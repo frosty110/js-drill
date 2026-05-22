@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = __dirname;
+const ROOT = path.resolve(__dirname, '../..');   // tools/migrations/ → project root
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 
 // Grab the last <script> block (the app code). The earlier ones are CDN tags.

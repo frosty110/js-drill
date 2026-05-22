@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILE = path.join(__dirname, 'index.html');
+const FILE = path.resolve(__dirname, '../../index.html');   // tools/migrations/ → project root
 let src = fs.readFileSync(FILE, 'utf8');
 
 // ── 1. Replace data blocks ────────────────────────────────────────────────

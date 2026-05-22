@@ -43,7 +43,7 @@ giving up the "open `index.html` in a browser, no build step" property.
    below.
 2. Add the lesson's entry to `data/manifest.json` (id, title, section, track,
    status).
-3. Verify the L2 fill-ins and L3 canonical run cleanly with `node validate-data.js`
+3. Verify the L2 fill-ins and L3 canonical run cleanly with `node tools/validate-data.js`
    (see the script for details — it uses the same runner semantics as the app).
 4. Reload the app — the lesson appears with its status dot.
 

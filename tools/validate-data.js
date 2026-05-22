@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = __dirname;
+const ROOT = path.resolve(__dirname, '..');   // tools/ → project root
 const DATA = path.join(ROOT, 'data');
 
 // ── Runner — must match index.html's runCode() and outputsMatch() ─────────

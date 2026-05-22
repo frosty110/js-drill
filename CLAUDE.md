@@ -60,15 +60,15 @@ There are also **Mock Interview mode** (random pattern + timer, no hints) and a 
 | `data/manifest.json` | Sidebar index — `{sections: [{name, slug, lessons: [{id,title,track,status}]}]}` |
 | `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
 | `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |
-| `validate-data.js` | Runs every L2 fill + L3 canonical, diffs manifest vs disk. Run before commits. |
-| `migrate-extract.js` | One-shot historical script that pulled CONTENT out of `index.html` |
-| `migrate-refactor.js` | One-shot historical script that surgically refactored `index.html` |
-| `scripts/cdp-check.js` | Probes a deployed URL via Chrome's :9222 port (basic) |
-| `scripts/cdp-deep-check.js` | Multi-tab + multi-lesson navigation probe with screenshots |
-| `scripts/cdp-mobile-l3.js` | iPhone-viewport probe for the L3 editor + sticky action bar |
+| `tools/validate-data.js` | Runs every L2 fill + L3 canonical, diffs manifest vs disk. Run before commits. |
+| `tools/cdp/check.js` | Probes a deployed URL via Chrome's :9222 port (basic) |
+| `tools/cdp/deep-check.js` | Multi-tab + multi-lesson navigation probe with screenshots |
+| `tools/cdp/mobile-l3.js` | iPhone-viewport probe for the L3 editor + sticky action bar |
+| `tools/migrations/extract.js` | Historical one-shot — pulled CONTENT out of `index.html` |
+| `tools/migrations/refactor.js` | Historical one-shot — surgically refactored `index.html` |
+| `tools/README.md` | Tool inventory + run instructions |
 | `README.md` | User-facing intro |
-| `docs-archive/` | Older `claude.md`, `AGENTIC_*.md`, `ARCHITECTURE.md`, etc. — historical only |
-| `generate-patterns.js`, `validate-snippets.js`, `enhance-descriptions.js` | Older standalone helpers, independent of the running app |
+| `docs-archive/` | Older `claude.md`, `AGENTIC_*.md`, `ARCHITECTURE.md`, plus `old-scripts/` (broken pre-refactor helpers) — historical only |
 
 ## How a lesson is structured (post-refactor)
 
@@ -118,7 +118,7 @@ A lesson is **authored** (`status: "full"`) only when:
 3. Add an entry under the right section in `data/manifest.json` with `"status": "stub"`.
 4. Verify:
    ```bash
-   node validate-data.js
+   node tools/validate-data.js
    ```
    This runs every L2 fill + L3 canonical against the same runner semantics the
    app uses, and flags any manifest/disk drift. Must show `184 passed, 0 failed`
@@ -167,11 +167,11 @@ python3 -m http.server 8765
 # Open http://127.0.0.1:8765/
 
 # Validate all exercises + manifest/disk parity
-node validate-data.js
+node tools/validate-data.js
 
 # Drive Chrome at :9222 (start with: open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-jsdrill)
-node scripts/cdp-deep-check.js http://127.0.0.1:8765/ /tmp/shots
-node scripts/cdp-mobile-l3.js  http://127.0.0.1:8765/ /tmp/shots
+node tools/cdp/deep-check.js http://127.0.0.1:8765/ /tmp/shots
+node tools/cdp/mobile-l3.js  http://127.0.0.1:8765/ /tmp/shots
 ```
 
 Deployment is GitHub Pages off `main` — just push to deploy. Pages refresh takes
@@ -184,19 +184,19 @@ When asked to author multiple lessons at once, spawn parallel `general-purpose`
 Agent calls — one per batch of 4-5 lessons. Each agent:
 1. Reads `CLAUDE.md` + a sample `data/<slug>/<sample>.json` for the schema
 2. Authors lesson JSON files into the right section folder
-3. **Verifies via `node validate-data.js`** before reporting back
+3. **Verifies via `node tools/validate-data.js`** before reporting back
 4. Reports lesson IDs added and the validator output
 
 The orchestrator integrates output, updates `data/manifest.json` for each new
-lesson, flips statuses, and runs `node validate-data.js` again to confirm all
-exercises still pass.
+lesson, flips statuses, and runs `node tools/validate-data.js` again to
+confirm all exercises still pass.
 
 ## Loop mode
 
 `/loop 10m <prompt>` schedules a recurring autonomous build. Each iteration:
 - Spawns multiple parallel content agents
 - Optionally spawns a review agent for code-quality findings
-- Integrates outputs, fixes critical bugs, verifies via `node validate-data.js`
+- Integrates outputs, fixes critical bugs, verifies via `node tools/validate-data.js`
 
 Track progress via `TaskCreate` / `TaskUpdate`. Verify every iteration with the
 full validator before declaring iteration complete.

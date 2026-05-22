@@ -8,7 +8,7 @@
 
 - **76 fully-authored lessons** (`status: 'full'`), 0 stubs
 - **184 verified L2+L3 exercises** (all pass via `node validate-data.js`)
-- `index.html` is the app shell + runtime only (~1,970 lines)
+- `index.html` is markup only (~140 lines); `app.css` (~280 lines) and `app.js` (~1,750 lines) load via `<link>` and `<script src>`
 - Lesson content lives in `data/<section-slug>/<lesson-id>.json` (76 files)
 - `data/manifest.json` is the sidebar index — loaded on boot, lessons lazy-load on click
 - 22 sections: Basics, Arrays, Hash Structures, Modern Syntax, Algorithms, Classes, Async, Advanced JS · Arrays & Hashing, Two Pointers, Sliding Window, Stack, Binary Search, Linked List, Trees, Tries, Heap, Graphs, Dynamic Programming, Backtracking, Bit Manipulation, System Design
@@ -56,7 +56,9 @@ There are also **Mock Interview mode** (random pattern + timer, no hints) and a 
 
 | File / Dir | Role |
 |---|---|
-| `index.html` | App shell + runtime, ~1,970 lines, self-contained markup + JS |
+| `index.html` | Markup only — ~140 lines |
+| `app.css` | All app styles — ~280 lines |
+| `app.js` | All app logic — ~1,750 lines |
 | `data/manifest.json` | Sidebar index — `{sections: [{name, slug, lessons: [{id,title,track,status}]}]}` |
 | `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
 | `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |

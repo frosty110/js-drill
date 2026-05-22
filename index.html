@@ -11,6 +11,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <!-- runMode lets static (non-editor) code blocks use the same tokenizer + Dracula theme. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/runmode/runmode.min.js"></script>
   <style>
     :root { color-scheme: dark; }
     html, body { height: 100%; }
@@ -30,9 +32,9 @@
     }
     .CodeMirror-scroll { min-height: 240px; max-width: 100%; }
     @media (max-width: 767px) {
-      .CodeMirror, .code-block { font-size: 12.5px; }
+      .CodeMirror, .code-block { font-size: 13px; }
       .CodeMirror-scroll { overflow-x: auto; }
-      pre.code-block { overflow-x: auto; max-width: 100%; }
+      pre.code-block { overflow-x: hidden; max-width: 100%; }
     }
     .blank-input {
       background: #0f172a;
@@ -49,8 +51,8 @@
     .blank-input.correct { border-color: #10b981; background: rgba(16, 185, 129, 0.12); }
     .blank-input.incorrect { border-color: #ef4444; background: rgba(239, 68, 68, 0.12); }
     .code-block {
-      background: #0f172a;
-      color: #e2e8f0;
+      background: #282a36;            /* Dracula bg — matches the L3 editor */
+      color: #f8f8f2;
       padding: 14px 16px;
       border-radius: 8px;
       font-family: "SF Mono", Menlo, Monaco, monospace;
@@ -58,8 +60,23 @@
       line-height: 1.55;
       overflow-x: auto;
       border: 1px solid #1e293b;
-      white-space: pre;
+      white-space: pre-wrap;          /* line-wrap so long lines stay on screen */
+      word-break: break-word;
+      tab-size: 2;
     }
+    /* The L2 blank inputs sit on the dracula background — keep them legible. */
+    .code-block .blank-input {
+      background: #1e1f29;
+      color: #f1f5f9;
+      border-color: #44475a;
+      font-size: inherit;
+      vertical-align: baseline;
+      padding: 0 6px;
+      line-height: 1.2;
+    }
+    .code-block .blank-input:focus { border-color: #8be9fd; box-shadow: 0 0 0 2px rgba(139,233,253,0.25); }
+    .code-block .blank-input.correct { border-color: #50fa7b; background: rgba(80,250,123,0.15); }
+    .code-block .blank-input.incorrect { border-color: #ff5555; background: rgba(255,85,85,0.15); }
     .tab-btn {
       padding: 8px 14px;
       border-radius: 8px 8px 0 0;
@@ -1175,12 +1192,24 @@
   // ──────────────────────────────────────────────────────────────────────────
   //  REFERENCE TAB
   // ──────────────────────────────────────────────────────────────────────────
+  // Static-syntax-highlighter — reuses CodeMirror's JS tokenizer + Dracula
+  // theme. Appends colored <span class="cm-…"> nodes into `target`, which must
+  // sit under a `.cm-s-dracula` ancestor for the colors to apply.
+  function colorizeInto(target, code, mode = 'javascript') {
+    target.textContent = '';
+    if (window.CodeMirror && CodeMirror.runMode) {
+      CodeMirror.runMode(code, mode, target);
+    } else {
+      target.textContent = code;
+    }
+  }
+
   function renderReference(body, content) {
     const ref = content.reference;
     const section = document.createElement('div');
     section.innerHTML = `
       <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">The thing to memorize</div>
-      <pre class="code-block">${escapeHtml(ref.code)}</pre>
+      <pre class="code-block cm-s-dracula" data-ref-code></pre>
       <div class="mt-6">
         <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Notes</div>
         <ul class="space-y-2">
@@ -1192,6 +1221,7 @@
       </div>
     `;
     body.appendChild(section);
+    colorizeInto(section.querySelector('[data-ref-code]'), ref.code);
     section.querySelector('[data-action="start-l1"]').addEventListener('click', () => selectTab('L1'));
   }
 
@@ -1297,7 +1327,7 @@
       card.innerHTML = `
         <div class="text-sm text-slate-500 mb-2">Exercise ${exi+1} of ${exercises.length}</div>
         <div class="text-white font-medium mb-3">${escapeHtml(ex.prompt)}</div>
-        <pre class="code-block mono" data-template></pre>
+        <pre class="code-block mono cm-s-dracula" data-template></pre>
         <div class="text-xs text-slate-500 mt-3 mb-2">Expected output:
           <span class="mono text-slate-300 ml-1">${escapeHtml(ex.expectedOutput)}</span>
         </div>
@@ -1312,13 +1342,18 @@
         </div>
       `;
 
-      // Build the template with <input> elements where ___ appears
+      // Build the template with <input> elements where ___ appears.
+      // Each non-blank segment is run through CodeMirror's tokenizer so
+      // the surrounding code gets the same Dracula highlighting as the L3
+      // editor; inputs interleave inline as before.
       const templEl = card.querySelector('[data-template]');
       const parts = ex.template.split('___');
       const inputs = [];
       templEl.innerHTML = '';
       parts.forEach((part, idx) => {
-        templEl.appendChild(document.createTextNode(part));
+        const seg = document.createElement('span');
+        colorizeInto(seg, part);
+        templEl.appendChild(seg);
         if (idx < parts.length - 1) {
           const inp = document.createElement('input');
           inp.className = 'blank-input mono';

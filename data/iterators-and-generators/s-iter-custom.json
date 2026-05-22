@@ -1,0 +1,86 @@
+{
+  "id": "s-iter-custom",
+  "title": "Custom iterables",
+  "section": "Iterators & Generators",
+  "track": "syntax",
+  "status": "full",
+  "description": "Add `[Symbol.iterator]` to a class or object and it instantly works with `for...of`, spread, and array destructuring.",
+  "reference": {
+    "code": "// A class becomes iterable by defining [Symbol.iterator]()\nclass Range {\n  constructor(start, end) {\n    this.start = start;\n    this.end = end;\n  }\n  [Symbol.iterator]() {\n    let i = this.start;\n    const end = this.end;\n    return {\n      next() {\n        return i < end\n          ? { value: i++, done: false }\n          : { value: undefined, done: true };\n      }\n    };\n  }\n}\n\nconst r = new Range(1, 4);\n[...r];                    // [1, 2, 3]\nArray.from(r);             // [1, 2, 3]\nfor (const n of r) { /* 1, 2, 3 */ }",
+    "notes": [
+      "`[Symbol.iterator]` uses computed-key syntax — the brackets are part of the method name, not array access.",
+      "Returning a FRESH iterator each call lets the same iterable be looped multiple times.",
+      "Spread, destructuring, `for...of`, `Array.from`, and `Promise.all` ALL use the iterable protocol."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "What method name makes a class iterable?",
+        "options": [
+          "iterator()",
+          "[Symbol.iterator]()",
+          "next()",
+          "[Symbol.iterable]()"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Which built-in feature does NOT use the iterable protocol?",
+        "options": [
+          "spread `[...x]`",
+          "`for...of`",
+          "`Array.from`",
+          "`Object.keys`"
+        ],
+        "answer": 3,
+        "explain": "`Object.keys` reads own enumerable string keys — it doesn't call `[Symbol.iterator]`."
+      },
+      {
+        "q": "Why return a fresh iterator object from `[Symbol.iterator]()`?",
+        "options": [
+          "Required by the JS spec on every call",
+          "So the iterable can be looped multiple times independently",
+          "To avoid `this` binding issues",
+          "It's not required — returning `this` is identical"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What does `[...new Range(0, 3)]` evaluate to (using the Range from the reference)?",
+        "options": [
+          "[0, 1, 2]",
+          "[0, 1, 2, 3]",
+          "[1, 2, 3]",
+          "Error: not iterable"
+        ],
+        "answer": 0,
+        "explain": "`end` is exclusive — Range(0, 3) yields 0, 1, 2."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Make `Counter` iterable so `[...new Counter(3)]` yields [0, 1, 2].",
+        "template": "class Counter {\n  constructor(n) { this.n = n; }\n  [___.iterator]() {\n    let i = 0;\n    const n = this.n;\n    return {\n      ___() {\n        return i < n\n          ? { value: i___, done: false }\n          : { value: undefined, done: true };\n      }\n    };\n  }\n}\nconsole.log(JSON.stringify([...new Counter(3)]));",
+        "blanks": [
+          { "answer": "Symbol", "hint": "well-known symbol holder" },
+          { "answer": "next", "hint": "iterator's method" },
+          { "answer": "++", "hint": "post-increment so we yield then advance" }
+        ],
+        "expectedOutput": "[0,1,2]"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Build a `Range(start, end)` class (end-exclusive) made iterable via `[Symbol.iterator]`. Log `JSON.stringify([...new Range(1, 4)])`.",
+    "expectedOutput": "[1,2,3]",
+    "canonical": "class Range {\n  constructor(start, end) {\n    this.start = start;\n    this.end = end;\n  }\n  [Symbol.iterator]() {\n    let i = this.start;\n    const end = this.end;\n    return {\n      next() {\n        return i < end\n          ? { value: i++, done: false }\n          : { value: undefined, done: true };\n      }\n    };\n  }\n}\nconsole.log(JSON.stringify([...new Range(1, 4)]));",
+    "hints": [
+      "Define `[Symbol.iterator]()` returning an object with `next()`.",
+      "Capture `start`/`end` into closure vars so `next` doesn't lose `this`.",
+      "End is exclusive — stop when `i >= end`."
+    ]
+  }
+}

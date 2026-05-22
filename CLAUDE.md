@@ -6,12 +6,12 @@
 
 ## Current state (snapshot)
 
-- **76 fully-authored lessons** (`status: 'full'`), 0 stubs
-- **184 verified L2+L3 exercises** (all pass via `node validate-data.js`)
-- `index.html` is markup only (~140 lines); `app.css` (~280 lines) and `app.js` (~1,750 lines) load via `<link>` and `<script src>`
-- Lesson content lives in `data/<section-slug>/<lesson-id>.json` (76 files)
+- **81 fully-authored lessons** (`status: 'full'`), 0 stubs
+- **197 verified L2+L3 exercises** (all pass via `node tools/validate-data.js`)
+- `index.html` is markup only (~140 lines); `app.css` (~370 lines) and `app.js` (~2,000 lines) load via `<link>` and `<script src>`
+- Lesson content lives in `data/<section-slug>/<lesson-id>.json` (81 files)
 - `data/manifest.json` is the sidebar index — loaded on boot, lessons lazy-load on click
-- 22 sections: Basics, Arrays, Hash Structures, Modern Syntax, Algorithms, Classes, Async, Advanced JS · Arrays & Hashing, Two Pointers, Sliding Window, Stack, Binary Search, Linked List, Trees, Tries, Heap, Graphs, Dynamic Programming, Backtracking, Bit Manipulation, System Design
+- 23 sections: Basics, Arrays, Hash Structures, Modern Syntax, Iterators & Generators, Algorithms, Classes, Async, Advanced JS · Arrays & Hashing, Two Pointers, Sliding Window, Stack, Binary Search, Linked List, Trees, Tries, Heap, Graphs, Dynamic Programming, Backtracking, Bit Manipulation, System Design
 
 ## What this project is
 

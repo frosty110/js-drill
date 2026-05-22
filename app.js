@@ -104,6 +104,8 @@ const STARTER_PATH = [
   's-obj-basics', 's-obj-iter', 'map-set',
   // Modern syntax
   'destructuring-spread', 's-optional', 's-nullish',
+  // Iterators & Generators (depends on for-of from array-iteration above)
+  's-iter-protocol', 's-iter-custom', 's-generators', 's-gen-delegation', 's-async-iter',
   // Classes + async
   's-class', 's-class-inh', 's-promises', 's-async', 's-trycatch',
   // Patterns — Arrays & Hashing first

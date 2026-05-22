@@ -1,0 +1,85 @@
+{
+  "id": "s-async-iter",
+  "title": "Async iterators (for await…of)",
+  "section": "Iterators & Generators",
+  "track": "syntax",
+  "status": "full",
+  "description": "Async iterables expose `[Symbol.asyncIterator]` and let `for await...of` consume values that arrive over time.",
+  "reference": {
+    "code": "// Sync iterator vs async iterator:\n//   sync:  next() -> { value, done }\n//   async: next() -> Promise<{ value, done }>\n\nconst asyncIterable = {\n  [Symbol.asyncIterator]() {\n    let i = 1;\n    return {\n      next() {\n        if (i <= 3) {\n          return Promise.resolve({ value: i++, done: false });\n        }\n        return Promise.resolve({ value: undefined, done: true });\n      }\n    };\n  }\n};\n\n(async () => {\n  for await (const n of asyncIterable) {\n    // n is the resolved value (1, then 2, then 3)\n  }\n})();",
+    "notes": [
+      "`for await...of` is ONLY valid inside an `async` function (or top-level module).",
+      "`[Symbol.asyncIterator]` is a DIFFERENT well-known symbol from `[Symbol.iterator]` — don't mix them up.",
+      "`next()` returns a Promise that resolves to `{ value, done }` — the wrapper, not the value, is async."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "What does an async iterator's `next()` return?",
+        "options": [
+          "{ value, done }",
+          "Promise<{ value, done }>",
+          "Promise<value>",
+          "AsyncGenerator<value>"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Where is `for await...of` legal?",
+        "options": [
+          "Anywhere",
+          "Only inside an async function or top-level module",
+          "Only inside a generator",
+          "Only inside try/catch"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Which well-known symbol makes an object work with `for await...of`?",
+        "options": [
+          "Symbol.iterator",
+          "Symbol.asyncIterator",
+          "Symbol.for('async')",
+          "Symbol.awaitable"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What happens if you use `for...of` (no await) on an object with only `[Symbol.asyncIterator]`?",
+        "options": [
+          "It works, JS auto-awaits each value",
+          "It logs Promises instead of values",
+          "TypeError: not iterable",
+          "It throws after the first iteration"
+        ],
+        "answer": 2,
+        "explain": "Sync `for...of` looks up `[Symbol.iterator]`, which isn't defined here."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the async iterable that yields 1 then 2.",
+        "template": "const it = {\n  [Symbol.___]() {\n    let i = 1;\n    return {\n      next() {\n        return i <= 2\n          ? Promise.resolve({ value: i++, done: ___ })\n          : Promise.resolve({ value: undefined, done: true });\n      }\n    };\n  }\n};\n(async () => {\n  for ___ (const n of it) {\n    console.log(n);\n  }\n})();",
+        "blanks": [
+          { "answer": "asyncIterator", "hint": "the async well-known symbol name" },
+          { "answer": "false", "hint": "we're NOT done yet" },
+          { "answer": "await", "hint": "what comes between `for` and `(` for async iteration" }
+        ],
+        "expectedOutput": "1\n2"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Build an async iterable that yields `Promise.resolve(n)` for n = 1, 2, 3. Consume with `for await...of` and log each value.",
+    "expectedOutput": "1\n2\n3",
+    "canonical": "const asyncIterable = {\n  [Symbol.asyncIterator]() {\n    let i = 1;\n    return {\n      next() {\n        if (i <= 3) {\n          return Promise.resolve({ value: i++, done: false });\n        }\n        return Promise.resolve({ value: undefined, done: true });\n      }\n    };\n  }\n};\n(async () => {\n  for await (const n of asyncIterable) {\n    console.log(n);\n  }\n})();",
+    "hints": [
+      "Define `[Symbol.asyncIterator]()` returning an object with `next()`.",
+      "`next()` should return `Promise.resolve({ value, done })`.",
+      "Wrap your `for await` in an `(async () => { ... })()` IIFE."
+    ]
+  }
+}

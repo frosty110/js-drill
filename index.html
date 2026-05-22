@@ -32,9 +32,16 @@
     }
     .CodeMirror-scroll { min-height: 240px; max-width: 100%; }
     @media (max-width: 767px) {
-      .CodeMirror, .code-block { font-size: 13px; }
+      /* 16px on the editor keeps iOS Safari from zoom-on-focus.
+         Static code blocks stay tighter — they aren't focusable so zoom
+         doesn't apply, and a denser block is easier to scan on a phone. */
+      .CodeMirror { font-size: 16px; }
+      .code-block { font-size: 13px; }
       .CodeMirror-scroll { overflow-x: auto; }
       pre.code-block { overflow-x: hidden; max-width: 100%; }
+      /* Mobile-friendly tap targets in the sidebar */
+      .lesson-link { padding: 12px 12px; font-size: 14px; min-height: 44px; }
+      .section-header { padding: 10px 12px 6px; }
     }
     .blank-input {
       background: #0f172a;
@@ -196,7 +203,25 @@
       body.sidebar-open aside.app-sidebar { transform: translateX(0); }
       body.sidebar-open .sidebar-backdrop { display: block; }
       main.app-main { padding-top: 56px; }
-      #lesson-shell { padding: 18px 14px !important; }
+      #lesson-shell { padding: 18px 14px 96px !important; } /* bottom pad clears sticky action bar */
+      /* Long prompts/identifiers wrap instead of breaking the layout on narrow screens. */
+      #lesson-shell h2, #lesson-shell p, #lesson-shell .ref-note { word-break: break-word; overflow-wrap: anywhere; }
+      /* L3 action bar sticks to the bottom of the viewport so Run is always reachable. */
+      .l3-actions {
+        position: sticky;
+        bottom: 0;
+        background: #0b1020;
+        padding: 10px 0;
+        margin: 0 -14px;
+        padding-left: 14px;
+        padding-right: 14px;
+        z-index: 5;
+        border-top: 1px solid #1e293b;
+      }
+      /* Blank inputs at 16px also dodge iOS zoom; bumping touch target. */
+      .blank-input, .code-block .blank-input { font-size: 16px; padding: 4px 8px; min-height: 32px; }
+      /* Larger tab text on phones. */
+      .tab-btn { padding: 10px 14px; font-size: 14px; min-height: 44px; }
     }
     button.primary {
       background: #2563eb; color: white; padding: 8px 16px;
@@ -1483,7 +1508,7 @@
         </div>
       </div>
       <textarea id="drill-editor"></textarea>
-      <div class="mt-3 flex items-center gap-2 flex-wrap">
+      <div class="l3-actions mt-3 flex items-center gap-2 flex-wrap">
         <button class="primary" data-action="run">Run <span class="text-blue-200">(⌘↵)</span></button>
         ${isMock ? '' : '<button class="secondary" data-action="hint">Hint</button>'}
         ${isMock ? '' : '<button class="secondary" data-action="diff">Compare to canonical</button>'}
@@ -1517,6 +1542,10 @@
       matchBrackets: true,
       indentUnit: 2,
       tabSize: 2,
+      // Wrap long lines so phone users never have to scroll horizontally to
+      // read code they just typed. Desktop benefits too (no orphan tokens
+      // sliding off the right edge).
+      lineWrapping: true,
       // Render the whole document — short snippets benefit from no
       // viewport virtualization, and it eliminates a scroll-jank source on iOS.
       viewportMargin: Infinity,

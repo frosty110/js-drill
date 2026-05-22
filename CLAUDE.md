@@ -1,15 +1,25 @@
 # CLAUDE.md — Project Context
 
+> **Read also: [MIGRATION-NOTES.md](MIGRATION-NOTES.md)** for the 2026-05 refactor
+> that split lesson content out of `index.html` and added mobile + syntax-highlight
+> work. The "How a lesson is structured" section below reflects the *new* layout.
+
 ## Current state (snapshot)
 
 - **76 fully-authored lessons** (`status: 'full'`), 0 stubs
-- **184 verified L2+L3 exercises** (all pass via the in-app runner)
-- ~8,500 lines, single self-contained `index.html`
+- **184 verified L2+L3 exercises** (all pass via `node validate-data.js`)
+- `index.html` is the app shell + runtime only (~1,970 lines)
+- Lesson content lives in `data/<section-slug>/<lesson-id>.json` (76 files)
+- `data/manifest.json` is the sidebar index — loaded on boot, lessons lazy-load on click
 - 22 sections: Basics, Arrays, Hash Structures, Modern Syntax, Algorithms, Classes, Async, Advanced JS · Arrays & Hashing, Two Pointers, Sliding Window, Stack, Binary Search, Linked List, Trees, Tries, Heap, Graphs, Dynamic Programming, Backtracking, Bit Manipulation, System Design
 
 ## What this project is
 
-A **single-file JavaScript syntax + interview-pattern memorization web app**. The entire app is `/index.html` — open it in a browser, no build step, no install. Uses Tailwind CSS and CodeMirror via CDN. Progress persists in `localStorage` under `jsdrill.progress.v1` (schema `__v: 4`, backwards-compat to v1).
+A **JavaScript syntax + interview-pattern memorization web app**. No build step —
+open `index.html` in a browser (or serve `python3 -m http.server`). Uses Tailwind
+CSS and CodeMirror via CDN. Progress persists in `localStorage` under
+`jsdrill.progress.v1` (schema `__v: 4`, backwards-compat to v1). Live on GitHub
+Pages: https://frosty110.github.io/js-drill/
 
 ## Features shipped (so future iterations don't re-add them)
 
@@ -23,13 +33,15 @@ A **single-file JavaScript syntax + interview-pattern memorization web app**. Th
 - Cheatsheet markdown export
 - Progress JSON backup/restore
 - Session resume (currentLessonId + tab persisted)
-- Mobile responsive drawer
+- Mobile responsive drawer + sticky L3 action bar
 - Multi-tab storage sync
 - Search (`/`), keyboard nav (`j`/`k`/`1`-`4`/`s`/`?`/`Esc`)
 - Letter-labeled MC (A/B/C/D)
 - Reveal-tracking (mastered-with-reveal dot variant)
 - Hide-mastered filter
 - First-time welcome banner with Starter Path CTA
+- Syntax-highlighted static code blocks (Reference + L2 templates) via CodeMirror runMode
+- Line-wrapping in the L3 editor (mobile-friendly, prevents horizontal scroll)
 
 The app's job is to drill JS syntax and canonical interview-pattern solutions through three escalating recall tests per lesson:
 
@@ -42,90 +54,84 @@ There are also **Mock Interview mode** (random pattern + timer, no hints) and a 
 
 ## File layout
 
-| File | Status |
+| File / Dir | Role |
 |---|---|
-| `index.html` | The entire app — ~4000 lines, self-contained |
-| `data/patterns-batch-1.json` | Early batch of pattern data (now superseded by inline CONTENT in `index.html`) |
+| `index.html` | App shell + runtime, ~1,970 lines, self-contained markup + JS |
+| `data/manifest.json` | Sidebar index — `{sections: [{name, slug, lessons: [{id,title,track,status}]}]}` |
+| `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
+| `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |
+| `validate-data.js` | Runs every L2 fill + L3 canonical, diffs manifest vs disk. Run before commits. |
+| `migrate-extract.js` | One-shot historical script that pulled CONTENT out of `index.html` |
+| `migrate-refactor.js` | One-shot historical script that surgically refactored `index.html` |
+| `scripts/cdp-check.js` | Probes a deployed URL via Chrome's :9222 port (basic) |
+| `scripts/cdp-deep-check.js` | Multi-tab + multi-lesson navigation probe with screenshots |
+| `scripts/cdp-mobile-l3.js` | iPhone-viewport probe for the L3 editor + sticky action bar |
 | `README.md` | User-facing intro |
-| `claude.md` (lowercase) | Older AI-workflow doc; superseded by this file |
-| `AGENTIC_*.md`, `ARCHITECTURE.md`, `DELIVERY.md`, `SETUP.md`, `QUICK_REFERENCE.md`, `AUTONOMOUS_BUILD_PROMPT.txt`, `RUN_AUTONOMOUS_BUILD.md` | **Stale** — describe an earlier Next.js architecture that does not exist. Safe to delete or treat as historical. |
-| `generate-patterns.js`, `validate-snippets.js`, `enhance-descriptions.js` | Standalone helper scripts using the older JSON schema. Independent of the running app. |
+| `docs-archive/` | Older `claude.md`, `AGENTIC_*.md`, `ARCHITECTURE.md`, etc. — historical only |
+| `generate-patterns.js`, `validate-snippets.js`, `enhance-descriptions.js` | Older standalone helpers, independent of the running app |
 
-## How a lesson is structured
+## How a lesson is structured (post-refactor)
 
-Two top-level arrays inside `index.html`:
+Each lesson is a standalone JSON file at `data/<section-slug>/<id>.json`:
 
-```js
-const CURRICULUM = [
-  { id: 'lesson-id', title: 'Title', track: 'syntax' | 'patterns', section: 'Section name', status: 'full' | 'stub' },
-  // ...
-];
-
-const CONTENT = {
-  'lesson-id': {
-    description: 'One sentence describing the lesson.',
-    reference: {
-      code: `// canonical code in a template literal`,
-      notes: ['Gotcha 1', 'Gotcha 2', 'Gotcha 3']
-    },
-    L1: { questions: [
-      { q: 'Question?', options: ['a', 'b', 'c', 'd'], answer: 1, explain: 'optional' }
-    ]},
-    L2: { exercises: [
-      {
-        prompt: 'What to do',
-        template: `// JS with ___ where blanks go\nconsole.log(...);`,
-        blanks: [{ answer: 'word', hint: 'optional' }],  // one per ___
-        expectedOutput: 'exact console output'
-      }
-    ]},
-    L3: {
-      prompt: 'One-sentence challenge',
-      expectedOutput: 'exact output',
-      canonical: `// full working solution that logs expectedOutput`,
-      hints: ['hint 1', 'hint 2']
-    }
+```jsonc
+{
+  "id": "two-sum",
+  "title": "Two Sum (hash map)",
+  "section": "Arrays & Hashing",
+  "track": "patterns",           // or "syntax"
+  "status": "full",              // or "stub"
+  "description": "One sentence describing the lesson.",
+  "reference": {
+    "code": "// canonical code as a string\n...",
+    "notes": ["Gotcha 1", "Gotcha 2"]
+  },
+  "L1": { "questions": [
+    { "q": "Question?", "options": ["a","b","c","d"], "answer": 1, "explain": "optional" }
+  ]},
+  "L2": { "exercises": [
+    { "prompt": "...", "template": "// JS with ___ where blanks go\nconsole.log(x);",
+      "blanks": [{ "answer": "word", "hint": "optional" }],
+      "expectedOutput": "exact console output" }
+  ]},
+  "L3": {
+    "prompt": "One-sentence challenge",
+    "expectedOutput": "exact output",
+    "canonical": "// full working solution",
+    "hints": ["hint 1", "hint 2"]
   }
-};
+}
 ```
 
-A lesson is **authored** (status `'full'`) only when it has a matching CONTENT entry AND both these are true:
-1. `L2` template with blanks filled produces `expectedOutput` exactly when run.
-2. `L3.canonical` produces `expectedOutput` exactly when run.
+Also add the lesson to `data/manifest.json` under the right section (id, title,
+track, status). Section slug is `lowercase + & → 'and' + non-alnum → '-'`.
+
+A lesson is **authored** (`status: "full"`) only when:
+1. The `L2.exercises[*].template` filled with each `blanks[*].answer` produces the `expectedOutput` exactly.
+2. The `L3.canonical` produces the `L3.expectedOutput` exactly.
 
 ## Adding a new lesson — the workflow
 
-1. Add a CURRICULUM entry with `status: 'stub'`
-2. Author the CONTENT entry following the schema above
-3. Verify against Node:
+1. Pick the section slug (e.g., `arrays-and-hashing`). Create
+   `data/<slug>/<lesson-id>.json` with `"status": "stub"`.
+2. Author the body. Use `\n` in JSON strings for newlines.
+3. Add an entry under the right section in `data/manifest.json` with `"status": "stub"`.
+4. Verify:
    ```bash
-   node -e "
-     const fs = require('fs');
-     const html = fs.readFileSync('index.html', 'utf8');
-     const scripts = [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];
-     let js = scripts[scripts.length - 1][1].replace(/^\\s*init\\(\\);\\s*\$/m, '');
-     const factory = eval('(function(){' + js + ' return { CURRICULUM, CONTENT, runCode, outputsMatch }; })');
-     const { CURRICULUM, CONTENT, runCode, outputsMatch } = factory();
-     (async () => {
-       const c = CONTENT['YOUR-LESSON-ID'];
-       for (const ex of c.L2.exercises) {
-         const parts = ex.template.split('___');
-         let filled = parts[0];
-         for (let i = 0; i < ex.blanks.length; i++) filled += ex.blanks[i].answer + parts[i+1];
-         const r = await runCode(filled);
-         console.log(outputsMatch(r.output, ex.expectedOutput) ? 'OK' : 'FAIL', r.output);
-       }
-       const r = await runCode(c.L3.canonical);
-       console.log(outputsMatch(r.output, c.L3.expectedOutput) ? 'OK' : 'FAIL', r.output);
-     })();
-   "
+   node validate-data.js
    ```
-4. Flip `status` from `'stub'` to `'full'` in CURRICULUM
-5. Open `index.html` in a browser — the lesson appears with its status dot
+   This runs every L2 fill + L3 canonical against the same runner semantics the
+   app uses, and flags any manifest/disk drift. Must show `184 passed, 0 failed`
+   (or whatever the new total is — it scales with lessons).
+5. Flip both the file's `"status"` and the manifest entry's `"status"` to `"full"`.
+6. Open `index.html` in a browser (via `python3 -m http.server 8765`) — the lesson
+   appears with its status dot.
 
 ## Runner semantics — critical for `expectedOutput`
 
-`runCode(code)` runs the string via `new Function('console', code)` with a fake console. It is **async** and awaits any returned promise plus one macrotask, so `(async () => { ... })()` IIFEs work.
+`runCode(code)` runs the string via `new Function('console', code)` with a fake
+console. It is **async** and awaits any returned promise plus one macrotask, so
+`(async () => { ... })()` IIFEs work. (Same semantics in `validate-data.js`.)
 
 Argument formatting:
 - strings → as-is
@@ -141,26 +147,56 @@ So `console.log([1, 2])` produces `"[1,2]"`, and `console.log("hi")` produces `"
 
 ## Common authoring pitfalls
 
-- **Apostrophes in single-quoted strings break the file**. Use double quotes (`"don't"`) or backticks. The whole JS object literal is single-quote-heavy.
-- **HTML entities (`&lt;`, `&gt;`, `&amp;`) in code are not auto-decoded**. Write `<`, `>`, `&&` literally.
-- **`___` is the blank marker**. The runner uses split-and-rejoin, so a user-typed `___` won't misroute, but don't put literal `___` inside templates outside of blanks.
-- **Async code**: use `Promise.resolve(value).then(...)` or `(async () => { ... })()` patterns. Real `setTimeout` delays may exceed the runner's single-macrotask drain.
+- **JSON strings: escape backslashes and quotes**. Newlines are `\n`. Tabs are `\t`.
+  Tab character in templates expands per `tab-size: 2` CSS.
+- **HTML entities (`&lt;`, `&gt;`, `&amp;`) are not auto-decoded** in code. Write
+  `<`, `>`, `&&` literally inside JSON strings (the JSON parser keeps them as-is).
+- **`___` is the blank marker** in `L2.exercises[*].template`. The runner uses
+  split-and-rejoin so a user-typed `___` can't misroute, but don't put literal
+  `___` inside templates outside of blanks.
+- **Async code**: use `Promise.resolve(value).then(...)` or `(async () => { ... })()` patterns.
+  Real `setTimeout` delays may exceed the runner's single-macrotask drain.
+- **Don't edit `CONTENT` / `CURRICULUM` inline in `index.html` anymore** — those
+  globals are now populated from `data/`. Edit the JSON files instead.
+
+## Local dev + deploy
+
+```bash
+# Serve locally — file:// won't work because of the fetch() calls.
+python3 -m http.server 8765
+# Open http://127.0.0.1:8765/
+
+# Validate all exercises + manifest/disk parity
+node validate-data.js
+
+# Drive Chrome at :9222 (start with: open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-jsdrill)
+node scripts/cdp-deep-check.js http://127.0.0.1:8765/ /tmp/shots
+node scripts/cdp-mobile-l3.js  http://127.0.0.1:8765/ /tmp/shots
+```
+
+Deployment is GitHub Pages off `main` — just push to deploy. Pages refresh takes
+~30–90 seconds; poll for the new content (e.g., grep for a unique string from
+the new commit) before running the CDP probe against the live URL.
 
 ## Sub-agent workflow
 
-When asked to author multiple lessons at once, spawn parallel `general-purpose` Agent calls — one per batch of 4-5 lessons. Each agent:
-1. Reads `index.html` for the schema
-2. Authors lessons
-3. **Verifies each with Node** (writes to /tmp, runs, captures output)
-4. Reports the JS object literals + verification results
+When asked to author multiple lessons at once, spawn parallel `general-purpose`
+Agent calls — one per batch of 4-5 lessons. Each agent:
+1. Reads `CLAUDE.md` + a sample `data/<slug>/<sample>.json` for the schema
+2. Authors lesson JSON files into the right section folder
+3. **Verifies via `node validate-data.js`** before reporting back
+4. Reports lesson IDs added and the validator output
 
-The orchestrator then integrates output, flips `status` flags, and runs the full verification pass across all lessons before declaring iteration complete.
+The orchestrator integrates output, updates `data/manifest.json` for each new
+lesson, flips statuses, and runs `node validate-data.js` again to confirm all
+exercises still pass.
 
 ## Loop mode
 
 `/loop 10m <prompt>` schedules a recurring autonomous build. Each iteration:
 - Spawns multiple parallel content agents
 - Optionally spawns a review agent for code-quality findings
-- Integrates outputs, fixes critical bugs, verifies all exercises
+- Integrates outputs, fixes critical bugs, verifies via `node validate-data.js`
 
-Track progress via `TaskCreate` / `TaskUpdate`. Verify every iteration with the full-runner check above.
+Track progress via `TaskCreate` / `TaskUpdate`. Verify every iteration with the
+full validator before declaring iteration complete.

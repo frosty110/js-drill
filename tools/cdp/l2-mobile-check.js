@@ -58,7 +58,15 @@ async function closeHostTabs(host) {
   await send('Page.navigate', { url: base });
   await new Promise(r => setTimeout(r, 2000));
   await send('Runtime.evaluate', { expression: `localStorage.clear(); location.reload();` });
-  await new Promise(r => setTimeout(r, 2200));
+  // Wait until init() has rendered the tab strip — Pages can be slower than
+  // local for the initial manifest + lesson fetch, so a fixed sleep races.
+  for (let i = 0; i < 40; i++) {
+    const r = await send('Runtime.evaluate', {
+      expression: `document.querySelectorAll('.tab-btn').length > 0`, returnByValue: true
+    });
+    if (r.result.value) break;
+    await new Promise(r => setTimeout(r, 200));
+  }
 
   async function snap(label) {
     const s = await send('Page.captureScreenshot', { format: 'png' });

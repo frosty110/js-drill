@@ -149,6 +149,56 @@
       margin-top: 6px;
     }
     .track-header:first-child { border-top: none; margin-top: 0; }
+    /* ── Vertical binder tabs ──────────────────────────────────────────────
+       Two tall tabs flank the lesson list. Clicking switches which track
+       (Syntax Fundamentals / Canonical Patterns) is rendered. Search across
+       both tracks temporarily overrides the filter. */
+    .binder-strip {
+      display: flex;
+      flex: 1;
+      min-height: 0;       /* required so the nested nav can scroll */
+    }
+    .binder-tabs {
+      display: flex;
+      flex-direction: column;
+      width: 38px;
+      flex-shrink: 0;
+      background: #060912;
+      border-right: 1px solid #1e293b;
+    }
+    .binder-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      writing-mode: vertical-rl;            /* reads top-to-bottom */
+      padding: 16px 0;
+      border-right: 2px solid transparent;
+      border-bottom: 1px solid #1e293b;
+      transition: color 0.12s, background 0.12s, border-color 0.12s;
+      user-select: none;
+    }
+    .binder-tab:last-child { border-bottom: none; }
+    .binder-tab:hover { color: #cbd5e1; background: rgba(96,165,250,0.05); }
+    .binder-tab.active {
+      color: #f8fafc;
+      background: #0b1020;
+      border-right-color: #60a5fa;
+    }
+    .binder-tab .binder-tab-count {
+      font-size: 10px;
+      font-weight: 500;
+      color: #475569;
+      margin-top: 8px;
+      letter-spacing: 0.04em;
+    }
+    .binder-tab.active .binder-tab-count { color: #94a3b8; }
     .mc-option {
       border: 1px solid #334155;
       border-radius: 8px;
@@ -344,7 +394,10 @@
           spellcheck="false"
         />
       </div>
-      <nav id="sidebar-nav" class="p-2 overflow-y-auto flex-1 scrollbar"></nav>
+      <div class="binder-strip">
+        <div id="binder-tabs" class="binder-tabs" role="tablist" aria-label="Lesson track"></div>
+        <nav id="sidebar-nav" class="p-2 overflow-y-auto flex-1 scrollbar"></nav>
+      </div>
       <div class="p-3 border-t border-slate-800 flex items-center justify-between text-xs">
         <div class="flex gap-3">
           <button id="reset-btn" class="text-slate-500 hover:text-red-400 transition">Reset</button>
@@ -438,8 +491,12 @@
     welcomed: false,    // hide welcome panel after first dismissal
     hideMastered: false, // sidebar filter: when true, drop fully-mastered lessons
     reviews: {},        // { lessonId: { lastPassedAt: ms, interval: ms, dueAt: ms } }
-    weakness: {}        // { lessonId: wrongL1Count } — tracks recurring L1 misses
+    weakness: {},       // { lessonId: wrongL1Count } — tracks recurring L1 misses
+    sidebarTrack: 'syntax' // 'syntax' | 'patterns' — which binder tab is active
   };
+  // Expose script-scope state on window for E2E probes (tools/cdp/*).
+  // Production-safe: it's the same object the runtime uses; readers only.
+  window.__jsdrillState = state;
 
   // Spaced-repetition intervals (in ms). Each pass advances to the next bucket.
   const REVIEW_INTERVALS = [
@@ -503,7 +560,7 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         // Support old shape ({lessonId: {...}}), v2 (progress + bestTimes), v3 (+ lastLesson, +revealed)
-        if (parsed && (parsed.__v === 2 || parsed.__v === 3 || parsed.__v === 4)) {
+        if (parsed && (parsed.__v === 2 || parsed.__v === 3 || parsed.__v === 4 || parsed.__v === 5)) {
           state.progress = parsed.progress || {};
           state.bestTimes = parsed.bestTimes || {};
           state.revealed = parsed.revealed || {};
@@ -514,6 +571,9 @@
           state.hideMastered = !!parsed.hideMastered;
           state.reviews = parsed.reviews || {};
           state.weakness = parsed.weakness || {};
+          if (parsed.sidebarTrack === 'syntax' || parsed.sidebarTrack === 'patterns') {
+            state.sidebarTrack = parsed.sidebarTrack;
+          }
           // Backfill: if a lesson is mastered but has no review schedule (legacy
           // data), seed it with the first interval so spaced-rep starts working
           // for existing users.
@@ -552,7 +612,7 @@
   function saveProgress() {
     try {
       localStorage.setItem(LS_KEY, JSON.stringify({
-        __v: 4,
+        __v: 5,
         progress: state.progress,
         bestTimes: state.bestTimes,
         revealed: state.revealed,
@@ -562,7 +622,8 @@
         welcomed: state.welcomed,
         hideMastered: state.hideMastered,
         reviews: state.reviews,
-        weakness: state.weakness
+        weakness: state.weakness,
+        sidebarTrack: state.sidebarTrack
       }));
     } catch (e) {}
   }
@@ -725,6 +786,7 @@
     state.mock.lessonId = lessonId;
     state.currentLessonId = lessonId;
     state.currentTab = 'L3';
+    syncBinderToLesson(lessonId);
     renderSidebar();
     renderLesson();
     state.mock.tickHandle = setInterval(() => {
@@ -869,6 +931,15 @@
     return 'not_started';
   }
   function findLesson(id) { return CURRICULUM.find(l => l.id === id); }
+  // Centralized helper — call this whenever code sets state.currentLessonId
+  // directly (selectLesson, mock interview, review jump, weak-spot jump, init
+  // resume). Keeps the binder tab in sync with whichever lesson the user is on.
+  function syncBinderToLesson(id) {
+    const l = findLesson(id);
+    if (l && (l.track === 'syntax' || l.track === 'patterns')) {
+      state.sidebarTrack = l.track;
+    }
+  }
 
   // ──────────────────────────────────────────────────────────────────────────
   //  CODE RUNNER (sandboxed via new Function)
@@ -939,6 +1010,44 @@
   // ──────────────────────────────────────────────────────────────────────────
   //  SIDEBAR RENDER
   // ──────────────────────────────────────────────────────────────────────────
+
+  // Re-renders the vertical binder tab strip. Counts reflect the *full*
+  // curriculum per track — they don't react to search / focus / starter-path
+  // filters, so a user can always see how many lessons each binder holds.
+  function renderBinderTabs(tracks) {
+    const host = document.getElementById('binder-tabs');
+    if (!host) return;
+    host.innerHTML = '';
+    for (const track of tracks) {
+      const total = CURRICULUM.filter(l => l.track === track.id).length;
+      const tab = document.createElement('div');
+      tab.className = 'binder-tab';
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('tabindex', '0');
+      tab.setAttribute('aria-selected', state.sidebarTrack === track.id ? 'true' : 'false');
+      tab.setAttribute('aria-label', `${track.label} (${total} lessons)`);
+      if (state.sidebarTrack === track.id) tab.classList.add('active');
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = track.label;
+      tab.appendChild(labelSpan);
+      const countSpan = document.createElement('span');
+      countSpan.className = 'binder-tab-count';
+      countSpan.textContent = String(total);
+      tab.appendChild(countSpan);
+      const switchTo = () => {
+        if (state.sidebarTrack === track.id) return;
+        state.sidebarTrack = track.id;
+        saveProgress();
+        renderSidebar();
+      };
+      tab.addEventListener('click', switchTo);
+      tab.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); switchTo(); }
+      });
+      host.appendChild(tab);
+    }
+  }
+
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     nav.innerHTML = '';
@@ -966,19 +1075,36 @@
     }
 
     const tracks = [
-      { id: 'syntax',   label: 'Track A — Syntax Fundamentals' },
-      { id: 'patterns', label: 'Track B — Canonical Patterns' }
+      { id: 'syntax',   label: 'Syntax Fundamentals' },
+      { id: 'patterns', label: 'Canonical Patterns' }
     ];
 
+    // Render the binder tab strip (independent of which lessons are visible).
+    renderBinderTabs(tracks);
+
+    // Search overrides the binder filter — if the user is searching, show
+    // matches from both tracks (and auto-switch the active tab if all hits are
+    // in the other track). Otherwise filter by the active tab only.
+    const tracksToRender = (() => {
+      if (!q) return tracks.filter(t => t.id === state.sidebarTrack);
+      // Searching — count matches per track
+      const counts = Object.fromEntries(tracks.map(t => [t.id,
+        CURRICULUM.filter(l => l.track === t.id && matches(l) && inStarter(l) && hideMasteredOk(l)).length
+      ]));
+      const activeHas = counts[state.sidebarTrack] > 0;
+      if (!activeHas && counts[state.sidebarTrack === 'syntax' ? 'patterns' : 'syntax'] > 0) {
+        // Auto-flip the active tab so search results aren't hidden behind it.
+        state.sidebarTrack = state.sidebarTrack === 'syntax' ? 'patterns' : 'syntax';
+        saveProgress();
+        renderBinderTabs(tracks);
+      }
+      return tracks.filter(t => t.id === state.sidebarTrack);
+    })();
+
     let visibleCount = 0;
-    for (const track of tracks) {
+    for (const track of tracksToRender) {
       const lessons = CURRICULUM.filter(l => l.track === track.id && matches(l) && inStarter(l) && hideMasteredOk(l));
       if (!lessons.length) continue;
-
-      const trackEl = document.createElement('div');
-      trackEl.className = 'track-header';
-      trackEl.textContent = track.label;
-      nav.appendChild(trackEl);
 
       const sections = [...new Set(lessons.map(l => l.section))];
       for (const section of sections) {
@@ -1058,6 +1184,9 @@
     }
     state.currentLessonId = id;
     state.currentTab = 'reference';
+    // Keep the binder tab in sync — the chosen lesson may belong to the
+    // other track (shuffle / mock / review-button paths can pick freely).
+    syncBinderToLesson(id);
     saveProgress();
     renderSidebar();
     renderLesson();
@@ -1678,6 +1807,7 @@
       const firstFull = CURRICULUM.find(l => l.status === 'full');
       if (firstFull) state.currentLessonId = firstFull.id;
     }
+    if (state.currentLessonId) syncBinderToLesson(state.currentLessonId);
     renderSidebar();
     renderLesson();
 
@@ -1731,6 +1861,7 @@
       if (!due.length) return;
       state.currentLessonId = due[0];
       state.currentTab = 'L3';
+      syncBinderToLesson(due[0]);
       saveProgress();
       renderSidebar();
       await loadLessonContent(due[0]);
@@ -1819,6 +1950,7 @@
       if (id) {
         state.currentLessonId = id;
         state.currentTab = 'L1';
+        syncBinderToLesson(id);
         saveProgress();
         renderSidebar();
         renderLesson();

@@ -1,0 +1,103 @@
+{
+  "id": "s-prototype",
+  "title": "Prototype chain",
+  "section": "Advanced JS",
+  "track": "syntax",
+  "status": "full",
+  "description": "Every object has a hidden link to a prototype. Property lookup walks this chain until found or null. class extends sets it up; hasOwnProperty filters own keys, `in` walks the chain.",
+  "reference": {
+    "code": "// Every object has a prototype — Object.getPrototypeOf reads it.\nconst arr = [1, 2, 3];\nObject.getPrototypeOf(arr) === Array.prototype;          // true\nObject.getPrototypeOf(Array.prototype) === Object.prototype;  // true\n\n// class extends wires the chain for you.\nclass Animal {\n  speak() { return \"noise\"; }\n}\nclass Dog extends Animal {\n  speak() { return \"woof\"; }                              // overrides Animal.speak\n}\nconst d = new Dog();\nd.speak();                                                // \"woof\" — found on Dog.prototype\nObject.getPrototypeOf(Dog.prototype) === Animal.prototype;// true\n\n// hasOwnProperty vs in: own keys vs the whole chain.\nconst proto = { inherited: 1 };\nconst obj = Object.create(proto);\nobj.own = 2;\nobj.hasOwnProperty(\"own\");        // true\nobj.hasOwnProperty(\"inherited\");  // false — lives on proto\n\"inherited\" in obj;               // true — in walks the chain",
+    "notes": [
+      "Lookup walks: instance → ClassName.prototype → ParentClass.prototype → Object.prototype → null.",
+      "Methods declared in a class body live on the prototype (shared), not on each instance.",
+      "hasOwnProperty checks only own keys; `in` returns true for inherited keys too."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Where does `d.speak()` find `speak` for `const d = new Dog()`?",
+        "options": [
+          "On the instance d itself",
+          "On Dog.prototype",
+          "On Animal.prototype",
+          "On Object.prototype"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What does `class Dog extends Animal {}` do to the prototype chain?",
+        "options": [
+          "Nothing — extends is sugar",
+          "Sets Object.getPrototypeOf(Dog.prototype) to Animal.prototype",
+          "Sets Dog.prototype to Animal",
+          "Copies Animal methods to every Dog instance"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Difference between obj.hasOwnProperty(k) and `k in obj`?",
+        "options": [
+          "No difference",
+          "hasOwnProperty checks own keys only; `in` walks the prototype chain",
+          "`in` is faster",
+          "hasOwnProperty walks the chain"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "A method declared inside a class body lives on:",
+        "options": [
+          "Each instance directly",
+          "The prototype (shared across instances)",
+          "A static registry",
+          "The global scope"
+        ],
+        "answer": 1
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Confirm extends wires the prototype chain.",
+        "template": "class Animal {\n  speak() { return \"noise\"; }\n}\nclass Dog ___ Animal {\n  speak() { return \"woof\"; }\n}\nconst d = new Dog();\nconsole.log(d.speak());\nconsole.log(Object.___(Dog.prototype) === Animal.prototype);",
+        "blanks": [
+          {
+            "answer": "extends",
+            "hint": "inheritance keyword"
+          },
+          {
+            "answer": "getPrototypeOf",
+            "hint": "reads the [[Prototype]] link"
+          }
+        ],
+        "expectedOutput": "woof\ntrue"
+      },
+      {
+        "prompt": "Show that hasOwnProperty filters inherited keys while `in` does not.",
+        "template": "const proto = { inherited: 1 };\nconst obj = Object.create(proto);\nobj.own = 2;\nconsole.log(obj.___(\"own\"));\nconsole.log(obj.hasOwnProperty(\"inherited\"));\nconsole.log(\"inherited\" ___ obj);",
+        "blanks": [
+          {
+            "answer": "hasOwnProperty",
+            "hint": "own-keys-only check"
+          },
+          {
+            "answer": "in",
+            "hint": "operator that walks the prototype chain"
+          }
+        ],
+        "expectedOutput": "true\nfalse\ntrue"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Define `class Animal { constructor(name); describe() }` and `class Dog extends Animal { bark() }`. Build `new Dog(\"Rex\")` and log describe() then bark().",
+    "expectedOutput": "Rex is an animal\nRex says woof",
+    "canonical": "class Animal {\n  constructor(name) { this.name = name; }\n  describe() { return this.name + \" is an animal\"; }\n}\nclass Dog extends Animal {\n  bark() { return this.name + \" says woof\"; }\n}\nconst d = new Dog(\"Rex\");\nconsole.log(d.describe());\nconsole.log(d.bark());",
+    "hints": [
+      "Dog inherits describe() automatically through the prototype chain.",
+      "Without an explicit Dog constructor, it forwards (name) to Animal."
+    ]
+  }
+}

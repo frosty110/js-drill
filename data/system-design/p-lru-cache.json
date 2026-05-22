@@ -1,0 +1,93 @@
+{
+  "id": "p-lru-cache",
+  "title": "LRU Cache",
+  "section": "System Design",
+  "track": "patterns",
+  "status": "full",
+  "description": "Least Recently Used cache with O(1) get and put. JS Map preserves INSERTION order — delete+re-set on every hit promotes to most-recent end; the first key is the LRU evict target.",
+  "reference": {
+    "code": "class LRUCache {\n  constructor(capacity) {\n    this.capacity = capacity;\n    this.map = new Map();                 // insertion order = recency order\n  }\n  get(key) {\n    if (!this.map.has(key)) return -1;\n    const v = this.map.get(key);\n    this.map.delete(key);                 // remove…\n    this.map.set(key, v);                 // …re-insert to mark as most recent\n    return v;\n  }\n  put(key, value) {\n    if (this.map.has(key)) {\n      this.map.delete(key);               // update bumps recency too\n    } else if (this.map.size >= this.capacity) {\n      const oldest = this.map.keys().next().value;\n      this.map.delete(oldest);            // evict the front (LRU)\n    }\n    this.map.set(key, value);\n  }\n}\n// Time O(1) per op, Space O(capacity)",
+    "notes": [
+      "Map preserves insertion order — leverage that to skip a doubly-linked list.",
+      "On HIT, delete + set to move the key to the end. Forgetting this turns the cache into FIFO.",
+      "Evict from the FRONT via `this.map.keys().next().value` — that key is the oldest."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why use a Map instead of a plain object for the LRU store?",
+        "options": [
+          "Maps allow non-string keys",
+          "Maps preserve insertion order — recency tracking for free",
+          "Maps are faster for every operation",
+          "Objects do not support delete"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "On a cache HIT, what must `get` do?",
+        "options": [
+          "Return the value",
+          "Return the value AND delete+re-set the key to mark it most recent",
+          "Increment a counter",
+          "Move the key to the front"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "When the cache is at capacity, which key do we evict?",
+        "options": [
+          "A random key",
+          "The most recently used (back of the map)",
+          "The least recently used (front of the map)",
+          "The smallest key"
+        ],
+        "answer": 2
+      },
+      {
+        "q": "Time complexity of get and put?",
+        "options": [
+          "O(log n)",
+          "O(n)",
+          "O(1) amortized",
+          "O(n log n)"
+        ],
+        "answer": 2
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the LRUCache so capacity 2 evicts key 2 after a get(1) and put(3, 3).",
+        "template": "class LRUCache {\n  constructor(capacity) {\n    this.capacity = capacity;\n    this.map = new ___();\n  }\n  get(key) {\n    if (!this.map.has(key)) return -1;\n    const v = this.map.get(key);\n    this.map.___(key);\n    this.map.set(key, v);\n    return v;\n  }\n  put(key, value) {\n    if (this.map.has(key)) this.map.delete(key);\n    else if (this.map.size >= this.capacity) {\n      const oldest = this.map.keys().___().value;\n      this.map.delete(oldest);\n    }\n    this.map.set(key, value);\n  }\n}\nconst c = new LRUCache(2);\nc.put(1, 1);\nc.put(2, 2);\nconsole.log(c.get(1));\nc.put(3, 3);\nconsole.log(c.get(2));",
+        "blanks": [
+          {
+            "answer": "Map",
+            "hint": "insertion-ordered key-value store"
+          },
+          {
+            "answer": "delete",
+            "hint": "remove before re-inserting to bump recency"
+          },
+          {
+            "answer": "next",
+            "hint": "first element of the keys iterator"
+          }
+        ],
+        "expectedOutput": "1\n-1"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement LRUCache(capacity) with O(1) get (returns value or -1) and put. Run capacity-2: put(1,1), put(2,2), get(1), put(3,3), get(2), put(4,4), get(1), get(3), get(4). Logs: 1, -1, -1, 3, 4.",
+    "expectedOutput": "1\n-1\n-1\n3\n4",
+    "canonical": "class LRUCache {\n  constructor(capacity) {\n    this.capacity = capacity;\n    this.map = new Map();\n  }\n  get(key) {\n    if (!this.map.has(key)) return -1;\n    const v = this.map.get(key);\n    this.map.delete(key);\n    this.map.set(key, v);\n    return v;\n  }\n  put(key, value) {\n    if (this.map.has(key)) this.map.delete(key);\n    else if (this.map.size >= this.capacity) {\n      const oldest = this.map.keys().next().value;\n      this.map.delete(oldest);\n    }\n    this.map.set(key, value);\n  }\n}\nconst c = new LRUCache(2);\nc.put(1, 1);\nc.put(2, 2);\nconsole.log(c.get(1));\nc.put(3, 3);\nconsole.log(c.get(2));\nc.put(4, 4);\nconsole.log(c.get(1));\nconsole.log(c.get(3));\nconsole.log(c.get(4));",
+    "hints": [
+      "Use a Map and rely on insertion order as recency order.",
+      "On hits and updates: delete + set to move the key to the back.",
+      "Evict via `this.map.keys().next().value` — the oldest key."
+    ]
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "id": "s-trycatch",
+  "title": "try / catch",
+  "section": "Async",
+  "track": "syntax",
+  "status": "full",
+  "description": "try/catch handles thrown errors; the catch parameter exposes .message; finally always runs. Works with async/await too.",
+  "reference": {
+    "code": "// Synchronous error handling\ntry {\n  JSON.parse(\"not json\");\n} catch (err) {\n  // err.message — human-readable\n  // err.name, err.stack also available\n} finally {\n  // runs whether try succeeded, threw, or returned\n}\n\n// Throw your own errors\nfunction divide(a, b) {\n  if (b === 0) throw new Error(\"div by zero\");\n  return a / b;\n}\n\n// finally runs even when try returns\nfunction f() {\n  try {\n    return \"from try\";\n  } finally {\n    // this line runs BEFORE the function returns\n  }\n}\n\n// Async usage — await throws into the surrounding try\nasync function loadUser(id) {\n  try {\n    const res = await fetch(\"/api/user/\" + id);\n    return await res.json();\n  } catch (e) {\n    return { error: e.message };\n  } finally {\n    // always runs\n  }\n}",
+    "notes": [
+      "The catch binding is optional in modern JS — write `catch {}` if you do not need the error.",
+      "finally runs even when try contains return or throw — perfect for cleanup.",
+      "await unwraps a rejected promise into a thrown error — wrap awaits in try/catch to handle failures."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "When does the `finally` block run?",
+        "options": [
+          "Only if try succeeds",
+          "Only if catch runs",
+          "Always — even after throw or return",
+          "Only on uncaught errors"
+        ],
+        "answer": 2
+      },
+      {
+        "q": "How do you read the error message inside `catch (e)`?",
+        "options": [
+          "e.text",
+          "e.message",
+          "e.error",
+          "e.value"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "How do you signal an error inside a function?",
+        "options": [
+          "return Error(...)",
+          "throw new Error(...)",
+          "console.error(...)",
+          "raise(...)"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Inside `async function f() { try { await p } catch (e) { ... } }`, when does catch run?",
+        "options": [
+          "Never — async swallows errors",
+          "When p rejects",
+          "Only on syntax errors",
+          "When p resolves"
+        ],
+        "answer": 1
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Catch a JSON.parse error, read .message, and run a finally cleanup.",
+        "template": "___ {\n  JSON.parse(\"not json\");\n} ___ (err) {\n  console.log(\"caught\", err.message.length > 0);\n} ___ {\n  console.log(\"done\");\n}",
+        "blanks": [
+          {
+            "answer": "try",
+            "hint": "open the protected block"
+          },
+          {
+            "answer": "catch",
+            "hint": "binds the thrown error"
+          },
+          {
+            "answer": "finally",
+            "hint": "always runs"
+          }
+        ],
+        "expectedOutput": "caught true\ndone"
+      },
+      {
+        "prompt": "Throw your own error and recover by returning its .message.",
+        "template": "function safeDivide(a, b) {\n  try {\n    if (b === 0) ___ new Error(\"div by zero\");\n    return a / b;\n  } catch (e) {\n    return e.___;\n  }\n}\nconsole.log(safeDivide(10, 2), safeDivide(10, 0));",
+        "blanks": [
+          {
+            "answer": "throw",
+            "hint": "raise an error"
+          },
+          {
+            "answer": "message",
+            "hint": "human-readable text"
+          }
+        ],
+        "expectedOutput": "5 div by zero"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `async function loadJSON(text)` that returns the parsed .value, or \"bad: \" + e.name on failure. Always log \"checked\" in finally. Run once with `{\"value\":42}`, once with \"oops\".",
+    "expectedOutput": "checked\n42\nchecked\nbad: SyntaxError",
+    "canonical": "async function loadJSON(text) {\n  try {\n    return JSON.parse(text).value;\n  } catch (e) {\n    return \"bad: \" + e.name;\n  } finally {\n    console.log(\"checked\");\n  }\n}\n(async () => {\n  console.log(await loadJSON(\"{\\\"value\\\":42}\"));\n  console.log(await loadJSON(\"oops\"));\n})();",
+    "hints": [
+      "finally logs BEFORE the function returns its value.",
+      "Use an async IIFE to await at the top level.",
+      "e.name is \"SyntaxError\" — stable across engines (e.message wording is not)."
+    ]
+  }
+}

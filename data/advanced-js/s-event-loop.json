@@ -1,0 +1,103 @@
+{
+  "id": "s-event-loop",
+  "title": "Event loop & microtasks",
+  "section": "Advanced JS",
+  "track": "syntax",
+  "status": "full",
+  "description": "Sync runs first. Microtasks (Promise.then) drain COMPLETELY before the next macrotask (setTimeout). That is why a Promise.then logs before a setTimeout(_, 0).",
+  "reference": {
+    "code": "// 1) Sync code runs to completion BEFORE any queued task fires.\nconsole.log(\"A\");                              // sync\nPromise.resolve().then(() => console.log(\"B\"));// microtask — queued\nconsole.log(\"C\");                              // sync\n// Output: A, C, B\n\n// 2) Microtasks drain fully between sync code and the next macrotask.\nPromise.resolve()\n  .then(() => console.log(1))                  // micro level 1\n  .then(() => console.log(2));                 // micro level 2 (queued by level 1)\nPromise.resolve().then(() => console.log(3));  // micro level 1 (queued earlier)\nconsole.log(4);                                // sync\n// Output: 4, 1, 3, 2\n//   sync 4 first; then FIFO level-1 (1, 3), then level-2 (2).",
+    "notes": [
+      "Sync code always runs first. Microtasks (Promise.then, queueMicrotask) drain before the next macrotask.",
+      "A .then enqueued inside another .then waits for the rest of the current microtask level to drain.",
+      "setTimeout(fn, 0) is NOT zero delay — it schedules a macrotask, so any pending Promise.then runs first."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "In `console.log(\"A\"); Promise.resolve().then(() => console.log(\"B\")); console.log(\"C\");`, what prints?",
+        "options": [
+          "A B C",
+          "A C B",
+          "B A C",
+          "C A B"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "A Promise.then callback is which kind of task?",
+        "options": [
+          "Macrotask",
+          "Microtask",
+          "Synchronous",
+          "Idle callback"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Between two sync statements, can a setTimeout(_, 0) callback fire?",
+        "options": [
+          "Yes, if the delay is 0",
+          "No — sync code runs to completion before any task fires",
+          "Only in Node.js",
+          "Only inside async functions"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Why does Promise.then beat setTimeout(_, 0) to the punch?",
+        "options": [
+          "Promises have higher priority by spec",
+          "Microtask queue drains fully before the next macrotask runs",
+          "setTimeout has a 4 ms minimum",
+          "Both — priority and the 4 ms floor"
+        ],
+        "answer": 1
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Predict the order: write the three logs so the output matches A, C, B.",
+        "template": "console.log(\"A\");\nPromise.resolve().___(() => console.log(\"B\"));\nconsole.log(\"___\");",
+        "blanks": [
+          {
+            "answer": "then",
+            "hint": "register a microtask"
+          },
+          {
+            "answer": "C",
+            "hint": "the second sync log"
+          }
+        ],
+        "expectedOutput": "A\nC\nB"
+      },
+      {
+        "prompt": "Fill the chain so the output is 4, 1, 3, 2.",
+        "template": "Promise.resolve().then(() => console.log(1)).___(() => console.log(2));\nPromise.resolve().then(() => console.log(___));\nconsole.log(4);",
+        "blanks": [
+          {
+            "answer": "then",
+            "hint": "second handler in the chain"
+          },
+          {
+            "answer": "3",
+            "hint": "logs after 1 in the same microtask level"
+          }
+        ],
+        "expectedOutput": "4\n1\n3\n2"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Log \"start\", schedule chain `.then(log \"micro1\").then(log \"micro2\")`, then log \"end\". Expect: start, end, micro1, micro2.",
+    "expectedOutput": "start\nend\nmicro1\nmicro2",
+    "canonical": "console.log(\"start\");\nPromise.resolve().then(() => console.log(\"micro1\")).then(() => console.log(\"micro2\"));\nconsole.log(\"end\");",
+    "hints": [
+      "Sync code (start, end) runs first.",
+      "Microtask queue drains: micro1 → which queues micro2 → micro2 runs."
+    ]
+  }
+}

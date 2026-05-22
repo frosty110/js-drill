@@ -1,0 +1,99 @@
+{
+  "id": "s-this",
+  "title": "this / bind / call / apply",
+  "section": "Advanced JS",
+  "track": "syntax",
+  "status": "full",
+  "description": "this is decided by how a function is CALLED. Four call patterns (method, standalone, new, explicit) + the arrow gotcha (lexical capture).",
+  "reference": {
+    "code": "const user = {\n  name: \"Ada\",\n  greet() { return \"Hi \" + this.name; }      // method call → this = user\n};\n\nuser.greet();                                // \"Hi Ada\"\n\nconst detached = user.greet;\ndetached();                                  // standalone → this is undefined (strict)\n\n// Fix 1: bind returns a NEW function with this locked\nconst bound = user.greet.bind(user);\nbound();                                     // \"Hi Ada\"\n\n// Fix 2: call / apply invoke once with an explicit this\nfunction intro(greet, punct) {\n  return greet + \" \" + this.name + punct;\n}\nintro.call(user, \"Hello\", \"!\");              // \"Hello Ada!\"\nintro.apply(user, [\"Hey\", \".\"]);             // \"Hey Ada.\" — array form\n\n// Arrow functions IGNORE call/bind — they capture this lexically\nconst obj = {\n  name: \"Lee\",\n  greet() { return (() => this.name)(); }    // arrow → this = obj\n};",
+    "notes": [
+      "this is bound at CALL time for normal functions; arrow functions capture this at DEFINITION time.",
+      "bind returns a new function; call/apply invoke immediately. apply takes args as an array.",
+      "Passing a method as a callback (setTimeout, map) detaches it — wrap in arrow or bind to preserve this."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "When is `this` resolved for a regular (non-arrow) function?",
+        "options": [
+          "Where the function is defined",
+          "When the function is called — based on how it is called",
+          "Always the global object",
+          "At module load"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Difference between call and apply?",
+        "options": [
+          "call binds permanently, apply does not",
+          "apply takes args as an array; call takes them comma-separated",
+          "apply is async",
+          "There is no difference"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What does bind return?",
+        "options": [
+          "The result of calling the function",
+          "undefined",
+          "A new function with this (and optional args) locked in",
+          "The original function mutated in place"
+        ],
+        "answer": 2
+      },
+      {
+        "q": "Inside `obj.greet() { return (() => this.name)(); }`, the arrow’s `this` is:",
+        "options": [
+          "undefined",
+          "The global object",
+          "obj — arrows inherit this from the enclosing scope",
+          "A new empty object"
+        ],
+        "answer": 2
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fix the lost-this problem by binding the detached method.",
+        "template": "const user = {\n  name: \"Ada\",\n  greet() { return \"Hi \" + this.name; }\n};\nconst detached = user.greet;\nconst bound = detached.___(user);\nconsole.log(bound());",
+        "blanks": [
+          {
+            "answer": "bind",
+            "hint": "returns a new function with this locked"
+          }
+        ],
+        "expectedOutput": "Hi Ada"
+      },
+      {
+        "prompt": "Invoke intro once with call, then with apply (note the array).",
+        "template": "function intro(greet, punct) {\n  return greet + \" \" + this.name + punct;\n}\nconst u = { name: \"Lee\" };\nconst a = intro.___(u, \"Hello\", \"!\");\nconst b = intro.___(u, [\"Hey\", \".\"]);\nconsole.log(a);\nconsole.log(b);",
+        "blanks": [
+          {
+            "answer": "call",
+            "hint": "comma-separated args"
+          },
+          {
+            "answer": "apply",
+            "hint": "args as an array"
+          }
+        ],
+        "expectedOutput": "Hello Lee!\nHey Lee."
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Inside `obj.greet()`, declare an arrow function that reads `this.name`, then return its call. Log `obj.greet()` for `{ name: \"Ada\" }`.",
+    "expectedOutput": "Ada",
+    "canonical": "const obj = {\n  name: \"Ada\",\n  greet() {\n    const arrow = () => this.name;\n    return arrow();\n  }\n};\nconsole.log(obj.greet());",
+    "hints": [
+      "Arrow functions do not have their own this — they inherit it from the enclosing method.",
+      "Inside greet(), this is obj because of the method call."
+    ]
+  }
+}

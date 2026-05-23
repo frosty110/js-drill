@@ -87,12 +87,28 @@ if (missingFromDisk.length || missingFromManifest.length) {
 }
 
 // ── L2 + L3 verification ──────────────────────────────────────────────────
+// Density thresholds — PROFILE.md says ≥3 L1 questions and ≥2 L2 exercises
+// per lesson so the mobile drill loop has enough surface area. Tracked here
+// as a non-fatal warning so the existing backlog doesn't block work; turn
+// it into a hard failure with --strict-density (e.g. in CI once cleared).
+const L1_MIN = 3;
+const L2_MIN = 2;
+const STRICT_DENSITY = process.argv.includes('--strict-density');
+
 (async () => {
   let pass = 0, fail = 0;
   const failures = [];
+  const underL1 = [];
+  const underL2 = [];
   for (const [id, info] of manifestEntries) {
     const lesson = JSON.parse(fs.readFileSync(info.file, 'utf8'));
     if (lesson.status !== 'full') continue;
+
+    // Density check — non-fatal by default, see below.
+    const l1n = lesson.L1?.questions?.length || 0;
+    const l2n = lesson.L2?.exercises?.length || 0;
+    if (l1n < L1_MIN) underL1.push({ id, section: info.slug, n: l1n });
+    if (l2n < L2_MIN) underL2.push({ id, section: info.slug, n: l2n });
 
     // L2 — splice each blank.answer into template, run, compare
     if (lesson.L2 && lesson.L2.exercises) {
@@ -136,5 +152,25 @@ if (missingFromDisk.length || missingFromManifest.length) {
     for (const f of failures.slice(0, 20)) console.log('  - ' + f);
     if (failures.length > 20) console.log(`  …and ${failures.length - 20} more`);
     process.exit(1);
+  }
+
+  // Density warning — never fails by default (use --strict-density to enforce).
+  if (underL1.length || underL2.length) {
+    console.log('');
+    console.log(`⚠ Density ${STRICT_DENSITY ? 'check' : 'warning'} — PROFILE.md says ≥${L1_MIN} L1 + ≥${L2_MIN} L2 per lesson.`);
+    if (underL1.length) {
+      console.log(`  L1 < ${L1_MIN} questions: ${underL1.length} lesson${underL1.length === 1 ? '' : 's'}`);
+      for (const o of underL1.slice(0, 5)) console.log(`    - ${o.section}/${o.id} (L1=${o.n})`);
+      if (underL1.length > 5) console.log(`    …and ${underL1.length - 5} more`);
+    }
+    if (underL2.length) {
+      console.log(`  L2 < ${L2_MIN} exercises: ${underL2.length} lesson${underL2.length === 1 ? '' : 's'}`);
+      for (const o of underL2.slice(0, 5)) console.log(`    - ${o.section}/${o.id} (L2=${o.n})`);
+      if (underL2.length > 5) console.log(`    …and ${underL2.length - 5} more`);
+    }
+    if (STRICT_DENSITY) {
+      console.error('\nStrict density enforcement is on — exiting non-zero.');
+      process.exit(1);
+    }
   }
 })();

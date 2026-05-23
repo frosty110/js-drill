@@ -7,7 +7,7 @@ for validation, browser-driven QA, and historical migrations.
 
 | File | Purpose |
 |---|---|
-| `validate-data.js` | Runs every L2 fill + L3 canonical from `data/<slug>/*.json`, diffs the manifest against the on-disk layout, and fails on drift. Run before every commit that touches lesson content. |
+| `validate-data.js` | Runs every L2 fill + L3 canonical from `data/<slug>/*.json`, diffs the manifest against the on-disk layout, and fails on drift. Also warns on lessons with fewer than 3 L1 questions or 2 L2 exercises (PROFILE.md density floor). Run before every commit that touches lesson content. Pass `--strict-density` to make the density check fail-hard (useful once the backlog is cleared). |
 | `cdp/lib.js` | Shared CDP helper — `ensureServer`, `ensureChrome`, `connect`. New probes should use this; one-off scripts shouldn't re-implement WS plumbing. |
 | `cdp/template.js` | Copy-this scenario template demonstrating the arrange → act → assert + snap pattern. See the `browser-test` skill. |
 | `cdp/check.js` | Quick single-page probe — drives Chrome at `:9222`, captures console/network errors and a screenshot. |

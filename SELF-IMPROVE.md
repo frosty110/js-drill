@@ -5,25 +5,26 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Close the L2 density gap.* The iter 5 survey
-  measured the lesson set: 102 of 143 full lessons (71%) have only ONE
-  L2 exercise. PROFILE.md says lessons should have ≥2 L2 exercises so
-  the mobile drill loop has enough surface area — the mobile user runs
-  out of L2 fuel almost immediately on most lessons. This is the biggest
-  PROFILE.md violation in the codebase right now and it's invisible
-  because no surface flags it.
-- **Hypothesis to test:** The cheapest, highest-trust fix isn't to mass-
-  author 102 new exercises this iteration; it's to make the validator
-  *warn* on under-built lessons so the gap is enforceable going forward
-  (and the existing 102 become a visible backlog rather than silent
-  drift). Adding 1 new L2 to ~5 of the worst offenders (the most-
-  frequently-drilled syntax lessons) as a follow-up step would be a
-  reasonable second swing — but the structural fix (the warning) is the
-  atomic move.
-- **Out of scope this iteration:** further SR-gradient tuning, Mock
-  Interview mode, adding new lessons, taxonomy changes, L1→L2→L3 *core*
-  structure. Mass content authoring is out of scope; only the validator
-  signal is.
+- **Primary lens:** *Start draining the L2 density backlog.* Iter 6 made
+  the 102-lesson gap visible at build time (validator warning,
+  `--strict-density` for future enforcement). Now the question is: do
+  the under-built lessons actually look uniformly thin, or is the
+  pattern that some lessons need 1 more exercise while others need 3?
+  And what's the *shape* of a good second L2 exercise — does it
+  reinforce the same concept with different parameters, or test a
+  related but distinct point? Need to look at 5–10 actual lessons
+  before deciding the authoring template.
+- **Hypothesis to test:** A small, focused content batch (5–10 of the
+  most-drilled patterns — `two-sum`, `valid-palindrome`, `valid-
+  parentheses`, etc. — the lessons mobile users hit first) is more
+  valuable than a generic "add one to all 102" sweep. The drill audit
+  should produce a working *template* for what a second L2 looks like
+  per lesson type (syntax vs pattern vs applied) so iter 8+ can scale
+  the authoring with confidence. Iter 7 = audit + template + 5 lessons
+  shipped, not 102.
+- **Out of scope this iteration:** Mock Interview mode, taxonomy
+  changes, L1→L2→L3 core structure, mass authoring of all 102 lessons,
+  further SR-gradient tuning.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -50,6 +51,21 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 6 — Validator warns on L2/L1 density floor
+The iter 5 survey found 102/143 lessons (71%) below the PROFILE.md L2
+density floor (≥2 exercises), but no surface flagged it — the gap was
+silently drifting. Extended `tools/validate-data.js` to compute density
+per lesson during its existing read pass and print a warning section
+after the pass/fail summary; added `--strict-density` flag to flip it
+into a hard failure for future CI / pre-commit once the backlog is
+cleared. Default behavior unchanged (exit 0 on warnings) so the loop
+keeps moving while the structural enforcement is now in place. Touched
+`active-recall.md` to document the "density floor supports varied
+recall reps" rationale. Validator default exit 0, --strict-density exit
+1 — both verified. **Learning:** the structural-warning move is much
+cheaper than mass-authoring and creates the right kind of pressure —
+contributors see the count every time they run the validator.
 
 ### 2026-05-23 — iter 5 — Starter Path step pill + non-SR re-survey
 Stepped out of the SR rabbit hole. Cold-surveyed via the browser-test

@@ -32,6 +32,14 @@ app's existence.
   Keeps the recall demand high while removing the typing-mechanics friction
   that would otherwise drown out the recall signal on a phone. See
   [[desirable-difficulty]] for the device-calibration rationale.
+- **Density floor enforced at build time.** Active recall is stronger when
+  the user retrieves the same concept across *varied* prompts, not the same
+  prompt repeatedly. PROFILE.md sets a floor (≥3 L1 questions, ≥2 L2
+  exercises per lesson) so each lesson can support multiple recall reps
+  without exhausting the bank. `tools/validate-data.js` warns on lessons
+  below the floor and can be flipped to fail-hard with `--strict-density`
+  once the existing backlog of under-built lessons (currently 102 of 143
+  on L2) is cleared.
 
 ## Under-exploited / candidate features
 

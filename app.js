@@ -370,7 +370,7 @@ async function generateCheatsheet() {
   const date = new Date().toISOString().slice(0, 10);
   const total = fullLessons.length;
   let md = `# JavaScript Interview Cheatsheet\n\n`;
-  md += `> ${total} lessons covering syntax fundamentals and canonical interview patterns.\n`;
+  md += `> ${total} lessons across syntax fundamentals, canonical interview patterns, and applied problems.\n`;
   md += `> Generated ${date} from the JS Drill app.\n\n`;
   md += `---\n\n## Table of Contents\n\n`;
 

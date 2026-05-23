@@ -5,26 +5,26 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Audit the data layer for the same kind of
-  third-track drift iter 14 found in the UI.* Iter 14 cleaned up
-  three places where `lesson.track === 'syntax' ? X : Y` excluded
-  applied lessons. That was UI drift. What about state / scheduling /
-  filtering? Specifically: does the daily-plan, SR scheduler, or any
-  other selection function silently exclude applied lessons in a way
-  that's structurally wrong now that applied is a first-class track?
-  (Mock random-pick is intentionally patterns-only per
-  startRandomMockInterview — that's by design, not drift. Look for
-  the *unintentional* ones.)
-- **Hypothesis to test:** A second focused audit — this time on the
-  selection functions in app.js (dueReviewIds, dailyPlan,
-  starterPathNextId, topWeakLessonId, pickShuffleReview, etc.) — will
-  surface 0 or 1 more drift point. If 0, the iter-14 audit
-  caught everything and the loop genuinely converged. If 1, fix it
-  cheaply with the same template (TRACK_PILLS-style lookup, probe
-  asserting applied parity).
-- **Out of scope this iteration:** UI changes (covered iter 14), new
-  features, content authoring, taxonomy changes, L1→L2→L3 core
-  structure.
+- **Primary lens:** *Fresh survey — the audit cycle is closed.* Iter
+  14 found UI drift (3 places). Iter 15 audited the data layer and
+  found 0 drift — every selection function is either track-agnostic
+  where it matters or track-exclusive by design. The adjacent surface
+  (cheatsheet header pitch + README tagline) had the same stale-prose
+  pattern as the iter-10 welcome banner; fixed those. The loop has
+  now closed every audit thread it started. Time to step back to a
+  fresh survey lens — not on tracks specifically, but on the broader
+  app experience after 15 iterations of incremental improvements.
+- **Hypothesis to test:** TBD — open it with a cold mobile walkthrough
+  (the same lens as iter 1) but now against the IMPROVED app. The
+  question: after iter 1's "rusty engineer in line at coffee shop"
+  framing, what NEW frictions emerge that weren't visible before
+  because earlier ones dominated? E.g., now that mock works, sidebar
+  is sorted, applied is surfaced, density is enforced — what's the
+  next friction surface the loop hasn't seen because it didn't
+  exist as a top-level problem yet?
+- **Out of scope this iteration:** content authoring, taxonomy
+  changes, L1→L2→L3 core structure, further track-drift audits (loop
+  has done two; data shows convergence).
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -51,6 +51,29 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 15 — Data-layer audit: clean; fix adjacent stale prose
+Audited every selection function (`dueReviewIds`, `topWeakLessonId`,
+`dailyPlan`, `starterPathNextId`, `nextLessonId`, `prevLessonId`,
+`pickShuffleReview`) for the same third-track exclusion pattern iter 14
+found in the UI. **Result: 0 drift.** All seven are either track-
+agnostic where appropriate or track-exclusive by design (path / mock-
+random-pick are intentionally syntax+patterns-only per the explicit
+"Applied Problems are OUTSIDE the linear path" comment). The data
+layer is genuinely converged.
+
+Found one adjacent drift while surveying: `generateCheatsheet` header
+line emitted "*syntax fundamentals and canonical interview patterns*"
+— same stale-prose pattern as the iter-10 welcome banner, missing
+the Applied Problems track. Body iteration was already correct (all
+three Track A/B/C sections render). README tagline had the same issue.
+Both fixed with one-line edits — same template as iter 10. Validator
+336/0; new probe `tools/cdp/cheatsheet-track-pitch.js` (6/6) asserts
+the header pitch mentions all three tracks AND the body still emits
+Track A/B/C sections. All 9 prior probes still pass (61 assertions
+total). **Learning:** two focused audits in a row closed the third-
+track theme cleanly. The loop should now widen its lens — there's no
+more obvious drift to chase here.
 
 ### 2026-05-23 — iter 14 — Audit found Applied-track UI drift; fixed
 The meta-audit scoped for iter 14 immediately surfaced three places
@@ -213,29 +236,11 @@ recall reps" rationale. Validator default exit 0, --strict-density exit
 cheaper than mass-authoring and creates the right kind of pressure —
 contributors see the count every time they run the validator.
 
-### 2026-05-23 — iter 5 — Starter Path step pill + non-SR re-survey
-Stepped out of the SR rabbit hole. Cold-surveyed via the browser-test
-skill at mobile viewport (9 screenshots) and ran an L1/L2 density audit
-across all 143 full lessons. Big finding: **102 lessons (71%) have only
-1 L2 exercise** vs. PROFILE.md's ≥2 floor — that's iter 6's lens.
-Smaller finding suitable for iter 5: when starter-path mode is on,
-the sidebar shows path step numbers per-lesson but they group by
-section, so adjacent lessons can show e.g. "22, 20, 21" — confusing
-non-sequential ordering. Added a "🧭 Step N of M" pill to the lesson
-header that gives the user a stable orientation anchor in the main
-viewport (visible on every render, not buried in sidebar). Same
-"make-invisible-state-visible" lever the iter 4 SR-feedback line
-exploits. Validator 327/0; new probe `tools/cdp/starter-path-step-
-pill.js` covers 4 scenarios (off, on, toggle-off, toggle-on) — 7/7.
-Iter 2 + iter 3 probes regression-clean. **Learning:** stepping back
-to re-survey surfaced a structural content-quality gap (L2 density)
-that 4 mechanism-tuning iterations had missed. The lens swap was the
-win, not the pill itself.
-
-*(iters 1–4 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–5 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1 device-calibrated Review CTA; `c02b928` iter 2 L2
 holds the SR bucket; `5e18e9a` iter 3 Reveal demotes the SR bucket;
-`0c3e61d` iter 4 surface SR state in pass/reveal feedback.)*
+`0c3e61d` iter 4 surface SR state in pass/reveal feedback;
+`4eaa3c6` iter 5 Starter Path step pill + non-SR re-survey.)*
 
 ## Hypotheses parking lot
 *(curated iter 10; sidebar-ordering shipped iter 11)*

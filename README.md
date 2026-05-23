@@ -1,6 +1,6 @@
 # JS Drill — Memorize JavaScript Syntax & Interview Patterns
 
-A single-file web app for drilling JavaScript syntax and canonical interview-pattern solutions. Built for coding-interview prep where speed of recall matters more than novel problem-solving.
+A single-file web app for drilling JavaScript syntax, canonical interview-pattern solutions, and applied implementation problems. Built for coding-interview prep where speed of recall matters more than novel problem-solving.
 
 ## Quick start
 

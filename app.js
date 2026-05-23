@@ -1714,12 +1714,18 @@ async function init() {
     startRandomMockInterview();
   });
 
-  // Review-Due button — jump to the most-overdue lesson's L3
+  // Review-Due button — jump to the most-overdue lesson.
+  // On touch devices, land on L2 (cued recall via fill-in) — desirable
+  // difficulty without the mechanical friction of typing free-recall code
+  // on a phone keyboard. On fine-pointer devices, keep L3 (blank editor) —
+  // the at-desk tier that actually advances the SR interval on pass.
+  // See docs/learning-strategies/desirable-difficulty.md.
   document.getElementById('review-btn').addEventListener('click', async () => {
     const due = dueReviewIds();
     if (!due.length) return;
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
     state.currentLessonId = due[0];
-    state.currentTab = 'L3';
+    state.currentTab = coarse ? 'L2' : 'L3';
     syncBinderToLesson(due[0]);
     saveProgress();
     renderSidebar();

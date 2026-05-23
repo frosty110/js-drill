@@ -27,6 +27,11 @@ app's existence.
   to lie about it.
 - **No "show solution then quiz"** pattern — Reference is a separate tab the
   user must explicitly leave to drill.
+- **Review CTA routes to a recall surface calibrated to the device** — touch
+  devices land on L2 (cued recall), keyboard devices on L3 (free recall).
+  Keeps the recall demand high while removing the typing-mechanics friction
+  that would otherwise drown out the recall signal on a phone. See
+  [[desirable-difficulty]] for the device-calibration rationale.
 
 ## Under-exploited / candidate features
 

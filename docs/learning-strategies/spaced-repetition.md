@@ -25,6 +25,14 @@ specifically toward lessons their memory is currently weakest on.
   goes overdue, then gets an L2 pass, drops out of the due list for another
   1 day — but to reach 3d, the user still has to nail L3. The difficulty
   gradient is preserved; the loop isn't desk-only.
+- **Reveal on a due lesson DEMOTES the bucket by one step.** Clicking
+  "Reveal answers" on L2 or L3 while the lesson is due means the user
+  couldn't produce it from memory — the canonical "I failed this recall"
+  signal. The bucket drops one step (floored at 1d), and `dueAt` resets to
+  `now + new_interval`. Reveals on a not-due lesson (voluntary early
+  review) are no-ops on the schedule. Symmetric counterpart to the
+  L3-advance / L2-hold gradient: easier test holds, harder test extends,
+  reveal demotes.
 - **Due-lessons surfacing** in Today's plan — the curated daily session pulls
   from `dueLessons` first.
 - **Weak-spot tracker** resurfaces lessons where L1 was missed, even outside

@@ -50,24 +50,24 @@ recall friction with much less typing.
   friction so the typing burden is at least clean.
 - **Line wrapping in the L3 editor** — removes horizontal-scroll friction
   that has nothing to do with recall.
-- **SR advancement is graded by difficulty.** L3 pass on a due lesson
-  advances the interval bucket (1d → 3d → 7d → 14d → 30d). L2 pass on a
-  due lesson HOLDS the bucket but resets `dueAt` so the user drops out of
-  the due list for the current interval window. This gives mobile users a
-  way to keep their queue moving without overstating their free-recall
-  confidence — easier test holds the line, harder test extends it. Cross-
-  references [[spaced-repetition]].
+- **SR advancement is graded by difficulty (both sides).** L3 pass on a due
+  lesson advances the interval bucket (1d → 3d → 7d → 14d → 30d). L2 pass
+  HOLDS the bucket but resets `dueAt`. Reveal on a due lesson DEMOTES the
+  bucket by one step (floored at 1d). The schedule responds to actual
+  recall strength rather than ratcheting in one direction. Cross-references
+  [[spaced-repetition]].
 
 ## Under-exploited / candidate features
 
 - **Recall-without-prompt mode** — show the lesson title only, expect the
   user to produce L3 canonical. Strips the prompt scaffolding that makes
   recall easier than a real interview. Cross-references [[active-recall]].
-- **Variable-spacing under failure.** Today scheduling is monotonic on the
-  win side (L2 holds, L3 advances) and no-op on the loss side. A failed L2
-  or L3 on a due review should pull the next due date *sooner* rather than
-  leaving the interval where it was — the loss-side version of the
-  hold-vs-advance gradient. Cross-references [[spaced-repetition]].
+- **L3 timeout-as-failure.** Today the only "failure" signal that demotes
+  is an explicit reveal. A user who silently abandons a due L3 (closes the
+  tab, switches lessons, lets the page sit) keeps their interval. A
+  threshold like "L3 opened on a due lesson, no pass within N minutes"
+  could broaden the loss-side signal — but needs care so it doesn't fire
+  on legitimate context switches.
 - **"Predict the output" gate before L3 run.** Forces a generation step
   before the typing step; isolates "did I understand?" from "did I type it
   right?"

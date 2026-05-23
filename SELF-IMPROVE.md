@@ -5,19 +5,21 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Close the loss-side of the SR gradient.* Iterations 1
-  and 2 fixed the win-side of spaced-repetition for mobile: L2 on a due
-  lesson now holds the bucket, L3 still advances. But the loss-side is
-  still no-op — a failed L2/L3 on a due review just leaves the interval
-  where it was, so a user who's clearly forgotten a pattern still gets
-  the same long interval next time. Anki/SM-2 pulls the interval shorter
-  on failure; this app doesn't.
-- **Hypothesis to test:** Demoting the SR bucket (or resetting to bucket 0)
-  on a failed L2/L3 attempt against a due lesson makes the schedule
-  responsive to actual recall strength rather than a one-way ratchet.
-  Open question — what counts as "failed enough" to demote? An L3 timeout?
-  Reveal-then-pass? N misses before pass? Worth a small ambiguity-pass
-  before coding.
+- **Primary lens:** *Make SR state legible to the user.* Iterations 1–3
+  built the SR gradient into the scheduler (L3 advances, L2 holds, Reveal
+  demotes). Mechanically the loop now responds to recall strength — but
+  none of this is visible. The user passes L2 on a due review and sees "✓
+  L2 passed" with no indication that the schedule moved; they reveal and
+  see "marked as revealed" with no sense of the interval impact (except
+  the new L3 dialog that mentions it). The system rewards/punishes
+  invisibly. That makes the SR system a black box and weakens the
+  commitment-device effect that spaced-repetition.md flags as a
+  candidate.
+- **Hypothesis to test:** Surfacing the next-review interval on the
+  lesson card (sidebar dot tooltip) and after a pass/reveal action ("Next
+  review in 3d" / "Interval shortened to 1d") turns invisible scheduling
+  into a felt loop. The mastery dot already exists as the SR proxy
+  surface — extending it is cheaper than a whole new UI element.
 - **Out of scope this iteration:** Mock Interview mode (desktop-only by
   design), adding new lessons, redesigning the three-track taxonomy,
   changing the L1→L2→L3 *core* structure. New strategy docs are in scope
@@ -48,6 +50,22 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 3 — Reveal demotes the SR bucket on due lessons
+Picked Reveal as the failure signal because it's the cleanest "I can't
+recall this" event the app already tracks (state.revealed) and goes
+through a centralized `markRevealed` — no new event handlers, no
+guessing what counts as "tried hard enough." Added `demoteReview(id)` (1
+bucket down, floored at 0); `markRevealed` calls it when the lesson is
+due. L3 reveal confirm dialog updated to mention the consequence when
+due — transparency. L2 reveal stays silent: it already has the
+mastery-dot soft-penalty, and adding a per-exercise confirm would create
+friction. Validator 327/0; new probe `tools/cdp/sr-reveal-demotes-bucket.js`
+covers 3 scenarios (due-demotes, not-due-no-op, floor) — 6/6 asserts;
+iter 2 probe still 6/6. **Learning:** the SR system is now mechanically
+right but completely invisible to the user. None of L2-holds /
+L3-advances / Reveal-demotes shows up in the UI as feedback. That's iter
+4's lens.
 
 ### 2026-05-23 — iter 2 — L2 holds the SR bucket on due lessons
 `scheduleReview` now accepts `{ advance }`; `markPassed` calls it with
@@ -88,15 +106,15 @@ fix doesn't close. That's iteration 2's lens.
   copy-fix candidate; not urgent enough to bump higher-leverage work.
 - **Lesson L1/L2 density audit** — PROFILE.md says ≥3 L1 + ≥2 L2 per lesson.
   No data on current distribution. Could be a future content-quality lens.
-- **L2-hold visibility.** A user who passes L2 on a due lesson today sees no
-  explicit confirmation that the SR clock pushed forward (just the standard
-  "✓ L2 passed."). A small "Next review: in 1d" affordance after pass would
-  turn an invisible reward into a visible commitment device — same parking-
-  lot idea as the spaced-repetition.md "interval surfacing" candidate.
 - **Bucket promotion gate.** Today L3 advances by 1 bucket no matter how
   long the user took. If an L3 takes 5x the personal-best time, maybe the
   bucket holds instead of advances. Same desirable-difficulty gradient but
   applied to the win-side rigor signal.
+- **L3 timeout-as-failure.** Reveal is the only loss-side trigger today; a
+  silent abandonment (open due L3, walk away, never pass) keeps the
+  interval. A threshold (no pass within N minutes of opening a due L3)
+  could broaden the loss-side. Needs care so legitimate context switches
+  don't fire it. Captured in desirable-difficulty.md candidates.
 
 ## Avoid (learned dead-ends)
 

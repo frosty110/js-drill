@@ -278,6 +278,27 @@ function formatDueRelative(lessonId) {
 function markRevealed(lessonId, level) {
   state.revealed[lessonId] = state.revealed[lessonId] || {};
   state.revealed[lessonId][level] = true;
+  // Loss-side SR gradient: revealing the answer on a due lesson means the
+  // user couldn't produce it from memory. Demote the bucket so the
+  // schedule reflects actual recall strength rather than ratcheting up.
+  // See docs/learning-strategies/spaced-repetition.md.
+  if ((level === 'L2' || level === 'L3') && isDueForReview(lessonId)) {
+    demoteReview(lessonId);
+  }
+  saveProgress();
+  updateReviewBadge();
+}
+function demoteReview(lessonId) {
+  const prev = state.reviews[lessonId];
+  if (!prev || !prev.interval) return;
+  const currentIdx = REVIEW_INTERVALS.indexOf(prev.interval);
+  const nextIdx = Math.max(currentIdx - 1, 0);
+  const interval = REVIEW_INTERVALS[nextIdx];
+  state.reviews[lessonId] = {
+    lastPassedAt: prev.lastPassedAt,
+    interval,
+    dueAt: Date.now() + interval,
+  };
   saveProgress();
 }
 function wasRevealed(lessonId, level) {
@@ -1599,7 +1620,11 @@ function renderL3(body, lesson, content) {
   const revealBtn = wrap.querySelector('[data-action="reveal"]');
   if (revealBtn) {
     revealBtn.addEventListener('click', () => {
-      if (!confirm('Reveal the canonical solution? Your mastery dot will be marked as revealed.')) return;
+      const due = isDueForReview(lesson.id);
+      const msg = due
+        ? 'Reveal the canonical solution? Your mastery dot will be marked as revealed, and your review interval will be shortened.'
+        : 'Reveal the canonical solution? Your mastery dot will be marked as revealed.';
+      if (!confirm(msg)) return;
       cm.setValue(drill.canonical);
       markRevealed(lesson.id, 'L3');
     });

@@ -12,7 +12,7 @@ if (!base) { console.error('usage: cdp-mobile-l3.js <url> [outDir]'); process.ex
 const PORT = 9222;
 function putReq(p) {
   return new Promise((res, rej) => {
-    http.request({ host: '127.0.0.1', port: PORT, path: p, method: 'PUT' }, r => {
+    http.request({ host: 'localhost', port: PORT, path: p, method: 'PUT' }, r => {
       let b = ''; r.on('data', d => b += d); r.on('end', () => { try { res(JSON.parse(b)); } catch (e) { rej(e); } });
     }).on('error', rej).end();
   });
@@ -104,5 +104,5 @@ function putReq(p) {
   await snap('04-L3-wrap-test');
 
   ws.close();
-  await new Promise(r => http.get(`http://127.0.0.1:${PORT}/json/close/${tab.id}`, () => r()).on('error', () => r()));
+  await new Promise(r => http.get(`http://localhost:${PORT}/json/close/${tab.id}`, () => r()).on('error', () => r()));
 })();

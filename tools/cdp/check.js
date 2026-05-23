@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Drive the Chrome debug port at 127.0.0.1:9222 to load a URL and capture:
+// Drive the Chrome debug port at localhost:9222 to load a URL and capture:
 //   - Console messages (especially errors)
 //   - Network failures
 //   - Page title and a screenshot
@@ -28,7 +28,7 @@ const mobile = argv.includes('--mobile');
 const PORT = 9222;
 function getJson(path) {
   return new Promise((resolve, reject) => {
-    http.get(`http://127.0.0.1:${PORT}${path}`, (res) => {
+    http.get(`http://localhost:${PORT}${path}`, (res) => {
       let buf = '';
       res.on('data', d => buf += d);
       res.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
@@ -37,7 +37,7 @@ function getJson(path) {
 }
 async function newTab(url) {
   return new Promise((resolve, reject) => {
-    http.request({ host: '127.0.0.1', port: PORT, path: `/json/new?${encodeURIComponent(url)}`, method: 'PUT' }, (res) => {
+    http.request({ host: 'localhost', port: PORT, path: `/json/new?${encodeURIComponent(url)}`, method: 'PUT' }, (res) => {
       let buf = '';
       res.on('data', d => buf += d);
       res.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
@@ -46,7 +46,7 @@ async function newTab(url) {
 }
 async function closeTab(id) {
   return new Promise((resolve) => {
-    http.get(`http://127.0.0.1:${PORT}/json/close/${id}`, () => resolve()).on('error', () => resolve());
+    http.get(`http://localhost:${PORT}/json/close/${id}`, () => resolve()).on('error', () => resolve());
   });
 }
 

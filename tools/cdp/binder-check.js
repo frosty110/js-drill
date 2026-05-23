@@ -13,7 +13,7 @@ const PORT = 9222;
 
 function putReq(p) {
   return new Promise((res, rej) => {
-    http.request({ host: '127.0.0.1', port: PORT, path: p, method: 'PUT' }, r => {
+    http.request({ host: 'localhost', port: PORT, path: p, method: 'PUT' }, r => {
       let b = ''; r.on('data', d => b += d); r.on('end', () => { try { res(JSON.parse(b)); } catch (e) { rej(e); } });
     }).on('error', rej).end();
   });
@@ -21,7 +21,7 @@ function putReq(p) {
 
 function getJson(p) {
   return new Promise((res, rej) => {
-    http.get(`http://127.0.0.1:${PORT}${p}`, r => {
+    http.get(`http://localhost:${PORT}${p}`, r => {
       let b = ''; r.on('data', d => b += d); r.on('end', () => { try { res(JSON.parse(b)); } catch (e) { rej(e); } });
     }).on('error', rej);
   });
@@ -33,7 +33,7 @@ async function closeStaleHostTabs(hostHint) {
   const list = await getJson('/json/list').catch(() => []);
   for (const t of list) {
     if (t.url && t.url.includes(hostHint)) {
-      await new Promise(r => http.get(`http://127.0.0.1:${PORT}/json/close/${t.id}`, () => r()).on('error', () => r()));
+      await new Promise(r => http.get(`http://localhost:${PORT}/json/close/${t.id}`, () => r()).on('error', () => r()));
     }
   }
 }
@@ -169,6 +169,6 @@ async function closeStaleHostTabs(hostHint) {
   for (const m of consoleMsgs.slice(0, 20)) console.log('  [' + m.type + '] ' + m.text);
   const errs = consoleMsgs.filter(m => m.type === 'error' || m.type === 'exception');
   ws.close();
-  http.get(`http://127.0.0.1:${PORT}/json/close/${tab.id}`, () => {}).on('error', () => {});
+  http.get(`http://localhost:${PORT}/json/close/${tab.id}`, () => {}).on('error', () => {});
   process.exit(errs.length ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });

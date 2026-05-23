@@ -15,14 +15,14 @@ if (!baseUrl) { console.error('usage: cdp-deep-check.js <url> [outDir] [--mobile
 const PORT = 9222;
 function getJson(p) {
   return new Promise((res, rej) => {
-    http.get(`http://127.0.0.1:${PORT}${p}`, r => {
+    http.get(`http://localhost:${PORT}${p}`, r => {
       let b = ''; r.on('data', d => b += d); r.on('end', () => { try { res(JSON.parse(b)); } catch (e) { rej(e); } });
     }).on('error', rej);
   });
 }
 function putReq(p) {
   return new Promise((resolve, reject) => {
-    http.request({ host: '127.0.0.1', port: PORT, path: p, method: 'PUT' }, r => {
+    http.request({ host: 'localhost', port: PORT, path: p, method: 'PUT' }, r => {
       let b = ''; r.on('data', d => b += d); r.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
     }).on('error', reject).end();
   });

@@ -183,7 +183,11 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
     },
 
     async reload() {
-      await rawSend('Page.reload');
+      // ignoreCache=true bypasses Chrome's HTTP cache so probes pick up the
+      // current app.js after edits. The local server doesn't set cache
+      // headers, so without this flag Chrome can serve a stale build between
+      // probe runs in the same session.
+      await rawSend('Page.reload', { ignoreCache: true });
       await new Promise(r => setTimeout(r, waitForLoadMs));
     },
 

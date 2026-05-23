@@ -5,24 +5,28 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Mock Interview surface — the least-touched
-  PROFILE.md success criterion.* PROFILE.md lists four success criteria;
-  #3 is "Mock interview personal-bests trend down over weeks." Eleven
-  iterations in, every other criterion has been worked on: L3 hit-rate
-  (iter 1 routing), SR retention (iters 2/3/4), 90-second mobile friction
-  (iters 1/5/9/10/11). Mock interview hasn't been touched, and PROFILE.md
-  treats it as the closest analog to a real interview experience. Time to
-  survey it before further drift.
-- **Hypothesis to test:** The Mock Interview flow has friction points
-  the loop hasn't seen because the iter-1 survey was mobile-focused and
-  Mock is desktop-only by design. Run a desktop-viewport survey of the
-  mock-start → mock-running → pass/fail flow, look for friction in:
-  start (how does user pick a lesson?), running (timer visibility,
-  unwanted hints/escape hatches), end (personal-best feedback, history
-  visibility, comparison to past attempts). Pick one improvement; ship.
-- **Out of scope this iteration:** Mobile-only changes (mock is
-  desktop-only by PROFILE.md), further content authoring, taxonomy
-  changes, L1→L2→L3 core structure, further SR-gradient tuning.
+- **Primary lens:** *Use the now-working Mock surface — what's the next
+  Mock friction worth fixing?* Iter 12 found Mock was fully broken
+  (null-deref crash); fixed it. Now that the surface actually loads,
+  what does the post-mock experience look like? PROFILE.md success
+  criterion #3 is "Mock interview personal-bests trend down over weeks"
+  — that requires (a) the bestTimes badge being visible at start so
+  users know what they're trying to beat, (b) end-of-mock feedback
+  that communicates the new vs. old best clearly, and (c) some sense
+  of history beyond a single best time. Iter 12 verified (a) and (b)
+  superficially; do a deeper pass on (c) plus any other Mock friction
+  surfaced by actually using the surface.
+- **Hypothesis to test:** The current "best time" pill is a single
+  number — it tells the user their PB but not the trend (faster?
+  plateaued? regressing?). For PROFILE.md success criterion #3 to be
+  meaningful, the user needs to *see* a downward trend. A small
+  affordance like "Last 5 attempts: 4:21, 3:48, 3:32, 3:51, 2:58 —
+  PB!" would surface the trend without a full dashboard. Storage
+  cost is minimal (5 numbers per lesson).
+- **Out of scope this iteration:** Mobile-only changes (mock stays
+  desktop-only), further content authoring, taxonomy changes, L1→L2→L3
+  core structure, further SR-gradient tuning. Don't redesign Mock —
+  add ONE small visible affordance.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -49,6 +53,30 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 12 — Mock Interview was crashing (null-deref) — fixed
+Desktop survey discovered Mock Interview was completely broken: clicking
+the Mock button filled the lesson shell with "Could not load lesson:
+Cannot read properties of null (reading 'addEventListener')". Root
+cause: `renderL3` unconditionally wired the `[data-action="hint"]`
+button at line 1657, but the hint button is omitted from the markup
+when `isMock`. The adjacent diff and reveal buttons were properly
+null-guarded; hint was the one that slipped through. PROFILE.md success
+criterion #3 ("Mock interview personal-bests trend down") was literally
+untestable while this bug existed — and prior iterations missed it
+because no probe ever started a mock. Fix: match the diff/reveal guard
+pattern with a single `if (hintBtn) { ... }` wrapper. Bonus tooling
+fix: `tools/cdp/lib.js` reload() now passes `ignoreCache: true` —
+without this, the local server's no-cache-headers + Chrome's heuristic
+caching meant probes were testing stale app.js between runs. Validator
+336/0; new durable probe `tools/cdp/mock-interview-loads.js` (9/9)
+covers start (no crash, banner + end-mock + drill editor present,
+hint button absent), pass (bestTimes recorded, mock cleared), and
+cleanup (hint button reappears after end). All 6 prior probes still
+pass. **Learning:** the loop's value-add over the user is finding
+bugs in features the user might not exercise often. A "least-touched"
+lens (which PROFILE.md success criterion hasn't been improved?) is a
+good way to surface those.
 
 ### 2026-05-23 — iter 11 — Sidebar lessons sort by STARTER_PATH index in path mode
 The iter 10 parking-lot audit handed iter 11 a concrete ship-now: in
@@ -197,24 +225,9 @@ right but completely invisible to the user. None of L2-holds /
 L3-advances / Reveal-demotes shows up in the UI as feedback. That's iter
 4's lens.
 
-### 2026-05-23 — iter 2 — L2 holds the SR bucket on due lessons
-`scheduleReview` now accepts `{ advance }`; `markPassed` calls it with
-`advance: false` when L2 passes on a due lesson, holding the interval
-bucket but resetting `dueAt` by the current interval. L3 still advances.
-This closes the loop iter 1 opened: mobile users can drill due reviews on
-L2 and have them actually leave the due list, but the 1d → 30d ladder is
-still gated on L3 — so they can't inflate intervals from a phone without
-proving free recall. Embodied **desirable difficulty** at the SR layer
-(grading the win by test rigor) and updated spaced-repetition.md +
-desirable-difficulty.md to match. Validator 327/0; new durable probe at
-`tools/cdp/sr-l2-holds-bucket.js` confirms: interval held at 1d, dueAt
-+1d, review badge clears. **Learning:** the natural next question
-surfaced cleanly — the loss-side is still no-op. A failed L2/L3 on a due
-review should pull the interval *shorter*, not just leave it. That's
-iter 3.
-
-*(iter 1 trimmed to keep the log at 10 entries — see git history for the
-device-calibrated Review CTA commit, `1903c4e`.)*
+*(iters 1–2 trimmed to keep the log at 10 entries — see git history:
+`1903c4e` iter 1 device-calibrated Review CTA; `c02b928` iter 2 L2 holds
+the SR bucket on due lessons.)*
 
 ## Hypotheses parking lot
 *(curated iter 10; sidebar-ordering shipped iter 11)*

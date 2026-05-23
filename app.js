@@ -1654,12 +1654,19 @@ function renderL3(body, lesson, content) {
   let running = false;
 
   wrap.querySelector('[data-action="run"]').addEventListener('click', run);
-  wrap.querySelector('[data-action="hint"]').addEventListener('click', () => {
-    const hints = drill.hints || [];
-    if (hints.length === 0) { feedback.innerHTML = '<span class="text-slate-500">No hints for this one.</span>'; return; }
-    feedback.innerHTML = `<span class="text-amber-300">💡 ${escapeHtml(hints[Math.min(hintIndex, hints.length-1)])}</span>`;
-    hintIndex++;
-  });
+  // Hint / diff / reveal buttons are omitted in Mock Interview mode (isMock).
+  // Each query must be null-guarded — without this guard, starting a mock
+  // throws `Cannot read properties of null (reading 'addEventListener')`
+  // and the entire lesson shell renders the error instead of the L3 surface.
+  const hintBtn = wrap.querySelector('[data-action="hint"]');
+  if (hintBtn) {
+    hintBtn.addEventListener('click', () => {
+      const hints = drill.hints || [];
+      if (hints.length === 0) { feedback.innerHTML = '<span class="text-slate-500">No hints for this one.</span>'; return; }
+      feedback.innerHTML = `<span class="text-amber-300">💡 ${escapeHtml(hints[Math.min(hintIndex, hints.length-1)])}</span>`;
+      hintIndex++;
+    });
+  }
   const diffBtn = wrap.querySelector('[data-action="diff"]');
   if (diffBtn) {
     diffBtn.addEventListener('click', () => {

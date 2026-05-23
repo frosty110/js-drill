@@ -41,14 +41,30 @@ app's existence.
   once the existing backlog of under-built lessons (currently 97 of 143
   on L2; was 102 before iter 7) is cleared.
 - **Authoring template for the second L2 exercise.** When backfilling an
-  under-built lesson, exercise #2 should not echo exercise #1. The template
-  that emerged in iter 7 (5 lessons backfilled): use **different input** so
-  muscle memory can't shortcut a memorized output, and **blank different
-  load-bearing tokens** than #1. If #1 blanks the data structure +
-  primary method names (e.g., `Map`, `has`, `set`), #2 blanks loop bounds,
-  iteration keywords (`of` vs `in`), early-return values, or comparison
-  operators. Same canonical, different cuing surfaces → two retrieval reps
-  per lesson that reinforce different bits of the same pattern.
+  under-built lesson, exercise #2 should not echo exercise #1. The core
+  rule: **different input** + **blank different load-bearing tokens**
+  than #1. Same canonical, different cuing surfaces → two retrieval reps
+  per lesson that reinforce different bits of the same idea.
+
+  Track-specific adaptations (validated iters 7–8):
+  - **Pattern lessons** (algorithm canonicals): swap the array/string
+    input so the expected output changes; blank loop bounds, iteration
+    keywords (`of` vs `in`), early-return values, comparators — not
+    the data-structure or method names that #1 already covered.
+  - **Syntax lessons** (language-feature drills, shorter canonicals):
+    smaller surface area, so "different input" usually means
+    "different *use* of the feature" — method call instead of binary
+    expression in `${}`; descending iterator instead of ascending;
+    different range in async iteration. Blank a different syntactic
+    role (object-field name vs symbol name; `Promise.resolve` vs
+    `await`).
+  - **Applied lessons** (closure-heavy implementation problems):
+    more state to blank than pattern or syntax. #2 can target the
+    closure surfaces #1 left intact — args capture, state-reset on
+    fire, spread call, the conditional that gates the side effect.
+
+  Track-syntax milestone: all syntax lessons (44/44) now meet the ≥2
+  L2 floor as of iter 8. Remaining backlog: 74 pattern + 19 applied.
 
 ## Under-exploited / candidate features
 

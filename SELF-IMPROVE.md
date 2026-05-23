@@ -5,28 +5,31 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Scale the density-backlog drain with the iter 7
-  template.* The authoring template (different input, blank different
-  load-bearing tokens than #1) is now documented in active-recall.md
-  and proven across 5 lessons. The remaining 97 under-built lessons
-  fall into roughly three buckets: pattern lessons (most of the
-  backlog — algorithm canonical with a clear API surface), syntax
-  lessons (smaller batch — language-feature drills), and applied
-  problems (~20 lessons — implementation problems). Iter 7 only
-  covered pattern lessons. Iter 8 should validate that the template
-  works for syntax lessons too — different shape than pattern lessons.
-- **Hypothesis to test:** The template generalizes to syntax lessons
-  with a small adjustment — for language-feature drills the
-  "different input" can be "different operator/keyword variant" or
-  "different scope context" rather than a different array. Pick 3–5
-  under-built syntax lessons (e.g., `s-template`, the iterator
-  lessons), draft second L2s, see if the template needs tweaking.
-  Also: if it works cleanly, the validator's "first 5 offenders"
-  list is now a backlog burndown queue — log progress.
-- **Out of scope this iteration:** Mock Interview mode, taxonomy
-  changes, L1→L2→L3 core structure, further SR-gradient tuning. Don't
-  attempt all 97 lessons at once — keep iterations small and
-  template-validated.
+- **Primary lens:** *Step back — the loop has been backlog-grinding
+  for three iterations.* Iters 6/7/8 went deep on the L2 density gap
+  (validator warning → 5 pattern lessons → 3 syntax + 1 applied).
+  The template now has three track-validated variants documented in
+  active-recall.md, and the syntax track is fully built. But three
+  iterations on content is a long lean against one principle, and
+  the remaining 93 lessons (74 pattern + 19 applied) represent
+  significant work that can be done by anyone (including the user) —
+  not necessarily the highest-leverage thing for an autonomous loop.
+  Time to re-survey for what the loop is uniquely good at.
+- **Hypothesis to test:** The loop's comparative advantage is on
+  *mechanism* + *measurement* changes (iter 1–6 territory), not on
+  *content authoring* (iter 7–8). A fresh non-SR, non-content survey
+  pass should surface something the loop can ship atomically that
+  the user wouldn't easily catch without it — e.g., a UX flow that's
+  broken under specific state, a mobile interaction that doesn't
+  match PROFILE.md, a measurement / observability gap. Look at the
+  app under realistic-but-unhappy state (lots of progress, mixed
+  reveal/passed states, due reviews piling up) to find the issue.
+- **Out of scope this iteration:** further content authoring (the
+  user can do those batches at their pace, with the template), Mock
+  Interview mode, taxonomy changes, L1→L2→L3 core structure, further
+  SR-gradient tuning, anything that resembles "obvious next move on
+  the current thread" — the point of this iteration is to find a
+  thread the loop hasn't already pulled on.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -53,6 +56,21 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 8 — 2nd L2 for 3 syntax + 1 applied; template generalizes
+Audited under-built syntax lessons — only 3 were under-built
+(s-template, s-iter-custom, s-async-iter), so hit all three plus
+a-debounce as an applied data point. Validated that the iter 7
+template generalizes to non-pattern lessons with track-specific
+adaptations: syntax = "different *use* of the feature" rather than
+different input data; applied = blank closure surfaces (args capture,
+state reset, spread) that the canonical leaves untouched in #1.
+Validator 336/0 (+4); density 97 → 93. **Syntax track is now fully
+built** at ≥2 L2 (44/44 lessons). Remaining backlog: 74 pattern + 19
+applied. **Learning:** three iterations grinding the same backlog
+thread is enough — the template is validated, the user can pace the
+remaining 93 lessons themselves. Iter 9 should re-survey for
+something the loop is uniquely positioned to find.
 
 ### 2026-05-23 — iter 7 — Author 2nd L2 exercise for 5 pattern lessons
 Audited `two-sum`, `valid-palindrome`, `valid-parentheses`,

@@ -258,6 +258,21 @@ function dueReviewIds() {
     .sort((a, b) => state.reviews[a.id].dueAt - state.reviews[b.id].dueAt)
     .map(l => l.id);
 }
+// SR-impact text appended after pass/reveal feedback. `kind`:
+//   'pass'   → "Next review in Nd."         (any time a reviews entry exists)
+//   'demote' → "Interval shortened — next review in Nd."  (after a demote)
+// Empty if the lesson has no reviews entry yet (first-mastery L2 surface).
+// The muted gray matches the surrounding small-text styling without
+// stealing emphasis from the "✓ passed" message.
+function srBadgeHtml(lessonId, kind) {
+  const r = state.reviews[lessonId];
+  if (!r) return '';
+  const when = formatDueRelative(lessonId);
+  const text = kind === 'demote'
+    ? `Interval shortened — next review ${when}.`
+    : `Next review ${when}.`;
+  return ` <span style="color:#94a3b8">${escapeHtml(text)}</span>`;
+}
 function formatDueRelative(lessonId) {
   const r = state.reviews[lessonId];
   if (!r) return '';
@@ -270,10 +285,16 @@ function formatDueRelative(lessonId) {
     if (hours >= 1) return `due (${hours}h overdue)`;
     return 'due now';
   }
-  const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+  // Round near boundaries — async drift between scheduleReview() writing
+  // dueAt and formatDueRelative() reading it would otherwise show
+  // "Next review in 23h" right after the system set the interval to
+  // exactly 1d. Rounding gives the user-facing estimate the bucket
+  // semantics they expect ("1d" not "23h59m").
+  const days = Math.round(diff / (24 * 60 * 60 * 1000));
   if (days >= 1) return `in ${days}d`;
-  const hours = Math.floor(diff / (60 * 60 * 1000));
-  return `in ${hours}h`;
+  const hours = Math.round(diff / (60 * 60 * 1000));
+  if (hours >= 1) return `in ${hours}h`;
+  return 'in <1h';
 }
 function markRevealed(lessonId, level) {
   state.revealed[lessonId] = state.revealed[lessonId] || {};
@@ -282,11 +303,14 @@ function markRevealed(lessonId, level) {
   // user couldn't produce it from memory. Demote the bucket so the
   // schedule reflects actual recall strength rather than ratcheting up.
   // See docs/learning-strategies/spaced-repetition.md.
+  let demoted = false;
   if ((level === 'L2' || level === 'L3') && isDueForReview(lessonId)) {
     demoteReview(lessonId);
+    demoted = true;
   }
   saveProgress();
   updateReviewBadge();
+  return { demoted };
 }
 function demoteReview(lessonId) {
   const prev = state.reviews[lessonId];
@@ -1223,7 +1247,10 @@ function renderL2(body, lesson, content) {
         inp.classList.remove('incorrect');
         inp.classList.add('correct');
       });
-      markRevealed(lesson.id, 'L2');
+      const { demoted } = markRevealed(lesson.id, 'L2');
+      if (demoted) {
+        feedback.innerHTML = '<span class="text-amber-400">Solution revealed.</span>' + srBadgeHtml(lesson.id, 'demote');
+      }
     });
     wrap.appendChild(card);
   });
@@ -1242,9 +1269,13 @@ function renderL2(body, lesson, content) {
   function checkL2Overall() {
     const allPassed = exerciseState.every(s => s.passed);
     if (allPassed) {
-      document.getElementById('l2-status').innerHTML = '<span class="text-emerald-400 font-medium">✓ L2 passed.</span>';
-      status.querySelector('[data-action="next-l3"]').classList.remove('hidden');
+      // markPassed first so state.reviews reflects the new schedule when
+      // srBadgeHtml reads it.
       markPassed(lesson.id, 'L2');
+      document.getElementById('l2-status').innerHTML =
+        '<span class="text-emerald-400 font-medium">✓ L2 passed.</span>' +
+        srBadgeHtml(lesson.id, 'pass');
+      status.querySelector('[data-action="next-l3"]').classList.remove('hidden');
     }
   }
 }
@@ -1369,7 +1400,10 @@ function renderL2Mobile(body, lesson, content) {
       if (activeRef && activeRef.exi === exi) {
         sheetInput.value = ex.blanks[activeRef.bi].answer;
       }
-      markRevealed(lesson.id, 'L2');
+      const { demoted } = markRevealed(lesson.id, 'L2');
+      if (demoted) {
+        feedback.innerHTML = '<span class="text-amber-400">Solution revealed.</span>' + srBadgeHtml(lesson.id, 'demote');
+      }
     });
 
     wrap.appendChild(card);
@@ -1486,9 +1520,13 @@ function renderL2Mobile(body, lesson, content) {
   function checkL2Overall() {
     const allPassed = exerciseState.every(s => s.passed);
     if (allPassed) {
-      document.getElementById('l2-status').innerHTML = '<span class="text-emerald-400 font-medium">✓ L2 passed.</span>';
-      status.querySelector('[data-action="next-l3"]').classList.remove('hidden');
+      // markPassed first so state.reviews reflects the new schedule when
+      // srBadgeHtml reads it.
       markPassed(lesson.id, 'L2');
+      document.getElementById('l2-status').innerHTML =
+        '<span class="text-emerald-400 font-medium">✓ L2 passed.</span>' +
+        srBadgeHtml(lesson.id, 'pass');
+      status.querySelector('[data-action="next-l3"]').classList.remove('hidden');
     }
   }
 }
@@ -1626,7 +1664,12 @@ function renderL3(body, lesson, content) {
         : 'Reveal the canonical solution? Your mastery dot will be marked as revealed.';
       if (!confirm(msg)) return;
       cm.setValue(drill.canonical);
-      markRevealed(lesson.id, 'L3');
+      const { demoted } = markRevealed(lesson.id, 'L3');
+      if (demoted) {
+        feedback.innerHTML = '<span class="text-amber-400">Solution revealed.</span>' + srBadgeHtml(lesson.id, 'demote');
+      } else {
+        feedback.innerHTML = '<span class="text-amber-400">Solution revealed.</span>';
+      }
     });
   }
   wrap.querySelector('[data-action="clear"]').addEventListener('click', () => cm.setValue(''));
@@ -1645,13 +1688,14 @@ function renderL3(body, lesson, content) {
       const wasMock = state.mock.active && state.mock.lessonId === lesson.id;
       markPassed(lesson.id, 'L3');
       const tries = attempts === 1 ? 'first try' : `${attempts} tries`;
+      const srBadge = srBadgeHtml(lesson.id, 'pass');
       if (wasMock) {
         const elapsed = endMockInterview(true);
         const prevBest = state.bestTimes[lesson.id];
         const isNewBest = elapsed === prevBest;
-        feedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Solved in ${formatTime(elapsed)} (${tries})${isNewBest ? ' — new personal best!' : ''}</span>`;
+        feedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Solved in ${formatTime(elapsed)} (${tries})${isNewBest ? ' — new personal best!' : ''}</span>` + srBadge;
       } else {
-        feedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Output matches — L3 passed (${tries}).</span>`;
+        feedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Output matches — L3 passed (${tries}).</span>` + srBadge;
       }
     } else if (!result.ok) {
       feedback.innerHTML = '<span class="text-rose-400">Runtime error — read the output box.</span>';

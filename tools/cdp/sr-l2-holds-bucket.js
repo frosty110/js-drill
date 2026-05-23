@@ -141,6 +141,10 @@ const TOLERANCE = 60000;
   const l2Status = await s.eval(`document.getElementById('l2-status')?.textContent || ''`);
   s.assert(/L2 passed/i.test(l2Status), `L2 status reads passed (got: ${JSON.stringify(l2Status)})`);
 
+  // iter 4: SR-impact line should be surfaced in the same status text.
+  s.assert(/Next review in 1d/i.test(l2Status),
+    `L2 status surfaces SR impact ("Next review in 1d"; got: ${JSON.stringify(l2Status)})`);
+
   const { failed, errors, networkErrors } = s.report();
   await s.close();
   process.exit(failed + errors + networkErrors > 0 ? 1 : 0);

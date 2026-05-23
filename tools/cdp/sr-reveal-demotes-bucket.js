@@ -63,7 +63,9 @@ async function runOneScenario({ urlSession, dueAtOffset, label }) {
     const r = window.__jsdrillState.reviews[${JSON.stringify(seeded)}];
     return r ? { interval: r.interval, dueAt: r.dueAt } : null;
   })()`);
-  return { seeded, after };
+  // L3 reveal puts feedback inside .feedback element; grab text for assertion.
+  const feedbackText = await urlSession.eval(`document.querySelector('.feedback')?.textContent || ''`);
+  return { seeded, after, feedbackText };
 }
 
 (async () => {
@@ -81,6 +83,9 @@ async function runOneScenario({ urlSession, dueAtOffset, label }) {
     `[due] interval demoted 3d → 1d (got ${a.after?.interval}; expected ${ONE_DAY})`);
   s.assert(Math.abs(a.after.dueAt - (Date.now() + ONE_DAY)) < TOLERANCE,
     `[due] dueAt reset to ~now+1d (delta ${a.after.dueAt - (Date.now() + ONE_DAY)}ms)`);
+  // iter 4: SR-impact feedback surfaces the demote.
+  s.assert(/Interval shortened/i.test(a.feedbackText) && /in 1d/.test(a.feedbackText),
+    `[due] L3 feedback surfaces "Interval shortened — next review in 1d." (got: ${JSON.stringify(a.feedbackText)})`);
 
   // --- Scenario B: NOT-due lesson, reveal → bucket UNCHANGED ---
   const b = await runOneScenario({ urlSession: s, dueAtOffset: ONE_DAY, label: 'not-due' });
@@ -89,6 +94,9 @@ async function runOneScenario({ urlSession, dueAtOffset, label }) {
   // dueAt should still be ~now+1d (the seeded future date), not perturbed.
   s.assert(Math.abs(b.after.dueAt - (Date.now() + ONE_DAY)) < TOLERANCE,
     `[not-due] dueAt unchanged from seed (delta ${b.after.dueAt - (Date.now() + ONE_DAY)}ms)`);
+  // iter 4: no demote feedback when the lesson wasn't due.
+  s.assert(!/Interval shortened/i.test(b.feedbackText),
+    `[not-due] L3 feedback does NOT surface "Interval shortened" (got: ${JSON.stringify(b.feedbackText)})`);
 
   // --- Scenario C: due lesson already at bucket 0 — floor, no underflow ---
   const seededC = await s.evalAwait(`(async () => {

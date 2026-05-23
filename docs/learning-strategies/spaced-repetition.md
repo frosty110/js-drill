@@ -33,6 +33,12 @@ specifically toward lessons their memory is currently weakest on.
   review) are no-ops on the schedule. Symmetric counterpart to the
   L3-advance / L2-hold gradient: easier test holds, harder test extends,
   reveal demotes.
+- **The SR consequence is surfaced in pass/reveal feedback.** After
+  passing L2 or L3 on a lesson with a reviews entry, the success line
+  appends "Next review in Nd." After revealing on a due lesson, the
+  feedback line appends "Interval shortened — next review in Nd." Mobile
+  users don't hover for tooltips; the inline status text is the universal
+  surface for SR feedback. Turns invisible scheduling into a felt loop.
 - **Due-lessons surfacing** in Today's plan — the curated daily session pulls
   from `dueLessons` first.
 - **Weak-spot tracker** resurfaces lessons where L1 was missed, even outside
@@ -52,8 +58,11 @@ specifically toward lessons their memory is currently weakest on.
 - **"Drill due now" deep link** from a notification or homescreen widget —
   removes the friction between "I have 90 seconds" and "I'm reviewing the
   thing that's about to slip."
-- **Interval surfacing on the lesson card** — "next review in 2d" — turns SR
-  from invisible scheduling into a visible commitment device.
+- **Interval surfacing on the sidebar dot tooltip.** The pass/reveal
+  inline feedback shipped above gives action-time legibility; an
+  always-on tooltip ("Next review in 2d") on the mastery dot would give
+  ambient legibility too. Desktop-mostly affordance (mobile doesn't
+  hover), so lower priority than the inline feedback was.
 
 ## Pitfalls
 

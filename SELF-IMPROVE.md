@@ -5,25 +5,24 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Make SR state legible to the user.* Iterations 1–3
-  built the SR gradient into the scheduler (L3 advances, L2 holds, Reveal
-  demotes). Mechanically the loop now responds to recall strength — but
-  none of this is visible. The user passes L2 on a due review and sees "✓
-  L2 passed" with no indication that the schedule moved; they reveal and
-  see "marked as revealed" with no sense of the interval impact (except
-  the new L3 dialog that mentions it). The system rewards/punishes
-  invisibly. That makes the SR system a black box and weakens the
-  commitment-device effect that spaced-repetition.md flags as a
-  candidate.
-- **Hypothesis to test:** Surfacing the next-review interval on the
-  lesson card (sidebar dot tooltip) and after a pass/reveal action ("Next
-  review in 3d" / "Interval shortened to 1d") turns invisible scheduling
-  into a felt loop. The mastery dot already exists as the SR proxy
-  surface — extending it is cheaper than a whole new UI element.
-- **Out of scope this iteration:** Mock Interview mode (desktop-only by
-  design), adding new lessons, redesigning the three-track taxonomy,
-  changing the L1→L2→L3 *core* structure. New strategy docs are in scope
-  only if the feature embodies one not yet documented.
+- **Primary lens:** *Step out of the SR cul-de-sac and re-survey.* Iters
+  1–4 went deep on one principle: the SR gradient and its surfacing. That
+  loop is now mechanically and legibly complete (L3 advances, L2 holds,
+  Reveal demotes, all of it shown in feedback). Continuing to push on SR
+  risks over-fitting to one principle while leaving other PROFILE.md
+  needs untouched. Re-run the cold-survey lens: what's the next-highest
+  friction point for a rusty engineer opening the app for a 20-min
+  mobile drill session that ISN'T SR-shaped?
+- **Hypothesis to test:** TBD — open the survey first. Candidates already
+  in the parking lot: the stale "76 lessons" welcome banner; L1/L2
+  density audit (PROFILE.md says ≥3 L1 + ≥2 L2, no data yet); recall-
+  without-prompt mode; bucket promotion gate. But form the judgment from
+  the code/UX, not from the parking lot — the parking lot biases toward
+  what was already on my mind.
+- **Out of scope this iteration:** further SR-gradient tuning (the system
+  is responsive enough for now; revisit only if user evidence says
+  otherwise), Mock Interview mode, adding new lessons, taxonomy changes,
+  L1→L2→L3 *core* structure.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -50,6 +49,20 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 4 — Surface SR state in pass/reveal feedback
+Added `srBadgeHtml(lessonId, kind)` and wired it into all six pass/reveal
+surfaces (desktop+mobile L2 pass, L3 pass, desktop+mobile L2 reveal, L3
+reveal). `markRevealed` now returns `{ demoted }` so reveal handlers can
+emit "Interval shortened — next review in Nd." only when the SR actually
+moved. Also fixed an off-by-one in `formatDueRelative` (floored 0.999d
+to "23h" right after `scheduleReview` set dueAt to exactly +1d) by
+switching to `Math.round` for the bucket display. Validator 327/0;
+extended both regression probes — iter 2 now 7/7 asserts "Next review in
+1d", iter 3 now 8/8 asserts demote feedback only when due. **Learning:**
+4 iterations in a row pulled on the same thread (SR mechanics →
+surfacing). The loop is at risk of over-investing in one principle.
+Iter 5 should re-survey rather than dig deeper here.
 
 ### 2026-05-23 — iter 3 — Reveal demotes the SR bucket on due lessons
 Picked Reveal as the failure signal because it's the cleanest "I can't

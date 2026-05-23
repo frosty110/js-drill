@@ -155,7 +155,7 @@ function loadProgress() {
         state.hideMastered = !!parsed.hideMastered;
         state.reviews = parsed.reviews || {};
         state.weakness = parsed.weakness || {};
-        if (parsed.sidebarTrack === 'syntax' || parsed.sidebarTrack === 'patterns') {
+        if (parsed.sidebarTrack === 'syntax' || parsed.sidebarTrack === 'patterns' || parsed.sidebarTrack === 'applied') {
           state.sidebarTrack = parsed.sidebarTrack;
         }
         // Backfill: if a lesson is mastered but has no review schedule (legacy
@@ -291,8 +291,9 @@ async function generateCheatsheet() {
   md += `---\n\n## Table of Contents\n\n`;
 
   const tracks = [
-    { id: 'syntax', label: 'Track A — Syntax Fundamentals' },
-    { id: 'patterns', label: 'Track B — Canonical Patterns' }
+    { id: 'syntax',   label: 'Track A — Syntax Fundamentals' },
+    { id: 'patterns', label: 'Track B — Canonical Patterns' },
+    { id: 'applied',  label: 'Track C — Applied Problems' }
   ];
 
   // ToC
@@ -520,7 +521,7 @@ function findLesson(id) { return CURRICULUM.find(l => l.id === id); }
 // resume). Keeps the binder tab in sync with whichever lesson the user is on.
 function syncBinderToLesson(id) {
   const l = findLesson(id);
-  if (l && (l.track === 'syntax' || l.track === 'patterns')) {
+  if (l && (l.track === 'syntax' || l.track === 'patterns' || l.track === 'applied')) {
     state.sidebarTrack = l.track;
   }
 }
@@ -660,15 +661,16 @@ function renderSidebar() {
 
   const tracks = [
     { id: 'syntax',   label: 'Syntax Fundamentals' },
-    { id: 'patterns', label: 'Canonical Patterns' }
+    { id: 'patterns', label: 'Canonical Patterns' },
+    { id: 'applied',  label: 'Applied Problems' }
   ];
 
   // Render the binder tab strip (independent of which lessons are visible).
   renderBinderTabs(tracks);
 
   // Search overrides the binder filter — if the user is searching, show
-  // matches from both tracks (and auto-switch the active tab if all hits are
-  // in the other track). Otherwise filter by the active tab only.
+  // matches across all tracks (and auto-switch the active tab if the active
+  // one has zero hits but another has some). Otherwise filter by active.
   const tracksToRender = (() => {
     if (!q) return tracks.filter(t => t.id === state.sidebarTrack);
     // Searching — count matches per track
@@ -676,11 +678,14 @@ function renderSidebar() {
       CURRICULUM.filter(l => l.track === t.id && matches(l) && inStarter(l) && hideMasteredOk(l)).length
     ]));
     const activeHas = counts[state.sidebarTrack] > 0;
-    if (!activeHas && counts[state.sidebarTrack === 'syntax' ? 'patterns' : 'syntax'] > 0) {
-      // Auto-flip the active tab so search results aren't hidden behind it.
-      state.sidebarTrack = state.sidebarTrack === 'syntax' ? 'patterns' : 'syntax';
-      saveProgress();
-      renderBinderTabs(tracks);
+    if (!activeHas) {
+      // Auto-flip to the first other track with matches.
+      const other = tracks.find(t => t.id !== state.sidebarTrack && counts[t.id] > 0);
+      if (other) {
+        state.sidebarTrack = other.id;
+        saveProgress();
+        renderBinderTabs(tracks);
+      }
     }
     return tracks.filter(t => t.id === state.sidebarTrack);
   })();
@@ -743,7 +748,9 @@ function renderSidebar() {
   if (visibleCount === 0) {
     const empty = document.createElement('div');
     empty.className = 'text-xs text-slate-500 px-3 py-6 text-center';
-    empty.textContent = 'No lessons match “' + state.searchQuery + '”.';
+    empty.textContent = state.searchQuery
+      ? 'No lessons match “' + state.searchQuery + '”.'
+      : 'No lessons in this track yet.';
     nav.appendChild(empty);
   }
 

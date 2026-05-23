@@ -41,11 +41,11 @@
 - Don't edit lesson content unless the directive explicitly makes lessons the
   focus this iteration.
 - Preserve backwards-compatible `localStorage` schema (`jsdrill.progress.v1`).
-- Mobile responsiveness must not regress — verify with
-  `tools/cdp/mobile-l3.js` when touching UI. (Note: the shared probe currently
-  fails on Chrome 148 because it uses `127.0.0.1` while Chrome restricts
-  devtools to `localhost`. Either patch the probe or write an inline one —
-  see iteration 1 log.)
+- Mobile responsiveness must not regress — invoke the `browser-test` skill
+  (or copy `tools/cdp/template.js`) to drive a headless Chrome at iPhone
+  viewport + coarse pointer when touching UI. The shared lib at
+  `tools/cdp/lib.js` bootstraps server + Chrome and keeps scenario scripts
+  short.
 
 ## Iteration log (newest first, keep last 10)
 
@@ -77,9 +77,6 @@ fix doesn't close. That's iteration 2's lens.
   interval where it was. Closer to true Anki/SM-2 semantics.
 - **Welcome banner says "76 lessons"** but the app now ships 143. Tiny
   copy-fix candidate; not urgent enough to bump higher-leverage work.
-- **`tools/cdp/mobile-l3.js` is broken on Chrome 148** — it uses `127.0.0.1`
-  but Chrome 148 only exposes devtools on `localhost`. Tooling tax for every
-  future UI iteration. Patch when convenient.
 - **Lesson L1/L2 density audit** — PROFILE.md says ≥3 L1 + ≥2 L2 per lesson.
   No data on current distribution. Could be a future content-quality lens.
 

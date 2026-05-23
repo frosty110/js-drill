@@ -893,6 +893,7 @@ function renderLesson() {
 
   // First-time welcome banner — shows once until dismissed or starter path engaged.
   if (!state.welcomed && Object.keys(state.progress).length === 0) {
+    const fullCount = CURRICULUM.filter(l => l.status === 'full').length;
     const welcome = document.createElement('div');
     welcome.className = 'mb-6 p-4 rounded-lg bg-blue-950/50 border border-blue-900';
     welcome.innerHTML = `
@@ -900,7 +901,7 @@ function renderLesson() {
         <div>
           <div class="text-blue-200 font-semibold mb-1">👋 Welcome to JS Drill</div>
           <div class="text-sm text-slate-300 leading-relaxed">
-            76 lessons spanning syntax fundamentals → canonical interview patterns.
+            ${fullCount} lessons across <strong>syntax</strong>, <strong>interview patterns</strong>, and <strong>applied problems</strong>.
             Each lesson has a <strong>Reference</strong> card, then <strong>L1</strong> (concept MC), <strong>L2</strong> (fill-in), and <strong>L3</strong> (type from memory).
             <br><br>
             Start with the <strong>🧭 Starter Path</strong> for a linear sequence, or hit <kbd>?</kbd> for keyboard shortcuts.

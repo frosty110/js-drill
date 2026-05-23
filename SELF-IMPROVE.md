@@ -5,27 +5,28 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Audit the iteration-log + parking-lot for what
-  the loop hasn't picked up.* Iter 9 validated the "stress survey"
-  approach (drive the app under realistic-but-unhappy state) and
-  shipped two findings as one improvement. That same survey
-  technique should now be run more deliberately against the
-  iteration history — the parking lot has entries that have aged
-  out (e.g., the "76 lessons" welcome banner — flagged since
-  iter 1, still not done; the `bucket promotion gate` from iter
-  3; the `recall-without-prompt` candidate; the sidebar starter-
-  path ordering). What's still there because it's actually
-  high-leverage, vs. what's there because nobody picked it up?
-- **Hypothesis to test:** Doing one parking-lot sweep — categorize
-  each item as (ship-now, deprioritize, or already-done-implicitly)
-  — sharpens the loop's queue and forces the next iteration to
-  pick from a curated list, not a stale FIFO. Then pick the top
-  ship-now item and ship it. The discipline is to AVOID adding
-  new items this iteration (read-only on the diagnostic side);
-  net entries should DECREASE.
+- **Primary lens:** *Sidebar lesson order in starter-path mode.* Per
+  the iter 10 parking-lot audit, this is the top ship-now item. When
+  the user enables Starter Path, the sidebar shows lessons grouped by
+  section but path step numbers are global (e.g., HASH STRUCTURES
+  shows steps 22, 20, 21 in that order because of intra-section
+  alphabetical-ish order). The iter 5 step pill made the *main-view*
+  orientation OK, but the sidebar — the primary navigation surface,
+  especially on mobile — still has non-sequential numbers next to
+  each other. The user can't visually progress through the path by
+  scrolling top-to-bottom.
+- **Hypothesis to test:** In path mode, sort visible lessons by
+  STARTER_PATH index (within each section, or across sections?
+  decide during diagnosis) so the numbers are monotonic in the order
+  the user reads them. Non-path lessons drop out of the sidebar
+  entirely or sink to the bottom — they're not in the path so they're
+  noise. Non-path mode is unchanged. Mobile probe asserts the
+  visible sidebar lessons in path mode read 1, 2, 3, … in scroll
+  order.
 - **Out of scope this iteration:** further content authoring, Mock
   Interview mode, taxonomy changes, L1→L2→L3 core structure,
-  further SR-gradient tuning, adding new parking-lot items.
+  further SR-gradient tuning. Don't re-architect the sidebar — just
+  fix the order within the existing render.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -52,6 +53,23 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 10 — Welcome banner refresh + parking-lot curation
+The "76 lessons" banner staleness has been flagged since iter 1 but no
+iteration touched the welcome surface, so it kept rolling forward.
+Iter 10 audited the parking lot directly: shipped #2 (banner: dynamic
+count + three-track pitch — now reads "143 lessons across syntax,
+interview patterns, and applied problems"), marked #3 done implicitly
+(removed), moved #4 (bucket-promotion gate) and #5 (L3-timeout-as-
+failure) to **Avoid** with reasoning — both had clear leverage-vs-risk
+problems, leaving them in the lot was holding the loop hostage to
+items the analysis already disqualifies. Parking lot net: 6 → 2
+entries (sidebar ordering + recall-without-prompt). Validator 336/0;
+new probe `tools/cdp/welcome-banner-dynamic.js` asserts 6 facts about
+the banner (dynamic count, no hardcoded "76", three tracks mentioned).
+**Learning:** the parking lot drifts into a passive backlog without
+periodic curation — explicit "Avoid" + "deprioritized" tags force the
+loop to either ship an item or admit why not.
 
 ### 2026-05-23 — iter 9 — Weak-spot visibility (button count + plan ordering)
 Stress-surveyed under realistic-but-unhappy state (40 mastered, 15
@@ -194,30 +212,36 @@ quickly surfaced a second, deeper issue — L2 doesn't advance SR — which the
 fix doesn't close. That's iteration 2's lens.
 
 ## Hypotheses parking lot
+*(curated iter 10 — items that were stale or low-leverage moved to Avoid)*
 
-- **"Recall-without-prompt" mode** — show only the lesson title and ask the
-  user to produce the canonical. Strips prompt scaffolding. Mentioned in
-  active-recall.md candidates.
-- **Welcome banner says "76 lessons"** but the app now ships 143. Tiny
-  copy-fix candidate; rolled past again in iter 5. Cheap enough that it
-  can ride along with any iteration that touches the welcome surface.
-- **L1/L2 density audit data** (iter 5 finding): 0/143 lessons under-built
-  on L1 (good); 102/143 lessons have only 1 L2 exercise. Iter 6 lens.
-- **Bucket promotion gate.** Today L3 advances by 1 bucket no matter how
-  long the user took. If an L3 takes 5x the personal-best time, maybe the
-  bucket holds instead of advances. Same desirable-difficulty gradient but
-  applied to the win-side rigor signal.
-- **L3 timeout-as-failure.** Reveal is the only loss-side trigger today; a
-  silent abandonment (open due L3, walk away, never pass) keeps the
-  interval. A threshold (no pass within N minutes of opening a due L3)
-  could broaden the loss-side. Needs care so legitimate context switches
-  don't fire it. Captured in desirable-difficulty.md candidates.
 - **Sidebar starter-path ordering.** When path mode is on, the sidebar
-  groups lessons by section (so adjacent path numbers can be 22, 20, 21).
-  The iter 5 step pill makes orientation OK in the main view but the
-  sidebar itself is still confusing in path mode. Could either (a) sort
-  by path index in path mode, or (b) ignore — the pill might be enough.
+  groups lessons by section (adjacent path numbers can read 22, 20, 21).
+  The iter 5 step pill addressed main-view orientation; the sidebar itself
+  is still confusing in path mode. Concrete fix: sort by path index in
+  path mode. **Next ship-now candidate.**
+- **"Recall-without-prompt" mode** — show only the lesson title and ask
+  the user to produce the canonical. Strips prompt scaffolding.
+  Documented in active-recall.md candidates. *Deprioritized iter 10:*
+  needs new mode UI + content judgment about which titles are
+  recognizable enough. Too big for atomic; no user-evidence of demand.
+  Revisit if/when a user reports they want this kind of unprompted
+  recall.
 
 ## Avoid (learned dead-ends)
 
-*(none yet — populate as iterations rule things out)*
+- **Bucket promotion gate keyed on personal-best time.** (Was in the
+  parking lot through iter 9.) The idea was: L3 holds the bucket
+  instead of advancing if the pass took 5x the personal-best time.
+  Problem: `state.bestTimes` is only populated during Mock Interview
+  mode. Regular L3 passes (the vast majority) have no time baseline
+  to compare against. The mechanism would fire for ~1% of L3 attempts —
+  not worth the engineering. Revisit only if a per-attempt time
+  baseline gets added for non-mock L3.
+- **L3 timeout-as-failure.** (Was in the parking lot through iter 9.)
+  The idea was: silent abandonment of a due L3 should demote the
+  bucket. Problem: distinguishing "user gave up" from "user got
+  pulled into a meeting" requires a threshold + state tracking that's
+  fragile. High mis-fire risk against a sympathetic user (someone with
+  intermittent attention). The Reveal-on-due demote (iter 3) already
+  captures the explicit "I can't recall" signal cleanly. Revisit only
+  if we get evidence that silent abandonment is a common failure mode.

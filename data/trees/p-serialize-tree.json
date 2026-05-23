@@ -1,0 +1,93 @@
+{
+  "id": "p-serialize-tree",
+  "title": "Serialize & Deserialize Binary Tree",
+  "section": "Trees",
+  "track": "patterns",
+  "status": "full",
+  "description": "Pre-order DFS with null markers makes serialization round-trippable: serialize emits a comma-separated stream, deserialize consumes it via a shared queue/index.",
+  "reference": {
+    "code": "// Pre-order DFS, write \"#\" for null. Round-trips because null markers preserve shape.\nfunction serialize(root) {\n  const out = [];\n  const dfs = (n) => {\n    if (!n) { out.push(\"#\"); return; }\n    out.push(String(n.val));\n    dfs(n.left);\n    dfs(n.right);\n  };\n  dfs(root);\n  return out.join(\",\");\n}\nfunction deserialize(s) {\n  const toks = s.split(\",\");\n  let i = 0;\n  const dfs = () => {\n    const t = toks[i++];\n    if (t === \"#\") return null;\n    return { val: Number(t), left: dfs(), right: dfs() };\n  };\n  return dfs();\n}\n// Time O(n) for both directions, Space O(n) for the token stream",
+    "notes": [
+      "Pre-order alone is ambiguous — you need explicit null markers (or BOTH pre + in-order) to recover the shape.",
+      "Deserialize must consume tokens IN ORDER via a shared index or shifted queue; recursing without state corrupts the stream.",
+      "Use String(val) on write and Number(tok) on read — splitting on comma turns numbers into strings."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why does pre-order with null markers uniquely identify a binary tree?",
+        "options": [
+          "Because in-order alone is enough",
+          "Null markers record the absence of children, so the shape is reconstructable",
+          "Because all binary trees are unique by their values",
+          "Because the root is always first"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What state must deserialize share across recursive calls?",
+        "options": [
+          "The original tree",
+          "A position/index (or queue) into the token stream",
+          "Nothing — each call parses independently",
+          "The output array"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Time complexity of serialize on n nodes?",
+        "options": [
+          "O(log n)",
+          "O(n)",
+          "O(n log n)",
+          "O(n^2)"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Why convert tokens with Number() during deserialize?",
+        "options": [
+          "Pure style",
+          "split(\",\") yields strings; the val field should be numeric",
+          "It validates the token",
+          "It is not necessary"
+        ],
+        "answer": 1,
+        "explain": "Splitting on a comma gives string tokens. Without Number(), node.val would be the string \"3\", not 3."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the pre-order serialize/deserialize with `#` null markers.",
+        "template": "function serialize(root) {\n  const out = [];\n  const dfs = (n) => {\n    if (!n) { out.push(___); return; }\n    out.push(String(n.val));\n    dfs(n.left);\n    dfs(n.right);\n  };\n  dfs(root);\n  return out.join(\",\");\n}\nfunction deserialize(s) {\n  const toks = s.split(\",\");\n  let i = 0;\n  const dfs = () => {\n    const t = toks[___];\n    if (t === \"#\") return ___;\n    return { val: Number(t), left: dfs(), right: dfs() };\n  };\n  return dfs();\n}\nconst root = { val: 1, left: { val: 2, left: null, right: null }, right: { val: 3, left: { val: 4, left: null, right: null }, right: { val: 5, left: null, right: null } } };\nconsole.log(serialize(deserialize(serialize(root))));",
+        "blanks": [
+          {
+            "answer": "\"#\"",
+            "hint": "null sentinel string"
+          },
+          {
+            "answer": "i++",
+            "hint": "consume current token and advance"
+          },
+          {
+            "answer": "null",
+            "hint": "absent child"
+          }
+        ],
+        "expectedOutput": "1,2,#,#,3,4,#,#,5,#,#"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement serialize(root) and deserialize(s) using pre-order DFS with `#` null markers. Build a sample tree [1, 2, 3, null, null, 4, 5], round-trip it via serialize(deserialize(serialize(root))), and log the result.",
+    "expectedOutput": "1,2,#,#,3,4,#,#,5,#,#",
+    "canonical": "function serialize(root) {\n  const out = [];\n  const dfs = (n) => {\n    if (!n) { out.push(\"#\"); return; }\n    out.push(String(n.val));\n    dfs(n.left);\n    dfs(n.right);\n  };\n  dfs(root);\n  return out.join(\",\");\n}\nfunction deserialize(s) {\n  const toks = s.split(\",\");\n  let i = 0;\n  const dfs = () => {\n    const t = toks[i++];\n    if (t === \"#\") return null;\n    return { val: Number(t), left: dfs(), right: dfs() };\n  };\n  return dfs();\n}\nconst root = {\n  val: 1,\n  left: { val: 2, left: null, right: null },\n  right: {\n    val: 3,\n    left: { val: 4, left: null, right: null },\n    right: { val: 5, left: null, right: null }\n  }\n};\nconsole.log(serialize(deserialize(serialize(root))));",
+    "hints": [
+      "Pre-order: write self, recurse left, recurse right. Write `#` for null.",
+      "Deserialize shares an index `i` across recursive calls — every call consumes exactly one token, then recurses for its two children."
+    ]
+  }
+}

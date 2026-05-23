@@ -1,0 +1,78 @@
+{
+  "id": "a-event-emitter",
+  "title": "Event Emitter",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Pub/sub primitive — multiple listeners per event, remove a specific handler with off(), invoke all in registration order on emit().",
+  "reference": {
+    "code": "class EventEmitter {\n  constructor() {\n    this.handlers = {};                          // event -> array of fns\n  }\n  on(event, fn) {\n    (this.handlers[event] ||= []).push(fn);      // lazy-create the bucket\n  }\n  off(event, fn) {\n    const arr = this.handlers[event];\n    if (!arr) return;\n    const i = arr.indexOf(fn);                   // identity match — exact same fn reference\n    if (i !== -1) arr.splice(i, 1);\n  }\n  emit(event, ...args) {\n    const arr = this.handlers[event];\n    if (!arr) return;\n    for (const fn of arr.slice()) fn(...args);   // copy so off-during-emit is safe\n  }\n}",
+    "notes": [
+      "off() removes by reference — passing an equivalent-looking anonymous fn won't match. Store the fn if you plan to off it.",
+      "Iterate a copy in emit() so a listener that calls off() inside doesn't skip the next handler.",
+      "`(this.handlers[event] ||= [])` lazily creates the bucket on first on() — common interview shorthand."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "What does off(event, fn) use to find the listener?",
+        "options": [
+          "Deep equality of the function source",
+          "Identity comparison — the exact same function reference",
+          "Function name string match",
+          "The order the listener was registered in"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Why does emit() iterate a copy of the handler array?",
+        "options": [
+          "Performance — arrays are faster to iterate when copied",
+          "To allow listeners that call off() or on() during dispatch without breaking iteration",
+          "Required by ES2020",
+          "Copies prevent stack overflows"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What happens when you emit an event with no registered listeners?",
+        "options": [
+          "It throws ReferenceError",
+          "Nothing — emit is a no-op for unknown events",
+          "It logs a warning",
+          "It auto-creates a listener"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "If on('x', fn) is called twice with the same fn, how many times will emit('x') invoke fn?",
+        "options": ["0", "1 — duplicates are deduped", "2 — duplicates are stored separately", "It throws"],
+        "answer": 2
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Complete on/off/emit so the sequence logs A and B once, then only B after off.",
+        "template": "class EE {\n  constructor() { this.h = {}; }\n  on(e, fn) { (this.h[e] ___= []).push(fn); }\n  off(e, fn) { const a = this.h[e]; if (!a) return; const i = a.indexOf(fn); if (i !== -1) a.___(i, 1); }\n  emit(e, ...args) { const a = this.h[e]; if (!a) return; for (const fn of a.slice()) fn(...args); }\n}\nconst ee = new EE();\nconst a = (x) => console.log('A:' + x);\nconst b = (x) => console.log('B:' + x);\nee.on('msg', a);\nee.on('msg', b);\nee.emit('msg', 1);\nee.off('msg', a);\nee.emit('msg', 2);",
+        "blanks": [
+          { "answer": "||", "hint": "logical-OR assignment lazily creates the bucket" },
+          { "answer": "splice", "hint": "array method to remove an element by index" }
+        ],
+        "expectedOutput": "A:1\nB:1\nB:2"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement EventEmitter with on/off/emit. Subscribe two listeners to 'tick', emit twice, off the first, emit again. Listeners should log identifying strings.",
+    "expectedOutput": "one:1\ntwo:1\none:2\ntwo:2\ntwo:3",
+    "canonical": "class EventEmitter {\n  constructor() { this.handlers = {}; }\n  on(event, fn) { (this.handlers[event] ||= []).push(fn); }\n  off(event, fn) {\n    const arr = this.handlers[event];\n    if (!arr) return;\n    const i = arr.indexOf(fn);\n    if (i !== -1) arr.splice(i, 1);\n  }\n  emit(event, ...args) {\n    const arr = this.handlers[event];\n    if (!arr) return;\n    for (const fn of arr.slice()) fn(...args);\n  }\n}\nconst ee = new EventEmitter();\nconst one = (n) => console.log('one:' + n);\nconst two = (n) => console.log('two:' + n);\nee.on('tick', one);\nee.on('tick', two);\nee.emit('tick', 1);\nee.emit('tick', 2);\nee.off('tick', one);\nee.emit('tick', 3);",
+    "hints": [
+      "Store handlers as a plain object keyed by event name, value is an array of fns.",
+      "off() must match by function reference — Array.indexOf works because === compares fn refs.",
+      "Iterate a slice() copy in emit so concurrent off() calls don't skip handlers."
+    ]
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "id": "p-encode-decode-strings",
+  "title": "Encode/Decode Strings",
+  "section": "Arrays & Hashing",
+  "track": "patterns",
+  "status": "full",
+  "description": "Serialize a list of arbitrary strings into one string and round-trip it back. Length-prefix scheme `len#payload` avoids any delimiter collision.",
+  "reference": {
+    "code": "function encode(strs) {\n  let out = \"\";\n  for (const s of strs) out += s.length + \"#\" + s;\n  return out;\n}\nfunction decode(str) {\n  const res = [];\n  let i = 0;\n  while (i < str.length) {\n    let j = i;\n    while (str[j] !== \"#\") j++;            // find delimiter\n    const len = Number(str.slice(i, j));\n    res.push(str.slice(j + 1, j + 1 + len));\n    i = j + 1 + len;\n  }\n  return res;\n}\n// Time O(N) total chars, Space O(N).",
+    "notes": [
+      "Length-prefix is delimiter-safe: payloads can contain '#' or any character.",
+      "Find '#' via a scan, not split — the payload may itself contain '#'.",
+      "Empty string encodes as `0#`; empty array encodes as `\"\"` and decodes to `[]`."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why prefix with `length + '#'` instead of just joining on a separator?",
+        "options": [
+          "It is shorter",
+          "Any separator could collide with a payload character — length prefix is collision-proof",
+          "JSON requires it",
+          "Performance"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "When decoding, why scan for '#' instead of using `split('#')`?",
+        "options": [
+          "split is slower",
+          "Payloads themselves can contain '#', so a global split would over-split",
+          "split returns the wrong type",
+          "It is a style preference"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "How is the empty string `\"\"` encoded?",
+        "options": [
+          "As an empty string",
+          "As `\"#\"`",
+          "As `\"0#\"`",
+          "It cannot be encoded"
+        ],
+        "answer": 2
+      },
+      {
+        "q": "After reading length L from a header ending at index j, where does the next header begin?",
+        "options": [
+          "j + L",
+          "j + 1 + L",
+          "j + L + 2",
+          "i + L"
+        ],
+        "answer": 1,
+        "explain": "Skip the '#' (1 char) and the payload (L chars)."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in encode/decode and round-trip the input.",
+        "template": "function encode(strs) {\n  let out = \"\";\n  for (const s of strs) out += s.length + ___ + s;\n  return out;\n}\nfunction decode(str) {\n  const res = [];\n  let i = 0;\n  while (i < str.length) {\n    let j = i;\n    while (str[j] !== \"#\") j++;\n    const len = Number(str.slice(i, j));\n    res.push(str.slice(j + 1, j + 1 + ___));\n    i = j + 1 + len;\n  }\n  return res;\n}\nconst enc = encode([\"hello\", \"world\"]);\nconsole.log(enc);\nconsole.log(JSON.stringify(___(enc)));",
+        "blanks": [
+          {
+            "answer": "\"#\"",
+            "hint": "the delimiter literal as a string"
+          },
+          {
+            "answer": "len",
+            "hint": "payload size from the header"
+          },
+          {
+            "answer": "decode",
+            "hint": "round-trip the encoded form"
+          }
+        ],
+        "expectedOutput": "5#hello5#world\n[\"hello\",\"world\"]"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement `encode(strs)` and `decode(str)` using a length-prefix scheme. Log `encode([\"hello\",\"world\"])` then `JSON.stringify(decode(encode([\"hello\",\"world\"])))`.",
+    "expectedOutput": "5#hello5#world\n[\"hello\",\"world\"]",
+    "canonical": "function encode(strs) {\n  let out = \"\";\n  for (const s of strs) out += s.length + \"#\" + s;\n  return out;\n}\nfunction decode(str) {\n  const res = [];\n  let i = 0;\n  while (i < str.length) {\n    let j = i;\n    while (str[j] !== \"#\") j++;\n    const len = Number(str.slice(i, j));\n    res.push(str.slice(j + 1, j + 1 + len));\n    i = j + 1 + len;\n  }\n  return res;\n}\nconst enc = encode([\"hello\", \"world\"]);\nconsole.log(enc);\nconsole.log(JSON.stringify(decode(enc)));",
+    "hints": [
+      "Encode each string as `length + '#' + payload` and concatenate.",
+      "To decode, scan to '#', read the length, slice off that many chars."
+    ]
+  }
+}

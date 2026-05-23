@@ -1,0 +1,93 @@
+{
+  "id": "p-pacific-atlantic",
+  "title": "Pacific Atlantic Water Flow",
+  "section": "Graphs",
+  "track": "patterns",
+  "status": "full",
+  "description": "Reverse-flood DFS from each ocean's edges; intersect the two reach-sets to find cells that drain to both oceans. O(R*C).",
+  "reference": {
+    "code": "function pacificAtlantic(heights) {\n  const R = heights.length, C = heights[0].length;\n  const pac = Array.from({length: R}, () => new Array(C).fill(false));\n  const atl = Array.from({length: R}, () => new Array(C).fill(false));\n  function dfs(r, c, seen, prev) {\n    if (r < 0 || r >= R || c < 0 || c >= C) return;\n    if (seen[r][c]) return;\n    if (heights[r][c] < prev) return;          // reverse flow: must be >= neighbor\n    seen[r][c] = true;\n    const h = heights[r][c];\n    dfs(r + 1, c, seen, h);\n    dfs(r - 1, c, seen, h);\n    dfs(r, c + 1, seen, h);\n    dfs(r, c - 1, seen, h);\n  }\n  for (let c = 0; c < C; c++) { dfs(0, c, pac, -Infinity); dfs(R - 1, c, atl, -Infinity); }\n  for (let r = 0; r < R; r++) { dfs(r, 0, pac, -Infinity); dfs(r, C - 1, atl, -Infinity); }\n  const out = [];\n  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (pac[r][c] && atl[r][c]) out.push([r, c]);\n  return out;\n}\n// Time O(R*C), Space O(R*C)",
+    "notes": [
+      "Flood is REVERSED: start at ocean edges and climb to cells with height >= current — that mirrors water flowing FROM a cell TO the ocean.",
+      "Two separate visited grids (one per ocean) so the same cell can be explored once per ocean — intersect at the end.",
+      "Top + left edges touch the Pacific; bottom + right edges touch the Atlantic — corners belong to both."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why do we DFS from the ocean edges INWARD instead of from every cell outward?",
+        "options": [
+          "Cells-outward is wrong",
+          "It is O(R*C) instead of O((R*C)^2) — each cell is visited at most twice total",
+          "Saves a visited array",
+          "Required by the runner"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Reverse-flow rule from a neighbor with height `prev` into current cell with height `h`:",
+        "options": [
+          "h <= prev",
+          "h >= prev",
+          "h == prev",
+          "Any h"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Which edges seed the Pacific flood?",
+        "options": [
+          "Top row + right column",
+          "Top row + left column",
+          "Bottom row + right column",
+          "All four edges"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "How is the final answer built?",
+        "options": [
+          "Union of pac and atl",
+          "XOR of pac and atl",
+          "Intersection: cells reachable in BOTH grids",
+          "Only the border cells"
+        ],
+        "answer": 2
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the reverse-flood Pacific/Atlantic DFS.",
+        "template": "function pacificAtlantic(heights) {\n  const R = heights.length, C = heights[0].length;\n  const pac = Array.from({length: R}, () => new Array(C).fill(false));\n  const atl = Array.from({length: R}, () => new Array(C).fill(false));\n  function dfs(r, c, seen, prev) {\n    if (r < 0 || r >= R || c < 0 || c >= C) return;\n    if (seen[r][c]) return;\n    if (heights[r][c] ___ prev) return;\n    seen[r][c] = ___;\n    const h = heights[r][c];\n    dfs(r + 1, c, seen, h);\n    dfs(r - 1, c, seen, h);\n    dfs(r, c + 1, seen, h);\n    dfs(r, c - 1, seen, h);\n  }\n  for (let c = 0; c < C; c++) { dfs(0, c, pac, -Infinity); dfs(R - 1, c, atl, -Infinity); }\n  for (let r = 0; r < R; r++) { dfs(r, 0, pac, -Infinity); dfs(r, C - 1, atl, -Infinity); }\n  const out = [];\n  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (pac[r][c] ___ atl[r][c]) out.push([r, c]);\n  return out;\n}\nconst heights = [[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]];\nconsole.log(JSON.stringify(pacificAtlantic(heights)));",
+        "blanks": [
+          {
+            "answer": "<",
+            "hint": "reverse-flow comparator: stop when current is lower than prev"
+          },
+          {
+            "answer": "true",
+            "hint": "mark visited"
+          },
+          {
+            "answer": "&&",
+            "hint": "must reach BOTH oceans"
+          }
+        ],
+        "expectedOutput": "[[0,4],[1,3],[1,4],[2,2],[3,0],[3,1],[4,0]]"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `pacificAtlantic(heights)` — return all cells whose water can drain to BOTH oceans (Pacific = top + left edge, Atlantic = bottom + right). Use reverse DFS from each ocean. Log `JSON.stringify(result)` on the classic 5x5 example.",
+    "expectedOutput": "[[0,4],[1,3],[1,4],[2,2],[3,0],[3,1],[4,0]]",
+    "canonical": "function pacificAtlantic(heights) {\n  const R = heights.length, C = heights[0].length;\n  const pac = Array.from({length: R}, () => new Array(C).fill(false));\n  const atl = Array.from({length: R}, () => new Array(C).fill(false));\n  function dfs(r, c, seen, prev) {\n    if (r < 0 || r >= R || c < 0 || c >= C) return;\n    if (seen[r][c]) return;\n    if (heights[r][c] < prev) return;\n    seen[r][c] = true;\n    const h = heights[r][c];\n    dfs(r + 1, c, seen, h);\n    dfs(r - 1, c, seen, h);\n    dfs(r, c + 1, seen, h);\n    dfs(r, c - 1, seen, h);\n  }\n  for (let c = 0; c < C; c++) { dfs(0, c, pac, -Infinity); dfs(R - 1, c, atl, -Infinity); }\n  for (let r = 0; r < R; r++) { dfs(r, 0, pac, -Infinity); dfs(r, C - 1, atl, -Infinity); }\n  const out = [];\n  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (pac[r][c] && atl[r][c]) out.push([r, c]);\n  return out;\n}\nconst heights = [[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]];\nconsole.log(JSON.stringify(pacificAtlantic(heights)));",
+    "hints": [
+      "Seed two DFS frontiers — one per ocean — at the edge cells.",
+      "Inside DFS, only continue when heights[neighbor] >= heights[current] (reverse flow).",
+      "Answer is the intersection of the two visited grids; iterate row-major to keep output sorted."
+    ]
+  }
+}

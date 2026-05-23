@@ -1,0 +1,94 @@
+{
+  "id": "s-number-parse",
+  "title": "Number parsing & coercion",
+  "section": "JS Toolbox",
+  "track": "syntax",
+  "status": "full",
+  "description": "Every input is a string until you parse it — pick the right tool (parseInt, parseFloat, Number, unary `+`) and know why `Number.isNaN` is safer than the global `isNaN`.",
+  "reference": {
+    "code": "// parseInt — leading digits, stops at first non-digit\nparseInt('42px', 10);     // 42\nparseInt('  -7 ', 10);    // -7\nparseInt('0.9', 10);      // 0   (stops at '.')\nparseInt('abc', 10);      // NaN\n\n// ALWAYS pass the radix — '0x10' would parse as hex without it\nparseInt('0x10', 10);     // 0\nparseInt('0x10');         // 16  (legacy hex detection)\n\n// parseFloat — accepts decimals + exponent\nparseFloat('3.14abc');    // 3.14\nparseFloat('1e3');        // 1000\n\n// Number — STRICT, whole string must be numeric (trims whitespace)\nNumber('42');             // 42\nNumber('42px');           // NaN  (unlike parseInt)\nNumber('');               // 0    (gotcha)\nNumber('  3.14  ');       // 3.14\n\n// Unary + — same as Number(x), shorter\n+'5';                     // 5\n+'';                      // 0\n+'5px';                   // NaN\n\n// Validation helpers (DO NOT coerce — false for non-numbers)\nNumber.isInteger(3);       // true\nNumber.isInteger(3.0);     // true   (3.0 === 3)\nNumber.isInteger('3');     // false  (no coercion)\nNumber.isFinite(Infinity); // false\nNumber.isFinite('1');      // false  (no coercion)\nNumber.isNaN(NaN);         // true\nNumber.isNaN('foo');       // false  (no coercion)\nisNaN('foo');              // true   (global — coerces first, surprise)",
+    "notes": [
+      "Always pass the radix to `parseInt(s, 10)` — otherwise `'08'` and `'0x10'` get parsed oddly across engines.",
+      "`Number('')` and `Number('  ')` are `0`, not `NaN`. Reject empty input explicitly.",
+      "Prefer `Number.isNaN(x)` over global `isNaN(x)` — the global coerces first so `isNaN('foo')` is misleadingly `true`."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "What is `parseInt('42px', 10)`?",
+        "options": [
+          "42",
+          "NaN",
+          "4210",
+          "throws"
+        ],
+        "answer": 0,
+        "explain": "`parseInt` reads leading digits and stops at the first non-digit."
+      },
+      {
+        "q": "What is `Number('42px')`?",
+        "options": [
+          "42",
+          "NaN",
+          "'42px'",
+          "0"
+        ],
+        "answer": 1,
+        "explain": "`Number` is strict — the whole string must be numeric (whitespace-trimmed)."
+      },
+      {
+        "q": "What is `Number('')`?",
+        "options": [
+          "NaN",
+          "0",
+          "undefined",
+          "throws"
+        ],
+        "answer": 1,
+        "explain": "Empty/whitespace-only strings coerce to 0. Validate first."
+      },
+      {
+        "q": "Why prefer `Number.isNaN(x)` over global `isNaN(x)`?",
+        "options": [
+          "It is faster",
+          "Number.isNaN does not coerce; global isNaN does",
+          "Global isNaN throws on strings",
+          "They are identical"
+        ],
+        "answer": 1,
+        "explain": "`isNaN('foo')` is `true` because it coerces; `Number.isNaN('foo')` is `false`."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Parse the leading integer from the CSS-like string.",
+        "template": "const n = ___('128px', 10);\nconsole.log(n);",
+        "blanks": [
+          { "answer": "parseInt", "hint": "stops at first non-digit" }
+        ],
+        "expectedOutput": "128"
+      },
+      {
+        "prompt": "Coerce the input only if it is a pure number; otherwise log 'bad'.",
+        "template": "const s = '12.5';\nconst n = ___(s);\nconsole.log(Number.___(n) ? n : 'bad');",
+        "blanks": [
+          { "answer": "Number", "hint": "strict coercion" },
+          { "answer": "isFinite", "hint": "non-coercing finite check" }
+        ],
+        "expectedOutput": "12.5"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `toIntStrict(s)` that returns the integer if `s` is a clean base-10 integer string (optional leading `-`), else `null`. Log results for `'42'`, `'-7'`, `'3.14'`, `' 5 '`, `'5px'`.",
+    "expectedOutput": "42\n-7\nnull\nnull\nnull",
+    "canonical": "function toIntStrict(s) {\n  if (typeof s !== 'string' || !/^-?\\d+$/.test(s)) return null;\n  return Number(s);\n}\nfor (const v of ['42', '-7', '3.14', ' 5 ', '5px']) {\n  console.log(toIntStrict(v));\n}",
+    "hints": [
+      "Validate with a regex (`/^-?\\d+$/`) before coercing.",
+      "`Number(s)` is fine once you have confirmed the shape."
+    ]
+  }
+}

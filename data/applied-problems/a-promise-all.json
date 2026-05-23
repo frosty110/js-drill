@@ -1,0 +1,84 @@
+{
+  "id": "a-promise-all",
+  "title": "Implement Promise.all",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Reimplement Promise.all from scratch — wait for every input to resolve, preserve order, reject fast on the first error. Classic async interview question.",
+  "reference": {
+    "code": "function promiseAll(arr) {\n  return new Promise((resolve, reject) => {\n    const out = new Array(arr.length);   // preallocate so order is preserved\n    let done = 0;\n    if (arr.length === 0) return resolve(out);\n    arr.forEach((item, i) => {\n      Promise.resolve(item)               // lift non-promises into the chain\n        .then(v => {\n          out[i] = v;\n          if (++done === arr.length) resolve(out);\n        })\n        .catch(reject);                   // first rejection wins\n    });\n  });\n}",
+    "notes": [
+      "Wrap each entry with `Promise.resolve()` — values may be raw, not promises, but you still want a microtask boundary.",
+      "Track completion with a counter, not by checking `out` for empty slots. A resolved `undefined` is still a real result.",
+      "Empty input must resolve to `[]` synchronously (well, in a microtask). Forgetting this gives a forever-pending promise."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why preallocate `out = new Array(arr.length)` instead of pushing as each resolves?",
+        "options": [
+          "Push is slower",
+          "Promises may resolve out of order — assigning by index preserves input order",
+          "new Array fills with zeros",
+          "Push throws inside a Promise constructor"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What happens when one input rejects?",
+        "options": [
+          "Other inputs are cancelled and the outer promise rejects",
+          "Other inputs keep running, but the outer promise rejects with the first error and ignores later results",
+          "It waits for all to settle, then collects errors",
+          "It silently resolves with undefined at that index"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Why wrap each item in `Promise.resolve(item)`?",
+        "options": [
+          "It deep-clones the item",
+          "Items may be plain values; Promise.resolve normalizes them to thenables",
+          "It speeds up the event loop",
+          "It rejects non-promise items"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What must `promiseAll([])` resolve to?",
+        "options": [
+          "undefined",
+          "null",
+          "[] — an empty array",
+          "It should reject — nothing to wait for"
+        ],
+        "answer": 2
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in promiseAll so [Promise.resolve(1), 2, Promise.resolve(3)] logs [1,2,3].",
+        "template": "function promiseAll(arr) {\n  return new Promise((resolve, reject) => {\n    const out = new Array(arr.___);\n    let done = 0;\n    if (arr.length === 0) return resolve(out);\n    arr.forEach((item, i) => {\n      Promise.___(item)\n        .then(v => { out[i] = v; if (++done === arr.length) resolve(out); })\n        .catch(___);\n    });\n  });\n}\n(async () => {\n  const r = await promiseAll([Promise.resolve(1), 2, Promise.resolve(3)]);\n  console.log(r);\n})();",
+        "blanks": [
+          { "answer": "length", "hint": "size of the input array" },
+          { "answer": "resolve", "hint": "static Promise method that wraps a value" },
+          { "answer": "reject", "hint": "forward errors to the outer promise" }
+        ],
+        "expectedOutput": "[1,2,3]"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement promiseAll(arr) that resolves to an in-order array of resolved values, or rejects with the first error. Test with a mix of promises and bare values; also test the rejection path.",
+    "expectedOutput": "[1,2,3]\nboom",
+    "canonical": "function promiseAll(arr) {\n  return new Promise((resolve, reject) => {\n    const out = new Array(arr.length);\n    let done = 0;\n    if (arr.length === 0) return resolve(out);\n    arr.forEach((item, i) => {\n      Promise.resolve(item)\n        .then(v => { out[i] = v; if (++done === arr.length) resolve(out); })\n        .catch(reject);\n    });\n  });\n}\n(async () => {\n  const ok = await promiseAll([Promise.resolve(1), 2, Promise.resolve(3)]);\n  console.log(ok);\n  try {\n    await promiseAll([Promise.resolve(1), Promise.reject(new Error('boom')), 3]);\n  } catch (e) {\n    console.log(e.message);\n  }\n})();",
+    "hints": [
+      "Wrap each entry in Promise.resolve() so plain values become thenables.",
+      "Assign results by index; track completion with a counter.",
+      "Forward the first .catch directly to the outer reject — later errors are ignored."
+    ]
+  }
+}

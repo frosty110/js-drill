@@ -1,0 +1,84 @@
+{
+  "id": "a-deep-clone",
+  "title": "Deep Clone",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Recursively clone plain objects and arrays so mutating the clone never touches the original — the canonical recursion + WeakMap-for-cycles pattern.",
+  "reference": {
+    "code": "function deepClone(value, seen = new WeakMap()) {\n  if (value === null || typeof value !== 'object') return value;  // primitives copy by value\n  if (seen.has(value)) return seen.get(value);                    // cycle: return prior clone\n  const out = Array.isArray(value) ? [] : {};\n  seen.set(value, out);                                           // register BEFORE recursing\n  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);\n  return out;\n}",
+    "notes": [
+      "Primitives (number, string, boolean, null, undefined) are immutable — return as-is, no copy needed.",
+      "Register the new object in the WeakMap before recursing into children, or cyclic graphs recurse forever.",
+      "This minimal version skips Date, Map, Set, RegExp, and class prototypes. Real `structuredClone` handles those; interviews usually only ask for the recursive core."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why must you set `seen.set(value, out)` before iterating the object's keys?",
+        "options": [
+          "Performance — WeakMap is faster on cold entries",
+          "To handle cycles: a child that references back to value must find the in-progress clone",
+          "It changes how Object.keys orders the keys",
+          "WeakMap rejects writes after a read"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What does `deepClone(42)` return?",
+        "options": [
+          "An object wrapping 42",
+          "42 — primitives are returned as-is",
+          "undefined",
+          "Throws because 42 is not cloneable"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "After `const b = deepClone(a); b.nested.x = 99;`, why is `a.nested.x` unchanged?",
+        "options": [
+          "Because objects are immutable by default",
+          "Because `b.nested` is a new object, distinct from `a.nested`",
+          "Because deepClone freezes the original",
+          "Because assignment to a clone is intercepted"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Why WeakMap instead of Map for the `seen` cache?",
+        "options": [
+          "Map cannot use objects as keys",
+          "WeakMap holds keys weakly, so the cache doesn't block GC of cloned graphs",
+          "WeakMap is synchronous; Map is async",
+          "WeakMap allows duplicate keys"
+        ],
+        "answer": 1
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Complete deepClone so the clone is independent — mutating clone.nested.x must not change original.nested.x.",
+        "template": "function deepClone(value, seen = new WeakMap()) {\n  if (value === null || ___ value !== 'object') return value;\n  if (seen.has(value)) return seen.get(value);\n  const out = Array.isArray(value) ? [] : {};\n  seen.___(value, out);\n  for (const k of Object.keys(value)) out[k] = ___(value[k], seen);\n  return out;\n}\nconst a = { nested: { x: 1 } };\nconst b = deepClone(a);\nb.nested.x = 99;\nconsole.log(a.nested.x);\nconsole.log(b.nested.x);",
+        "blanks": [
+          { "answer": "typeof", "hint": "primitive type check operator" },
+          { "answer": "set", "hint": "WeakMap write method" },
+          { "answer": "deepClone", "hint": "recurse on children" }
+        ],
+        "expectedOutput": "1\n99"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement deepClone(value) with cycle detection. Clone a nested object, mutate the clone, log original.nested.x and clone.nested.x to prove independence, then clone a cyclic object and confirm cycle.self === cycle.",
+    "expectedOutput": "1\n99\ntrue\ntrue",
+    "canonical": "function deepClone(value, seen = new WeakMap()) {\n  if (value === null || typeof value !== 'object') return value;\n  if (seen.has(value)) return seen.get(value);\n  const out = Array.isArray(value) ? [] : {};\n  seen.set(value, out);\n  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);\n  return out;\n}\nconst a = { nested: { x: 1 }, list: [1, 2, 3] };\nconst b = deepClone(a);\nb.nested.x = 99;\nconsole.log(a.nested.x);\nconsole.log(b.nested.x);\nconsole.log(a.list !== b.list);\nconst cyc = { name: 'root' };\ncyc.self = cyc;\nconst cycClone = deepClone(cyc);\nconsole.log(cycClone.self === cycClone);",
+    "hints": [
+      "Guard with `typeof value !== 'object' || value === null` — null is typeof 'object'.",
+      "Set the WeakMap entry BEFORE the recursion loop so cyclic children find the in-progress clone.",
+      "Arrays and plain objects branch on `Array.isArray(value)`."
+    ]
+  }
+}

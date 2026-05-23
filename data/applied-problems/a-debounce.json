@@ -1,0 +1,78 @@
+{
+  "id": "a-debounce",
+  "title": "Debounce",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Debounce delays a function call until `ms` of quiet — every new call resets the timer. Built with an injectable fake clock so the verifier can advance time deterministically.",
+  "reference": {
+    "code": "function debounce(fn, ms) {\n  let scheduled = null;       // due-at on fake clock, or null when idle\n  let lastArgs = null;\n  const api = function (...args) {\n    lastArgs = args;\n    scheduled = api._now + ms;     // (re)set the due time on every call\n  };\n  api._now = 0;\n  api.tick = (delta) => {          // advance fake clock; fire if due\n    api._now += delta;\n    if (scheduled !== null && api._now >= scheduled) {\n      scheduled = null;\n      fn(...lastArgs);\n    }\n  };\n  return api;\n}",
+    "notes": [
+      "Each call resets `scheduled` to now+ms — the timer restarts, not accumulates. That's the debounce contract.",
+      "Only the most recent args are captured. The trailing call wins; intermediate args are dropped.",
+      "Injecting a clock (tick/_now) instead of using setTimeout makes the implementation testable without real timers."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Three rapid calls in quick succession to a debounced fn (ms=100) result in how many invocations of the underlying fn (assuming time advances past 100ms only after the third call)?",
+        "options": ["3", "0", "1 — only the last", "2"],
+        "answer": 2
+      },
+      {
+        "q": "Which args does the underlying fn receive when the debounced wrapper finally fires?",
+        "options": [
+          "Args from the first call",
+          "Args from the most recent call",
+          "All accumulated args as an array",
+          "No args — debounce strips them"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Why expose a `tick(delta)` method instead of using real setTimeout?",
+        "options": [
+          "setTimeout is deprecated",
+          "Deterministic, synchronous testing without waiting for real wall-clock time",
+          "tick is faster at runtime",
+          "Browsers do not have setTimeout"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "After a debounced call, what should happen if `tick(ms-1)` is called (less than the debounce window)?",
+        "options": [
+          "fn fires immediately",
+          "fn does not fire — the window hasn't elapsed",
+          "Throws an error",
+          "fn fires with stale args"
+        ],
+        "answer": 1
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the debounce so rapid calls only invoke fn once, with the latest args, after the window elapses.",
+        "template": "function debounce(fn, ms) {\n  let scheduled = null, lastArgs;\n  const api = function (...args) {\n    lastArgs = args;\n    scheduled = api._now + ___;\n  };\n  api._now = 0;\n  api.tick = (d) => {\n    api._now += d;\n    if (scheduled !== null && api._now ___ scheduled) {\n      scheduled = null;\n      fn(...lastArgs);\n    }\n  };\n  return api;\n}\nlet calls = 0;\nconst d = debounce((x) => { calls++; console.log('fire:' + x); }, 100);\nd(1); d(2); d(3);\nd.tick(50);\nconsole.log(calls);\nd.tick(60);\nconsole.log(calls);",
+        "blanks": [
+          { "answer": "ms", "hint": "the delay parameter" },
+          { "answer": ">=", "hint": "comparison operator — fire when now reaches the due time" }
+        ],
+        "expectedOutput": "0\nfire:3\n1"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement debounce(fn, ms) with an injectable clock (_now + tick). Demonstrate: three rapid calls, advance just under ms (no fire), advance past ms (one fire with last args), then a fourth call + advance past ms (another fire).",
+    "expectedOutput": "calls=0\ncalls=1 last=c\ncalls=2 last=d",
+    "canonical": "function debounce(fn, ms) {\n  let scheduled = null, lastArgs;\n  const api = function (...args) {\n    lastArgs = args;\n    scheduled = api._now + ms;\n  };\n  api._now = 0;\n  api.tick = (delta) => {\n    api._now += delta;\n    if (scheduled !== null && api._now >= scheduled) {\n      scheduled = null;\n      fn(...lastArgs);\n    }\n  };\n  return api;\n}\nlet calls = 0, last = null;\nconst d = debounce((x) => { calls++; last = x; }, 100);\nd('a'); d('b'); d('c');\nd.tick(50);\nconsole.log('calls=' + calls);\nd.tick(60);\nconsole.log('calls=' + calls + ' last=' + last);\nd('d');\nd.tick(100);\nconsole.log('calls=' + calls + ' last=' + last);",
+    "hints": [
+      "Track a single `scheduled` due-time; reset it on every call.",
+      "Store the latest args only — debounce keeps just one pending invocation.",
+      "tick advances the fake clock; check if `_now >= scheduled` and fire."
+    ]
+  }
+}

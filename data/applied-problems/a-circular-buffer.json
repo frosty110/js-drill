@@ -1,0 +1,73 @@
+{
+  "id": "a-circular-buffer",
+  "title": "Circular Buffer",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Fixed-capacity ring buffer — writes past capacity overwrite the oldest slot. Modular arithmetic on head/tail indices keeps it O(1) per op.",
+  "reference": {
+    "code": "class CircularBuffer {\n  constructor(capacity) {\n    this.cap = capacity;\n    this.buf = new Array(capacity);\n    this.head = 0;        // next slot to write\n    this.tail = 0;        // next slot to read\n    this.size = 0;\n  }\n  write(v) {\n    this.buf[this.head] = v;\n    this.head = (this.head + 1) % this.cap;\n    if (this.size === this.cap) {\n      this.tail = (this.tail + 1) % this.cap;   // overwrite: advance tail too\n    } else {\n      this.size++;\n    }\n  }\n  read() {\n    if (this.size === 0) return undefined;\n    const v = this.buf[this.tail];\n    this.tail = (this.tail + 1) % this.cap;\n    this.size--;\n    return v;\n  }\n}",
+    "notes": [
+      "Two indices (head=write, tail=read) plus a size counter — size disambiguates the full-vs-empty case where head === tail.",
+      "Decision: when full, additional writes overwrite the oldest element rather than throwing. Document the policy — both choices are valid.",
+      "All ops are O(1). Modulo on indices is the only trick — never reallocate."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why track `size` separately instead of inferring it from head and tail?",
+        "options": [
+          "Modulo is too slow",
+          "When head === tail, it could mean either full or empty — size resolves the ambiguity",
+          "JavaScript can't subtract indices",
+          "It's a style preference, no functional reason"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "On a write to a full buffer (overwrite policy), which pointer must advance besides head?",
+        "options": [
+          "Neither — only head moves",
+          "tail must also advance so the oldest entry is dropped",
+          "size must decrement",
+          "The whole buffer must shift"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Time complexity of read() and write() on a circular buffer?",
+        "options": ["O(n)", "O(log n)", "O(1)", "O(n) amortized"],
+        "answer": 2
+      },
+      {
+        "q": "After capacity=3 and writes [1,2,3,4,5], what does the next read() return?",
+        "options": ["1", "3", "4", "5"],
+        "answer": 1
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Complete the wrap-around logic so reads return the oldest surviving values after overwrites.",
+        "template": "class CB {\n  constructor(c) { this.cap = c; this.buf = new Array(c); this.head = 0; this.tail = 0; this.size = 0; }\n  write(v) {\n    this.buf[this.head] = v;\n    this.head = (this.head + 1) ___ this.cap;\n    if (this.size === this.cap) this.tail = (this.tail + 1) % this.cap;\n    else this.size___;\n  }\n  read() {\n    const v = this.buf[this.tail];\n    this.tail = (this.tail + 1) % this.cap;\n    this.size--;\n    return v;\n  }\n}\nconst b = new CB(3);\nb.write(1); b.write(2); b.write(3); b.write(4); b.write(5);\nconsole.log(b.read());\nconsole.log(b.read());\nconsole.log(b.read());",
+        "blanks": [
+          { "answer": "%", "hint": "modulo operator wraps the index" },
+          { "answer": "++", "hint": "increment size when not yet full" }
+        ],
+        "expectedOutput": "3\n4\n5"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement CircularBuffer(capacity) with write(v), read(), and a `size` field. Writes past capacity overwrite the oldest. With cap=3: write 1,2,3,4 then log size, read, read, read, read.",
+    "expectedOutput": "3\n2\n3\n4\nundefined",
+    "canonical": "class CircularBuffer {\n  constructor(capacity) {\n    this.cap = capacity;\n    this.buf = new Array(capacity);\n    this.head = 0;\n    this.tail = 0;\n    this.size = 0;\n  }\n  write(v) {\n    this.buf[this.head] = v;\n    this.head = (this.head + 1) % this.cap;\n    if (this.size === this.cap) this.tail = (this.tail + 1) % this.cap;\n    else this.size++;\n  }\n  read() {\n    if (this.size === 0) return undefined;\n    const v = this.buf[this.tail];\n    this.tail = (this.tail + 1) % this.cap;\n    this.size--;\n    return v;\n  }\n}\nconst b = new CircularBuffer(3);\nb.write(1); b.write(2); b.write(3); b.write(4);\nconsole.log(b.size);\nconsole.log(b.read());\nconsole.log(b.read());\nconsole.log(b.read());\nconsole.log(b.read());",
+    "hints": [
+      "Modulo on head and tail is the only wrap-around logic you need.",
+      "When full, advance tail on each write so the oldest element is the one discarded.",
+      "Reading an empty buffer should return undefined, not throw."
+    ]
+  }
+}

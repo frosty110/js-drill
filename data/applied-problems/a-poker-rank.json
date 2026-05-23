@@ -1,0 +1,83 @@
+{
+  "id": "a-poker-rank",
+  "title": "Poker Hand Rank",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Classify a 5-card poker hand into its category. Parse `rank+suit` strings, build a rank histogram, check straight + flush flags, then walk the ranking ladder from royal-flush downward.",
+  "reference": {
+    "code": "function rankHand(cards) {\n  const order = '23456789TJQKA';\n  // strip suit (last char), rewrite '10' -> 'T' for single-char indexing\n  const ranks = cards.map(c => c.slice(0, -1) === '10' ? 'T' : c.slice(0, -1));\n  const suits = cards.map(c => c.slice(-1));\n  const idx = ranks.map(r => order.indexOf(r)).sort((a, b) => a - b);\n  const counts = {};\n  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;\n  const groups = Object.values(counts).sort((a, b) => b - a);\n  const flush = suits.every(s => s === suits[0]);\n  // straight: 5 consecutive indices; A-2-3-4-5 wheel handled by checking 'A,2,3,4,5'\n  let straight = idx.every((v, i) => i === 0 || v === idx[i-1] + 1);\n  if (!straight && ranks.includes('A') && ranks.includes('2') && ranks.includes('3') && ranks.includes('4') && ranks.includes('5')) straight = true;\n  if (straight && flush && idx[0] === order.indexOf('T')) return 'royal-flush';\n  if (straight && flush)                                   return 'straight-flush';\n  if (groups[0] === 4)                                     return 'four-of-a-kind';\n  if (groups[0] === 3 && groups[1] === 2)                  return 'full-house';\n  if (flush)                                               return 'flush';\n  if (straight)                                            return 'straight';\n  if (groups[0] === 3)                                     return 'three-of-a-kind';\n  if (groups[0] === 2 && groups[1] === 2)                  return 'two-pair';\n  if (groups[0] === 2)                                     return 'pair';\n  return 'high-card';\n}",
+    "notes": [
+      "Normalize '10' to a single character ('T') so rank ordering uses a simple string index.",
+      "The rank ladder must be checked TOP-DOWN: a full-house also matches three-of-a-kind, but we return the stronger category first.",
+      "Wheel straight (A-2-3-4-5) is the special case where the ace is low — handle it explicitly because indices wouldn't be consecutive otherwise."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why check `royal-flush` and `straight-flush` BEFORE `four-of-a-kind`?",
+        "options": [
+          "Speed",
+          "The categories are ordered by strength — the first matching category wins, and royal/straight-flush are stronger than four-of-a-kind",
+          "Four-of-a-kind requires flush detection",
+          "Alphabetical ordering of strings"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What is `groups` if the hand is a full house?",
+        "options": [
+          "[2, 2, 1]",
+          "[3, 2]",
+          "[5]",
+          "[3, 1, 1]"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Why rewrite '10' to 'T' before indexing into '23456789TJQKA'?",
+        "options": [
+          "Cosmetic",
+          "So every rank is a single character — index lookup and sorting stay simple",
+          "Required by JavaScript",
+          "'10' is reserved"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "How is a flush detected from the parsed `suits` array?",
+        "options": [
+          "All 5 suits identical",
+          "Three or more matching suits",
+          "Any two suits match",
+          "Suits are sorted"
+        ],
+        "answer": 0
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the flush + four-of-a-kind detection.",
+        "template": "function check(cards) {\n  const ranks = cards.map(c => c.slice(0, -1));\n  const suits = cards.map(c => c.slice(-1));\n  const counts = {};\n  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;\n  const groups = Object.values(counts).sort((a, b) => b - a);\n  const flush = suits.every(s => s === suits[___]);\n  if (groups[0] === ___) return 'four-of-a-kind';\n  if (flush) return 'flush';\n  return 'other';\n}\nconsole.log(check(['9H','9D','9S','9C','2H']));\nconsole.log(check(['2H','5H','9H','JH','KH']));",
+        "blanks": [
+          { "answer": "0", "hint": "compare each suit to the first" },
+          { "answer": "4", "hint": "max group size for four-of-a-kind" }
+        ],
+        "expectedOutput": "four-of-a-kind\nflush"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement rankHand(cards). Log ranks for: royal flush (TS-AS spades), four kings, full house (KKK + 22), wheel straight (A-5 mixed), pair of nines.",
+    "expectedOutput": "royal-flush\nfour-of-a-kind\nfull-house\nstraight\npair",
+    "canonical": "function rankHand(cards) {\n  const order = '23456789TJQKA';\n  const ranks = cards.map(c => c.slice(0, -1) === '10' ? 'T' : c.slice(0, -1));\n  const suits = cards.map(c => c.slice(-1));\n  const idx = ranks.map(r => order.indexOf(r)).sort((a, b) => a - b);\n  const counts = {};\n  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;\n  const groups = Object.values(counts).sort((a, b) => b - a);\n  const flush = suits.every(s => s === suits[0]);\n  let straight = idx.every((v, i) => i === 0 || v === idx[i-1] + 1);\n  if (!straight && ranks.includes('A') && ranks.includes('2') && ranks.includes('3') && ranks.includes('4') && ranks.includes('5')) straight = true;\n  if (straight && flush && idx[0] === order.indexOf('T')) return 'royal-flush';\n  if (straight && flush) return 'straight-flush';\n  if (groups[0] === 4) return 'four-of-a-kind';\n  if (groups[0] === 3 && groups[1] === 2) return 'full-house';\n  if (flush) return 'flush';\n  if (straight) return 'straight';\n  if (groups[0] === 3) return 'three-of-a-kind';\n  if (groups[0] === 2 && groups[1] === 2) return 'two-pair';\n  if (groups[0] === 2) return 'pair';\n  return 'high-card';\n}\nconsole.log(rankHand(['10S','JS','QS','KS','AS']));\nconsole.log(rankHand(['KH','KD','KS','KC','3D']));\nconsole.log(rankHand(['KH','KD','KS','2H','2D']));\nconsole.log(rankHand(['AH','2D','3S','4C','5H']));\nconsole.log(rankHand(['9H','9D','5S','3C','2H']));",
+    "hints": [
+      "Normalize '10' to a single character first — indexing into a rank string then becomes trivial.",
+      "Build a rank histogram and sort counts descending. `[4,1]` = four-of-a-kind, `[3,2]` = full-house, `[2,2,1]` = two-pair.",
+      "Check the categories TOP-DOWN: a full house also matches three-of-a-kind, but royal/straight-flush beat everything."
+    ]
+  }
+}

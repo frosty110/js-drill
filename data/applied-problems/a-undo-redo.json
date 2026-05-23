@@ -1,0 +1,83 @@
+{
+  "id": "a-undo-redo",
+  "title": "Undo/Redo Stack",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Command-pattern undo/redo — each action is an object with apply/revert. Two stacks: done and undone. Doing a fresh command clears the redo stack.",
+  "reference": {
+    "code": "class History {\n  constructor() {\n    this.done = [];                  // commands already applied\n    this.undone = [];                // commands undone, available to redo\n  }\n  do(cmd) {\n    cmd.apply();                     // mutate the world\n    this.done.push(cmd);\n    this.undone = [];                // any new action invalidates redo\n  }\n  undo() {\n    const cmd = this.done.pop();\n    if (!cmd) return;\n    cmd.revert();\n    this.undone.push(cmd);\n  }\n  redo() {\n    const cmd = this.undone.pop();\n    if (!cmd) return;\n    cmd.apply();\n    this.done.push(cmd);\n  }\n}",
+    "notes": [
+      "Each command must be self-contained: apply() and revert() are inverses. The history doesn't know what the command does.",
+      "Doing a new action after an undo clears the undone stack — branching destroys the redo path. Standard editor behavior.",
+      "Undo and redo are no-ops on empty stacks. Don't throw — UI buttons just stay disabled."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why does `do(cmd)` clear `this.undone`?",
+        "options": [
+          "Performance — large undone stacks are slow",
+          "A fresh action creates a new branch; the previously-undone commands are no longer reachable",
+          "Required by the spec for memory safety",
+          "It doesn't — that's a bug"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What pair of operations must each command expose?",
+        "options": [
+          "run / cancel",
+          "apply / revert (inverses of each other)",
+          "start / stop",
+          "commit / rollback"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Where do commands sit after `undo()`?",
+        "options": [
+          "Deleted",
+          "Moved from `done` to `undone` so redo can replay them",
+          "Stay in `done` but marked inactive",
+          "Pushed to a third stack"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What does `redo()` do when `undone` is empty?",
+        "options": [
+          "Throws",
+          "Replays the last `done` command",
+          "Returns early — it's a no-op",
+          "Resets both stacks"
+        ],
+        "answer": 2
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Complete History.do so that after do(+1), do(+2), undo, the value is 1.",
+        "template": "class History {\n  constructor() { this.done = []; this.undone = []; }\n  do(cmd) {\n    cmd.apply();\n    this.done.___(cmd);\n    this.undone = [];\n  }\n  undo() {\n    const cmd = this.done.___();\n    if (!cmd) return;\n    cmd.revert();\n    this.undone.push(cmd);\n  }\n}\nlet x = 0;\nconst h = new History();\nh.do({ apply: () => x += 1, revert: () => x -= 1 });\nh.do({ apply: () => x += 2, revert: () => x -= 2 });\nh.undo();\nconsole.log(x);",
+        "blanks": [
+          { "answer": "push", "hint": "append to the done stack" },
+          { "answer": "pop", "hint": "remove latest from done" }
+        ],
+        "expectedOutput": "1"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Build a History class with do/undo/redo over a number variable. Sequence: do(+1), do(+2), undo (now 1), do(+10) — clears redo. Then undo, undo. Log value after each step.",
+    "expectedOutput": "1\n3\n1\n11\n1\n0",
+    "canonical": "class History {\n  constructor() { this.done = []; this.undone = []; }\n  do(cmd) { cmd.apply(); this.done.push(cmd); this.undone = []; }\n  undo() { const c = this.done.pop(); if (!c) return; c.revert(); this.undone.push(c); }\n  redo() { const c = this.undone.pop(); if (!c) return; c.apply(); this.done.push(c); }\n}\nlet x = 0;\nconst h = new History();\nconst add = n => ({ apply: () => x += n, revert: () => x -= n });\nh.do(add(1));\nconsole.log(x);\nh.do(add(2));\nconsole.log(x);\nh.undo();\nconsole.log(x);\nh.do(add(10));\nconsole.log(x);\nh.undo();\nconsole.log(x);\nh.undo();\nconsole.log(x);",
+    "hints": [
+      "Each command is `{ apply, revert }` — the History never inspects what they do.",
+      "do() must clear the undone stack — branching invalidates redo.",
+      "undo/redo are no-ops on empty stacks; return early instead of throwing."
+    ]
+  }
+}

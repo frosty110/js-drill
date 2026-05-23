@@ -1,0 +1,78 @@
+{
+  "id": "a-throttle",
+  "title": "Throttle",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Throttle caps invocations to one per `ms` window — extra calls during the cool-down are dropped (leading-edge variant). Built with an injectable clock so tests advance time deterministically.",
+  "reference": {
+    "code": "function throttle(fn, ms) {\n  let lastFired = -Infinity;       // when the last fn() call happened, on fake clock\n  const api = function (...args) {\n    if (api._now - lastFired >= ms) {\n      lastFired = api._now;\n      fn(...args);                 // leading edge: fire immediately\n    }\n    // else: drop this call silently\n  };\n  api._now = 0;\n  api.tick = (delta) => { api._now += delta; };\n  return api;\n}",
+    "notes": [
+      "Leading-edge throttle fires on the first call of each window; trailing-edge would defer to the window end. Both are valid — pick one and document it.",
+      "Initialize `lastFired = -Infinity` (or any sentinel < -ms) so the very first call always fires.",
+      "Dropped calls are lost — no queueing. Debounce keeps the latest args; throttle does not."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Three calls within one ms window to a leading-edge throttled fn invoke the underlying fn how many times?",
+        "options": ["3", "0", "1 — the first one", "1 — the last one"],
+        "answer": 2
+      },
+      {
+        "q": "What is the key difference between debounce and throttle?",
+        "options": [
+          "Throttle uses promises; debounce does not",
+          "Debounce delays until quiet; throttle caps the rate (at most one per window)",
+          "Throttle queues calls; debounce drops them",
+          "They are synonyms"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "Why initialize lastFired to -Infinity?",
+        "options": [
+          "To make `_now - lastFired >= ms` true on the very first call",
+          "JavaScript requires sentinel values for numbers",
+          "It's faster than 0",
+          "It hides the variable from the closure"
+        ],
+        "answer": 0
+      },
+      {
+        "q": "If the underlying fn is called inside the cool-down window, what happens to its args?",
+        "options": [
+          "Queued and applied at window end",
+          "Stored as `lastArgs` and fired later",
+          "Dropped — leading-edge throttle does not buffer",
+          "Throws an error"
+        ],
+        "answer": 2
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Complete the throttle: fire on the first call, drop calls within ms, fire again once the window passes.",
+        "template": "function throttle(fn, ms) {\n  let lastFired = -Infinity;\n  const api = function (...args) {\n    if (api._now - lastFired ___ ms) {\n      lastFired = api._now;\n      fn(...args);\n    }\n  };\n  api._now = 0;\n  api.tick = (d) => { api._now ___ d; };\n  return api;\n}\nlet calls = 0;\nconst t = throttle((x) => { calls++; console.log('fire:' + x); }, 100);\nt(1);\nt(2);\nt.tick(50);\nt(3);\nt.tick(60);\nt(4);\nconsole.log(calls);",
+        "blanks": [
+          { "answer": ">=", "hint": "compare elapsed vs window" },
+          { "answer": "+=", "hint": "advance the fake clock by delta" }
+        ],
+        "expectedOutput": "fire:1\nfire:4\n2"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement throttle(fn, ms) leading-edge with injectable clock. Show: first call fires, two more within window drop, advance past window, next call fires.",
+    "expectedOutput": "calls=1 last=a\ncalls=1 last=a\ncalls=2 last=d",
+    "canonical": "function throttle(fn, ms) {\n  let lastFired = -Infinity;\n  const api = function (...args) {\n    if (api._now - lastFired >= ms) {\n      lastFired = api._now;\n      fn(...args);\n    }\n  };\n  api._now = 0;\n  api.tick = (delta) => { api._now += delta; };\n  return api;\n}\nlet calls = 0, last = null;\nconst t = throttle((x) => { calls++; last = x; }, 100);\nt('a');\nconsole.log('calls=' + calls + ' last=' + last);\nt('b'); t('c');\nt.tick(50);\nconsole.log('calls=' + calls + ' last=' + last);\nt.tick(60);\nt('d');\nconsole.log('calls=' + calls + ' last=' + last);",
+    "hints": [
+      "Track only `lastFired` — no pending args, no scheduled callback.",
+      "On each call, compare _now - lastFired against ms; fire and update lastFired only if the gap is large enough.",
+      "tick(delta) is the only way time moves — there's no real setTimeout."
+    ]
+  }
+}

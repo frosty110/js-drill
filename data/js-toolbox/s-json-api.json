@@ -1,0 +1,93 @@
+{
+  "id": "s-json-api",
+  "title": "JSON.parse / stringify",
+  "section": "JS Toolbox",
+  "track": "syntax",
+  "status": "full",
+  "description": "Serialize and deserialize structured data — the API has more knobs than people remember (indent, replacer, reviver) and a handful of foot-guns.",
+  "reference": {
+    "code": "// Basic round-trip\nconst obj = { a: 1, b: [2, 3] };\nconst s = JSON.stringify(obj);          // '{\"a\":1,\"b\":[2,3]}'\nconst back = JSON.parse(s);             // { a: 1, b: [2, 3] }\n\n// Pretty-print with indent (3rd arg)\nJSON.stringify(obj, null, 2);           // 2-space indent\n\n// Replacer: filter or transform on the way out\nJSON.stringify({ a: 1, pw: 'x' }, (k, v) => k === 'pw' ? undefined : v);\n\n// Reviver: transform on the way in\nJSON.parse('{\"d\":\"2024-01-01\"}', (k, v) => k === 'd' ? new Date(v) : v);\n\n// PITFALLS\nJSON.stringify({ a: undefined, b: NaN });  // '{\"b\":null}' — undefined dropped, NaN→null\nJSON.stringify([undefined]);               // '[null]'\n// Circular refs THROW: JSON.stringify(obj) where obj.self = obj",
+    "notes": [
+      "`undefined` is dropped from objects but becomes `null` in arrays. `NaN` and `Infinity` also stringify to `null`.",
+      "Circular references throw `TypeError: Converting circular structure to JSON`.",
+      "Replacer can be an array of keys to whitelist: `JSON.stringify(o, ['a','b'])`."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "What does `JSON.stringify({a: undefined, b: 1})` produce?",
+        "options": [
+          "'{\"a\":undefined,\"b\":1}'",
+          "'{\"a\":null,\"b\":1}'",
+          "'{\"b\":1}'",
+          "throws"
+        ],
+        "answer": 2,
+        "explain": "`undefined` values on object keys are dropped entirely."
+      },
+      {
+        "q": "What does `JSON.stringify([undefined, NaN])` produce?",
+        "options": [
+          "'[undefined,NaN]'",
+          "'[null,null]'",
+          "'[]'",
+          "throws"
+        ],
+        "answer": 1,
+        "explain": "In arrays, both become `null` to preserve indices."
+      },
+      {
+        "q": "Which argument controls indentation?",
+        "options": [
+          "1st",
+          "2nd",
+          "3rd",
+          "4th"
+        ],
+        "answer": 2,
+        "explain": "`JSON.stringify(value, replacer, indent)`."
+      },
+      {
+        "q": "Stringifying an object with a circular reference will:",
+        "options": [
+          "Return '[Circular]'",
+          "Return '{}'",
+          "Throw a TypeError",
+          "Silently drop the cycle"
+        ],
+        "answer": 2
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Round-trip an object through JSON.",
+        "template": "const s = JSON.___({ x: 1, y: 2 });\nconst o = JSON.___(s);\nconsole.log(o.x + o.y);",
+        "blanks": [
+          { "answer": "stringify", "hint": "serialize" },
+          { "answer": "parse", "hint": "deserialize" }
+        ],
+        "expectedOutput": "3"
+      },
+      {
+        "prompt": "Strip the `password` field while serializing.",
+        "template": "const s = JSON.stringify({ user: 'a', password: 'secret' }, (k, v) =>\n  k === '___' ? undefined : v\n);\nconsole.log(s);",
+        "blanks": [
+          { "answer": "password" }
+        ],
+        "expectedOutput": "{\"user\":\"a\"}"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Deep-clone an object via JSON. Define `clone(o)` and prove the clone is a separate reference. Log the cloned value's JSON and whether `clone(obj) === obj`.",
+    "expectedOutput": "{\"a\":1,\"b\":[2,3]}\nfalse",
+    "canonical": "function clone(o) {\n  return JSON.parse(JSON.stringify(o));\n}\nconst obj = { a: 1, b: [2, 3] };\nconst c = clone(obj);\nconsole.log(JSON.stringify(c));\nconsole.log(c === obj);",
+    "hints": [
+      "`JSON.parse(JSON.stringify(x))` is the quickest deep clone for plain data.",
+      "Note: it drops functions, undefined, and breaks Dates / Maps — fine for JSON-shaped data."
+    ]
+  }
+}

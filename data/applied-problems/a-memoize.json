@@ -1,0 +1,78 @@
+{
+  "id": "a-memoize",
+  "title": "Memoize",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Cache a pure function's results by argument key — repeated calls with the same input return the stored value without re-running the body. The optional keyFn lets callers serialize complex args.",
+  "reference": {
+    "code": "function memoize(fn, keyFn) {\n  const cache = new Map();\n  const toKey = keyFn || ((...args) => JSON.stringify(args));   // default key: stringify all args\n  return function (...args) {\n    const k = toKey(...args);\n    if (cache.has(k)) return cache.get(k);                      // cache hit\n    const v = fn(...args);                                      // miss: compute, store, return\n    cache.set(k, v);\n    return v;\n  };\n}",
+    "notes": [
+      "Default key is JSON.stringify(args) — fast and good enough for primitives + plain objects, but won't distinguish two objects with identical content from one passed twice.",
+      "Memoization only works for pure fns. A fn that reads `Date.now()` or mutates globals will return stale results on cache hits.",
+      "Use Map (not a plain object) for keys — Map handles any string cleanly and avoids prototype-pollution edge cases like `__proto__`."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Calling a memoized fn with the same args three times calls the underlying fn how many times?",
+        "options": ["3", "0", "1", "2"],
+        "answer": 2
+      },
+      {
+        "q": "Why is the default key `JSON.stringify(args)` insufficient for some inputs?",
+        "options": [
+          "It's too slow",
+          "Functions, undefined, Symbols, and circular refs don't serialize cleanly — also two distinct objects with the same shape collide",
+          "It returns the wrong type",
+          "JSON.stringify is not part of ES"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "When is memoization unsafe?",
+        "options": [
+          "Whenever the function takes more than one argument",
+          "When the function isn't pure — same args may legitimately need different outputs",
+          "When using Map instead of Object",
+          "Memoization is always safe"
+        ],
+        "answer": 1
+      },
+      {
+        "q": "What benefit does an explicit keyFn provide over the default?",
+        "options": [
+          "Avoids the cost of JSON.stringify and lets you collapse equivalent-but-not-identical inputs to one key",
+          "It makes the cache larger",
+          "It allows mutation",
+          "It enables async support"
+        ],
+        "answer": 0
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the memoize so the call counter only increments once per unique input.",
+        "template": "function memoize(fn) {\n  const cache = new ___();\n  return function (...args) {\n    const k = JSON.stringify(args);\n    if (cache.has(k)) return cache.___(k);\n    const v = fn(...args);\n    cache.set(k, v);\n    return v;\n  };\n}\nlet calls = 0;\nconst slow = (n) => { calls++; return n * 2; };\nconst m = memoize(slow);\nconsole.log(m(3));\nconsole.log(m(3));\nconsole.log(m(4));\nconsole.log(calls);",
+        "blanks": [
+          { "answer": "Map", "hint": "ES6 keyed collection" },
+          { "answer": "get", "hint": "fetch the stored value by key" }
+        ],
+        "expectedOutput": "6\n6\n8\n2"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Implement memoize(fn, keyFn?). Call a counter-tracking slow fn with two repeated and one unique arg; show results and that the underlying fn ran only twice.",
+    "expectedOutput": "9\n9\n16\ncalls=2",
+    "canonical": "function memoize(fn, keyFn) {\n  const cache = new Map();\n  const toKey = keyFn || ((...args) => JSON.stringify(args));\n  return function (...args) {\n    const k = toKey(...args);\n    if (cache.has(k)) return cache.get(k);\n    const v = fn(...args);\n    cache.set(k, v);\n    return v;\n  };\n}\nlet calls = 0;\nconst square = (n) => { calls++; return n * n; };\nconst m = memoize(square);\nconsole.log(m(3));\nconsole.log(m(3));\nconsole.log(m(4));\nconsole.log('calls=' + calls);",
+    "hints": [
+      "Use a Map keyed by JSON.stringify(args) when no keyFn is provided.",
+      "Check cache.has(k) before computing — the whole point is to skip fn() on hits.",
+      "Accept an optional keyFn for callers who need custom serialization."
+    ]
+  }
+}

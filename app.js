@@ -106,36 +106,52 @@ const STARTER_PATH = [
   'destructuring-spread', 's-optional', 's-nullish',
   // Iterators & Generators (depends on for-of from array-iteration above)
   's-iter-protocol', 's-iter-custom', 's-generators', 's-gen-delegation', 's-async-iter',
+  // JS Toolbox — utility-belt syntax that comes up in nearly every coding challenge
+  's-array-from', 's-json-api', 's-math-toolkit', 's-regexp-basics', 's-number-parse', 's-bitwise-toolkit',
   // Classes + async
   's-class', 's-class-inh', 's-promises', 's-async', 's-trycatch',
   // Patterns — Arrays & Hashing first
   'two-sum', 'p-contains-dup', 'p-anagrams', 'p-valid-anagram',
+  'p-longest-consecutive', 'p-encode-decode-strings',
   // Two pointers
-  'valid-palindrome', 'p-3sum', 'p-container',
+  'valid-palindrome', 'p-3sum', 'p-container', 'p-trapping-rain',
   // Sliding window
-  'best-time-stock', 'p-longest-sub',
+  'best-time-stock', 'p-longest-sub', 'p-min-window', 'p-sliding-window-max',
   // Stack (depends on s-stack-pattern above)
-  'valid-parentheses', 'p-daily-temp', 'p-min-stack',
+  'valid-parentheses', 'p-daily-temp', 'p-min-stack', 'p-largest-rect-hist',
   // Binary search
-  'binary-search', 'p-rotated',
+  'binary-search', 'p-rotated', 'p-min-rotated', 'p-koko-bananas',
   // Linked list
-  'p-reverse-list', 'p-cycle',
+  'p-reverse-list', 'p-cycle', 'p-merge-two-sorted', 'p-remove-nth',
+  'p-add-two-numbers', 'p-reorder-list', 'p-merge-k-lists',
   // Trees (depends on s-queue-pattern for BFS)
-  'p-max-depth', 'p-invert', 'p-bfs',
+  'p-max-depth', 'p-invert', 'p-bfs', 'p-valid-bst', 'p-lca-bst',
+  'p-same-tree', 'p-construct-tree', 'p-max-path-sum', 'p-serialize-tree',
   // Tries + heap (p-min-heap must precede p-top-k-frequent and the heap upgrade for p-kth-largest)
-  'p-trie', 'p-min-heap', 'p-top-k-frequent', 'p-kth-largest',
+  'p-trie', 'p-min-heap', 'p-top-k-frequent', 'p-kth-largest', 'p-median-data-stream',
+  'p-word-search-ii',
   // Graphs
-  'p-islands', 'p-course',
-  // Bit manipulation (XOR is famous interview trick)
-  'p-single-number', 'p-count-bits',
+  'p-islands', 'p-course', 'p-clone-graph', 'p-connected-components',
+  'p-course-ii', 'p-num-provinces', 'p-pacific-atlantic',
+  // Greedy
+  'p-max-subarray', 'p-jump-game', 'p-gas-station',
   // Dynamic Programming (foundational interview category)
-  'p-climbing-stairs', 'p-house-robber', 'p-coin-change', 'p-longest-inc-sub',
+  'p-climbing-stairs', 'p-house-robber', 'p-coin-change', 'p-longest-inc-sub', 'p-word-break',
+  'p-edit-distance', 'p-longest-common-subseq', 'p-unique-paths', 'p-max-product-subarray',
   // Backtracking (recursive search)
-  'p-subsets', 'p-permutations', 'p-combination-sum',
+  'p-subsets', 'p-permutations', 'p-combination-sum', 'p-word-search',
+  // Intervals
+  'p-merge-intervals', 'p-insert-interval', 'p-meeting-rooms-ii',
+  // Matrix / Grid
+  'p-spiral-matrix', 'p-rotate-image', 'p-set-matrix-zeroes',
+  // Bit manipulation (XOR is famous interview trick)
+  'p-single-number', 'p-count-bits', 'p-num-1-bits', 'p-missing-number', 'p-reverse-bits',
   // Advanced JS (interview deep dives)
   's-this', 's-prototype', 's-event-loop',
   // System design classics
-  'p-lru-cache', 'p-merge-intervals'
+  'p-lru-cache'
+  // Applied Problems are intentionally OUTSIDE the linear path — they're a
+  // different practice mode (build me X) rather than a learning progression.
 ];
 
 function loadProgress() {

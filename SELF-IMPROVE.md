@@ -5,26 +5,28 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Start draining the L2 density backlog.* Iter 6 made
-  the 102-lesson gap visible at build time (validator warning,
-  `--strict-density` for future enforcement). Now the question is: do
-  the under-built lessons actually look uniformly thin, or is the
-  pattern that some lessons need 1 more exercise while others need 3?
-  And what's the *shape* of a good second L2 exercise — does it
-  reinforce the same concept with different parameters, or test a
-  related but distinct point? Need to look at 5–10 actual lessons
-  before deciding the authoring template.
-- **Hypothesis to test:** A small, focused content batch (5–10 of the
-  most-drilled patterns — `two-sum`, `valid-palindrome`, `valid-
-  parentheses`, etc. — the lessons mobile users hit first) is more
-  valuable than a generic "add one to all 102" sweep. The drill audit
-  should produce a working *template* for what a second L2 looks like
-  per lesson type (syntax vs pattern vs applied) so iter 8+ can scale
-  the authoring with confidence. Iter 7 = audit + template + 5 lessons
-  shipped, not 102.
+- **Primary lens:** *Scale the density-backlog drain with the iter 7
+  template.* The authoring template (different input, blank different
+  load-bearing tokens than #1) is now documented in active-recall.md
+  and proven across 5 lessons. The remaining 97 under-built lessons
+  fall into roughly three buckets: pattern lessons (most of the
+  backlog — algorithm canonical with a clear API surface), syntax
+  lessons (smaller batch — language-feature drills), and applied
+  problems (~20 lessons — implementation problems). Iter 7 only
+  covered pattern lessons. Iter 8 should validate that the template
+  works for syntax lessons too — different shape than pattern lessons.
+- **Hypothesis to test:** The template generalizes to syntax lessons
+  with a small adjustment — for language-feature drills the
+  "different input" can be "different operator/keyword variant" or
+  "different scope context" rather than a different array. Pick 3–5
+  under-built syntax lessons (e.g., `s-template`, the iterator
+  lessons), draft second L2s, see if the template needs tweaking.
+  Also: if it works cleanly, the validator's "first 5 offenders"
+  list is now a backlog burndown queue — log progress.
 - **Out of scope this iteration:** Mock Interview mode, taxonomy
-  changes, L1→L2→L3 core structure, mass authoring of all 102 lessons,
-  further SR-gradient tuning.
+  changes, L1→L2→L3 core structure, further SR-gradient tuning. Don't
+  attempt all 97 lessons at once — keep iterations small and
+  template-validated.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -51,6 +53,22 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 7 — Author 2nd L2 exercise for 5 pattern lessons
+Audited `two-sum`, `valid-palindrome`, `valid-parentheses`,
+`p-contains-dup`, `best-time-stock` and derived an authoring template:
+exercise #2 uses **different input** (so memorized output doesn't
+transfer) and **blanks different load-bearing tokens** than #1 (loop
+bounds, iteration keywords, early-return values, comparators — not the
+data-structure/method names that #1 already covered). Two recall reps
+per lesson with different cuing surfaces, reinforcing distinct bits of
+the same canonical. Validator 332/0 (+5 from the new exercises);
+density warning dropped 102 → 97. Authoring template now documented in
+active-recall.md so iter 8+ can apply it without re-deriving.
+**Learning:** the template generalized cleanly across all 5 pattern
+lessons sampled — the "varied retrieval" framing maps directly to
+"blank a different subset of the canonical." Iter 8 needs to validate
+on syntax lessons (different shape than pattern lessons).
 
 ### 2026-05-23 — iter 6 — Validator warns on L2/L1 density floor
 The iter 5 survey found 102/143 lessons (71%) below the PROFILE.md L2

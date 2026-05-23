@@ -38,8 +38,17 @@ app's existence.
   exercises per lesson) so each lesson can support multiple recall reps
   without exhausting the bank. `tools/validate-data.js` warns on lessons
   below the floor and can be flipped to fail-hard with `--strict-density`
-  once the existing backlog of under-built lessons (currently 102 of 143
-  on L2) is cleared.
+  once the existing backlog of under-built lessons (currently 97 of 143
+  on L2; was 102 before iter 7) is cleared.
+- **Authoring template for the second L2 exercise.** When backfilling an
+  under-built lesson, exercise #2 should not echo exercise #1. The template
+  that emerged in iter 7 (5 lessons backfilled): use **different input** so
+  muscle memory can't shortcut a memorized output, and **blank different
+  load-bearing tokens** than #1. If #1 blanks the data structure +
+  primary method names (e.g., `Map`, `has`, `set`), #2 blanks loop bounds,
+  iteration keywords (`of` vs `in`), early-return values, or comparison
+  operators. Same canonical, different cuing surfaces → two retrieval reps
+  per lesson that reinforce different bits of the same pattern.
 
 ## Under-exploited / candidate features
 

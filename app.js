@@ -227,14 +227,20 @@ function saveProgress() {
     }));
   } catch (e) {}
 }
-function scheduleReview(lessonId) {
-  // Called when L3 passes. Advance to the next interval bucket.
+function scheduleReview(lessonId, { advance = true } = {}) {
+  // L3 pass → advance to the next interval bucket.
+  // L2 pass on a due lesson → hold the bucket, push dueAt forward by the
+  // current interval. Mobile users can keep the due list manageable from a
+  // phone (where L3 is high-friction) without inflating intervals they
+  // haven't proven free-recall on. See desirable-difficulty.md.
   const now = Date.now();
   const prev = state.reviews[lessonId];
   let nextIntervalIdx = 0;
   if (prev && prev.interval) {
     const currentIdx = REVIEW_INTERVALS.indexOf(prev.interval);
-    nextIntervalIdx = Math.min(currentIdx + 1, REVIEW_INTERVALS.length - 1);
+    nextIntervalIdx = advance
+      ? Math.min(currentIdx + 1, REVIEW_INTERVALS.length - 1)
+      : currentIdx;
   }
   const interval = REVIEW_INTERVALS[nextIntervalIdx];
   state.reviews[lessonId] = { lastPassedAt: now, interval, dueAt: now + interval };
@@ -433,8 +439,14 @@ function markPassed(lessonId, level) {
   state.progress[lessonId] = state.progress[lessonId] || {};
   const wasMastered = lessonOverallStatus(lessonId) === 'mastered';
   state.progress[lessonId][level] = 'passed';
-  // L3 mastery (re-)schedules the spaced-rep review interval.
-  if (level === 'L3') scheduleReview(lessonId);
+  // L3 advances the SR bucket. L2 on a due lesson holds the bucket but
+  // resets dueAt — gives mobile users a way to keep the due list moving
+  // without overstating their free-recall confidence.
+  if (level === 'L3') {
+    scheduleReview(lessonId);
+  } else if (level === 'L2' && state.reviews[lessonId] && isDueForReview(lessonId)) {
+    scheduleReview(lessonId, { advance: false });
+  }
   saveProgress();
   if (!wasMastered && lessonOverallStatus(lessonId) === 'mastered') {
     state.streak += 1;

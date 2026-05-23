@@ -50,21 +50,24 @@ recall friction with much less typing.
   friction so the typing burden is at least clean.
 - **Line wrapping in the L3 editor** — removes horizontal-scroll friction
   that has nothing to do with recall.
+- **SR advancement is graded by difficulty.** L3 pass on a due lesson
+  advances the interval bucket (1d → 3d → 7d → 14d → 30d). L2 pass on a
+  due lesson HOLDS the bucket but resets `dueAt` so the user drops out of
+  the due list for the current interval window. This gives mobile users a
+  way to keep their queue moving without overstating their free-recall
+  confidence — easier test holds the line, harder test extends it. Cross-
+  references [[spaced-repetition]].
 
 ## Under-exploited / candidate features
 
-- **L2 success on a due lesson advances the SR interval.** Today only L3
-  advances SR — which means mobile users who actually use the routed Review
-  button get good recall practice but no scheduling reward. Their due list
-  piles up until they get to a desktop. Make L2 also tick the interval (with
-  a slightly shorter step than L3 if we want to preserve the difficulty
-  signal). Cross-references [[spaced-repetition]].
 - **Recall-without-prompt mode** — show the lesson title only, expect the
   user to produce L3 canonical. Strips the prompt scaffolding that makes
   recall easier than a real interview. Cross-references [[active-recall]].
-- **Variable-spacing under failure.** If the user fails an L2/L3 on a due
-  review, schedule the next review *sooner* rather than the next-bucket
-  default. Today scheduling is monotonic — failure doesn't pull intervals in.
+- **Variable-spacing under failure.** Today scheduling is monotonic on the
+  win side (L2 holds, L3 advances) and no-op on the loss side. A failed L2
+  or L3 on a due review should pull the next due date *sooner* rather than
+  leaving the interval where it was — the loss-side version of the
+  hold-vs-advance gradient. Cross-references [[spaced-repetition]].
 - **"Predict the output" gate before L3 run.** Forces a generation step
   before the typing step; isolates "did I understand?" from "did I type it
   right?"

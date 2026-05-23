@@ -16,8 +16,15 @@ specifically toward lessons their memory is currently weakest on.
 
 ## How the app encodes it today
 
-- **1d → 3d → 7d → 14d → 30d interval ladder** keyed off successful L3
-  completion (see `app.js`).
+- **1d → 3d → 7d → 14d → 30d interval ladder.** L3 pass on a mastered
+  lesson advances one bucket; L3 pass at the top bucket holds at 30d.
+- **L2 pass on a due lesson HOLDS the bucket but resets `dueAt`.** Mobile
+  users can keep their due list moving from a phone (L3 is high-friction
+  there — see [[desirable-difficulty]]) without inflating intervals they
+  haven't proven free-recall on. Practical effect: a 1d-bucket lesson that
+  goes overdue, then gets an L2 pass, drops out of the due list for another
+  1 day — but to reach 3d, the user still has to nail L3. The difficulty
+  gradient is preserved; the loop isn't desk-only.
 - **Due-lessons surfacing** in Today's plan — the curated daily session pulls
   from `dueLessons` first.
 - **Weak-spot tracker** resurfaces lessons where L1 was missed, even outside
@@ -44,8 +51,8 @@ specifically toward lessons their memory is currently weakest on.
 
 - **SR without active recall is just re-reading on a schedule.** Reviewing
   the Reference tab doesn't count as a successful review for SR purposes —
-  only an L2/L3 completion does. Make sure scheduling never advances on
-  passive re-exposure.
+  only an L2 or L3 completion does. Make sure scheduling never advances on
+  passive re-exposure. (L2 holds the bucket; L3 advances it — see above.)
 - **Optimal-interval tuning is per-user.** Don't over-engineer a single
   global curve. Let the user's recall-grade signal pull intervals shorter
   or longer.

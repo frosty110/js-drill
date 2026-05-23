@@ -403,15 +403,18 @@ async function generateCheatsheet() {
 
 function dailyPlan() {
   // Returns an ordered, deduped list of lesson IDs to tackle next:
-  //   1. Up to 3 due-for-review (highest priority — retention beats new content)
-  //   2. Up to 2 next-in-starter-path that are not mastered
-  //   3. Up to 1 top weak-spot
+  //   1. Up to 3 due-for-review (retention beats new content)
+  //   2. Up to 1 top weak-spot (an active misconception is more actionable
+  //      than the next-in-path; surface BEFORE path so dedup promotes the
+  //      "weak spot" label when a lesson is in both buckets)
+  //   3. Up to 2 next-in-starter-path that are not mastered
   const seen = new Set();
   const plan = [];
   const add = (id, why) => {
     if (id && !seen.has(id)) { seen.add(id); plan.push({ id, why }); }
   };
   for (const id of dueReviewIds().slice(0, 3)) add(id, 'review due');
+  add(topWeakLessonId(), 'weak spot');
   let added = 0;
   for (const id of STARTER_PATH) {
     if (added >= 2) break;
@@ -422,7 +425,6 @@ function dailyPlan() {
       added++;
     }
   }
-  add(topWeakLessonId(), 'weak spot');
   return plan;
 }
 function formatTime(ms) {
@@ -515,9 +517,11 @@ function updateReviewBadge() {
     }
   }
   const weakBtn = document.getElementById('weak-btn');
+  const weakCnt = document.getElementById('weak-count');
   if (weakBtn) {
-    const hasWeak = Object.keys(state.weakness || {}).length > 0;
-    weakBtn.classList.toggle('hidden', !hasWeak);
+    const n = Object.keys(state.weakness || {}).length;
+    weakBtn.classList.toggle('hidden', n === 0);
+    if (weakCnt) weakCnt.textContent = n;
   }
 }
 function updateLessonHeaderInPlace() {

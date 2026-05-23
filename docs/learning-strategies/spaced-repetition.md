@@ -47,7 +47,12 @@ specifically toward lessons their memory is currently weakest on.
 - **Due-lessons surfacing** in Today's plan — the curated daily session pulls
   from `dueLessons` first.
 - **Weak-spot tracker** resurfaces lessons where L1 was missed, even outside
-  the normal SR cadence.
+  the normal SR cadence. The `⚠️ Weak (N)` sidebar button shows the count of
+  lessons with outstanding misses (parallel to `🕒 Review (N)`); the Today's
+  plan queues the top weak-spot **before** the next-on-path entries so an
+  active misconception is more actionable than a new lesson — if a lesson
+  is both weak and on the path, the dedup labels it `weak spot`, not
+  `next on path`.
 - **Mastered-with-reveal dot variant** — a softer "mastered" state that
   schedules slightly tighter SR intervals than a clean mastery.
 

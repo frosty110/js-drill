@@ -5,31 +5,27 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Step back — the loop has been backlog-grinding
-  for three iterations.* Iters 6/7/8 went deep on the L2 density gap
-  (validator warning → 5 pattern lessons → 3 syntax + 1 applied).
-  The template now has three track-validated variants documented in
-  active-recall.md, and the syntax track is fully built. But three
-  iterations on content is a long lean against one principle, and
-  the remaining 93 lessons (74 pattern + 19 applied) represent
-  significant work that can be done by anyone (including the user) —
-  not necessarily the highest-leverage thing for an autonomous loop.
-  Time to re-survey for what the loop is uniquely good at.
-- **Hypothesis to test:** The loop's comparative advantage is on
-  *mechanism* + *measurement* changes (iter 1–6 territory), not on
-  *content authoring* (iter 7–8). A fresh non-SR, non-content survey
-  pass should surface something the loop can ship atomically that
-  the user wouldn't easily catch without it — e.g., a UX flow that's
-  broken under specific state, a mobile interaction that doesn't
-  match PROFILE.md, a measurement / observability gap. Look at the
-  app under realistic-but-unhappy state (lots of progress, mixed
-  reveal/passed states, due reviews piling up) to find the issue.
-- **Out of scope this iteration:** further content authoring (the
-  user can do those batches at their pace, with the template), Mock
-  Interview mode, taxonomy changes, L1→L2→L3 core structure, further
-  SR-gradient tuning, anything that resembles "obvious next move on
-  the current thread" — the point of this iteration is to find a
-  thread the loop hasn't already pulled on.
+- **Primary lens:** *Audit the iteration-log + parking-lot for what
+  the loop hasn't picked up.* Iter 9 validated the "stress survey"
+  approach (drive the app under realistic-but-unhappy state) and
+  shipped two findings as one improvement. That same survey
+  technique should now be run more deliberately against the
+  iteration history — the parking lot has entries that have aged
+  out (e.g., the "76 lessons" welcome banner — flagged since
+  iter 1, still not done; the `bucket promotion gate` from iter
+  3; the `recall-without-prompt` candidate; the sidebar starter-
+  path ordering). What's still there because it's actually
+  high-leverage, vs. what's there because nobody picked it up?
+- **Hypothesis to test:** Doing one parking-lot sweep — categorize
+  each item as (ship-now, deprioritize, or already-done-implicitly)
+  — sharpens the loop's queue and forces the next iteration to
+  pick from a curated list, not a stale FIFO. Then pick the top
+  ship-now item and ship it. The discipline is to AVOID adding
+  new items this iteration (read-only on the diagnostic side);
+  net entries should DECREASE.
+- **Out of scope this iteration:** further content authoring, Mock
+  Interview mode, taxonomy changes, L1→L2→L3 core structure,
+  further SR-gradient tuning, adding new parking-lot items.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -56,6 +52,21 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 9 — Weak-spot visibility (button count + plan ordering)
+Stress-surveyed under realistic-but-unhappy state (40 mastered, 15
+overdue reviews, 5 reveals, 3 weakness misses). Two findings, both
+about weak-spot legibility: (1) the `⚠️ Weak` sidebar button had no
+count while `🕒 Review (15)` did — inconsistent affordance; (2) the
+`dailyPlan` added the path BEFORE the weak entry, so a lesson that's
+both weak and on-path got labeled `next on path` instead of the more
+actionable `weak spot`. Fixed both: added a count span (parallel to
+review-btn); reordered dailyPlan so weak precedes path so dedup
+promotes the weak label. Validator 336/0; new probe
+`weak-spot-visibility.js` confirms 3 scenarios (count, hidden, weak-on-
+path labeling). **Learning:** stress-surveying under a seeded
+unhappy-path state surfaces UX inconsistencies that happy-path probes
+miss — worth keeping in the technique toolbox.
 
 ### 2026-05-23 — iter 8 — 2nd L2 for 3 syntax + 1 applied; template generalizes
 Audited under-built syntax lessons — only 3 were under-built

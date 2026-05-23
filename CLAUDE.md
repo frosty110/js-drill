@@ -55,6 +55,29 @@ The app's job is to drill JS syntax and canonical interview-pattern solutions th
 
 There are also **Mock Interview mode** (random pattern + timer, no hints) and a **Starter Path** (linear recommended order).
 
+## Who this is for + how it learns
+
+The target user is described in [PROFILE.md](PROFILE.md) — a rusty-but-experienced
+software engineer who studies **on a phone ~80% of the time**. That single fact
+shifts the design center of gravity:
+
+- L1 (tap) and L2 (short-token typing) are the high-throughput surfaces.
+- L3 is the "at-desk" tier; don't optimize the mobile loop around it.
+- Every lesson should ship with ≥3 L1 questions and ≥2 L2 exercises so the
+  mobile user has enough surface area per lesson.
+
+The app is also an evolving **memorization tool**. The learning-science
+principles it encodes — active recall, spaced repetition, interleaving,
+retrieval practice, elaboration, etc. — live in
+[docs/learning-strategies/](docs/learning-strategies/). When you add a feature
+that exploits a learning principle, also add or update its strategy doc.
+When you're choosing what to build next, scan the strategy docs for under-
+exploited principles. The two coevolve.
+
+The self-improve loop reads [PROFILE.md](PROFILE.md) and
+[SELF-IMPROVE.md](SELF-IMPROVE.md) on each iteration and updates the directive
+based on what it learned — that's how the app keeps converging on the profile.
+
 ## File layout
 
 | File / Dir | Role |
@@ -73,6 +96,9 @@ There are also **Mock Interview mode** (random pattern + timer, no hints) and a 
 | `tools/migrations/refactor.js` | Historical one-shot — surgically refactored `index.html` |
 | `tools/README.md` | Tool inventory + run instructions |
 | `README.md` | User-facing intro |
+| `PROFILE.md` | Target user profile — drives every product decision |
+| `SELF-IMPROVE.md` | Self-improve loop directive — evolves with each iteration |
+| `docs/learning-strategies/` | Learning-science principles the app should encode. Co-evolves with features. |
 | `docs-archive/` | Older `claude.md`, `AGENTIC_*.md`, `ARCHITECTURE.md`, plus `old-scripts/` (broken pre-refactor helpers) — historical only |
 
 ## How a lesson is structured (post-refactor)

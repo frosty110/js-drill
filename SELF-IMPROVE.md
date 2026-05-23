@@ -5,28 +5,24 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Sidebar lesson order in starter-path mode.* Per
-  the iter 10 parking-lot audit, this is the top ship-now item. When
-  the user enables Starter Path, the sidebar shows lessons grouped by
-  section but path step numbers are global (e.g., HASH STRUCTURES
-  shows steps 22, 20, 21 in that order because of intra-section
-  alphabetical-ish order). The iter 5 step pill made the *main-view*
-  orientation OK, but the sidebar — the primary navigation surface,
-  especially on mobile — still has non-sequential numbers next to
-  each other. The user can't visually progress through the path by
-  scrolling top-to-bottom.
-- **Hypothesis to test:** In path mode, sort visible lessons by
-  STARTER_PATH index (within each section, or across sections?
-  decide during diagnosis) so the numbers are monotonic in the order
-  the user reads them. Non-path lessons drop out of the sidebar
-  entirely or sink to the bottom — they're not in the path so they're
-  noise. Non-path mode is unchanged. Mobile probe asserts the
-  visible sidebar lessons in path mode read 1, 2, 3, … in scroll
-  order.
-- **Out of scope this iteration:** further content authoring, Mock
-  Interview mode, taxonomy changes, L1→L2→L3 core structure,
-  further SR-gradient tuning. Don't re-architect the sidebar — just
-  fix the order within the existing render.
+- **Primary lens:** *Mock Interview surface — the least-touched
+  PROFILE.md success criterion.* PROFILE.md lists four success criteria;
+  #3 is "Mock interview personal-bests trend down over weeks." Eleven
+  iterations in, every other criterion has been worked on: L3 hit-rate
+  (iter 1 routing), SR retention (iters 2/3/4), 90-second mobile friction
+  (iters 1/5/9/10/11). Mock interview hasn't been touched, and PROFILE.md
+  treats it as the closest analog to a real interview experience. Time to
+  survey it before further drift.
+- **Hypothesis to test:** The Mock Interview flow has friction points
+  the loop hasn't seen because the iter-1 survey was mobile-focused and
+  Mock is desktop-only by design. Run a desktop-viewport survey of the
+  mock-start → mock-running → pass/fail flow, look for friction in:
+  start (how does user pick a lesson?), running (timer visibility,
+  unwanted hints/escape hatches), end (personal-best feedback, history
+  visibility, comparison to past attempts). Pick one improvement; ship.
+- **Out of scope this iteration:** Mobile-only changes (mock is
+  desktop-only by PROFILE.md), further content authoring, taxonomy
+  changes, L1→L2→L3 core structure, further SR-gradient tuning.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -53,6 +49,26 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 11 — Sidebar lessons sort by STARTER_PATH index in path mode
+The iter 10 parking-lot audit handed iter 11 a concrete ship-now: in
+path mode, the sidebar's intra-section order tracks the manifest, not
+the path, so HASH STRUCTURES read "22, 20, 21" because Map & Set,
+Object literals, keys/values/entries appeared in that manifest order
+while their global path steps were 22, 20, 21. Added one sort:
+`lessons.sort((a,b) => STARTER_PATH.indexOf(a.id) - STARTER_PATH.indexOf(b.id))`
+when path mode is on; sections naturally appear in the order of their
+first path step too (because `[...new Set(...)]` preserves first-
+occurrence order). Non-path mode unchanged. Also added two test
+affordances (`data-lesson-id` on lesson-links, `class="lesson-label"`
+on the label span) so future probes can target sidebar entries cleanly.
+Validator 336/0; new probe `tools/cdp/sidebar-path-order.js` (6/6)
+confirms monotonic top-to-bottom step ordering AND the specific HASH
+STRUCTURES case (s-obj-basics → s-obj-iter → map-set) AND that non-path
+mode shows no step prefixes. All 5 prior probes still pass.
+**Learning:** test affordances are cheap to add (1-line per element)
+and pay back across iterations — the probe was easy to write once
+selectors were stable.
 
 ### 2026-05-23 — iter 10 — Welcome banner refresh + parking-lot curation
 The "76 lessons" banner staleness has been flagged since iter 1 but no
@@ -197,28 +213,12 @@ surfaced cleanly — the loss-side is still no-op. A failed L2/L3 on a due
 review should pull the interval *shorter*, not just leave it. That's
 iter 3.
 
-### 2026-05-23 — iter 1 — Device-calibrated Review CTA
-Cold-surveyed the entry flow. Top friction for an 80%-mobile rusty engineer
-was that the 🕒 Review button — the primary spaced-repetition CTA — forced
-L3 regardless of device, dropping phone users into a blank CodeMirror editor
-on a phone keyboard (direct PROFILE.md violation). Changed the click handler
-to route to L2 on `(pointer: coarse)` devices, L3 otherwise — one ternary,
-no schema change. Embodied **desirable difficulty**: keep the recall demand
-high, strip the mechanical friction that doesn't load cognitive effort.
-Created `docs/learning-strategies/desirable-difficulty.md`, cross-referenced
-from active-recall. Validator 327/0; inline mobile CDP probe confirmed
-landing on L2 with coarse pointer emulated. **Learning:** the diagnosis
-quickly surfaced a second, deeper issue — L2 doesn't advance SR — which the
-fix doesn't close. That's iteration 2's lens.
+*(iter 1 trimmed to keep the log at 10 entries — see git history for the
+device-calibrated Review CTA commit, `1903c4e`.)*
 
 ## Hypotheses parking lot
-*(curated iter 10 — items that were stale or low-leverage moved to Avoid)*
+*(curated iter 10; sidebar-ordering shipped iter 11)*
 
-- **Sidebar starter-path ordering.** When path mode is on, the sidebar
-  groups lessons by section (adjacent path numbers can read 22, 20, 21).
-  The iter 5 step pill addressed main-view orientation; the sidebar itself
-  is still confusing in path mode. Concrete fix: sort by path index in
-  path mode. **Next ship-now candidate.**
 - **"Recall-without-prompt" mode** — show only the lesson title and ask
   the user to produce the canonical. Strips prompt scaffolding.
   Documented in active-recall.md candidates. *Deprioritized iter 10:*

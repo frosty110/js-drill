@@ -769,8 +769,19 @@ function renderSidebar() {
 
   let visibleCount = 0;
   for (const track of tracksToRender) {
-    const lessons = CURRICULUM.filter(l => l.track === track.id && matches(l) && inStarter(l) && hideMasteredOk(l));
+    let lessons = CURRICULUM.filter(l => l.track === track.id && matches(l) && inStarter(l) && hideMasteredOk(l));
     if (!lessons.length) continue;
+
+    // In path mode, sort by STARTER_PATH index so the visible step numbers
+    // read monotonically top-to-bottom. Sections then appear in the order
+    // of their first path-step (because `[...new Set(...)]` preserves
+    // first-occurrence order). Without this, HASH STRUCTURES could read
+    // "22, 20, 21" because intra-section order tracks manifest order, not
+    // path order. Non-path mode is unaffected.
+    if (state.starterPath) {
+      lessons = [...lessons].sort((a, b) =>
+        STARTER_PATH.indexOf(a.id) - STARTER_PATH.indexOf(b.id));
+    }
 
     const sections = [...new Set(lessons.map(l => l.section))];
     for (const section of sections) {
@@ -785,6 +796,8 @@ function renderSidebar() {
         const link = document.createElement('div');
         const overall = lessonOverallStatus(lesson.id);
         link.className = 'lesson-link';
+        // Test affordance — also makes future skills cleaner.
+        link.setAttribute('data-lesson-id', lesson.id);
         if (lesson.status === 'stub') link.classList.add('stub');
         if (state.currentLessonId === lesson.id) link.classList.add('active');
 
@@ -806,6 +819,7 @@ function renderSidebar() {
         link.appendChild(dot);
 
         const label = document.createElement('span');
+        label.className = 'lesson-label';
         if (state.starterPath) {
           const num = starterIndex(lesson.id);
           label.innerHTML = `<span class="text-slate-500 text-xs mr-1">${num}.</span>${escapeHtml(lesson.title)}`;

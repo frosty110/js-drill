@@ -39,11 +39,14 @@ specifically toward lessons their memory is currently weakest on.
   feedback line appends "Interval shortened — next review in Nd." Mobile
   users don't hover for tooltips; the inline status text is the universal
   surface for SR feedback. Turns invisible scheduling into a felt loop.
-- **Adjacent: the Starter Path step pill** (`🧭 Step N of M` in the lesson
-  header when path mode is on) applies the same "make invisible state
-  visible" principle to the linear curriculum — orientation in a 60+ step
-  journey instead of opaque progression. Not SR proper, but the same
-  commitment-device lever.
+- **Adjacent: Starter Path orientation surfaces.** The `🧭 Step N of M`
+  pill in the lesson header (iter 5) plus the sidebar sort by
+  STARTER_PATH index in path mode (iter 11) apply the same "make
+  invisible state visible" principle to the linear curriculum. The pill
+  gives instant orientation in the main view; the sidebar sort makes
+  step numbers read monotonically top-to-bottom (instead of e.g.
+  "22, 20, 21" because intra-section order tracks the manifest, not the
+  path). Not SR proper, but the same commitment-device lever.
 - **Due-lessons surfacing** in Today's plan — the curated daily session pulls
   from `dueLessons` first.
 - **Weak-spot tracker** resurfaces lessons where L1 was missed, even outside

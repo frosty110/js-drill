@@ -85,6 +85,16 @@ window.__jsdrillState = state;
 // (improving / plateaued / regressing) without bloating localStorage.
 const MOCK_HISTORY_MAX = 5;
 
+// Per-track pill metadata — keep this in one place so the lesson header,
+// Today's plan modal, and any future track-aware surface stay in sync.
+// Without it, the header read "Pattern" for applied-track lessons (the
+// fallback when track !== 'syntax').
+const TRACK_PILLS = {
+  syntax:   { cls: 'pill-syntax',  label: 'Syntax' },
+  patterns: { cls: 'pill-pattern', label: 'Pattern' },
+  applied:  { cls: 'pill-applied', label: 'Applied' },
+};
+
 // Spaced-repetition intervals (in ms). Each pass advances to the next bucket.
 const REVIEW_INTERVALS = [
   1  * 24 * 60 * 60 * 1000,   // 1 day  (after first mastery)
@@ -961,8 +971,9 @@ function renderLesson() {
   // header
   const header = document.createElement('div');
   header.className = 'mb-6';
-  const pill = lesson.track === 'syntax' ? 'pill-syntax' : 'pill-pattern';
-  const pillText = lesson.track === 'syntax' ? 'Syntax' : 'Pattern';
+  const trackPill = TRACK_PILLS[lesson.track] || TRACK_PILLS.patterns;
+  const pill = trackPill.cls;
+  const pillText = trackPill.label;
   const overall = lessonOverallStatus(lesson.id);
   const masteredPill = overall === 'mastered' ? `<span class="pill pill-mastered ml-2">✓ Mastered</span>` : '';
   // Starter-path step indicator — shown only when path mode is on AND this
@@ -1983,10 +1994,13 @@ async function init() {
     const bestTimesEntries = Object.entries(state.bestTimes);
     const totalMockMs = bestTimesEntries.reduce((s, [,ms]) => s + ms, 0);
     const avgMockMs = bestTimesEntries.length ? Math.floor(totalMockMs / bestTimesEntries.length) : 0;
-    const masteredPatterns = CURRICULUM.filter(l => l.track === 'patterns' && lessonOverallStatus(l.id) === 'mastered').length;
-    const totalPatterns = CURRICULUM.filter(l => l.track === 'patterns').length;
-    const masteredSyntax = CURRICULUM.filter(l => l.track === 'syntax' && lessonOverallStatus(l.id) === 'mastered').length;
-    const totalSyntax = CURRICULUM.filter(l => l.track === 'syntax').length;
+    const tally = (track) => ({
+      mastered: CURRICULUM.filter(l => l.track === track && lessonOverallStatus(l.id) === 'mastered').length,
+      total:    CURRICULUM.filter(l => l.track === track).length,
+    });
+    const syntaxStats   = tally('syntax');
+    const patternsStats = tally('patterns');
+    const appliedStats  = tally('applied');
 
     document.getElementById('stats-body').innerHTML = `
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -1998,13 +2012,19 @@ async function init() {
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">In Progress</div>
           <div style="font-size: 28px; color: #f59e0b; font-weight: 700;">${inProgress}</div>
         </div>
-        <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
+      </div>
+      <div style="margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+        <div data-track-stat="syntax" style="background: #1e293b; padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Syntax</div>
-          <div style="font-size: 22px; color: #93c5fd; font-weight: 700;">${masteredSyntax} / ${totalSyntax}</div>
+          <div style="font-size: 22px; color: #93c5fd; font-weight: 700;">${syntaxStats.mastered} / ${syntaxStats.total}</div>
         </div>
-        <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
+        <div data-track-stat="patterns" style="background: #1e293b; padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Patterns</div>
-          <div style="font-size: 22px; color: #c4b5fd; font-weight: 700;">${masteredPatterns} / ${totalPatterns}</div>
+          <div style="font-size: 22px; color: #c4b5fd; font-weight: 700;">${patternsStats.mastered} / ${patternsStats.total}</div>
+        </div>
+        <div data-track-stat="applied" style="background: #1e293b; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Applied</div>
+          <div style="font-size: 22px; color: #fcd34d; font-weight: 700;">${appliedStats.mastered} / ${appliedStats.total}</div>
         </div>
       </div>
       <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 12px;">
@@ -2056,7 +2076,7 @@ async function init() {
         const lesson = findLesson(id);
         const colors = { 'review due': '#67e8f9', 'next on path': '#93c5fd', 'weak spot': '#fdba74' };
         return `<button data-lesson-id="${escapeHtml(id)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-          <span><span style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-right:8px;">${escapeHtml(lesson?.track === 'syntax' ? 'Syntax' : 'Pattern')}</span>${escapeHtml(lesson?.title || id)}</span>
+          <span><span style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-right:8px;">${escapeHtml((TRACK_PILLS[lesson?.track] || TRACK_PILLS.patterns).label)}</span>${escapeHtml(lesson?.title || id)}</span>
           <span style="color:${colors[why] || '#94a3b8'}; font-size:11px;">${escapeHtml(why)}</span>
         </button>`;
       }).join('');

@@ -5,25 +5,26 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Step back and review the recent commits for any
-  drift in pattern, doc reciprocity, or test coverage.* 13 iterations
-  in. The last several have followed a clean pattern (find a friction
-  → make a small surgical change → durable probe → strategy doc note
-  → sharpen). That's a healthy loop. But it's worth a beat to look
-  back over the last 5–6 commits and ask: is anything inconsistent?
-  Did any strategy doc get out of sync? Are there feature surfaces I
-  added probes for but not docs for, or docs for but not probes for?
-  Is there a refactor opportunity hiding in similar patterns
-  (e.g., several "surface this state on a pill" iterations sharing
-  duplicated styling)? This is a meta-iteration — a small audit of
-  the loop's recent output.
-- **Hypothesis to test:** A short audit will surface either
-  (a) a small drift to clean up — ship it cheaply, or (b) nothing —
-  in which case the loop is genuinely converged on the current
-  PROFILE.md needs and iter 15 can return to a fresh survey.
-- **Out of scope this iteration:** new features, content authoring,
-  taxonomy changes, L1→L2→L3 core structure, anything that doesn't
-  fall out of the audit as a small inconsistency.
+- **Primary lens:** *Audit the data layer for the same kind of
+  third-track drift iter 14 found in the UI.* Iter 14 cleaned up
+  three places where `lesson.track === 'syntax' ? X : Y` excluded
+  applied lessons. That was UI drift. What about state / scheduling /
+  filtering? Specifically: does the daily-plan, SR scheduler, or any
+  other selection function silently exclude applied lessons in a way
+  that's structurally wrong now that applied is a first-class track?
+  (Mock random-pick is intentionally patterns-only per
+  startRandomMockInterview — that's by design, not drift. Look for
+  the *unintentional* ones.)
+- **Hypothesis to test:** A second focused audit — this time on the
+  selection functions in app.js (dueReviewIds, dailyPlan,
+  starterPathNextId, topWeakLessonId, pickShuffleReview, etc.) — will
+  surface 0 or 1 more drift point. If 0, the iter-14 audit
+  caught everything and the loop genuinely converged. If 1, fix it
+  cheaply with the same template (TRACK_PILLS-style lookup, probe
+  asserting applied parity).
+- **Out of scope this iteration:** UI changes (covered iter 14), new
+  features, content authoring, taxonomy changes, L1→L2→L3 core
+  structure.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -50,6 +51,28 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 14 — Audit found Applied-track UI drift; fixed
+The meta-audit scoped for iter 14 immediately surfaced three places
+where `lesson.track === 'syntax' ? X : 'patterns-default'` excluded
+the applied track: (1) the lesson header pill labeled applied lessons
+as "Pattern"; (2) the Today's plan modal label did the same; (3) the
+stats modal had `masteredPatterns/totalPatterns` and
+`masteredSyntax/totalSyntax` but NO applied row — 20 applied lessons of
+progress effectively invisible in the user's progress dashboard. Added
+a `TRACK_PILLS` module-scope lookup (`{ syntax, patterns, applied } →
+{ cls, label }`) as the single source of truth for track display
+metadata; both surfaces now read from it. Added `.pill-applied`
+amber CSS class so the third track has its own visual identity (was
+previously borrowing the purple Pattern pill). Restructured the stats
+modal to a 2-then-3 column grid so all three tracks show as peers.
+Validator 336/0; new probe `tools/cdp/applied-track-visibility.js`
+(6/6) asserts the header pill on a-debounce reads "Applied" and
+`[data-track-stat]` panels for all three tracks render. All 8 prior
+probes still pass. **Learning:** the meta-audit lens was load-bearing
+— each individual drift point would have been easy to miss in isolation,
+but reading recent commits together while looking for the same pattern
+made the cluster obvious.
 
 ### 2026-05-23 — iter 13 — Mock Interview trend chip (last-5 attempts)
 PROFILE.md success criterion #3 is "Mock interview personal-bests trend
@@ -209,24 +232,10 @@ to re-survey surfaced a structural content-quality gap (L2 density)
 that 4 mechanism-tuning iterations had missed. The lens swap was the
 win, not the pill itself.
 
-### 2026-05-23 — iter 4 — Surface SR state in pass/reveal feedback
-Added `srBadgeHtml(lessonId, kind)` and wired it into all six pass/reveal
-surfaces (desktop+mobile L2 pass, L3 pass, desktop+mobile L2 reveal, L3
-reveal). `markRevealed` now returns `{ demoted }` so reveal handlers can
-emit "Interval shortened — next review in Nd." only when the SR actually
-moved. Also fixed an off-by-one in `formatDueRelative` (floored 0.999d
-to "23h" right after `scheduleReview` set dueAt to exactly +1d) by
-switching to `Math.round` for the bucket display. Validator 327/0;
-extended both regression probes — iter 2 now 7/7 asserts "Next review in
-1d", iter 3 now 8/8 asserts demote feedback only when due. **Learning:**
-4 iterations in a row pulled on the same thread (SR mechanics →
-surfacing). The loop is at risk of over-investing in one principle.
-Iter 5 should re-survey rather than dig deeper here.
-
-*(iters 1–3 trimmed to keep the log at 10 entries — see git history:
-`1903c4e` iter 1 device-calibrated Review CTA; `c02b928` iter 2 L2 holds
-the SR bucket on due lessons; `5e18e9a` iter 3 Reveal demotes the SR
-bucket on due lessons.)*
+*(iters 1–4 trimmed to keep the log at 10 entries — see git history:
+`1903c4e` iter 1 device-calibrated Review CTA; `c02b928` iter 2 L2
+holds the SR bucket; `5e18e9a` iter 3 Reveal demotes the SR bucket;
+`0c3e61d` iter 4 surface SR state in pass/reveal feedback.)*
 
 ## Hypotheses parking lot
 *(curated iter 10; sidebar-ordering shipped iter 11)*

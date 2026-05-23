@@ -932,6 +932,15 @@ function renderLesson() {
   const pillText = lesson.track === 'syntax' ? 'Syntax' : 'Pattern';
   const overall = lessonOverallStatus(lesson.id);
   const masteredPill = overall === 'mastered' ? `<span class="pill pill-mastered ml-2">✓ Mastered</span>` : '';
+  // Starter-path step indicator — shown only when path mode is on AND this
+  // lesson is part of the path. The sidebar shows step numbers per-lesson
+  // but they group by section, so 22 / 20 / 21 can appear adjacent —
+  // confusing. The header pill gives the user a stable "Step N of M"
+  // anchor in the main viewport.
+  const pathIdx = state.starterPath ? STARTER_PATH.indexOf(lesson.id) + 1 : 0;
+  const pathPill = pathIdx > 0
+    ? `<span class="pill pill-path ml-2" title="Starter Path step ${pathIdx} of ${STARTER_PATH.length}">🧭 Step ${pathIdx} of ${STARTER_PATH.length}</span>`
+    : '';
   const nextId = nextLessonId(lesson.id);
   const nextLessonObj = nextId ? findLesson(nextId) : null;
   const nextCta = (overall === 'mastered' && nextLessonObj)
@@ -939,10 +948,11 @@ function renderLesson() {
     : '';
   header.innerHTML = `
     <div class="flex items-center justify-between gap-3 mb-1">
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
         <span class="pill ${pill}">${pillText}</span>
         <span class="text-xs text-slate-500">${escapeHtml(lesson.section)}</span>
         ${masteredPill}
+        ${pathPill}
       </div>
       <div class="flex items-center gap-1 text-slate-500 text-xs">
         <button class="hover:text-slate-300 px-1" data-action="prev-lesson" title="Previous (k)">◀</button>
@@ -1831,8 +1841,11 @@ async function init() {
     // If toggling ON and current lesson isn't in the path, jump to next un-mastered in path
     if (state.starterPath && !STARTER_PATH.includes(state.currentLessonId)) {
       const next = starterPathNextId();
-      if (next) selectLesson(next);
+      if (next) { selectLesson(next); return; }
     }
+    // Toggled but stayed on the same lesson — re-render so the path-step
+    // pill in the header reflects the new state.
+    if (state.currentLessonId) renderLesson();
   });
 
   // Keyboard nav (global)

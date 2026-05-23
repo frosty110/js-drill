@@ -65,6 +65,7 @@ const state = {
   searchQuery: '',
   streak: 0,      // consecutive lessons mastered in this run (resets on reload)
   bestTimes: {},  // { lessonId: ms } — fastest mock-interview pass
+  mockHistory: {},  // { lessonId: [ms, ms, ...] } — last N=MOCK_HISTORY_MAX successful mock times, oldest→newest
   mock: { active: false, startTime: 0, lessonId: null, tickHandle: null },
   starterPath: false, // when true, sidebar shows only the linear starter path
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -79,6 +80,10 @@ const state = {
 // Expose script-scope state on window for E2E probes (tools/cdp/*).
 // Production-safe: it's the same object the runtime uses; readers only.
 window.__jsdrillState = state;
+
+// Mock interview attempts kept per lesson — enough to see a trend
+// (improving / plateaued / regressing) without bloating localStorage.
+const MOCK_HISTORY_MAX = 5;
 
 // Spaced-repetition intervals (in ms). Each pass advances to the next bucket.
 const REVIEW_INTERVALS = [
@@ -163,6 +168,7 @@ function loadProgress() {
       if (parsed && (parsed.__v === 2 || parsed.__v === 3 || parsed.__v === 4 || parsed.__v === 5)) {
         state.progress = parsed.progress || {};
         state.bestTimes = parsed.bestTimes || {};
+        state.mockHistory = parsed.mockHistory || {};
         state.revealed = parsed.revealed || {};
         state.lastLessonId = parsed.lastLessonId || null;
         state.lastTab = parsed.lastTab || null;
@@ -206,7 +212,7 @@ function loadProgress() {
       }
     }
   } catch (e) {
-    state.progress = {}; state.bestTimes = {}; state.revealed = {};
+    state.progress = {}; state.bestTimes = {}; state.revealed = {}; state.mockHistory = {};
   }
 }
 function saveProgress() {
@@ -215,6 +221,7 @@ function saveProgress() {
       __v: 5,
       progress: state.progress,
       bestTimes: state.bestTimes,
+      mockHistory: state.mockHistory,
       revealed: state.revealed,
       lastLessonId: state.currentLessonId,
       lastTab: state.currentTab,
@@ -455,11 +462,18 @@ function endMockInterview(passed) {
   if (state.mock.tickHandle) { clearInterval(state.mock.tickHandle); state.mock.tickHandle = null; }
   state.mock.active = false;
   if (passed && lessonId) {
+    // Append to the rolling history — sequence reveals trend (improving /
+    // plateaued / regressing), not just the single PB.
+    state.mockHistory[lessonId] = state.mockHistory[lessonId] || [];
+    state.mockHistory[lessonId].push(elapsed);
+    if (state.mockHistory[lessonId].length > MOCK_HISTORY_MAX) {
+      state.mockHistory[lessonId] = state.mockHistory[lessonId].slice(-MOCK_HISTORY_MAX);
+    }
     const prevBest = state.bestTimes[lessonId];
     if (!prevBest || elapsed < prevBest) {
       state.bestTimes[lessonId] = elapsed;
-      saveProgress();
     }
+    saveProgress();
   }
   renderLesson();
   return elapsed;
@@ -1581,12 +1595,26 @@ function renderL3(body, lesson, content) {
   const bestBadge = bestMs
     ? `<span class="pill" style="background:rgba(244,114,182,0.15);color:#fbcfe8">⏱ Best: ${formatTime(bestMs)}</span>`
     : '';
+  // Trend chip — show the rolling history of mock times so the user can see
+  // whether they're improving across attempts, not just whether they hit a
+  // new PB on this one. The most recent attempt is rightmost; if it equals
+  // the PB it gets a star. Hidden when fewer than 2 attempts exist (no
+  // trend yet to show).
+  const history = state.mockHistory[lesson.id] || [];
+  const trendBadge = history.length >= 2
+    ? (() => {
+        const cells = history.map(ms =>
+          (bestMs && ms === bestMs ? `★${formatTime(ms)}` : formatTime(ms))
+        );
+        return `<span class="pill mono" title="Last ${history.length} mock attempts — most recent rightmost" style="background:rgba(244,114,182,0.08);color:#fbcfe8;letter-spacing:0.02em">${cells.join(' · ')}</span>`;
+      })()
+    : '';
 
   wrap.innerHTML = `
     ${mockBanner}
     <div class="mb-4 text-sm text-slate-400 flex items-center justify-between flex-wrap gap-2">
       <span>Blank editor. Type the canonical solution from memory, then Run. Pass when output matches.</span>
-      ${bestBadge}
+      <div class="flex items-center gap-2 flex-wrap">${bestBadge}${trendBadge}</div>
     </div>
     <div class="p-4 rounded-lg bg-slate-900 border border-slate-800 mb-4">
       <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Prompt</div>
@@ -1792,6 +1820,7 @@ async function init() {
       state.progress = {};
       state.streak = 0;
       state.bestTimes = {};
+      state.mockHistory = {};
       state.reviews = {};
       state.revealed = {};
       state.weakness = {};

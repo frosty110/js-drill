@@ -47,6 +47,13 @@ specifically toward lessons their memory is currently weakest on.
   step numbers read monotonically top-to-bottom (instead of e.g.
   "22, 20, 21" because intra-section order tracks the manifest, not the
   path). Not SR proper, but the same commitment-device lever.
+- **Adjacent: Mock Interview trend chip.** On the L3 surface for a
+  lesson with ≥2 past mock attempts, the trend chip
+  (`0:42 · 0:38 · ★0:32 · 0:34 · 0:29`) renders the rolling
+  last-5 attempt times with the PB marked. Same "make invisible state
+  visible" lever, this time applied to PROFILE.md success criterion #3
+  ("Mock interview personal-bests trend down over weeks"). A trend can't
+  trend if you only see the best.
 - **Due-lessons surfacing** in Today's plan — the curated daily session pulls
   from `dueLessons` first.
 - **Weak-spot tracker** resurfaces lessons where L1 was missed, even outside

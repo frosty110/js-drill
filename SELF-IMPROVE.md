@@ -5,28 +5,25 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Use the now-working Mock surface — what's the next
-  Mock friction worth fixing?* Iter 12 found Mock was fully broken
-  (null-deref crash); fixed it. Now that the surface actually loads,
-  what does the post-mock experience look like? PROFILE.md success
-  criterion #3 is "Mock interview personal-bests trend down over weeks"
-  — that requires (a) the bestTimes badge being visible at start so
-  users know what they're trying to beat, (b) end-of-mock feedback
-  that communicates the new vs. old best clearly, and (c) some sense
-  of history beyond a single best time. Iter 12 verified (a) and (b)
-  superficially; do a deeper pass on (c) plus any other Mock friction
-  surfaced by actually using the surface.
-- **Hypothesis to test:** The current "best time" pill is a single
-  number — it tells the user their PB but not the trend (faster?
-  plateaued? regressing?). For PROFILE.md success criterion #3 to be
-  meaningful, the user needs to *see* a downward trend. A small
-  affordance like "Last 5 attempts: 4:21, 3:48, 3:32, 3:51, 2:58 —
-  PB!" would surface the trend without a full dashboard. Storage
-  cost is minimal (5 numbers per lesson).
-- **Out of scope this iteration:** Mobile-only changes (mock stays
-  desktop-only), further content authoring, taxonomy changes, L1→L2→L3
-  core structure, further SR-gradient tuning. Don't redesign Mock —
-  add ONE small visible affordance.
+- **Primary lens:** *Step back and review the recent commits for any
+  drift in pattern, doc reciprocity, or test coverage.* 13 iterations
+  in. The last several have followed a clean pattern (find a friction
+  → make a small surgical change → durable probe → strategy doc note
+  → sharpen). That's a healthy loop. But it's worth a beat to look
+  back over the last 5–6 commits and ask: is anything inconsistent?
+  Did any strategy doc get out of sync? Are there feature surfaces I
+  added probes for but not docs for, or docs for but not probes for?
+  Is there a refactor opportunity hiding in similar patterns
+  (e.g., several "surface this state on a pill" iterations sharing
+  duplicated styling)? This is a meta-iteration — a small audit of
+  the loop's recent output.
+- **Hypothesis to test:** A short audit will surface either
+  (a) a small drift to clean up — ship it cheaply, or (b) nothing —
+  in which case the loop is genuinely converged on the current
+  PROFILE.md needs and iter 15 can return to a fresh survey.
+- **Out of scope this iteration:** new features, content authoring,
+  taxonomy changes, L1→L2→L3 core structure, anything that doesn't
+  fall out of the audit as a small inconsistency.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -53,6 +50,23 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 13 — Mock Interview trend chip (last-5 attempts)
+PROFILE.md success criterion #3 is "Mock interview personal-bests trend
+down over weeks." A trend can't be seen from a single best-time pill —
+only the sequence shows whether the user is improving, plateaued, or
+regressing. Added `state.mockHistory: { lessonId: [ms, ms, ...] }`
+capped at MOCK_HISTORY_MAX=5 entries (every successful mock pushes; old
+ones evict FIFO). Persisted alongside `bestTimes`. On the L3 surface,
+when history has ≥2 entries, a muted chip renders the times oldest→
+newest (`0:42 · 0:38 · ★0:32 · 0:34 · 0:29`) with the PB cell starred.
+Schema is forward-compatible — added field, no `__v` bump. Validator
+336/0; new probe `tools/cdp/mock-history-trend.js` (7/7) covers D
+(single attempt → no chip), A (3 attempts → chip with 3 cells), B (PB
+cell starred), C (history capped at 5 after 6 attempts). All 7 prior
+probes still pass. **Learning:** post-iter-12-crash-fix, mock-related
+iterations get cheap traction — the surface was broken so long that
+several small wins are still on the table without invention.
 
 ### 2026-05-23 — iter 12 — Mock Interview was crashing (null-deref) — fixed
 Desktop survey discovered Mock Interview was completely broken: clicking
@@ -209,25 +223,10 @@ extended both regression probes — iter 2 now 7/7 asserts "Next review in
 surfacing). The loop is at risk of over-investing in one principle.
 Iter 5 should re-survey rather than dig deeper here.
 
-### 2026-05-23 — iter 3 — Reveal demotes the SR bucket on due lessons
-Picked Reveal as the failure signal because it's the cleanest "I can't
-recall this" event the app already tracks (state.revealed) and goes
-through a centralized `markRevealed` — no new event handlers, no
-guessing what counts as "tried hard enough." Added `demoteReview(id)` (1
-bucket down, floored at 0); `markRevealed` calls it when the lesson is
-due. L3 reveal confirm dialog updated to mention the consequence when
-due — transparency. L2 reveal stays silent: it already has the
-mastery-dot soft-penalty, and adding a per-exercise confirm would create
-friction. Validator 327/0; new probe `tools/cdp/sr-reveal-demotes-bucket.js`
-covers 3 scenarios (due-demotes, not-due-no-op, floor) — 6/6 asserts;
-iter 2 probe still 6/6. **Learning:** the SR system is now mechanically
-right but completely invisible to the user. None of L2-holds /
-L3-advances / Reveal-demotes shows up in the UI as feedback. That's iter
-4's lens.
-
-*(iters 1–2 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–3 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1 device-calibrated Review CTA; `c02b928` iter 2 L2 holds
-the SR bucket on due lessons.)*
+the SR bucket on due lessons; `5e18e9a` iter 3 Reveal demotes the SR
+bucket on due lessons.)*
 
 ## Hypotheses parking lot
 *(curated iter 10; sidebar-ordering shipped iter 11)*

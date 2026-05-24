@@ -385,3 +385,6 @@ The trigger check is bounded: 9 categories × ~3 rows each = ~27 freshness looku
 - **Why:** the iter-5 bar said "if I keep finding 'bridges-a-gap' entries iter after iter, the bar is too low." Iter-7 trajectory was already two consecutive net-negative iters; iter-8 forcing a third creative angle would itself be the signal that I'm rationalizing. The honest answer is: this brainstorm loop is done.
 - **Stop recommendation reiterated:** `CronDelete 96752a5d`. If the cron continues to fire, future iters should append a one-line "iter-N: no action" entry here rather than force new content.
 - **What WOULD restart productive brainstorming:** a vision iter shipping from this catalog and surfacing new gaps in the process; a real user-interview surfacing a need not on the catalog; a shift in PROFILE.md (e.g., scope change to include mid-level→senior promo prep); a frame iter ratifying one of the BLOCKED PROFILE amendments (which would unblock the 3 iter-26 entries and reshape the catalog's center of gravity). None of those have happened.
+
+**Subsequent no-action iters** *(one line each per the iter-8 commitment; if this list grows past 3 the loop is being kept alive past its useful life and the user should stop it or change the prompt):*
+- **Iter-43:** no action. Catalog unchanged. Same trigger conditions as iter-42 hold.

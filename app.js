@@ -987,9 +987,25 @@ function renderLesson() {
     : '';
   const nextId = nextLessonId(lesson.id);
   const nextLessonObj = nextId ? findLesson(nextId) : null;
-  const nextCta = (overall === 'mastered' && nextLessonObj)
-    ? `<div class="mt-3 flex items-center gap-2"><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">🎲 Shuffle review</button></div>`
-    : '';
+  // On a mastered lesson, surface the highest-priority next action:
+  //   - Due reviews exist → primary becomes "🕒 Review N due", which jumps
+  //     to the most-overdue lesson via the same path as the sidebar Review
+  //     button (device-calibrated tab routing). The "Next lesson" choice
+  //     drops to secondary. Retention beats new content per dailyPlan.
+  //   - No due reviews → keep the original "Next lesson" primary.
+  // The sidebar Review CTA is invisible on mobile (behind the drawer);
+  // this surface puts the same action in the main viewport.
+  const dueDuringMastered = (overall === 'mastered') ? dueReviewIds() : [];
+  let nextCta = '';
+  if (overall === 'mastered' && dueDuringMastered.length > 0) {
+    const reviewLabel = `🕒 Review ${dueDuringMastered.length} due →`;
+    const secondary = nextLessonObj
+      ? `<button class="secondary" data-action="goto-next">Next: ${escapeHtml(nextLessonObj.title)}</button>`
+      : '';
+    nextCta = `<div class="mt-3 flex items-center gap-2 flex-wrap"><button class="primary" data-action="goto-due-review">${reviewLabel}</button>${secondary}<button class="secondary" data-action="shuffle-here">🎲 Shuffle</button></div>`;
+  } else if (overall === 'mastered' && nextLessonObj) {
+    nextCta = `<div class="mt-3 flex items-center gap-2"><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">🎲 Shuffle review</button></div>`;
+  }
   header.innerHTML = `
     <div class="flex items-center justify-between gap-3 mb-1">
       <div class="flex items-center gap-2 flex-wrap">
@@ -1012,6 +1028,13 @@ function renderLesson() {
   header.querySelector('[data-action="next-lesson"]').addEventListener('click', () => { const n = nextLessonId(lesson.id); if (n) selectLesson(n); });
   const nextBtn = header.querySelector('[data-action="goto-next"]');
   if (nextBtn) nextBtn.addEventListener('click', () => selectLesson(nextId));
+  // "Review N due" — jump to the top due lesson via the same sidebar-button
+  // click handler so device-calibrated tab routing (L2 on coarse, L3 on
+  // fine) stays consistent across surfaces.
+  const dueBtn = header.querySelector('[data-action="goto-due-review"]');
+  if (dueBtn) dueBtn.addEventListener('click', () => {
+    document.getElementById('review-btn')?.click();
+  });
   const shuffleHere = header.querySelector('[data-action="shuffle-here"]');
   if (shuffleHere) shuffleHere.addEventListener('click', () => { const r = pickShuffleReview(); if (r) selectLesson(r); });
 

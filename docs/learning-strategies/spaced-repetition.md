@@ -55,7 +55,11 @@ specifically toward lessons their memory is currently weakest on.
   ("Mock interview personal-bests trend down over weeks"). A trend can't
   trend if you only see the best.
 - **Due-lessons surfacing** in Today's plan — the curated daily session pulls
-  from `dueLessons` first.
+  from `dueLessons` first. Additionally, when the user is on a mastered
+  lesson and due reviews exist, the lesson-header CTA promotes "🕒 Review
+  N due →" to primary (demoting "Next lesson" to secondary) so the
+  highest-priority next action lives in the main viewport, not behind the
+  sidebar drawer.
 - **Weak-spot tracker** resurfaces lessons where L1 was missed, even outside
   the normal SR cadence. The `⚠️ Weak (N)` sidebar button shows the count of
   lessons with outstanding misses (parallel to `🕒 Review (N)`); the Today's

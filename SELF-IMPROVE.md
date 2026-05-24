@@ -5,26 +5,22 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Fresh survey — the audit cycle is closed.* Iter
-  14 found UI drift (3 places). Iter 15 audited the data layer and
-  found 0 drift — every selection function is either track-agnostic
-  where it matters or track-exclusive by design. The adjacent surface
-  (cheatsheet header pitch + README tagline) had the same stale-prose
-  pattern as the iter-10 welcome banner; fixed those. The loop has
-  now closed every audit thread it started. Time to step back to a
-  fresh survey lens — not on tracks specifically, but on the broader
-  app experience after 15 iterations of incremental improvements.
-- **Hypothesis to test:** TBD — open it with a cold mobile walkthrough
-  (the same lens as iter 1) but now against the IMPROVED app. The
-  question: after iter 1's "rusty engineer in line at coffee shop"
-  framing, what NEW frictions emerge that weren't visible before
-  because earlier ones dominated? E.g., now that mock works, sidebar
-  is sorted, applied is surfaced, density is enforced — what's the
-  next friction surface the loop hasn't seen because it didn't
-  exist as a top-level problem yet?
+- **Primary lens:** *Continue surfacing high-priority actions in the
+  main viewport, not behind the drawer.* Iter 16 found the most acute
+  remaining UX hole — a mastered lesson with due reviews steered users
+  toward new content via the "Next lesson" CTA, because the sidebar
+  Review badge is invisible on mobile until the drawer opens. Iter 17
+  picks the next analog: are there other "right action is hidden
+  behind the drawer" moments? Candidates from quick survey: the L1
+  end-state on a NOT-mastered lesson doesn't suggest a next action
+  beyond "next-l2"; ditto L2 → L3 transition; weak-spot prompt-from-
+  main-view (currently only the sidebar Weak button surfaces it).
+- **Hypothesis to test:** Audit the main-viewport actions on
+  non-mastered lessons for similar "user has to know about the sidebar"
+  moments. If 1 exists, ship a small main-view CTA. If 0, the iter-16
+  pattern was the last one and the loop can wind down or pivot.
 - **Out of scope this iteration:** content authoring, taxonomy
-  changes, L1→L2→L3 core structure, further track-drift audits (loop
-  has done two; data shows convergence).
+  changes, L1→L2→L3 core structure, drawer redesign.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -51,6 +47,22 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 16 — Mastered-lesson CTA prefers due reviews
+Fresh cold-survey at mobile viewport, mid-journey state (15 mastered,
+4 overdue reviews). The lesson header on a mastered lesson primary-
+CTA'd "Next lesson: Numbers & Math →" while the user had 4 reviews
+waiting — retention beats new content per dailyPlan's own ordering,
+but the UI pointed at new content. The sidebar Review badge surfaces
+the right action but is invisible on mobile until the drawer opens.
+Fix: when on a mastered lesson AND `dueReviewIds().length > 0`,
+promote "🕒 Review N due →" to primary (delegating to the same
+sidebar click handler so the device-calibrated L2/L3 routing stays
+consistent) and demote "Next lesson" to secondary. No due reviews →
+original behavior unchanged. Validator 336/0; new probe
+`tools/cdp/mastered-cta-prefers-review.js` (5/5). Recent probes
+regression-clean. **Learning:** "main-viewport vs. drawer" is a
+consistent friction theme on mobile — likely more instances exist.
 
 ### 2026-05-23 — iter 15 — Data-layer audit: clean; fix adjacent stale prose
 Audited every selection function (`dueReviewIds`, `topWeakLessonId`,
@@ -221,26 +233,9 @@ lessons sampled — the "varied retrieval" framing maps directly to
 "blank a different subset of the canonical." Iter 8 needs to validate
 on syntax lessons (different shape than pattern lessons).
 
-### 2026-05-23 — iter 6 — Validator warns on L2/L1 density floor
-The iter 5 survey found 102/143 lessons (71%) below the PROFILE.md L2
-density floor (≥2 exercises), but no surface flagged it — the gap was
-silently drifting. Extended `tools/validate-data.js` to compute density
-per lesson during its existing read pass and print a warning section
-after the pass/fail summary; added `--strict-density` flag to flip it
-into a hard failure for future CI / pre-commit once the backlog is
-cleared. Default behavior unchanged (exit 0 on warnings) so the loop
-keeps moving while the structural enforcement is now in place. Touched
-`active-recall.md` to document the "density floor supports varied
-recall reps" rationale. Validator default exit 0, --strict-density exit
-1 — both verified. **Learning:** the structural-warning move is much
-cheaper than mass-authoring and creates the right kind of pressure —
-contributors see the count every time they run the validator.
-
-*(iters 1–5 trimmed to keep the log at 10 entries — see git history:
-`1903c4e` iter 1 device-calibrated Review CTA; `c02b928` iter 2 L2
-holds the SR bucket; `5e18e9a` iter 3 Reveal demotes the SR bucket;
-`0c3e61d` iter 4 surface SR state in pass/reveal feedback;
-`4eaa3c6` iter 5 Starter Path step pill + non-SR re-survey.)*
+*(iters 1–6 trimmed to keep the log at 10 entries — see git history:
+`1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
+`4eaa3c6` iter 5; `d2877d7` iter 6 validator density warning.)*
 
 ## Hypotheses parking lot
 *(curated iter 10; sidebar-ordering shipped iter 11)*

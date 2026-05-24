@@ -29,7 +29,7 @@ The convention:
 **Review trigger:** If `SELF-IMPROVE.md § Last-touched index` rows `L1 / L2 / L3 render state cache`, `Drilling surfaces (L1/L2/L3)`, or any per-tab row have not been bumped in 10+ iters, this category is stale.
 
 **Active ideas:**
-- **Reference-Card Flash Mode (cloze-deletion on canonical)** — see [`roadmap.md` iter-31 entry #2](roadmap.md). Queued. Fills the "read+recall-no-input" cell in the modality matrix (between Reference-read and L2-type).
+- **Reference-Card Flash Mode (cloze-deletion on canonical)** — see [`roadmap.md` iter-31 entry #5](roadmap.md). **SHIPPED iter 35.** Fills the "read+recall-no-input" cell in the modality matrix.
 - **L1 Rapid-Fire Drill (cross-lesson MCQ stream)** — see [`roadmap.md` iter-31 entry #1](roadmap.md). Queued. Cross-lesson interleaving on the highest-throughput mobile surface.
 
 **Parking-lot ideas** *(not yet promoted to roadmap.md; lighter weight)*:

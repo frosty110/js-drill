@@ -27,6 +27,15 @@ app's existence.
   to lie about it.
 - **No "show solution then quiz"** pattern — Reference is a separate tab the
   user must explicitly leave to drill.
+- **Reference-Card Flash mode (iter 35)** turns the previously-passive
+  Reference tab into an active-recall surface without requiring typing.
+  Toggling 🃏 Flash hides 1–3 randomly-chosen "good" tokens (length ≥3,
+  alphanumeric) behind tap-to-reveal blur spans. The user mentally fills
+  the blank before tapping to confirm — pure self-graded retrieval. Fills
+  the read+recall-no-input cell between Reference-read and L2-type that
+  the L1/L2/L3 ladder didn't cover. Mobile-native (tap-only, no keyboard).
+  See `iter-artifacts/roadmap.md` iter-31 entry #5 and
+  `iter-artifacts/ideas-by-category.md § Drilling Surfaces`.
 - **Review CTA routes to a recall surface calibrated to the device** — touch
   devices land on L2 (cued recall), keyboard devices on L3 (free recall).
   Keeps the recall demand high while removing the typing-mechanics friction

@@ -1315,6 +1315,58 @@ function colorizeInto(target, code, mode = 'javascript') {
   }
 }
 
+// Flash-mode render — same tokens as colorizeInto, but 1-3 randomly-chosen
+// "good" tokens (length >= 3, alphanumeric content, not a comment) are wrapped
+// in tap-to-reveal blur spans. Active-recall surface on the Reference tab:
+// the user mentally fills the blank before tapping to confirm. No typing,
+// no validation, pure self-graded retrieval. See roadmap.md iter-31 entry #2
+// and ideas-by-category.md § Drilling Surfaces.
+function renderFlash(target, code, mode = 'javascript') {
+  target.textContent = '';
+  if (!(window.CodeMirror && CodeMirror.runMode)) {
+    target.textContent = code;
+    return;
+  }
+  const tokens = [];
+  CodeMirror.runMode(code, mode, (text, style) => {
+    tokens.push({ text, style });
+  });
+  // Pick "good" candidates: length >= 3, alphanumeric content, not comment/string-content noise.
+  const goodIdx = [];
+  tokens.forEach((t, i) => {
+    if (t.text.length < 3) return;
+    if (!/[a-zA-Z0-9]{3,}/.test(t.text)) return;
+    if (t.style && /^(comment)$/.test(t.style)) return;
+    goodIdx.push(i);
+  });
+  // Shuffle and pick 1-3.
+  for (let i = goodIdx.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [goodIdx[i], goodIdx[j]] = [goodIdx[j], goodIdx[i]];
+  }
+  const n = Math.min(goodIdx.length, 1 + Math.floor(Math.random() * 3));
+  const blurSet = new Set(goodIdx.slice(0, n));
+  tokens.forEach((tok, i) => {
+    const span = document.createElement('span');
+    if (blurSet.has(i)) {
+      span.className = 'flash-blur';
+      span.textContent = tok.text;
+      span.setAttribute('role', 'button');
+      span.setAttribute('tabindex', '0');
+      span.title = 'Tap to reveal';
+      const reveal = () => span.classList.add('revealed');
+      span.addEventListener('click', reveal);
+      span.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(); }
+      });
+    } else {
+      if (tok.style) span.className = 'cm-' + tok.style.replace(/ +/g, ' cm-');
+      span.textContent = tok.text;
+    }
+    target.appendChild(span);
+  });
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 //  CONVERSATION TAB — interview walk-through for Patterns/Applied lessons
 // ──────────────────────────────────────────────────────────────────────────
@@ -1602,7 +1654,10 @@ function renderReference(body, content) {
   const ref = content.reference;
   const section = document.createElement('div');
   section.innerHTML = `
-    <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">The thing to memorize</div>
+    <div class="flex items-center justify-between mb-2">
+      <div class="text-xs text-slate-500 uppercase tracking-wider">The thing to memorize</div>
+      <button class="flash-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">🃏 Flash</button>
+    </div>
     <pre class="code-block cm-s-dracula" data-ref-code></pre>
     <div class="mt-6">
       <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Notes</div>
@@ -1615,7 +1670,17 @@ function renderReference(body, content) {
     </div>
   `;
   body.appendChild(section);
-  colorizeInto(section.querySelector('[data-ref-code]'), ref.code);
+  const codeEl = section.querySelector('[data-ref-code]');
+  colorizeInto(codeEl, ref.code);
+  let flashOn = false;
+  const flashBtn = section.querySelector('[data-action="flash-toggle"]');
+  flashBtn.addEventListener('click', () => {
+    flashOn = !flashOn;
+    flashBtn.classList.toggle('active', flashOn);
+    flashBtn.textContent = flashOn ? '🃏 Reveal all' : '🃏 Flash';
+    if (flashOn) renderFlash(codeEl, ref.code);
+    else colorizeInto(codeEl, ref.code);
+  });
   section.querySelector('[data-action="start-l1"]').addEventListener('click', () => selectTab('L1'));
 }
 

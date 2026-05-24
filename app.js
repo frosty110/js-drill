@@ -54,6 +54,52 @@ async function ensureAllContentLoaded() {
   const ids = CURRICULUM.filter(l => l.status === 'full').map(l => l.id);
   await Promise.all(ids.map(loadLessonContent));
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+//  MECHANICS REGISTRY (cross-cutting code idioms tagged on lessons)
+//  Loaded once from data/mechanics.json. MECHANIC_INDEX is built lazily
+//  on first modal open by walking the (already-loaded) CONTENT cache.
+//  Source of truth for what counts as a mechanic — and which lessons it
+//  appears in — lives in data/. App side just renders.
+// ──────────────────────────────────────────────────────────────────────────
+let MECHANICS = [];                    // [{id, label, category, blurb, snippet}]
+let MECHANIC_CATEGORIES = [];          // [{id, label}]
+let MECHANIC_INDEX = new Map();        // mechId → Set<lessonId>
+let _mechanicsRegistryLoaded = false;
+
+async function loadMechanicsRegistry() {
+  if (_mechanicsRegistryLoaded) return;
+  try {
+    const res = await fetch('data/mechanics.json', { cache: 'no-cache' });
+    if (!res.ok) return;
+    const reg = await res.json();
+    MECHANICS = Array.isArray(reg.mechanics) ? reg.mechanics : [];
+    MECHANIC_CATEGORIES = Array.isArray(reg.categories) ? reg.categories : [];
+    _mechanicsRegistryLoaded = true;
+  } catch (e) {
+    // Missing registry just hides the surface; fail soft.
+    MECHANICS = [];
+  }
+}
+
+// Build mechId → set-of-lessonIds index by walking every loaded lesson's
+// `mechanics` field. We force-load all content first (same approach as the
+// cheatsheet export) so the index is complete on first render — otherwise
+// the cross-cutting view would only see lessons the user has visited.
+async function ensureMechanicIndex() {
+  await loadMechanicsRegistry();
+  await ensureAllContentLoaded();
+  MECHANIC_INDEX = new Map();
+  for (const m of MECHANICS) MECHANIC_INDEX.set(m.id, new Set());
+  for (const lesson of CURRICULUM) {
+    const content = CONTENT[lesson.id];
+    if (!content || !Array.isArray(content.mechanics)) continue;
+    for (const mid of content.mechanics) {
+      const bucket = MECHANIC_INDEX.get(mid);
+      if (bucket) bucket.add(lesson.id);
+    }
+  }
+}
 // ──────────────────────────────────────────────────────────────────────────
 //  STATE + LOCALSTORAGE
 // ──────────────────────────────────────────────────────────────────────────
@@ -1852,6 +1898,179 @@ function escapeHtml(s) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+//  MECHANICS MODAL — cross-cutting drill surface
+//  Two views inside one modal:
+//    list   — every mechanic grouped by category, with mastered/total badge
+//    detail — one mechanic's canonical snippet + every lesson that uses it,
+//             sorted by review priority (due > weak > in-progress > new > mastered)
+//  Tapping a lesson row jumps straight to it and closes the modal — the
+//  user's existing L1/L2/L3 loop takes over from there. The act of seeing
+//  the mechanic alongside its cross-track lesson set IS the interleaving aid.
+// ──────────────────────────────────────────────────────────────────────────
+let _mechanicsView = 'list';            // 'list' | 'detail'
+let _mechanicsSelectedId = null;        // mechanic id when view === 'detail'
+
+function _mechMasteryFraction(lessonIds) {
+  const arr = [...lessonIds];
+  const mastered = arr.filter(id => lessonOverallStatus(id) === 'mastered').length;
+  return { mastered, total: arr.length };
+}
+
+function _mechSortLessons(lessonIds) {
+  // Review priority — surface the lesson the user most needs to drill first.
+  const prio = (id) => {
+    if (isDueForReview(id)) return 0;
+    if (state.weakness[id]) return 1;
+    const s = lessonOverallStatus(id);
+    if (s === 'in_progress') return 2;
+    if (s === 'not_started') return 3;
+    return 4; // mastered, lowest priority
+  };
+  return [...lessonIds].sort((a, b) => {
+    const pa = prio(a), pb = prio(b);
+    if (pa !== pb) return pa - pb;
+    return (findLesson(a)?.title || '').localeCompare(findLesson(b)?.title || '');
+  });
+}
+
+async function openMechanicsModal() {
+  const modal = document.getElementById('mechanics-modal');
+  if (!modal) return;
+  // Show modal first, then load — the loading state lives inside the modal
+  // body, not behind a spinner that blocks the click.
+  _mechanicsView = 'list';
+  _mechanicsSelectedId = null;
+  const body = document.getElementById('mechanics-body');
+  if (body) body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Loading mechanics…</div>`;
+  modal.style.display = 'block';
+  await ensureMechanicIndex();
+  renderMechanicsModal();
+}
+
+function closeMechanicsModal() {
+  const modal = document.getElementById('mechanics-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function renderMechanicsModal() {
+  const body = document.getElementById('mechanics-body');
+  const titleEl = document.getElementById('mechanics-title');
+  const subEl = document.getElementById('mechanics-sub');
+  const backBtn = document.getElementById('mechanics-back');
+  if (!body || !titleEl || !subEl || !backBtn) return;
+
+  if (_mechanicsView === 'list') {
+    titleEl.textContent = '🧩 Mechanics';
+    subEl.textContent = 'Code idioms tagged across lessons. Tap a mechanic to see every lesson where it appears.';
+    backBtn.style.display = 'none';
+    body.innerHTML = _renderMechanicsListHtml();
+    body.scrollTop = 0;
+    body.querySelectorAll('[data-mech-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _mechanicsSelectedId = btn.getAttribute('data-mech-id');
+        _mechanicsView = 'detail';
+        renderMechanicsModal();
+      });
+    });
+  } else {
+    const m = MECHANICS.find(x => x.id === _mechanicsSelectedId);
+    if (!m) { _mechanicsView = 'list'; renderMechanicsModal(); return; }
+    titleEl.textContent = '🧩 ' + m.label;
+    subEl.textContent = m.blurb;
+    backBtn.style.display = '';
+    body.innerHTML = _renderMechanicsDetailHtml(m);
+    body.scrollTop = 0;
+    body.querySelectorAll('[data-lesson-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-lesson-id');
+        closeMechanicsModal();
+        selectLesson(id);
+      });
+    });
+  }
+}
+
+function _renderMechanicsListHtml() {
+  if (!MECHANICS.length) {
+    return `<div style="color:#94a3b8;text-align:center;padding:24px 0;">No mechanics defined.</div>`;
+  }
+  // Group by category, preserving category order from the registry; within
+  // a category, sort by lesson count desc so the user's most-frequented
+  // mechanics float up.
+  const byCat = new Map();
+  for (const cat of MECHANIC_CATEGORIES) byCat.set(cat.id, []);
+  for (const m of MECHANICS) {
+    const lessonIds = MECHANIC_INDEX.get(m.id) || new Set();
+    const { mastered, total } = _mechMasteryFraction(lessonIds);
+    const arr = byCat.get(m.category);
+    if (arr) arr.push({ m, total, mastered });
+  }
+  let html = '';
+  for (const cat of MECHANIC_CATEGORIES) {
+    const items = byCat.get(cat.id) || [];
+    items.sort((a, b) => b.total - a.total || a.m.label.localeCompare(b.m.label));
+    if (!items.length) continue;
+    html += `<div data-mech-cat="${escapeHtml(cat.id)}" style="font-size:10.5px;text-transform:uppercase;letter-spacing:0.07em;color:#64748b;margin-top:10px;margin-bottom:4px;">${escapeHtml(cat.label)}</div>`;
+    for (const { m, total, mastered } of items) {
+      const empty = total === 0;
+      const masteredAll = total > 0 && mastered === total;
+      const badgeColor = masteredAll ? '#34d399' : (mastered > 0 ? '#67e8f9' : '#94a3b8');
+      const pct = total ? ` · ${Math.round((mastered / total) * 100)}%` : '';
+      const cursor = empty ? 'default' : 'pointer';
+      const opacity = empty ? '0.5' : '1';
+      html += `<button data-mech-id="${escapeHtml(m.id)}" ${empty ? 'disabled' : ''} style="text-align:left; padding:10px 12px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:${cursor}; opacity:${opacity};">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+          <span style="font-weight:600;">${escapeHtml(m.label)}</span>
+          <span style="color:${badgeColor}; font-size:11px; white-space:nowrap;">${mastered}/${total}${pct}</span>
+        </div>
+      </button>`;
+    }
+  }
+  return html;
+}
+
+function _renderMechanicsDetailHtml(m) {
+  const lessonIds = MECHANIC_INDEX.get(m.id) || new Set();
+  const sorted = _mechSortLessons(lessonIds);
+  const { mastered, total } = _mechMasteryFraction(lessonIds);
+  let html = '';
+  // Snippet — the canonical shape of this mechanic. Plain <pre> rather than
+  // CodeMirror runMode keeps the modal lightweight; it's a glance surface.
+  html += `<div style="background:#020617; border:1px solid #1e293b; border-radius:8px; padding:12px; margin-bottom:14px;">
+    <pre style="margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12.5px; color:#e2e8f0; white-space:pre-wrap; word-break: break-word;">${escapeHtml(m.snippet)}</pre>
+  </div>`;
+  html += `<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">
+    <span style="color:#cbd5e1; font-size:13px; font-weight:600;">${total} lesson${total === 1 ? '' : 's'}</span>
+    <span style="color:#94a3b8; font-size:12px;">${mastered}/${total} mastered</span>
+  </div>`;
+  if (!sorted.length) {
+    html += `<div style="color:#94a3b8;text-align:center;padding:24px 0;">No lessons tagged with this mechanic yet.</div>`;
+    return html;
+  }
+  html += `<div style="display:flex; flex-direction:column; gap:6px;">`;
+  for (const id of sorted) {
+    const lesson = findLesson(id);
+    if (!lesson) continue;
+    const overall = lessonOverallStatus(id);
+    const dotColor = overall === 'mastered' ? '#34d399' : (overall === 'in_progress' ? '#facc15' : '#475569');
+    const tagBits = [];
+    if (isDueForReview(id)) tagBits.push(`<span style="color:#67e8f9; font-size:11px;">🕒 due</span>`);
+    if (state.weakness[id]) tagBits.push(`<span style="color:#fdba74; font-size:11px;">⚠ weak</span>`);
+    const trackMeta = TRACK_PILLS[lesson.track] || TRACK_PILLS.patterns;
+    html += `<button data-lesson-id="${escapeHtml(id)}" style="text-align:left; padding:10px 12px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <span style="display:flex; align-items:center; gap:8px; min-width:0; overflow:hidden;">
+        <span style="width:8px; height:8px; border-radius:50%; background:${dotColor}; flex:0 0 auto;" aria-hidden="true"></span>
+        <span style="color:#94a3b8; font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; flex:0 0 auto;">${escapeHtml(trackMeta.label)}</span>
+        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(lesson.title)}</span>
+      </span>
+      <span style="display:flex; gap:8px; flex:0 0 auto;">${tagBits.join(' ')}</span>
+    </button>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 //  INIT
 // ──────────────────────────────────────────────────────────────────────────
 async function init() {
@@ -1860,6 +2079,9 @@ async function init() {
     document.getElementById('lesson-shell').innerHTML = '<div class="p-6 text-red-300">Failed to load lesson data: ' + (e && e.message ? e.message : e) + '</div>';
     return;
   }
+  // Fire-and-forget — modal will await its own load if user clicks before
+  // this resolves. Keeps boot snappy on slow connections.
+  loadMechanicsRegistry();
   // Re-run GC now that CURRICULUM is populated.
   {
     let mutated = false;
@@ -1999,7 +2221,7 @@ async function init() {
     }
     if (e.key === 'Escape') {
       // Close any open modal on Escape
-      const modals = ['help-modal', 'today-modal', 'stats-modal'];
+      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);
         if (m && m.style.display === 'block') { m.style.display = 'none'; e.preventDefault(); return; }
@@ -2156,6 +2378,19 @@ async function init() {
   document.getElementById('today-close').addEventListener('click', () => todayModal.style.display = 'none');
   todayModal.addEventListener('click', (e) => {
     if (e.target === todayModal) todayModal.style.display = 'none';
+  });
+
+  // Mechanics modal — cross-cutting drill surface
+  const mechanicsModal = document.getElementById('mechanics-modal');
+  document.getElementById('mechanics-btn').addEventListener('click', openMechanicsModal);
+  document.getElementById('mechanics-close').addEventListener('click', closeMechanicsModal);
+  document.getElementById('mechanics-back').addEventListener('click', () => {
+    _mechanicsView = 'list';
+    _mechanicsSelectedId = null;
+    renderMechanicsModal();
+  });
+  mechanicsModal.addEventListener('click', (e) => {
+    if (e.target === mechanicsModal) closeMechanicsModal();
   });
 
   // Help modal close (open is wired in the keydown handler with `?`)

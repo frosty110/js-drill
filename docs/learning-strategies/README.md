@@ -62,11 +62,11 @@ Books, papers, or articles. Keep terse — we're not writing a literature review
 - [Active recall](active-recall.md) — the L1→L2→L3 ladder
 - [Spaced repetition](spaced-repetition.md) — the 1d→30d intervals
 - [Desirable difficulty](desirable-difficulty.md) — calibrating friction to device + recall stage
+- [Interleaving](interleaving.md) — mixing idioms across topics (Mechanics modal, Today's plan, Mock)
 
 ## Strategies to add when relevant
 *(parking lot — the loop should pick from here when a feature is a fit)*
 
-- Interleaving (mixing topic types in a session — partially encoded via Today's plan)
 - Elaboration (the "why" of L1 explanations)
 - Dual coding (visual + verbal — could affect Reference layout)
 - Chunking (canonical-snippet sizing)

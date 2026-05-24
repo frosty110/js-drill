@@ -1,0 +1,284 @@
+{
+  "schema": 1,
+  "description": "Cross-cutting code idioms ('mechanics') tagged on lessons so the user can drill the same pattern across every place it appears. Each lesson's `mechanics` field references entries by id here.",
+  "categories": [
+    { "id": "iteration",  "label": "Iteration"          },
+    { "id": "pointers",   "label": "Pointers & Windows" },
+    { "id": "hash",       "label": "Hash & Set"         },
+    { "id": "structures", "label": "Data Structures"    },
+    { "id": "recursion",  "label": "Recursion"          },
+    { "id": "classes",    "label": "Classes & State"    },
+    { "id": "dp",         "label": "Dynamic Programming"},
+    { "id": "async",      "label": "Async"              },
+    { "id": "modern",     "label": "Modern Syntax"      },
+    { "id": "bit",        "label": "Bit Manipulation"   }
+  ],
+  "mechanics": [
+    {
+      "id": "nested-loop-build",
+      "label": "Nested-loop build",
+      "category": "iteration",
+      "blurb": "Two nested loops that push each combination into an output array. The shape behind Cartesian products, deck construction, matrix initialization, and pair enumeration.",
+      "snippet": "for (const a of A)\n  for (const b of B)\n    out.push(a + b);"
+    },
+    {
+      "id": "array-chain",
+      "label": "Array transform chain",
+      "category": "iteration",
+      "blurb": "Compose map / filter / reduce / sort / slice into a single expression. Reads top-to-bottom as a pipeline; great when intermediate names would just be noise.",
+      "snippet": "arr.filter(x => x > 0)\n   .map(x => x * 2)\n   .reduce((s, x) => s + x, 0);"
+    },
+    {
+      "id": "two-pointer",
+      "label": "Two-pointer convergence",
+      "category": "pointers",
+      "blurb": "Left and right indices walk toward each other based on a comparison. Sorted-array problems collapse from O(n^2) to O(n).",
+      "snippet": "let l = 0, r = nums.length - 1;\nwhile (l < r) {\n  // compare nums[l] / nums[r], move one inward\n}"
+    },
+    {
+      "id": "sliding-window",
+      "label": "Sliding window (expand / shrink)",
+      "category": "pointers",
+      "blurb": "Right pointer expands the window; left pointer shrinks it whenever an invariant breaks. Maintains a running aggregate so each element is touched O(1) amortized.",
+      "snippet": "let l = 0, best = 0;\nfor (let r = 0; r < s.length; r++) {\n  while (/* invariant broken */) { /* shrink: l++ */ }\n  best = Math.max(best, r - l + 1);\n}"
+    },
+    {
+      "id": "fast-slow-pointer",
+      "label": "Fast & slow pointers",
+      "category": "pointers",
+      "blurb": "Two pointers move at different speeds. Floyd's tortoise-and-hare for cycle detection; mid-of-list trick; nth-from-end with a gap.",
+      "snippet": "let slow = head, fast = head;\nwhile (fast && fast.next) {\n  slow = slow.next;\n  fast = fast.next.next;\n  if (slow === fast) return true;\n}"
+    },
+    {
+      "id": "hash-complement",
+      "label": "Hash complement lookup",
+      "category": "hash",
+      "blurb": "Walk the array once; for each element ask 'have I seen its complement?' Check BEFORE inserting so you can't match an element with itself.",
+      "snippet": "const seen = new Map();\nfor (let i = 0; i < nums.length; i++) {\n  const need = target - nums[i];\n  if (seen.has(need)) return [seen.get(need), i];\n  seen.set(nums[i], i);\n}"
+    },
+    {
+      "id": "freq-map",
+      "label": "Frequency map",
+      "category": "hash",
+      "blurb": "Count occurrences of each key in a single pass. The `(get(k) ?? 0) + 1` idiom handles the first-time-seen case without a branch.",
+      "snippet": "const count = new Map();\nfor (const x of items) {\n  count.set(x, (count.get(x) ?? 0) + 1);\n}"
+    },
+    {
+      "id": "set-dedup",
+      "label": "Set for dedup / membership",
+      "category": "hash",
+      "blurb": "`new Set(arr)` removes duplicates in one shot; `Set` membership is O(1). Use over `arr.includes()` whenever the same array is queried repeatedly.",
+      "snippet": "const seen = new Set(arr);\nif (seen.has(x)) { /* O(1) */ }\nconst unique = [...new Set(arr)];"
+    },
+    {
+      "id": "array-as-stack",
+      "label": "Array-as-stack",
+      "category": "structures",
+      "blurb": "Use a plain array as a LIFO stack: push to add, pop to remove, `at(-1)` to peek. The shape behind bracket matching, DFS, undo history, monotonic stacks.",
+      "snippet": "const stack = [];\nstack.push(x);\nconst top = stack.at(-1);\nstack.pop();"
+    },
+    {
+      "id": "array-as-queue",
+      "label": "Array-as-queue",
+      "category": "structures",
+      "blurb": "Push to enqueue, shift to dequeue. `shift` is O(n) on huge arrays — for production code use a head index — but for interview-scale n it's fine.",
+      "snippet": "const queue = [start];\nwhile (queue.length) {\n  const x = queue.shift();\n  // ...enqueue neighbors\n}"
+    },
+    {
+      "id": "bfs-level-snapshot",
+      "label": "BFS with level snapshot",
+      "category": "structures",
+      "blurb": "Snapshot `queue.length` BEFORE the inner loop so children pushed mid-loop are processed in the NEXT outer iteration. Lets you process one level at a time.",
+      "snippet": "while (queue.length) {\n  const size = queue.length;\n  for (let i = 0; i < size; i++) {\n    const node = queue.shift();\n    // enqueue children of node\n  }\n}"
+    },
+    {
+      "id": "dfs-grid-flood",
+      "label": "Grid flood-fill DFS",
+      "category": "structures",
+      "blurb": "Recursive DFS into a grid with bounds + visited guard at the TOP. Mutating the grid in-place doubles as 'visited' and skips an auxiliary set.",
+      "snippet": "function dfs(r, c) {\n  if (r < 0 || r >= rows || c < 0 || c >= cols) return;\n  if (grid[r][c] !== '1') return;\n  grid[r][c] = '0';\n  dfs(r+1, c); dfs(r-1, c); dfs(r, c+1); dfs(r, c-1);\n}"
+    },
+    {
+      "id": "four-dir-neighbors",
+      "label": "4-directional neighbor walk",
+      "category": "structures",
+      "blurb": "The four cardinal deltas as a single array, iterated with destructuring. Bounds-check BEFORE indexing — otherwise edges crash.",
+      "snippet": "const dirs = [[-1,0],[1,0],[0,-1],[0,1]];\nfor (const [dr, dc] of dirs) {\n  const nr = r + dr, nc = c + dc;\n  if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;\n  // visit grid[nr][nc]\n}"
+    },
+    {
+      "id": "heap-sift",
+      "label": "Heap index math + sift",
+      "category": "structures",
+      "blurb": "0-indexed array heap: parent=(i-1)>>1, left=2i+1, right=2i+2. Sift up after push (compare with parent); sift down after pop-root (swap with smaller child).",
+      "snippet": "const parent = i => (i - 1) >> 1;\nconst left   = i => 2 * i + 1;\nconst right  = i => 2 * i + 2;"
+    },
+    {
+      "id": "linked-list-walk",
+      "label": "Linked-list prev / curr walk",
+      "category": "structures",
+      "blurb": "Cache `curr.next` BEFORE rewiring or you lose the rest of the list. The prev/curr/next triple is the shape behind reverse, remove-nth, reorder.",
+      "snippet": "let prev = null, curr = head;\nwhile (curr) {\n  const next = curr.next;\n  curr.next = prev;\n  prev = curr;\n  curr = next;\n}"
+    },
+    {
+      "id": "tree-recursion",
+      "label": "Tree recursion (left + right)",
+      "category": "recursion",
+      "blurb": "Null root → base case; recurse on left + right; combine the two results. The shape behind depth, invert, validate-BST, max-path-sum.",
+      "snippet": "function depth(node) {\n  if (!node) return 0;\n  return 1 + Math.max(depth(node.left), depth(node.right));\n}"
+    },
+    {
+      "id": "backtrack-template",
+      "label": "Backtracking: choose / explore / un-choose",
+      "category": "recursion",
+      "blurb": "Push a choice → recurse with the next decision → pop the choice. The pop is the backtrack — without it, sibling branches inherit state from this one.",
+      "snippet": "function backtrack(start, path) {\n  res.push([...path]);\n  for (let i = start; i < nums.length; i++) {\n    path.push(nums[i]);   // choose\n    backtrack(i + 1, path); // explore\n    path.pop();           // un-choose\n  }\n}"
+    },
+    {
+      "id": "class-with-reset",
+      "label": "Constructor delegates to reset()",
+      "category": "classes",
+      "blurb": "Put initialization in a `reset()` method and have the constructor call it. Now the caller can rebuild state without re-instantiating — useful for decks, boards, game state.",
+      "snippet": "class Deck {\n  constructor() { this.reset(); }\n  reset() {\n    this.cards = [];\n    // build...\n  }\n}"
+    },
+    {
+      "id": "closure-state",
+      "label": "Closure capturing private state",
+      "category": "classes",
+      "blurb": "Return a function that closes over locals. The state is unreachable from outside — pure encapsulation without a class. The shape behind counters, memoize, throttle, debounce.",
+      "snippet": "function makeCounter() {\n  let n = 0;\n  return () => ++n;\n}"
+    },
+    {
+      "id": "dp-rolling-vars",
+      "label": "DP with rolling variables",
+      "category": "dp",
+      "blurb": "When DP only needs the last 1-2 values, drop the array and keep two scalars. Space goes from O(n) to O(1) without touching the recurrence.",
+      "snippet": "let prev2 = 0, prev1 = 0;\nfor (const n of nums) {\n  const curr = Math.max(prev1, prev2 + n);\n  prev2 = prev1;\n  prev1 = curr;\n}"
+    },
+    {
+      "id": "dp-tabulation",
+      "label": "DP bottom-up tabulation",
+      "category": "dp",
+      "blurb": "Allocate a dp array sized by the input; fill bottom-up so each entry's dependencies are already computed. Iterative, no recursion stack risk.",
+      "snippet": "const dp = new Array(n + 1).fill(0);\ndp[0] = base;\nfor (let i = 1; i <= n; i++) {\n  dp[i] = /* recurrence using dp[i-1], dp[i-2], ... */;\n}"
+    },
+    {
+      "id": "dp-memoization",
+      "label": "DP top-down memoization",
+      "category": "dp",
+      "blurb": "Plain recursion + a `Map` cache keyed by the subproblem. Check cache first, recurse if missing, store before returning. Great when the state space is sparse.",
+      "snippet": "const memo = new Map();\nfunction solve(state) {\n  if (memo.has(state)) return memo.get(state);\n  const ans = /* recurse on subproblems */;\n  memo.set(state, ans);\n  return ans;\n}"
+    },
+    {
+      "id": "async-iife",
+      "label": "Async IIFE",
+      "category": "async",
+      "blurb": "Wrap top-level await in `(async () => { ... })()` so you can use await outside an async function. The runner awaits the returned promise.",
+      "snippet": "(async () => {\n  const data = await fetchSomething();\n  console.log(data);\n})();"
+    },
+    {
+      "id": "promise-chain",
+      "label": "Promise chain / await",
+      "category": "async",
+      "blurb": "Two equivalent shapes: `.then(...).then(...)` chains promises in order; `await` lets the same flow read like synchronous code.",
+      "snippet": "Promise.resolve(1)\n  .then(x => x + 1)\n  .then(x => console.log(x));"
+    },
+    {
+      "id": "destructure-args",
+      "label": "Destructured arguments",
+      "category": "modern",
+      "blurb": "Destructure the parameter at the function boundary so callers pass an options object and the body uses bare names. Defaults can sit right in the pattern.",
+      "snippet": "function fetchUser({ id, includeOrders = false } = {}) {\n  // use id, includeOrders\n}"
+    },
+    {
+      "id": "spread-merge",
+      "label": "Spread for merge / copy",
+      "category": "modern",
+      "blurb": "`{ ...a, ...b }` shallow-merges objects (later wins); `[...a, ...b]` concatenates arrays. Used for immutable state updates, function arg forwarding, and shallow cloning.",
+      "snippet": "const merged = { ...defaults, ...overrides };\nconst combined = [...first, ...second];"
+    },
+    {
+      "id": "xor-accumulator",
+      "label": "XOR accumulator",
+      "category": "bit",
+      "blurb": "XOR is its own inverse and commutes, so XORing every element cancels duplicates and leaves the unique one. Identity is 0.",
+      "snippet": "let result = 0;\nfor (const n of nums) result ^= n;\nreturn result;"
+    },
+    {
+      "id": "bit-clear-lowest",
+      "label": "Clear lowest set bit (n & (n-1))",
+      "category": "bit",
+      "blurb": "`n & (n - 1)` removes the lowest 1-bit of n. Loop until n is 0 to count set bits in O(popcount) instead of O(32).",
+      "snippet": "let count = 0;\nwhile (n) { n &= (n - 1); count++; }\nreturn count;"
+    },
+    {
+      "id": "binary-search-interval",
+      "label": "Binary search on a half-open interval",
+      "category": "pointers",
+      "blurb": "Closed interval [l, r] with `while (l <= r)`, midpoint `m = (l + r) >> 1`, then narrow to `m+1` or `m-1`. The same skeleton drives sorted-array search AND predicate search on an answer space (Koko, ship-capacity, etc.).",
+      "snippet": "let l = 0, r = nums.length - 1;\nwhile (l <= r) {\n  const m = (l + r) >> 1;\n  if (nums[m] === target) return m;\n  if (nums[m] < target) l = m + 1;\n  else r = m - 1;\n}"
+    },
+    {
+      "id": "dummy-head-sentinel",
+      "label": "Dummy-head sentinel (linked list)",
+      "category": "structures",
+      "blurb": "Create a fake node before the real list, build off `dummy.next`, return `dummy.next` at the end. Removes the special case for an empty result OR for inserting before the original head — the rest of the code stops branching on `head === null`.",
+      "snippet": "const dummy = { next: null };\nlet tail = dummy;\nwhile (curr) {\n  tail.next = curr;\n  tail = tail.next;\n  curr = curr.next;\n}\nreturn dummy.next;"
+    },
+    {
+      "id": "greedy-single-pass",
+      "label": "Greedy single-pass scan",
+      "category": "iteration",
+      "blurb": "Walk the array once, maintaining one or two running aggregates (best, current, total) and updating them with a local decision per element. Reset state when a prefix is provably non-useful (Kadane's, gas-station tank).",
+      "snippet": "let best = -Infinity, curr = 0;\nfor (const n of nums) {\n  curr = Math.max(n, curr + n);   // local decision\n  best = Math.max(best, curr);\n}\nreturn best;"
+    },
+    {
+      "id": "dfs-graph-adjacency",
+      "label": "Graph DFS over adjacency list",
+      "category": "structures",
+      "blurb": "Recursive (or stack-based) DFS over a `node → neighbors[]` adjacency map, with a `visited` set to break cycles. Distinct from grid DFS — neighbors come from a map, not from coordinate deltas.",
+      "snippet": "const visited = new Set();\nfunction dfs(node) {\n  if (visited.has(node)) return;\n  visited.add(node);\n  for (const nb of graph[node]) dfs(nb);\n}"
+    },
+    {
+      "id": "sort-then-sweep",
+      "label": "Sort then sweep",
+      "category": "iteration",
+      "blurb": "Sort the input by a key, then walk it once with a small piece of running state (last merged interval, open-event count). The sort surfaces the relevant ordering so the scan can decide locally.",
+      "snippet": "intervals.sort((a, b) => a[0] - b[0]);\nconst out = [intervals[0]];\nfor (let i = 1; i < intervals.length; i++) {\n  const last = out[out.length - 1];\n  if (intervals[i][0] <= last[1]) last[1] = Math.max(last[1], intervals[i][1]);\n  else out.push(intervals[i]);\n}"
+    },
+    {
+      "id": "union-find",
+      "label": "Union-Find (Disjoint Set)",
+      "category": "structures",
+      "blurb": "`parent[i]` points each node at its representative; `find` walks up with path compression; `union` links two roots. O(α(n)) per op — effectively constant. Counts components, detects cycles in undirected graphs.",
+      "snippet": "const parent = Array.from({ length: n }, (_, i) => i);\nfunction find(x) {\n  while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }\n  return x;\n}\nfunction union(a, b) { parent[find(a)] = find(b); }"
+    },
+    {
+      "id": "ring-buffer-mod",
+      "label": "Ring buffer with modular index",
+      "category": "structures",
+      "blurb": "Fixed-size array with a moving head/tail index that wraps via `% capacity`. Writes overwrite the oldest entry without reallocation. Used in circular buffers, rate limiters, and last-N caches.",
+      "snippet": "this.buf = new Array(cap);\nthis.head = 0;\npush(x) {\n  this.buf[this.head] = x;\n  this.head = (this.head + 1) % this.cap;\n}"
+    },
+    {
+      "id": "map-keyed-state",
+      "label": "Map-keyed state container",
+      "category": "hash",
+      "blurb": "Use a Map (or plain object) keyed by event/category/id to hold per-key state — usually an array of listeners, a line-item record, or a counter. The `(get(k) ?? init)` set-on-first-touch idiom keeps the call sites branch-free.",
+      "snippet": "const handlers = new Map();\nfunction on(event, fn) {\n  if (!handlers.has(event)) handlers.set(event, []);\n  handlers.get(event).push(fn);\n}"
+    },
+    {
+      "id": "matrix-transpose-swap",
+      "label": "In-place matrix transpose / swap",
+      "category": "iteration",
+      "blurb": "Swap `matrix[i][j]` with `matrix[j][i]` for `j > i` to transpose in place — then reverse each row to rotate 90° clockwise. Two simple passes replace allocating a new grid.",
+      "snippet": "for (let i = 0; i < n; i++) {\n  for (let j = i + 1; j < n; j++) {\n    [matrix[i][j], matrix[j][i]] = [matrix[j][i], matrix[i][j]];\n  }\n}\nfor (const row of matrix) row.reverse();"
+    },
+    {
+      "id": "boundary-shrink-traversal",
+      "label": "Boundary-shrinking traversal (4 walls)",
+      "category": "iteration",
+      "blurb": "Maintain top/bottom/left/right bounds; each pass walks one wall and contracts that bound inward. The shape behind spiral matrix and any 'peel the onion' grid walk.",
+      "snippet": "let top = 0, bottom = m - 1, left = 0, right = n - 1;\nwhile (top <= bottom && left <= right) {\n  for (let j = left; j <= right; j++) out.push(matrix[top][j]);\n  top++;\n  // ...right wall, bottom wall, left wall, then shrink\n}"
+    }
+  ]
+}

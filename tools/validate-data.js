@@ -41,6 +41,19 @@ function outputsMatch(actual, expected) {
   return actual.trim() === expected.trim();
 }
 
+// ── Mechanics registry ────────────────────────────────────────────────────
+// Optional: data/mechanics.json defines cross-cutting code idioms tagged on
+// lessons. If present, every `mechanics: [...]` reference on a lesson must
+// point to a real id here, or the run fails. Orphan mechanics (defined but
+// never used) and untagged full lessons surface as a non-fatal warning so
+// the registry can grow without blocking work.
+const MECHANICS_PATH = path.join(DATA, 'mechanics.json');
+let MECHANIC_IDS = null;
+if (fs.existsSync(MECHANICS_PATH)) {
+  const reg = JSON.parse(fs.readFileSync(MECHANICS_PATH, 'utf8'));
+  MECHANIC_IDS = new Set((reg.mechanics || []).map(m => m.id));
+}
+
 // ── Manifest vs disk diff ─────────────────────────────────────────────────
 const manifest = JSON.parse(fs.readFileSync(path.join(DATA, 'manifest.json'), 'utf8'));
 const manifestEntries = new Map(); // id -> {section slug, file path}
@@ -100,6 +113,8 @@ const STRICT_DENSITY = process.argv.includes('--strict-density');
   const failures = [];
   const underL1 = [];
   const underL2 = [];
+  const untaggedMechanics = [];
+  const usedMechanicIds = new Set();
   for (const [id, info] of manifestEntries) {
     const lesson = JSON.parse(fs.readFileSync(info.file, 'utf8'));
     if (lesson.status !== 'full') continue;
@@ -109,6 +124,25 @@ const STRICT_DENSITY = process.argv.includes('--strict-density');
     const l2n = lesson.L2?.exercises?.length || 0;
     if (l1n < L1_MIN) underL1.push({ id, section: info.slug, n: l1n });
     if (l2n < L2_MIN) underL2.push({ id, section: info.slug, n: l2n });
+
+    // Mechanics field — when registry is present, every referenced id must
+    // exist; missing field is a non-fatal warning so tagging can roll out
+    // incrementally.
+    if (MECHANIC_IDS) {
+      const mechs = Array.isArray(lesson.mechanics) ? lesson.mechanics : null;
+      if (!mechs || mechs.length === 0) {
+        untaggedMechanics.push({ id, section: info.slug });
+      } else {
+        for (const m of mechs) {
+          if (!MECHANIC_IDS.has(m)) {
+            fail++;
+            failures.push(`${id} unknown mechanic id "${m}" — not in data/mechanics.json`);
+          } else {
+            usedMechanicIds.add(m);
+          }
+        }
+      }
+    }
 
     // L2 — splice each blank.answer into template, run, compare
     if (lesson.L2 && lesson.L2.exercises) {
@@ -171,6 +205,30 @@ const STRICT_DENSITY = process.argv.includes('--strict-density');
     if (STRICT_DENSITY) {
       console.error('\nStrict density enforcement is on — exiting non-zero.');
       process.exit(1);
+    }
+  }
+
+  // Mechanics coverage report (non-fatal). Surfaces:
+  //   - lessons missing a `mechanics` field
+  //   - mechanic ids defined but never referenced
+  if (MECHANIC_IDS) {
+    const orphans = [...MECHANIC_IDS].filter(id => !usedMechanicIds.has(id));
+    if (untaggedMechanics.length || orphans.length) {
+      console.log('');
+      console.log('⚠ Mechanics coverage:');
+      if (untaggedMechanics.length) {
+        console.log(`  Lessons missing \`mechanics\` field: ${untaggedMechanics.length}`);
+        for (const o of untaggedMechanics.slice(0, 5)) console.log(`    - ${o.section}/${o.id}`);
+        if (untaggedMechanics.length > 5) console.log(`    …and ${untaggedMechanics.length - 5} more`);
+      }
+      if (orphans.length) {
+        console.log(`  Mechanics defined but unused: ${orphans.length}`);
+        for (const o of orphans.slice(0, 10)) console.log(`    - ${o}`);
+        if (orphans.length > 10) console.log(`    …and ${orphans.length - 10} more`);
+      }
+    } else {
+      const tagged = MECHANIC_IDS.size;
+      console.log(`\n🧩 Mechanics: ${tagged} ids defined, all referenced by ≥1 lesson; all full lessons tagged.`);
     }
   }
 })();

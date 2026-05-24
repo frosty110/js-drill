@@ -75,3 +75,82 @@ meetings, on the couch. This shapes everything:
 - Gamification that obscures actual progress against interview readiness.
 - New feature surface that competes with the core Reference → L1 → L2 → L3 loop.
 - Mobile experience that doesn't support a "drill in line at coffee shop" use case.
+
+<!--
+PROPOSED AMENDMENTS (drafted iter 26 vision mode; awaiting a frame iter to ratify or reject).
+Format: each amendment is paired with the roadmap entry that would require it.
+These are drafts only — the loop must not act on them as if they are PROFILE.md.
+
+== Amendment A — "Pattern selection is a distinct skill from pattern implementation" ==
+Paired with roadmap entry: Pattern Recognition Speed Drill (iter 26 #1)
+Current PROFILE.md text (§ State they're in):
+  "Pattern recall degraded. They know 'sliding window exists' but can't produce
+  a canonical implementation from a blank editor in 5 minutes anymore."
+Proposed amendment splits this into two sub-bullets:
+  - Pattern *recognition* degraded — given a problem prompt, can't quickly name
+    which pattern fits ("which family is this? two-pointers? sliding window?
+    hash + complement?"). This is the *diagnosis* step of an interview, which
+    the current L1→L2→L3 ladder never drills (every drill begins with the
+    pattern already named in the lesson title).
+  - Pattern *implementation* degraded — even with the pattern correctly named,
+    can't produce a canonical implementation from a blank editor in 5 minutes.
+    This is what the existing L3 tier already drills.
+Why this matters: separating these makes "Recognize" a first-class need rather
+than a refinement of L3, and unblocks new surfaces that target recognition
+specifically (timed pattern-name picks, mixed-topic interleaving).
+
+== Amendment B — "Metacognitive ownership of one's own gaps is a distinct need" ==
+Paired with roadmap entry: Error Post-Mortem with Miss Classification (iter 26 #2)
+Current PROFILE.md text (§ What they need from this app) lists 5 needs:
+  syntax re-memorization, pattern fluency, interview-format conditioning,
+  spaced reinforcement, memorization tooling.
+Proposed amendment adds a 6th:
+  6. Metacognitive ownership of gaps. The rusty engineer benefits from
+     *naming* their own recurring mistake types (off-by-one, method-name
+     confusion, semantics traps, etc.) — not just re-drilling lessons in
+     which they happened to miss. Surfaces that let the user classify and
+     own their own misconceptions, then resurface lessons via those
+     concept-level tags rather than just lesson-level weak flags, are a
+     distinct class of need from "spaced reinforcement" (which the weak-spot
+     tracker partially serves at the lesson grain).
+Why this matters: today's weak-spot tracker operates at the lesson unit. A
+concept-level user-mistakes model is a genuinely new mode of self-knowledge
+the rusty engineer can't currently build inside the app.
+
+== Amendment C — "~80% phone may include non-visual phone time" ==
+Paired with roadmap entry: Commute Audio Mode (iter 26 #3)
+Current PROFILE.md text (§ Usage context) implies *visual-attention* phone
+time exclusively — every modality bullet (L1 tap, L2 type, L3 type) requires
+looking at a screen and hitting a target.
+Proposed amendment adds a fourth modality:
+  - **Audio (eyes-free, hands-free)** is the unaddressed slice of "~80%
+    phone" — walking, transit, gym, dishes, driving. The phone is with the
+    user but the screen isn't viable. Listen-and-acknowledge cycles (TTS +
+    big single-tap or Bluetooth-click input) are the highest-throughput
+    modality for this slice. L1 question/answer pairs are the natural unit
+    (short enough to hold in working memory between hearing and acknowledging).
+    L2/L3 are NOT viable in audio modality without voice recognition (deferred).
+  - Implication for features: audio-out is the MVP; voice-in is a separate
+    later effort with much higher engineering cost (Web Speech accuracy, grammar
+    tuning, error handling). Don't bundle.
+Why this matters: today the loop optimizes the visual-attention surface as if
+it covers all 80%-phone time, which structurally excludes a large block of
+the user's actual cognitive availability.
+
+== Adversarial counterpoint (own these too) ==
+A frame-iter ratifying the above should also weigh:
+  - Are recognition and implementation actually separate skills, or does
+    recognition get carried for free as implementation lessons accumulate?
+    Evidence to gather: do users with high L3-pass rates on a section have
+    proportionally high recognition speed, or is there a measurable lag?
+    (Recognize-mode itself provides this evidence post-ship.)
+  - Is "naming your gaps" actually different from "having spaced rep
+    resurface lessons you missed"? Evidence to gather: do users who use
+    miss-classification ≥10 times outperform users who don't on repeat-miss
+    rate, controlling for total drill time?
+  - Does ~80% phone time actually include large blocks of eyes-free time,
+    or is the 80% mostly visual transit time (subway looking at screen)?
+    Evidence to gather: pre-ship the Page Visibility instrumentation alone
+    to measure screen-off intervals during sessions before building audio UI.
+-->
+

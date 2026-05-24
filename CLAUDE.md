@@ -332,6 +332,17 @@ affects what the user sees, reads, or interacts with on the live URL.
 - `[product/ux]` — refinement to an existing feature: copy changes, CTA reordering, sidebar sort, banner refresh, layout tweaks. Use when "an existing feature got better but the feature set didn't grow."
 - `[product/fix]` — bug fix the user would notice (crash, broken interaction, wrong content shown, mobile overflow). Use when "something the user could have hit is now fixed."
 
+**Multi-iter feature subtypes** (added iter 24 to support `roadmap.md`-driven
+big features that don't fit one atomic iter — see `.claude/skills/drill-improve/SKILL.md`
+Step 3): a single roadmap entry may span up to 3 iters using these in sequence:
+- `[product/feature-scaffold]` — skeleton + flag-gate; user-facing surface hidden behind a feature flag.
+- `[product/feature-wire]` — state, handlers, persistence; still flag-gated.
+- `[product/feature-ship]` — UI complete, flag removed, mobile probe green; the feature lands for users.
+
+Each iter in the sequence must independently pass the validator and `## Product
+impact` describes the *intended* user-facing change (consistent across the 3
+commits) plus what specifically landed in *this* iter.
+
 **Engineering — internal, no direct user impact.** Tag this when the change is
 invisible to the drilling user.
 - `[engineering/tooling]` — validator, CDP probes/helpers, `tools/` scripts, `.gitignore`, build helpers. Use when "the way we build, verify, or deploy changed."

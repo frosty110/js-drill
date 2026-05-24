@@ -7,13 +7,14 @@
 > the parking lots after each pass.
 
 ## Next iteration
-- **Suggested mode:** ship (with options — see veto)
-- **Signal pointing there:** iter 23 produced two artifacts. (a) `iter-artifacts/iter-23-l1-l2-audit.md` flagged 5 bottom-quartile lessons (mean < 1.80) ready for L1/L2 rewrites — Tier 1 of that artifact is the natural ship target. (b) `iter-artifacts/iter-23-loop-meta-review.md` recommends a structural change to the loop itself (vision mode + adversarial subagent) — that's a frame-mode candidate but quota-locked until iter 29 unless explicitly overridden. Tier 1 lessons: `async/s-promises` (1.38, multi-blank chain rewrite), `basics/s-strings` (1.75), `basics/s-template` (1.75), `hash-structures/s-obj-basics` (1.75, blank syntax tokens not identifiers), `async/s-trycatch` (1.75). Rolling-6 quota: iters 18=audit, 19=frame, 20-22=ship, 23=audit → 3 ships in last 6 (at floor). iter 24 ship stays within quota.
-- **Veto condition:** skip Tier 1 rewrites if (a) user authorizes a frame-iter override to act on the loop meta-review immediately (act on BS-14 directly — restructure SKILL.md per Part 4 recommendation), (b) user wants to act on BS-13 (retro-add ASCII diagrams to existing structural lessons) instead, (c) user surfaces another in-flight friction, or (d) user redirects to Cluster 1 Tier 2 (the long-queued 7 boilerplate-as-syntax lessons).
+- **Suggested mode:** vision OR ship (see options)
+- **Signal pointing there:** Iter 24 just restructured the loop architecture (added vision mode, mandatory adversarial subagent in ship, removed ship-quota floor — see iter-23 meta-review). The new SKILL.md says vision floor = ≥1 vision iter per rolling 6. Last vision iter never happened (vision mode is iter 24's invention), so iter 25 is a natural first vision iter to populate `iter-artifacts/roadmap.md` with the first 3 big-feature candidates. Alternative: iter 25 ship to consume the still-queued iter-23 L1/L2 Tier 1 rewrites (5 bottom-quartile lessons) — adversarial subagent now mandatory will test the new mechanism in practice.
+- **Veto condition:** skip vision if (a) user wants to validate the new adversarial-subagent mechanism on a real ship iter first, (b) user wants to ship the long-queued L1/L2 Tier 1 rewrites or Cluster 1 Tier 2 before letting vision generate new candidates, or (c) user surfaces another in-flight friction.
 
 ## Current focus
-- **Status: ACTIVE** — pedagogical quality lens (post-iter-23 audit). Five bottom-quartile lessons identified, fixes queued for iter 24+. Concurrent open question: the loop architecture itself was critiqued by iter 23's meta-review (BS-14) — user must decide whether to override the frame-quota lock to act on it immediately, or defer until iter 29.
-- **Primary lens (active until iter 28 or BS-08 fully closes):** Two parallel threads: (1) **L1/L2 quality** — execute the iter-23 audit's Tier 1 rewrites (iter 24), Tier 2 (iter 25), Tier 3 (iter 26). (2) **Loop architecture** — decision pending; recommendation in `iter-artifacts/iter-23-loop-meta-review.md` Part 4.
+- **Status: ACTIVE** — loop architecture restructured iter 24 per BS-14 / iter-23 meta-review. New architecture (vision mode + adversarial subagent + vision floor) needs validation in the next 5-6 iters. Pedagogical quality lens (BS-08) still has queued work in iter-23 L1/L2 audit.
+- **Primary lens (active until iter 30 or BS-14 fully closes):** Validate the new loop architecture. (1) First vision iter populates `iter-artifacts/roadmap.md` with big-feature candidates the loop would never have surfaced under the old architecture. (2) First ship iter under the new architecture must exercise the mandatory adversarial subagent — does it pivot, or rebut and ship the originally-queued target? Pivot rate ≥30% over the first 6 ship iters is the success criterion for the restructure.
+- **Parallel thread (BS-08):** Tier 1 L1/L2 rewrites (5 bottom-quartile lessons from `iter-artifacts/iter-23-l1-l2-audit.md`) still queued. Likely consumed by iter 25 or 26.
 - **Follow-up noted iter 20 (still open):** the 6 iter-20 Algorithms lessons + iter-22 `s-index-math` are in the manifest + sidebar but NOT in `STARTER_PATH`. Decide whether/where to insert. Not blocking.
 
 ## Mode ledger
@@ -28,6 +29,7 @@
 | 21 | ship | [product/fix] tab-switch state cache (BS-12 close): user-redirect from queued Tier 2 to fix in-flight friction — switching to Reference mid-attempt was wiping L1 picks / L2 fills / L3 typing. Added `inProgressCache` keyed on lessonId, cleared in selectLesson. L1 replays locked-state visuals; L2 desktop+mobile restore input values via input listeners + shared array refs; L3 syncs cm.on('change'). New durable probe `tab-switch-preserves-state.js` (10/10). Regressions clean on sr-l2-holds-bucket, sr-reveal-demotes-bucket, mock-interview-loads, cta-injects-on-l3-pass |
 | 22 | ship | [product/content] [engineering/docs] `s-index-math` lesson + dual-coding strategy doc: user-redirect — "I find r-l+1 indexing challenging" was unmet by any single existing lesson. New Syntax/Algorithms lesson covers 6 idioms (inclusive interval length, midpoint, fixed-length slice, sliding window, circular indexing, nth-from-end) with full ASCII diagrams embedded in Reference per user's visual-learner request. First lesson to systematically use dual coding — new `docs/learning-strategies/dual-coding.md` documents the principle and points to BS-13 for retro-adding diagrams to other high-traffic lessons. Validator 355→359 (+4 exercises, 0 fail). algorithms-section-expansion probe extended (now 33/33) |
 | 23 | audit | [engineering/meta] User-requested L1/L2 quality audit + loop meta-review. Spawned 3 parallel fresh-eyes subagents (none read SELF-IMPROVE.md): A scored 27 syntax lessons (Basics+Arrays+Hash+Modern+Iterators), B scored 24 (JS Toolbox+Algorithms+Classes+Async+Advanced JS), C critiqued the loop architecture itself. Findings: 51 lessons mean 2.49/3.00; 5 bottom-quartile flagged for rewrite (`s-promises` 1.38, four lessons tied at 1.75); 6 more on watchlist. Loop meta-review (Agent C) found loop has produced ZERO new feature surfaces across all iterations — every "big feature" predates iter 1 or was human-shipped in parallel. Architecturally biased toward additive UX. Two artifacts: `iter-23-l1-l2-audit.md`, `iter-23-loop-meta-review.md`. Opens BS-14 (loop additive-bias). Closes BS-08 (audit done; fixes queued for iter 24+). |
+| 24 | frame | [engineering/meta] User-authorized quota override to act on iter-23 loop meta-review immediately rather than defer to iter 29. SKILL.md restructured per Part 4 recommendation: (1) added 6th mode `vision` for periodic big-feature roadmap generation; (2) added mandatory adversarial subagent step to ship mode (every ship target must be confronted with an adversary proposing alternatives, then commit body must pivot or rebut in ≥3 sentences); (3) replaced ship-quota floor (`≥3 ships per 6`) with vision floor (`≥1 vision per 6`) + evidence floor (`≥1 evidence-producing per 6`); (4) removed `3+ consecutive ships → forced non-ship` and `multiple of 10 → forced frame` rules (now redundant); (5) reframed coverage prompt from "what's missing from curriculum?" to "what user need has no current surface?"; (6) added multi-iter feature pattern with `[product/feature-scaffold]` → `[product/feature-wire]` → `[product/feature-ship]` subtypes for roadmap entries too big for one iter. New `iter-artifacts/roadmap.md` stub created. CLAUDE.md commit convention updated with the new subtypes. BS-14 marked partially closed; success criterion = adversary pivot rate ≥30% over first 6 ship iters. |
 
 ## Blind spots ledger
 *(things the loop has historically not questioned; promote to Current focus or Parking lot when actioned)*
@@ -45,7 +47,7 @@
 - **[BS-11] "I passed but nothing saved" UX gap** — user-reported 2026-05-23 after iter 20. Investigation via CDP probes confirmed localStorage save/load works correctly on both localhost and the live Pages URL. Actual cause: pass conditions are strict — L1 requires ALL questions correct in one session (any wrong click locks that question; user must hit Retry), L2 requires every exercise's every blank correct, L3 requires exact output match. Navigation state (lastLessonId, lastTab, sidebarTrack, welcomed) saves on nav so the user sees "something" persisted, but `progress` stays empty until a full pass fires `markPassed()`. The single feedback message "Some answers were off — hit Retry to start over" is the only signal, and it's easy to miss when individual questions show "✓ Correct" mid-session. *Candidate product/ux fixes: (a) persistent per-session score chip ("2/3 correct — Retry for full pass"); (b) post-attempt summary surface; (c) loosen strict-pass to ≥N% with a note that the SR bucket still requires full mastery; (d) different copy on the "✓ Correct" per-question feedback to make clear it's per-question, not the lesson pass. Queue for iter 22+ as a [product/ux] candidate — discuss with user before implementing since (c) touches the SR mechanism's core assumption.*
 - **[BS-12] Tab-switch wipes in-flight work** — user-reported 2026-05-23 mid-iter-21 investigation. Switching from L1/L2/L3 to Reference and back rebuilt the renderX DOM from scratch, losing any clicked L1 answers, typed L2 blanks, or L3 editor code. Root cause: each `renderX` initialized local state fresh (`localState = qs.map(...)`, `exerciseState = exercises.map(...)`, fresh CodeMirror instance) with no persistence layer between renders. *Closed iter 21 by adding `inProgressCache` keyed on `lesson.id`, cleared in `selectLesson` when lesson changes, restored on every renderX. Probe `tab-switch-preserves-state.js` 10/10 verifies all three tiers + cross-lesson cache clear.*
 - **[BS-13] Visual encoding under-exploited across existing lessons** — user-surfaced 2026-05-23 during iter 22 (visual-learner request). Most existing lessons rely on code-only references, but structural concepts (indexing, traversal, window-sliding, neighbor offsets, parent/child math, recursion order) memorize faster with ASCII diagrams alongside the formula. `s-index-math` (iter 22) is the proof-of-concept; new `docs/learning-strategies/dual-coding.md` formalizes the principle. *Candidate retro-add targets in priority order: binary-search, p-bfs (tree level-order trick), p-min-window (sliding window animation), p-islands (matrix DFS), p-merge-two-sorted (dummy-head shape), p-reverse-list (pointer hop), p-min-heap (sift-up/sift-down trace), s-iter-protocol (yield flow). Each is a 5-15 line diagram added to the lesson's `reference.code` string — atomically commitable. Queue as a [product/content] audit-and-add ship for iter 23+ once Cluster 1 Tier 2 lands, OR consume in parallel as a separate ship if user flags more friction.*
-- **[BS-14] Loop is structurally biased toward additive UX work — has shipped ZERO new feature surfaces** — surfaced iter 23 by fresh-eyes meta-review subagent (see `iter-artifacts/iter-23-loop-meta-review.md`). Across all loop iterations (1-22), the per-iteration classification is: 0 new feature surfaces, 2 content additions, ~10 UX refinements, 2 bug fixes, 2 tooling, 3+ meta. Every "big feature" the project is known for either predates iter 1 (mock interview, SR, starter path, 3-track binder) or was authored by the human in parallel (mechanics modal, canonical-style guide, commit convention, ASCII line-above comments). **Root cause:** the SKILL.md's ship-quota floor (`≥3 ships per 6`), "atomically commitable" requirement, next-mode handoff that's gradient-descent within the current focus, and fresh-eyes prompt scaffold asking *"what's missing from the curriculum?"* (gets "more lessons") rather than *"what user need has no current surface?"* (would get "new features"). The loop is a recipe for avoiding small drift but enforces big stagnation. *Agent C's recommendation: hybrid of (A) Vision-first mode every 5 iters + (B) Mandatory adversarial subagent each ship iter + (C) Remove the ship-quota floor. Currently quota-locked from a frame iter until iter 29 unless user authorizes override. Listed as an iter-24 veto option in § Next iteration.*
+- **[BS-14] Loop is structurally biased toward additive UX work — has shipped ZERO new feature surfaces** — surfaced iter 23 by fresh-eyes meta-review subagent (see `iter-artifacts/iter-23-loop-meta-review.md`). Across all loop iterations (1-22), the per-iteration classification is: 0 new feature surfaces, 2 content additions, ~10 UX refinements, 2 bug fixes, 2 tooling, 3+ meta. **Partial close iter 24:** SKILL.md restructured per the meta-review's Part 4 recommendation. Added `vision` mode (≥1 per rolling 6 — replaces the old "multiple of 10 → frame" rule as the periodic-reframe trigger). Added mandatory adversarial subagent in every ship iter (must pivot or rebut in ≥3 sentences). Removed the ship-quota floor + the "3 consecutive ships → forced non-ship" rule. Reframed coverage prompt from "what's missing from curriculum?" to "what user need has no current surface?" Added multi-iter feature pattern (`[product/feature-scaffold]`/`feature-wire`/`feature-ship`) so roadmap entries too big for one iter can land. **Success criterion (validates the close):** adversary pivot rate ≥30% over the first 6 ship iters under the new architecture (iters 25-30ish). If pivot rate stays below 30%, the adversarial step has become a rubber-stamp and the loop is still stuck — escalate to a fresh frame iter.
 - **[BS-14] Lesson `description` is technique-flavored, not problem-flavored** — user-surfaced 2026-05-23 while evaluating the Conversation tab prototype (`p-longest-sub`). Current `description` for Patterns/Applied lessons reads like solution metadata ("Sliding window with a Set: expand the right edge…") which belongs on Reference. The Conversation tab simulates an interview but never shows the user the actual problem statement first, so "Restate & clarify" asks the user to restate something they were never shown. *Fix: add a new `problem` field (interview-style statement with example + constraints) and render it under the lesson title, visible on every tab. `description` stays as sidebar/search metadata — no churn across the other 142 lessons. L3 prompts can shrink to just the action ("Implement it. Log …") since the problem lives elsewhere. Schema-only addition. Queue as the next [product/content] + [engineering/refactor] ship for the Conversation-tab arc; templatize across the 99 Patterns/Applied lessons after the first 2-3 prove the format.*
 
 ## Last-touched index
@@ -59,6 +61,8 @@
 | Learning-strategies docs (dual-coding) | 22 |
 | L1/L2 pedagogical quality audit (BS-08 close) | 23 |
 | Loop meta-review (BS-14 open) | 23 |
+| SKILL.md restructure (BS-14 partial close) | 24 |
+| Roadmap mechanism (`iter-artifacts/roadmap.md`) | 24 |
 | L3 surface / CTA injection | 17 |
 | Cheatsheet | 15 |
 | Applied-track surfaces (pills, stats panel) | 14 |
@@ -120,6 +124,44 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 24 — Frame mode: restructure loop per iter-23 meta-review (BS-14 partial close)
+User-authorized override of the `≤1 frame per 10` quota (last frame
+was iter 19, only 5 iters ago — too soon) to act on iter-23's
+meta-review immediately rather than defer to iter 29. The
+meta-review's finding was unambiguous: the loop has produced ZERO
+new feature surfaces across 22 iterations because the SKILL.md
+itself enforces additive bias. Deferring 5 more iters would have
+validated the very concern raised. **Challenge-the-focus answers:**
+(1) loop's own architecture hadn't been touched since iter 19 frame
+(5 iters); PROFILE.md hasn't been amended ever (literal scripture);
+no `vision` or `roadmap` concept ever existed. (2) PROFILE.md assumes
+the user wants more lessons / better lessons within the L1→L2→L3
+ladder — but the user has been shipping feature-grade work in
+parallel (mechanics modal), demonstrating by action that they value
+new surfaces, not just more cells. (3) New contributor would ask
+"why does this loop's SKILL.md make it impossible to ship a
+mechanics-modal-class feature?" (4) Yes highest-leverage —
+restructuring the loop is meta-leverage compounding over all
+future iters. **Changes shipped:** SKILL.md fully rewritten with 6
+modes (added `vision`); mandatory adversarial subagent in ship mode
+(must pivot or rebut in ≥3 sentences); replaced ship-quota floor
+(`≥3 ships per 6`) with vision floor (`≥1 vision per 6`) + evidence
+floor (`≥1 evidence per 6`); removed "3 consecutive ships → forced
+non-ship" and "multiple of 10 → forced frame" rules (now redundant);
+reframed coverage prompt from "what's missing from curriculum?" to
+"what user need has no current surface?"; added multi-iter feature
+pattern with `[product/feature-scaffold]` → `[product/feature-wire]`
+→ `[product/feature-ship]` subtypes for roadmap entries too big for
+one atomic iter. New `iter-artifacts/roadmap.md` stub created.
+CLAUDE.md commit convention updated with the new subtypes. BS-14
+marked partial close with success criterion = adversary pivot rate
+≥30% over first 6 ship iters. Validator unchanged (no code touched).
+**Learning:** the meta-loop CAN restructure itself, but only when
+external (user) authorization overrides the safety quotas. The
+quotas were good for preventing drift, bad for enabling intentional
+pivots. The new architecture relies more on adversarial signal and
+less on rigid floors.
 
 ### 2026-05-23 — iter 23 — Audit mode: L1/L2 quality + loop meta-review
 User-requested dual audit. Forced non-ship per "no 3 consecutive
@@ -350,33 +392,12 @@ total). **Learning:** two focused audits in a row closed the third-
 track theme cleanly. The loop should now widen its lens — there's no
 more obvious drift to chase here.
 
-### 2026-05-23 — iter 14 — Audit found Applied-track UI drift; fixed
-The meta-audit scoped for iter 14 immediately surfaced three places
-where `lesson.track === 'syntax' ? X : 'patterns-default'` excluded
-the applied track: (1) the lesson header pill labeled applied lessons
-as "Pattern"; (2) the Today's plan modal label did the same; (3) the
-stats modal had `masteredPatterns/totalPatterns` and
-`masteredSyntax/totalSyntax` but NO applied row — 20 applied lessons of
-progress effectively invisible in the user's progress dashboard. Added
-a `TRACK_PILLS` module-scope lookup (`{ syntax, patterns, applied } →
-{ cls, label }`) as the single source of truth for track display
-metadata; both surfaces now read from it. Added `.pill-applied`
-amber CSS class so the third track has its own visual identity (was
-previously borrowing the purple Pattern pill). Restructured the stats
-modal to a 2-then-3 column grid so all three tracks show as peers.
-Validator 336/0; new probe `tools/cdp/applied-track-visibility.js`
-(6/6) asserts the header pill on a-debounce reads "Applied" and
-`[data-track-stat]` panels for all three tracks render. All 8 prior
-probes still pass. **Learning:** the meta-audit lens was load-bearing
-— each individual drift point would have been easy to miss in isolation,
-but reading recent commits together while looking for the same pattern
-made the cluster obvious.
-
-*(iters 1–13 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–14 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
 `4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7; `dc41586` iter 8;
 `b65df72` iter 9; `7728e0c` iter 10; `56068c7` iter 11; `31ba22b` iter 12;
-`8bc5306` iter 13 Mock Interview trend chip — last-5 attempts on L3.)*
+`8bc5306` iter 13; `dac973e` iter 14 Applied-track UI drift fix +
+TRACK_PILLS lookup + .pill-applied amber class + stats modal 3-col grid.)*
 
 ## Hypotheses parking lot
 *(re-audited every 5 iters; last curated: iter 10)*

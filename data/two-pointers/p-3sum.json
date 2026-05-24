@@ -6,6 +6,119 @@
   "status": "full",
   "description": "Sort, then for each anchor i, two pointers converge on the remaining pair. Skip duplicates at every level to keep results unique.",
   "mechanics": ["two-pointer"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: given an integer array `nums`, return every unique triplet `[a, b, c]` where `a + b + c = 0`. 'Unique' meaning the set of triplets — order within a triplet doesn't matter, and `[-1, 0, 1]` should only appear once even if there are multiple ways to form it from the input.\"\n\nThen a few quick clarifying questions:\n• Can the input have duplicates? (Almost certainly yes — that's where the dedup discipline comes in.)\n• Negatives, zero, and positives all allowed? (Need negatives for the sum to ever hit 0 with positives.)\n• Any bounds on `nums.length`? (Affects whether O(n²) is acceptable — for n up to ~3000 it's fine.)\n• Can I mutate the input by sorting in place, or do I need to copy first?\n• Return shape — array of arrays, or some other structure? Does the order of triplets in the output matter?",
+        "why": "The 'unique triplets' clause is the load-bearing part of the prompt and the thing that turns a clean two-pointer scan into a problem with three layers of dedup. Surfacing it explicitly tells the interviewer you noticed. The mutation question matters too: sorting is the first move, and a real engineer asks before mutating someone else's array."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n³) solution before you discard it.",
+        "say": "\"The brute force is three nested loops — pick `i`, then `j > i`, then `k > j`, check if `nums[i] + nums[j] + nums[k] === 0`. To dedup, I'd sort each triplet, stringify it, and put it in a Set. That's O(n³) time and O(n³) space worst case for the Set. Correct but slow — let me see if I can fix one element and reduce the inner two to a faster search.\"",
+        "why": "Two reasons to narrate this. (1) It anchors the O(n²) target as a clean improvement — you're collapsing the inner two loops, not reinventing the algorithm. (2) The brute force's stringify-and-Set dedup makes the in-place dedup-by-skip in the real solution look obviously better, which is what you want the interviewer to notice."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to sort + two pointers?",
+        "say": "\"Sum-to-target on an array screams 'sort it and use two pointers.' Here's the derivation: if I fix the first element `a = nums[i]`, the remaining problem is 'find two numbers in `nums[i+1..]` that sum to `-a`' — that's classic two-sum on a subarray. Sorting buys me two things at once. (1) Two-pointer convergence works: with `l = i+1` and `r = n-1`, if `nums[l] + nums[r]` is too small I move `l` right (bigger value), too big I move `r` left (smaller value), exactly equal I record the triplet. The sorted invariant is what tells me which side to move. (2) Duplicates cluster together, so I can skip them by comparing adjacent values — `if (nums[i] === nums[i-1]) continue` for the anchor, and after a hit `while (nums[l] === nums[l+1]) l++` and the symmetric `r--`. Three layers of dedup, all enabled by the sort.\"",
+        "why": "Pattern-naming alone is a guess. The derivation — fix one element, reduce to two-sum, sort enables both the convergence AND the dedup — is what scores. The bonus insight is that sorting does double duty here: most candidates pitch sort for the convergence and treat dedup as a separate problem. Calling out that it's one decision serving both needs is the senior move."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the canonical mixed input, the all-zeros dup-skip stress, and a no-triplet case to confirm we return empty cleanly.",
+        "examples": [
+          {
+            "input": "[-1, 0, 1, 2, -1, -4]",
+            "output": "[[-1,-1,2],[-1,0,1]]",
+            "note": "Canonical case — has duplicate anchors after sorting, so the i-dedup actually fires.",
+            "trace": "sort → nums = [-4,-1,-1,0,1,2]\ni=0 anchor=-4 → l=1 r=5\n  sum = -4 + -1 + 2 = -3 < 0 → l++, l=2\n  sum = -4 + -1 + 2 = -3 < 0 → l++, l=3\n  sum = -4 + 0 + 2 = -2 < 0 → l++, l=4\n  sum = -4 + 1 + 2 = -1 < 0 → l++, l=5. l<r false, exit\ni=1 anchor=-1 → l=2 r=5\n  sum = -1 + -1 + 2 = 0 ✓ push [-1,-1,2]. l++ r--, l=3 r=4\n  sum = -1 + 0 + 1 = 0 ✓ push [-1,0,1]. l++ r--, l=4 r=3. exit\ni=2 anchor=-1, nums[2]==nums[1] → SKIP DUP ANCHOR\ni=3 anchor=0 → l=4 r=5\n  sum = 0 + 1 + 2 = 3 > 0 → r--, r=4. exit\nreturn [[-1,-1,2],[-1,0,1]]"
+          },
+          {
+            "input": "[0, 0, 0, 0]",
+            "output": "[[0,0,0]]",
+            "note": "Dup-skip stress — every element is identical, the post-hit dedup loops are what prevent emitting [0,0,0] four times.",
+            "trace": "sort → nums = [0,0,0,0]\ni=0 anchor=0 → l=1 r=3\n  sum = 0+0+0 = 0 ✓ push [0,0,0]\n  while nums[l]==nums[l+1]: nums[1]==nums[2] → l++, l=2. nums[2]==nums[3] → l++, l=3. l<r false, stop\n  while nums[r]==nums[r-1]: l<r false, stop\n  l++ r-- → l=4 r=2. exit\ni=1 anchor=0, nums[1]==nums[0] → SKIP\ni=2 same → SKIP. (loop ends at i < length-2 = 2)\nreturn [[0,0,0]]"
+          },
+          {
+            "input": "[1, 2, 3]",
+            "output": "[]",
+            "note": "No-triplet case — smallest possible array (length 3) with all positives, so no sum can hit 0.",
+            "trace": "sort → nums = [1,2,3] (already sorted)\ni=0 anchor=1 → l=1 r=2\n  sum = 1 + 2 + 3 = 6 > 0 → r--, r=1. l<r false, exit\n(loop ends at i < length-2 = 1)\nreturn []"
+          }
+        ],
+        "why": "Two things the trace exposes. (1) The dup-skip loops on l and r need the `l < r` guard inside them — without it, on `[0,0,0,0]` you'd walk off the end and crash on the bounds check; the trace makes that very visible. (2) The outer bound `i < length - 2` (not `< length`) needs to leave room for `l = i+1` and `r`, and the `[1,2,3]` case confirms the loop exits cleanly even when the array is exactly length 3."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty array or length < 3 → `length - 2 ≤ 0`, outer loop never runs, returns `[]`. ✓\n• All zeros `[0,0,0,0,...]` → exactly one triplet `[0,0,0]`; the three layers of dedup are what enforce uniqueness.\n• All positives or all negatives `[1,2,3]` or `[-3,-2,-1]` → no sum can hit 0, returns `[]`. The two-pointer just walks out without ever finding `sum === 0`.\n• Many duplicate anchors `[-1,-1,-1,2,2,2]` → without the `nums[i] === nums[i-1]` skip, you'd emit `[-1,-1,2]` three times.\n• Large values near `Number.MAX_SAFE_INTEGER` → `a + b + c` could overflow JS safe-integer range; for interview purposes I'd note it but assume inputs are bounded.\n• Should I return triplets in any particular order? The standard answer (and what LeetCode expects) is that triplet order in the output doesn't matter, but within each triplet they're sorted ascending — which falls out for free because we read them off the sorted array.\"",
+        "why": "The dedup-related edges (all-zeros, repeated anchors) are where careless implementations fail — and naming each layer of dedup against the specific input that exercises it shows you understand which check is doing what. The integer-overflow callout is the senior touch; most candidates never think about it, and on a problem with summation it's a real (if rare) concern."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n²). The sort is O(n log n) — dominated. The outer loop runs n times. The inner two-pointer scan for each anchor is O(n), because `l` only increments and `r` only decrements, so together they visit at most `n` positions per anchor. n outer × n inner = n². The dedup-skip loops don't change this — they're amortized into the same `l`/`r` budget.\n\nSpace is O(1) extra if we ignore the output array and the sort's stack (which is O(log n) for V8's quicksort). The dedup is in-place via the skip checks — no Set, no hash structure.\n\nIf you wanted to extend to 4Sum, it's the same template with one more outer loop layer: fix two anchors, two-pointer the remaining pair. O(n³). The general 'k-Sum' recursion is: peel an outer layer until you hit base case (k=2 → two-pointer), giving O(n^(k-1)).\"",
+        "why": "The amortization argument — that `l` and `r` collectively cover at most n positions per anchor, regardless of how many dup-skips happen — is the right defense against 'isn't the dedup loop nested inside the while loop another factor?' It's not, because the dedup `l++` and the main-path `l++` both consume the same budget. The 4Sum / k-Sum extension proves you see the template, not just this one problem — which is how the same shape generalizes."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical solution one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[-1,0,1,2,-1,-4] → [[-1,-1,2],[-1,0,1]]", "input": [-1, 0, 1, 2, -1, -4], "expected": "[[-1,-1,2],[-1,0,1]]" },
+      { "label": "[0,0,0,0] → [[0,0,0]] (dup-skip stress)",  "input": [0, 0, 0, 0],          "expected": "[[0,0,0]]" },
+      { "label": "[1,2,3] → [] (no triplet)",                "input": [1, 2, 3],             "expected": "[]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input.slice();",
+      "  yield { line: 1, label: `enter function — input ${JSON.stringify(input)}`, state: { nums: [...nums] } };",
+      "  const res = [];",
+      "  yield { line: 2, label: 'init res = [] (collected triplets)', state: { nums: [...nums], res: [...res] } };",
+      "  nums.sort((a, b) => a - b);",
+      "  yield { line: 4, label: `sort ascending → nums=${JSON.stringify(nums)}`, state: { nums: [...nums], res: [...res] } };",
+      "  for (let i = 0; i < nums.length - 2; i++) {",
+      "    yield { line: 6, label: `outer step: i=${i}, anchor=nums[${i}]=${nums[i]}`, state: { nums: [...nums], res: [...res], i } };",
+      "    if (i > 0 && nums[i] === nums[i - 1]) {",
+      "      yield { line: 8, label: `nums[${i}]=${nums[i]} === nums[${i - 1}]=${nums[i - 1]} → skip dup anchor`, state: { nums: [...nums], res: [...res], i } };",
+      "      continue;",
+      "    }",
+      "    let l = i + 1, r = nums.length - 1;",
+      "    yield { line: 9, label: `init l=${l}, r=${r}`, state: { nums: [...nums], res: [...res], i, l, r } };",
+      "    while (l < r) {",
+      "      const sum = nums[i] + nums[l] + nums[r];",
+      "      yield { line: 11, label: `sum = ${nums[i]} + ${nums[l]} + ${nums[r]} = ${sum}`, state: { nums: [...nums], res: [...res], i, l, r, sum } };",
+      "      if (sum === 0) {",
+      "        res.push([nums[i], nums[l], nums[r]]);",
+      "        yield { line: 13, label: `hit! push [${nums[i]},${nums[l]},${nums[r]}] → res=${JSON.stringify(res)}`, state: { nums: [...nums], res: res.map(t => [...t]), i, l, r, sum } };",
+      "        while (l < r && nums[l] === nums[l + 1]) {",
+      "          yield { line: 15, label: `nums[${l}]=${nums[l]} === nums[${l + 1}]=${nums[l + 1]} → skip dup l`, state: { nums: [...nums], res: res.map(t => [...t]), i, l, r } };",
+      "          l++;",
+      "        }",
+      "        while (l < r && nums[r] === nums[r - 1]) {",
+      "          yield { line: 16, label: `nums[${r}]=${nums[r]} === nums[${r - 1}]=${nums[r - 1]} → skip dup r`, state: { nums: [...nums], res: res.map(t => [...t]), i, l, r } };",
+      "          r--;",
+      "        }",
+      "        l++; r--;",
+      "        yield { line: 17, label: `advance both → l=${l}, r=${r}`, state: { nums: [...nums], res: res.map(t => [...t]), i, l, r } };",
+      "      } else if (sum < 0) {",
+      "        l++;",
+      "        yield { line: 18, label: `sum=${sum} < 0 → need bigger, l++ → l=${l}`, state: { nums: [...nums], res: res.map(t => [...t]), i, l, r } };",
+      "      } else {",
+      "        r--;",
+      "        yield { line: 19, label: `sum=${sum} > 0 → need smaller, r-- → r=${r}`, state: { nums: [...nums], res: res.map(t => [...t]), i, l, r } };",
+      "      }",
+      "    }",
+      "  }",
+      "  yield { line: 22, label: `return ${JSON.stringify(res)}`, state: { nums: [...nums], res: res.map(t => [...t]), returns: JSON.stringify(res) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function threeSum(nums) {\n  const res = [];\n  // Sort unlocks two-pointer convergence — and groups duplicates for skipping.\n  nums.sort((a, b) => a - b);\n  // length - 2 leaves room for l = i+1 and r.\n  for (let i = 0; i < nums.length - 2; i++) {\n    // Skip duplicate anchors so we don't re-emit the same triplet.\n    if (i > 0 && nums[i] === nums[i - 1]) continue;\n    let l = i + 1, r = nums.length - 1;\n    while (l < r) {\n      const sum = nums[i] + nums[l] + nums[r];\n      if (sum === 0) {\n        res.push([nums[i], nums[l], nums[r]]);\n        // After a hit, skip duplicate l and r values before advancing.\n        while (l < r && nums[l] === nums[l + 1]) l++;\n        while (l < r && nums[r] === nums[r - 1]) r--;\n        l++; r--;\n      } else if (sum < 0) l++;  // need bigger — left side has smaller values\n      else r--;                 // need smaller — right side has bigger values\n    }\n  }\n  return res;\n}\n// Time O(n^2), Space O(1) extra (ignoring sort + output)",
     "notes": [

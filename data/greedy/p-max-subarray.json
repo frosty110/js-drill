@@ -6,6 +6,94 @@
   "status": "full",
   "description": "Find the max sum of any contiguous subarray. Kadane's: at each index, either extend the running sum or restart from the current value.",
   "mechanics": ["dp-rolling-vars", "greedy-single-pass"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: given an integer array `nums`, return the largest sum of any contiguous subarray. Contiguous, not subsequence — the elements have to be adjacent in the original array. And it has to be non-empty: at minimum the answer is the single largest element.\"\n\nThen a few quick clarifying questions:\n• Can values be negative? (Yes — that's what makes this non-trivial.)\n• What if the whole array is negative — do I return the least-negative element, or 0?\n• Is the subarray required to be length ≥ 1, or can it be empty (sum 0)?\n• Just return the sum, or also the indices?",
+        "why": "The 'all-negative → return largest element' clarification is the load-bearing one. If empty subarrays were allowed (sum 0), the answer for `[-3,-1,-2]` would be 0, which makes the algorithm trivially simple but doesn't match the standard problem. Confirming non-empty up front determines how you initialize `cur` and `best` — and getting that init wrong is the most common bug on this problem."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solutions before you discard them.",
+        "say": "\"Two brute forces worth naming. The naive one is O(n³): two nested loops over `i` and `j` to pick every subarray, an inner loop to sum it. The slightly-better version uses prefix sums to compute any subarray sum in O(1), bringing it to O(n²) — still try every pair. Both work, but they're doing redundant work: when extending the subarray ending at `i` to one ending at `i+1`, we don't need to re-examine all earlier starts.\n\nThere's also a clean O(n log n) divide-and-conquer: the max subarray either lies entirely in the left half, entirely in the right half, or crosses the midpoint (which you compute with a linear scan). But the most elegant is O(n) with one pass — let me describe that.\"",
+        "why": "Walking the cost ladder O(n³) → O(n²) → O(n log n) → O(n) explicitly is the move. It shows you can see the problem at multiple resolutions, which is what separates 'pattern-matched to Kadane' from 'thought it through.' Also, the O(n log n) D&C is a real algorithm — some interviewers will probe whether you know it exists; naming it costs you nothing and demonstrates breadth."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to Kadane's one-pass DP?",
+        "say": "\"Here's the structural insight: define `cur[i]` = the maximum sum of any subarray that ENDS exactly at index `i`. There are only two options for that subarray — either it's just `nums[i]` alone (we start fresh here), or it's the best subarray ending at `i-1` extended by `nums[i]`. So `cur[i] = max(nums[i], cur[i-1] + nums[i])`. The final answer is `max(cur[0], cur[1], ..., cur[n-1])`.\n\nThe greedy choice is: at each `i`, take whichever is larger between starting fresh and extending. This is provably optimal because `cur[i-1]` is by definition the best subarray ending at `i-1` — extending it gives the best 'extension' option, and starting fresh gives the only alternative. There's no third choice.\n\nAnd since we only ever look at `cur[i-1]`, we can drop the array and use a single rolling variable. That's Kadane's.\"",
+        "why": "Defining `cur[i]` precisely as 'max subarray ENDING at i' is the move. Most candidates wave at 'running sum' without naming what it means; saying 'it's the max subarray ending at this exact index' is the DP definition that makes the recurrence trivially correct. The 'we only need cur[i-1]' observation is what justifies the O(1) space — same template as Fibonacci-style DP collapse."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the classic mixed case, an all-negative edge, and a never-restart positive case.",
+        "examples": [
+          {
+            "input": "[-2,1,-3,4,-1,2,1,-5,4]",
+            "output": "6",
+            "note": "Classic case — multiple restarts; best subarray is [4,-1,2,1] from i=3..6.",
+            "trace": "init cur=-2, best=-2\ni=1, nums[i]=1:  cur = max(1, -2+1=-1) → 1 [restart]. best=max(-2,1) → 1\ni=2, nums[i]=-3: cur = max(-3, 1-3=-2) → -2 [extend]. best=max(1,-2) → 1\ni=3, nums[i]=4:  cur = max(4, -2+4=2) → 4 [restart]. best=max(1,4) → 4\ni=4, nums[i]=-1: cur = max(-1, 4-1=3) → 3 [extend]. best=max(4,3) → 4\ni=5, nums[i]=2:  cur = max(2, 3+2=5) → 5 [extend]. best=max(4,5) → 5\ni=6, nums[i]=1:  cur = max(1, 5+1=6) → 6 [extend]. best=max(5,6) → 6\ni=7, nums[i]=-5: cur = max(-5, 6-5=1) → 1 [extend]. best=max(6,1) → 6\ni=8, nums[i]=4:  cur = max(4, 1+4=5) → 5 [extend]. best=max(6,5) → 6\nreturn 6"
+          },
+          {
+            "input": "[-3,-1,-2]",
+            "output": "-1",
+            "note": "All-negative edge — answer is the largest (least-negative) single element. Seeding cur/best with nums[0] is what makes this work.",
+            "trace": "init cur=-3, best=-3\ni=1, nums[i]=-1: cur = max(-1, -3-1=-4) → -1 [restart]. best=max(-3,-1) → -1\ni=2, nums[i]=-2: cur = max(-2, -1-2=-3) → -2 [restart]. best=max(-1,-2) → -1\nreturn -1"
+          },
+          {
+            "input": "[5,4,-1,7,8]",
+            "output": "23",
+            "note": "Never restart — the running sum stays positive throughout, so extending always wins.",
+            "trace": "init cur=5, best=5\ni=1, nums[i]=4:  cur = max(4, 5+4=9) → 9 [extend]. best=max(5,9) → 9\ni=2, nums[i]=-1: cur = max(-1, 9-1=8) → 8 [extend]. best=max(9,8) → 9\ni=3, nums[i]=7:  cur = max(7, 8+7=15) → 15 [extend]. best=max(9,15) → 15\ni=4, nums[i]=8:  cur = max(8, 15+8=23) → 23 [extend]. best=max(15,23) → 23\nreturn 23"
+          }
+        ],
+        "why": "Tracing surfaces the bug that bites everyone — initializing `cur=0, best=0` instead of `cur=nums[0], best=nums[0]`. The all-negative case `[-3,-1,-2]` is the clearest demonstration: with `0,0` init, the algorithm would return 0 (which means 'empty subarray'), violating the non-empty constraint. The 'never restart' case `[5,4,-1,7,8]` also clarifies that `best` is not always the final `cur` — but here they coincide because the maximum prefix sum IS the answer. Both are essential mental models to lock in before coding."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Single element `[5]` → loop doesn't run, return best=5. ✓\n• Single negative `[-3]` → loop doesn't run, return best=-3. ✓\n• All negative `[-3,-1,-2]` → seeding with nums[0] gives the right -1.\n• All positive `[1,2,3]` → never restart, return sum=6.\n• All zeros `[0,0,0]` → cur stays 0, best stays 0, return 0. ✓\n• Single zero in negatives `[-2,0,-3]` → cur after i=1 is max(0,-2+0=-2)=0; best becomes 0. Correctly picks the zero as the max.\n• Peak in the middle then drop `[1,2,3,-100,4]` → best locks in at 6 after i=2; cur tanks at i=3 but best is preserved. (This is why we track best separately.)\n• Very large arrays — O(n) handles it. Integer overflow: in JS, numbers are safe to 2^53, so accumulating millions of even moderately large ints is fine; in Java/C++, you'd want a long.\"",
+        "why": "The 'peak in the middle then drop' case is what proves WHY we need both `cur` and `best` — a one-variable Kadane would lose the peak the moment `cur` falls. Naming this out loud preempts the interviewer's 'why don't you just return `cur`?' challenge. The overflow caveat is the senior flag for language-agnostic interviews; trivial in JS but worth voicing."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — single pass, constant work per element (two max calls, one addition). No nested loop, no recursion, no auxiliary data structure.\n\nSpace is O(1) — two rolling variables, `cur` and `best`. The DP table collapsed to two scalars because the recurrence only looks back one step.\n\nThe key insight: Kadane is the canonical example of a 1D DP collapsing to O(1) space. The state we actually need at index `i` is just `cur[i-1]` — we never look further back. Same trick applies to House Robber, Climbing Stairs, and any 'state depends on previous one or two values' DP.\n\nIf you wanted to return the actual subarray (start and end indices, not just the sum), you'd track `cur_start` alongside `cur`: when you restart (`cur = nums[i]`), set `cur_start = i`; when `best` updates, lock in `best_start = cur_start` and `best_end = i`. Same template, two extra variables.\n\nAnd if the problem changed to 'maximum product subarray' instead of sum, the same shape applies but you have to track both the max AND min product ending at `i`, because a negative times a negative can become the new max. Same Kadane spirit, two parallel state variables.\"",
+        "why": "The 'collapses to O(1) because we only look back one step' phrasing is the move that frames Kadane as a member of a family rather than a one-off. The subarray-tracking and max-product extensions are real LeetCode follow-ups (LC 53 → LC 152, and 'return subarray' is a common variant) — naming them proves you see the template, not just the problem. That's the senior signal."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through Kadane's on a real input. Watch `cur` decide each step whether to extend the running sum or restart at nums[i] — and watch `best` lock in the peak as `cur` rises and falls.",
+    "examples": [
+      { "label": "[-2,1,-3,4,-1,2,1,-5,4] → 6", "input": [-2, 1, -3, 4, -1, 2, 1, -5, 4], "expected": 6 },
+      { "label": "[-3,-1,-2] → -1 (all negative — pick largest)", "input": [-3, -1, -2], "expected": -1 },
+      { "label": "[5,4,-1,7,8] → 23 (never restart)", "input": [5, 4, -1, 7, 8], "expected": 23 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  let cur = nums[0], best = nums[0];",
+      "  yield { line: 3, label: `init cur=nums[0]=${cur}, best=nums[0]=${best} (seed handles all-negative)`, state: { nums, cur, best } };",
+      "  for (let i = 1; i < nums.length; i++) {",
+      "    const extend = cur + nums[i];",
+      "    const restart = nums[i];",
+      "    const chose = extend >= restart ? 'extend' : 'restart';",
+      "    cur = Math.max(restart, extend);",
+      "    yield { line: 5, label: `i=${i}, nums[${i}]=${nums[i]}: cur = max(restart=${restart}, extend=${extend}) → ${cur} [${chose}]`, state: { nums, i, cur, best } };",
+      "    const prevBest = best;",
+      "    best = Math.max(best, cur);",
+      "    yield { line: 7, label: `best = max(${prevBest}, cur=${cur}) → ${best}`, state: { nums, i, cur, best } };",
+      "  }",
+      "  yield { line: 9, label: `return best=${best}`, state: { nums, cur, best, returns: best } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function maxSubArray(nums) {\n  // Seed both with nums[0] — handles all-negative arrays (return the largest).\n  let cur = nums[0], best = nums[0];\n  for (let i = 1; i < nums.length; i++) {\n    cur = Math.max(nums[i], cur + nums[i]);   // extend or restart\n    // Track best separately — cur can fall after a peak.\n    best = Math.max(best, cur);\n  }\n  return best;\n}\n// Time O(n), Space O(1)",
     "notes": [

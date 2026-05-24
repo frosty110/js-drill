@@ -6,6 +6,111 @@
   "status": "full",
   "description": "Two strings are anagrams iff their character counts match. One Map, increment for s, decrement for t — all zero at the end means anagram. O(n).",
   "mechanics": ["freq-map"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: I'm given two strings `s` and `t`, and I return `true` if `t` is an anagram of `s` — same multiset of characters, possibly rearranged. A few quick clarifying questions:\"\n\n• Are the strings case-sensitive? Is `\"Listen\"` an anagram of `\"silent\"`?\n• Character set — lowercase ASCII, or full Unicode?\n• Should I strip whitespace or punctuation, or treat them as significant characters?\n• Is the empty-string vs empty-string case `true`? (Trivially yes — both have the empty multiset.)",
+        "why": "The case-sensitivity and whitespace questions are the ones that decide whether your solution actually solves the user's problem. If they say 'normalize first,' you'd add `.toLowerCase()` and possibly `.replace(/\\s/g, '')` before counting. The character-set question matters less here than in Group Anagrams — you're counting, not sorting — but it still affects whether you can use a length-26 array vs. a Map."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solutions before you discard them.",
+        "say": "\"Two obvious brute forces.\"\n\n\"One: sort both strings and compare with `===`. That's O(n log n) time, O(n) space for the sorted copies. Clean and short — a perfectly fine answer if the interviewer doesn't push for better.\"\n\n\"Two: count chars in `s`, then walk `t` and tick each one down — if any count goes negative or any char isn't in the count, return false. That's O(n) time, O(1) space for a bounded alphabet.\"\n\n\"I'll go with the count-map approach since it beats the sort asymptotically and the constant factors are similar.\"",
+        "why": "Naming the sort solution first is important — it's the obvious one, and dismissing it without acknowledging it makes you look like you skipped the easy answer to show off. By explicitly comparing the two, you show you considered both AND have a principled reason for picking the counter — not 'because it's the fancy one' but 'because it's strictly better on the asymptotic.'"
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a counter map?",
+        "say": "\"This is a frequency-counter hash-map problem. The structural property: two strings are anagrams iff their character frequency distributions are identical. So if I maintain a count map keyed on character, +1 walking `s` and -1 walking `t`, the strings are anagrams iff every entry settles back to zero.\"\n\n\"Two tricks make this even cleaner. First, length check at the top — if the lengths differ, the strings cannot be anagrams, period; bail immediately and skip the whole final zero-check. Second, while walking `t`, if any count goes negative, return false right away — that means `t` has an extra of some char that `s` didn't, and no further work can rescue it. Combined with the length check, those two short-circuits mean I never need to scan the map at the end.\"",
+        "why": "Naming the data structure AND the structural property — 'same frequency distribution → anagram' — is what the interviewer wants. The two short-circuits (length check + negative-on-decrement) aren't just micro-optimizations; they're what lets you skip the trailing zero-check entirely. Spelling out *why* they're load-bearing — not just that they're nice — is what separates pattern recognition from cargo culting."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a few cases.\" Three inputs — a typical anagram pair, a same-length non-anagram (where a counter goes negative), and a length-mismatch case that exits at the top.",
+        "examples": [
+          {
+            "input": "s=\"anagram\", t=\"nagaram\"",
+            "output": "true",
+            "note": "Classic anagram pair — counts balance to zero everywhere.",
+            "trace": "length check: 7 === 7 → continue\nbuild count from s: {a:3, n:1, g:1, r:1, m:1}\nt: 'n' → count.n=0\nt: 'a' → count.a=2\nt: 'g' → count.g=0\nt: 'a' → count.a=1\nt: 'r' → count.r=0\nt: 'a' → count.a=0\nt: 'm' → count.m=0\nwalked all of t with no negatives → return true ✓"
+          },
+          {
+            "input": "s=\"rat\", t=\"car\"",
+            "output": "false",
+            "note": "Same length but not an anagram — the 'c' in t isn't in the count map, so we short-circuit.",
+            "trace": "length check: 3 === 3 → continue\nbuild count from s: {r:1, a:1, t:1}\nt: 'c' → count.has('c')=false → return false ✓"
+          },
+          {
+            "input": "s=\"abc\", t=\"abcd\"",
+            "output": "false",
+            "note": "Length mismatch — exits immediately at the top check, no Map even built.",
+            "trace": "length check: 3 !== 4 → return false ✓"
+          }
+        ],
+        "why": "The second example is the one to mention out loud — it's the case where the negative-counter short-circuit pays off. If you didn't bail on `!count.has('c')`, you'd `set('c', -1)` and the negative check would catch it on the next line — same correctness, slightly redundant. The third example is also worth flagging because it shows the length-check top-bail is doing real work, not just being defensive."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Both empty `s=\"\"`, `t=\"\"` → length check passes (0 === 0), both loops are no-ops, returns `true`. Vacuously correct.\n• Length mismatch → caught immediately by the top check. Don't skip this — without it, you'd need to scan the map at the end for non-zero entries.\n• Repeated characters (`\"aabb\"`, `\"abab\"`) → the counter handles repeats naturally; that's what makes it stronger than a Set.\n• Unicode/emoji → `for...of` on a string DOES iterate by codepoint (unlike index-based access), so this canonical actually handles emoji correctly. Worth flagging as a hidden win.\n• Case sensitivity — if `\"Listen\"` should match `\"silent\"`, lowercase both at the top.\n• Whitespace — same: strip if the problem says to.",
+        "why": "The Unicode call-out here is a positive one — `for...of` happens to do the right thing, which is the opposite of `s[i]` indexing that breaks on surrogate pairs. Naming that explicitly shows you know the difference and that this canonical wasn't an accident. The case/whitespace edges aren't trivial — they're real interview-trap territory where the candidate codes the right algorithm against the wrong specification."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) where n is the string length. Two passes — one over `s` to build the count map, one over `t` to decrement — each does O(1) work per character.\n\nSpace is O(1) for a bounded alphabet — the Map holds at most |alphabet| entries (26 for lowercase English, 128 for ASCII), independent of n. For unbounded Unicode it'd be O(n) in the worst case.\n\nIf you wanted to extend to 'are two strings k-anagrams' (anagrams after at most k char swaps), you'd build the count map the same way, then sum the absolute deltas and check if the total is at most 2k. Same primitive — frequency map — with a different aggregation. Or extend to 'find all anagram start indices in a longer text': that's the same counter inside a sliding window, which is exactly the Find All Anagrams in a String problem.\"",
+        "why": "The amortization is straightforward — two linear passes, O(1) per char — but the wrap-up's job is to show transfer. Naming k-anagrams AND Find All Anagrams in a String unprompted demonstrates you see this as a *template* (frequency-count comparison) that composes with sliding window, not just a one-off trick. That's the move that wins the senior-track follow-up."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical Valid Anagram one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "\"anagram\", \"nagaram\" → true", "input": { "s": "anagram", "t": "nagaram" }, "expected": true },
+      { "label": "\"rat\", \"car\" → false (negative counter)", "input": { "s": "rat", "t": "car" }, "expected": false },
+      { "label": "\"abc\", \"abcd\" → false (length mismatch)", "input": { "s": "abc", "t": "abcd" }, "expected": false }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const s = input.s;",
+      "  const t = input.t;",
+      "  yield { line: 1, label: `enter function — s=\"${s}\", t=\"${t}\"`, state: { s, t } };",
+      "  if (s.length !== t.length) {",
+      "    yield { line: 3, label: `length check: ${s.length} !== ${t.length} → return false`, state: { s, t, returns: false } };",
+      "    return;",
+      "  }",
+      "  yield { line: 3, label: `length check: ${s.length} === ${t.length} → continue`, state: { s, t } };",
+      "  const count = new Map();",
+      "  yield { line: 4, label: 'init count (empty Map: char → remaining quota)', state: { s, t, count: [] } };",
+      "  let si = 0;",
+      "  for (const c of s) {",
+      "    count.set(c, (count.get(c) || 0) + 1);",
+      "    yield { line: 6, label: `s[${si}]='${c}' → count.set('${c}', ${count.get(c)})`, state: { s, t, count: [...count.entries()], si, c } };",
+      "    si++;",
+      "  }",
+      "  let ti = 0;",
+      "  for (const c of t) {",
+      "    yield { line: 7, label: `t[${ti}]='${c}' — start check`, state: { s, t, count: [...count.entries()], ti, c } };",
+      "    if (!count.has(c)) {",
+      "      yield { line: 8, label: `count.has('${c}') → false — char not in s, return false`, state: { s, t, count: [...count.entries()], ti, c, returns: false } };",
+      "      return;",
+      "    }",
+      "    count.set(c, count.get(c) - 1);",
+      "    yield { line: 9, label: `count.set('${c}', ${count.get(c)}) — decrement for t`, state: { s, t, count: [...count.entries()], ti, c } };",
+      "    if (count.get(c) < 0) {",
+      "      yield { line: 11, label: `count.get('${c}')=${count.get(c)} < 0 — t has extra '${c}', return false`, state: { s, t, count: [...count.entries()], ti, c, returns: false } };",
+      "      return;",
+      "    }",
+      "    ti++;",
+      "  }",
+      "  yield { line: 13, label: 'walked all of t with no negatives — return true', state: { s, t, count: [...count.entries()], returns: true } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function isAnagram(s, t) {\n  // Different lengths cannot be anagrams — and lets us skip a final zero-check.\n  if (s.length !== t.length) return false;\n  const count = new Map();\n  // +1 per char in s — Map key is char, value is remaining quota.\n  for (const c of s) count.set(c, (count.get(c) || 0) + 1);\n  for (const c of t) {\n    if (!count.has(c)) return false;\n    count.set(c, count.get(c) - 1);\n    // Negative means t has an extra of c that s didn't.\n    if (count.get(c) < 0) return false;\n  }\n  return true;\n}\n// Time O(n), Space O(1) for a bounded alphabet",
     "notes": [

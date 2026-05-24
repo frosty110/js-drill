@@ -5,6 +5,112 @@
   "track": "patterns",
   "status": "full",
   "description": "Insert a new interval into a sorted, non-overlapping list and re-merge. Single pass in three phases: before, overlapping, after. O(n).",
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given a list of intervals that's already sorted by start and has no overlaps. I'm also given a single `newInterval`, and I need to insert it and re-merge anything it touches. So inserting `[2,5]` into `[[1,3],[6,9]]` gives `[[1,5],[6,9]]`.\"\n\nThen a few quick clarifying questions:\n• Is the input *guaranteed* sorted and non-overlapping, or do I need to defend against unsorted input? (Spec says yes; that's the whole point of the problem.)\n• Touching counts as overlap, right? Inserting `[5,7]` into `[[1,5]]` should give `[[1,7]]`, not `[[1,5],[5,7]]`?\n• Can `newInterval` fall entirely before all existing intervals, entirely after, or completely engulf the whole list?\n• Can I mutate `newInterval` in place, or do I need to copy it first?\n• Return shape — fresh array of arrays, or modify input?",
+        "why": "The 'already sorted' invariant is the entire reason this runs in O(n) instead of O(n log n) — surfacing it explicitly tells the interviewer you know what affordance the problem is handing you. The engulf and before-everything cases are the corner cases that make the three-phase structure necessary; flagging them up front shows you've already mapped why a single while loop won't work."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n log n) solution before you discard it.",
+        "say": "\"The dumb-but-correct approach is to push `newInterval` onto the list, sort by start, then run the standard Merge Intervals sweep on top. That's O(n log n) — the sort dominates. It works, but it throws away the sortedness gift the problem already gave me. Let me see if I can walk the list once and exploit the order.\"",
+        "why": "Two reasons to narrate this. (1) It's a genuine fallback — if the candidate runs out of time on the three-phase walk, they can fall back to sort-then-merge and still be correct. (2) It anchors the optimization target: getting from O(n log n) to O(n) means *not re-sorting*. The optimization isn't a clever algorithm — it's a structural one, exploiting the input invariant."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why a single sweep, but in three phases?",
+        "say": "\"The input is already sorted and non-overlapping, so I don't need to sort — that's the whole affordance. But unlike Merge Intervals, I can't just run one sweep with one rule, because `newInterval` partitions the list into three distinct regions: intervals that end *before* `newInterval` starts (untouched, pass through), intervals that *overlap* with `newInterval` (collapse into a single merged interval), and intervals that start *after* `newInterval` ends (untouched, pass through). Three regions → three while loops.\n\nThe pivot is the overlap test. Phase 1 condition: `intervals[i][1] < newInterval[0]` — strict `<` because touching at the endpoint should merge. Phase 2 condition: `intervals[i][0] <= newInterval[1]` — `<=` because touching merges. During phase 2 I expand `newInterval` itself by taking `Math.min` of starts and `Math.max` of ends, which is what lets me handle the case where `newInterval` engulfs several existing intervals. After phase 2 I push the now-grown `newInterval` once. Phase 3 is just 'drain the rest'.\n\nThe reason this is O(n), not O(n^2), is that each phase advances `i` monotonically — once a phase exits, we never re-examine its intervals. Each interval is touched at most once across the whole algorithm.\"",
+        "why": "The three-phase framing is the whole derivation — without it, candidates write one giant while loop with three nested conditions and get lost. Naming the strict `<` vs `<=` distinction explicitly is the senior touch; those two operators encode the touching-is-overlap rule and getting them wrong silently produces wrong answers on `[[1,3]] + [3,5]`. The 'each interval touched at most once' line is the O(n) defense in advance."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a simple two-element merge, a multi-interval engulf that exercises phase 2 hard, and a no-overlap case that confirms phase 2 can run zero times.",
+        "examples": [
+          {
+            "input": "intervals=[[1,3],[6,9]], newInterval=[2,5]",
+            "output": "[[1,5],[6,9]]",
+            "note": "Canonical case — phase 2 fires once, then phase 3 drains the tail.",
+            "trace": "init res=[], i=0, n=2\nPHASE 1: intervals[0]=[1,3], 3 < 2? No → exit phase 1\nPHASE 2: intervals[0]=[1,3], 1 <= 5? Yes → OVERLAP\n  newInterval = [min(2,1), max(5,3)] = [1,5]. i=1\n  intervals[1]=[6,9], 6 <= 5? No → exit phase 2\npush newInterval=[1,5] → res=[[1,5]]\nPHASE 3: push intervals[1]=[6,9] → res=[[1,5],[6,9]]. i=2\nreturn [[1,5],[6,9]]"
+          },
+          {
+            "input": "intervals=[[1,2],[3,5],[6,7],[8,10],[12,16]], newInterval=[4,8]",
+            "output": "[[1,2],[3,10],[12,16]]",
+            "note": "Multi-interval engulf — newInterval [4,8] swallows [3,5], [6,7], and [8,10]; phase 2 runs three times and newInterval grows to [3,10].",
+            "trace": "init res=[], i=0, n=5\nPHASE 1: intervals[0]=[1,2], 2 < 4? Yes → push [1,2], i=1. res=[[1,2]]\n  intervals[1]=[3,5], 5 < 4? No → exit phase 1\nPHASE 2: intervals[1]=[3,5], 3 <= 8? Yes → OVERLAP\n  newInterval = [min(4,3), max(8,5)] = [3,8]. i=2\n  intervals[2]=[6,7], 6 <= 8? Yes → OVERLAP\n  newInterval = [min(3,6), max(8,7)] = [3,8]. i=3\n  intervals[3]=[8,10], 8 <= 8? Yes → OVERLAP (touching)\n  newInterval = [min(3,8), max(8,10)] = [3,10]. i=4\n  intervals[4]=[12,16], 12 <= 10? No → exit phase 2\npush newInterval=[3,10] → res=[[1,2],[3,10]]\nPHASE 3: push intervals[4]=[12,16] → res=[[1,2],[3,10],[12,16]]. i=5\nreturn [[1,2],[3,10],[12,16]]"
+          },
+          {
+            "input": "intervals=[[1,2],[3,4]], newInterval=[5,6]",
+            "output": "[[1,2],[3,4],[5,6]]",
+            "note": "No-overlap case — phase 2 runs zero times; we push newInterval as-is.",
+            "trace": "init res=[], i=0, n=2\nPHASE 1: intervals[0]=[1,2], 2 < 5? Yes → push [1,2], i=1\n  intervals[1]=[3,4], 4 < 5? Yes → push [3,4], i=2 → exit (i==n)\nPHASE 2: i==n, condition false → skip entirely (zero iterations)\npush newInterval=[5,6] → res=[[1,2],[3,4],[5,6]]\nPHASE 3: i==n → skip\nreturn [[1,2],[3,4],[5,6]]"
+          }
+        ],
+        "why": "Two specific things the trace exposes. (1) On the multi-engulf input, you can watch `newInterval` actually grow over three iterations — that's the proof that you must take `Math.min`/`Math.max`, not just overwrite, because each overlapping interval can extend in either direction. (2) The no-overlap case forces you to confirm that pushing `newInterval` happens *between* phases 2 and 3 unconditionally — not inside a condition. A common bug is to forget the push when phase 2 runs zero times, which corrupts the no-overlap case silently."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty intervals list `intervals=[]` → phases 1 and 3 skip, phase 2 skips, we push `newInterval` alone. Returns `[newInterval]`. ✓\n• `newInterval` before everything `intervals=[[5,7]], newInterval=[1,2]` → phase 1 skips (5 not < 1), phase 2 skips (5 not <= 2), push `newInterval`, phase 3 drains. Returns `[[1,2],[5,7]]`. ✓\n• `newInterval` after everything `intervals=[[1,2]], newInterval=[5,7]` → phase 1 drains, phase 2 skips, push `newInterval`. Returns `[[1,2],[5,7]]`. ✓\n• `newInterval` engulfs the whole list `intervals=[[2,3],[4,5]], newInterval=[1,10]` → phase 1 skips, phase 2 runs twice and grows newInterval to `[1,10]`. ✓\n• Touching at the boundary `intervals=[[1,5]], newInterval=[5,8]` → phase 1 skips (5 not < 5), phase 2 fires (5 <= 8), newInterval becomes `[1,8]`. Confirms `<` and `<=` are doing what we think.\n• `newInterval` fully inside an existing one `intervals=[[1,10]], newInterval=[3,5]` → phase 2 fires once, `newInterval` becomes `[min(3,1), max(5,10)] = [1,10]`. Result is `[[1,10]]` — unchanged.\n• Mutation note: I'm mutating `newInterval` in place during phase 2. If the caller cares about that, I should copy it first.\"",
+        "why": "The before/after/engulf cases are exactly where careless implementations fail — naming each one and walking through why the three phases handle it shows you understand the structural invariant, not just that the code passes the canonical test. The mutation callout at the end is the senior touch most candidates skip; in real code, silently mutating a caller's argument is the kind of bug that surfaces three sprints later."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n). Each interval is examined at most once — across all three phases, the pointer `i` only advances, never resets. There's no sort, because the input is already sorted; that's the whole reason we're under O(n log n). Space is O(n) for the output array (in the worst case, no merges happen and `res` is `intervals.length + 1`).\n\nIf the input *weren't* sorted, this becomes Merge Intervals — push `newInterval`, sort, sweep, O(n log n). Going the other direction, if you needed to handle a *stream* of inserts (Insert Interval called repeatedly), you'd want a balanced BST or sorted-set keyed by start, locate the insertion point in O(log n), and merge against neighbors — that's the My Calendar I/II family.\"",
+        "why": "The 'pointer only advances' argument is the right defense against 'don't you have three loops, isn't that O(3n)?' — three loops sharing one monotonically advancing pointer is still one pass. The sorted-stream extension shows you see the family: a single batch insert is one shape, but the same merge-with-neighbors mental model scales to live-data structures with the right index."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the three-phase scan on a real input. The highlighted line is what just ran; the state panel shows res, i, and the current newInterval bounds. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[[1,3],[6,9]] + [2,5] → [[1,5],[6,9]]", "input": { "intervals": [[1,3],[6,9]], "newInterval": [2,5] }, "expected": "[[1,5],[6,9]]" },
+      { "label": "[[1,2],[3,5],[6,7],[8,10],[12,16]] + [4,8] → [[1,2],[3,10],[12,16]]", "input": { "intervals": [[1,2],[3,5],[6,7],[8,10],[12,16]], "newInterval": [4,8] }, "expected": "[[1,2],[3,10],[12,16]]" },
+      { "label": "[[1,2],[3,4]] + [5,6] → [[1,2],[3,4],[5,6]] (no overlap)", "input": { "intervals": [[1,2],[3,4]], "newInterval": [5,6] }, "expected": "[[1,2],[3,4],[5,6]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const intervals = input.intervals.map(iv => iv.slice());",
+      "  const newInterval = input.newInterval.slice();",
+      "  yield { line: 1, label: `enter — intervals=${JSON.stringify(intervals)}, newInterval=${JSON.stringify(newInterval)}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval] } };",
+      "  const res = [];",
+      "  yield { line: 2, label: 'init res = []', state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]) } };",
+      "  let i = 0, n = intervals.length;",
+      "  yield { line: 3, label: `init i=0, n=${n}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "  yield { line: 4, label: 'PHASE 1 — append intervals strictly BEFORE newInterval (end < newStart)', state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "  while (i < n && intervals[i][1] < newInterval[0]) {",
+      "    yield { line: 5, label: `intervals[${i}]=${JSON.stringify(intervals[i])} ends ${intervals[i][1]} < newStart ${newInterval[0]} → BEFORE`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "    res.push(intervals[i]);",
+      "    i++;",
+      "    yield { line: 6, label: `push intervals[${i - 1}] → res=${JSON.stringify(res)}; i → ${i}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "  }",
+      "  yield { line: 8, label: `PHASE 2 — merge overlapping (start <= newEnd), starting at i=${i}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "  while (i < n && intervals[i][0] <= newInterval[1]) {",
+      "    yield { line: 9, label: `intervals[${i}]=${JSON.stringify(intervals[i])} starts ${intervals[i][0]} <= newEnd ${newInterval[1]} → OVERLAP, expand`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "    newInterval[0] = Math.min(newInterval[0], intervals[i][0]);",
+      "    yield { line: 10, label: `newStart = min(prev, ${intervals[i][0]}) → ${newInterval[0]}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "    newInterval[1] = Math.max(newInterval[1], intervals[i][1]);",
+      "    yield { line: 11, label: `newEnd = max(prev, ${intervals[i][1]}) → ${newInterval[1]}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "    i++;",
+      "    yield { line: 12, label: `i → ${i}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "  }",
+      "  res.push(newInterval);",
+      "  yield { line: 14, label: `push merged newInterval ${JSON.stringify(newInterval)} → res=${JSON.stringify(res)}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "  yield { line: 15, label: `PHASE 3 — append the rest (strictly after), starting at i=${i}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "  while (i < n) {",
+      "    res.push(intervals[i]);",
+      "    i++;",
+      "    yield { line: 16, label: `push intervals[${i - 1}]=${JSON.stringify(intervals[i - 1])} → res=${JSON.stringify(res)}; i → ${i}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), i, n } };",
+      "  }",
+      "  yield { line: 17, label: `return ${JSON.stringify(res)}`, state: { intervals: intervals.map(iv => [...iv]), newInterval: [...newInterval], res: res.map(iv => [...iv]), returns: JSON.stringify(res) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function insert(intervals, newInterval) {\n  const res = [];\n  let i = 0, n = intervals.length;\n  // 1) append intervals strictly BEFORE newInterval\n  while (i < n && intervals[i][1] < newInterval[0]) {\n    res.push(intervals[i++]);\n  }\n  // 2) merge any that overlap by expanding newInterval bounds\n  while (i < n && intervals[i][0] <= newInterval[1]) {\n    newInterval[0] = Math.min(newInterval[0], intervals[i][0]);\n    newInterval[1] = Math.max(newInterval[1], intervals[i][1]);\n    i++;\n  }\n  res.push(newInterval);\n  // 3) append the rest, all strictly after\n  while (i < n) res.push(intervals[i++]);\n  return res;\n}\n// Time O(n), Space O(n) for the output",
     "notes": [

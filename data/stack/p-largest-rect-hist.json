@@ -6,6 +6,105 @@
   "status": "full",
   "description": "Monotonic increasing stack of indices. When a shorter bar arrives, pop and compute the rectangle whose height is the popped bar; its width spans from the new stack-top to the current index. Append a 0 sentinel so everything drains at the end.",
   "mechanics": ["array-as-stack"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I have an array `heights` where `heights[i]` is the height of a bar of width 1 sitting at position `i`, and I want the area of the largest axis-aligned rectangle I can fit *inside* the histogram. The rectangle has to be horizontal — same height all the way across — but can span any contiguous set of bars, and its height is bounded by the SHORTEST bar in that span.\"\n\nThen a few quick clarifying questions:\n• Heights are non-negative integers, right? Can any be zero?\n• Bars all have width 1?\n• Bounds — n up to 10^5? That rules out O(n²).\n• Return value — just the area integer, not the rectangle's position?",
+        "why": "The 'bounded by the shortest bar' detail is the load-bearing one — that's the constraint that makes brute force O(n²) (for every pair `(i, j)`, you need to find the min height in `[i..j]`). Asking about zero-height bars matters because the algorithm handles zeros gracefully — they immediately drain the stack — and confirming this lets you use a 0 sentinel as a closing trick. Asking about n's bound signals you're already thinking about whether the natural O(n²) is acceptable; for n=10^5 it isn't, hence the stack."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"Two natural brute forces. First: for every pair `(i, j)` with `i <= j`, compute the min height in `[i..j]` and the area `(j - i + 1) * min`. That's O(n³) naively, or O(n²) if you track the running min as `j` extends. Second, equivalently: for every index `i`, find the leftmost `L` and rightmost `R` such that `heights[k] >= heights[i]` for all `k` in `[L..R]` — the area for bar `i` as the limiting height is `heights[i] * (R - L + 1)`. Computing L and R naively is O(n) per index → O(n²) total. The answer is the max over all i. Either way we're at O(n²); for n=10^5 that's 10^10 ops. Let me see if we can find L and R for every index in one pass.\"",
+        "why": "Two reasons to name the 'for each bar, find its left and right extent' brute force out loud. (1) It's NOT the obvious O(n²) — most candidates think first of 'try every pair'. The reframing to 'for each bar as the limiting height, find its extent' is the structural insight that the monotonic stack will accelerate. (2) It tees up section 3 perfectly: a monotonic stack computes those extents for free as a side effect of its push/pop discipline."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a monotonic stack?",
+        "say": "\"For each bar `i`, I need to find the nearest *smaller* bar to its left and the nearest smaller bar to its right — those two are L-1 and R+1, the boundaries of bar i's rectangle. 'Nearest smaller on each side for every index' is the textbook monotonic-stack signal. Specifically: I'll maintain a stack of indices whose heights are strictly INCREASING from bottom to top. As I scan left to right, whenever the new bar `h[i]` is shorter than the stack-top bar, I pop — and at that pop moment I know everything: the popped bar's right boundary is `i` (because the violator caused the pop), and its left boundary is the new stack-top (because anything between them was already popped earlier, which means everything between was taller). So `width = i - newStackTop - 1`, `area = poppedHeight * width`. Keep popping while the invariant is broken, then push i. At the end, any bars left on the stack haven't been resolved — so I append a 0 sentinel that forces a final drain.\"",
+        "why": "Naming the pattern *and* the structural invariant that makes it apply is the move. 'Use a stack' is a guess; 'monotonic increasing stack — when a shorter bar arrives, the popped bar's left/right extents are exactly knowable from stack positions' is a derivation. The sentinel-0 trick is also the load-bearing detail — without it, an all-increasing input like `[1, 2, 3]` would leave every bar on the stack and you'd compute zero rectangles. Naming the sentinel explicitly here means it's not a surprise when it appears in the code."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the canonical mixed case, a single bar (sentinel-only drain), and a flat run (sentinel forces a wide rectangle).",
+        "examples": [
+          {
+            "input": "[2, 1, 5, 6, 2, 3]",
+            "output": "10",
+            "note": "Canonical case. The answer 10 = height 5 × width 2 — bars at indices 2 and 3 (heights 5 and 6) limited by 5.",
+            "trace": "h = [2, 1, 5, 6, 2, 3, 0]   ← append sentinel\nstack=[] best=0\ni=0 h[i]=2 → push. stack=[0]\ni=1 h[i]=1 < h[0]=2 → pop 0. width = stack empty → i=1. area = 2*1 = 2. best=2. push 1. stack=[1]\ni=2 h[i]=5 > h[1]=1 → push. stack=[1, 2]\ni=3 h[i]=6 > h[2]=5 → push. stack=[1, 2, 3]\ni=4 h[i]=2 < h[3]=6 → pop 3. width = i-newTop-1 = 4-2-1 = 1. area = 6*1 = 6. best=6.\n         2 < h[2]=5 → pop 2. width = 4-1-1 = 2. area = 5*2 = 10. best=10.\n         2 > h[1]=1 → stop. push 4. stack=[1, 4]\ni=5 h[i]=3 > h[4]=2 → push. stack=[1, 4, 5]\ni=6 h[i]=0 < h[5]=3 → pop 5. width = 6-4-1 = 1. area = 3*1 = 3. (best stays 10)\n         0 < h[4]=2 → pop 4. width = 6-1-1 = 4. area = 2*4 = 8. (best stays 10)\n         0 < h[1]=1 → pop 1. width = stack empty → i=6. area = 1*6 = 6. (best stays 10)\n         push 6. stack=[6]\nreturn 10"
+          },
+          {
+            "input": "[5]",
+            "output": "5",
+            "note": "Single bar — without the sentinel, nothing would ever pop. The sentinel 0 forces the drain at i=1.",
+            "trace": "h = [5, 0]   ← append sentinel\nstack=[] best=0\ni=0 h[i]=5 → push. stack=[0]\ni=1 h[i]=0 < h[0]=5 → pop 0. width = stack empty → i=1. area = 5*1 = 5. best=5.\n         push 1. stack=[1]\nreturn 5"
+          },
+          {
+            "input": "[3, 3, 3]",
+            "output": "9",
+            "note": "Flat run — strict `>` means equal heights don't pop, so all three indices accumulate. Sentinel drains them as a single 3-wide rectangle (last pop has empty stack → width = i = 3).",
+            "trace": "h = [3, 3, 3, 0]   ← append sentinel\nstack=[] best=0\ni=0 h[i]=3 → push. stack=[0]\ni=1 h[i]=3 NOT > h[0]=3 (strict) → push. stack=[0, 1]\ni=2 h[i]=3 NOT > h[1]=3 → push. stack=[0, 1, 2]\ni=3 h[i]=0 < h[2]=3 → pop 2. width = 3-1-1 = 1. area = 3*1 = 3. best=3.\n         0 < h[1]=3 → pop 1. width = 3-0-1 = 2. area = 3*2 = 6. best=6.\n         0 < h[0]=3 → pop 0. width = stack empty → i=3. area = 3*3 = 9. best=9.\n         push 3. stack=[3]\nreturn 9"
+          }
+        ],
+        "why": "Tracing surfaces the three bugs this problem rewards. (1) The width formula — `i - newTop - 1` (NOT `i - top` and NOT `i - newTop`) — is the most common mistake; tracing through `[2, 1, 5, 6, 2, 3]` at i=4 shows exactly why we subtract one. (2) The empty-stack case — width = i, not i - 1 — is the other variant of the same bug, and the `[5]` case isolates it. (3) Forgetting the sentinel — without it, the `[3, 3, 3]` case would return 0 (everything left on the stack, never measured); tracing it makes the necessity obvious. All three are exactly the bugs interviewers probe for."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty array → result 0 (no rectangles possible). The for-loop never runs; best stays 0. ✓\n• Single bar [h] → area = h * 1 = h. The sentinel drains it. ✓ (Without the sentinel this would return 0 — silent bug.)\n• All same height [3, 3, 3] → since the condition is strictly `>`, no pops fire during the main scan; sentinel drains everything at the end as one wide rectangle. Result h * n. ✓\n• Strictly increasing [1, 2, 3, 4, 5] → no pops during the scan, sentinel triggers pops in reverse order. Each pop's width is the remaining span. ✓\n• Strictly decreasing [5, 4, 3, 2, 1] → every step pops once (clean monotone violations), stack stays size 1 throughout. ✓\n• A bar of height 0 in the middle, e.g. [3, 0, 3] → the 0 immediately drains the 3 to its left (and itself becomes a non-event since `area = 0 * anything = 0`); no rectangle spans across it because 0 limits everything. ✓\n• Very large heights / very long arrays — JS numbers handle up to 2^53 safely; for n=10^5 and h up to 10^4, max area is 10^9 which is fine. No overflow concern unless we're in BigInt territory.\"",
+        "why": "Walking the [5] and the flat-run cases explicitly is what defends the sentinel — without it both would return 0 silently, and they're the two cases the interviewer is most likely to throw at you to test edge handling. The 0-bar-in-the-middle case is a nice senior-touch — most candidates don't think about it because the algorithm handles it naturally (0 acts like a soft sentinel mid-array), but explaining WHY it works smoothly shows you understand the invariant."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — same amortization argument as every monotonic-stack problem. Each index is pushed onto the stack exactly once and popped from the stack at most once. So the total work of the inner `while` across the entire outer loop is bounded by n. Outer loop is n+1 iterations (n bars plus the sentinel), inner work is amortized O(1) per iteration, total O(n).\n\nSpace is O(n) — worst case strictly-increasing input fills the stack with all n indices before the sentinel drains them.\n\nThe sentinel is purely an implementation convenience — an equivalent solution puts an `after-loop` drain block that pops the remaining stack with `width = n - newTop - 1` (or n if empty). I prefer the sentinel because it eliminates a duplicate code path and keeps the loop body the sole place where area is computed.\n\nThis template extends directly to Maximal Rectangle in a binary matrix — for each row, build a histogram of consecutive 1s ending at that row, then run Largest Rectangle on it; total O(rows × cols). Same monotonic-stack core, layered over a row-wise histogram build.\"",
+        "why": "The amortized-analysis argument is what wins the pushback from an interviewer who sees the nested `while` and challenges 'isn't that O(n²)?'. Naming the sentinel as 'an implementation convenience' acknowledges that the after-loop drain works equally well — this matters because an interviewer who learned it the other way might ask 'why the sentinel?' and you want to show you chose it deliberately, not because it was the only way. The Maximal Rectangle extension is unprompted bonus material that proves you see this not as a one-off trick but as the engine that powers a whole class of 2D problems."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the monotonic-increasing-stack solution one statement at a time. h is the heights array with the sentinel 0 appended; the stack holds indices whose heights stay strictly increasing. Watch how each pop measures a rectangle whose height is the popped bar and whose width spans from the new stack top to i.",
+    "examples": [
+      { "label": "[2,1,5,6,2,3] → 10 (the canonical case)", "input": [2, 1, 5, 6, 2, 3], "expected": 10 },
+      { "label": "[5] → 5 (single bar — sentinel drains it)", "input": [5], "expected": 5 },
+      { "label": "[3,3,3] → 9 (flat run — sentinel forces a 3-wide rect)", "input": [3, 3, 3], "expected": 9 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const heights = input;",
+      "  yield { line: 1, label: `enter function — heights=${JSON.stringify(heights)}`, state: { heights } };",
+      "  const stack = [];",
+      "  yield { line: 2, label: 'init stack (empty) — will hold indices with strictly increasing heights', state: { heights, stack: [] } };",
+      "  let best = 0;",
+      "  yield { line: 3, label: 'init best=0', state: { heights, stack: [], best: 0 } };",
+      "  const h = heights.concat(0);",
+      "  yield { line: 5, label: `append 0 sentinel → h=${JSON.stringify(h)}`, state: { heights, h, stack: [], best: 0 } };",
+      "  for (let i = 0; i < h.length; i++) {",
+      "    yield { line: 6, label: `outer step: i=${i}, h[i]=${h[i]}`, state: { heights, h, stack: [...stack], best, i } };",
+      "    while (stack.length && h[stack[stack.length - 1]] > h[i]) {",
+      "      const topIdx = stack[stack.length - 1];",
+      "      yield { line: 8, label: `h[stack.top()]=h[${topIdx}]=${h[topIdx]} > h[${i}]=${h[i]} — pop and measure`, state: { heights, h, stack: [...stack], best, i } };",
+      "      const top = stack.pop();",
+      "      yield { line: 9, label: `top = stack.pop() → ${top}`, state: { heights, h, stack: [...stack], best, i, top } };",
+      "      const width = stack.length ? i - stack[stack.length - 1] - 1 : i;",
+      "      const widthLabel = stack.length ? `i - newTop - 1 = ${i} - ${stack[stack.length - 1]} - 1 = ${width}` : `stack empty → width = i = ${i}`;",
+      "      yield { line: 11, label: `width: ${widthLabel}`, state: { heights, h, stack: [...stack], best, i, top, width } };",
+      "      const area = h[top] * width;",
+      "      best = Math.max(best, area);",
+      "      yield { line: 12, label: `area = h[${top}] * ${width} = ${h[top]} * ${width} = ${area}; best = max(prev, ${area}) → ${best}`, state: { heights, h, stack: [...stack], best, i, top, width, area } };",
+      "    }",
+      "    stack.push(i);",
+      "    yield { line: 14, label: `push ${i} — stack now ${JSON.stringify(stack)}`, state: { heights, h, stack: [...stack], best, i } };",
+      "  }",
+      "  yield { line: 16, label: `return ${best}`, state: { heights, h, stack: [...stack], best, returns: best } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function largestRectangleArea(heights) {\n  const stack = [];                                  // indices, heights[idx] strictly increasing\n  let best = 0;\n  // Sentinel 0 at the end forces every remaining bar to pop and settle its area.\n  const h = heights.concat(0);\n  for (let i = 0; i < h.length; i++) {\n    // Pop while current bar breaks the increasing run — each popped bar's max rect ends here.\n    while (stack.length && h[stack[stack.length - 1]] > h[i]) {\n      const top = stack.pop();\n      // Width = gap between new stack top and i, minus 1; if stack empty, span is [0..i).\n      const width = stack.length ? i - stack[stack.length - 1] - 1 : i;\n      best = Math.max(best, h[top] * width);\n    }\n    stack.push(i);\n  }\n  return best;\n}\n// Time O(n), Space O(n)",
     "notes": [

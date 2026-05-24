@@ -6,6 +6,107 @@
   "status": "full",
   "description": "Two singly-linked lists store digits in reverse order. Walk both with a carry; build the sum list using a dummy head. Continue while either list has nodes left or carry is non-zero.",
   "mechanics": ["linked-list-walk", "dummy-head-sentinel"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I get two non-empty linked lists where each node holds a single digit, and the digits are stored in REVERSE order — so [2,4,3] represents 342 (head is the ones place, next is tens, then hundreds). I need to return their sum as a linked list, also in reverse order. So 342 + 465 = 807, and the output is [7,0,8] — 7 ones, 0 tens, 8 hundreds.\"\n\nThen a few quick clarifying questions:\n• Confirming the digits are 0-9, no negative digits?\n• Are the lists guaranteed non-empty, or do I need to handle null heads?\n• Different lengths — one number could have more digits than the other?\n• Leading zeros — are they allowed in input? Should I avoid them in output (e.g. 0+0 = [0], not [])?\n• Confirming I should NOT convert to BigInt and add — that would defeat the digit-by-digit exercise and would also fail for numbers exceeding `Number.MAX_SAFE_INTEGER` (≈9 × 10¹⁵) if I went through a regular Number.",
+        "why": "The reverse-order detail is the single most important thing to verify — if you misread it as 'forward order', you'd need to reverse both lists first, which doubles the code complexity. Confirming it upfront saves five minutes of wrong code. The 'convert to BigInt' question matters because that's the seductive shortcut a beginner would reach for, and naming why it's wrong (the digit-by-digit pattern IS the point of the problem; also overflow on huge inputs) shows you understand what's being tested."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the convert-then-add tempting wrong answer before you discard it.",
+        "say": "\"The tempting brute force is: walk each list, reconstruct the integer value (digit × 10^position), add the two numbers normally, then build a new linked list from the digits of the sum. That's O(m + n) time and looks clean, but it breaks for numbers larger than 2^53 — JavaScript Numbers only hold ~15-16 decimal digits exactly. For arbitrary-length inputs (say, 100-digit numbers), you'd silently lose precision. BigInt would fix the precision, but using it sidesteps the point of the problem — which is to perform schoolbook addition digit-by-digit with a carry. So the real solution walks both lists in parallel, sums one column at a time, propagates a carry, and appends each output digit as we go.\"",
+        "why": "Two reasons to name the convert-and-add brute force out loud. (1) It surfaces the overflow concern unprompted, which is a senior-level reflex. (2) It frames the digit-by-digit walk as the right answer because it sidesteps overflow entirely — no number larger than 9 + 9 + 1 = 19 is ever held in a variable. That's exactly why elementary-school addition works for arbitrarily large numbers: you only ever look at one column at a time."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to digit-by-digit + dummy head + carry-in-the-loop?",
+        "say": "\"This is schoolbook addition implemented on linked lists, with two pattern signals stacked together.\n\nSignal 1 — REVERSE-ordered digits: the ones place is the head. That's exactly the order you add in (right-to-left in normal notation = head-to-tail here), so I walk both lists forward without any reversal step. If the digits were stored most-significant-first, I'd need to reverse both first, then add, then reverse the result.\n\nSignal 2 — building a linked list incrementally: dummy head + tail pointer. Same as Merge Two Sorted Lists — the dummy sentinel removes the 'is this the first append?' special case.\n\nThe non-obvious trick is the loop guard: `while (l1 || l2 || carry)`. The carry has to be in the guard because of cases like 5+5: both lists end after one node, but the carry is 1, and that 1 needs to become a new most-significant digit. Without `carry` in the guard, you'd output [0] instead of [0,1] — you'd lose the leading 1.\n\nAnd inside the loop: treat a missing node as digit 0 (`const a = l1 ? l1.val : 0`) so unequal-length lists just work. No upfront length-matching needed.\"",
+        "why": "Naming the three structural moves — reverse-order means walk forward, dummy head for the build, carry in the guard — is what shows understanding versus pattern-matching. The carry-in-the-guard insight is the load-bearing one; it's the bug interviewers most often watch candidates hit. If you state the loop condition upfront and explain WHY (5+5 needs one more digit), you've already solved the problem on the whiteboard. The 'missing digit → 0' trick is also worth stating explicitly because it's how the algorithm handles unequal lengths without code branching."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure the carry handling is right.\" Three inputs cover the interesting behaviors — a clean same-length addition, a multi-digit carry chain, and the case where the carry produces a new most-significant digit.",
+        "examples": [
+          {
+            "input": "[2,4,3] + [5,6,4]   (342 + 465 = 807)",
+            "output": "[7,0,8]",
+            "note": "Same length, no carry propagation across columns.",
+            "trace": "init: dummy→null, tail=dummy, carry=0\niter1: a=2, b=5, sum=7. carry=0, digit=7. append 7.   sumList=[7]\niter2: a=4, b=6, sum=10. carry=1, digit=0. append 0.  sumList=[7,0]\niter3: a=3, b=4, carry=1, sum=8. carry=0, digit=8. append 8. sumList=[7,0,8]\nloop check: l1=null, l2=null, carry=0 → exit\nreturn [7,0,8]"
+          },
+          {
+            "input": "[9,9] + [1]   (99 + 1 = 100)",
+            "output": "[0,0,1]",
+            "note": "Different lengths AND carry propagates across all columns AND creates a new most-significant digit. The 'hard' case.",
+            "trace": "init: dummy→null, tail=dummy, carry=0\niter1: a=9, b=1, sum=10. carry=1, digit=0. append 0.       sumList=[0]\niter2: a=9, b=0 (l2 exhausted), carry=1, sum=10. carry=1, digit=0. append 0.   sumList=[0,0]\niter3: l1=null, l2=null, carry=1. a=0, b=0, sum=1. carry=0, digit=1. append 1. sumList=[0,0,1]\nloop check: l1=null, l2=null, carry=0 → exit\nreturn [0,0,1]"
+          },
+          {
+            "input": "[5] + [5]   (5 + 5 = 10)",
+            "output": "[0,1]",
+            "note": "Smallest case that exercises the carry-after-both-lists-end behavior. This is exactly why `carry` is in the loop guard.",
+            "trace": "init: dummy→null, tail=dummy, carry=0\niter1: a=5, b=5, sum=10. carry=1, digit=0. append 0.   sumList=[0]\niter2: l1=null, l2=null, carry=1. a=0, b=0, sum=1. carry=0, digit=1. append 1. sumList=[0,1]\nloop check: l1=null, l2=null, carry=0 → exit\nreturn [0,1]"
+          }
+        ],
+        "why": "Tracing surfaces the two bugs this problem is famous for. (1) The 9+1 trace exposes 'forgetting `carry` in the loop guard' — without it, iter 3 never runs and you output [0,0] instead of [0,0,1]. (2) The 5+5 trace is the smallest reproduction of the same bug. If your loop condition is just `l1 || l2`, both traces fail in the same way. Writing them out before the code is much less painful than catching them after the interviewer asks 'what does it return for 5+5?'."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Both single zero ([0] + [0]) → one iteration, sum=0, carry=0, append 0. Return [0], not []. ✓\n• One list much longer ([1,2,3,4,5,6,7] + [1]) → walk the long list to completion with the short one's digits treated as 0. No length-matching code needed.\n• Final carry creates a new digit ([9,9,9] + [1]) → carry propagates all the way through and produces a leading 1. Handled by `carry` in the loop guard.\n• Very long lists (say 10,000 digits each) → still O(max(m, n)) time, O(max(m, n)) space for the output. No overflow because every variable holds at most 19 (9 + 9 + 1).\n• What I am NOT handling: negative numbers (assumed non-negative), forward-order digits (would need reversal pre-and-post). Worth flagging that the algorithm is specific to the 'reverse order, non-negative' contract.\"",
+        "why": "The [0]+[0] = [0] case is the one most candidates miss — they over-engineer to strip leading zeros from the output and end up returning [] for 0+0. Naming it shows you've actually thought about the degenerate case. The overflow callout ('every variable holds at most 19') is the senior reflex — this is the answer to 'doesn't your int overflow on a 10000-digit number?'. The answer is no, because we never hold the full number in a variable, only one column's sum at a time."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(max(m, n)) where m and n are the lengths of the two input lists. The loop runs once per output digit, which is at most max(m, n) + 1 (the +1 is the possible carry-out at the top). Each iteration does fixed work — one add, one div, one mod, one append. No nested loops, no amortization needed.\n\nSpace is O(max(m, n)) for the output linked list. O(1) extra beyond the output (the dummy and tail are constants).\n\nIf you wanted to extend to 'forward-ordered digits' (LeetCode 445 — Add Two Numbers II), you have two options: (1) reverse both inputs, run this exact algorithm, reverse the output; or (2) push both onto stacks and pop synchronously while building the output BACKWARDS by inserting at the head. Option 2 is the cleaner answer when you can't mutate the input. Same digit-by-digit + carry primitive underneath.\"",
+        "why": "The 'max(m,n) + 1' bound is the right defense — it explains why the answer can be longer than either input (because of the carry-out). The Add Two Numbers II extension is the natural follow-up and proves you see the digit-by-digit pattern as separable from the order detail. That's how the same primitive shows up in Plus One, Add Strings, Multiply Strings, and any arbitrary-precision arithmetic problem — the carry-propagation column-walk is the underlying shape."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through digit-by-digit addition with a carry. Input is { l1, l2 } as two reversed-digit arrays. Watch the carry propagate, and notice how the third example (5+5) needs one more digit AFTER both lists end — that's why `carry` is in the loop guard.",
+    "examples": [
+      { "label": "[2,4,3] + [5,6,4] → [7,0,8]   (342+465=807)", "input": { "l1": [2, 4, 3], "l2": [5, 6, 4] }, "expected": "[7,0,8]" },
+      { "label": "[9,9] + [1] → [0,0,1]   (99+1=100)",          "input": { "l1": [9, 9], "l2": [1] },        "expected": "[0,0,1]" },
+      { "label": "[5] + [5] → [0,1]   (5+5=10)",                "input": { "l1": [5], "l2": [5] },           "expected": "[0,1]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { l1: arr1, l2: arr2 } = input;",
+      "  const toList = (arr) => { const d = { val: 0, next: null }; let c = d; for (const v of arr) { c.next = { val: v, next: null }; c = c.next; } return d.next; };",
+      "  const toArr = (n) => { const out = []; while (n) { out.push(n.val); n = n.next; } return out; };",
+      "  let l1 = toList(arr1), l2 = toList(arr2);",
+      "  yield { line: 1, label: `enter function — l1=${JSON.stringify(arr1)}, l2=${JSON.stringify(arr2)}`, state: { l1: toArr(l1), l2: toArr(l2) } };",
+      "  const dummy = { val: 0, next: null };",
+      "  let tail = dummy, carry = 0;",
+      "  yield { line: 4, label: 'init dummy sentinel, tail=dummy, carry=0', state: { l1: toArr(l1), l2: toArr(l2), carry: 0, sumList: toArr(dummy.next) } };",
+      "  let iter = 0;",
+      "  while (l1 || l2 || carry) {",
+      "    iter++;",
+      "    yield { line: 6, label: `loop iter ${iter} — guard: l1=${!!l1}, l2=${!!l2}, carry=${carry}`, state: { l1: toArr(l1), l2: toArr(l2), carry, sumList: toArr(dummy.next) } };",
+      "    const a = l1 ? l1.val : 0;",
+      "    const b = l2 ? l2.val : 0;",
+      "    yield { line: 9, label: `read digits — a=${a}, b=${b} (missing → 0)`, state: { l1: toArr(l1), l2: toArr(l2), a, b, carry } };",
+      "    const sum = a + b + carry;",
+      "    yield { line: 10, label: `sum = ${a} + ${b} + ${carry} = ${sum}`, state: { a, b, carry, sum } };",
+      "    carry = Math.floor(sum / 10);",
+      "    yield { line: 11, label: `new carry = floor(${sum}/10) = ${carry}`, state: { sum, carry, digit: sum % 10 } };",
+      "    tail.next = { val: sum % 10, next: null };",
+      "    tail = tail.next;",
+      "    yield { line: 13, label: `append digit ${sum % 10} to sum list`, state: { carry, sumList: toArr(dummy.next) } };",
+      "    if (l1) l1 = l1.next;",
+      "    if (l2) l2 = l2.next;",
+      "    yield { line: 15, label: 'advance l1 and l2 (if not exhausted)', state: { l1: toArr(l1), l2: toArr(l2), carry, sumList: toArr(dummy.next) } };",
+      "    if (iter > 30) { yield { line: 6, label: 'safety stop', state: { returns: '[]' } }; return; }",
+      "  }",
+      "  yield { line: 17, label: 'return dummy.next', state: { sumList: toArr(dummy.next), returns: JSON.stringify(toArr(dummy.next)) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function addTwoNumbers(l1, l2) {\n  // Dummy sentinel — first sum node attaches without a special case.\n  const dummy = { val: 0, next: null };\n  let tail = dummy, carry = 0;\n  // Carry in the condition: 5+5 still owes a leading 1 after both lists end.\n  while (l1 || l2 || carry) {\n    // Treat a missing node as 0 so unequal lengths just work.\n    const a = l1 ? l1.val : 0;\n    const b = l2 ? l2.val : 0;\n    const sum = a + b + carry;\n    carry = Math.floor(sum / 10);\n    tail.next = { val: sum % 10, next: null };\n    tail = tail.next;\n    if (l1) l1 = l1.next;\n    if (l2) l2 = l2.next;\n  }\n  return dummy.next;\n}\n// Time O(max(m, n)), Space O(max(m, n))",
     "notes": [

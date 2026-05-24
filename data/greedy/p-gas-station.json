@@ -6,6 +6,101 @@
   "status": "full",
   "description": "Given gas[i] and cost[i] around a circular route, return the starting index that lets you finish the loop, or -1. Greedy: if total gas >= total cost a solution exists; reset start whenever the tank goes negative.",
   "mechanics": ["greedy-single-pass"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I have two equal-length arrays, `gas` and `cost`, around a circular route. At station `i` I can pick up `gas[i]` units of fuel, and it costs `cost[i]` to drive to station `i+1` (wrapping around). I need to return any starting index from which I can complete the full loop, or -1 if no such start exists.\"\n\nThen a few quick clarifying questions:\n• Are gas and cost guaranteed equal-length and non-empty?\n• Are the values non-negative integers, or could they be floats / negative?\n• Is the answer unique? (Yes — if a solution exists, it's the only one.)\n• Just return the index, not the route itself, right?",
+        "why": "The 'answer is unique' clarification is the load-bearing one — it's what justifies the greedy single-pass. If multiple starts could work, you'd need a different verification step. Confirming non-negative integers also matters: if costs could be negative (refunds at a station), the 'tank goes negative → reset' invariant breaks down."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"The brute force is: for every candidate start `s` from 0 to n-1, simulate the loop — track a tank, add `gas[(s+k) % n]`, subtract `cost[(s+k) % n]` for k=0..n-1, and bail to the next `s` if the tank ever goes negative. Return the first `s` that makes it all the way around, or -1 if none do. That's O(n²) time, O(1) space — let me see if we can do it in one pass.\"",
+        "why": "Naming the O(n²) simulation out loud does two things. (1) It proves you understand the problem operationally — interviewers worry about candidates who skip to a slick one-pass before they can describe what 'complete the circuit' actually means. (2) It frames the greedy insight: the brute force re-simulates from every start, but most of those simulations share a prefix with one we've already done. The optimization is 'don't re-simulate — learn from the previous failure.'"
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a single-pass greedy?",
+        "say": "\"Two invariants make this greedy. First, **feasibility**: if `sum(gas) >= sum(cost)`, a solution exists; otherwise return -1. That's a one-line global check. Second, **the exchange argument for the start**: if I begin at some start `s` and the running tank goes negative at index `i`, then no index in `[s, s+1, ..., i]` can be a valid start either. Why? Pick any inner index `j` in that range — starting at `j` skips a non-negative prefix `[s..j-1]` (it had to be non-negative, otherwise we'd have reset before reaching `j`). Removing a non-negative prefix can only make the tank at `i` lower, not higher. So `j` fails at `i` too. The only candidate left is `i+1`. One pass, jumping start forward whenever the local tank dies, lands on THE answer.\"",
+        "why": "Naming the pattern *and* the exchange argument is the move. 'Greedy' alone is a guess; 'greedy because skipping a non-negative prefix can only lower the tank, so every inner index is dominated by the outer one' is a derivation. The exchange argument is the proof of correctness — interviewers grade on whether you can produce it, not on whether you memorized the algorithm."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the classic case where the answer sits in the middle, an infeasible case where total is negative, and a case where the answer is the last index.",
+        "examples": [
+          {
+            "input": "gas=[1,2,3,4,5], cost=[3,4,5,1,2]",
+            "output": "3",
+            "note": "Classic case — multiple resets, final start lands on the right answer.",
+            "trace": "init total=0, tank=0, start=0\ni=0: diff=-2. total=-2, tank=-2 → tank<0! start=1, tank=0\ni=1: diff=-2. total=-4, tank=-2 → tank<0! start=2, tank=0\ni=2: diff=-2. total=-6, tank=-2 → tank<0! start=3, tank=0\ni=3: diff=3.  total=-3, tank=3\ni=4: diff=3.  total=0,  tank=6\nfinal: total=0 >= 0 → return start=3"
+          },
+          {
+            "input": "gas=[2,3,4], cost=[3,4,3]",
+            "output": "-1",
+            "note": "Infeasible — total gas < total cost. The greedy's local resets would still produce a 'last candidate' but the total<0 check overrules.",
+            "trace": "init total=0, tank=0, start=0\ni=0: diff=-1. total=-1, tank=-1 → tank<0! start=1, tank=0\ni=1: diff=-1. total=-2, tank=-1 → tank<0! start=2, tank=0\ni=2: diff=1.  total=-1, tank=1\nfinal: total=-1 < 0 → return -1"
+          },
+          {
+            "input": "gas=[5,1,2,3,4], cost=[4,4,1,5,1]",
+            "output": "4",
+            "note": "Answer is the last index — start gets reset all the way to the end.",
+            "trace": "init total=0, tank=0, start=0\ni=0: diff=1.  total=1,  tank=1\ni=1: diff=-3. total=-2, tank=-2 → tank<0! start=2, tank=0\ni=2: diff=1.  total=-1, tank=1\ni=3: diff=-2. total=-3, tank=-1 → tank<0! start=4, tank=0\ni=4: diff=3.  total=0,  tank=3\nfinal: total=0 >= 0 → return start=4"
+          }
+        ],
+        "why": "Tracing surfaces the subtle invariant — `start` and `tank` reset together, while `total` keeps accumulating across resets. The infeasible case is what defends the `total >= 0` guard: without it, the algorithm would happily return `start=2` for `[2,3,4]/[3,4,3]` even though the loop is impossible. Two parallel accumulators, two different jobs."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• `sum(gas) < sum(cost)` → no valid start; the `total < 0` guard returns -1. ✓\n• `sum(gas) === sum(cost)` exactly → solution exists and ties net to zero; greedy still finds it. ✓\n• Single station `gas=[5], cost=[5]` → diff=0, tank never goes negative, total=0, return 0. ✓\n• Single station `gas=[3], cost=[5]` → diff=-2, tank goes negative, start=1 (past the array), total=-2 → return -1. ✓\n• All `gas[i] === cost[i]` → diff=0 everywhere, never resets, returns 0. ✓\n• `gas` all zeros, `cost` positive → first iteration: tank goes negative, reset → eventually start passes end of array and total<0 → -1. ✓\n• Very large arrays — O(n) handles it, but if values are large, watch for integer overflow in other languages (not an issue in JS — numbers are 64-bit floats up to 2^53).\"",
+        "why": "Walking the single-station cases is what proves the algorithm handles n=1 without special-casing — both `[5]/[5]` (return 0) and `[3]/[5]` (return -1) fall out naturally from the same loop. That's the test of a clean invariant: it doesn't need an n==1 branch. The integer-overflow call-out is the senior-engineer flag for the language-agnostic interviewer."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — one pass through the array, constant work per index (add, compare, maybe reset). No nested loop, no re-simulation from new starts, no amortization argument needed; it's just n iterations.\n\nSpace is O(1) — three integers (`total`, `tank`, `start`). The input arrays are read-only; no auxiliary structure.\n\nThe key insight worth emphasizing: we get the right answer in one pass because of TWO separate invariants doing different jobs. `total` gates feasibility globally — if sum is negative, nothing works. `tank` and `start` together implement the exchange argument locally — every reset disqualifies a contiguous block of candidates without simulating them.\n\nIf you wanted to extend to 'find ALL valid starts' instead of just one, the answer would still be at most one (the problem guarantees uniqueness when feasible). But a related question — 'what's the minimum tank capacity needed to make the loop from a given start?' — uses the same diff array and a running max/min, same template, different aggregation.\"",
+        "why": "Calling out the two-invariants insight is the move that distinguishes 'I memorized the algorithm' from 'I understand why it works'. Most candidates state the O(n) without articulating that two parallel accumulators are doing distinct jobs — the interviewer will probe with 'why do you need both `total` and `tank`?' and you've already answered it. The extension question hints at LeetCode 'Course Schedule with prereqs' style problems where a similar reset-on-failure greedy applies."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the one-pass greedy on a real input. Watch how `tank` accumulates, resets at the failure index, and `start` jumps to `i+1` — while `total` keeps the whole-loop verdict in parallel.",
+    "examples": [
+      { "label": "gas=[1,2,3,4,5], cost=[3,4,5,1,2] → 3", "input": { "gas": [1, 2, 3, 4, 5], "cost": [3, 4, 5, 1, 2] }, "expected": 3 },
+      { "label": "gas=[2,3,4], cost=[3,4,3] → -1 (total negative)", "input": { "gas": [2, 3, 4], "cost": [3, 4, 3] }, "expected": -1 },
+      { "label": "gas=[5,1,2,3,4], cost=[4,4,1,5,1] → 4", "input": { "gas": [5, 1, 2, 3, 4], "cost": [4, 4, 1, 5, 1] }, "expected": 4 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { gas, cost } = input;",
+      "  yield { line: 1, label: `enter function — gas=${JSON.stringify(gas)}, cost=${JSON.stringify(cost)}`, state: { gas, cost } };",
+      "  let total = 0, tank = 0, start = 0;",
+      "  yield { line: 3, label: 'init total=0, tank=0, start=0', state: { gas, cost, total, tank, start } };",
+      "  for (let i = 0; i < gas.length; i++) {",
+      "    const diff = gas[i] - cost[i];",
+      "    yield { line: 5, label: `i=${i}: diff = gas[${i}] - cost[${i}] = ${gas[i]} - ${cost[i]} = ${diff}`, state: { gas, cost, i, diff, total, tank, start } };",
+      "    total += diff;",
+      "    yield { line: 6, label: `total += ${diff} → ${total}`, state: { gas, cost, i, diff, total, tank, start } };",
+      "    tank += diff;",
+      "    yield { line: 7, label: `tank += ${diff} → ${tank}`, state: { gas, cost, i, diff, total, tank, start } };",
+      "    if (tank < 0) {",
+      "      yield { line: 9, label: `tank=${tank} < 0 — every index in [${start}..${i}] is disqualified, reset`, state: { gas, cost, i, diff, total, tank, start } };",
+      "      start = i + 1;",
+      "      tank = 0;",
+      "      yield { line: 10, label: `start → ${start}, tank → 0`, state: { gas, cost, i, diff, total, tank, start } };",
+      "    } else {",
+      "      yield { line: 9, label: `tank=${tank} >= 0 — keep current start=${start}`, state: { gas, cost, i, diff, total, tank, start } };",
+      "    }",
+      "  }",
+      "  const result = total >= 0 ? start : -1;",
+      "  yield { line: 15, label: `total=${total} ${total >= 0 ? '>= 0 → return start=' + start : '< 0 → return -1'}`, state: { gas, cost, total, tank, start, returns: result } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function canCompleteCircuit(gas, cost) {\n  // total = whole-loop balance (decides feasibility); tank = running balance from current candidate start.\n  let total = 0, tank = 0, start = 0;\n  for (let i = 0; i < gas.length; i++) {\n    const diff = gas[i] - cost[i];\n    total += diff;\n    tank  += diff;\n    // If tank goes negative, every index in [start..i] is disqualified — jump past i.\n    if (tank < 0) {\n      start = i + 1;\n      tank = 0;\n    }\n  }\n  // If total < 0 no start works; otherwise the last surviving start is THE answer.\n  return total >= 0 ? start : -1;\n}\n// Time O(n), Space O(1)",
     "notes": [

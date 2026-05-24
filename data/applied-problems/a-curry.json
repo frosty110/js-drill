@@ -6,6 +6,101 @@
   "status": "full",
   "description": "Turn `fn(a, b, c)` into a function you can call as `f(a)(b)(c)`, `f(a, b)(c)`, or `f(a, b, c)` — the recursive-args-accumulator pattern.",
   "mechanics": ["closure-state"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the contract.",
+        "say": "\"Let me restate: I'm given a function `fn` that takes some fixed number of args, and I need to return a curried version `c` such that `c(a)(b)(c)`, `c(a,b)(c)`, and `c(a,b,c)` all produce the same result as `fn(a,b,c)`. A few clarifying questions before I code:\"\n\n• Arity — am I curring against `fn.length` (declared params), or is the target arity passed in explicitly?\n• Variadic functions — what should curry do if `fn` uses rest params? (`fn.length` is 0 for those.)\n• Default-valued params — do they count toward arity? (`fn.length` stops at the first default.)\n• `this` binding — should the curried function preserve `this` from the call site, or always invoke `fn` with `null`?",
+        "why": "The arity question is the load-bearing one — every gate in the implementation compares against it. Asking about `this` upfront signals you've thought about `fn.apply(this, args)` vs. `fn(...args)`; most candidates skip that and lose marks when the interviewer says \"now make it work as a method\". Calling out the rest-param edge unprompted shows you've actually used `fn.length` in anger."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious hard-coded version before generalizing.",
+        "say": "\"The dumb version for a known arity-3 case is: `c = a => b => c => fn(a,b,c)`. That handles the fully-curried call shape `c(1)(2)(3)` but breaks for `c(1,2)(3)` because the outer function only accepts one arg. To support all the legal call shapes for arbitrary arity, I need each partial to accept any number of args, decide whether it has enough to fire, and either invoke `fn` or return another partial. That's the generalization.\"",
+        "why": "Naming the trivial nested-arrow version makes the leap to the recursive accumulator feel like a small step, not a magic trick. It also surfaces the real requirement — variable-batch sizes per call — which the trivial version doesn't satisfy. Interviewers grade you on showing the requirement that forces the general solution, not just on the general solution."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the underlying primitive?",
+        "say": "\"This is recursive partial application backed by closure. The pattern: return a function `curried(...args)` that closes over the original `fn`. On every call, check `args.length >= fn.length`. If yes, fire `fn.apply(this, args)`. If no, return a NEW wrapper that — when called — recurses into `curried` with `args.concat(more)`. The outer closure captures `fn`; each partial wrapper captures the args accumulated so far.\"\n\n\"Two subtleties: use `concat` (not `push`) so sibling partials from the same intermediate function don't share a mutating array; and recurse via the named `curried`, not `fn`, so the new partial can re-check arity and chain further.\"",
+        "why": "Articulating both the closure topology (`fn` captured at the outer level, args captured at each partial) and the recursion (`curried` calls itself, not `fn`) is what separates a candidate who's memorized the snippet from one who understands it. The `concat` vs `push` distinction is the test — anyone who reaches for `push` here has a subtle bug that only shows up when you reuse the same intermediate partial twice."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk the three call shapes to confirm the model.",
+        "intro": "\"Let me run the three legal call shapes — `c(1)(2)(3)`, `c(1,2)(3)`, and `c(1,2,3)` — through the model. Same arity (3), same `add(a,b,c) => a+b+c`, but the partial chain looks different in each case.\"",
+        "examples": [
+          {
+            "input": "c(1)(2)(3) — three one-arg calls",
+            "output": "6",
+            "note": "The classic fully-curried form. Two partials before the fire.",
+            "trace": "call c(1)        → curried([1]).        args.len=1 < 3 → return wrapper closing over [1]\ncall  (2)        → curried([1,2]).     args.len=2 < 3 → return wrapper closing over [1,2]\ncall  (3)        → curried([1,2,3]).   args.len=3 >= 3 → fn.apply(null, [1,2,3]) = 6 ✓"
+          },
+          {
+            "input": "c(1,2)(3) — first call already has 2 of 3",
+            "output": "6",
+            "note": "Variable batch size — first batch is 2, second is 1.",
+            "trace": "call c(1,2)      → curried([1,2]).     args.len=2 < 3 → return wrapper closing over [1,2]\ncall  (3)        → curried([1,2,3]).   args.len=3 >= 3 → fn.apply(null, [1,2,3]) = 6 ✓"
+          },
+          {
+            "input": "c(1,2,3) — single saturated call fires immediately",
+            "output": "6",
+            "note": "Already-met arity on the first call — the arity check fires on entry, no partial returned.",
+            "trace": "call c(1,2,3)    → curried([1,2,3]).   args.len=3 >= 3 → fn.apply(null, [1,2,3]) = 6 ✓ (no wrapper ever created)"
+          }
+        ],
+        "why": "The trace exposes the load-bearing bug: if you use `args.push(...more)` instead of `args.concat(more)`, calling the same intermediate partial twice (e.g. `const p = c(1); p(2,3); p(2,3);`) would carry mutation across calls and the second invocation would see `[1,2,3,2,3]`. Walking the c(1,2)(3) and c(1,2,3) cases also confirms the arity check works for both \"already-saturated\" and \"saturated-by-this-batch\" — the same guard handles both."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs break a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Zero-arg `fn` — `fn.length === 0`, so `args.length >= 0` is true on the very first call. `curry(fn)()` fires immediately. Worth confirming the interviewer wants that behavior.\n• Single-arg `fn` — `curry(fn)(x)` should just return `fn(x)`; no partial chain. The same `args.length >= fn.length` gate handles it.\n• Already-met arity on first call — `curry(fn)(a,b,c)` for arity-3 fires without ever returning a wrapper. Same gate.\n• Over-saturated — `curry(fn)(a,b,c,d)` passes 4 args to an arity-3 fn. With `>=` the extra arg is forwarded to `fn`; with `===` it would silently return a partial. `>=` is the correct comparison.\n• Variadic `fn` (rest params) — `fn.length === 0`, so curry fires on the first call regardless of what was passed. Real currying doesn't apply here; flag it.\n• Default-param `fn` — `(a, b = 1) => a + b` has `length === 1`. Curry fires after one arg, never letting the caller override `b`. Worth noting if it surprises them.",
+        "why": "The over-saturated case is the comparison-operator test (`>=` vs `===`) — getting it wrong is a subtle bug that only fires on the unusual call. The variadic / default-param cases prove you understand that `fn.length` is a structural property of the declaration, not the call site — that's the kind of detail interviewers probe to separate \"used closures\" from \"understands closures\"."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim, and what does this generalize to?",
+        "say": "\"Time per call is O(k) where k is the number of args passed in that call — `args.concat(more)` copies the accumulated array. Total work across the chain to reach a fully-saturated call of arity n is O(n²) in the worst case (one-arg-at-a-time copies a growing array), but n is small (function arity, typically ≤5), so this is a non-issue in practice.\n\nSpace is O(n) — the longest partial chain holds one closure per call, each capturing an args array up to length n.\n\nThis is the canonical example of recursive partial application via closure. The same closure-as-accumulator pattern shows up in flat-arg builder APIs (`q.where(...).order(...).limit()`), in compose/pipe (`pipe(f,g,h)(x) = h(g(f(x)))` — different recursion, same closure-capture idea), and in the React `useCallback` / `useMemo` hooks (closure over a function with deps as the cache key). If you wanted me to extend: add a placeholder symbol (`_`) so callers can defer specific positions instead of just trailing ones — Ramda's `R.curry` does this.\"",
+        "why": "The O(n²) defense (with the small-n disclaimer) is the right answer to \"is this efficient?\" — it acknowledges the cost without pretending it doesn't exist. The placeholder extension is the bonus that proves you see this as a *family* of partial-application techniques, not a one-off interview snippet. Naming Ramda specifically signals you've seen this used in real code."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through curry on `add(a,b,c) => a+b+c` (arity 3). Each example simulates one of the legal call shapes — `c(1)(2)(3)`, `c(1,2)(3)`, `c(1,2,3)` — by feeding a sequence of arg-batches and walking the recursive curried(...) accumulator. Watch `collected` grow and the arity check decide fire-or-defer.",
+    "examples": [
+      { "label": "c(1)(2)(3) — three one-arg calls", "input": { "arity": 3, "calls": [[1], [2], [3]] }, "expected": 6 },
+      { "label": "c(1,2)(3) — first call already has 2 of 3", "input": { "arity": 3, "calls": [[1, 2], [3]] }, "expected": 6 },
+      { "label": "c(1,2,3) — single saturated call fires immediately", "input": { "arity": 3, "calls": [[1, 2, 3]] }, "expected": 6 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const arity = input.arity;",
+      "  const calls = input.calls;",
+      "  const fn = (a, b, c) => a + b + c;",
+      "  yield { line: 1, label: `enter curry(fn) — fn.length=${arity}, call batches=${JSON.stringify(calls)}`, state: { arity, calls } };",
+      "  let collected = [];",
+      "  let result;",
+      "  yield { line: 2, label: 'curry returns curried(...) — collected args start empty []', state: { arity, calls, collected: [...collected] } };",
+      "  for (let k = 0; k < calls.length; k++) {",
+      "    const batch = calls[k];",
+      "    yield { line: 2, label: `call batch #${k}: invoke partial with args=${JSON.stringify(batch)}`, state: { arity, calls, collected: [...collected], batch } };",
+      "    collected = collected.concat(batch);",
+      "    yield { line: 6, label: `args.concat(more) → collected=${JSON.stringify(collected)} (length ${collected.length})`, state: { arity, calls, collected: [...collected], batch } };",
+      "    if (collected.length >= arity) {",
+      "      yield { line: 3, label: `arity check: ${collected.length} >= ${arity} — fire fn.apply(this, args)`, state: { arity, calls, collected: [...collected], batch } };",
+      "      result = fn.apply(null, collected);",
+      "      yield { line: 4, label: `fn(${collected.join(', ')}) → ${result}`, state: { arity, calls, collected: [...collected], result } };",
+      "      break;",
+      "    } else {",
+      "      yield { line: 5, label: `arity check: ${collected.length} < ${arity} — return a new partial that will recurse on curried(args.concat(more))`, state: { arity, calls, collected: [...collected], batch } };",
+      "    }",
+      "  }",
+      "  yield { line: 4, label: `final result = ${result}`, state: { arity, calls, collected: [...collected], result, returns: result } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function curry(fn) {\n  return function curried(...args) {\n    if (args.length >= fn.length) {           // enough args — fire it\n      return fn.apply(this, args);\n    }\n    return function (...more) {                // not enough — collect more\n      return curried.apply(this, args.concat(more));\n    };\n  };\n}\nconst add = (a, b, c) => a + b + c;\nconst c = curry(add);\nc(1)(2)(3);        // 6\nc(1, 2)(3);        // 6\nc(1)(2, 3);        // 6\nc(1, 2, 3);        // 6",
     "notes": [

@@ -6,6 +6,123 @@
   "status": "full",
   "description": "Preorder gives roots in order; inorder splits left/right around each root. Recurse on the two halves, indexing inorder with a Map for O(n).",
   "mechanics": ["tree-recursion"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"So I have two arrays: `preorder` (root-left-right traversal) and `inorder` (left-root-right traversal) of the same binary tree, and I need to reconstruct the tree. Each preorder array starts with the root of the whole tree, and finding that root in inorder splits inorder into 'everything left of root' = left subtree's inorder, and 'everything right of root' = right subtree's inorder.\"\n\nThen a few quick clarifying questions:\n• Are all values guaranteed unique? (Critical — duplicates break the inorder-split-by-root approach.)\n• Are the two arrays guaranteed to describe a valid tree (same length, same multiset of values)?\n• What if both arrays are empty? Return null?\n• Return the root node, right? Not a serialized form?",
+        "why": "The 'all values unique' question is THE precondition for this algorithm. With duplicates, looking up the root's index in inorder is ambiguous — which copy of the value is the actual root? The standard solution assumes uniqueness; flagging it shows you understand the algorithm's foundation, not just its mechanics. Without that assumption you'd need a different approach entirely (BFS-based or extra metadata)."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the O(n²) version, then justify the O(n) hash-map upgrade.",
+        "say": "\"The natural recursive solution: take `preorder[0]` as the root. Find that root value in `inorder` — say at index `mid`. Then everything in `inorder[0..mid-1]` is the left subtree's inorder, and `inorder[mid+1..end]` is the right subtree's inorder. The corresponding slices of preorder are `preorder[1..mid]` for the left and `preorder[mid+1..end]` for the right.\n\nNaively, finding `mid` in inorder is O(n) per call, and we make n recursive calls, giving O(n²) overall. Plus, slicing arrays each call allocates memory.\n\nThe optimization is two-pronged: (1) build a value→index Map from inorder up front, making the `mid` lookup O(1); (2) instead of slicing, pass (lo, hi) index ranges into the original inorder array, and use a single moving pointer `p` into preorder. Result: O(n) time, O(n) space for the map and recursion.\"",
+        "why": "Walking through the O(n²) version first — and naming both the lookup cost AND the slicing allocation — is the move. It justifies BOTH optimizations (Map and index ranges) as fixing specific identified problems, not as 'because the textbook says so.' Interviewers grade on whether you can name the cost source, then engineer past it."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to this specific tree-recursion shape?",
+        "say": "\"There are really two interlocking insights. First, preorder is sequential: 'visit self, then ALL of left subtree, then ALL of right subtree.' Which means after I take preorder[0] as root, the very next preorder elements (in order) form the entire left subtree's preorder — and only after the whole left subtree is consumed does the right subtree's preorder begin. That's why a SINGLE moving pointer `p` works: I just consume preorder in order as I recurse.\n\nSecond, inorder is split-by-root: 'left subtree's inorder, then root, then right subtree's inorder.' So finding the root in inorder cleanly partitions the remaining inorder into the two subtrees.\n\nCombine them: preorder names roots in left-first order; inorder tells me where each root splits its subtree. Recurse on the (lo, hi) sub-range of inorder, with `p` consuming preorder. That's the pattern — 'reconstruct via two traversals where one names roots and the other splits subtrees.'\"",
+        "why": "Naming the two traversals' complementary properties — preorder gives roots in order, inorder gives the split — is the derivation. 'Use a hash map' alone is mechanics; 'left-first preorder consumption + inorder split point' is the insight. The fact that a single pointer `p` works is non-obvious; spelling out WHY (preorder visits all of left before any of right) earns serious credit."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the classic balanced case, the single-node base case, and a left-skewed-ish tree.",
+        "examples": [
+          {
+            "input": "preorder=[3,9,20,15,7] inorder=[9,3,15,20,7]",
+            "output": "post-order [9,15,7,20,3]",
+            "note": "Classic — tree is 3 with left=9 (leaf) and right=20 (with children 15, 7).",
+            "trace": "p=0, build(0, 4): val=preorder[0]=3, p=1, mid=idx.get(3)=1\n  build(0, 0): val=preorder[1]=9, p=2, mid=0\n    build(0, -1): lo>hi → null\n    build(1, 0): lo>hi → null\n    return node 9\n  build(2, 4): val=preorder[2]=20, p=3, mid=3\n    build(2, 2): val=preorder[3]=15, p=4, mid=2\n      build(2, 1): null; build(3, 2): null\n      return node 15\n    build(4, 4): val=preorder[4]=7, p=5, mid=4\n      build(4, 3): null; build(5, 4): null\n      return node 7\n    return node 20 with left=15, right=7\n  return node 3 with left=9, right=20\npost-order of result: [9, 15, 7, 20, 3]"
+          },
+          {
+            "input": "preorder=[1] inorder=[1]",
+            "output": "post-order [1]",
+            "note": "Single node — recursive base case after one consumption.",
+            "trace": "p=0, build(0, 0): val=preorder[0]=1, p=1, mid=0\n  build(0, -1): lo>hi → null\n  build(1, 0): lo>hi → null\n  return node 1\npost-order: [1]"
+          },
+          {
+            "input": "preorder=[1,2,4,5,3] inorder=[4,2,5,1,3]",
+            "output": "post-order [4,5,2,3,1]",
+            "note": "Asymmetric — node 1 has left=2 (with children 4 and 5) and right=3 (leaf).",
+            "trace": "p=0, build(0, 4): val=1, p=1, mid=3\n  build(0, 2): val=2, p=2, mid=1\n    build(0, 0): val=4, p=3, mid=0 → leaf 4\n    build(2, 2): val=5, p=4, mid=2 → leaf 5\n    return node 2 with left=4, right=5\n  build(4, 4): val=3, p=5, mid=4 → leaf 3\n  return node 1 with left=2, right=3\npost-order: [4, 5, 2, 3, 1]"
+          }
+        ],
+        "why": "Watching `p` advance monotonically through preorder while the inorder window narrows is the visual proof that the algorithm works — it's not obvious that a single pointer suffices until you trace it. The asymmetric case (#3) is where the inorder-split logic becomes load-bearing: root 1 sits at inorder[3], so mid=3 cleanly partitions inorder into [4,2,5] (left subtree, length 3) and [3] (right subtree, length 1). If the lengths come out wrong, the recursion goes off the rails — tracing surfaces that immediately."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty arrays → first call is `build(0, -1)` which hits `lo > hi` and returns null. ✓\n• Single node → `build(0, 0)`, consumes preorder[0], finds mid=0, both child calls hit `lo > hi`. ✓\n• Left-skewed tree (all lefts) → mid is always at the END of the current inorder window; right subtree is always empty. Recursion depth = n.\n• Right-skewed tree (all rights) → mid is always at the START of the current inorder window; left subtree is always empty. Recursion depth = n.\n• Duplicate values → THE algorithm-breaking case. The map's value→index lookup becomes ambiguous; the algorithm assumes uniqueness. Worth flagging the precondition.\n• Mismatched arrays (e.g. preorder and inorder don't describe the same tree) → would crash or produce a wrong tree; defensive programming would validate, but typically the problem promises valid inputs.\n• Very deep tree → recursion-stack risk for skewed cases, same as any tree recursion.\"",
+        "why": "The duplicates callout is the senior signal — it names the algorithm's specific precondition and what breaks without it. Most candidates implement the algorithm assuming uniqueness implicitly; explicitly flagging the precondition demonstrates you understand which assumptions are load-bearing. The skewed-tree recursion depth is the standard tree-recursion concern — naming it shows you're aware of stack-overflow risk on adversarial inputs."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — each of n preorder elements is consumed exactly once via the moving pointer, and each recursive call does O(1) work given the hash-map lookup for mid. Without the map it would be O(n²) because the linear search for mid happens n times.\n\nSpace is O(n) — the map stores n entries, and the recursion stack is O(h) which is at most n for skewed trees. Both are bounded by n.\n\nIf you wanted to extend this to 'reconstruct from inorder + postorder' (LeetCode 106), it's the same skeleton but: postorder's LAST element is the root, and you consume postorder back-to-front. The right subtree is now what comes AFTER the root in postorder, so you build right BEFORE left in the recursion. Same template, mirrored consumption order.\n\nIf you wanted 'reconstruct from preorder + postorder' (LeetCode 889) — that's actually under-constrained for general binary trees because you can't always distinguish left from right; works only if you assume full binary trees (every node has 0 or 2 children).\"",
+        "why": "The complexity defense — O(n) IFF the hash map is used, else O(n²) — is the right way to frame the optimization. The inorder+postorder extension is LeetCode 106 and shows you see this as a parameterized template. The preorder+postorder caveat (only works for full binary trees) is a subtle senior signal: most candidates assume all three combinations are equivalent, when in fact one of them is under-constrained. That's the kind of detail that distinguishes engineers who understand information content from those who memorize recipes."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through preorder+inorder reconstruction. The trace simulates the recursive build with an explicit stack; the final return is the resulting tree's post-order traversal so you can verify the shape.",
+    "examples": [
+      { "label": "preorder=[3,9,20,15,7] inorder=[9,3,15,20,7] → post [9,15,7,20,3]", "input": { "preorder": [3, 9, 20, 15, 7], "inorder": [9, 3, 15, 20, 7] }, "expected": "[9,15,7,20,3]" },
+      { "label": "preorder=[1] inorder=[1] → post [1]",                                "input": { "preorder": [1], "inorder": [1] },                                 "expected": "[1]" },
+      { "label": "preorder=[1,2,4,5,3] inorder=[4,2,5,1,3] → post [4,5,2,3,1]",        "input": { "preorder": [1, 2, 4, 5, 3], "inorder": [4, 2, 5, 1, 3] },         "expected": "[4,5,2,3,1]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { preorder, inorder } = input;",
+      "  yield { line: 1, label: `enter buildTree — preorder=${JSON.stringify(preorder)}, inorder=${JSON.stringify(inorder)}`, state: { preorder, inorder } };",
+      "  const idx = new Map();",
+      "  inorder.forEach((v, i) => idx.set(v, i));",
+      "  yield { line: 4, label: `build inorder index → ${JSON.stringify([...idx.entries()])}`, state: { preorder, inorder, idx: [...idx.entries()] } };",
+      "  let p = 0;",
+      "  yield { line: 6, label: 'init preorder pointer p=0', state: { preorder, inorder, p } };",
+      "  function dummyBuild(lo, hi) { /* placeholder for line ref */ }",
+      "  const stack = [{ lo: 0, hi: inorder.length - 1, parent: null, side: null, phase: 'enter' }];",
+      "  let root = null;",
+      "  while (stack.length) {",
+      "    const frame = stack[stack.length - 1];",
+      "    if (frame.phase === 'enter') {",
+      "      yield { line: 7, label: `build(lo=${frame.lo}, hi=${frame.hi}) — window inorder[${frame.lo}..${frame.hi}]`, state: { preorder, inorder, p, lo: frame.lo, hi: frame.hi, stackDepth: stack.length } };",
+      "      if (frame.lo > frame.hi) {",
+      "        yield { line: 8, label: `lo(${frame.lo}) > hi(${frame.hi}) → return null`, state: { preorder, inorder, p, returnsHere: null } };",
+      "        stack.pop();",
+      "        if (frame.parent) frame.parent[frame.side] = null;",
+      "        continue;",
+      "      }",
+      "      const val = preorder[p++];",
+      "      const node = { val, left: null, right: null };",
+      "      const mid = idx.get(val);",
+      "      frame.node = node;",
+      "      frame.mid = mid;",
+      "      yield { line: 9, label: `take preorder[${p - 1}] = ${val} as current root; p→${p}`, state: { preorder, inorder, p, currentRoot: val, mid } };",
+      "      yield { line: 11, label: `mid = idx.get(${val}) = ${mid} (splits inorder window)`, state: { preorder, inorder, p, currentRoot: val, mid, leftWindow: `[${frame.lo}..${mid - 1}]`, rightWindow: `[${mid + 1}..${frame.hi}]` } };",
+      "      frame.phase = 'leftDone';",
+      "      stack.push({ lo: frame.lo, hi: mid - 1, parent: node, side: 'left', phase: 'enter' });",
+      "    } else if (frame.phase === 'leftDone') {",
+      "      yield { line: 14, label: `recurse RIGHT of ${frame.node.val} — window [${frame.mid + 1}..${frame.hi}]`, state: { preorder, inorder, p, currentRoot: frame.node.val } };",
+      "      frame.phase = 'rightDone';",
+      "      stack.push({ lo: frame.mid + 1, hi: frame.hi, parent: frame.node, side: 'right', phase: 'enter' });",
+      "    } else {",
+      "      yield { line: 15, label: `subtree rooted at ${frame.node.val} complete`, state: { preorder, inorder, p, completed: frame.node.val, stackDepth: stack.length - 1 } };",
+      "      if (frame.parent) frame.parent[frame.side] = frame.node;",
+      "      else root = frame.node;",
+      "      stack.pop();",
+      "    }",
+      "  }",
+      "  const out = [];",
+      "  function post(n) { if (!n) return; post(n.left); post(n.right); out.push(n.val); }",
+      "  post(root);",
+      "  yield { line: 17, label: `tree built — post-order = ${JSON.stringify(out)}`, state: { preorder, inorder, postOrder: out, returns: JSON.stringify(out) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function buildTree(preorder, inorder) {\n  // value → inorder index, so each root's split is O(1) instead of O(n).\n  const idx = new Map();\n  inorder.forEach((v, i) => idx.set(v, i));\n  // Single moving pointer — the next preorder element is always the next root.\n  let p = 0;\n  function build(lo, hi) {\n    if (lo > hi) return null;          // empty inorder window\n    const val = preorder[p++];\n    const node = { val, left: null, right: null };\n    const mid = idx.get(val);\n    // Left FIRST — preorder consumes the whole left subtree before the right root.\n    node.left = build(lo, mid - 1);\n    node.right = build(mid + 1, hi);\n    return node;\n  }\n  return build(0, inorder.length - 1);\n}\n// Time O(n), Space O(n) for the index map + recursion",
     "notes": [

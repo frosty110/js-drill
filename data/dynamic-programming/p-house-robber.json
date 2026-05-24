@@ -6,6 +6,96 @@
   "status": "full",
   "description": "Max sum of non-adjacent elements. At each house: rob (prev2 + n) or skip (prev1). Classic 1D DP with O(1) rolling scalars.",
   "mechanics": ["dp-rolling-vars"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: I'm given an array of non-negative integers where each entry is the cash in a house on a street. I'm picking houses to rob, but I can't rob two adjacent ones — the alarm goes off. I want the maximum total I can carry out.\"\n\nThen a few quick clarifying questions:\n• Are values strictly non-negative, or can they be zero/negative?\n• Empty array — return 0?\n• Single house — just return `nums[0]`?\n• Return value — just the max sum, or also the indices I robbed?\n• Can I assume the input fits in memory? Any bound on length?",
+        "why": "The non-negative question matters because the recurrence relies on 'taking more is never worse' — if values could be negative, the skip-vs-rob comparison still works but the framing changes (you'd never voluntarily rob a negative house, but the structure stays the same). Confirming the empty and single-element cases pins down the base seeds: `prev2 = prev1 = 0` covers both."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(2^n) solution before you discard it.",
+        "say": "\"The brute force is exponential recursion: at each house I have two choices — skip it (move to `i+1` with the same haul) or rob it (move to `i+2` adding `nums[i]`). Return the max of the two subtrees. That's `O(2^n)` time because every house branches in two, with massive overlap — `rob(i)` from skipping `i-1` and `rob(i)` from robbing `i-2`-then-skipping-`i-1` both compute the same subproblem.\"",
+        "why": "Naming the two recursive branches — skip vs rob — out loud is what plants the recurrence. The DP cell is literally `max(skip-branch, rob-branch)`. Saying it as recursion first makes the bottom-up version a translation, not a leap. The overlap is also what justifies switching to DP rather than just memoizing the recursion."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to 1D DP with rolling variables?",
+        "say": "\"This is a 1D DP. The recurrence is `dp[i] = max(dp[i-1], dp[i-2] + nums[i])` — at each house I'm making one binary decision: skip (so my best is whatever I had at `i-1`) or rob (so my best is whatever I had at `i-2` plus this house, because robbing `i` forbids `i-1`). The adjacency constraint is exactly what reaches back two cells instead of one. And because `dp[i]` only reads `dp[i-1]` and `dp[i-2]`, the full array is unnecessary — two rolling scalars `prev2` and `prev1` are enough. Time O(n), space O(1).\"",
+        "why": "Articulating the decision *and* the constraint that creates the look-back is the move. 'Skip vs rob' alone is incomplete; 'skip vs rob, and rob forbids the immediate predecessor, which is why we reach back to `i-2`' is the full derivation. That's the same shape as Climbing Stairs (Fibonacci-style look-back of 2), just with a max-with-payload instead of a sum."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a typical mix where skip wins twice, a case where skip-then-rob beats every greedy strategy, and the single-house degenerate.",
+        "examples": [
+          {
+            "input": "[2, 7, 9, 3, 1]",
+            "output": "12",
+            "note": "Canonical case — optimal is rob(2) + rob(9) + rob(1) = 12.",
+            "trace": "init: prev2=0, prev1=0\ni=0 n=2: curr = max(skip=0, rob=0+2=2) = 2. roll → (0,2). dp[0]=2\ni=1 n=7: curr = max(skip=2, rob=0+7=7) = 7. roll → (2,7). dp[1]=7\ni=2 n=9: curr = max(skip=7, rob=2+9=11) = 11. roll → (7,11). dp[2]=11\ni=3 n=3: curr = max(skip=11, rob=7+3=10) = 11. roll → (11,11). dp[3]=11\ni=4 n=1: curr = max(skip=11, rob=11+1=12) = 12. roll → (11,12). dp[4]=12\nreturn 12"
+          },
+          {
+            "input": "[2, 1, 1, 2]",
+            "output": "4",
+            "note": "Skip-then-rob beats greedy — robbing 2 at the start AND 2 at the end (skipping the middle) totals 4, better than any other plan.",
+            "trace": "init: prev2=0, prev1=0\ni=0 n=2: curr = max(0, 0+2) = 2. roll → (0,2). dp[0]=2\ni=1 n=1: curr = max(2, 0+1) = 2. roll → (2,2). dp[1]=2\ni=2 n=1: curr = max(2, 2+1) = 3. roll → (2,3). dp[2]=3\ni=3 n=2: curr = max(3, 2+2) = 4. roll → (3,4). dp[3]=4\nreturn 4"
+          },
+          {
+            "input": "[5]",
+            "output": "5",
+            "note": "Single house — the loop runs once and the seed `prev2 = 0` makes rob the obvious winner.",
+            "trace": "init: prev2=0, prev1=0\ni=0 n=5: curr = max(skip=0, rob=0+5=5) = 5. roll → (0,5). dp[0]=5\nreturn 5"
+          }
+        ],
+        "why": "Tracing surfaces two things. (1) The roll order — assign `prev2 = prev1` BEFORE `prev1 = curr`, or you stomp the value you still need to read next iteration. (2) The `[2,1,1,2]` case shows why greedy 'always rob the biggest available' fails: greedy picks 2 then 1 = 3, but skip-then-rob picks 2 and 2 = 4. That trace defends *why* this needs DP and not a simple scan."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• `[]` — loop doesn't run, `prev1 = 0` returned. ✓\n• `[5]` — loop runs once, `max(0, 0+5) = 5`. ✓\n• `[5, 10]` — two houses, can only rob one; result should be max(5, 10) = 10. Trace: `max(0, 0+5)=5`, then `max(5, 0+10)=10`. ✓\n• All zeros — every iteration computes `max(0, 0+0) = 0`. Returns 0. ✓\n• Strictly increasing — every decision favors robbing the latest, because skipping the previous unlocks more. The recurrence still handles it correctly; no special case needed.\n• Very large values — sums of integers can overflow JS's safe integer range if values are near `2^53`; switch to BigInt if that's in play.\"",
+        "why": "Walking through the small-array cases on the same recurrence shows the loop's invariant works without any if-branches for small inputs — that's a senior signal. Most candidates write `if (n === 0) return 0; if (n === 1) return nums[0];` guards as defensive programming, then realize the rolling-vars version handles both implicitly. The overflow note is the bonus that flags data-type awareness."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — one pass through the array, constant work per house (one max, one add, two assignments). Space is O(1) — just the two scalars `prev2` and `prev1`, no array allocation.\n\nThe naive recursion was O(2^n) time; memoization brings it to O(n) time / O(n) space; tabulation stays at O(n) / O(n); rolling pair drops space to O(1). Same trajectory as Climbing Stairs.\n\nFor the natural follow-up: House Robber II (houses arranged in a circle, so houses 0 and n-1 are now adjacent) — you run House Robber twice: once on `nums[0..n-2]`, once on `nums[1..n-1]`, take the max. Same template, just split the input two ways to break the circular constraint. House Robber III is the tree variant — same skip-vs-rob recurrence, recursed down a binary tree.\"",
+        "why": "The 2^n → n → 1 space progression is the right defense — interviewers love seeing you understand *why* each step works (overlapping subproblems → memo, limited look-back → rolling vars). The House Robber II/III extensions prove you see the template as 'skip-vs-take with constraint on adjacency' rather than this one problem; that same shape recurs in Delete and Earn, Paint House, and any 'partition with non-adjacency' problem."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the rolling-pair House Robber on real inputs. Each iteration decides skip-vs-rob; the synthetic dp array shows the running best at every prefix.",
+    "examples": [
+      { "label": "[2,7,9,3,1] → 12", "input": [2, 7, 9, 3, 1], "expected": 12 },
+      { "label": "[2,1,1,2] → 4 (skip-then-rob beats greedy)", "input": [2, 1, 1, 2], "expected": 4 },
+      { "label": "[5] → 5 (single house)", "input": [5], "expected": 5 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  let prev2 = 0, prev1 = 0;",
+      "  const dp = [];",
+      "  yield { line: 3, label: 'init prev2=0, prev1=0 (no houses robbed yet)', state: { nums, prev2, prev1, dp: [...dp] } };",
+      "  for (let i = 0; i < nums.length; i++) {",
+      "    const n = nums[i];",
+      "    yield { line: 5, label: `outer step: i=${i}, house value=${n}`, state: { nums, i, n, prev2, prev1, dp: [...dp] } };",
+      "    const curr = Math.max(prev1, prev2 + n);",
+      "    yield { line: 6, label: `curr = max(skip=${prev1}, rob=${prev2}+${n}=${prev2 + n}) = ${curr}`, state: { nums, i, n, prev2, prev1, curr, dp: [...dp] } };",
+      "    prev2 = prev1;",
+      "    yield { line: 8, label: `roll: prev2 = prev1 = ${prev2}`, state: { nums, i, n, prev2, prev1, curr, dp: [...dp] } };",
+      "    prev1 = curr;",
+      "    dp.push(curr);",
+      "    yield { line: 9, label: `roll: prev1 = curr = ${prev1} — dp[${i}]=${curr} filled`, state: { nums, i, n, prev2, prev1, dp: [...dp], lastFilled: i } };",
+      "  }",
+      "  yield { line: 11, label: `return prev1 = ${prev1}`, state: { nums, prev2, prev1, dp: [...dp], returns: prev1 } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function rob(nums) {\n  // Bases both 0 — no houses robbed yet; prev1 ends up holding the answer.\n  let prev2 = 0, prev1 = 0;\n  // Recurrence: dp[i] = max(dp[i-1], dp[i-2] + nums[i]).\n  for (const n of nums) {\n    const curr = Math.max(prev1, prev2 + n);   // skip vs rob this house\n    // Roll: assign prev2 BEFORE prev1, or you overwrite the value still needed.\n    prev2 = prev1;\n    prev1 = curr;\n  }\n  return prev1;\n}\n// Time O(n), Space O(1)",
     "notes": [

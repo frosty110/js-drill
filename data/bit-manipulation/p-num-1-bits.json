@@ -6,6 +6,95 @@
   "status": "full",
   "description": "Brian Kernighan: `n & (n - 1)` clears the lowest set bit. Loop until n is 0; each iteration counts one bit. O(set bits), not O(32).",
   "mechanics": ["bit-clear-lowest"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: given an unsigned 32-bit integer `n`, return the count of 1-bits in its binary representation — the Hamming weight, a.k.a. popcount. A few quick checks:\"\n\n• Is `n` always non-negative, or could the input be a signed int32 with the sign bit set (i.e. `n >= 2^31`)?\n• Should I assume JS-style 'number' (where the input fits in int32), or could it be a BigInt?\n• Edge case n=0 — return 0 right? (Just confirming.)\n• Is there a constraint on the approach — e.g. 'no built-in popcount' (there isn't one in JS, but languages like Java have `Integer.bitCount`)?",
+        "why": "The 'unsigned 32-bit' detail is the crucial one — JS bitwise ops operate on signed int32, so values >= 2^31 come in as negative numbers (e.g. `2147483648` from a problem prompt arrives as `-2147483648`). Asking about this signals that you know JS's bit-op model and lets you decide whether to coerce with `n >>>= 0` at the start. Asking about BigInt is the senior-tier touch — for values beyond 2^53, you'd switch to BigInt arithmetic, which has different popcount idioms."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(32) solution before you discard it.",
+        "say": "\"The brute force is a fixed 32-iteration loop: for `i` from 0 to 31, check whether the i-th bit is set by `n & (1 << i)`, and tally. That's O(32) — constant time, but always 32 iterations no matter how few bits are actually set.\n\n\"A second brute force is to convert to a binary string with `n.toString(2)` and count the '1' characters. That works but allocates a string and does character comparison — fine for correctness, ugly for performance.\"",
+        "why": "Naming the 32-iteration brute force out loud is what sets up the optimization narrative: 'always 32 iterations' is the inefficiency to beat, and the speedup comes from looping only over the bits that are actually set rather than every position. The string-conversion brute force is worth mentioning because it's a real candidate answer that interviewers see often — flagging it and dismissing it shows you know it works but understand why it's suboptimal."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to Brian Kernighan?",
+        "say": "\"The trick is the bit identity: `n & (n - 1)` clears the LOWEST set bit of `n`. The intuition: subtracting 1 from `n` flips the lowest set bit from 1 to 0 AND turns every zero below it from 0 to 1 (a borrow chain). ANDing that with the original `n` zeroes out the lowest set bit and everything beneath it, leaving the higher bits untouched.\n\n\"So the algorithm becomes: while `n !== 0`, do `n = n & (n - 1)` and increment a counter. Each iteration removes exactly one set bit, so the loop runs `popcount(n)` times — O(k) where k is the number of set bits, not O(32). For sparse inputs that's a real speedup; for dense inputs it matches the brute force.\"",
+        "why": "Naming the identity `n & (n - 1)` AND explaining WHY it clears the lowest set bit (the borrow chain on `n - 1`) is the move. Most candidates know the trick but can't explain it; explaining the borrow chain proves you derived it rather than memorized it. The output-sensitive complexity claim (O(k) rather than O(32)) is also worth verbalizing — it's the kind of refinement that wins extra points over candidates who just state O(1)."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace a couple of inputs to verify the bit-clearing behavior.\" Three cases — a typical mixed bit pattern, the n=0 degenerate (loop never enters), and a single-bit value where the algorithm is at its most efficient.",
+        "examples": [
+          {
+            "input": "n=11",
+            "output": "3",
+            "note": "11 = 0b1011 — three set bits; algorithm loops exactly three times.",
+            "trace": "count = 0, n = 11 (0b1011)\niter 1: n-1 = 10 (0b1010); n & (n-1) = 1011 & 1010 = 1010 = 10. count → 1\niter 2: n-1 = 9  (0b1001); n & (n-1) = 1010 & 1001 = 1000 = 8.  count → 2\niter 3: n-1 = 7  (0b0111); n & (n-1) = 1000 & 0111 = 0000 = 0.  count → 3\nloop exits (n=0)\nreturn 3 ✓"
+          },
+          {
+            "input": "n=0",
+            "output": "0",
+            "note": "Degenerate — loop never enters, count stays at 0.",
+            "trace": "count = 0, n = 0 (0b0000)\nloop check: 0 !== 0 → false, exit immediately\nreturn 0 ✓"
+          },
+          {
+            "input": "n=128",
+            "output": "1",
+            "note": "Single bit at position 7 — algorithm loops exactly once.",
+            "trace": "count = 0, n = 128 (0b10000000)\niter 1: n-1 = 127 (0b01111111); n & (n-1) = 10000000 & 01111111 = 00000000 = 0. count → 1\nloop exits (n=0)\nreturn 1 ✓"
+          }
+        ],
+        "why": "The first trace surfaces the bit-clearing pattern beautifully — you can see the bits disappear from the right one at a time, even though they're at non-adjacent positions (0, 1, 3). The third trace defends the 'O(k) not O(32)' claim viscerally: a value like `128` with one bit set finishes in one iteration; the naive 32-bit-scan would take 32. That gap is the whole point of preferring this algorithm. The n=0 trace is the safety check that the loop condition is right — `n !== 0` correctly skips, vs. a `do/while` that would run once incorrectly."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• n=0 → loop never enters, returns 0. ✓\n• n with all 32 bits set (`0xFFFFFFFF` = 4294967295 unsigned, or -1 signed) → in JS this arrives as `-1` because bitwise ops are signed. `(-1) & (-2) = -2`, then `-2 & -3 = -4`, etc. — each step clears one bit just like with positive numbers, because the trick operates on the bit pattern, not the interpreted value. Loop runs 32 times, returns 32.\n• n >= 2^31 (high bit set) → represented as negative in JS's signed int32 view. The algorithm still works because `n & (n-1)` is a pure bit operation; the LOOP CONDITION `n !== 0` is what to watch — for negative n, the loop continues correctly until all bits clear, eventually reaching 0.\n• Values beyond int32 — JS truncates them silently to 32 bits before any bitwise op. For huge inputs you'd switch to BigInt, where the popcount idiom is different (no built-in shortcut; you typically convert to string).\n• Unsigned coercion — if the input arrives as a positive number > 2^31, JS already gives it to you as that number; the bitwise ops will then coerce to a negative int32 internally. If you want predictable unsigned semantics, `n >>>= 0` at the start normalizes.",
+        "why": "The 'high bit set / negative-looking input' edge is the JS-specific gotcha that catches careless candidates. The algorithm works for negative values because it's operating on the bit pattern, not the numeric value — but you have to TRUST that, because the loop variable will look negative throughout. Verbalizing this shows you understand JS's signed-int32 model and aren't going to be surprised by it. The BigInt note is the senior-tier touch for problems where 32 bits isn't enough."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(k) where k is the number of set bits in `n` — each iteration of the loop clears exactly one set bit, so the loop runs precisely `popcount(n)` times. Worst case k=32, best case k=0.\n\nSpace is O(1) — a single counter, no auxiliary structures.\n\nIf you wanted to extend this: counting set bits across many inputs (the Counting Bits problem) uses the same `i & (i-1)` identity inside a DP — `popcount(i) = popcount(i & (i-1)) + 1`. The recurrence is exact because each `i & (i-1)` is strictly smaller than `i`, so the DP fills bottom-up in one O(n) pass. Same identity, scaled up from single-query to batch-query.\"",
+        "why": "The output-sensitive O(k) bound is the differentiator from the naive O(32) brute force — naming it with the amortized argument ('each iteration removes one set bit, so loop runs popcount times') is the precise version of the claim. Connecting it to the Counting Bits DP proves you see the `i & (i-1)` identity as a TEMPLATE that applies in multiple problem shapes (single-query popcount here, batch popcount over a range there), not as a one-off trick. The same identity also shows up in 'is n a power of two?' (`n > 0 && (n & (n-1)) === 0`)."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through Brian Kernighan's loop. The state panel shows `n`, `n - 1`, and the resulting `n & (n - 1)` — all in binary — so you can literally see the lowest set bit (and everything below it) get cleared in one move.",
+    "examples": [
+      { "label": "n=11 (0b1011) → 3", "input": 11, "expected": 3 },
+      { "label": "n=0 → 0 (edge: loop never enters)", "input": 0, "expected": 0 },
+      { "label": "n=128 (0b10000000) → 1", "input": 128, "expected": 1 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  let n = input;",
+      "  const bin = (x) => (x >>> 0).toString(2).padStart(8, '0');",
+      "  yield { line: 1, label: `enter function — n=${n} (${bin(n)})`, state: { n: `${n} (${bin(n)})` } };",
+      "  let count = 0;",
+      "  yield { line: 2, label: 'init count = 0', state: { n: `${n} (${bin(n)})`, count } };",
+      "  while (n !== 0) {",
+      "    const nMinus1 = n - 1;",
+      "    yield { line: 3, label: `loop check: n=${n} !== 0 → true; n-1 = ${nMinus1} (${bin(nMinus1)}) flips lowest set bit and all zeros below`, state: { n: `${n} (${bin(n)})`, 'n-1': `${nMinus1} (${bin(nMinus1)})`, count } };",
+      "    const next = n & nMinus1;",
+      "    n = next;",
+      "    yield { line: 5, label: `n = n & (n-1) = ${next} (${bin(next)}) — lowest set bit cleared`, state: { n: `${n} (${bin(n)})`, count } };",
+      "    count++;",
+      "    yield { line: 6, label: `count++ → ${count}`, state: { n: `${n} (${bin(n)})`, count } };",
+      "  }",
+      "  yield { line: 3, label: `loop check: n=${n} !== 0 → false; exit loop`, state: { n: `${n} (${bin(n)})`, count } };",
+      "  yield { line: 8, label: `return ${count}`, state: { n: `${n} (${bin(n)})`, count, returns: count } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function hammingWeight(n) {\n  let count = 0;\n  while (n !== 0) {\n    // Brian Kernighan: n & (n - 1) clears the lowest set bit — loops once per 1-bit, not per 32 bits.\n    n = n & (n - 1);\n    count++;\n  }\n  return count;\n}\n// Time O(k) where k = popcount(n), Space O(1)",
     "notes": [

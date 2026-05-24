@@ -6,6 +6,120 @@
   "status": "full",
   "description": "FIFO queue built from two LIFO stacks (just JS arrays). push goes to `in`. pop/peek read from `out`; when `out` is empty, drain ALL of `in` into `out` by popping — which reverses the order, putting the oldest element on top. Each element migrates at most once, so the work is amortized O(1) per op.",
   "mechanics": ["array-as-stack"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down what 'using only stacks' means.",
+        "say": "\"Let me make sure I have this right: I need to implement a FIFO queue — push, pop, peek, size — but the only data structure I'm allowed to use internally is a LIFO stack. JS arrays count as stacks if I restrict myself to push and pop on the same end.\"\n\nThen a few quick clarifying questions:\n• 'Only stacks' — can I use multiple stacks, or just one? (The whole problem only makes sense with two; one stack literally cannot give FIFO.)\n• Am I optimizing for worst-case O(1), or is amortized O(1) acceptable? (Amortized is the standard answer; worst-case O(1) requires a different structure entirely.)\n• Pop and peek on empty queue — return undefined or throw?\n• Do I need to handle generic values, or just numbers?",
+        "why": "The 'amortized vs worst-case' question is the one that flags you as someone who actually understands the analysis. The two-stack queue is *amortized* O(1); each element costs constant amortized work but a single pop can occasionally do n moves. If the interviewer says 'I need worst-case O(1)', this isn't the right answer — they'd want something like Okasaki's banker's queue with lazy lists. Asking shows you know the limit of what you're about to propose."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious wrong shape before discarding it.",
+        "say": "\"The naive one-stack approach: push to the stack, then on pop, reverse the entire stack, pop, reverse back. That's O(n) per pop and O(n) per push if I keep reversing. Even uglier: I could pop everything into a temp stack on each pop, take the bottom (which is now on top), and pour everything back. Same O(n) every pop.\n\nThe insight: I don't need to reverse on every pop. I only need to reverse when I've run out of already-reversed elements. So I keep TWO stacks: one for incoming pushes (in their natural LIFO order), one for outgoing pops (already in FIFO order). I only do the reverse-pour when the out stack is empty AND someone wants to pop.\"",
+        "why": "Two reasons to narrate the bad version. (1) It frames the optimization clearly — the two-stack design is 'cache the reversed view, only rebuild when stale', and that framing lands harder when you've named the naive 'rebuild every time'. (2) The interviewer learns you know WHY you're using two stacks, not just THAT you are. Without articulating the wrong version, the right version looks like memorized trivia."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the data structure, and what's the amortization argument?",
+        "say": "\"The data structure is two stacks: `in` (push side) and `out` (pop side). Pushes always go to `in` — that's O(1), no thought required. Pops and peeks read from `out`; if `out` is empty, I drain ALL of `in` into `out` by popping each one and pushing to `out` — which reverses the order, putting the oldest element on top of `out`. Then I pop from out.\n\nThe invariant: at any moment, the FIFO order of the queue is `out` (top-to-bottom) followed by `in` (bottom-to-top). The drain operation re-establishes the invariant when `out` runs dry, and crucially I only drain when `out` is empty — never partway. That's what makes it amortized O(1): each element gets pushed to `in` once, drained from `in` to `out` once, and popped from `out` once. Three constant-time touches per element across its whole lifetime, no matter how the operations interleave.\"",
+        "why": "The amortization argument is the load-bearing piece — every interviewer pushes back with 'but that drain is O(n), isn't pop worst-case O(n)?' The answer is: yes, that single pop is O(n) worst case, but you can't have TWO worst-case-O(n) pops in a row because the first one already drained the in-stack. Spread across the whole sequence, the cost averages out. The 'drain only when out is empty, never partway' rule is the bug-catcher — partial drains break the FIFO invariant because newer elements would land on top of older ones in `out`."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few op sequences to confirm the model — especially the drain trigger.",
+        "intro": "\"Let me trace three sequences. Each shows the `in` and `out` stacks after each op, with the results list collecting every peek/pop/size output. The third example is the interesting one — a push happens mid-stream after a drain, and we need to confirm the new push doesn't sneak ahead of older elements still in `out`.\"",
+        "examples": [
+          {
+            "input": "push 1, push 2, push 3, pop, pop, pop",
+            "output": "[1,2,3]",
+            "note": "Canonical case — single drain on the first pop, all three pops served from out.",
+            "trace": "init in=[], out=[]\npush(1)  → in=[1], out=[]\npush(2)  → in=[1,2], out=[]\npush(3)  → in=[1,2,3], out=[]\npop      → out empty → drain: pop 3 from in, push to out → in=[1,2], out=[3]\n                            pop 2 from in, push to out → in=[1], out=[3,2]\n                            pop 1 from in, push to out → in=[], out=[3,2,1]\n           out.pop() → 1   results=[1]\npop      → out non-empty → out.pop() → 2   results=[1,2]\npop      → out non-empty → out.pop() → 3   results=[1,2,3]\nreturn [1,2,3]"
+          },
+          {
+            "input": "push 1, push 2, push 3, peek, pop, push 4, pop, peek, pop, pop, size",
+            "output": "[1,1,2,3,3,4,0]",
+            "note": "Peek triggers the drain just like pop does. After 4 is pushed, it lands on `in`, not `out` — so it gets served LAST, after the three earlier elements drain.",
+            "trace": "init in=[], out=[]\npush(1)  → in=[1], out=[]\npush(2)  → in=[1,2], out=[]\npush(3)  → in=[1,2,3], out=[]\npeek     → out empty → drain → in=[], out=[3,2,1]\n           top of out = 1   results=[1]\npop      → out.pop() → 1    results=[1,1]\npush(4)  → in=[4], out=[2,3 wait — out=[3,2] top is 2]    in=[4], out=[3,2]   ← 4 goes to in, doesn't touch out\npop      → out non-empty → out.pop() → 2    results=[1,1,2]\npeek     → out non-empty → top of out = 3    results=[1,1,2,3]\npop      → out.pop() → 3    results=[1,1,2,3,3]\npop      → out empty → drain: in=[], out=[4]\n           out.pop() → 4    results=[1,1,2,3,3,4]\nsize     → in.length + out.length = 0 + 0 = 0    results=[1,1,2,3,3,4,0]\nreturn [1,1,2,3,3,4,0]"
+          },
+          {
+            "input": "push 1, pop, push 2, push 3, pop, pop",
+            "output": "[1,2,3]",
+            "note": "Drains happen twice — once before the first pop, once before the second. Order is preserved because the second drain only fires when out is empty, never partway.",
+            "trace": "init in=[], out=[]\npush(1)  → in=[1], out=[]\npop      → out empty → drain: in=[], out=[1]\n           out.pop() → 1    results=[1]\npush(2)  → in=[2], out=[]\npush(3)  → in=[2,3], out=[]\npop      → out empty → drain: in=[], out=[3,2]\n           out.pop() → 2    results=[1,2]\npop      → out non-empty → out.pop() → 3    results=[1,2,3]\nreturn [1,2,3]"
+          }
+        ],
+        "why": "The second example surfaces the bug that breaks naive implementations: if you drained on EVERY pop (not just when out is empty), the push(4) would land on `in`, then the next pop would drain `in` (now [4]) on top of the existing `out` ([3,2])... and you'd serve 4 before 3 and 2. FIFO violated. The third example confirms that interleaved push/pop sequences still produce strict FIFO because each drain happens against an empty `out`, preserving order. These are the two cases the interviewer probably has scripted as tests."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty queue → pop returns undefined (array.pop on []), peek returns undefined. The problem usually says assume non-empty, but worth flagging that we don't throw.\n• Single push, single pop → drain fires once on the empty out, pours one element, pop returns it. ✓\n• Many pushes then many pops → one drain on the first pop, all subsequent pops are O(1). Best-case shape for the amortization.\n• Alternating push/pop in tight loop — push, pop, push, pop. Each pop fires a drain on a single-element in. Still amortized O(1) because each element only touches 3 ops total.\n• Push during a 'pop cycle' (the second example above) — new pushes go to `in`, which is correct because they're newer than anything still in `out`.\n• size() — must sum BOTH stacks. Returning just `in.length` or just `out.length` makes the queue look smaller than it is. Easy bug.\n• Don't drain partially. If a sharp interviewer asks 'what if we drained only when needed, like one element at a time?' — the answer is FIFO breaks, see the trace above.\n• Concurrent calls — JS is single-threaded so this is fine; in a multi-threaded language the drain would need locking.\"",
+        "why": "The 'don't drain partially' bullet is the one to lean on — it's the bug that the trace is designed to expose, and naming it shows you've actually thought about the invariant rather than memorized the structure. The size() bullet is the cheap-but-easy bug that even careful candidates ship; flagging it on your own shows the interviewer you stress-test your own designs. The single-threading note is a senior-flavored aside that costs nothing to say but signals depth."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the amortized claim, and where else does this idea show up?",
+        "say": "\"Time is amortized O(1) per operation — push always O(1), pop is O(1) when `out` is non-empty and O(n) when it triggers a drain. But each element gets touched exactly three times across its whole life in the queue: pushed to `in`, moved from `in` to `out`, popped from `out`. So across a sequence of m operations on n elements, total work is 3n + O(m), which means amortized O(1) per op even though individual pops can spike.\n\nThe 'banker's argument' makes it formal: charge 3 credits to each push, 1 paid immediately and 2 stored on the element. When the drain fires, it spends the stored credits to pay for the move. Every operation thus runs on a constant credit budget.\n\nSpace is O(n) — sum of both stacks holds every element currently in the queue.\n\nThe 'two-structures, lazy reorganize' pattern shows up elsewhere too: persistent data structures often defer rebalancing until a read forces it; the Linux page cache writes are async-batched; even React's reconciler defers DOM commits until a render boundary forces them. 'Cheap on the hot path, occasional expensive consolidation' is a general performance pattern, not just a stack-queue trick.\"",
+        "why": "The banker's argument is the senior-candidate detail — most candidates can defend amortized O(1) with the '3 touches' counting argument, but framing it as a credit/debit lets the interviewer see you've read the theory, not just memorized the result. The 'lazy reorganize' generalization is the wrap-up flourish — it shows you see the design pattern (cheap-hot-path, expensive-consolidation) rather than just this one queue implementation. That's how the same template explains both this and the Linux page cache."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of Queue operations. Each example is an op list. The state panel shows both stacks (`in` and `out`) after every op. The trace collects every peek/pop/size result into a `results` array so you can verify FIFO order and watch the drain happen only when `out` is empty.",
+    "examples": [
+      { "label": "push 1,2,3; pop, pop, pop → [1,2,3]", "input": [ { "op": "push", "arg": 1 }, { "op": "push", "arg": 2 }, { "op": "push", "arg": 3 }, { "op": "pop" }, { "op": "pop" }, { "op": "pop" } ], "expected": "[1,2,3]" },
+      { "label": "push 1,2,3; peek→1, pop→1; push 4; pop,peek,pop,pop,size → [1,1,2,3,3,4,0]", "input": [ { "op": "push", "arg": 1 }, { "op": "push", "arg": 2 }, { "op": "push", "arg": 3 }, { "op": "peek" }, { "op": "pop" }, { "op": "push", "arg": 4 }, { "op": "pop" }, { "op": "peek" }, { "op": "pop" }, { "op": "pop" }, { "op": "size" } ], "expected": "[1,1,2,3,3,4,0]" },
+      { "label": "push 1; pop→1; push 2,3; pop→2, pop→3 (mid-stream drain)", "input": [ { "op": "push", "arg": 1 }, { "op": "pop" }, { "op": "push", "arg": 2 }, { "op": "push", "arg": 3 }, { "op": "pop" }, { "op": "pop" } ], "expected": "[1,2,3]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  const inStk = [];",
+      "  const outStk = [];",
+      "  const results = [];",
+      "  yield { line: 2, label: 'new Queue() — in=[], out=[]', state: { ops, in: [], out: [], results: [] } };",
+      "  const shift = function*(callOp) {",
+      "    if (!outStk.length) {",
+      "      yield { line: 6, label: callOp + ': out empty — drain in into out', state: { ops, in: [...inStk], out: [...outStk], results: [...results] } };",
+      "      while (inStk.length) {",
+      "        const v = inStk.pop();",
+      "        outStk.push(v);",
+      "        yield { line: 8, label: 'pop ' + v + ' from in, push to out → in=' + JSON.stringify(inStk) + ', out=' + JSON.stringify(outStk), state: { ops, in: [...inStk], out: [...outStk], results: [...results] } };",
+      "      }",
+      "    } else {",
+      "      yield { line: 7, label: callOp + ': out non-empty (' + JSON.stringify(outStk) + ') — skip drain', state: { ops, in: [...inStk], out: [...outStk], results: [...results] } };",
+      "    }",
+      "  };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const { op, arg } = ops[k];",
+      "    if (op === 'push') {",
+      "      inStk.push(arg);",
+      "      yield { line: 4, label: 'op#' + k + ': push(' + arg + ') → in=' + JSON.stringify(inStk), state: { ops, in: [...inStk], out: [...outStk], results: [...results], op, arg } };",
+      "    } else if (op === 'pop') {",
+      "      yield { line: 11, label: 'op#' + k + ': pop() — shift then pop out', state: { ops, in: [...inStk], out: [...outStk], results: [...results], op } };",
+      "      yield* shift('pop');",
+      "      const v = outStk.pop();",
+      "      results.push(v);",
+      "      yield { line: 11, label: 'out.pop() → ' + v + ' (oldest)', state: { ops, in: [...inStk], out: [...outStk], results: [...results], op } };",
+      "    } else if (op === 'peek') {",
+      "      yield { line: 12, label: 'op#' + k + ': peek() — shift then read top of out', state: { ops, in: [...inStk], out: [...outStk], results: [...results], op } };",
+      "      yield* shift('peek');",
+      "      const v = outStk[outStk.length - 1];",
+      "      results.push(v);",
+      "      yield { line: 12, label: 'top of out = ' + v, state: { ops, in: [...inStk], out: [...outStk], results: [...results], op } };",
+      "    } else if (op === 'size') {",
+      "      const s = inStk.length + outStk.length;",
+      "      results.push(s);",
+      "      yield { line: 14, label: 'op#' + k + ': size = in.length + out.length = ' + inStk.length + ' + ' + outStk.length + ' = ' + s, state: { ops, in: [...inStk], out: [...outStk], results: [...results], op } };",
+      "    }",
+      "  }",
+      "  yield { line: 15, label: 'all ops processed — results=' + JSON.stringify(results), state: { ops, in: [...inStk], out: [...outStk], results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class Queue {\n  constructor() { this.in = []; this.out = []; }\n  // Pushes always go to `in` — cheap, no reorder.\n  push(v) { this.in.push(v); }\n  _shift() {\n    // Drain ONLY when out is empty — that's what amortizes pop to O(1).\n    if (!this.out.length) {\n      // Pop from in + push to out flips LIFO to FIFO; oldest ends up on top.\n      while (this.in.length) this.out.push(this.in.pop());\n    }\n  }\n  pop() { this._shift(); return this.out.pop(); }\n  peek() { this._shift(); return this.out[this.out.length - 1]; }\n  // size sums both halves — forgetting one makes the queue look smaller than it is.\n  get size() { return this.in.length + this.out.length; }\n}\n// Amortized O(1) push/pop/peek, Space O(n)",
     "notes": [

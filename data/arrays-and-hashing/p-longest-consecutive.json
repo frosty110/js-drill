@@ -6,6 +6,104 @@
   "status": "full",
   "description": "Find the length of the longest run of consecutive integers in an unsorted array, in O(n). Trick: dump into a Set and only start counting from values whose predecessor is missing.",
   "mechanics": ["set-dedup"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: I'm given an unsorted array of integers, and I need to return the LENGTH of the longest run of consecutive integers — values that differ by exactly 1, like `[1,2,3,4]`. They don't need to be adjacent in the array; only their values need to be consecutive. A few quick clarifying questions:\"\n\n• Are duplicates in the input allowed? If `[1,2,2,3]` is in, does the run count as 3 (1,2,3)?\n• Can the integers be negative? Around zero? Very large?\n• Is the empty array a valid input? Return 0?\n• Just the length, or do I also need to return the actual run?",
+        "why": "The duplicates question is what decides whether you need to dedup at the start. Putting everything into a Set both deduplicates AND gives you O(1) membership in one step — that's load-bearing for the algorithm. The negative/large-integer questions are quick sanity checks: this approach handles both natively since we're using `===` semantics via the Set, not numeric arithmetic that could overflow."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solutions before you discard them.",
+        "say": "\"Two reasonable brute forces.\"\n\n\"One: sort the array, walk it, count consecutive runs (resetting on a gap or duplicate). That's O(n log n) time, O(1) extra space if you sort in place. Clean and short.\"\n\n\"Two: for each element `x` in the array, walk upward — does `x+1` exist? `x+2`? `x+3`? Take the max length found. To check existence you'd scan the array each time, which is O(n) per check times n elements times up-to-n walk length — that's O(n³). You can drop one factor of n by putting everything in a Set for O(1) lookup, getting it to O(n²). Still not great because runs would be re-walked starting from every member.\"\n\n\"The key insight for getting to O(n): we don't need to start the walk from every element — only from the START of each run.\"",
+        "why": "Walking through both brute forces is important here because the O(n²) Set version is close to the right answer — it just doesn't filter starting points. That makes the leap to the canonical feel inevitable: 'we have all the right pieces, we just need to avoid starting from mid-run elements.' The sort solution is also worth naming because it's the legitimate O(n log n) fallback if the interviewer rejects the Set-memory cost."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a Set with a sequence-start guard?",
+        "say": "\"This is a Set-with-sequence-head-detection pattern. The structural property: each consecutive run has exactly one element whose predecessor is missing — the run's head. If I only start counting from heads, every element gets walked at most twice across the whole algorithm — once when it's considered as a possible head, once when an actual head's inner while-loop reaches it. That's the amortization that buys us O(n).\"\n\n\"The data structure is Set because I need TWO O(1) operations: membership (`set.has(x-1)` to detect heads, `set.has(x+len)` to extend runs) AND iteration (to walk candidates exactly once). The head-guard `if (set.has(x - 1)) continue` is the load-bearing line — without it, the inner while-loop runs from every element and you're back to O(n²).\"",
+        "why": "Naming the data structure AND the structural property — 'O(1) membership PLUS sequence-start detection via the missing-predecessor check' — is what distinguishes derivation from guessing. A naive Set solution without the head-guard looks identical at a glance but is asymptotically O(n²). The head-guard is the *whole* algorithmic idea, and articulating WHY it bounds the work to O(n) is what wins this question."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace a few inputs.\" Three cases — the classic mix, the empty array, and a duplicate-containing input that confirms the Set dedup is doing real work.",
+        "examples": [
+          {
+            "input": "[100,4,200,1,3,2]",
+            "output": "4",
+            "note": "Classic case. Only x=1 and x=100 and x=200 pass the head check; the others (2,3,4) are mid-run and skip. The walk from x=1 finds 2,3,4 → length 4.",
+            "trace": "set = {100,4,200,1,3,2}, best=0\nx=100: set.has(99)=false → HEAD. len=1. set.has(101)=false → run is 1. best=1\nx=4:   set.has(3)=true → mid-run, skip\nx=200: set.has(199)=false → HEAD. len=1. set.has(201)=false → run is 1. best=1\nx=1:   set.has(0)=false → HEAD. len=1.\n       set.has(2)=true → len=2. set.has(3)=true → len=3. set.has(4)=true → len=4.\n       set.has(5)=false → run is 4. best=4\nx=3:   set.has(2)=true → mid-run, skip\nx=2:   set.has(1)=true → mid-run, skip\nreturn best=4 ✓"
+          },
+          {
+            "input": "[]",
+            "output": "0",
+            "note": "Empty input — Set is empty, outer for-of loop never runs, best stays 0. Vacuously correct.",
+            "trace": "set = {}, best=0\n(for-of loop never enters)\nreturn best=0 ✓"
+          },
+          {
+            "input": "[1,2,0,1]",
+            "output": "3",
+            "note": "Duplicate `1` — the Set dedups it to one entry, and only x=0 passes the head check. Run is 0,1,2 → length 3.",
+            "trace": "set = {1,2,0} (duplicate 1 collapsed), best=0\nx=1: set.has(0)=true → mid-run, skip\nx=2: set.has(1)=true → mid-run, skip\nx=0: set.has(-1)=false → HEAD. len=1.\n     set.has(1)=true → len=2. set.has(2)=true → len=3.\n     set.has(3)=false → run is 3. best=3\nreturn best=3 ✓"
+          }
+        ],
+        "why": "The first example is the one to mention out loud — it shows the head-guard skipping 4, 3, and 2 (mid-run elements), and the walk from x=1 doing the real counting work. The third example proves WHY iterating the Set (not the original array) matters: the duplicate `1` collapses to one entry, so we don't waste an outer-loop iteration on it. The empty case is just defense — confirms the base case behaves."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty input → for-of never enters, returns 0.\n• Single element → set has one entry, it passes the head check (predecessor not in set), inner while finds nothing, returns 1.\n• All duplicates (`[5,5,5,5]`) → set collapses to `{5}`, one head, run of 1, returns 1. Confirms dedup matters.\n• All-consecutive in order (`[1,2,3,4,5]`) → only `1` passes the head check; the walk from 1 runs the inner while n-1 times. Total work is still O(n) because every other outer iteration short-circuits.\n• Negative integers (`[-3,-2,-1,0,1]`) → no special handling needed; `x-1` works on negatives.\n• `Number.MIN_SAFE_INTEGER` / `Number.MAX_SAFE_INTEGER` boundaries → `x-1` and `x+len` are fine within the safe-integer range. Beyond that you'd start losing precision, but most interviewers will scope to safe integers.\n• `NaN` in the input → set treats `NaN === NaN` for membership, but `NaN - 1` is `NaN`, so the head check passes vacuously and the walk fails on `NaN+1`. Best to ask whether `NaN` is even possible.",
+        "why": "The all-consecutive case is the one to mention because it's where the amortization story matters most — the inner while loop does ALL the work in one outer iteration, but it's still O(n) total. Calling that out signals that you've actually thought about the worst-case shape, not just the average. The integer-boundary edge is a senior touch most candidates skip."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) amortized — and the amortization argument is exactly what the head-guard buys us. Each element is touched at most twice across the whole algorithm: once when the outer for-of loop visits it (where the head-guard either skips it or starts a walk), and once by an inner-while step from some head. So total work is bounded by 2n, which is O(n).\n\nSpace is O(n) for the Set — at most one entry per distinct input value.\n\nIf you wanted to extend this: the same head-detection trick generalizes to 'find all consecutive runs' (return them as ranges instead of just the max length). It also adapts to 'longest consecutive in a stream' (keep a Map of value → run-length and merge runs when a new value bridges two neighbors). Both build on the same primitive — Set membership for O(1) predecessor/successor checks.\"",
+        "why": "The amortization defense — 'each element touched at most twice' — is the answer to 'but you have a nested loop, isn't that O(n²)?' Walking through WHY the head-guard bounds the inner work is the move; just stating 'it's O(n)' isn't enough at the senior level. The stream-variant extension shows you see this as a *template* (Set-for-O(1)-adjacency) that scales beyond the original problem."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical Longest Consecutive Sequence one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[100,4,200,1,3,2] → 4", "input": [100, 4, 200, 1, 3, 2], "expected": 4 },
+      { "label": "[] → 0 (empty)", "input": [], "expected": 0 },
+      { "label": "[1,2,0,1] → 3 (dup ignored, run is 0,1,2)", "input": [1, 2, 0, 1], "expected": 3 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  const set = new Set(nums);",
+      "  yield { line: 3, label: `init set = new Set(nums) → ${JSON.stringify([...set])}`, state: { nums, set: [...set] } };",
+      "  let best = 0;",
+      "  yield { line: 4, label: 'init best = 0', state: { nums, set: [...set], best } };",
+      "  for (const x of set) {",
+      "    yield { line: 5, label: `outer step: x=${x}`, state: { nums, set: [...set], best, x } };",
+      "    if (set.has(x - 1)) {",
+      "      yield { line: 6, label: `set.has(${x}-1=${x-1}) → true — ${x} is mid-run, skip`, state: { nums, set: [...set], best, x } };",
+      "      continue;",
+      "    }",
+      "    yield { line: 6, label: `set.has(${x-1}) → false — ${x} is a sequence head, count from here`, state: { nums, set: [...set], best, x } };",
+      "    let len = 1;",
+      "    yield { line: 7, label: `init len = 1`, state: { nums, set: [...set], best, x, len } };",
+      "    while (set.has(x + len)) {",
+      "      yield { line: 9, label: `set.has(${x}+${len}=${x+len}) → true — extend run`, state: { nums, set: [...set], best, x, len } };",
+      "      len++;",
+      "      yield { line: 9, label: `len → ${len}`, state: { nums, set: [...set], best, x, len } };",
+      "    }",
+      "    yield { line: 9, label: `set.has(${x+len}) → false — chain ends, run length is ${len}`, state: { nums, set: [...set], best, x, len } };",
+      "    best = Math.max(best, len);",
+      "    yield { line: 10, label: `best = max(prev_best, ${len}) → ${best}`, state: { nums, set: [...set], best, x, len } };",
+      "  }",
+      "  yield { line: 12, label: `return best = ${best}`, state: { nums, set: [...set], best, returns: best } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function longestConsecutive(nums) {\n  // Dedup via Set so each value is walked at most once.\n  const set = new Set(nums);\n  let best = 0;\n  for (const x of set) {\n    if (set.has(x - 1)) continue;        // only start runs from a sequence head\n    let len = 1;\n    // Walk forward as far as the consecutive chain extends.\n    while (set.has(x + len)) len++;\n    best = Math.max(best, len);\n  }\n  return best;\n}\n// Time O(n) amortized — each value enters the inner while loop at most once.\n// Space O(n) for the set.",
     "notes": [

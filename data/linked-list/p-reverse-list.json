@@ -6,6 +6,99 @@
   "status": "full",
   "description": "Walk the list once; at each node rewrite next to point at the previous node. Three pointers: prev, curr, next.",
   "mechanics": ["linked-list-walk"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given the head of a singly linked list and I need to reverse it in place, returning the new head. So [1,2,3,4,5] becomes [5,4,3,2,1] — same nodes, same values, but the next pointers all flip.\"\n\nThen a few quick clarifying questions:\n• Mutation — am I allowed to rewrite the existing `next` pointers, or do I need to allocate new nodes?\n• Empty list — head is null. Return null?\n• Single node — return the same node (its next is already null)?\n• Iterative or recursive — any preference? (Iterative is O(1) space; recursive is O(n) stack.)",
+        "why": "The mutation question is the load-bearing one. If they want immutability, this becomes a different problem — you'd allocate a new list, which is O(n) extra space. If they're fine with in-place mutation (the standard answer), the iterative three-pointer dance is O(1) space. The empty/single-node questions surface that your loop should handle them without special cases — and they will, if you set `prev = null` at the start."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n) extra-space solution before you discard it.",
+        "say": "\"The brute force is: walk the list and push every value into an array, then walk a second time and overwrite each node's `val` from the array in reverse — or build a brand new list from `arr.reverse()`. Either way it's O(n) time and O(n) extra space. Functionally correct, but if I'm allowed to mutate next pointers I can do it in one pass with O(1) extra space — same comparisons, just rewriting the existing pointers instead of allocating an array.\"",
+        "why": "Two reasons to name the array-buffer brute force out loud. (1) It proves you can see the obvious answer before reaching for the clever one — interviewers worry about candidates who pattern-match straight to the three-pointer dance without acknowledging why it's better. (2) It frames the iterative solution as 'same outcome, just no buffer' rather than a wholly different algorithm — which is what makes the pointer dance feel motivated rather than magical."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to the three-pointer dance?",
+        "say": "\"Reversing a singly linked list is the canonical 'pointer-dance' problem — you can't walk backward (no prev pointer in the node), so you have to flip each `next` as you pass through, but the moment you flip `curr.next = prev` you've lost the rest of the list. The fix is to cache `next` BEFORE the rewrite. That gives you the three-pointer template: `prev` (what comes before, starts null), `curr` (where I am now), and a local `next` cached each iteration. Initialize `prev = null` because the original head becomes the new tail with `next = null`. Return `prev` at the end, not `curr` — when the loop exits, `curr` is null and `prev` points to what was the old tail.\"",
+        "why": "Naming the pattern *and* the structural reason makes it land. 'Three-pointer dance' alone is jargon; 'three pointers because flipping curr.next destroys the forward link, so you must cache next first' is a derivation. Interviewers grade on the second. Calling out 'return prev, not curr' upfront also short-circuits the most common off-by-one — most candidates write the loop right and then return the wrong thing."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a typical multi-node reversal, the empty case where the loop never runs, and the single-node case where the loop runs exactly once.",
+        "examples": [
+          {
+            "input": "[1, 2, 3, 4, 5]",
+            "output": "[5, 4, 3, 2, 1]",
+            "note": "Classic case — five iterations of the pointer dance, prev walks from null to 5.",
+            "trace": "init: prev=null, curr=1\niter1: next=2, 1.next=null, prev=1, curr=2  → reversedSoFar=[1]\niter2: next=3, 2.next=1, prev=2, curr=3     → reversedSoFar=[2,1]\niter3: next=4, 3.next=2, prev=3, curr=4     → reversedSoFar=[3,2,1]\niter4: next=5, 4.next=3, prev=4, curr=5     → reversedSoFar=[4,3,2,1]\niter5: next=null, 5.next=4, prev=5, curr=null → reversedSoFar=[5,4,3,2,1]\nloop exits (curr=null), return prev=5"
+          },
+          {
+            "input": "[]",
+            "output": "[]",
+            "note": "Empty list — head is null, loop never executes, prev stays null, return null. No special case needed.",
+            "trace": "init: prev=null, curr=null\nloop check: curr is null → never enter\nreturn prev=null"
+          },
+          {
+            "input": "[42]",
+            "output": "[42]",
+            "note": "Single node — one iteration writes 42.next=null (it already was), then curr becomes null. Same code, no special case.",
+            "trace": "init: prev=null, curr=42\niter1: next=null, 42.next=null, prev=42, curr=null\nloop exits, return prev=42"
+          }
+        ],
+        "why": "Tracing surfaces the two off-by-ones this problem rewards. (1) The empty-list trace confirms that initializing `prev = null` and looping on `curr` (not `head`) handles the zero-node case without an `if`. (2) The single-node trace confirms you return `prev`, not `curr` — at loop exit `curr` is always null, so returning `curr` would always give you back null. Writing the trace out before the code is much less painful than catching either bug after the interviewer points at failing tests."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty list (head = null) → loop never runs, prev stays null, return null. ✓\n• Single node → one iteration sets the (already null) next, then curr becomes null, return that node. ✓\n• Two nodes → tests the rewrite specifically — 1→2 becomes 2→1, easy to mess up if you forget to cache next.\n• Long list (10k+ nodes) → O(n) time, O(1) space; the recursive version would blow the stack here, which is one reason to prefer iterative.\n• Cycle in the input (e.g. 1→2→3→1) → the loop never terminates. Worth flagging that this function assumes acyclic input; with a cycle you'd need Floyd's detection first.\"",
+        "why": "The empty and single-node cases both work for the *same* structural reason — `prev = null` is the correct initial value and the loop condition checks `curr`, not `head` — and naming that connection shows you understand the invariant rather than memorizing pass/fail per case. The cycle call-out is the senior move; most candidates assume acyclic input silently, and the interviewer either nods (impressed) or says 'good catch but assume acyclic for now'. Either outcome is good."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — each node is visited exactly once. The body of the loop is a fixed number of pointer assignments (three), so no amortization argument is needed.\n\nSpace is O(1) — three local pointers (`prev`, `curr`, `next`) regardless of list length. The recursive version is O(n) stack space because every call frame holds onto a node, so for large lists iterative is the right call.\n\nIf you wanted to extend to 'reverse only nodes between positions m and n', it's the same three-pointer dance bounded by a counter — walk to position m-1, then run the reverse loop n-m+1 times, then splice the reversed segment back in. Same template, just bracketed. And if you wanted to 'reverse in groups of k' (LeetCode 25), it's the same dance run k nodes at a time with a per-group splice.\"",
+        "why": "The fixed-work-per-node argument is the clean defense — there's no nested loop here so amortization isn't the issue, but interviewers do sometimes ask 'why isn't this O(n²)?' and the answer is just 'every operation in the body is O(1)'. The 'reverse between m and n' and 'reverse k-group' extensions prove you see the three-pointer dance as a reusable primitive rather than this one problem's trick — that's exactly how it shows up in Reverse Nodes in k-Group, Reverse Linked List II, and as a subroutine inside Reorder List and Palindrome Linked List."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical three-pointer reversal one statement at a time. The highlighted line is what just ran; the state panel shows prev/curr/next and the list rebuilt as an array after each step.",
+    "examples": [
+      { "label": "[1,2,3,4,5] → [5,4,3,2,1]", "input": [1, 2, 3, 4, 5], "expected": "[5,4,3,2,1]" },
+      { "label": "[] → []",                   "input": [],              "expected": "[]" },
+      { "label": "[42] → [42]",               "input": [42],            "expected": "[42]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const toArr = (n) => { const out = []; while (n) { out.push(n.val); n = n.next; } return out; };",
+      "  const dummy = { val: null, next: null };",
+      "  let tail = dummy;",
+      "  for (const v of input) { tail.next = { val: v, next: null }; tail = tail.next; }",
+      "  let head = dummy.next;",
+      "  yield { line: 1, label: `enter function — list ${JSON.stringify(input)}`, state: { input, list: toArr(head) } };",
+      "  let prev = null, curr = head;",
+      "  yield { line: 3, label: 'init prev=null, curr=head', state: { list: toArr(head), prev: null, curr: curr ? curr.val : null } };",
+      "  while (curr) {",
+      "    yield { line: 4, label: `loop entry — curr=${curr.val}`, state: { remaining: toArr(curr), reversedSoFar: toArr(prev), prev: prev ? prev.val : null, curr: curr.val } };",
+      "    const next = curr.next;",
+      "    yield { line: 6, label: `cache next = ${next ? next.val : 'null'} (saved before rewrite)`, state: { remaining: toArr(curr), reversedSoFar: toArr(prev), prev: prev ? prev.val : null, curr: curr.val, next: next ? next.val : null } };",
+      "    curr.next = prev;",
+      "    yield { line: 7, label: `rewrite curr.next → prev (${curr.val}.next = ${prev ? prev.val : 'null'})`, state: { reversedSoFar: toArr(curr), prev: prev ? prev.val : null, curr: curr.val, next: next ? next.val : null } };",
+      "    prev = curr;",
+      "    yield { line: 8, label: `prev → ${prev.val}`, state: { reversedSoFar: toArr(prev), prev: prev.val, curr: curr.val, next: next ? next.val : null } };",
+      "    curr = next;",
+      "    yield { line: 9, label: `curr → ${curr ? curr.val : 'null'} (advance using cached next)`, state: { reversedSoFar: toArr(prev), prev: prev.val, curr: curr ? curr.val : null } };",
+      "  }",
+      "  yield { line: 12, label: `loop done — return prev (new head)`, state: { reversed: toArr(prev), prev: prev ? prev.val : null, curr: null, returns: JSON.stringify(toArr(prev)) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function reverseList(head) {\n  // prev starts null so the original head becomes the new tail (next = null).\n  let prev = null, curr = head;\n  while (curr) {\n    // Cache next BEFORE rewriting curr.next — otherwise the rest of the list is lost.\n    const next = curr.next;\n    curr.next = prev;\n    prev = curr;\n    curr = next;\n  }\n  // curr is null at the end; prev is the new head.\n  return prev;\n}\n// Time O(n), Space O(1)",
     "notes": [

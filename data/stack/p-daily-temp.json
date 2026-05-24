@@ -8,6 +8,99 @@
   "mechanics": [
     "array-as-stack"
   ],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: given an array `temps` of daily temperatures, return an array `result` of the same length where `result[i]` is the number of days you'd have to wait after day `i` until a warmer temperature. If no future day is warmer, `result[i]` is 0.\"\n\nThen a few quick clarifying questions:\n• 'Warmer' — strictly greater, right? Equal temps don't count?\n• Integer temperatures, or could they be floats?\n• Bounds — is the array length at most 10^5 or larger? (Determines whether O(n²) brute force would even pass.)\n• If today is the last day, the answer is 0 by definition?",
+        "why": "The strictly-greater vs greater-or-equal question is load-bearing — if equal temps DID count, the inner condition becomes `>=` and the stack logic changes (equal temps resolve each other). Confirming integer temps lets you skip floating-point edge talk. And asking about array size signals you're thinking about whether the O(n²) brute force is even acceptable — sometimes it is, and the interviewer will tell you to stop optimizing."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"The brute force is: for each index `i`, walk forward with `j` from `i+1` looking for the first `temps[j] > temps[i]`. Record `j - i` and break. If you walk off the end, record 0. That's two nested loops — O(n²) time, O(1) extra space. It works, but for n=10^5 it's 10^10 operations — way too slow. Let me see if we can do it in one pass.\"",
+        "why": "Two reasons to name the nested-loop brute force out loud. (1) It proves you understand the problem before optimizing — and you'd be surprised how often candidates skip this and produce a subtly wrong O(n) solution because they never grounded themselves in what the right answer should look like. (2) It frames the stack solution as 'instead of EACH `i` searching forward for its warmer day, let EACH WARMER DAY broadcast itself backward to the pending `i`s waiting for it' — which is the inversion the stack enables."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a monotonic stack?",
+        "say": "\"This is a 'next greater element' problem — for each `i`, find the nearest `j > i` with `temps[j] > temps[i]`. Whenever you see 'for each element, find the next/previous greater/smaller element', the answer is a monotonic stack. Specifically: I'll keep a stack of INDICES whose answer is still pending, and I'll maintain the invariant that the temperatures at those indices are monotonically DECREASING (top of stack = smallest pending temp). When I see a new temp warmer than the top, I pop — the popped index's wait is `i - poppedIdx` — and I keep popping while the invariant is broken. Each index gets pushed once and popped at most once, so the total work across the outer loop is O(n) even though there's a nested while.\"",
+        "why": "Naming the pattern *and* the structural invariant that makes it apply is the move. 'Use a stack' is a guess; 'monotonic decreasing stack of indices waiting for their warmer day' is a derivation. The 'pushed once, popped once' framing is the amortization argument that defends O(n) — name it here so it's not surprising when you reach section 6. The 'next greater element' framing is also the bridge — once you see this problem as that template, you've also unlocked Next Greater Element I/II, Stock Span, and Largest Rectangle in Histogram."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the canonical mixed case, all-decreasing (stack never pops), and all-increasing (stack pops every step).",
+        "examples": [
+          {
+            "input": "[73, 74, 75, 71, 69, 72, 76, 73]",
+            "output": "[1,1,4,2,1,1,0,0]",
+            "note": "Canonical case — multiple pops at i=5 (resolves 71 and 69) and i=6 (resolves 75 and 72).",
+            "trace": "res=[0,0,0,0,0,0,0,0] stack=[]\ni=0 temp=73 → push. stack=[0]\ni=1 temp=74 > temps[0]=73 → pop 0, res[0]=1-0=1. push 1. stack=[1] res=[1,0,0,0,0,0,0,0]\ni=2 temp=75 > temps[1]=74 → pop 1, res[1]=2-1=1. push 2. stack=[2] res=[1,1,0,0,0,0,0,0]\ni=3 temp=71 < temps[2]=75 → push. stack=[2,3]\ni=4 temp=69 < temps[3]=71 → push. stack=[2,3,4]\ni=5 temp=72 > temps[4]=69 → pop 4, res[4]=5-4=1. 72 > temps[3]=71 → pop 3, res[3]=5-3=2. 72 < temps[2]=75 → stop. push 5. stack=[2,5] res=[1,1,0,2,1,0,0,0]\ni=6 temp=76 > temps[5]=72 → pop 5, res[5]=6-5=1. 76 > temps[2]=75 → pop 2, res[2]=6-2=4. push 6. stack=[6] res=[1,1,4,2,1,1,0,0]\ni=7 temp=73 < temps[6]=76 → push. stack=[6,7]\nloop done — stack=[6,7] both keep their default 0\nreturn [1,1,4,2,1,1,0,0]"
+          },
+          {
+            "input": "[5, 4, 3, 2, 1]",
+            "output": "[0,0,0,0,0]",
+            "note": "All decreasing — invariant never broken, every index pushed, nothing ever pops. Result is all zeros from init.",
+            "trace": "res=[0,0,0,0,0] stack=[]\ni=0 temp=5 → push. stack=[0]\ni=1 temp=4 < temps[0]=5 → push. stack=[0,1]\ni=2 temp=3 < temps[1]=4 → push. stack=[0,1,2]\ni=3 temp=2 < temps[2]=3 → push. stack=[0,1,2,3]\ni=4 temp=1 < temps[3]=2 → push. stack=[0,1,2,3,4]\nloop done — all 5 indices left on stack, all keep res[i]=0\nreturn [0,0,0,0,0]"
+          },
+          {
+            "input": "[1, 2, 3, 4]",
+            "output": "[1,1,1,0]",
+            "note": "All increasing — every push immediately triggers a pop. Stack never has more than 1 element. The last index has no warmer day, keeps 0.",
+            "trace": "res=[0,0,0,0] stack=[]\ni=0 temp=1 → push. stack=[0]\ni=1 temp=2 > temps[0]=1 → pop 0, res[0]=1-0=1. push 1. stack=[1] res=[1,0,0,0]\ni=2 temp=3 > temps[1]=2 → pop 1, res[1]=2-1=1. push 2. stack=[2] res=[1,1,0,0]\ni=3 temp=4 > temps[2]=3 → pop 2, res[2]=3-2=1. push 3. stack=[3] res=[1,1,1,0]\nloop done — stack=[3] keeps res[3]=0\nreturn [1,1,1,0]"
+          }
+        ],
+        "why": "Tracing surfaces the three bugs this problem rewards. (1) Pushing the TEMP instead of the INDEX — you can't compute `i - j` if `j` was a temperature. (2) Using `>=` instead of `>` — equal temps would pop each other, breaking the 'strictly greater' rule. (3) Forgetting to leave the trailing pending indices with 0 — the `fill(0)` at init is what saves you (no explicit cleanup needed). The all-increasing case also defends the amortization: every step pops once, total pops across the loop = n, so O(n) overall."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty array → result is empty, loop doesn't run. ✓\n• Single element → push and never pop, result is [0]. ✓\n• All same temps (e.g. [5,5,5]) → since the condition is strictly `>`, no pops fire, result is all 0s. ✓ (This is why the strict-vs-equal clarification mattered.)\n• Strictly decreasing → every index pushed, never popped, all 0s. (Worst case for stack-size.)\n• Strictly increasing → every step pops exactly once, stack never grows past size 1. (Best case for stack size, every result except last is 1.)\n• Two big plateaus separated by a drop, e.g. [5,5,5,1,1,1,9] → the plateau values don't resolve each other (strict `>`), but the trailing 9 resolves them all in one burst when it arrives.\"",
+        "why": "Calling out the all-same case explicitly closes the loop on the strict-vs-equal clarification from section 1 — it shows the interviewer you used that constraint to make a load-bearing decision in the code, not just to fill time. The plateau example is the one that tends to trip up the 'I'll use `>=`' candidate, because they'd resolve plateau entries against each other prematurely (and wrongly)."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — the nested `while` looks scary, but the amortization argument is: each index is pushed onto the stack exactly once, and popped from the stack at most once. So the total work the inner while does across the entire outer loop is bounded by n. Outer loop is n iterations, inner work is amortized O(1) per iteration, total O(n).\n\nSpace is O(n) — worst case strictly-decreasing input fills the stack with all n indices.\n\nIf you wanted Next Greater Element instead of count-of-days, you'd record `temps[i]` (the warmer value) instead of `i - j` (the wait). If you wanted to look backwards (previous warmer day), iterate right-to-left instead of left-to-right. If you wanted to handle circular arrays (Next Greater Element II), iterate twice through the array (modular indexing) but only push during the first pass. Same monotonic-stack template, different recording rules.\"",
+        "why": "The amortized-analysis argument is what wins the pushback from an interviewer who sees the nested `while` and challenges 'isn't that O(n²)?'. The Next Greater Element extensions are unprompted bonus material that proves you see the template, not just this one problem — that's how the same shape powers Stock Span, Online Stock Span, Sum of Subarray Minimums, and the histogram problem two lessons over."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical monotonic-stack solution one statement at a time. The highlighted line is what just ran; the state panel shows res, the stack of pending indices, and i. Pick a different example to see how the stack behaves on monotone inputs.",
+    "examples": [
+      { "label": "[73,74,75,71,69,72,76,73] → [1,1,4,2,1,1,0,0]", "input": [73, 74, 75, 71, 69, 72, 76, 73], "expected": "[1,1,4,2,1,1,0,0]" },
+      { "label": "[5,4,3,2,1] → [0,0,0,0,0] (all decreasing — never pops)", "input": [5, 4, 3, 2, 1], "expected": "[0,0,0,0,0]" },
+      { "label": "[1,2,3,4] → [1,1,1,0] (all increasing — pops every step)", "input": [1, 2, 3, 4], "expected": "[1,1,1,0]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const temps = input;",
+      "  yield { line: 1, label: `enter function — temps=${JSON.stringify(temps)}`, state: { temps } };",
+      "  const res = new Array(temps.length).fill(0);",
+      "  yield { line: 3, label: `init res = ${JSON.stringify(res)} (all zeros — default wait)`, state: { temps, res: [...res] } };",
+      "  const stack = [];",
+      "  yield { line: 4, label: 'init stack (empty) — will hold indices with no warmer day yet', state: { temps, res: [...res], stack: [] } };",
+      "  for (let i = 0; i < temps.length; i++) {",
+      "    yield { line: 5, label: `outer step: i=${i}, temps[i]=${temps[i]}`, state: { temps, res: [...res], stack: [...stack], i } };",
+      "    while (stack.length && temps[i] > temps[stack[stack.length - 1]]) {",
+      "      const topIdx = stack[stack.length - 1];",
+      "      yield { line: 7, label: `temps[${i}]=${temps[i]} > temps[${topIdx}]=${temps[topIdx]} — pop and settle`, state: { temps, res: [...res], stack: [...stack], i } };",
+      "      const j = stack.pop();",
+      "      yield { line: 8, label: `j = stack.pop() → ${j}`, state: { temps, res: [...res], stack: [...stack], i, j } };",
+      "      res[j] = i - j;",
+      "      yield { line: 9, label: `res[${j}] = ${i} - ${j} = ${res[j]}`, state: { temps, res: [...res], stack: [...stack], i, j } };",
+      "    }",
+      "    stack.push(i);",
+      "    yield { line: 12, label: `push ${i} — stack now holds pending indices`, state: { temps, res: [...res], stack: [...stack], i } };",
+      "  }",
+      "  yield { line: 14, label: `return ${JSON.stringify(res)} (indices left on stack keep their default 0)`, state: { temps, res: [...res], stack: [...stack], returns: JSON.stringify(res) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function dailyTemperatures(temps) {\n  // Default 0 stays for any index that never finds a warmer day.\n  const res = new Array(temps.length).fill(0);\n  const stack = [];                       // indices, temps[stack] decreasing\n  for (let i = 0; i < temps.length; i++) {\n    // Strict > keeps the stack monotonically decreasing; equal temps don't resolve.\n    while (stack.length && temps[i] > temps[stack[stack.length - 1]]) {\n      const j = stack.pop();\n      res[j] = i - j;                     // days waited\n    }\n    // Push the INDEX (not temp) — we need it to compute i - j later.\n    stack.push(i);\n  }\n  return res;\n}\n// Time O(n) — each index is pushed and popped at most once\n// Space O(n)",
     "notes": [

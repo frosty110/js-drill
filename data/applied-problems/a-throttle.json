@@ -6,6 +6,106 @@
   "status": "full",
   "description": "Throttle caps invocations to one per `ms` window — extra calls during the cool-down are dropped (leading-edge variant). Built with an injectable clock so tests advance time deterministically.",
   "mechanics": ["closure-state"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the rate-limit contract and the edge variant.",
+        "say": "\"Let me make sure I have this right: I'm writing throttle(fn, ms) — a wrapper that lets fn fire at most once every ms. Extra calls during the cool-down window are either dropped or queued, depending on which variant we pick.\"\n\nThen a few quick clarifying questions:\n• Leading-edge or trailing-edge? Leading fires immediately on the first call of a window, drops the rest. Trailing waits and fires the last call at the window's end. They produce different behavior on bursts.\n• What happens to dropped calls' args — gone forever (leading-edge), or buffered and fired at the trailing edge?\n• Real setTimeout or injectable fake clock? I'd default to the fake clock pattern — easier to test deterministically.\n• Should the very first call always fire, or wait until ms has elapsed since some implicit t=0?\n• `this`-forwarding semantics — does fn see the wrapper's `this`?",
+        "why": "Leading vs trailing is the load-bearing decision — they're genuinely different algorithms, not just a flag. Leading-edge throttle is a simple gate (`if now - lastFired >= ms: fire`). Trailing-edge throttle needs a pending timer and saved args, which makes it look a lot more like debounce. Pick one and commit. The 'should the first call fire' question matters because the natural initialization is `lastFired = -Infinity` (so `now - (-Infinity) = Infinity >= ms` is true on the first call) — naming this explicitly avoids the bug where the first call gets dropped because lastFired started at 0 and ms was big."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious naive version before you discard it.",
+        "say": "\"The brute force is: no rate limit at all — every call invokes fn. That defeats the purpose; throttle exists to cap call frequency, usually because fn is expensive (network request, layout recalc, etc.).\n\nThe insight: I need to remember WHEN fn last fired, then on each call compare 'now minus lastFired' against ms. If the gap is big enough, fire and update lastFired. If not, drop the call silently. That's the entire leading-edge variant — one comparison and one assignment.\n\nThe closure variable `lastFired` is the persistent state. Same closure-as-state pattern as debounce, but the decision rule flips: debounce RESETS on every call, throttle GATES on every call.\"",
+        "why": "Calling out 'reset vs gate' as the one-word difference between debounce and throttle is the framing that sticks — once you have that mental model, you can derive either one from scratch. The 'fn is expensive' motivation explains *why* anyone would want throttle, which makes the implementation feel inevitable rather than arbitrary."
+      },
+      {
+        "title": "3. Spot the pattern — API shape & invariant",
+        "prompt": "What's the closure shape and what invariant keeps the rate limit correct?",
+        "say": "\"The API shape is: throttle returns a function. That function closes over `lastFired` — a single timestamp (or -Infinity sentinel for 'never fired yet'). On each call: compute `gap = _now - lastFired`. If `gap >= ms`, set `lastFired = _now` and call fn(...args). Otherwise, do nothing.\n\nThe invariant: between any two firings, at least ms has elapsed on the fake clock. That's literally the rate limit. The gate enforces it because we only update lastFired when we fire, and we only fire when the gap is big enough.\n\nLeading-edge means we fire on the FIRST call of each window. The `lastFired = -Infinity` initialization makes the very first call always pass the gate (since `_now - (-Infinity)` is Infinity, which is >= any ms).\n\nDropped calls' args are gone — no buffer, no queue. If the spec wanted trailing-edge behavior (fire the last dropped call at the window's end), I'd need to keep a `pendingArgs` variable and a `scheduled` timer like debounce — at which point throttle starts looking like debounce-plus-an-immediate-leading-fire. The leading-only variant is much simpler and is what 'throttle' usually means in interviews.\"",
+        "why": "Explicitly contrasting 'reset on call' (debounce) vs 'gate on call' (throttle) as the one structural difference is the senior framing — it shows you see them as variants of the same template, not two unrelated problems. The `-Infinity` sentinel is the tell-tale detail interviewers look for; without it, the first-call-fires invariant has to be enforced with a separate `hasFired` boolean, which is ugly. Naming the leading-vs-trailing tradeoff as 'leading is simple, trailing needs a timer' shows you understand WHY you'd default to leading."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few timelines to confirm the gate behaves correctly.",
+        "intro": "\"Let me trace a few event timelines to confirm the gate is right.\" Three examples cover the canonical burst-then-fire-again case, the trivial single-call case, and the exact boundary where gap == ms — that's the test of the `>=` vs `>` choice.",
+        "examples": [
+          {
+            "input": "ms=100: call('a') fires, call('b'), call('c') drop, tick(50), tick(60), call('d') fires",
+            "output": "[[\"a\"],[\"d\"]]",
+            "note": "Burst case — first call fires (gap = 0 - (-Infinity) = Infinity >= 100), next two drop (gap still 0 < 100). After tick(110), the gap from lastFired (=0) to _now (=110) is 110 >= 100, so call('d') fires.",
+            "trace": "init lastFired=-Infinity, _now=0, fired=[]\ncall('a') → gap = 0 - (-Inf) = Inf, Inf >= 100 → FIRE, lastFired=0, fired=[['a']]\ncall('b') → gap = 0 - 0 = 0, 0 < 100 → DROP (args 'b' gone forever)\ncall('c') → gap = 0 - 0 = 0, 0 < 100 → DROP (args 'c' gone forever)\ntick(50)  → _now=50 (tick alone does NOT fire anything — leading-edge fires only on calls)\ntick(60)  → _now=110\ncall('d') → gap = 110 - 0 = 110, 110 >= 100 → FIRE, lastFired=110, fired=[['a'],['d']]"
+          },
+          {
+            "input": "ms=50: a single call at _now=0 always fires (lastFired=-Infinity)",
+            "output": "[[1]]",
+            "note": "Single call at t=0 confirms the -Infinity sentinel makes the very first call always pass the gate, even when _now is 0 and ms is positive.",
+            "trace": "init lastFired=-Infinity, _now=0, fired=[]\ncall(1) → gap = 0 - (-Inf) = Inf, Inf >= 50 → FIRE, lastFired=0, fired=[[1]]"
+          },
+          {
+            "input": "ms=100 boundary: call('a') fires; tick(99); call('b') drops (gap=99<100); tick(1); call('c') fires (gap=100)",
+            "output": "[[\"a\"],[\"c\"]]",
+            "note": "Boundary case — gap exactly equals ms. The `>=` makes this fire; `>` would silently drop and you'd have to wait one more tick for call to succeed. One-character bug worth catching on the whiteboard.",
+            "trace": "init lastFired=-Infinity, _now=0, fired=[]\ncall('a') → gap = Inf, Inf >= 100 → FIRE, lastFired=0, fired=[['a']]\ntick(99)  → _now=99\ncall('b') → gap = 99 - 0 = 99, 99 < 100 → DROP\ntick(1)   → _now=100\ncall('c') → gap = 100 - 0 = 100, 100 >= 100 → FIRE (the `>=` is load-bearing), lastFired=100, fired=[['a'],['c']]"
+          }
+        ],
+        "why": "The first trace exposes the most common bug: forgetting that dropped calls are SILENT — interviewers sometimes expect throttle to queue and fire the last dropped call, and if you implemented leading-only you need to defend that choice. The boundary case (`>=` vs `>`) is the same one-character bug that bites debounce — easy to miss in the heat of writing, but the trace makes it impossible to miss. The first-call-at-t=0 trace defends the `-Infinity` sentinel choice; without it, the test 'fire on the first call ever' silently fails."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Rapid-fire calls inside one window → all but the first drop, no queueing. Their args are gone. (Already traced above.)\n• Single call → fires immediately because `-Infinity` sentinel makes the gate always open on the first call.\n• Sparse calls (gap always > ms) → every call fires; throttle is a no-op when the user isn't bursting.\n• Boundary `_now - lastFired == ms` exactly → fires (`>=`, not `>`). The trace catches this one.\n• ms = 0 → degenerates to no rate limit; every call fires. Mathematically sound, probably not what the user wants.\n• `this` binding inside fn — same as debounce. Used `function (...args)` (not arrow) so `this` is forwarded; switch to `fn.apply(this, args)` to forward to fn explicitly.\n• Trailing-edge follow-up — if asked, you need a pending timer AND lastFired. The 'fire immediately if gate open, else schedule a single pending fire at lastFired+ms with the latest args' algorithm. Worth knowing the upgrade path.\n• Concurrent access — closures aren't thread-safe in general, but JS is single-threaded so this is fine. Worth knowing it'd be a problem in a multithreaded runtime.\"",
+        "why": "Naming the trailing-edge upgrade path unprompted shows you understand throttle exists on a spectrum and you've made a specific choice — that's the senior-candidate move. The `this`-binding edge is the JS-specific call-out (same as debounce). The ms=0 edge is silly but mentioning it shows you've actually thought about the bounds rather than just typed up the happy path."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time per call is O(1) — one subtraction, one comparison, maybe one assignment and one fn call. Time per tick is O(1) — just increment _now (leading-edge throttle does NOT fire on tick, only on call, which is a simplification worth naming).\n\nSpace is O(1) — one closure variable, `lastFired`. No queue, no history. (The trailing-edge variant would add a pending-args slot and a timer, still O(1).)\n\nThis is the same closure-as-state template as debounce, with the rule flipped: debounce RESETS the timer on every call (so the last call wins after silence); throttle GATES on every call (so calls inside the window are dropped). Once you internalize 'reset vs gate', the two are dual halves of a rate-limiting toolkit.\n\nReal-world: lodash's throttle adds leading/trailing flags, a maxWait option, and cancel/flush methods. requestAnimationFrame is essentially throttle at the browser's repaint cadence (~16ms). Scroll/resize event handlers are the canonical use case — without throttle, a single scroll burst fires hundreds of handlers per second.\"",
+        "why": "The 'reset vs gate' framing as the structural difference between debounce and throttle is the line worth memorizing — it's how you derive either one from scratch under time pressure. The scroll-handler example grounds the abstraction in a real use case interviewers actually care about (because they've shipped buggy scroll handlers themselves). Naming requestAnimationFrame as throttle-at-the-browser-cadence is the senior trivia move."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through throttle on an event timeline. Each input is { ms, events: [...] } where an event is either { type: 'call', args: [...] } — a throttled invocation — or { type: 'tick', delta } — advance the fake clock. The state panel shows _now and lastFired; the leading-edge gate fires when _now - lastFired >= ms and silently drops otherwise. The trace collects every actual firing into fired — note that dropped calls' args are NOT queued (unlike debounce).",
+    "examples": [
+      { "label": "ms=100: call('a') fires, call('b'), call('c') drop, tick(50), tick(60), call('d') fires", "input": { "ms": 100, "events": [ { "type": "call", "args": ["a"] }, { "type": "call", "args": ["b"] }, { "type": "call", "args": ["c"] }, { "type": "tick", "delta": 50 }, { "type": "tick", "delta": 60 }, { "type": "call", "args": ["d"] } ] }, "expected": "[[\"a\"],[\"d\"]]" },
+      { "label": "ms=50: a single call at _now=0 always fires (lastFired=-Infinity)", "input": { "ms": 50, "events": [ { "type": "call", "args": [1] } ] }, "expected": "[[1]]" },
+      { "label": "ms=100 boundary: call('a') fires; tick(99); call('b') drops (gap=99<100); tick(1); call('c') fires (gap=100)", "input": { "ms": 100, "events": [ { "type": "call", "args": ["a"] }, { "type": "tick", "delta": 99 }, { "type": "call", "args": ["b"] }, { "type": "tick", "delta": 1 }, { "type": "call", "args": ["c"] } ] }, "expected": "[[\"a\"],[\"c\"]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { ms, events } = input;",
+      "  let lastFired = -Infinity;",
+      "  let _now = 0;",
+      "  const fired = [];",
+      "  const show = (x) => x === -Infinity ? '-Infinity' : x;",
+      "  yield { line: 3, label: `throttle(fn, ${ms}) created — lastFired=-Infinity, _now=0 (first call will always pass the gate)`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired] } };",
+      "  for (let k = 0; k < events.length; k++) {",
+      "    const ev = events[k];",
+      "    if (ev.type === 'call') {",
+      "      yield { line: 4, label: `event#${k}: api(${ev.args.map(a => JSON.stringify(a)).join(', ')}) — wrapper called`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired], event: ev } };",
+      "      const gap = _now - lastFired;",
+      "      yield { line: 6, label: `gap = _now - lastFired = ${_now} - ${show(lastFired)} = ${show(gap)}; gate: gap >= ${ms}?`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired], event: ev, gap: show(gap) } };",
+      "      if (gap >= ms) {",
+      "        lastFired = _now;",
+      "        yield { line: 7, label: `gate passes — lastFired = ${_now}`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired], event: ev } };",
+      "        fired.push(ev.args.slice());",
+      "        yield { line: 8, label: `fn(...${JSON.stringify(ev.args)}) invoked — fired=${JSON.stringify(fired)}`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired], event: ev } };",
+      "      } else {",
+      "        yield { line: 9, label: `gate fails — drop call (args ${JSON.stringify(ev.args)} NOT queued, gone forever)`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired], event: ev } };",
+      "      }",
+      "    } else if (ev.type === 'tick') {",
+      "      yield { line: 14, label: `event#${k}: tick(${ev.delta}) — advancing clock`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired], event: ev } };",
+      "      _now += ev.delta;",
+      "      yield { line: 14, label: `_now += ${ev.delta} → ${_now} (tick does NOT fire anything — leading edge only fires on call)`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired], event: ev } };",
+      "    }",
+      "  }",
+      "  yield { line: 16, label: `timeline complete — fired=${JSON.stringify(fired)}`, state: { events, ms, _now, lastFired: show(lastFired), fired: [...fired], returns: JSON.stringify(fired) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function throttle(fn, ms) {\n  // -Infinity so the very first call always satisfies _now - lastFired >= ms.\n  let lastFired = -Infinity;\n  const api = function (...args) {\n    // Leading edge: fire on the first call of each window, drop the rest silently.\n    if (api._now - lastFired >= ms) {\n      lastFired = api._now;\n      fn(...args);\n    }\n    // No queueing — throttle does NOT keep latest args like debounce does.\n  };\n  api._now = 0;\n  // Injected clock — tests advance time deterministically without setTimeout.\n  api.tick = (delta) => { api._now += delta; };\n  return api;\n}",
     "notes": [

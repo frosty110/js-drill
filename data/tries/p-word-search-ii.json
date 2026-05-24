@@ -10,6 +10,137 @@
     "four-dir-neighbors",
     "backtrack-template"
   ],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the board, the dictionary, and the legal moves.",
+        "say": "\"Let me restate: I'm given a 2D `board` of single characters and an array `words`. I want to return every word in `words` that can be formed by walking the board — starting at any cell, moving to 4-directional neighbors, never reusing a cell within a single word. A few quick checks:\"\n\n• How big can the board get, and how many words? (`M x N` up to ~12x12, `len(words)` into the thousands is the standard LeetCode bound — worth confirming because the answer is what motivates the trie.)\n• What's the max word length? (Important — `4^L` is the DFS branching factor.)\n• Are diagonals legal moves? (Almost always no — but ask.)\n• Can a word be in the dictionary twice, or contain non-letter characters?\n• Output order — sorted, or in the order I find them?",
+        "why": "The 'how many words' question is the load-bearing one — it's what makes the trie pay off. If there are 5 words you might genuinely be fine running plain Word Search I five times. If there are 5,000, you can't — you need to share the prefix work across them, which is the entire reason a trie is in the picture. Asking the size question first lets you justify the trie as a response to scale rather than as a memorized trick."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solution before you reach for the trie.",
+        "say": "\"The brute force is: for each word in `words`, run Word Search I — DFS from every cell, looking for that specific word. Each Word Search I run is O(M·N·4^L) where L is the word length. So the total is O(W · M · N · 4^L) where W is the word count. That's fine for a handful of words, but it's catastrophic when W gets large — most of the work is redundant because words that share prefixes (\"cat\", \"car\", \"card\") all walk the same `c→a` path on the board, separately, once per word.\"",
+        "why": "Pointing out the redundant prefix work is what motivates the trie — you're not pulling a data structure out of a hat, you're observing that the brute force does the same prefix walk W times and asking 'what if I could share that?' That's the framing that makes the next section feel like derivation rather than memorization. It also gives you the cleanest possible benchmark to beat: the trie version drops the W factor entirely."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why does a trie make the multi-word search tractable?",
+        "say": "\"The trie's job here is to let a SINGLE grid DFS test all dictionary prefixes at once and prune the moment no word continues. Concrete picture: I build a trie of every word in the dictionary. Then I run one DFS over the board, but at each step I also descend a trie node in parallel. When I step from cell `(r,c)` to a neighbor whose character is `ch`, I look up `currentTrieNode[ch]`. If it's missing, I return immediately — no word in the dictionary continues with this prefix, so the entire subtree of further DFS calls is dead. That single check is the pruning that makes everything tractable.\"\n\n\"Two more details: I stash the full word string at each terminal node so when I hit one, I can push it to results without rebuilding it from the DFS path. And after I push, I set that terminal's `word` field to null — same word reachable from multiple start cells would otherwise appear twice.\"\n\n\"The complexity drops from O(W · M · N · 4^L) to O(M · N · 4^L), regardless of W. The trie absorbs the word count into its structure.\"",
+        "why": "The 'trie absorbs the word count' framing is what shows you understand WHY this works, not just THAT it works. The pruning property — 'one missing trie edge kills an entire DFS subtree' — is the load-bearing observation. Interviewers grade on whether you can explain how the trie changes the complexity bound, not just on whether you correctly emit the code. The stash-the-full-word and null-out-on-collection tricks are small but worth naming unprompted because they're the two implementation details that distinguish a working solution from a buggy one (rebuilding-from-path is slow and error-prone; not deduping returns the same word multiple times)."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the DFS.",
+        "intro": "\"Let me trace through a few small boards to make sure the model is right.\" Three cases cover the interesting behaviors — a small board where two short words both succeed (proves the trie handles multiple terminals), a 1-row board where a dictionary word can't be formed (proves pruning on missing trie edge), and a 3x3 where a non-straight path word is the only match (proves backtracking restores cells correctly).",
+        "examples": [
+          {
+            "input": "board=[['o','a','t'],['h','x','h']], words=['oath','oh']",
+            "output": "['oh','oath']",
+            "note": "Two words, one shares a prefix with the other — both terminate on the trie.",
+            "trace": "trie: root.o.h={word:'oh'}, root.o.a.t.h={word:'oath'}\nStart (0,0)='o' → trie.o exists. Hit terminal? root.o has no .word, skip.\n  Neighbors: (1,0)='h' → trie.o.h exists. Has .word='oh' → found=['oh'], null it out.\n    Neighbors of (1,0): all out-of-bounds or already visited → return\n  (0,1)='a' → trie.o.a exists. No .word, continue.\n    Neighbors: (0,2)='t' → trie.o.a.t exists. No .word.\n      Neighbors: (1,2)='h' → trie.o.a.t.h exists. Has .word='oath' → found=['oh','oath']\nAll other start cells: root.h, root.a, root.t, root.x → none in trie root, prune immediately"
+          },
+          {
+            "input": "board=[['c','a','t','x']], words=['cat','car']",
+            "output": "['cat']",
+            "note": "Two-prefix dictionary — 'cat' succeeds, 'car' is pruned because no 'r' is reachable from 'a'.",
+            "trace": "trie: root.c.a.t={word:'cat'}, root.c.a.r={word:'car'}\nStart (0,0)='c' → trie.c exists.\n  (0,1)='a' → trie.c.a exists.\n    (0,0) visited. (0,2)='t' → trie.c.a.t exists, .word='cat' → found=['cat']\n      Neighbors: (0,1) visited, (0,3)='x' → trie.c.a.t has no .x edge → PRUNE\n    No way to reach an 'r' from (0,1), so 'car' branch is never opened\nOther start cells: 'a','t','x' → not in trie root, prune"
+          },
+          {
+            "input": "board=[['a','b','c'],['d','e','f'],['g','h','i']], words=['abef','xyz']",
+            "output": "['abef']",
+            "note": "Non-straight path — a→b→e→f bends through the middle row. Also tests that an entirely-missing-from-board word ('xyz') is pruned at the root.",
+            "trace": "trie: root.a.b.e.f={word:'abef'}, root.x.y.z={word:'xyz'}\nStart (0,0)='a' → trie.a exists.\n  (0,1)='b' → trie.a.b exists.\n    (1,1)='e' → trie.a.b.e exists.\n      (1,2)='f' → trie.a.b.e.f exists, .word='abef' → found=['abef']\nOther starts: 'b','c','d','e','f','g','h','i' — none of them are root.b/root.c/... except... none match the root letters of dictionary words 'a' or 'x'.\n'xyz' branch: no 'x' anywhere on the board → never explored, dies at the start-cell loop."
+          }
+        ],
+        "why": "The first example is the one to walk live — it shows both the terminal-hit logic AND the dedupe-via-null trick (start cell (0,0)'s subtree finds 'oath', but if 'oath' were also reachable from another path, the nulled .word would prevent the duplicate). The second example earns its place by making the pruning concrete — you can SEE that 'car' is never explored, because no 'r' is adjacent to any 'a'. That's the kind of trace that makes the O(M·N·4^L) bound feel real instead of hand-waved. The third defends backtracking — restoring `board[r][c] = ch` after the DFS frame returns is what lets the 'e' cell be revisited by future start cells if needed."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty words list → return `[]` immediately. The trie is empty, every DFS prunes at the root, no work done.\n• Single-character words → terminate at the first cell match. Make sure your code checks `next.word` BEFORE descending into neighbors, otherwise you'd miss 1-char hits.\n• Words that are prefixes of other words (\"cat\" and \"cats\") → both terminals exist; finding 'cat' doesn't prevent the DFS from continuing to 's' and finding 'cats'. The null-out only blanks the specific terminal you hit, not the whole subtree.\n• Same word reachable from multiple start cells → without the `next.word = null` step, you'd push it twice. This is the single most common bug — easy to forget and easy to miss without a multi-cell test case.\n• Board boundary → the `nr >= 0 && nr < R && nc >= 0 && nc < C` check has to come BEFORE you read `board[nr][nc]`, or you'll dereference undefined.\n• Words longer than the total number of cells (or longer than any reachable path) → automatically pruned: the DFS bottoms out when it can't move to an unvisited neighbor, and the trie walk fails when no word in the dictionary continues.\n• Forgetting to restore `board[r][c] = ch` after the DFS frame → the cell stays marked `#` forever and no future word can use it. Classic backtracking bug.",
+        "why": "The 'forgot to dedupe with null-out' bug is the single most diagnostic edge — it's the one that ships green on small tests and fails the moment two paths reach the same terminal. Calling it out unprompted signals that you've actually built this once and hit the bug. The 'check `next.word` before recursing' detail matters because it's the difference between a working single-char-word case and a subtle off-by-one in DFS ordering. The board-boundary-check-order point is the one that catches careless candidates who write `board[nr][nc] !== '#' && nr >= 0...` — JS short-circuit means that runs `nr >= 0` last, but the dereference already happened."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(M · N · 4^L) where M·N is the board size and L is the longest word length. Start from each of M·N cells, and from each start cell the DFS has branching factor 4 (neighbors) up to depth L. Crucially, the W word count is NOT in the bound — the trie absorbs it. The pruning means most DFS paths die after a few characters because no dictionary word continues; in practice the runtime is vastly below the worst case.\n\nBuilding the trie is O(total characters across all words), which is dominated by the DFS for any non-trivial board.\n\nSpace is O(total characters) for the trie + O(L) for the DFS recursion stack.\n\nIf you wanted me to extend this: the same trie+DFS template generalizes to any 'find all occurrences of dictionary patterns in a graph' problem. For boggle variants where you score by word length, you'd track a score during the descent. For 'wildcard' dictionary entries, you'd modify the trie walk to also branch into all children on `.` — same as the Add-and-Search-Word problem's trick, just embedded in the grid DFS.\"",
+        "why": "The complexity defense here is structural rather than analytical — there's no clever amortization, just 'each DFS cell descends 4 ways up to depth L, starting from M·N cells, and W vanishes thanks to the trie'. The crucial sentence is 'W is NOT in the bound' — that's the punchline that pays off the section-2 setup. The extensions (boggle scoring, wildcard search) prove you see this as a template — DFS over a graph guided by a trie — not a one-off algorithm for this specific problem. That generalization is what separates 'solved Word Search II' from 'understands trie-guided graph search.'"
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through findWords on a small board. The state panel shows the current cell (r,c), the trie path walked so far, the visited cells (marked '#' on the board), and the found-words list. Each DFS recursion frame yields on entry; the four-direction loop yields per neighbor explored or skipped. Watch how a missing trie edge prunes a whole subtree.",
+    "examples": [
+      { "label": "2x3 [['o','a','t'],['h','x','h']], words=['oath','oh'] → ['oh','oath']", "input": { "board": [["o","a","t"],["h","x","h"]], "words": ["oath","oh"] }, "expected": "[\"oh\",\"oath\"]" },
+      { "label": "1x4 [['c','a','t','x']], words=['cat','car'] → ['cat']", "input": { "board": [["c","a","t","x"]], "words": ["cat","car"] }, "expected": "[\"cat\"]" },
+      { "label": "3x3 [['a','b','c'],['d','e','f'],['g','h','i']], words=['abef','xyz'] → ['abef']", "input": { "board": [["a","b","c"],["d","e","f"],["g","h","i"]], "words": ["abef","xyz"] }, "expected": "[\"abef\"]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const board = input.board.map(row => row.slice());",
+      "  const words = input.words;",
+      "  const root = {};",
+      "  yield { line: 2, label: `init trie root = {} — will build from ${words.length} word(s)`, state: { board, words, trie: {}, found: [] } };",
+      "  const snapshot = (node) => {",
+      "    const out = {};",
+      "    for (const k of Object.keys(node)) {",
+      "      if (k === 'word') { out.word = node.word; continue; }",
+      "      out[k] = snapshot(node[k]);",
+      "    }",
+      "    return out;",
+      "  };",
+      "  for (const w of words) {",
+      "    let n = root;",
+      "    for (const ch of w) n = n[ch] = n[ch] || {};",
+      "    n.word = w;",
+      "    yield { line: 6, label: `inserted '${w}' into trie`, state: { board, words, trie: snapshot(root), found: [] } };",
+      "  }",
+      "  const found = [];",
+      "  const R = board.length, C = board[0].length;",
+      "  yield { line: 9, label: `board is ${R}x${C}; begin scanning start cells`, state: { board, words, trie: snapshot(root), found: [], R, C } };",
+      "  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];",
+      "  function* dfs(r, c, node, depth, pathChars) {",
+      "    const ch = board[r][c];",
+      "    yield { line: 11, label: `dfs(r=${r},c=${c}) depth=${depth} — board[${r}][${c}]='${ch}'`, state: { board, words, trie: snapshot(root), found: [...found], r, c, depth, ch, pathChars } };",
+      "    const next = node[ch];",
+      "    if (!next) {",
+      "      yield { line: 13, label: `PRUNE: trie has no edge for '${ch}' at this depth — return`, state: { board, words, trie: snapshot(root), found: [...found], r, c, depth, ch, pathChars } };",
+      "      return;",
+      "    }",
+      "    yield { line: 12, label: `trie edge '${ch}' exists — descend into trie node`, state: { board, words, trie: snapshot(root), found: [...found], r, c, depth, ch, pathChars: pathChars + ch } };",
+      "    if (next.word) {",
+      "      found.push(next.word);",
+      "      yield { line: 14, label: `terminal hit! found '${next.word}' — push and null out (dedupe)`, state: { board, words, trie: snapshot(root), found: [...found], r, c, depth, word: next.word, pathChars: pathChars + ch } };",
+      "      next.word = null;",
+      "    }",
+      "    board[r][c] = '#';",
+      "    yield { line: 15, label: `mark board[${r}][${c}] = '#' (visited)`, state: { board: board.map(row => row.slice()), words, trie: snapshot(root), found: [...found], r, c, depth, pathChars: pathChars + ch } };",
+      "    for (const [dr, dc] of dirs) {",
+      "      const nr = r + dr, nc = c + dc;",
+      "      if (nr >= 0 && nr < R && nc >= 0 && nc < C && board[nr][nc] !== '#') {",
+      "        yield { line: 18, label: `explore neighbor (${nr},${nc})='${board[nr][nc]}'`, state: { board: board.map(row => row.slice()), words, trie: snapshot(root), found: [...found], r, c, depth, nr, nc, pathChars: pathChars + ch } };",
+      "        yield* dfs(nr, nc, next, depth + 1, pathChars + ch);",
+      "      } else {",
+      "        const reason = (nr < 0 || nr >= R || nc < 0 || nc >= C) ? 'out of bounds' : 'already visited';",
+      "        yield { line: 18, label: `skip (${nr},${nc}) — ${reason}`, state: { board: board.map(row => row.slice()), words, trie: snapshot(root), found: [...found], r, c, depth, nr, nc, pathChars: pathChars + ch } };",
+      "      }",
+      "    }",
+      "    board[r][c] = ch;",
+      "    yield { line: 20, label: `restore board[${r}][${c}] = '${ch}' (backtrack)`, state: { board: board.map(row => row.slice()), words, trie: snapshot(root), found: [...found], r, c, depth, pathChars } };",
+      "  }",
+      "  for (let r = 0; r < R; r++) {",
+      "    for (let c = 0; c < C; c++) {",
+      "      yield { line: 22, label: `start cell (${r},${c})='${board[r][c]}'`, state: { board: board.map(row => row.slice()), words, trie: snapshot(root), found: [...found], r, c } };",
+      "      yield* dfs(r, c, root, 0, '');",
+      "    }",
+      "  }",
+      "  yield { line: 23, label: `done — found=${JSON.stringify(found)}`, state: { board: board.map(row => row.slice()), words, trie: snapshot(root), found: [...found], returns: JSON.stringify(found) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function findWords(board, words) {\n  const root = {};\n  for (const w of words) {\n    let n = root;\n    for (const ch of w) n = n[ch] = n[ch] || {};\n    n.word = w;            // stash the full word at the terminal\n  }\n  const found = [];\n  const R = board.length, C = board[0].length;\n  const dfs = (r, c, node) => {\n    const ch = board[r][c];\n    const next = node[ch];\n    if (!next) return;     // PRUNE: no trie edge for this character\n    if (next.word) { found.push(next.word); next.word = null; } // dedupe\n    board[r][c] = \"#\";     // mark visited in place\n    for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {\n      const nr = r + dr, nc = c + dc;\n      if (nr >= 0 && nr < R && nc >= 0 && nc < C && board[nr][nc] !== \"#\") dfs(nr, nc, next);\n    }\n    board[r][c] = ch;      // restore\n  };\n  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) dfs(r, c, root);\n  return found;\n}\n// Time O(R*C * 4^L) worst case, but trie pruning collapses huge subtrees in practice",
     "notes": [

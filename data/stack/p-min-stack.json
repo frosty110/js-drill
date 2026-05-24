@@ -6,6 +6,111 @@
   "status": "full",
   "description": "Parallel stack of running minimums alongside the value stack so getMin is O(1).",
   "mechanics": ["array-as-stack"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I need a stack data structure supporting push(x), pop(), top(), and getMin() — and the catch is getMin() needs to return the minimum of all values currently in the stack in O(1), not O(n).\"\n\nThen a few quick clarifying questions:\n• All four operations need to be O(1) — push, pop, top, AND getMin, right?\n• Are pop() and top() always called on a non-empty stack, or do I need to handle empty?\n• Duplicates allowed? (e.g. push(2), push(2), pop — what's the min after?)\n• Integer values only, or could they be floats / strings?",
+        "why": "The O(1) constraint on getMin is the whole point of the problem — it's why naive 'scan vals on getMin' (O(n)) won't fly. Confirming duplicates are allowed matters for the parallel-stack design: if you used a 'pop the min stack only when popping the actual min' shortcut, duplicates would silently break it. Asking about empty-stack semantics signals you've thought about edge behavior — but most LeetCode-style problem statements guarantee non-empty for pop/top, so this is usually a quick confirmation."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n)-on-getMin solution before you discard it.",
+        "say": "\"The brute force is: just use a single array as the stack. push, pop, and top are all O(1) — straight array operations. But getMin scans the entire stack with `Math.min(...vals)`, which is O(n). That fails the constraint. The alternative naive idea — cache the current min in a variable — works until you pop the min, at which point you don't know what the *next* min is without scanning. So a single variable isn't enough state. We need to remember not just the current min but the min at every depth.\"",
+        "why": "Two reasons to name the cached-min trap out loud. (1) It's the trap candidates fall into — they push a `this.min` field, feel clever, and then realize on pop they have no way to recover the previous min without scanning. Naming it shows you saw the trap before falling in. (2) It frames the parallel-stack solution as 'remember the min at every depth' — which is exactly what a parallel stack of running mins achieves, one stack frame per depth."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a parallel min-stack?",
+        "say": "\"The insight is: when I push x, the new minimum is `min(currentMin, x)`. When I pop, the minimum has to revert to whatever it was BEFORE the pushed element arrived. So I need a way to 'remember' the min at every depth — push and pop in sync with the main stack. That's a parallel stack: `mins[i]` holds the minimum of `vals[0..i]`, and I push to mins on EVERY push (not just when x is the new min) so the two stacks stay the same length. Then pop drops one from each. getMin is just `mins[mins.length - 1]` — O(1) read of the top.\"",
+        "why": "Naming the pattern *and* the invariant that makes it apply is the move. 'Use two stacks' is a guess; 'parallel min-stack tracks the running minimum at each depth, so pop reverts naturally' is a derivation. The 'push to mins on every push, even when x isn't the new min' bit is the load-bearing detail — interviewers specifically ask 'why not only push when x is smaller?' and the answer is exactly the alignment invariant: pop needs to drop one from each, and that only works if the two stacks have the same length."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few operation sequences to confirm the model before writing the class.",
+        "intro": "\"Let me trace through a couple of operation sequences to make sure my model is right.\" Each example is a sequence of method calls. I'll show vals, mins, and the collected results (one entry per getMin/top call) after each operation. Three sequences cover the canonical case, a case where pushes don't change the min, and one with multiple pops.",
+        "examples": [
+          {
+            "input": "push(-2), push(0), push(-3), getMin→-3, pop, top→0, getMin→-2",
+            "output": "[-3,0,-2]",
+            "note": "Canonical case — the LeetCode example. After popping -3, getMin correctly reverts to -2 because mins[1]=-2 is still on the parallel stack.",
+            "trace": "init vals=[] mins=[]\npush(-2) → vals=[-2], mins=[min(Infinity, -2)]=[-2]\npush(0)  → vals=[-2, 0], mins=[-2, min(-2, 0)]=[-2, -2]\npush(-3) → vals=[-2, 0, -3], mins=[-2, -2, min(-2, -3)]=[-2, -2, -3]\ngetMin() → mins[top]=-3 → results=[-3]\npop()    → vals=[-2, 0], mins=[-2, -2]\ntop()    → vals[top]=0 → results=[-3, 0]\ngetMin() → mins[top]=-2 → results=[-3, 0, -2]\nreturn [-3, 0, -2]"
+          },
+          {
+            "input": "push(5), push(2), getMin→2, push(7), getMin→2, pop, getMin→2",
+            "output": "[2,2,2]",
+            "note": "Push(7) doesn't change the min, but we still push to mins (we push 2, copying the running min). This is the load-bearing detail — without it, lengths would drift.",
+            "trace": "init vals=[] mins=[]\npush(5)  → vals=[5], mins=[min(Infinity, 5)]=[5]\npush(2)  → vals=[5, 2], mins=[5, min(5, 2)]=[5, 2]\ngetMin() → mins[top]=2 → results=[2]\npush(7)  → vals=[5, 2, 7], mins=[5, 2, min(2, 7)]=[5, 2, 2]   ← note we push 2 even though 7 > 2\ngetMin() → mins[top]=2 → results=[2, 2]\npop()    → vals=[5, 2], mins=[5, 2]   ← both shrink together\ngetMin() → mins[top]=2 → results=[2, 2, 2]\nreturn [2, 2, 2]"
+          },
+          {
+            "input": "push(3), push(1), push(4), getMin→1, pop, getMin→1, pop, getMin→3",
+            "output": "[1,1,3]",
+            "note": "Pop the top (4) — getMin still 1, because mins[1]=1 is unchanged. Pop again (1) — now getMin correctly reverts to 3 from mins[0].",
+            "trace": "init vals=[] mins=[]\npush(3)  → vals=[3], mins=[3]\npush(1)  → vals=[3, 1], mins=[3, min(3, 1)]=[3, 1]\npush(4)  → vals=[3, 1, 4], mins=[3, 1, min(1, 4)]=[3, 1, 1]\ngetMin() → mins[top]=1 → results=[1]\npop()    → vals=[3, 1], mins=[3, 1]\ngetMin() → mins[top]=1 → results=[1, 1]\npop()    → vals=[3], mins=[3]\ngetMin() → mins[top]=3 → results=[1, 1, 3]\nreturn [1, 1, 3]"
+          }
+        ],
+        "why": "Tracing surfaces the two bugs this problem rewards. (1) The 'only push to mins when x < current min' optimization — it seems to save space, but it breaks the alignment invariant: when you later pop, you don't know whether to also pop from mins (was the value-being-popped the min at the time?), and tracking that needs an extra equality check that's easy to get wrong with duplicates. (2) The Infinity initialization for the first push — without it, `mins[mins.length - 1]` on an empty mins stack returns undefined, and `Math.min(undefined, x)` returns NaN, silently poisoning every subsequent getMin. Both are the kind of bugs that pass the easy test cases and fail the trickier ones."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• First push (empty stacks) → Infinity fallback for the prior min, so `Math.min(Infinity, x) = x`. The first mins entry is just x. ✓\n• Push of a new minimum then pop → mins[top] correctly reverts to the prior min because we pushed the prior min one level down.\n• Duplicate of the current min, e.g. push(2), push(2), pop, getMin → both vals and mins have a 2 at the top; popping drops one of each; mins[new top] is still 2. ✓ (The 'push every time' rule handles duplicates for free; the 'only on smaller' shortcut would silently fail here.)\n• Long sequence of monotonically decreasing pushes (3, 2, 1, 0, -1) → mins matches vals exactly. Wastes a bit of space but always correct.\n• Long sequence of monotonically increasing pushes (1, 2, 3, 4, 5) → mins is [1, 1, 1, 1, 1] — the original min stays at every level. This is the case where 'only push when smaller' would have saved space, but at the cost of complicating pop.\n• pop on empty / top on empty — usually out of scope per the problem statement, but worth flagging that the current implementation would return undefined silently.\"",
+        "why": "The duplicate-of-min case is the killer one to mention — it's the one that breaks the naive 'only push smaller' optimization most clearly, and walking through it shows the interviewer why your 'wasteful' parallel-stack design is actually the right call. The monotonically increasing case is also worth naming because a sharp interviewer might push back with 'isn't this wasteful?' — and the answer is yes by a constant factor (2n instead of n) but it buys O(1) pop with no conditional logic, which is the right tradeoff."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(1) per operation — push does two array pushes plus one Math.min, pop does two array pops, top and getMin are each one array index. No loops anywhere, no amortization argument needed; truly worst-case O(1).\n\nSpace is O(n) — two parallel stacks of length n, so 2n total, which is O(n).\n\nIf space mattered, the optimization is to push to mins only when `x <= current min` (note `<=`, not `<`, so duplicates are handled), and on pop only pop mins when `vals.pop() === mins[top]`. That's strictly better space in the average case but adds conditional logic that's easier to get wrong. Worth knowing it exists, but I'd default to the parallel-stack version for readability unless space was actually the bottleneck.\n\nThe parallel-tracking pattern shows up elsewhere — Max Stack uses the same trick with `>=` instead of `<=`. A monotonic deque (for sliding window max/min) is the same idea generalized to allow removal from both ends. The 'track auxiliary state in sync with the main structure' template applies anywhere you need O(1) lookup of a derived value.\"",
+        "why": "Explicitly naming the space-optimized variant unprompted is the senior-candidate move — it shows you know the tradeoff exists and you've made a deliberate choice (readability over a constant-factor space savings). The Max Stack and monotonic deque connections prove you see the template, not just this one problem — that's how the same shape powers Sliding Window Maximum and Stock Spanner."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of MinStack operations. Each example is a list of method calls. The state panel shows the two parallel stacks (vals, mins) after each operation. The trace collects every getMin / top result and returns them as an array so you can verify the invariant: mins[i] always equals min(vals[0..i]).",
+    "examples": [
+      { "label": "push(-2), push(0), push(-3), getMin→-3, pop, top→0, getMin→-2", "input": [ { "op": "push", "arg": -2 }, { "op": "push", "arg": 0 }, { "op": "push", "arg": -3 }, { "op": "getMin" }, { "op": "pop" }, { "op": "top" }, { "op": "getMin" } ], "expected": "[-3,0,-2]" },
+      { "label": "push(5), push(2), getMin→2, push(7), getMin→2, pop, getMin→2", "input": [ { "op": "push", "arg": 5 }, { "op": "push", "arg": 2 }, { "op": "getMin" }, { "op": "push", "arg": 7 }, { "op": "getMin" }, { "op": "pop" }, { "op": "getMin" } ], "expected": "[2,2,2]" },
+      { "label": "push(3), push(1), push(4), getMin→1, pop, getMin→1, pop, getMin→3", "input": [ { "op": "push", "arg": 3 }, { "op": "push", "arg": 1 }, { "op": "push", "arg": 4 }, { "op": "getMin" }, { "op": "pop" }, { "op": "getMin" }, { "op": "pop" }, { "op": "getMin" } ], "expected": "[1,1,3]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  const vals = [];",
+      "  const mins = [];",
+      "  const results = [];",
+      "  yield { line: 2, label: `new MinStack() — vals=[], mins=[]`, state: { ops, vals: [], mins: [], results: [] } };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const { op, arg } = ops[k];",
+      "    if (op === 'push') {",
+      "      yield { line: 3, label: `op#${k}: push(${arg})`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], op, arg } };",
+      "      vals.push(arg);",
+      "      yield { line: 4, label: `vals.push(${arg}) → vals=${JSON.stringify(vals)}`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], op, arg } };",
+      "      const top = mins.length ? mins[mins.length - 1] : Infinity;",
+      "      yield { line: 6, label: `top of mins = ${mins.length ? top : 'Infinity (mins empty)'}`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], op, arg, topOfMins: top === Infinity ? 'Infinity' : top } };",
+      "      const newMin = Math.min(top, arg);",
+      "      mins.push(newMin);",
+      "      yield { line: 8, label: `mins.push(min(${top === Infinity ? 'Infinity' : top}, ${arg})) → mins=${JSON.stringify(mins)}`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], op, arg } };",
+      "    } else if (op === 'pop') {",
+      "      yield { line: 11, label: `op#${k}: pop()`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], op } };",
+      "      vals.pop();",
+      "      mins.pop();",
+      "      yield { line: 11, label: `pop both stacks → vals=${JSON.stringify(vals)}, mins=${JSON.stringify(mins)}`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], op } };",
+      "    } else if (op === 'top') {",
+      "      const t = vals[vals.length - 1];",
+      "      results.push(t);",
+      "      yield { line: 12, label: `op#${k}: top() → ${t}`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], op } };",
+      "    } else if (op === 'getMin') {",
+      "      const m = mins[mins.length - 1];",
+      "      results.push(m);",
+      "      yield { line: 13, label: `op#${k}: getMin() → ${m} (read top of mins, O(1))`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], op } };",
+      "    }",
+      "  }",
+      "  yield { line: 14, label: `all ops processed — collected results=${JSON.stringify(results)}`, state: { ops, vals: [...vals], mins: [...mins], results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class MinStack {\n  constructor() { this.vals = []; this.mins = []; }\n  push(x) {\n    this.vals.push(x);\n    // Infinity fallback on first push — never read top of empty mins.\n    const top = this.mins.length ? this.mins[this.mins.length - 1] : Infinity;\n    // Push to mins on EVERY push so the two stacks stay the same length.\n    this.mins.push(Math.min(top, x));\n  }\n  // Pop both — keeps mins[i] aligned with vals[0..i].\n  pop() { this.vals.pop(); this.mins.pop(); }\n  top() { return this.vals[this.vals.length - 1]; }\n  getMin() { return this.mins[this.mins.length - 1]; }\n}\n// Time O(1) per operation, Space O(n)",
     "notes": [

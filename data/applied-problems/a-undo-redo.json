@@ -6,6 +6,127 @@
   "status": "full",
   "description": "Command-pattern undo/redo — each action is an object with apply/revert. Two stacks: done and undone. Doing a fresh command clears the redo stack.",
   "mechanics": ["array-as-stack"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the API and the timeline semantics.",
+        "say": "\"Let me make sure I have this right: I need a History class with three methods — `do(cmd)` runs a command, `undo()` reverses the most recent one, and `redo()` re-runs the most recently undone one. Each command is some object that knows how to apply itself and how to revert itself.\"\n\nThen a few quick clarifying questions:\n• What shape are commands — `{apply, revert}` callable objects, or just plain data I have to interpret? (I'll assume callable for now.)\n• If the user does an action, undoes it, then does a NEW action — does the redo of the original still work, or is it gone? (This is the load-bearing semantic question.)\n• Should `undo` on an empty history throw, or silently no-op? (UI-wise, no-op is friendlier — disabled buttons just don't fire.)\n• Any depth limit on the history, or unbounded?",
+        "why": "The 'new action after undo clears redo' question is the entire interview. Every editor on earth works this way — VSCode, Photoshop, Google Docs — but candidates routinely miss it and ship a History where redo silently replays a stale command after the timeline has branched. Asking the question signals you've used an editor with an undo bug and remember the moment you noticed. The callable-vs-data clarification matters too: if commands are plain data, the History has to know how to invert them, which couples the two and ruins the Command pattern."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious single-stack design before discarding it.",
+        "say": "\"The brute force is: one stack of applied commands. `do` pushes, `undo` pops and reverts. That handles undo cleanly. But where does redo go? I'd need a second structure — there's no way to recover an undone command from just the done stack once I've popped it. So I either keep a parallel 'undone' list, or I never actually pop on undo and instead track a cursor index into the stack. The cursor approach works but the index bookkeeping for 'fresh action truncates the future' is fiddly. Two stacks is cleaner: undo moves a command from done to undone, redo moves it back. The `do` method then explicitly clears undone — which makes the timeline-branching rule a single line of code instead of an off-by-one on a cursor.\"",
+        "why": "Two reasons to name the cursor variant out loud. (1) It's a real alternative — some implementations do use it — so dismissing it without explanation looks like ignorance. (2) The reason two-stacks wins is that the 'fresh do clears redo' rule becomes one explicit assignment (`this.undone = []`) instead of a slice on a cursor index, and explicitness is what makes the load-bearing rule survive future edits. Interviewers grade you on the tradeoff, not just the pick."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why two stacks, and what's the invariant that ties them together?",
+        "say": "\"The data structure is two stacks: `done` and `undone`. The invariant is that they jointly represent a linear timeline — `done` is the past (commands applied, in order), `undone` is the future (commands waiting to be redone, top is next-to-redo). `do` pushes to done and clears undone, because performing a fresh action means we've branched off the old timeline and the future commands are no longer reachable. `undo` pops from done, reverts it, pushes to undone — that command moves from past to future. `redo` is the mirror — pops from undone, applies it, pushes to done. The 'new action after undo wipes redo' rule is the load-bearing one; without it, redo can replay a command that no longer makes sense against the current state.\"",
+        "why": "Naming the pattern (two-stacks-as-timeline) and the invariant (do-clears-undone) is the move. 'Use two stacks' alone is a guess; 'two stacks because they jointly model a timeline, and do clears undone because branching destroys the future' is a derivation. The interviewer's follow-up is almost always 'what happens if I do, undo, redo, do, redo?' — and the answer falls out of the invariant: the last redo is a no-op because the second `do` cleared the undone stack."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few operation sequences to confirm the model before writing the class.",
+        "intro": "\"Let me trace through three sequences. Each shows the value of `x`, the done stack, and the undone stack after each op. The first is the canonical case — do, do, undo, do, undo, undo. The second covers the redo path. The third is the branching case — `do` after `undo` must clear the redo history.\"",
+        "examples": [
+          {
+            "input": "do(+1), do(+2), undo, do(+10), undo, undo",
+            "output": "[1,3,1,11,1,0]",
+            "note": "Canonical case — third op `do(+10)` after the undo clears the undone stack, so the final undo can't redo the +2.",
+            "trace": "init x=0, done=[], undone=[]\ndo(+1)   → x=1,  done=[+1],     undone=[]      results=[1]\ndo(+2)   → x=3,  done=[+1,+2],  undone=[]      results=[1,3]\nundo     → pop +2, revert → x=1, done=[+1], undone=[+2]   results=[1,3,1]\ndo(+10)  → x=11, done=[+1,+10], undone=[]      ← cleared! +2 is gone   results=[1,3,1,11]\nundo     → pop +10, revert → x=1, done=[+1], undone=[+10]  results=[1,3,1,11,1]\nundo     → pop +1, revert → x=0, done=[], undone=[+10,+1]  results=[1,3,1,11,1,0]\nreturn [1,3,1,11,1,0]"
+          },
+          {
+            "input": "do(+5), undo, redo, undo, undo",
+            "output": "[5,0,5,0,0]",
+            "note": "Redo path works — after undo, redo replays the +5. The final undo on an empty done stack is a no-op (x stays at 0).",
+            "trace": "init x=0, done=[], undone=[]\ndo(+5)   → x=5, done=[+5], undone=[]            results=[5]\nundo     → pop +5, revert → x=0, done=[], undone=[+5]   results=[5,0]\nredo     → pop +5, apply  → x=5, done=[+5], undone=[]   results=[5,0,5]\nundo     → pop +5, revert → x=0, done=[], undone=[+5]   results=[5,0,5,0]\nundo     → done empty — no-op, x unchanged              results=[5,0,5,0,0]\nreturn [5,0,5,0,0]"
+          },
+          {
+            "input": "do(+3), do(+4), undo, do(+7), redo",
+            "output": "[3,7,3,10,10]",
+            "note": "Branching case — `do(+7)` after the undo wipes undone, so the final `redo` is a no-op (the +4 is no longer reachable).",
+            "trace": "init x=0, done=[], undone=[]\ndo(+3)   → x=3,  done=[+3],     undone=[]      results=[3]\ndo(+4)   → x=7,  done=[+3,+4],  undone=[]      results=[3,7]\nundo     → pop +4, revert → x=3, done=[+3], undone=[+4]   results=[3,7,3]\ndo(+7)   → x=10, done=[+3,+7], undone=[]       ← cleared! +4 is gone   results=[3,7,3,10]\nredo     → undone empty — no-op, x unchanged   results=[3,7,3,10,10]\nreturn [3,7,3,10,10]"
+          }
+        ],
+        "why": "Tracing surfaces the bug this problem is designed to catch — forgetting to clear undone in `do`. Without that line, the third example's final `redo` would replay the +4 against the new state (current x=10) and produce x=14, which is nonsense — the +4 was performed against a timeline where x was 3, not 10. The all-no-op trail in example 2 also shows why no-op-on-empty is the right call: the user pressed undo one extra time, and the value just stays where it is — silent, undramatic, no exception bubbling up to UI code."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Undo on empty done → no-op, return early. Don't throw — the UI just keeps the undo button disabled.\n• Redo on empty undone → same, no-op.\n• Do, undo, do → the second `do` must clear undone, otherwise a later redo replays a stale command against a branched timeline. This is the bug.\n• Do, undo, undo (more undos than dos) → second undo no-ops cleanly because done is empty.\n• Command throws inside apply/revert → the state machine is now corrupted (done stack thinks the command applied, but the side effect didn't). In production I'd wrap in try/catch and roll back; in an interview I'd flag it as something to discuss but not implement unless asked.\n• Same command object pushed twice — fine, the stacks just hold references. Reverting twice would double-revert; that's the caller's problem to avoid.\n• Unbounded growth — if the user does 100k actions, both stacks just grow. If memory mattered I'd cap done at N and drop the oldest, but undone has a natural bound (anything in undone came from done, and gets cleared on the next do).\"",
+        "why": "The 'second do clears undone' bullet is the one to lean on — it's the bug that the trace exposed and the interviewer is probably checking for. The 'command throws' bullet is the senior-candidate flag: it shows you know real implementations have to deal with partial-apply failures, even if the in-interview scope is happy-path only. The unbounded-growth note shows you've thought about production scale without derailing into actually building an LRU."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity and place this pattern?",
+        "say": "\"Time is O(1) per operation — do/undo/redo are each one push, one pop, one apply or revert call, plus the constant-time clearing of undone in `do` (assigning a new empty array is O(1); freeing the old one is the GC's problem). No loops anywhere.\n\nSpace is O(n) where n is the number of applied commands — done plus undone together hold every command that's part of the current reachable timeline. Cleared commands become garbage and get collected.\n\nThe Command pattern (each command is `{apply, revert}`) is what generalizes this beyond a single 'number with +/-' demo. A text editor's commands might be `insertText` / `deleteText` pairs; a CAD program's might be `addShape` / `removeShape`. The History class doesn't change — only the commands do. That separation is the whole point of the pattern, and it's what lets the same History power VSCode's edit undo AND its workspace-layout undo without code reuse hacks.\n\nIf you wanted multi-user collaborative editing, this whole model breaks — concurrent edits don't form a stack, they form a graph, and you need operational transforms or CRDTs. Worth knowing the limit of the pattern.\"",
+        "why": "Naming the Command pattern explicitly is what elevates this from 'I can code an undo stack' to 'I know why this design exists'. The OT/CRDT mention at the end is the senior-engineer flourish — it shows you know when the pattern stops working, which is what a tech lead does. Interviewers love the inverse — candidates who can defend a pattern AND name where it breaks down."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of History operations on a number variable x. Each example is an op list — `do(+n)`, `undo`, or `redo`. The state panel shows the two stacks (done, undone) and the live value of x after each op. The trace collects x after every op into a `results` array so you can verify the timeline.",
+    "examples": [
+      { "label": "do(+1), do(+2), undo, do(+10), undo, undo → x trail [1,3,1,11,1,0]", "input": [ { "op": "do", "arg": 1 }, { "op": "do", "arg": 2 }, { "op": "undo" }, { "op": "do", "arg": 10 }, { "op": "undo" }, { "op": "undo" } ], "expected": "[1,3,1,11,1,0]" },
+      { "label": "do(+5), undo, redo, undo, undo (no-op) → x trail [5,0,5,0,0]", "input": [ { "op": "do", "arg": 5 }, { "op": "undo" }, { "op": "redo" }, { "op": "undo" }, { "op": "undo" } ], "expected": "[5,0,5,0,0]" },
+      { "label": "do(+3), do(+4), undo, do(+7) clears redo, redo (no-op) → x trail [3,7,3,10,10]", "input": [ { "op": "do", "arg": 3 }, { "op": "do", "arg": 4 }, { "op": "undo" }, { "op": "do", "arg": 7 }, { "op": "redo" } ], "expected": "[3,7,3,10,10]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  let x = 0;",
+      "  const done = [];",
+      "  const undone = [];",
+      "  const results = [];",
+      "  yield { line: 4, label: 'new History() — done=[], undone=[], x=0', state: { ops, x, done: [], undone: [], results: [] } };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const { op, arg } = ops[k];",
+      "    if (op === 'do') {",
+      "      const cmd = { n: arg };",
+      "      yield { line: 7, label: 'op#' + k + ': do(+' + arg + ')', state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op, arg } };",
+      "      x += arg;",
+      "      yield { line: 8, label: 'cmd.apply() → x = ' + x, state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op, arg } };",
+      "      done.push(cmd);",
+      "      yield { line: 9, label: 'done.push(+' + arg + ') → done=' + JSON.stringify(done.map(c => '+' + c.n)), state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op, arg } };",
+      "      const hadRedo = undone.length > 0;",
+      "      undone.length = 0;",
+      "      yield { line: 11, label: hadRedo ? 'fresh action — clear undone (branch destroys old future)' : 'undone already empty — nothing to clear', state: { ops, x, done: done.map(c => '+' + c.n), undone: [], results: [...results], op, arg } };",
+      "      results.push(x);",
+      "    } else if (op === 'undo') {",
+      "      yield { line: 13, label: 'op#' + k + ': undo()', state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op } };",
+      "      const cmd = done.pop();",
+      "      if (!cmd) {",
+      "        yield { line: 15, label: 'done is empty — no-op, return early', state: { ops, x, done: [], undone: undone.map(c => '+' + c.n), results: [...results], op } };",
+      "        results.push(x);",
+      "      } else {",
+      "        x -= cmd.n;",
+      "        yield { line: 16, label: 'cmd.revert() → x = ' + x, state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op } };",
+      "        undone.push(cmd);",
+      "        yield { line: 17, label: 'undone.push(+' + cmd.n + ') → undone=' + JSON.stringify(undone.map(c => '+' + c.n)), state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op } };",
+      "        results.push(x);",
+      "      }",
+      "    } else if (op === 'redo') {",
+      "      yield { line: 19, label: 'op#' + k + ': redo()', state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op } };",
+      "      const cmd = undone.pop();",
+      "      if (!cmd) {",
+      "        yield { line: 21, label: 'undone is empty — no-op, return early', state: { ops, x, done: done.map(c => '+' + c.n), undone: [], results: [...results], op } };",
+      "        results.push(x);",
+      "      } else {",
+      "        x += cmd.n;",
+      "        yield { line: 22, label: 'cmd.apply() → x = ' + x, state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op } };",
+      "        done.push(cmd);",
+      "        yield { line: 23, label: 'done.push(+' + cmd.n + ') → done=' + JSON.stringify(done.map(c => '+' + c.n)), state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], op } };",
+      "        results.push(x);",
+      "      }",
+      "    }",
+      "  }",
+      "  yield { line: 26, label: 'all ops processed — x trail = ' + JSON.stringify(results), state: { ops, x, done: done.map(c => '+' + c.n), undone: undone.map(c => '+' + c.n), results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class History {\n  // done = applied stack; undone = redo stack. Two stacks model a linear timeline.\n  constructor() {\n    this.done = [];\n    this.undone = [];\n  }\n  do(cmd) {\n    cmd.apply();\n    this.done.push(cmd);\n    // A fresh action invalidates redo — branching destroys the old future.\n    this.undone = [];\n  }\n  undo() {\n    const cmd = this.done.pop();\n    // No-op on empty stack — don't throw; UI buttons just stay disabled.\n    if (!cmd) return;\n    cmd.revert();\n    this.undone.push(cmd);\n  }\n  redo() {\n    const cmd = this.undone.pop();\n    if (!cmd) return;\n    cmd.apply();\n    this.done.push(cmd);\n  }\n}",
     "notes": [

@@ -6,6 +6,96 @@
   "status": "full",
   "description": "Stream once; the first repeated value short-circuits to true. Set membership is O(1).",
   "mechanics": ["set-dedup"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: I'm given an array `nums` and I need to return `true` if any value appears at least twice, `false` if every value is distinct. A couple of quick questions before I code:\"\n\n• What are the elements — integers only, or could there be strings or mixed types?\n• Any size bound on the array? Anything I should worry about for memory?\n• Are NaN or `-0`/`+0` in play? (Set treats `NaN` as equal to itself, but `===` doesn't — worth flagging.)\n• Empty input — return `false`, right?",
+        "why": "The element-type question matters because Set uses SameValueZero equality, which differs from `===` on exactly one edge: `NaN`. If the interviewer says \"floats are possible,\" you've now planted a flag that the Set behavior is intentional rather than accidental. The empty-input check is a 5-second clarification that prevents a silly miss at the end."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"The brute force is two nested loops: outer `i` from 0, inner `j` from `i+1`, check `nums[i] === nums[j]`. First match returns `true`. That's O(n²) time, O(1) extra space — let me see if we can trade some space for time.\"\n\n\"There's also a sort-then-scan-adjacent variant — O(n log n) time, but it mutates the input array, and the default `.sort()` is lexicographic which would order `[1,10,2]` wrong without a comparator. I'd flag both before I went that direction.\"",
+        "why": "Naming both brute forces — nested loops AND sort — is more thorough than just one. It shows you considered the alternatives. The lexicographic-sort gotcha is the kind of trivia interviewers respect: it proves you've actually been burned by `[1,10,2].sort()` returning `[1,10,2]` and know to reach for a numeric comparator."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a hash set?",
+        "say": "\"This is the canonical Set-membership problem. The signal: for each element I'm asking 'have I seen this before?' — that's O(1) membership lookup, and I don't need any value associated with the key, just presence. Set gives me exactly that. I'll walk the array once, and for each element check `seen.has(n)` BEFORE adding it. First hit returns `true`; if I finish the loop, return `false`.\"",
+        "why": "Naming the data structure AND the structural property — 'O(1) membership, no associated value needed' — is what distinguishes derivation from guessing. If the problem had asked 'count duplicates' I'd reach for a Map (need a count). If it had asked 'find the first index that repeats' I'd still want a Set, but storing the index. Spelling out which property unlocks Set is what the interviewer is grading."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me run a couple of inputs through the model.\" Three cases — a typical dup-found-mid-array, an all-unique case that walks the full loop, and an all-same case that returns on the second element.",
+        "examples": [
+          {
+            "input": "[1,2,3,1]",
+            "output": "true",
+            "note": "Typical case — duplicate is the very last element.",
+            "trace": "n=1 → seen.has(1)=false → seen={1}\nn=2 → seen.has(2)=false → seen={1,2}\nn=3 → seen.has(3)=false → seen={1,2,3}\nn=1 → seen.has(1)=true! return true ✓"
+          },
+          {
+            "input": "[1,2,3,4]",
+            "output": "false",
+            "note": "All unique — loop runs to completion and falls through to the trailing `return false`.",
+            "trace": "n=1 → seen.has(1)=false → seen={1}\nn=2 → seen.has(2)=false → seen={1,2}\nn=3 → seen.has(3)=false → seen={1,2,3}\nn=4 → seen.has(4)=false → seen={1,2,3,4}\nloop ends → return false ✓"
+          },
+          {
+            "input": "[1,1,1,1]",
+            "output": "true",
+            "note": "All-same — short-circuits on the second element. The check-before-add order is what prevents the first 1 from matching itself.",
+            "trace": "n=1 → seen.has(1)=false (we DON'T match ourselves) → seen={1}\nn=1 → seen.has(1)=true! return true ✓"
+          }
+        ],
+        "why": "The all-same case is the one to mention out loud — it's why the order is `check → add`, not `add → check`. If you added first, the very first 1 would 'find' itself on the next has-check (or worse, on the same iteration if you wrote it inline). The all-unique trace also defends the worst-case bound: even when the answer is false, we only walk the array once."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty array → loop doesn't fire, returns `false` (vacuously: no duplicates exist).\n• One element → same — no duplicate is possible.\n• Mixed types like `[1, '1']` → `===` and Set's SameValueZero treat these as distinct, so this returns `false`. That might or might not be the intended behavior — worth asking.\n• `NaN` in the array → Set treats `NaN === NaN` for membership, even though `NaN !== NaN` under `===`. So `[NaN, NaN]` returns `true`, which is actually the *intuitive* answer.\n• Very large array of all-unique → O(n) memory in the Set. If memory's a constraint and we accept O(n log n) time, sort-and-scan in place is the alternative.",
+        "why": "The NaN call-out is the senior-tier touch — most candidates don't know that Set and Map use SameValueZero rather than `===`. If the interviewer asks 'why does that matter,' you've got an answer ready: it's the one place Set's equality differs from `===`. The memory-vs-time tradeoff at the end shows you understand this is a deliberate engineering choice, not a default."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — one pass, with O(1) `has` and `add` per element. The short-circuit on first match can return early, but the worst case is all-unique, which still walks the whole array.\n\nSpace is O(n) — the Set holds at most n entries in the worst case (all-unique).\n\nIf you wanted to extend this: 'Contains Duplicate II' adds a constraint — duplicates must be within distance k of each other. The fix is to switch from Set to a sliding window of size k (still O(n)). The template here — Set-as-membership — is the building block; the windowed variant just bounds the Set's lifetime.\"",
+        "why": "The amortization story is straightforward — one pass, O(1) per element — but the wrap-up's job is to show transfer. Naming Contains Duplicate II unprompted is the move that proves you see this as a *template* (Set-for-membership) rather than a one-off. Interviewers grade transfer heavily because it predicts how you'll handle the variant they'll throw at you on the follow-up."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical Contains Duplicate one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[1,2,3,1] → true", "input": [1, 2, 3, 1], "expected": true },
+      { "label": "[1,2,3,4] → false", "input": [1, 2, 3, 4], "expected": false },
+      { "label": "[1,1,1,1] → true", "input": [1, 1, 1, 1], "expected": true }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  const seen = new Set();",
+      "  yield { line: 2, label: 'init seen (empty Set)', state: { nums, seen: [] } };",
+      "  let i = 0;",
+      "  for (const n of nums) {",
+      "    yield { line: 3, label: `outer step: i=${i}, n=${n}`, state: { nums, seen: [...seen], i, n } };",
+      "    if (seen.has(n)) {",
+      "      yield { line: 5, label: `seen.has(${n}) → true — duplicate found, short-circuit`, state: { nums, seen: [...seen], i, n, returns: true } };",
+      "      return;",
+      "    }",
+      "    yield { line: 5, label: `seen.has(${n}) → false (no duplicate yet)`, state: { nums, seen: [...seen], i, n } };",
+      "    seen.add(n);",
+      "    yield { line: 6, label: `seen.add(${n})`, state: { nums, seen: [...seen], i, n } };",
+      "    i++;",
+      "  }",
+      "  yield { line: 8, label: 'loop ended without finding a duplicate — return false', state: { nums, seen: [...seen], returns: false } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function containsDuplicate(nums) {\n  const seen = new Set();\n  for (const n of nums) {\n    // Check BEFORE add — otherwise every element would match itself.\n    if (seen.has(n)) return true;\n    seen.add(n);\n  }\n  return false;\n}\n// Time O(n), Space O(n)",
     "notes": [

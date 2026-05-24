@@ -6,6 +6,99 @@
   "status": "full",
   "description": "Ways to reach step n taking 1 or 2 steps at a time. Fibonacci-shaped DP: ways(n) = ways(n-1) + ways(n-2). O(1) space with rolling variables.",
   "mechanics": ["dp-rolling-vars"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me play it back: I'm standing at the bottom of `n` stairs. At every move I can take exactly 1 step or 2 steps. I want to count the number of distinct sequences of moves that land me on step `n`.\"\n\nThen a few quick clarifying questions:\n• Range of `n` — fits in a 32-bit int? Could it be 0?\n• Is `n=0` a valid input — and if so, is the answer 1 (the empty sequence) or 0?\n• Are 1-then-2 and 2-then-1 counted as different sequences? (They should be — it's ordered.)\n• Return value — just the count, or also the sequences themselves?",
+        "why": "The `n=0` and ordering questions look pedantic but they pin down the base case. If 1-2 and 2-1 are the *same*, this becomes a partition-counting problem with a totally different recurrence. And `n=0 → 1` is what makes `ways(2) = ways(1) + ways(0) = 1 + 1 = 2` work cleanly — without it the seed gets ugly."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(2^n) solution before you discard it.",
+        "say": "\"The obvious recursive version is: `ways(n) = ways(n-1) + ways(n-2)`, with `ways(0) = ways(1) = 1`. At every step you either took a 1 or a 2; sum the two subtrees. Plain recursion is O(2^n) time because `ways(n-1)` and `ways(n-2)` re-derive overlapping subproblems — `ways(n-3)` gets computed in both branches, `ways(n-4)` four times, and so on. Same shape as the naive Fibonacci recursion.\"",
+        "why": "Two reasons to name it. (1) Most interviewers want to see you reach for recursion first — it's the natural decomposition of 'last move was 1 or 2'. (2) The overlap is the whole reason DP applies. Once you say 'I'm recomputing the same subtree', memoization → tabulation → rolling-pair is a straight line, and it's clear *why* each step helps."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to bottom-up DP with rolling variables?",
+        "say": "\"This is a 1D DP problem. The recurrence is the load-bearing piece: to land on step `n`, the last move was either a 1 (so I was on step `n-1`) or a 2 (so I was on step `n-2`). Those two subproblems are disjoint and cover every sequence, so `ways(n) = ways(n-1) + ways(n-2)` — straight Fibonacci. Once I see that each `dp[i]` only reads `dp[i-1]` and `dp[i-2]`, the array is overkill: I keep two rolling scalars `prev2` and `prev1`, slide them forward in a loop, and the answer is the final `prev1`. Time O(n), space O(1).\"",
+        "why": "Naming the recurrence in plain language — 'last move was 1 or 2, so sum the two predecessors' — is the move. Anyone can say 'this is Fibonacci'; the win is *deriving* it from the decision at each step. The rolling-vars observation comes from inspecting the recurrence's read-window: if the recurrence only reaches back `k` cells, you only need `k` rolling vars."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the canonical n=5, the n=1 base case, and a slightly larger n=7 to confirm the Fibonacci pattern keeps holding.",
+        "examples": [
+          {
+            "input": "5",
+            "output": "8",
+            "note": "Canonical case — produces the familiar Fibonacci sequence 1,1,2,3,5,8.",
+            "trace": "init: prev2=ways(0)=1, prev1=ways(1)=1\ni=2: curr = prev1+prev2 = 1+1 = 2. roll → prev2=1, prev1=2. dp so far [1,1,2]\ni=3: curr = 2+1 = 3. roll → prev2=2, prev1=3. dp [1,1,2,3]\ni=4: curr = 3+2 = 5. roll → prev2=3, prev1=5. dp [1,1,2,3,5]\ni=5: curr = 5+3 = 8. roll → prev2=5, prev1=8. dp [1,1,2,3,5,8]\nreturn prev1 = 8"
+          },
+          {
+            "input": "1",
+            "output": "1",
+            "note": "Base case — the early return fires before the loop runs.",
+            "trace": "n=1 → hits `if (n <= 1) return 1`\nreturn 1 (single sequence: [1])"
+          },
+          {
+            "input": "7",
+            "output": "21",
+            "note": "Larger — confirms the rolling-pair carries the Fibonacci forward without divergence.",
+            "trace": "init: prev2=1, prev1=1\ni=2: curr=2, roll → (1,2)\ni=3: curr=3, roll → (2,3)\ni=4: curr=5, roll → (3,5)\ni=5: curr=8, roll → (5,8)\ni=6: curr=13, roll → (8,13)\ni=7: curr=21, roll → (13,21)\nreturn 21"
+          }
+        ],
+        "why": "Tracing surfaces the one bug this problem rewards: the roll order. If you assign `prev1 = curr` *before* `prev2 = prev1`, you overwrite `prev1` with `curr` and then copy that same `curr` into `prev2` — both rails collapse and you compute the wrong sequence. The n=1 trace also defends the base case: without `ways(0) = 1`, the loop's first iteration would start from the wrong seed."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• `n = 0` — depends on the convention you pick in clarification. Either return 1 (the empty sequence) or guard against it explicitly.\n• `n = 1` and `n = 2` — both should return 1 and 2 respectively; the early return covers `n ≤ 1` and the loop body covers `n = 2` cleanly.\n• Very large `n` (e.g. 80+) — the answer overflows a regular JS Number's safe integer range around `n ≈ 78`. If the spec needs exact arithmetic beyond that, switch the rolling vars to BigInt.\n• Negative `n` — almost certainly invalid; either throw or treat as 0 depending on the contract.\"",
+        "why": "The integer-overflow call-out is the senior signal here. Most candidates blow past it because the Fibonacci numbers feel benign; pointing out that JS Numbers lose precision around `2^53` (which Fibonacci hits surprisingly fast) shows you actually thought about the data type, not just the algorithm. The interviewer either nods or says 'assume `n ≤ 45`' — both are fine outcomes."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — single pass from `i = 2` to `n`, constant work per iteration (one add, two assignments). Space is O(1) — just the two rolling scalars `prev2` and `prev1`, no array allocation.\n\nThe naive recursive version was O(2^n) time because of the overlapping-subproblems blow-up; memoization brings it to O(n) time / O(n) space; tabulation keeps O(n) / O(n); rolling pair drops space to O(1). Same answer, three different memory profiles.\n\nIf you wanted to extend to 'you can step 1, 2, or 3 at a time', the recurrence becomes `ways(n) = ways(n-1) + ways(n-2) + ways(n-3)` (a tribonacci) and you'd need three rolling vars. Same template, different look-back depth.\"",
+        "why": "Walking the 2^n → n → 1 progression in space is the right way to defend the rolling-vars choice — the interviewer sees you understand why DP works (overlapping subproblems) and why you can compress (limited look-back). The tribonacci extension proves you see the template as 'k-step Fibonacci' rather than memorizing this one problem; that same shape recurs in House Robber, Min Cost Climbing Stairs, and Decode Ways."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical Fibonacci-shape DP one statement at a time. The state panel shows the rolling pair (prev2, prev1) plus a synthetic dp array so you can see the table fill.",
+    "examples": [
+      { "label": "n=5 → 8",  "input": 5, "expected": 8 },
+      { "label": "n=1 → 1 (base case)", "input": 1, "expected": 1 },
+      { "label": "n=7 → 21", "input": 7, "expected": 21 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const n = input;",
+      "  yield { line: 1, label: `enter function — n=${n}`, state: { n } };",
+      "  if (n <= 1) {",
+      "    yield { line: 2, label: `n=${n} <= 1 — return 1`, state: { n, returns: 1 } };",
+      "    return;",
+      "  }",
+      "  let prev2 = 1, prev1 = 1;",
+      "  const dp = [1, 1];",
+      "  yield { line: 4, label: 'seed bases: prev2=ways(0)=1, prev1=ways(1)=1', state: { n, prev2, prev1, dp: [...dp] } };",
+      "  for (let i = 2; i <= n; i++) {",
+      "    yield { line: 6, label: `outer step: i=${i} — compute ways(${i})`, state: { n, i, prev2, prev1, dp: [...dp] } };",
+      "    const curr = prev1 + prev2;",
+      "    yield { line: 7, label: `curr = prev1 + prev2 = ${prev1} + ${prev2} = ${curr}`, state: { n, i, prev2, prev1, curr, dp: [...dp] } };",
+      "    prev2 = prev1;",
+      "    yield { line: 9, label: `roll: prev2 = prev1 = ${prev2}`, state: { n, i, prev2, prev1, curr, dp: [...dp] } };",
+      "    prev1 = curr;",
+      "    dp.push(curr);",
+      "    yield { line: 10, label: `roll: prev1 = curr = ${prev1} — dp[${i}]=${curr} filled`, state: { n, i, prev2, prev1, dp: [...dp], lastFilled: i } };",
+      "  }",
+      "  yield { line: 12, label: `return prev1 = ${prev1}`, state: { n, prev2, prev1, dp: [...dp], returns: prev1 } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function climbStairs(n) {\n  if (n <= 1) return 1;\n  // Base cases seeded: ways(0)=1 (stay), ways(1)=1 (one step).\n  let prev2 = 1, prev1 = 1;     // ways(0), ways(1)\n  // Fibonacci recurrence: ways(i) = ways(i-1) + ways(i-2).\n  for (let i = 2; i <= n; i++) {\n    const curr = prev1 + prev2;\n    // Roll: assign prev2 BEFORE overwriting prev1 — order matters.\n    prev2 = prev1;\n    prev1 = curr;\n  }\n  return prev1;\n}\n// Time O(n), Space O(1)",
     "notes": [

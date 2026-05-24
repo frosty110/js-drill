@@ -6,6 +6,110 @@
   "status": "full",
   "description": "Online game-state class. After each `play`, check only the four lines that pass through that cell — row, column, and (if on a diagonal) the two diagonals. O(n) per move instead of scanning the whole board.",
   "mechanics": [],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Design a TicTacToe class for an n×n board. `play(player, row, col)` records a move and returns the winner ('X' or 'O') if this move wins, else ''. Quick clarifications:\"\n\n• Are moves guaranteed valid — never on an occupied cell, never out of bounds?\n• Player tokens — always 'X' and 'O', or arbitrary strings?\n• Does `play` need to handle a turn order, or can the same player play twice (assume caller alternates)?\n• Once someone wins, can `play` still be called? What should it return — '' or the prior winner?\n• Is `n` always 3 or arbitrary? (Affects whether the diagonal-cells short-circuit matters.)",
+        "why": "The arbitrary-n question is what unlocks the elegant tally-based solution. If n were always 3 you could hardcode 8 lines and be done. For arbitrary n, you need the +1/-1 tally per row/col/diagonal trick — that's the whole reason this problem exists in interview rotation. Asking the question up front signals you saw the generalization."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) per move solution before you discard it.",
+        "say": "\"The brute force is: maintain the full board as a 2D array. After each `play`, scan the row, column, and (if on a diagonal) the two diagonals, checking if all n cells match the just-played player. That's O(n) per line × up to 4 lines = O(n) per move. Not bad, but it does the work proportional to the board size on every move.\n\nWe can do better: instead of re-scanning the cells, maintain a TALLY per line — increment by +1 when X plays in it, decrement by -1 when O plays. A line's tally equals n when X has filled it, -n when O has, anything in between means it's mixed or partial. That's O(1) per move.\"",
+        "why": "Naming the O(n) board-scan first proves you understand the basic structure. The pivot to tallies is non-obvious — it relies on the trick that 'sum of integers' is a constant-time aggregate, and that fixed sign reservation per player makes 'sum equals ±n' a clean win signal. Walking through this derivation out loud is what gets credit."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why does a +1/-1 tally per line work?",
+        "say": "\"The insight is: a line wins if and only if it's filled with exactly one player's tokens. Equivalently: if I assign +1 to X and -1 to O, the line wins iff the sum is +n (all X) or -n (all O). Any mix of X and O on the line gives a sum strictly between -n and +n in absolute value.\n\nWith 4 line types — rows, cols, main diagonal, anti-diagonal — each cell (r, c) belongs to:\n• row r (always)\n• col c (always)\n• main diag (only if r === c)\n• anti diag (only if r + c === n - 1)\n\nSo each move updates AT MOST 4 tallies — O(1) regardless of n. After the update, check if any of those 4 hit ±n; if so, return the player. O(n) space for the row and col tally arrays.\n\nThe diagonal conditions are the load-bearing arithmetic: main diag = top-left to bottom-right means row index equals col index. Anti-diag = top-right to bottom-left means r + c is constant — specifically `n - 1` (the corner (0, n-1) and (n-1, 0) both satisfy it).\"",
+        "why": "Naming the +n/-n math is the differentiator. Most candidates remember 'use tallies' but blank on why ±n is the win threshold or where the diagonal conditions come from. Deriving `r + c === n - 1` from 'the anti-diagonal passes through (0, n-1) and (n-1, 0)' shows you can rebuild the formula, not just memorize it."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace three games on a 3×3 board — X wins the main diagonal, O wins the top row, and X wins the anti-diagonal. Each trace shows the tally fields after each move and the per-move return value.\"",
+        "examples": [
+          {
+            "input": "n=3 — X(0,0) O(0,1) X(1,1) O(0,2) X(2,2)",
+            "output": "['', '', '', '', 'X']",
+            "note": "X completes the main diagonal (0,0)-(1,1)-(2,2). diag tally hits +3.",
+            "trace": "init: rows=[0,0,0] cols=[0,0,0] diag=0 anti=0\nX(0,0) v=+1: rows[0]=1 cols[0]=1 r===c→diag=1 r+c=0≠2 (no anti). |tallies|<3 → ''\nO(0,1) v=-1: rows[0]=0 cols[1]=-1 r≠c r+c=1≠2. → ''\nX(1,1) v=+1: rows[1]=1 cols[1]=0 r===c→diag=2 r+c=2→anti=1. → ''\nO(0,2) v=-1: rows[0]=-1 cols[2]=-1 r≠c r+c=2→anti=0. → ''\nX(2,2) v=+1: rows[2]=1 cols[2]=0 r===c→diag=3 r+c=4≠2. |diag|=3=n → return 'X'"
+          },
+          {
+            "input": "n=3 — X(1,0) O(0,0) X(1,1) O(0,1) X(2,2) O(0,2)",
+            "output": "['', '', '', '', '', 'O']",
+            "note": "O sweeps the top row. row[0] tally hits -3.",
+            "trace": "X(1,0): rows[1]=1, → ''\nO(0,0): rows[0]=-1 cols[0]=-1 diag=-1. → ''\nX(1,1): rows[1]=2 cols[1]=1 diag=0 anti=1. → ''\nO(0,1): rows[0]=-2 cols[1]=0. → ''\nX(2,2): rows[2]=1 cols[2]=1 diag=1. → ''\nO(0,2): rows[0]=-3. |rows[0]|=3=n → return 'O'"
+          },
+          {
+            "input": "n=3 — X(0,2) O(0,0) X(1,1) O(1,0) X(2,0)",
+            "output": "['', '', '', '', 'X']",
+            "note": "X completes the anti-diagonal (0,2)-(1,1)-(2,0). anti tally hits +3.",
+            "trace": "X(0,2): rows[0]=1 cols[2]=1 r+c=2→anti=1. → ''\nO(0,0): rows[0]=0 cols[0]=-1 diag=-1. → ''\nX(1,1): rows[1]=1 cols[1]=1 diag=0 anti=2. → ''\nO(1,0): rows[1]=0 cols[0]=-2. → ''\nX(2,0): rows[2]=1 cols[0]=-1 r+c=2→anti=3. |anti|=3=n → return 'X'"
+          }
+        ],
+        "why": "The three traces collectively confirm all 4 win-detection lines fire (row, col x2 implicitly, diag, anti-diag). The anti-diag trace is the most error-prone — easy to write `r + c === n` (off by one) instead of `r + c === n - 1`. Tracing (0,2)+(1,1)+(2,0) on n=3 confirms the formula: 0+2=2, 1+1=2, 2+0=2, all equal n-1=2. ✓"
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me walk through edges:\n• **Full board draw** — no line ever sums to ±n. Final `play` returns ''. Caller is responsible for detecting 'all cells used' to declare a draw; this class only signals winners.\n• **Move played on an already-occupied cell** — the spec says assume valid input, but if violated, the tally double-counts and you could falsely declare a win with fewer than n unique cells. In a defensive variant I'd guard with a Set of played cells.\n• **Instant win on first move** — impossible. Smallest n is 3, smallest line is 3 cells, so a player needs at least 3 plays to win. The first 2 plays always return ''. Worth stating because interviewers love impossibility proofs.\n• **n = 1** — degenerate. The single cell is row 0, col 0, AND on both diagonals. One play wins. The tallies fire 4 times simultaneously, all 4 if-checks would return — but the first hit short-circuits. Fine.\n• **Cell on both diagonals** — only the center cell of an odd-n board satisfies both `r === c` AND `r + c === n - 1`. The two if-statements (not else-if) both fire, updating both `diag` and `anti`. Correct behavior — that move legitimately participates in both diagonals.\n• **Off-board move** — `rows[row]` with `row >= n` would throw or silently extend the array. Defensive guard if not promised valid.\"",
+        "why": "The 'instant win impossible' beat is the cute pre-condition that shows you've thought about the move sequence, not just the algorithm. The 'both diagonals at center' beat is the gotcha that catches careless `else if` use — if you write `if (r === c) ... else if (r + c === n - 1) ...`, the center cell only updates `diag`, missing `anti`. Using two separate `if`s (not else-if) is what saves it."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(1) per `play` — exactly 4 tally updates, 4 absolute-value comparisons. No loops over board cells. Strictly constant regardless of n.\n\nSpace is O(n) — two arrays of length n (rows and cols), plus two scalars (diag, anti). For n = 3, that's 8 numbers total.\n\nCompared to the naive 'scan after each move' approach: that's O(n) per play because each line has n cells to check. So the tally trick is the difference between O(1) and O(n) per move. For a long game (e.g., a streamed series of moves where many never trigger a win), the tally version is dramatically cheaper.\n\nThe template generalizes to any 'check N-in-a-line with incremental updates' problem — Connect Four if N were small enough to fit in a fixed counter, or game-state problems where moves can only ADD to the state (no undos). The +1/-1 trick specifically works when there are exactly two players or two states; for k > 2 players you'd switch to a hash of `(line → counts per player)`.\"",
+        "why": "The O(1) vs O(n) per-move framing is the headline. The 'two players is what makes +1/-1 work' caveat is the extension — interviewers sometimes ask 'what if there were 3 players?' and the right answer is 'I'd use a count Map per line instead of a single integer tally', not 'I'd use ±1, ±2 sentinels' (which doesn't generalize because 1+2 = 3 = -3 mod something is ambiguous)."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of TicTacToe plays. Watch the per-row, per-col, and diagonal tallies evolve (+1 for X, -1 for O). Each play()'s return is collected into a results array; |tally| === n signals a win for that line.",
+    "examples": [
+      { "label": "n=3 — X wins main diagonal in 5 moves", "input": { "n": 3, "moves": [ { "player": "X", "row": 0, "col": 0 }, { "player": "O", "row": 0, "col": 1 }, { "player": "X", "row": 1, "col": 1 }, { "player": "O", "row": 0, "col": 2 }, { "player": "X", "row": 2, "col": 2 } ] }, "expected": "[\"\",\"\",\"\",\"\",\"X\"]" },
+      { "label": "n=3 — O wins top row in 6 moves", "input": { "n": 3, "moves": [ { "player": "X", "row": 1, "col": 0 }, { "player": "O", "row": 0, "col": 0 }, { "player": "X", "row": 1, "col": 1 }, { "player": "O", "row": 0, "col": 1 }, { "player": "X", "row": 2, "col": 2 }, { "player": "O", "row": 0, "col": 2 } ] }, "expected": "[\"\",\"\",\"\",\"\",\"\",\"O\"]" },
+      { "label": "n=3 — X wins anti-diagonal in 5 moves", "input": { "n": 3, "moves": [ { "player": "X", "row": 0, "col": 2 }, { "player": "O", "row": 0, "col": 0 }, { "player": "X", "row": 1, "col": 1 }, { "player": "O", "row": 1, "col": 0 }, { "player": "X", "row": 2, "col": 0 } ] }, "expected": "[\"\",\"\",\"\",\"\",\"X\"]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { n, moves } = input;",
+      "  const rowsT = new Array(n).fill(0);",
+      "  const colsT = new Array(n).fill(0);",
+      "  let diag = 0;",
+      "  let anti = 0;",
+      "  const results = [];",
+      "  yield { line: 2, label: `new TicTacToe(${n}) — rows=[0,0,0], cols=[0,0,0], diag=0, anti=0`, state: { n, rowsT: [...rowsT], colsT: [...colsT], diag, anti, results: [...results] } };",
+      "  for (let k = 0; k < moves.length; k++) {",
+      "    const { player, row, col } = moves[k];",
+      "    const v = player === 'X' ? 1 : -1;",
+      "    yield { line: 11, label: `move#${k}: play('${player}', ${row}, ${col}) → v=${v}`, state: { n, rowsT: [...rowsT], colsT: [...colsT], diag, anti, player, row, col, v, results: [...results] } };",
+      "    rowsT[row] += v;",
+      "    colsT[col] += v;",
+      "    yield { line: 13, label: `rows[${row}] → ${rowsT[row]}, cols[${col}] → ${colsT[col]}`, state: { n, rowsT: [...rowsT], colsT: [...colsT], diag, anti, player, row, col, results: [...results] } };",
+      "    if (row === col) {",
+      "      diag += v;",
+      "      yield { line: 15, label: `(${row},${col}) on main diag → diag = ${diag}`, state: { n, rowsT: [...rowsT], colsT: [...colsT], diag, anti, player, row, col, results: [...results] } };",
+      "    }",
+      "    if (row + col === n - 1) {",
+      "      anti += v;",
+      "      yield { line: 17, label: `(${row},${col}) on anti diag (row+col=${row + col}=${n - 1}) → anti = ${anti}`, state: { n, rowsT: [...rowsT], colsT: [...colsT], diag, anti, player, row, col, results: [...results] } };",
+      "    }",
+      "    let winRet = '';",
+      "    if (Math.abs(rowsT[row]) === n) winRet = player;",
+      "    else if (Math.abs(colsT[col]) === n) winRet = player;",
+      "    else if (Math.abs(diag) === n) winRet = player;",
+      "    else if (Math.abs(anti) === n) winRet = player;",
+      "    results.push(winRet);",
+      "    yield { line: 23, label: `check |tally|===${n}? → return '${winRet}'`, state: { n, rowsT: [...rowsT], colsT: [...colsT], diag, anti, results: [...results], returnedThisMove: winRet } };",
+      "  }",
+      "  yield { line: 23, label: `all moves processed — results=${JSON.stringify(results)}`, state: { n, rowsT: [...rowsT], colsT: [...colsT], diag, anti, results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class TicTacToe {\n  constructor(n) {\n    this.n = n;\n    // Per-line tallies (+1 for X, -1 for O). |tally| === n means that line wins.\n    this.rows = new Array(n).fill(0);\n    this.cols = new Array(n).fill(0);\n    this.diag = 0;\n    this.anti = 0;\n  }\n  play(player, row, col) {\n    const v = player === 'X' ? 1 : -1;\n    this.rows[row] += v;\n    this.cols[col] += v;\n    // Main diagonal: row === col. Touches at most 4 lines per move — O(1).\n    if (row === col)              this.diag += v;\n    // Anti-diagonal: row + col === n - 1.\n    if (row + col === this.n - 1) this.anti += v;\n    // abs() because X reaches +n, O reaches -n — sign tells which player won.\n    if (Math.abs(this.rows[row]) === this.n) return player;\n    if (Math.abs(this.cols[col]) === this.n) return player;\n    if (Math.abs(this.diag)        === this.n) return player;\n    if (Math.abs(this.anti)        === this.n) return player;\n    return '';\n  }\n}",
     "notes": [

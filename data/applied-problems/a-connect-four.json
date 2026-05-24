@@ -8,6 +8,135 @@
   "mechanics": [
     "four-dir-neighbors"
   ],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Build Connect Four. `drop(col, color)` places a piece at the lowest empty row of `col`, returning the row it landed at. `winner()` returns 'R' or 'Y' if four-in-a-row exists, else ''. Let me confirm a few things:\"\n\n• Board size — standard 6 rows × 7 cols?\n• Row indexing — is row 0 the bottom of the board (gravity drops settle at low row indices) or the top?\n• What does `drop` return on a full column — a sentinel like -1, or throw?\n• Colors — fixed to 'R'/'Y' or arbitrary strings? Empty cells — `''` or `null`?\n• Do I need to enforce turn alternation, or is the caller responsible?",
+        "why": "The row-orientation question is critical — it determines whether `drop` scans from low row to high or vice versa. Picking and stating the convention upfront prevents the mid-implementation confusion of 'wait, which way is up?'. Outsourcing turn enforcement to the caller is also worth surfacing — it keeps the class focused on board mechanics, not game state."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(rows × cols) winner check before you discard it.",
+        "say": "\"The obvious `winner()` is: scan every cell on the board; for each non-empty cell, probe in all 8 directions counting consecutive same-color pieces; if any direction hits 4, return that color. That's O(rows × cols × 8 × 4) = O(rows × cols) per call.\n\nThere's an optimization: you don't need all 8 directions. The reverse of every direction would re-detect the same line from its other end, so 4 vectors (→, ↑, ↗, ↘) suffice — that's the canonical.\n\nA further optimization: after a `drop`, you only need to check the 4 lines passing through the just-dropped cell. That cuts winner-after-drop from O(rows × cols) to O(1). But it requires `drop` to know about win-checking — couples the two methods. The full-scan keeps the API clean.\"",
+        "why": "Surfacing both the 4-vs-8 directions optimization AND the local-vs-global win check shows you see the layered choices. The interviewer might push you toward the local-check version mid-interview ('what if the board were 1000x1000?') — having pre-surfaced it means you've already done that pivot mentally."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why is 'count 4 consecutive in 4 directions' the right shape?",
+        "say": "\"This is a 'directional run-length on a grid' problem. The key insight is that any winning configuration is 4 colinear cells in one of 4 lines: horizontal, vertical, slash-diagonal, backslash-diagonal. So the search space per cell is exactly 4 direction vectors `[[0,1],[1,0],[1,1],[1,-1]]`, and for each direction I count consecutive same-color matches up to 4.\n\nWhy 4 not 8? Because every direction has an inverse — if I check `(0, 1)` (rightward) from cell A, I'd find the same 4-line when starting from cell B four steps to the right and checking `(0, -1)` (leftward). Dropping the inverses halves the work with no loss of coverage.\n\nThe walk itself is bounded — `while (k < 4)`, breaking on bounds or mismatch. So each cell-direction pair does O(1) work, total O(rows × cols × 4) = O(rows × cols).\n\nThe drop function is even simpler: a column-walk from row 0 upward, settling on the first `''` cell. Linear in column height. The 'is column full?' pre-check is implicit in the `return -1` sentinel after the loop.\"",
+        "why": "Naming '4 directions because inverses are redundant' is the structural answer — most candidates either guess 8 (correct but wasteful) or 4 (correct without justification). The third path — explaining why — is what differentiates. The directional run-length framing also generalizes to Gomoku, word search in a grid, ship placement detection — same template."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace three games — two drops with no winner yet, a horizontal R win, and a vertical Y win. Result format: each drop returns the row it landed at, winner returns the color string or ''.\"",
+        "examples": [
+          {
+            "input": "drop(0,R), drop(1,Y), winner()",
+            "output": "[0, 0, '']",
+            "note": "Two pieces, no run of 4 anywhere — winner returns ''.",
+            "trace": "drop(0,R): r=0 of col 0 is '' → place 'R', return 0\ndrop(1,Y): r=0 of col 1 is '' → place 'Y', return 0\nwinner(): scan (0,0)='R'. 4 dirs:\n  →: k=1 try (0,1)='Y' ≠ R, break. k=1.\n  ↑: k=1 try (1,0)='' ≠ R, break.\n  ↗: k=1 try (1,1)='' ≠ R, break.\n  ↘: k=1 try (1,-1) OOB, break.\n  no dir reaches k=4. scan (0,1)='Y' similarly. nothing. return ''"
+          },
+          {
+            "input": "drop(0,R) drop(1,R) drop(2,R) drop(3,R) winner()",
+            "output": "[0, 0, 0, 0, 'R']",
+            "note": "4 R's in the bottom row → horizontal win in direction →.",
+            "trace": "After 4 drops, row 0 = ['R','R','R','R','','','']\nwinner(): scan (0,0)='R'. dir → (0,1):\n  k=1 (0,1)='R' match, k=2\n  k=2 (0,2)='R' match, k=3\n  k=3 (0,3)='R' match, k=4. STOP.\n  k===4 → return 'R'"
+          },
+          {
+            "input": "drop(0,Y) ×4 then winner()",
+            "output": "[0, 1, 2, 3, 'Y']",
+            "note": "Vertical stack in column 0 → ↑ direction wins.",
+            "trace": "drops return 0,1,2,3 (filling col 0 bottom-up)\ncol 0 = ['Y','Y','Y','Y','','']\nwinner(): scan (0,0)='Y'. dir ↑ (1,0):\n  k=1 (1,0)='Y', k=2\n  k=2 (2,0)='Y', k=3\n  k=3 (3,0)='Y', k=4. STOP.\n  return 'Y'"
+          }
+        ],
+        "why": "The first trace shows the early-break behavior — most cells have nothing interesting and the OOB or mismatch fires on k=1. The second shows the 'win exists, found on first scan-direction-pair' happy path. The third confirms the ↑ direction works (which is easy to bug if you accidentally write `[1,0]` as `[-1,0]` thinking 'up means decreasing row'). Tracing all three exposes the row-orientation invariant the candidate picked in section 1."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me walk through edges:\n• **Dropping into a full column** — the `for (let r = 0; r < rows; r++)` exits without placing. The `return -1` sentinel signals 'refused' to the caller. If you forget this return, the function returns `undefined`, which the caller probably misreads as 'row 0'.\n• **Calling `winner()` on a fresh empty board** — every cell is `''`, the `if (!v) continue` short-circuits every iteration. Returns ''. Constant work, no edge bugs.\n• **Diagonal starting from the edge** — say a ↗ diagonal starting at column 4 wants to reach column 8, which is OOB. The `nc >= cols` check inside the while breaks cleanly. The 4-direction limit means we can't detect a ↙ line starting from a high column, but the same line is detected from its other end as ↗.\n• **Diagonal that wraps off two edges** — say ↘ from (3, 5) on a 6×7 board: k=1 (4,6) ok, k=2 (5,7) OOB. Breaks before false-match. The bounds check is per-step, not per-direction, which is what saves it.\n• **Same color, longer than 4** — 5 in a row should still return that color. Our `while (k < 4)` stops at exactly 4, doesn't keep counting. Fine — we don't need the full length, just 'at least 4'.\n• **Multiple wins at once** — a clever drop creates both a horizontal AND vertical 4-line simultaneously. The scan returns whichever it finds first (top-to-bottom, left-to-right, with horizontal direction first). Either is correct — there's only one winning color in legal play.\"",
+        "why": "The full-column drop is the most-asked follow-up — interviewers want to hear you defend the -1 sentinel out loud. The diagonal-from-edge case demonstrates that the bounds check is *inside* the while loop (per-step), not a precondition — that's a subtle implementation detail worth voicing. The 'longer than 4' case is a sanity check that the early break-at-4 isn't a bug."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time:\n• `drop(col, color)` — O(rows), one column scan to the first empty slot. Strictly bounded by board height.\n• `winner()` — O(rows × cols × 4 directions × 4 steps) = O(rows × cols). For a 6×7 board that's 42 × 16 = 672 ops, completely fine.\n\nSpace is O(rows × cols) for the board itself; the winner check is O(1) auxiliary.\n\nIf the board were huge and `winner()` were called frequently, I'd switch to the after-drop local check — pass the just-dropped `(r, col)` into `winner` and probe only the 4 lines through that cell. That's O(1) per drop, at the cost of coupling the two methods. Same pattern as Tic-Tac-Toe's incremental check.\n\nThe broader template — scan-cells-then-probe-directions — generalizes to Word Search II, Gomoku, ship-detection in Battleship. Once you have the 4 direction vectors, the rest is mechanical.\"",
+        "why": "Naming the after-drop local-check as the 'next optimization if asked' is the senior move — you've shown you can implement the clean version, and you know exactly what you'd change if pushed. The complexity defense is straightforward (no amortization tricks needed), so the wrap-up's job is mostly to demonstrate transferability via the Word Search / Battleship connection."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of Connect Four operations on the 6x7 board. drop() finds the lowest empty row and returns it; winner() scans every cell × 4 direction vectors for a 4-in-a-row. The trace collects every drop's row + every winner's color into a results array.",
+    "examples": [
+      { "label": "drop col 0 (R), col 1 (Y), winner → '' (no four yet)", "input": [ { "op": "drop", "col": 0, "color": "R" }, { "op": "drop", "col": 1, "color": "Y" }, { "op": "winner" } ], "expected": "[0,0,\"\"]" },
+      { "label": "4×R bottom row cols 0-3 → horizontal R wins", "input": [ { "op": "drop", "col": 0, "color": "R" }, { "op": "drop", "col": 1, "color": "R" }, { "op": "drop", "col": 2, "color": "R" }, { "op": "drop", "col": 3, "color": "R" }, { "op": "winner" } ], "expected": "[0,0,0,0,\"R\"]" },
+      { "label": "4×Y stacked in col 0 → vertical Y wins", "input": [ { "op": "drop", "col": 0, "color": "Y" }, { "op": "drop", "col": 0, "color": "Y" }, { "op": "drop", "col": 0, "color": "Y" }, { "op": "drop", "col": 0, "color": "Y" }, { "op": "winner" } ], "expected": "[0,1,2,3,\"Y\"]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  const rows = 6, cols = 7;",
+      "  const board = Array.from({ length: rows }, () => new Array(cols).fill(''));",
+      "  const results = [];",
+      "  yield { line: 2, label: `new ConnectFour() — empty 6x7 board`, state: { ops, board: board.map(r => r.slice()), results: [...results] } };",
+      "  for (let opIdx = 0; opIdx < ops.length; opIdx++) {",
+      "    const cur = ops[opIdx];",
+      "    if (cur.op === 'drop') {",
+      "      const { col, color } = cur;",
+      "      yield { line: 7, label: `op#${opIdx}: drop(col=${col}, color='${color}')`, state: { ops, board: board.map(r => r.slice()), results: [...results], col, color } };",
+      "      let placedR = -1;",
+      "      for (let r = 0; r < rows; r++) {",
+      "        if (board[r][col] === '') {",
+      "          board[r][col] = color;",
+      "          placedR = r;",
+      "          yield { line: 9, label: `row ${r} of col ${col} is empty → place '${color}'; return ${r}`, state: { ops, board: board.map(r => r.slice()), results: [...results], col, color, placedR: r } };",
+      "          break;",
+      "        }",
+      "      }",
+      "      if (placedR === -1) {",
+      "        yield { line: 11, label: `col ${col} full — return -1`, state: { ops, board: board.map(r => r.slice()), results: [...results], col, color } };",
+      "      }",
+      "      results.push(placedR);",
+      "    } else if (cur.op === 'winner') {",
+      "      yield { line: 13, label: `op#${opIdx}: winner() — scan every cell × 4 directions`, state: { ops, board: board.map(r => r.slice()), results: [...results] } };",
+      "      const dirs = [[0,1],[1,0],[1,1],[1,-1]];",
+      "      let won = '';",
+      "      outer:",
+      "      for (let r = 0; r < rows; r++) {",
+      "        for (let c = 0; c < cols; c++) {",
+      "          const v = board[r][c];",
+      "          if (!v) continue;",
+      "          yield { line: 18, label: `cell (${r},${c})='${v}' — probe 4 directions`, state: { ops, board: board.map(r => r.slice()), results: [...results], r, c, v } };",
+      "          for (let d = 0; d < dirs.length; d++) {",
+      "            const dr = dirs[d][0], dc = dirs[d][1];",
+      "            const dirName = ['→','↑','↗','↘'][d];",
+      "            let k = 1;",
+      "            while (k < 4) {",
+      "              const nr = r + dr * k, nc = c + dc * k;",
+      "              if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) break;",
+      "              if (board[nr][nc] !== v) break;",
+      "              k++;",
+      "            }",
+      "            if (k === 4) {",
+      "              yield { line: 29, label: `4-in-a-row found from (${r},${c}) in dir ${dirName} — winner='${v}'`, state: { ops, board: board.map(r => r.slice()), results: [...results], r, c, v, dir: dirName, k } };",
+      "              won = v;",
+      "              break outer;",
+      "            }",
+      "          }",
+      "        }",
+      "      }",
+      "      results.push(won);",
+      "      yield { line: 33, label: `winner() returns '${won}'`, state: { ops, board: board.map(r => r.slice()), results: [...results], won } };",
+      "    }",
+      "  }",
+      "  yield { line: 33, label: `all ops processed — results=${JSON.stringify(results)}`, state: { ops, board: board.map(r => r.slice()), results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class ConnectFour {\n  constructor() {\n    this.rows = 6;\n    this.cols = 7;\n    // Row 0 = bottom of board so drop scans upward to the first empty slot.\n    this.board = Array.from({ length: 6 }, () => new Array(7).fill(''));\n  }\n  drop(col, color) {\n    for (let r = 0; r < this.rows; r++) {\n      if (this.board[r][col] === '') { this.board[r][col] = color; return r; }\n    }\n    return -1;                                  // column full — sentinel\n  }\n  winner() {\n    // Only 4 directions — reverses would re-detect the same line from its other end.\n    const dirs = [[0,1],[1,0],[1,1],[1,-1]];    // →, ↑, ↗, ↘\n    for (let r = 0; r < this.rows; r++) {\n      for (let c = 0; c < this.cols; c++) {\n        const v = this.board[r][c];\n        if (!v) continue;\n        for (const [dr, dc] of dirs) {\n          let k = 1;\n          // Count consecutive matches in this direction, capped at 4.\n          while (k < 4) {\n            const nr = r + dr*k, nc = c + dc*k;\n            if (nr < 0 || nr >= this.rows || nc < 0 || nc >= this.cols) break;\n            if (this.board[nr][nc] !== v) break;\n            k++;\n          }\n          if (k === 4) return v;\n        }\n      }\n    }\n    return '';\n  }\n}",
     "notes": [

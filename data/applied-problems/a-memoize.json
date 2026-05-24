@@ -6,6 +6,108 @@
   "status": "full",
   "description": "Cache a pure function's results by argument key — repeated calls with the same input return the stored value without re-running the body. The optional keyFn lets callers serialize complex args.",
   "mechanics": ["closure-state"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the contract.",
+        "say": "\"Let me restate: `memoize(fn)` returns a wrapped function such that calling the wrapper with arguments it's already seen returns the cached result without re-running `fn`. A few clarifying questions:\"\n\n• Purity — am I allowed to assume `fn` is pure? (Same args always yield same output, no side effects.)\n• Cache key — what counts as 'same args'? Just primitives, or object arguments by content? Identity or structural comparison?\n• Cache lifetime — does the cache live for the lifetime of the wrapper, or do I need eviction (LRU, TTL)?\n• `this` binding — should the wrapper preserve `this` from the call site?\n• Optional custom keyFn — should I accept one so the caller can override the default serialization?",
+        "why": "The purity question is the gating one — if `fn` reads `Date.now()` or mutates globals, memoizing it is incorrect, not just inefficient. Calling that out upfront signals you understand WHY caching works in the first place. The cache-lifetime question separates a toy implementation from a production one; for the interview, \"lives as long as the wrapper\" is almost always the right answer, but asking shows you've thought past the happy path."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the simplest version before generalizing.",
+        "say": "\"For a single-arg numeric function, the trivial version is `const cache = {}; const memoized = n => cache[n] !== undefined ? cache[n] : (cache[n] = fn(n))`. That works for `square(3)` repeatedly, but it has real limits:\"\n\n• Only one argument.\n• Plain object keys collide on prototype names (`__proto__`).\n• `cache[n] !== undefined` mis-classifies a legitimate cached `undefined` as a miss — would re-run `fn` forever for any function that returns `undefined`.\n\n\"To generalize: use a `Map` (handles any string key, no prototype collisions), use `cache.has(k)` instead of value comparison, and key by `JSON.stringify(args)` so any arg shape works.\"",
+        "why": "The 'cached undefined' bug is the senior-tier callout — most candidates write the `!== undefined` version and never notice it breaks for fns that legitimately return undefined. Naming it explicitly demonstrates that you understand caches need explicit presence checks (`has` / `in`), not value sentinels. The prototype-collision issue with plain objects is the other test — `Map` exists for exactly this reason."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the underlying primitive?",
+        "say": "\"This is the classic cache-as-closure pattern. The wrapper closes over a private `Map` that lives as long as the wrapper does. Each call: compute a string key from the args (default: `JSON.stringify(args)`), check `cache.has(k)` — hit returns the stored value, miss runs `fn`, stores the result, and returns it.\"\n\n\"The closure topology is the load-bearing part: the cache is *captured*, not passed in, so it's private to this wrapper instance. Two separate `memoize(fn)` calls create two independent caches. That's why calling `memoize(fn)` and discarding the return value defeats the whole mechanism — the cache lives with the wrapper, not with `fn`.\"",
+        "why": "Naming both the closure capture AND the wrapper-instance-scoped lifetime is the distinguishing move. A candidate who says \"I'd store results in a cache\" without saying *where* the cache lives hasn't fully grasped the mechanism. Spelling out that two `memoize(fn)` calls produce two caches is the test — that's the difference between understanding closures and merely using them."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few call sequences to confirm the model.",
+        "intro": "\"Let me trace three call sequences on `memoize(x => x * 2)`. The state to track per call: `cache` contents, the result returned, and how many times the underlying `fn` body actually ran.\"",
+        "examples": [
+          {
+            "input": "calls=[3,3,4,5,3]",
+            "output": "[6,6,8,10,6]",
+            "note": "Mixed hits and misses — key '[3]' cached after first call, hit on positions 1 and 4.",
+            "trace": "call #0 args=[3] → k='[3]' MISS → fn(3)=6, cache={'[3]':6}, bodyRuns=1\ncall #1 args=[3] → k='[3]' HIT  → return 6 (skip fn body)\ncall #2 args=[4] → k='[4]' MISS → fn(4)=8, cache={'[3]':6,'[4]':8}, bodyRuns=2\ncall #3 args=[5] → k='[5]' MISS → fn(5)=10, cache={'[3]':6,'[4]':8,'[5]':10}, bodyRuns=3\ncall #4 args=[3] → k='[3]' HIT  → return 6\n→ results=[6,6,8,10,6], bodyRuns=3 (5 calls, 3 unique)"
+          },
+          {
+            "input": "calls=[1,2,3]",
+            "output": "[2,4,6]",
+            "note": "All unique — every call misses, cache grows linearly, no hits.",
+            "trace": "call #0 args=[1] → k='[1]' MISS → fn(1)=2, cache size 1\ncall #1 args=[2] → k='[2]' MISS → fn(2)=4, cache size 2\ncall #2 args=[3] → k='[3]' MISS → fn(3)=6, cache size 3\n→ results=[2,4,6], bodyRuns=3 (worst case: memoize never helps)"
+          },
+          {
+            "input": "calls=[7,7,7]",
+            "output": "[14,14,14]",
+            "note": "First miss, then two hits — the canonical 'amortize the work' case.",
+            "trace": "call #0 args=[7] → k='[7]' MISS → fn(7)=14, cache={'[7]':14}, bodyRuns=1\ncall #1 args=[7] → k='[7]' HIT  → return 14\ncall #2 args=[7] → k='[7]' HIT  → return 14\n→ results=[14,14,14], bodyRuns=1 (3 calls, 1 fn run — the whole point)"
+          }
+        ],
+        "why": "Tracing the all-unique case is the move that surfaces the worst case — memoize doesn't help when there's no repetition, and the cache becomes pure overhead. Calling that out shows you understand the tradeoff. The mixed-hits-and-misses trace also exposes the key-collision risk: if `JSON.stringify` returned the same string for two different arg lists (which it doesn't for primitives, but does for non-stable object key ordering), the hits would return stale results."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Cached `undefined` — `cache.has(k)` is the correct guard, not `cache[k] !== undefined`. A function that returns `undefined` legitimately would otherwise re-run forever.\n• Object arguments — `JSON.stringify({a:1, b:2})` and `JSON.stringify({b:2, a:1})` produce different strings even though the objects are structurally identical. Key ordering in literals is insertion-order in modern JS, but not guaranteed across constructors. Caller might need a custom keyFn.\n• Cache eviction — no built-in eviction means a long-lived wrapper called with many distinct args grows unbounded. For production, wrap with an LRU (a `Map` plus delete-and-reinsert on hit gives you LRU semantics for free, since Map preserves insertion order).\n• `this` binding — `fn(...args)` loses the call-site `this`. For method memoization, use `fn.apply(this, args)` instead.\n• Non-serializable args (functions, Symbols, circular refs) — `JSON.stringify` drops them silently or throws on cycles. Custom keyFn needed.\n• Async functions — memoize stores the returned Promise, so subsequent calls await the same in-flight Promise (de-duplication, not just caching). That's usually desirable, but worth noting.\n• Rejected Promises — the cache stores the rejected Promise, so retries don't help. Often you want to delete on rejection.",
+        "why": "The cached-undefined and `cache.has` vs `cache[k] !== undefined` distinction is the single most common bug in this code. Calling it out unprompted shows you've debugged this before. The async/rejected-Promise edge is the modern-JS senior signal — most candidates think of memoize as a sync-only tool, and explicitly addressing how it interacts with Promises proves you've thought about real codebases that use it."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the bounds, and what does this generalize to?",
+        "say": "\"Time per call is O(k) where k is the cost of computing the key (`JSON.stringify` cost), plus O(1) for the Map lookup, plus the original `fn` cost on a miss. For primitive args, the key cost is negligible. The whole point is that hits skip the `fn` body — for a fn that's expensive relative to the key serialization, the speedup is unbounded.\n\nSpace is O(unique-args-seen) — the cache grows to one entry per distinct key. For functions called with bounded input domains (a finite recursion, a fixed set of params), it's small. For functions called with unbounded input, you need eviction.\n\nThis is the canonical example of trading space for time via closure-state. The same pattern shows up in React's `useMemo` (cache by dep array), in dynamic programming top-down memoization (`fib(n)` with a cache flips O(2^n) to O(n)), and in HTTP request de-duplication (Promise cache keyed by URL). If you wanted me to extend: add LRU eviction with `maxSize`, or add TTL via timestamps in the cached value, or add weak-key support so object-keyed entries get GC'd when the key object dies.\"",
+        "why": "Naming the React `useMemo` and DP-memoization analogs is the transfer move — it proves you see memoize as a general technique with many surface forms, not a one-off interview snippet. The LRU/TTL/weak-key extensions show you've thought about how the toy version becomes a real one. The 'speedup is unbounded' phrasing is the right way to talk about the time bound: there's no clean O() number because it depends entirely on `fn`'s cost vs. the key cost."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through memoize wrapping `x => x * 2`. The trace feeds a sequence of single-arg calls; the cache state and `results` array (one per call) evolve in the state panel. Repeated args hit the cache and skip the body entirely — that's the whole point.",
+    "examples": [
+      { "label": "calls=[3,3,4,5,3] — hits at positions 1, 4 (key '[3]' cached after first call)", "input": { "calls": [[3], [3], [4], [5], [3]] }, "expected": "[6,6,8,10,6]" },
+      { "label": "calls=[1,2,3] — all unique, every call misses + populates", "input": { "calls": [[1], [2], [3]] }, "expected": "[2,4,6]" },
+      { "label": "calls=[7,7,7] — first miss, then two hits in a row", "input": { "calls": [[7], [7], [7]] }, "expected": "[14,14,14]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const calls = input.calls;",
+      "  const fn = (x) => x * 2;",
+      "  let bodyRuns = 0;",
+      "  yield { line: 1, label: `enter memoize(fn) — fn is x => x*2; call sequence=${JSON.stringify(calls)}`, state: { calls, bodyRuns } };",
+      "  const cache = new Map();",
+      "  yield { line: 3, label: 'init cache (empty Map)', state: { calls, cache: [], bodyRuns } };",
+      "  const toKey = (...args) => JSON.stringify(args);",
+      "  yield { line: 5, label: 'no keyFn provided — default toKey = JSON.stringify(args)', state: { calls, cache: [...cache.entries()], bodyRuns } };",
+      "  const results = [];",
+      "  for (let i = 0; i < calls.length; i++) {",
+      "    const args = calls[i];",
+      "    yield { line: 6, label: `call #${i}: wrapped(${args.join(', ')})`, state: { calls, cache: [...cache.entries()], bodyRuns, results: [...results], i, args } };",
+      "    const k = toKey(...args);",
+      "    yield { line: 7, label: `compute key = JSON.stringify(args) = '${k}'`, state: { calls, cache: [...cache.entries()], bodyRuns, results: [...results], i, args, k } };",
+      "    if (cache.has(k)) {",
+      "      const hit = cache.get(k);",
+      "      results.push(hit);",
+      "      yield { line: 9, label: `HIT — cache.get('${k}') = ${hit}; skip fn body entirely`, state: { calls, cache: [...cache.entries()], bodyRuns, results: [...results], i, args, k, hit } };",
+      "    } else {",
+      "      yield { line: 9, label: `MISS — '${k}' not in cache; run fn(...args)`, state: { calls, cache: [...cache.entries()], bodyRuns, results: [...results], i, args, k } };",
+      "      bodyRuns++;",
+      "      const v = fn(...args);",
+      "      yield { line: 10, label: `fn(${args.join(', ')}) → ${v} (bodyRuns now ${bodyRuns})`, state: { calls, cache: [...cache.entries()], bodyRuns, results: [...results], i, args, k, v } };",
+      "      cache.set(k, v);",
+      "      results.push(v);",
+      "      yield { line: 11, label: `cache.set('${k}', ${v}) — store for next call`, state: { calls, cache: [...cache.entries()], bodyRuns, results: [...results], i, args, k, v } };",
+      "    }",
+      "  }",
+      "  yield { line: 13, label: `done — bodyRuns=${bodyRuns}, results=${JSON.stringify(results)}`, state: { calls, cache: [...cache.entries()], bodyRuns, results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function memoize(fn, keyFn) {\n  // Map (not plain object) — avoids __proto__ collisions and handles any string key.\n  const cache = new Map();\n  // Default key stringifies all args; callers can inject a custom keyFn.\n  const toKey = keyFn || ((...args) => JSON.stringify(args));\n  return function (...args) {\n    const k = toKey(...args);\n    // Hit: skip the body entirely — the whole point of memoization.\n    if (cache.has(k)) return cache.get(k);\n    const v = fn(...args);\n    cache.set(k, v);\n    return v;\n  };\n}",
     "notes": [

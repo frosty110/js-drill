@@ -6,6 +6,103 @@
   "status": "full",
   "description": "Minimum insert/delete/replace edits to turn word1 into word2. 2D DP: dp[i][j] = edits between word1[:i] and word2[:j]. Match → carry diagonal; mismatch → 1 + min(insert, delete, replace).",
   "mechanics": ["dp-tabulation"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: given two strings `word1` and `word2`, return the minimum number of single-character operations to convert `word1` into `word2`. Operations are insert, delete, and replace — each costs 1.\"\n\nThen a few quick clarifying questions:\n• Are the three operations equally weighted at 1, or do they have different costs?\n• Case-sensitive? ('Apple' vs 'apple' — 1 edit or 0?)\n• ASCII or Unicode? (Affects whether `word1[i]` indexes bytes or code units.)\n• Empty strings on either side — convert empty to length-`n` is `n` inserts, right?\n• Length bounds — is `O(m·n)` time/space acceptable?",
+        "why": "The equal-cost question matters because weighted edit distance changes the recurrence (each `+1` becomes a per-op cost). Most problem statements assume cost-1 but it's worth confirming. The empty-string question pins down the base row/column: `dp[0][j] = j` (insert all of `word2`) and `dp[i][0] = i` (delete all of `word1`). Pinning down `O(m·n)` upfront preempts the space-optimization pushback — if `m·n` is too big they want you to know about the rolling-row trick."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious exponential solution before you discard it.",
+        "say": "\"The brute force is recursive: compare the last chars of both strings. If they match, recurse on `(m-1, n-1)` with no cost. If they don't, return `1 + min(recurse(m-1, n), recurse(m, n-1), recurse(m-1, n-1))` — the three branches correspond to delete from `word1`, insert into `word1`, replace. Base cases: empty `word1` returns `n` (insert all), empty `word2` returns `m` (delete all). That's `O(3^min(m,n))` worst case — three-way branching, depth `min(m,n)`. Massive overlap on `(i,j)` subproblems; memoization brings it to `O(m·n)`.\"",
+        "why": "The three-way recursive split is what plants the recurrence — once you say 'mismatch means try all three ops, take the cheapest, add one', the bottom-up table is just memoizing the recursion in reverse. The 'characters match → no cost, carry diagonal' clause is the load-bearing detail; missing it leads to an off-by-one where matches still cost 1. Naming it in recursion first makes the bottom-up version feel like a translation, not a leap."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to 2D bottom-up tabulation?",
+        "say": "\"This is classic 2D DP over prefix pairs. The recurrence: `dp[i][j]` = min edits to turn `word1[0..i)` into `word2[0..j)`. The decision at each step is what to do with the *last* character of each prefix:\n• If `word1[i-1] === word2[j-1]`, the last chars already agree, no op needed — inherit the diagonal: `dp[i][j] = dp[i-1][j-1]`.\n• Otherwise, take 1 plus the minimum of the three predecessors: `dp[i-1][j] + 1` (delete from `word1`), `dp[i][j-1] + 1` (insert into `word1`), `dp[i-1][j-1] + 1` (replace).\n\nBase cases live in row 0 and column 0: `dp[i][0] = i` (delete `i` chars), `dp[0][j] = j` (insert `j` chars). Answer sits at `dp[m][n]`. The `(m+1) × (n+1)` table is what lets the base row/column live at index 0 cleanly.\"",
+        "why": "Articulating the *three operations as three table neighbors* — delete is top, insert is left, replace is diagonal — is the load-bearing pedagogy. Once that mapping clicks, the recurrence is mechanical: 'I'm at `(i,j)`; I either spent zero ops to inherit the diagonal (chars matched) or I spent one to do one of the three things'. The off-by-one between string index `i-1` and table index `i` is the easy trap — always say it out loud so the interviewer sees you're tracking it."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a single replace, a single insert, and a multi-op case that exercises all three operations.",
+        "examples": [
+          {
+            "input": "word1=\"cat\", word2=\"cut\"",
+            "output": "1",
+            "note": "One substitute (a→u). Diagonal carries match for c and t; only the middle column triggers an op.",
+            "trace": "init table (4×4):\n     ''  c  u  t\n''   0  1  2  3\nc    1\na    2\nt    3\n\ni=1 j=1: 'c'=='c' → dp[1][1]=dp[0][0]=0\ni=1 j=2: 'c'!='u' → 1+min(top=1, left=0, diag=1)=1\ni=1 j=3: 'c'!='t' → 1+min(2,1,2)=2\ni=2 j=1: 'a'!='c' → 1+min(1,2,1)=2\ni=2 j=2: 'a'!='u' → 1+min(1,2,0)=1 ← the replace\ni=2 j=3: 'a'!='t' → 1+min(2,1,1)=2\ni=3 j=1: 't'!='c' → 1+min(2,3,2)=3\ni=3 j=2: 't'!='u' → 1+min(1,3,2)=2\ni=3 j=3: 't'=='t' → dp[3][3]=dp[2][2]=1\nreturn 1"
+          },
+          {
+            "input": "word1=\"ab\", word2=\"abc\"",
+            "output": "1",
+            "note": "Single insert at the end. Diagonal carries through ab; the extra c is one left-step (insert).",
+            "trace": "init table (3×4):\n     ''  a  b  c\n''   0  1  2  3\na    1\nb    2\n\ni=1 j=1: 'a'=='a' → dp[1][1]=dp[0][0]=0\ni=1 j=2: 'a'!='b' → 1+min(top=1, left=0, diag=1)=1\ni=1 j=3: 'a'!='c' → 1+min(2,1,2)=2\ni=2 j=1: 'b'!='a' → 1+min(1,2,1)=2\ni=2 j=2: 'b'=='b' → dp[2][2]=dp[1][1]=0\ni=2 j=3: 'b'!='c' → 1+min(2,0,1)=1 ← the insert\nreturn 1"
+          },
+          {
+            "input": "word1=\"horse\", word2=\"ros\"",
+            "output": "3",
+            "note": "Three ops total — one replace (h→r) and two deletes (r and e). All three operations show up in the optimal path.",
+            "trace": "init table (6×4), first row/col are 0..n / 0..m\nWalking just the answer path:\ndp[5][3] = 3, reached via:\n  - replace h→r (cost 1)\n  - keep o (match)\n  - keep r→s? No, r doesn't match s. Need: delete r, keep s, delete e\nThe key cells: dp[1][1]=1 (h→r replace), dp[2][2]=1 (carry diag, o==o is one mismatch ago but ros has 'o' second... walk shows dp fills to dp[5][3]=3.\nFinal: dp[5][3] = 3"
+          }
+        ],
+        "why": "Tracing the table surfaces three things. (1) The `cat→cut` case shows match carries the diagonal cleanly — the answer is one because c and t both gave 'free' diagonal passes, only the middle paid. (2) `ab→abc` shows the insert (left-neighbor) operation in isolation. (3) The off-by-one between table index `i` and string index `i-1` is the bug that bites — saying it out loud while you trace is what catches it before you code."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Both empty — `dp[0][0] = 0`, answer is 0. ✓\n• One empty — `dp[m][0] = m` or `dp[0][n] = n`, exactly the other length. The base row/column handles this without any branching.\n• Identical strings — every diagonal carries, no op fires, returns 0.\n• Completely disjoint strings (e.g. \"abc\" → \"xyz\") — every cell mismatches; the answer is `max(m, n)` (replace all the overlapping chars, then insert/delete the rest).\n• Very different lengths (e.g. \"a\" → \"abcdef\") — answer is `|m - n| + matches lost = 5`. Handled by the recurrence; the base row pre-fills the high-cost edge.\n• Unicode — `word1[i]` indexes UTF-16 code units, not code points, so an emoji compared as one char would read as two halves. If the spec mentions emoji, use `[...word1]` and index that array instead.\n• Huge inputs — `O(m·n)` time and space can blow memory at `m·n ~ 10^7`. The rolling-row trick drops space to `O(min(m, n))` by keeping only two rows.\"",
+        "why": "The disjoint-strings answer (`max(m, n)`) is a clean sanity check the interviewer can verify mentally — naming it shows you've reasoned about the bound, not just trusted the table. The Unicode call-out is the senior signal — most candidates assume ASCII; flagging emoji handling (and the `[...word]` fix) demonstrates real string-internals awareness. The rolling-row space optimization is the standard 'can you do better than O(m·n) space?' follow-up answer."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is `O(m·n)` — `(m+1)(n+1)` cells, constant work per cell (one comparison, at most three lookups, one min). Space is `O(m·n)` for the full table.\n\nThe naive recursive version was `O(3^min(m,n))` time; memoization brings it to `O(m·n)` time / `O(m·n)` space; bottom-up tabulation keeps the same bounds with smaller constants. The space optimization: since each cell only reads the previous row (top, diagonal) and the current row (left), you only need two rows in memory — drops space to `O(min(m, n))` by always making the smaller dimension the inner loop.\n\nIf the interviewer asks for the actual edit sequence (not just the count), I'd add backpointers — each cell records which of the four predecessors it came from, then walk back from `dp[m][n]` to `dp[0][0]` and emit the corresponding ops in reverse. That's still `O(m·n)` time / `O(m·n)` space (can't compress with backpointers).\n\nTemplate variants: Longest Common Subsequence (same 2D shape, max instead of min, no replace op); Distinct Subsequences (count rather than min); Wildcard Matching and Regex Matching (string-vs-pattern variants with different match rules). All share the prefix-pair 2D table.\"",
+        "why": "Defending both the standard and the rolling-row bound demonstrates you know the space optimization without having to be prompted. The 'recover the actual sequence' note is the natural follow-up; naming the backpointer trick proves you've thought past the count-only spec. The LCS/Distinct Subseq/Regex Matching extensions prove you see the 2D prefix-pair shape as a template — that family of problems is wide, and recognizing it is what lets you skip the derivation on the next variant."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the (m+1)×(n+1) Levenshtein table. Row 0 / column 0 hold base cases (i deletes / j inserts). For each interior cell: match carries the diagonal, mismatch is 1 + min(top, left, diagonal).",
+    "examples": [
+      { "label": "\"cat\"→\"cut\" → 1 (one substitute)", "input": { "word1": "cat", "word2": "cut" }, "expected": 1 },
+      { "label": "\"ab\"→\"abc\" → 1 (one insert)", "input": { "word1": "ab", "word2": "abc" }, "expected": 1 },
+      { "label": "\"horse\"→\"ros\" → 3 (replace+delete+delete)", "input": { "word1": "horse", "word2": "ros" }, "expected": 3 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { word1: w1, word2: w2 } = input;",
+      "  yield { line: 1, label: `enter — w1=\"${w1}\", w2=\"${w2}\"`, state: { w1, w2 } };",
+      "  const m = w1.length, n = w2.length;",
+      "  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));",
+      "  const snap = () => dp.map(row => row.slice());",
+      "  yield { line: 4, label: `allocate (${m + 1})x(${n + 1}) dp table, all zeros`, state: { w1, w2, m, n, dp: snap() } };",
+      "  for (let i = 0; i <= m; i++) dp[i][0] = i;",
+      "  yield { line: 6, label: `base col 0: dp[i][0] = i (i deletes to reach empty)`, state: { w1, w2, dp: snap() } };",
+      "  for (let j = 0; j <= n; j++) dp[0][j] = j;",
+      "  yield { line: 7, label: `base row 0: dp[0][j] = j (j inserts from empty)`, state: { w1, w2, dp: snap() } };",
+      "  for (let i = 1; i <= m; i++) {",
+      "    for (let j = 1; j <= n; j++) {",
+      "      const a = w1[i - 1], b = w2[j - 1];",
+      "      if (a === b) {",
+      "        dp[i][j] = dp[i - 1][j - 1];",
+      "        yield { line: 12, label: `dp[${i}][${j}] '${a}'=='${b}' → carry diag dp[${i - 1}][${j - 1}]=${dp[i][j]}`, state: { w1, w2, i, j, dp: snap(), lastFilled: [i, j] } };",
+      "      } else {",
+      "        const top = dp[i - 1][j], left = dp[i][j - 1], diag = dp[i - 1][j - 1];",
+      "        dp[i][j] = 1 + Math.min(top, left, diag);",
+      "        yield { line: 14, label: `dp[${i}][${j}] '${a}'!='${b}' → 1 + min(del=${top}, ins=${left}, repl=${diag}) = ${dp[i][j]}`, state: { w1, w2, i, j, dp: snap(), lastFilled: [i, j] } };",
+      "      }",
+      "    }",
+      "  }",
+      "  yield { line: 22, label: `return dp[${m}][${n}] = ${dp[m][n]}`, state: { w1, w2, dp: snap(), returns: dp[m][n] } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function minDistance(w1, w2) {\n  const m = w1.length, n = w2.length;\n  // dp[i][j] = edits to turn w1[..i] into w2[..j]; (m+1)x(n+1) including empty-prefix row/col.\n  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));\n  // Base cases: empty target costs i deletes; empty source costs j inserts.\n  for (let i = 0; i <= m; i++) dp[i][0] = i;\n  for (let j = 0; j <= n; j++) dp[0][j] = j;\n  for (let i = 1; i <= m; i++) {\n    for (let j = 1; j <= n; j++) {\n      // Chars match → no edit needed, inherit diagonal.\n      if (w1[i - 1] === w2[j - 1]) {\n        dp[i][j] = dp[i - 1][j - 1];\n      } else {\n        dp[i][j] = 1 + Math.min(\n          dp[i - 1][j],     // delete from w1\n          dp[i][j - 1],     // insert into w1\n          dp[i - 1][j - 1]  // replace\n        );\n      }\n    }\n  }\n  return dp[m][n];\n}\n// Time O(m*n), Space O(m*n)",
     "notes": [

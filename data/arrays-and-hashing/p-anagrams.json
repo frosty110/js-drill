@@ -6,6 +6,100 @@
   "status": "full",
   "description": "Group strings that are anagrams. Use a sorted-character key in a Map to bucket them. O(n·k log k) where k is max word length.",
   "mechanics": ["freq-map", "array-chain"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: I'm given an array of strings, and I want to group together the strings that are anagrams of each other. Output is an array of groups — each group is the strings that share an anagram class. A few clarifying questions:\"\n\n• Character set — lowercase ASCII only, or full Unicode? That changes whether the 26-count-array trick is viable.\n• Case sensitivity — is `\"Eat\"` the same anagram class as `\"tea\"`? My guess is no, but worth confirming.\n• Do groups need a particular order — first-seen, alphabetical, by group size?\n• Are duplicate strings allowed in the input? (e.g. `[\"a\", \"a\"]` → one group of two, or two groups of one?)",
+        "why": "The character-set question is load-bearing: 'lowercase ASCII only' unlocks the O(k) count-array key; full Unicode forces you back to the sorted-string key (which is O(k log k)). The first-seen-order question matters because using a `Map` (insertion order) vs. a plain object lets you guarantee that ordering for free — interviewers often want a deterministic output."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²·k) solution before you discard it.",
+        "say": "\"The brute force is: for each string, scan all the already-formed groups; if any group's representative is an anagram of the current string, append it; otherwise start a new group. Checking 'are these anagrams' itself costs O(k) (sort both and compare, or count chars). So total is O(n²·k) in the worst case — n strings times up-to-n groups times O(k) per anagram check.\"\n\n\"That's wasteful — we're recomputing the anagram check over and over. What if we computed a canonical *key* for each string and bucketed by that?\"",
+        "why": "Two reasons to walk through the brute force. First, it forces you to articulate WHY this is wasteful — we're doing the same anagram check repeatedly. Second, it sets up the optimization narratively: the leap from 'check anagram pairwise' to 'compute a canonical key once' is the entire insight, and it lands harder when the brute force was just stated."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a hash map keyed by anagram fingerprint?",
+        "say": "\"This is a bucket-by-key hash-map problem. The structural property: two strings are anagrams iff they have the same multiset of characters. So if I can produce a canonical key from a string that depends only on its multiset, two anagrams will produce the same key, and a Map keyed on that gives me O(1) bucketing.\"\n\n\"Easiest canonical key: sort the chars and join. `'eat'` → `'aet'`, `'tea'` → `'aet'`, `'ate'` → `'aet'` — all collide into the same bucket. That's O(k log k) per string. If the alphabet is fixed (lowercase ASCII), I could swap that for a 26-length count array joined into a string, which drops keying to O(k).\"",
+        "why": "Naming the data structure AND the structural property — 'same multiset → same key' — is what distinguishes derivation from a memorized template. The same hash-map-keyed-by-canonical-form template shows up in surprising places (group by sorted graph adjacency, group by frequency signature). The interviewer is testing whether you see the abstraction, not just the surface."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a few inputs.\" Three cases — the textbook mixed input, the degenerate single-element case, and a small mixed case to confirm bucket order.",
+        "examples": [
+          {
+            "input": "[\"eat\",\"tea\",\"tan\",\"ate\",\"nat\",\"bat\"]",
+            "output": "[[\"eat\",\"tea\",\"ate\"],[\"tan\",\"nat\"],[\"bat\"]]",
+            "note": "Three anagram classes. Note the groups stay in first-seen order because Map preserves insertion order.",
+            "trace": "s=\"eat\" → key=\"aet\" → new bucket → map={aet:[eat]}\ns=\"tea\" → key=\"aet\" → push → map={aet:[eat,tea]}\ns=\"tan\" → key=\"ant\" → new bucket → map={aet:[eat,tea], ant:[tan]}\ns=\"ate\" → key=\"aet\" → push → map={aet:[eat,tea,ate], ant:[tan]}\ns=\"nat\" → key=\"ant\" → push → map={aet:[eat,tea,ate], ant:[tan,nat]}\ns=\"bat\" → key=\"abt\" → new bucket → map={aet:[eat,tea,ate], ant:[tan,nat], abt:[bat]}\nreturn Array.from(map.values()) → [[eat,tea,ate],[tan,nat],[bat]] ✓"
+          },
+          {
+            "input": "[\"a\"]",
+            "output": "[[\"a\"]]",
+            "note": "Single-element degenerate case — one bucket with one string. Confirms the lazy-init bucket path works.",
+            "trace": "s=\"a\" → key=\"a\" → new bucket → map={a:[a]}\nreturn [[a]] ✓"
+          },
+          {
+            "input": "[\"abc\",\"bca\",\"xyz\"]",
+            "output": "[[\"abc\",\"bca\"],[\"xyz\"]]",
+            "note": "Two groups — `abc` and `bca` collide on key `abc`, `xyz` is alone.",
+            "trace": "s=\"abc\" → key=\"abc\" → new bucket → map={abc:[abc]}\ns=\"bca\" → key=\"abc\" → push → map={abc:[abc,bca]}\ns=\"xyz\" → key=\"xyz\" → new bucket → map={abc:[abc,bca], xyz:[xyz]}\nreturn [[abc,bca],[xyz]] ✓"
+          }
+        ],
+        "why": "Tracing surfaces the subtle correctness property — the *output order* of the outer groups is determined by which anagram class is *first seen*, not by which class has the most members. The `tan/nat` group appears before `bat` because `tan` came before `bat` in the input. That's only guaranteed if you use `Map` (or careful Object usage on modern engines); a wrong-language assumption would bite a candidate who reached for a plain object without thinking about it."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty input `[]` → loop doesn't fire, returns `[]`. Vacuously correct.\n• Single string → one group of one. The lazy-init path runs once.\n• Empty strings as input elements (`[\"\", \"\"]`) → key is `\"\"` for both; one group of two. Worth confirming that's intended.\n• Duplicate strings (`[\"a\", \"a\"]`) → both hash to the same bucket, one group of two. Same as anagrams — the algorithm doesn't distinguish.\n• Unicode/emoji → `.split('')` splits by UTF-16 code units, which can break surrogate pairs (one emoji becomes two halves). Fix: `[...s].sort().join('')` iterates by codepoint.\n• Very long strings (large k) → the sort dominates: O(k log k) per string. If k is huge and the alphabet is fixed, switch to the count-array key for O(k) per string.",
+        "why": "The Unicode call-out is the senior-tier touch — `.split('')` is one of the most quietly-buggy idioms in JavaScript because it works perfectly for ASCII and silently breaks for emoji. Mentioning the `[...s]` fix shows you've debugged this before. The count-array-vs-sort tradeoff at the end shows you understand the algorithm has a tunable knob, not just one canonical form."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n · k log k) where n is the number of strings and k is the max string length. The k log k comes from sorting each string's chars; the outer n is the loop over the input.\n\nSpace is O(n · k) for the output (each input string appears in exactly one group), plus O(n) for the Map's key set (one key per unique anagram class, each key of length k).\n\nIf you wanted the O(n · k) variant: build a length-26 count array per string (for lowercase ASCII), join into a key like `'1#0#2#...'` — that drops keying to linear. Same Map structure, same bucketing logic. The template is identical; only the key function changes.\"",
+        "why": "The complexity defense here has TWO components that candidates often blur — the n-loop and the per-string k log k cost. Naming them separately is the move. The count-array extension at the end isn't bonus material — it's the alternative an interviewer might press you on ('can you do better than k log k per string?'), and having it ready is the difference between scrambling and confident."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical Group Anagrams one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[\"eat\",\"tea\",\"tan\",\"ate\",\"nat\",\"bat\"] → 3 groups", "input": ["eat", "tea", "tan", "ate", "nat", "bat"], "expected": "[[\"eat\",\"tea\",\"ate\"],[\"tan\",\"nat\"],[\"bat\"]]" },
+      { "label": "[\"a\"] → [[\"a\"]] (single)", "input": ["a"], "expected": "[[\"a\"]]" },
+      { "label": "[\"abc\",\"bca\",\"xyz\"] → 2 groups", "input": ["abc", "bca", "xyz"], "expected": "[[\"abc\",\"bca\"],[\"xyz\"]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const strs = input;",
+      "  yield { line: 1, label: `enter function — strs=${JSON.stringify(strs)}`, state: { strs } };",
+      "  const map = new Map();",
+      "  yield { line: 3, label: 'init map (empty Map: sorted-key → bucket)', state: { strs, map: [] } };",
+      "  let i = 0;",
+      "  for (const s of strs) {",
+      "    yield { line: 4, label: `outer step: i=${i}, s=\"${s}\"`, state: { strs, map: [...map.entries()], i, s } };",
+      "    const key = s.split('').sort().join('');",
+      "    yield { line: 6, label: `key = \"${s}\".split('').sort().join('') = \"${key}\"`, state: { strs, map: [...map.entries()], i, s, key } };",
+      "    if (!map.has(key)) {",
+      "      map.set(key, []);",
+      "      yield { line: 8, label: `key \"${key}\" not in map — lazy-init bucket map.set(\"${key}\", [])`, state: { strs, map: [...map.entries()], i, s, key } };",
+      "    } else {",
+      "      yield { line: 8, label: `key \"${key}\" already in map — reuse existing bucket`, state: { strs, map: [...map.entries()], i, s, key } };",
+      "    }",
+      "    map.get(key).push(s);",
+      "    yield { line: 9, label: `map.get(\"${key}\").push(\"${s}\")`, state: { strs, map: [...map.entries()], i, s, key } };",
+      "    i++;",
+      "  }",
+      "  const result = Array.from(map.values());",
+      "  yield { line: 11, label: `return Array.from(map.values()) = ${JSON.stringify(result)}`, state: { strs, map: [...map.entries()], returns: JSON.stringify(result) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function groupAnagrams(strs) {\n  // Map preserves insertion order so groups stay in first-seen order.\n  const map = new Map();\n  for (const s of strs) {\n    // Sorted chars are the canonical anagram fingerprint — same multiset → same key.\n    const key = s.split(\"\").sort().join(\"\");\n    // Lazy-init the bucket on first sighting of this key.\n    if (!map.has(key)) map.set(key, []);\n    map.get(key).push(s);\n  }\n  return Array.from(map.values());\n}\n// Time O(n * k log k), Space O(n * k)",
     "notes": [

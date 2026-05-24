@@ -6,6 +6,124 @@
   "status": "full",
   "description": "Post-order DFS. Each node returns the best single-branch gain (clamped at 0); a global tracks the best left+node+right path seen at any node.",
   "mechanics": ["tree-recursion", "closure-state"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"So I need to find the maximum sum of any path in a binary tree, where a 'path' is a sequence of connected nodes via parent-child edges, and the path can start and end at any nodes — it doesn't need to go through the root, doesn't need to start or end at a leaf.\"\n\nThen a few quick clarifying questions:\n• Can values be negative? (Yes is the standard — that's what makes the problem interesting.)\n• Does a path have to contain at least one node? (Yes — empty paths aren't counted, and a single node by itself is a valid path with sum = node.val.)\n• Can a path go 'up and over' a node — i.e. left child → node → right child? (Yes, that's the through-path case, and it's the whole trick of the problem.)\n• Just return the sum, not the path itself?",
+        "why": "The 'up and over' question is THE problem-defining clarification. If paths were strictly downward (root-to-leaf style), this would be a simple post-order recursion. But because paths can turn at any node — go up from left child, through the node, down to right child — there's a fundamental tension between 'best path through this node' (uses both children) and 'best path you can extend UPWARD from this node' (uses only one child, because a path can't fork). Forcing the interviewer to confirm the up-and-over case ensures you're solving the right problem."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the O(n²) DFS-from-every-node, then justify the O(n) post-order with two values.",
+        "say": "\"The brute force: for every node, do a DFS treating it as the 'apex' of the path. From the apex, walk down both children collecting the maximum-sum path on each side, sum those plus the apex value, that's the best path with this apex. Repeat for every node. That's O(n) per node times n nodes = O(n²).\n\nThe better approach: do ONE post-order traversal, and at each node compute two things:\n(a) Best path THROUGH this node — uses left, node, right — this updates a global `best`.\n(b) Best CHAIN ending at this node and extendable upward — can use only ONE side, because a path can't fork. This is what we RETURN to the parent.\n\nThe key trick: clamp each child's returned chain at 0. A negative-sum branch is worse than not including that branch at all, so we just skip it. Visit each node once → O(n).\"",
+        "why": "The 'two values per node' framing is the load-bearing distinction that this problem rewards. Calling it out explicitly — 'through-path uses both children, return-chain uses one' — is what separates a derivation from a magic algorithm. The clamp-at-zero rule is the subtle bit that handles negative values cleanly; verbalizing why (negative is worse than nothing) shows you understand the decision rather than just writing `Math.max(gain, 0)`."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to this two-values-per-node post-order shape?",
+        "say": "\"There are two markers that point to this specific shape. First, the answer depends on values aggregated bottom-up — each node's contribution depends on what its children contributed. That's post-order DFS. Second, and more importantly, there are TWO DIFFERENT THINGS we care about at each node: the answer we'd RECORD (best path through this node) versus the answer we'd RETURN (best chain ending here, extendable by the parent). These are different because a path can have AT MOST one 'turn' — once it goes up through a node and down the other child, it's closed. The parent can only extend a chain, never a turned path.\n\nThat 'record one thing, return another' shape — combined with closure-scoped state for the global best — is the technique. Whenever a tree problem has both 'global best across all subtrees' AND 'something I need to pass up to the parent,' this template applies. Same shape as Diameter of Binary Tree (LeetCode 543), where you return depth but record diameter.\"",
+        "why": "Naming the 'record one thing, return another' shape — and explicitly distinguishing the two values per node — is the derivation. Most candidates write the algorithm correctly but can't articulate why the two values are different. The connection to Diameter of Binary Tree (which has the same shape: return depth, update global diameter via left + right + 1) proves you see the template, not just this problem."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a tree where the answer doesn't touch the root, a single all-negative node, and a tiny tree where the answer goes THROUGH the root.",
+        "examples": [
+          {
+            "input": "[-10,9,20,null,null,15,7]",
+            "output": "42",
+            "note": "Best path is 15→20→7 (sum 42), entirely in the right subtree — root -10 is NOT on the answer path.",
+            "trace": "best = -Infinity\ngain(9): no children. through = 9 + 0 + 0 = 9; best=9. return 9 + max(0,0) = 9.\ngain(15): no children. through = 15; best=15. return 15.\ngain(7):  no children. through = 7;  best still 15. return 7.\ngain(20): left=max(15,0)=15, right=max(7,0)=7. through = 20+15+7 = 42; best=42. return 20+max(15,7) = 35.\ngain(-10): left=max(9,0)=9, right=max(35,0)=35. through = -10+9+35 = 34; best still 42. return -10+max(9,35) = 25.\nreturn 42"
+          },
+          {
+            "input": "[-3]",
+            "output": "-3",
+            "note": "Single all-negative node — defends `best = -Infinity` initial value, not 0.",
+            "trace": "best = -Infinity\ngain(-3): no children. through = -3 + 0 + 0 = -3; best = max(-Infinity, -3) = -3. return -3 + max(0,0) = -3.\nreturn -3"
+          },
+          {
+            "input": "[1,2,3]",
+            "output": "6",
+            "note": "Tiny tree — answer is the through-path at root: 2 + 1 + 3 = 6.",
+            "trace": "best = -Infinity\ngain(2): through = 2; best=2. return 2.\ngain(3): through = 3; best=3. return 3.\ngain(1): left=max(2,0)=2, right=max(3,0)=3. through = 1+2+3 = 6; best=6. return 1+max(2,3) = 4.\nreturn 6"
+          }
+        ],
+        "why": "The first trace makes the through-vs-return distinction visible: at node 20, the through-path candidate is 42 (uses both children), but what we return upward is 35 (uses only one child — the path can't fork). At node -10 we'd return 25 upward, but the global `best` stays at 42. The all-negative trace defends the `best = -Infinity` initialization — if we'd started best at 0, we'd incorrectly return 0 for the tree `[-3]`. These two bugs are the most common in this problem; the traces expose them."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Single node, positive → best = node.val. ✓\n• Single node, negative → best = node.val (must be negative). This is why `best` starts at `-Infinity`, not 0. If you initialize to 0, you'd return 0 on `[-3]` which is wrong.\n• All-negative tree → answer is the largest single value (best single node). The clamp-at-zero ensures children contribute 0 instead of their negative sum, so each node's through-path is just node.val. Best across all nodes is max(all values).\n• Tree where the answer doesn't go through root → handled because we update `best` at every node, not just the root.\n• Left-skewed (degenerate to linked list) → recursion depth = n; same stack-overflow concern as any tree recursion.\n• All-zero values → answer is 0. Initialization at -Infinity gets overridden by the first node's through-path.\n• Very deep tree → recursion-stack risk, would need iterative post-order DFS as a fallback.\n• Two equally-good paths → returns either's sum, problem only asks for the max not the path itself.\"",
+        "why": "The `-Infinity` vs 0 initialization is THE classic bug here, and naming it explicitly — with the `[-3]` counter-example that breaks the 0-init version — is the senior signal. The all-negative tree's reduction to 'best single value' is a nice corollary that proves the clamp-at-zero handles it cleanly; verbalizing that reduction shows you traced through the logic, not just memorized the algorithm."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — each node is visited exactly once in post-order. The work per node is constant: two max calls, one addition, one comparison against global best, one return. No re-traversal, no memoization needed because the recursion tree mirrors the actual tree.\n\nSpace is O(h) for the recursion stack — log n balanced, n worst case skewed. The closure-scoped `best` is O(1).\n\nThe trick — return one value, update another — generalizes to a whole family of tree problems. Diameter of Binary Tree (LeetCode 543): return depth, update global diameter via `left_depth + right_depth`. Longest Univalue Path (LeetCode 687): return univalue chain length, update global with sum of both children. Same shape: post-order, two values per node, one extends upward and one is recorded globally.\n\nIf interview pushback questioned the O(h) stack on huge trees, I'd convert to iterative post-order with an explicit stack — same logic, just managing the stack frames manually. More code, same complexity.\"",
+        "why": "Naming the family — Diameter, Longest Univalue Path — proves you see this as a parameterized template, not a one-off. The 'return one, record another' shape is the abstract pattern, and showing you can apply it across problems is what distinguishes pattern recognition from memorization. The iterative-post-order fallback is the right answer to the stack-safety pushback."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the post-order DFS. At every node the trace shows (a) the upward gain returned to its parent — one branch only, clamped at 0 — and (b) the through-node path candidate (node.val + left + right) compared against the global best.",
+    "examples": [
+      { "label": "[-10,9,20,null,null,15,7] → 42 (15+20+7)", "input": [-10, 9, 20, null, null, 15, 7], "expected": 42 },
+      { "label": "[-3] → -3 (all-negative single node)",     "input": [-3],                            "expected": -3 },
+      { "label": "[1,2,3] → 6 (2+1+3 through root)",          "input": [1, 2, 3],                       "expected": 6 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  function buildTree(arr) {",
+      "    if (!arr || arr.length === 0 || arr[0] == null) return null;",
+      "    const root = { val: arr[0], left: null, right: null };",
+      "    const q = [root];",
+      "    let i = 1;",
+      "    while (q.length && i < arr.length) {",
+      "      const node = q.shift();",
+      "      if (i < arr.length && arr[i] != null) { node.left = { val: arr[i], left: null, right: null }; q.push(node.left); }",
+      "      i++;",
+      "      if (i < arr.length && arr[i] != null) { node.right = { val: arr[i], left: null, right: null }; q.push(node.right); }",
+      "      i++;",
+      "    }",
+      "    return root;",
+      "  }",
+      "  const root = buildTree(input);",
+      "  yield { line: 1, label: `enter maxPathSum — tree ${JSON.stringify(input)}`, state: { treeShape: input } };",
+      "  let best = -Infinity;",
+      "  yield { line: 2, label: 'init best = -Infinity', state: { treeShape: input, best: '-Infinity' } };",
+      "  const gainOf = new Map();",
+      "  const stack = [[root, false]];",
+      "  while (stack.length) {",
+      "    const frame = stack[stack.length - 1];",
+      "    const [node, visited] = frame;",
+      "    if (!node) { stack.pop(); continue; }",
+      "    if (!visited) {",
+      "      yield { line: 3, label: `call gain(${node.val}) — descend to children first`, state: { treeShape: input, current: node.val, best: best === -Infinity ? '-Infinity' : best, stackDepth: stack.length } };",
+      "      frame[1] = true;",
+      "      if (node.right) stack.push([node.right, false]);",
+      "      if (node.left)  stack.push([node.left,  false]);",
+      "    } else {",
+      "      stack.pop();",
+      "      const leftRaw  = node.left  ? gainOf.get(node.left)  : 0;",
+      "      const rightRaw = node.right ? gainOf.get(node.right) : 0;",
+      "      const left  = Math.max(leftRaw,  0);",
+      "      const right = Math.max(rightRaw, 0);",
+      "      yield { line: 5, label: `node ${node.val}: leftGain=max(${leftRaw},0)=${left}, rightGain=max(${rightRaw},0)=${right}`, state: { treeShape: input, current: node.val, leftRaw, rightRaw, left, right } };",
+      "      const through = node.val + left + right;",
+      "      best = Math.max(best, through);",
+      "      yield { line: 7, label: `through-path candidate = ${node.val}+${left}+${right} = ${through}; best → ${best}`, state: { treeShape: input, current: node.val, through, best } };",
+      "      const upward = node.val + Math.max(left, right);",
+      "      gainOf.set(node, upward);",
+      "      yield { line: 8, label: `return upward gain ${node.val}+max(${left},${right}) = ${upward}`, state: { treeShape: input, current: node.val, upward, best } };",
+      "    }",
+      "  }",
+      "  yield { line: 11, label: `done — return best = ${best}`, state: { treeShape: input, returns: best } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function maxPathSum(root) {\n  let best = -Infinity;\n  const gain = (node) => {\n    if (!node) return 0;\n    const left  = Math.max(gain(node.left), 0);   // drop negative branches\n    const right = Math.max(gain(node.right), 0);\n    best = Math.max(best, node.val + left + right); // path through this node\n    return node.val + Math.max(left, right);        // extend upward via ONE side\n  };\n  gain(root);\n  return best;\n}\n// Time O(n), Space O(h)",
     "notes": [

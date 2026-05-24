@@ -6,6 +6,108 @@
   "status": "full",
   "description": "Minimum rooms = max simultaneous meetings. Sort starts and ends separately, then sweep with two pointers — a meeting reuses a room iff its start is at or after the next ending. O(n log n).",
   "mechanics": ["sort-then-sweep"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: given a list of meeting intervals like `[[0,30],[5,10],[15,20]]`, return the minimum number of conference rooms needed to host them all. So if two meetings overlap in time they need separate rooms, but if one ends before the next starts they can share.\"\n\nThen a few quick clarifying questions:\n• Is the input sorted in any way? (Almost certainly not — that's the first move.)\n• Touching meetings — if one ends at 10 and the next starts at 10, can they share a room? (Convention says yes; that flips strict `<` vs `<=`.)\n• Are start and end always integers, with `start < end`? Any zero-length meetings?\n• Should the answer be the *peak* concurrency at any moment, or some weekly total? (Peak — that's what 'minimum rooms' means.)\n• Can the input be empty? Return 0?",
+        "why": "The 'touching reuses' clarification is the load-bearing one — it's the difference between a room count of `n` and a much smaller number on stacked schedules. The reframe from 'minimum rooms' to 'peak concurrency' is the key conceptual unlock; getting the interviewer to nod at that reframe means you've already solved the hard part of the problem."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n^2) (or worse) solution before you discard it.",
+        "say": "\"The brute force is to walk every integer time point and count how many intervals contain it, then take the max. That's O(n * range) which is awful if times are large. A tighter brute force: for each interval, count how many others overlap it, but that's still O(n^2). The real reframe is to stop thinking about rooms and start thinking about *events* on a timeline — every start is a +1 to concurrency, every end is a -1. The answer is the peak running sum. Let me see if I can compute that without scanning every time point.\"",
+        "why": "Two reasons to narrate this. (1) The event-stream reframe is the entire algorithmic insight — once you see meetings as +1/-1 events sorted in time, the problem becomes 'find the peak prefix-sum of a sequence', which is trivially O(n) after a sort. (2) Talking through the time-point scan first makes it obvious *why* you don't need it: only the moments where the running count changes (the actual start/end times) matter."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why decouple starts and ends, and why does the sweep work?",
+        "say": "\"Two equivalent solutions both unlocked by sorting.\n\n**Approach A (the one I'll code) — two-pointer sweep on decoupled events.** I split the intervals into two arrays: all starts and all ends. Sort each independently. Then walk the starts with pointer `s` while a second pointer `e` tracks the next end. For each start, if `starts[s] < ends[e]` then a new meeting begins before any current one ends — increment `used`, update `rooms = max(rooms, used)`. Otherwise some prior meeting has ended (or touches), so we can reuse its room — advance `e`. The output `rooms` is the peak `used` ever reached.\n\nThe weird part is that I sort starts and ends *independently* — pairing is irrelevant. That works because I don't care *which* meeting freed the room, only that *a* room was freed by *some* prior meeting. The pairing back to specific intervals doesn't affect concurrency.\n\n**Approach B — min-heap of end times.** Sort meetings by start. Walk through them; for each new meeting, peek the heap-top (smallest end). If `meeting.start >= heap.top` the earliest-ending meeting has freed its room, so pop and push the new end (reuse). Otherwise push the new end without popping (new room). Final answer is `heap.size`. Same O(n log n), more intuitive to some interviewers because each room is an explicit heap entry with its current end time.\n\nBoth use sort to put events in time order; both maintain a single piece of state (the next ending). The two-pointer version is cleaner code; the heap version generalizes more naturally to variants (e.g., 'which room did each meeting go in?').\"",
+        "why": "Sorting is what reduces this to a one-pass scan — without it you'd be doing all-pairs comparisons forever. The independent-sort insight in approach A is the part most candidates miss; saying 'pairing is irrelevant, only the timeline matters' explicitly is what separates a coached answer from a derived one. Naming both approaches and the tradeoff (cleaner code vs. easier to generalize) shows you've actually thought about the family of solutions, not just memorized one."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a canonical mix where rooms are reused, a touching-endpoints case that exercises the strict `<`, and a fully-concurrent case where no reuse is possible.",
+        "examples": [
+          {
+            "input": "[[0,30],[5,10],[15,20]]",
+            "output": "2",
+            "note": "Canonical case — meeting [5,10] ends before [15,20] starts, so room 2 gets reused.",
+            "trace": "starts sorted = [0, 5, 15]\nends   sorted = [10, 20, 30]\ninit rooms=0, used=0, e=0\ns=0: starts[0]=0 < ends[0]=10 → new room. used=1, rooms=max(0,1)=1\ns=1: starts[1]=5 < ends[0]=10 → new room. used=2, rooms=max(1,2)=2\ns=2: starts[2]=15 >= ends[0]=10 → reuse. e=1 (used stays at 2)\nloop ends\nreturn 2"
+          },
+          {
+            "input": "[[7,10],[2,4]]",
+            "output": "1",
+            "note": "Touching case — [2,4] ends at 4, then [7,10] starts at 7. Strict `<` lets the room be reused even though they don't actually touch.",
+            "trace": "starts sorted = [2, 7]\nends   sorted = [4, 10]\ninit rooms=0, used=0, e=0\ns=0: starts[0]=2 < ends[0]=4 → new room. used=1, rooms=max(0,1)=1\ns=1: starts[1]=7 >= ends[0]=4 → reuse. e=1 (used stays at 1)\nloop ends\nreturn 1"
+          },
+          {
+            "input": "[[1,5],[2,6],[3,7]]",
+            "output": "3",
+            "note": "All concurrent — every meeting starts before any has ended; no reuse possible.",
+            "trace": "starts sorted = [1, 2, 3]\nends   sorted = [5, 6, 7]\ninit rooms=0, used=0, e=0\ns=0: starts[0]=1 < ends[0]=5 → new room. used=1, rooms=1\ns=1: starts[1]=2 < ends[0]=5 → new room. used=2, rooms=2\ns=2: starts[2]=3 < ends[0]=5 → new room. used=3, rooms=3\nloop ends\nreturn 3"
+          }
+        ],
+        "why": "Two specific things the trace exposes. (1) Notice that `used` never decrements — it only grows on a 'new room' path. That's fine because we only care about the *peak*, and decrementing on reuse would just be bookkeeping that doesn't affect the answer. (2) On `[[7,10],[2,4]]`, watch the `>=` save us — if we used `>` instead, two meetings that just touch (one ending exactly when another starts) would falsely be counted as concurrent. The strict-vs-non-strict pick is the single most common bug in this problem."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty input `[]` → guard at the top, return 0. Without the guard, sort and loop still run safely but the up-front check is cleaner.\n• Single meeting `[[1,5]]` → starts=[1], ends=[5], loop runs once, used=1, rooms=1. ✓\n• All non-overlapping `[[1,2],[3,4],[5,6]]` → each new start finds the next end already past, so we just advance `e` and used stays at 1. Returns 1.\n• All identical `[[5,10],[5,10],[5,10]]` → all starts at 5, all ends at 10. starts[0]=5 < ends[0]=10 → +1. starts[1]=5 < ends[0]=10 → +1. starts[2]=5 < ends[0]=10 → +1. Returns 3.\n• Touching back-to-back `[[1,5],[5,10],[10,15]]` → starts=[1,5,10], ends=[5,10,15]. Each subsequent start equals the prior end → reused. Returns 1.\n• Zero-length meeting `[[5,5]]` → starts=[5], ends=[5]. starts[0]=5 < ends[0]=5? No → e=1. Loop ends with used=0, rooms=0. Hm — that's probably wrong; a zero-length meeting still arguably needs a room. I'd flag this and ask the interviewer.\n• Very large schedules — sort is O(n log n) on whatever n is; nothing pathological.\"",
+        "why": "The zero-length edge is the kind of question the interviewer might not have considered themselves — surfacing it shows you're stress-testing your own model, not just running the canonical examples. The touching-back-to-back case is a great sanity check that the strict `<` is doing what we want; a single conference room can host a back-to-back schedule with no overlap, and the algorithm returns 1 to confirm."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n log n), dominated by the two sorts (sorting starts and sorting ends). The sweep itself is O(n) — pointer `s` advances n times in the outer loop, and pointer `e` advances at most n times total across all iterations, so the inner work is O(n) amortized. Space is O(n) for the two extracted arrays.\n\nThe min-heap variant is also O(n log n) — n insertions/pop-pushes, each O(log n). Same asymptotic class, different constant factor; the two-pointer version usually wins on practical benchmarks because comparisons on a pre-sorted array beat heap operations.\n\nIf you wanted to extend this to 'return the actual assignment of meeting → room', the min-heap version is cleaner: each heap entry can carry a room ID, and when you pop you reassign the room to the new meeting. The two-pointer version loses that info because it decouples starts from ends.\"",
+        "why": "Naming the amortization on `e` is the right defense against 'isn't there a hidden inner loop?' — `e` is a single pointer that only advances, so its total work across the whole algorithm is bounded by n. The 'which version to pick' tradeoff at the end is what proves you understand both approaches as members of the same family, not as competing memorized recipes. Calling out the room-ID extension is the bonus that shows you can adapt the choice to downstream requirements."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the two-pointer sweep on a real input. The highlighted line is what just ran; state shows the decoupled starts/ends arrays, both pointers, and current `used` vs peak `rooms`. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[[0,30],[5,10],[15,20]] → 2", "input": { "intervals": [[0,30],[5,10],[15,20]] }, "expected": 2 },
+      { "label": "[[7,10],[2,4]] → 1 (touching reuses room)", "input": { "intervals": [[7,10],[2,4]] }, "expected": 1 },
+      { "label": "[[1,5],[2,6],[3,7]] → 3 (all concurrent)", "input": { "intervals": [[1,5],[2,6],[3,7]] }, "expected": 3 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const intervals = input.intervals.map(iv => iv.slice());",
+      "  yield { line: 1, label: `enter — intervals=${JSON.stringify(intervals)}`, state: { intervals: intervals.map(iv => [...iv]) } };",
+      "  const n = intervals.length;",
+      "  yield { line: 2, label: `n = ${n}`, state: { intervals: intervals.map(iv => [...iv]), n } };",
+      "  if (n === 0) {",
+      "    yield { line: 3, label: 'empty input → return 0', state: { intervals: [], n, returns: 0 } };",
+      "    return;",
+      "  }",
+      "  const starts = intervals.map(x => x[0]).sort((a, b) => a - b);",
+      "  yield { line: 5, label: `starts sorted = ${JSON.stringify(starts)}`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts] } };",
+      "  const ends = intervals.map(x => x[1]).sort((a, b) => a - b);",
+      "  yield { line: 6, label: `ends sorted = ${JSON.stringify(ends)} — decoupled from starts`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends] } };",
+      "  let rooms = 0, used = 0, e = 0;",
+      "  yield { line: 7, label: 'init rooms=0, used=0, e=0', state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends], rooms, used, e } };",
+      "  for (let s = 0; s < n; s++) {",
+      "    yield { line: 8, label: `outer step: s=${s}, starts[${s}]=${starts[s]}, ends[${e}]=${ends[e]}`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends], rooms, used, e, s } };",
+      "    if (starts[s] < ends[e]) {",
+      "      yield { line: 10, label: `${starts[s]} < ${ends[e]} → new meeting starts before next ends; need another room`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends], rooms, used, e, s } };",
+      "      used++;",
+      "      yield { line: 11, label: `used → ${used}`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends], rooms, used, e, s } };",
+      "      rooms = Math.max(rooms, used);",
+      "      yield { line: 12, label: `rooms = max(prev, used) → ${rooms}`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends], rooms, used, e, s } };",
+      "    } else {",
+      "      yield { line: 13, label: `${starts[s]} >= ${ends[e]} → previous meeting ended (or touches) → reuse room`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends], rooms, used, e, s } };",
+      "      e++;",
+      "      yield { line: 14, label: `e → ${e} (consume one freed end)`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends], rooms, used, e, s } };",
+      "    }",
+      "  }",
+      "  yield { line: 17, label: `return ${rooms}`, state: { intervals: intervals.map(iv => [...iv]), n, starts: [...starts], ends: [...ends], rooms, used, e, returns: rooms } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function minMeetingRooms(intervals) {\n  const n = intervals.length;\n  if (n === 0) return 0;\n  // Decouple starts and ends — only the event timeline matters, not which start pairs with which end.\n  const starts = intervals.map(x => x[0]).sort((a, b) => a - b);\n  const ends   = intervals.map(x => x[1]).sort((a, b) => a - b);\n  let rooms = 0, used = 0, e = 0;\n  for (let s = 0; s < n; s++) {\n    // Strict < — a start equal to an end can reuse the freed room.\n    if (starts[s] < ends[e]) {\n      used++;\n      rooms = Math.max(rooms, used);\n    } else {\n      e++;\n    }\n  }\n  return rooms;\n}\n// Time O(n log n), Space O(n)",
     "notes": [

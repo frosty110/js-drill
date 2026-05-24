@@ -6,6 +6,106 @@
   "status": "full",
   "description": "Sort by start, then sweep once: extend the last merged interval if the next overlaps; otherwise start a new one. O(n log n) sort + O(n) sweep.",
   "mechanics": ["sort-then-sweep"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given a list of intervals like `[[1,3],[2,6],[8,10]]`, and I need to merge any that overlap and return the resulting list. So `[1,3]` and `[2,6]` would collapse into `[1,6]`.\"\n\nThen a few quick clarifying questions:\n• Is the input sorted? (Almost always no — that's the first move.)\n• Do touching intervals like `[1,4]` and `[4,5]` count as overlapping, or strictly disjoint? (Changes one operator: `<=` vs `<`.)\n• Can I mutate the input array by sorting in place, or do I need to copy first?\n• Are intervals always `[start, end]` with `start <= end`, or can they be reversed/empty?\n• Return shape — array of arrays, sorted by start in the output?",
+        "why": "The touching-vs-strict question is the load-bearing clarification — it flips one comparator and silently changes the result on test cases like `[[1,4],[4,5]]`. Asking it up front signals you've already mapped the failure modes. The mutation question is the senior tell: sorting is the first move, and a real engineer asks before mutating someone else's array."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n^2) solution before you discard it.",
+        "say": "\"The brute force is to repeatedly scan the list for any pair that overlaps and merge them in place, repeating until no merges happen. Each pass is O(n^2) on the pair check, and you could need up to n passes in the worst case — so O(n^3) ugly. Even a cleaner version that does one O(n^2) all-pairs sweep into a union-find or set is still quadratic. Let me see if I can avoid the all-pairs check by imposing some order first.\"",
+        "why": "Two reasons to narrate this. (1) It anchors O(n log n) as a clean win — you're not just shaving a constant, you're collapsing a quadratic. (2) It plants the seed for sorting: the brute force is expensive because it has to check every pair to find overlaps. If you could guarantee that an interval only ever overlaps with the run immediately before it, you'd never need that pair check."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to sort-then-sweep?",
+        "say": "\"Two things scream sort-then-sweep here. (1) The problem is fundamentally about *order* — two intervals can only overlap if one starts before the other ends. (2) After sorting by start, the structure collapses to a single sweep: if `cur.start <= last.end` they overlap and I extend `last.end`; otherwise `cur` is the start of a new disjoint run, push it. The key invariant is that once I see a non-overlap, I *never* have to look back. Because the array is sorted by start, every future interval has a start ≥ `cur.start`, so it can't reach back across the gap into the previous run. That's what makes one pass sufficient.\n\nThe Math.max on the end is the one subtlety — `cur` might be fully contained in `last` (like `[1,4]` then `[2,3]`), in which case I must not shrink the run by overwriting `last.end` with the smaller value.\"",
+        "why": "Pattern-naming alone is a guess. The derivation — sorting buys you a no-look-back invariant, and the sweep maintains it in one pass — is what scores. The 'no need to look back after a non-overlap' insight is the load-bearing one; it's why this is O(n) sweep and not O(n^2), and naming it explicitly shows you understand *why* the algorithm is correct, not just that it works on the examples."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a canonical mix with multiple merges, a touching-endpoints case that exercises the `<=`, and a contained case that exercises the Math.max.",
+        "examples": [
+          {
+            "input": "[[1,3],[2,6],[8,10],[15,18]]",
+            "output": "[[1,6],[8,10],[15,18]]",
+            "note": "Canonical case — one merge, then two disjoint runs.",
+            "trace": "sort → [[1,3],[2,6],[8,10],[15,18]] (already sorted)\nseed res = [[1,3]]\ni=1 cur=[2,6], last=[1,3] → 2 <= 3 → OVERLAP. last[1] = max(3,6) = 6 → res=[[1,6]]\ni=2 cur=[8,10], last=[1,6] → 8 > 6 → DISJOINT. push → res=[[1,6],[8,10]]\ni=3 cur=[15,18], last=[8,10] → 15 > 10 → DISJOINT. push → res=[[1,6],[8,10],[15,18]]\nreturn [[1,6],[8,10],[15,18]]"
+          },
+          {
+            "input": "[[1,4],[4,5]]",
+            "output": "[[1,5]]",
+            "note": "Touching endpoints — exercises the `<=` decision; `<` would split these wrongly.",
+            "trace": "sort → [[1,4],[4,5]] (already sorted)\nseed res = [[1,4]]\ni=1 cur=[4,5], last=[1,4] → 4 <= 4 → OVERLAP (touching counts). last[1] = max(4,5) = 5 → res=[[1,5]]\nreturn [[1,5]]"
+          },
+          {
+            "input": "[[1,4],[2,3]]",
+            "output": "[[1,4]]",
+            "note": "Contained case — exercises the Math.max; without it last.end would shrink from 4 to 3.",
+            "trace": "sort → [[1,4],[2,3]] (already sorted by start)\nseed res = [[1,4]]\ni=1 cur=[2,3], last=[1,4] → 2 <= 4 → OVERLAP. last[1] = max(4,3) = 4 (NOT 3) → res=[[1,4]]\nreturn [[1,4]]"
+          }
+        ],
+        "why": "Two specific bugs the trace exposes. (1) On `[[1,4],[2,3]]`, a naive `last[1] = cur[1]` would corrupt the run to `[1,3]` — the Math.max is what keeps the run honest when `cur` is fully contained. (2) On `[[1,4],[4,5]]`, the `<=` vs `<` choice flips the entire output; tracing forces you to commit to one and confirm against the spec before writing the loop."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty input `[]` → guard up front, return `[]`. The seed `res = [intervals[0]]` would crash without this.\n• Single interval `[[1,2]]` → seed sets `res = [[1,2]]`, loop runs zero times, returns `[[1,2]]`. ✓\n• All identical `[[1,5],[1,5],[1,5]]` → each subsequent one overlaps and Math.max keeps last.end at 5. Returns `[[1,5]]`.\n• Fully nested `[[1,10],[2,3],[4,5]]` → after sort, every later interval is contained in the first; Math.max keeps the run at `[1,10]`.\n• Already disjoint and sorted `[[1,2],[3,4],[5,6]]` → never overlaps, every iteration pushes; returns the input.\n• Reverse-sorted input `[[15,18],[8,10],[1,6]]` → the sort fixes it; the sweep never sees the original order.\n• Negative coordinates, zero-width intervals like `[[3,3]]` — the comparators all still work; no special case needed.\"",
+        "why": "The empty-input guard is the cheap obvious one but it's also the most common skipped check — `res = [intervals[0]]` crashes silently as `res = [undefined]` and the loop never errors, just returns garbage. Naming the fully-nested case explicitly is the dedup callout that proves the Math.max is doing real work, not decoration."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n log n), dominated entirely by the sort. The sweep itself is O(n) — one pass, constant work per element. Space is O(n) for the result array (in the worst case, no merges happen and `res` ends up the same size as `intervals`). The sort is in-place so it contributes O(log n) stack overhead for V8's quicksort, which I'd mention but it's not the bottleneck.\n\nIf you wanted to handle a stream of intervals arriving one at a time instead of a batch, you'd swap this for a sorted-set structure keyed by start, find the insertion point with binary search, and merge against neighbors — O(log n) per insert. That's the Insert Interval / Calendar Booking variant.\"",
+        "why": "The 'sort dominates' answer is the correct framing — most candidates state O(n log n) without naming *which step* drives it, which leaves them stuck when the interviewer asks 'what if the input came in pre-sorted?'. The streaming extension proves you see the family of problems: Insert Interval, My Calendar I/II, Range Module are all the same shape with different freshness assumptions."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through sort-then-sweep on a real input. The highlighted line is what just ran; state shows the current res, the trailing `last` interval being extended, and the candidate `cur`. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[[1,3],[2,6],[8,10],[15,18]] → [[1,6],[8,10],[15,18]]", "input": { "intervals": [[1,3],[2,6],[8,10],[15,18]] }, "expected": "[[1,6],[8,10],[15,18]]" },
+      { "label": "[[1,4],[4,5]] → [[1,5]] (touching merges)", "input": { "intervals": [[1,4],[4,5]] }, "expected": "[[1,5]]" },
+      { "label": "[[1,4],[2,3]] → [[1,4]] (cur fully inside last)", "input": { "intervals": [[1,4],[2,3]] }, "expected": "[[1,4]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const intervals = input.intervals.map(iv => iv.slice());",
+      "  yield { line: 1, label: `enter — intervals=${JSON.stringify(intervals)}`, state: { intervals: intervals.map(iv => [...iv]) } };",
+      "  if (intervals.length === 0) {",
+      "    yield { line: 2, label: 'empty input → return []', state: { intervals: [], returns: '[]' } };",
+      "    return;",
+      "  }",
+      "  intervals.sort((a, b) => a[0] - b[0]);",
+      "  yield { line: 4, label: `sort by start → ${JSON.stringify(intervals)}`, state: { intervals: intervals.map(iv => [...iv]) } };",
+      "  const res = [intervals[0]];",
+      "  yield { line: 5, label: `seed res with intervals[0]=${JSON.stringify(intervals[0])}`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]) } };",
+      "  for (let i = 1; i < intervals.length; i++) {",
+      "    yield { line: 6, label: `outer step: i=${i}`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]), i } };",
+      "    const last = res[res.length - 1];",
+      "    yield { line: 7, label: `last = res[${res.length - 1}] = ${JSON.stringify(last)}`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]), i, last: [...last] } };",
+      "    const cur = intervals[i];",
+      "    yield { line: 8, label: `cur = intervals[${i}] = ${JSON.stringify(cur)}`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]), i, last: [...last], cur: [...cur] } };",
+      "    if (cur[0] <= last[1]) {",
+      "      yield { line: 10, label: `cur.start ${cur[0]} <= last.end ${last[1]} → OVERLAP, extend`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]), i, last: [...last], cur: [...cur] } };",
+      "      last[1] = Math.max(last[1], cur[1]);",
+      "      yield { line: 11, label: `last.end = max(prev, ${cur[1]}) → ${last[1]}; res=${JSON.stringify(res)}`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]), i, last: [...last], cur: [...cur] } };",
+      "    } else {",
+      "      yield { line: 12, label: `cur.start ${cur[0]} > last.end ${last[1]} → DISJOINT, start new run`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]), i, last: [...last], cur: [...cur] } };",
+      "      res.push(cur);",
+      "      yield { line: 13, label: `push cur → res=${JSON.stringify(res)}`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]), i, cur: [...cur] } };",
+      "    }",
+      "  }",
+      "  yield { line: 16, label: `return ${JSON.stringify(res)}`, state: { intervals: intervals.map(iv => [...iv]), res: res.map(iv => [...iv]), returns: JSON.stringify(res) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function merge(intervals) {\n  if (intervals.length === 0) return [];\n  // Sort by start — after this, each interval only needs to compare to the LAST merged one.\n  intervals.sort((a, b) => a[0] - b[0]);\n  const res = [intervals[0]];\n  for (let i = 1; i < intervals.length; i++) {\n    const last = res[res.length - 1];\n    const cur = intervals[i];\n    // Touching counts as overlap (<= not <); use Math.max in case cur is fully inside last.\n    if (cur[0] <= last[1]) {\n      last[1] = Math.max(last[1], cur[1]);\n    } else {\n      res.push(cur);\n    }\n  }\n  return res;\n}\n// merge([[1,3],[2,6],[8,10],[15,18]]) -> [[1,6],[8,10],[15,18]]\n// Time O(n log n), Space O(n)",
     "notes": [

@@ -232,6 +232,80 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
         pass++;
       }
     }
+
+    // Walkthrough — compile the trace generator (array-of-lines joined to
+    // source), run on each example, assert no throw. If the example has an
+    // `expected` field, also assert the final step's state.returns matches.
+    // Catches: trace function compile errors, runtime errors, drift between
+    // the trace and the canonical (returns-mismatch).
+    if (lesson.walkthrough) {
+      const w = lesson.walkthrough;
+      if (!Array.isArray(w.examples) || w.examples.length === 0) {
+        fail++;
+        failures.push(`${id} walkthrough has no examples`);
+      } else {
+        const src = Array.isArray(w.trace) ? w.trace.join('\n') : String(w.trace || '');
+        let fn;
+        try {
+          fn = new Function('input', '"use strict";\n' + src + '\nreturn trace(input);');
+        } catch (e) {
+          fail++;
+          failures.push(`${id} walkthrough trace compile error: ${e.message}`);
+          fn = null;
+        }
+        if (fn) {
+          for (let ei = 0; ei < w.examples.length; ei++) {
+            const ex = w.examples[ei];
+            try {
+              const steps = [...fn(ex.input)];
+              if (steps.length === 0) {
+                fail++;
+                failures.push(`${id} walkthrough example#${ei} (${ex.label || ex.input}) yielded zero steps`);
+                continue;
+              }
+              const last = steps[steps.length - 1];
+              if (ex.expected !== undefined) {
+                const got = last.state && last.state.returns;
+                if (String(got) !== String(ex.expected)) {
+                  fail++;
+                  failures.push(`${id} walkthrough example#${ei} (${ex.label || ex.input}) returns mismatch — got ${JSON.stringify(got)}, expected ${JSON.stringify(ex.expected)}`);
+                } else {
+                  pass++;
+                }
+              } else {
+                pass++;
+              }
+            } catch (e) {
+              fail++;
+              failures.push(`${id} walkthrough example#${ei} (${ex.label || ex.input}) runtime error: ${e.message}`);
+            }
+          }
+        }
+      }
+    }
+
+    // Conversation — structural check. Every section needs a title and at
+    // least one body field (say | why | reveal | examples). Bare-section
+    // authoring is a common subagent failure mode; this catches it.
+    if (lesson.conversation) {
+      const c = lesson.conversation;
+      if (!Array.isArray(c.sections) || c.sections.length < 3) {
+        fail++;
+        failures.push(`${id} conversation needs at least 3 sections (got ${c.sections?.length || 0})`);
+      } else {
+        c.sections.forEach((sec, si) => {
+          if (!sec.title) {
+            fail++;
+            failures.push(`${id} conversation section#${si} missing title`);
+          }
+          const hasBody = sec.say || sec.why || sec.reveal || (Array.isArray(sec.examples) && sec.examples.length);
+          if (!hasBody) {
+            fail++;
+            failures.push(`${id} conversation section#${si} (${sec.title || '?'}) has no body — needs at least one of say|why|reveal|examples`);
+          }
+        });
+      }
+    }
   }
 
   console.log(`\n${pass} passed, ${fail} failed.`);

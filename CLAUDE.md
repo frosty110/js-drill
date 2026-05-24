@@ -38,22 +38,30 @@ persistence). Live on GitHub Pages: https://frosty110.github.io/js-drill/
 - Session resume (currentLessonId + tab persisted)
 - Mobile responsive drawer + sticky L3 action bar
 - Multi-tab storage sync
-- Search (`/`), keyboard nav (`j`/`k`/`1`-`4`/`s`/`?`/`Esc`)
+- Search (`/`), keyboard nav (`j`/`k`/`1`-`4`/`c`/`s`/`?`/`Esc`)
 - Letter-labeled MC (A/B/C/D)
 - Reveal-tracking (mastered-with-reveal dot variant)
 - Hide-mastered filter
 - First-time welcome banner with Starter Path CTA
 - Syntax-highlighted static code blocks (Reference + L2 templates) via CodeMirror runMode
 - Line-wrapping in the L3 editor (mobile-friendly, prevents horizontal scroll)
+- **Conversation tab** (opt-in, Patterns + Applied only — 99/99 lessons as of OOB-2026-05-24): 6-section interview-narration walkthrough with say/why color split. Simulates "what would you say in an interview" rather than just showing the canonical.
+- **Walkthrough tab** (opt-in, Patterns + Applied only — 99/99 lessons as of OOB-2026-05-24): Jupyter-style line-by-line stepper. Pick an example input, scrub through the canonical with current-line highlight and a live state panel. Trace functions are JS generators compiled at runtime via `new Function`; the validator runs every trace on every example and asserts the final `returns` matches the declared `expected` — mechanical regression guardrail.
 
-The app's job is to drill JS syntax and canonical interview-pattern solutions through three escalating recall tests per lesson:
+The app's job is to drill JS syntax and canonical interview-pattern solutions through three escalating recall tests per lesson (plus two opt-in narrative surfaces on Patterns/Applied lessons):
 
+- **Conversation** *(Patterns/Applied only — opt-in)* — 6 collapsible sections of interview narration. Tap a section to expand.
+- **Walkthrough** *(Patterns/Applied only — opt-in)* — interactive line-by-line stepper. Pick example, scrub with prev/next, watch state evolve.
 - **Reference** — read the canonical code + notes (the thing to memorize)
 - **L1 Concept** — multiple-choice on the load-bearing ideas
 - **L2 Fill-in** — partial code with blanks to type
 - **L3 Drill** — blank CodeMirror editor, type from memory, runner compares output
 
 There are also **Mock Interview mode** (random pattern + timer, no hints) and a **Starter Path** (linear recommended order).
+
+**Tab order**: Patterns/Applied lessons render up to 6 tabs (Conversation → Walkthrough → Reference → L1 → L2 → L3, horizontally scrollable on mobile). Syntax lessons render 4 tabs (Reference → L1 → L2 → L3). Conversation and Walkthrough are independent — a lesson can have both, either, or neither.
+
+**Authoring Conversation / Walkthrough**: see [`docs/conversation-walkthrough.md`](docs/conversation-walkthrough.md) for the full schema, engine internals, per-shape pattern library, and maintenance playbook. Use the `author-conversation` and `author-walkthrough` skills to author for new lessons.
 
 ## Who this is for + how it learns
 
@@ -142,6 +150,10 @@ A lesson is **authored** (`status: "full"`) only when:
 1. The `L2.exercises[*].template` filled with each `blanks[*].answer` produces the `expectedOutput` exactly.
 2. The `L3.canonical` produces the `L3.expectedOutput` exactly.
 3. The `reference.code`, every `L2.exercises[*].template`, and `L3.canonical` use idioms matching the problem shape per [`docs/canonical-style.md`](docs/canonical-style.md) — the validator enforces the banned-syntax list (`do/while`, `with`, `var`, labeled break, comma operator, `void`); idiom-shape choices are reviewer-enforced.
+
+**For Patterns/Applied lessons with `conversation` and/or `walkthrough` blocks**, additional validator gates fire:
+4. Conversation: `sections.length >= 3`, every section has a `title` and at least one body field (`say` | `why` | `reveal` | `examples`). Voice quality is reviewer-enforced.
+5. Walkthrough: `trace` (stored as array of source lines) must compile via `new Function`; must run on every example without throwing; if `expected` is declared on an example, the final `state.returns` must match (string-compare). See [`docs/conversation-walkthrough.md`](docs/conversation-walkthrough.md) for the full schema, input-shape patterns (multi-arg, class-based, linked-list, tree, async), and per-shape pattern library.
 
 ## Adding a new lesson — the workflow
 

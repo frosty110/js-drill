@@ -47,6 +47,32 @@ async function runOne({ mobile, label }) {
   const revealText = await s.eval(`document.querySelector('.conv-section[open] .conv-body')?.textContent?.trim().length || 0`);
   s.assert(revealText > 50, `[${label}] Reveal body has substantive text (length: ${revealText})`);
 
+  // ACT — open section 4 (the multi-example trace section) and verify the
+  // worked-examples sub-blocks render and expand independently.
+  const section4Title = await s.eval(`(() => {
+    const sections = document.querySelectorAll('.conv-section');
+    // Section 4 is index 3 (0-based)
+    sections[3]?.querySelector('.conv-summary')?.click();
+    return sections[3]?.querySelector('.conv-title')?.textContent || '';
+  })()`);
+  s.assert(/Trace/.test(section4Title), `[${label}] Section 4 is now the trace section (got: ${JSON.stringify(section4Title)})`);
+  await s.sleep(200);
+  const exampleCount = await s.eval(`document.querySelectorAll('.conv-section')[3]?.querySelectorAll('.conv-example').length || 0`);
+  s.assert(exampleCount >= 3, `[${label}] Section 4 renders >= 3 worked examples (got: ${exampleCount})`);
+  const exOpenInitial = await s.eval(`document.querySelectorAll('.conv-section')[3]?.querySelectorAll('.conv-example[open]').length || 0`);
+  s.assert(exOpenInitial === 0, `[${label}] Worked examples collapsed initially (got open: ${exOpenInitial})`);
+  // Expand the first worked example
+  await s.eval(`document.querySelectorAll('.conv-section')[3]?.querySelector('.conv-example .conv-ex-summary')?.click()`);
+  await s.sleep(200);
+  // Scroll the expanded example into view so the screenshot is informative
+  await s.eval(`document.querySelector('.conv-example[open]')?.scrollIntoView({ block: 'start' })`);
+  await s.sleep(200);
+  await s.snap('02b-example-expanded');
+  const exOpenAfter = await s.eval(`document.querySelectorAll('.conv-section')[3]?.querySelectorAll('.conv-example[open]').length || 0`);
+  s.assert(exOpenAfter === 1, `[${label}] First worked example expands independently (got open: ${exOpenAfter})`);
+  const traceLen = await s.eval(`document.querySelector('.conv-example[open] .conv-ex-trace')?.textContent?.length || 0`);
+  s.assert(traceLen > 100, `[${label}] Trace body has substantive monospace content (len: ${traceLen})`);
+
   // ACT — click "See the solution →" — should switch to Reference tab
   await s.eval(`document.querySelector('[data-action="conv-to-reference"]')?.click()`);
   await s.sleep(300);

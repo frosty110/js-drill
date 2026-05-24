@@ -6,6 +6,91 @@
   "status": "full",
   "description": "XOR every index 0..n with every value — paired numbers cancel and the missing one survives. O(n) time, O(1) space.",
   "mechanics": ["xor-accumulator"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: `nums` contains `n` distinct integers drawn from the range `0..n` — exactly one value from that range is missing. Return the missing one. A few quick checks:\"\n\n• Is exactly ONE value missing, or could the input be malformed (zero or multiple gaps)?\n• Confirming the range is `0..n` inclusive (so `n+1` possible values, `n` of them present)?\n• Can `n` be 0 — i.e. an empty array where the answer is just 0?\n• Any upper bound on `n` I should worry about — for the sum-formula approach, `n*(n+1)/2` could overflow for huge `n`.",
+        "why": "The 'range is 0..n inclusive' framing is what makes the XOR trick work — the indices `0..n-1` plus the value `n` together cover every possible value once, and the values present in `nums` cover every value except the missing one. Pinning that down before coding rules out a confusion where the range is `1..n` (off-by-one different) or `0..n-1` (different problem entirely). Asking about the upper bound is what justifies bringing up XOR over the sum formula — the sum can overflow on large n; XOR can't."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n) / O(n) solution before you discard it.",
+        "say": "\"Two reasonable brute forces. The first is a hash set: insert every value in `nums`, then walk `0..n` and return the first one missing. O(n) time, O(n) space.\n\n\"The second is sort and scan: sort `nums`, then walk it — the missing value is the first index where `nums[i] !== i`, or `n` if every index matched. O(n log n) time, O(1) extra space.\n\n\"Both work; the question is whether we can hit O(n) time AND O(1) space.\"",
+        "why": "Naming the hash-set brute force is what teases up the question 'can we avoid the auxiliary structure?' — that's the prompt for XOR or the sum trick. Mentioning sort-and-scan is the secondary candidate that proves you can solve it with O(1) extra space at the cost of time. Listing both lets you frame the optimization as a third option that's strictly better on both axes, which is the satisfying answer the interviewer is fishing for."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to XOR (or the sum trick)?",
+        "say": "\"Two patterns apply here, and both are worth naming.\n\n\"Sum trick: the sum of `0..n` is `n*(n+1)/2`. Subtract the actual sum of `nums` and the difference IS the missing number. O(n) time, O(1) space, clean math.\n\n\"XOR cancellation: every index `0..n` and every value in `nums` together form `2n+1` numbers — every value appears exactly twice EXCEPT the missing one, which appears only as an index (since it's missing from the values). So XOR all `2n+1` numbers together and the pairs cancel, leaving the missing value. Also O(n) time, O(1) space, and overflow-free.\n\n\"I'd usually go with XOR — same complexity, no risk of `n*(n+1)/2` overflowing JS's safe integer range on large `n`, and it's the more interesting answer in a bit-manipulation context.\"",
+        "why": "Presenting BOTH approaches is the senior move — it shows you see two different mathematical structures (additive identity for sum, self-inverse for XOR) that solve the same problem. The overflow comparison is the tiebreaker: in JS, `Number.MAX_SAFE_INTEGER` is `2^53 - 1`, so `n*(n+1)/2` becomes unsafe when n exceeds ~94 million. XOR has no such issue because each operation stays within int32. That's the kind of language-specific reasoning interviewers grade highly."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me fold a couple of inputs to verify both pieces — the seed with `n` and the per-iteration `i ^ nums[i]`.\" Three cases — a typical small mix, an edge where `nums` has a single element and the missing is 1, and the full-coverage [0,1] case where the answer is 2 (the value never present at an index).",
+        "examples": [
+          {
+            "input": "nums=[3,0,1]",
+            "output": "2",
+            "note": "Classic mix — n=3, missing value is 2 (since 0,1,3 are present).",
+            "trace": "xor = 3 (seed = nums.length)\ni=0 nums[0]=3 → xor ^= (0 ^ 3) = 3; xor: 3 → 0\ni=1 nums[1]=0 → xor ^= (1 ^ 0) = 1; xor: 0 → 1\ni=2 nums[2]=1 → xor ^= (2 ^ 1) = 3; xor: 1 → 2\nreturn 2 ✓\n\n(Algebraic view: 3 ^ 0 ^ 3 ^ 1 ^ 0 ^ 2 ^ 1 = 2 — the 0, 1, 3 pairs cancel, the 2 survives.)"
+          },
+          {
+            "input": "nums=[0]",
+            "output": "1",
+            "note": "Single-element edge — n=1, value 0 is present, so 1 is missing.",
+            "trace": "xor = 1 (seed = nums.length)\ni=0 nums[0]=0 → xor ^= (0 ^ 0) = 0; xor: 1 → 1\nreturn 1 ✓"
+          },
+          {
+            "input": "nums=[0,1]",
+            "output": "2",
+            "note": "Full prefix present — the missing value is n itself, which is exactly why we seed with nums.length.",
+            "trace": "xor = 2 (seed = nums.length)\ni=0 nums[0]=0 → xor ^= (0 ^ 0) = 0; xor: 2 → 2\ni=1 nums[1]=1 → xor ^= (1 ^ 1) = 0; xor: 2 → 2\nreturn 2 ✓\n\n(Without the seed, xor would be 0 here — wrong. The seed is what catches the 'missing value is n' case.)"
+          }
+        ],
+        "why": "The third example is the one to mention out loud — it's the case where the seed earns its keep. If you forgot to seed with `n` and started from 0, the algorithm would silently return 0 instead of n whenever `n` itself is the missing value. Tracing this case surfaces that bug before code does. The first example is also worth narrating because watching the xor accumulator transit `0` mid-loop shows visually that order doesn't matter — pairs cancel independent of when they appear."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty array → `n=0`, missing value is 0. The seed `xor = nums.length = 0` plus the never-entered loop returns 0. ✓ (works out clean.)\n• Missing value is `n` (the array contains `0..n-1`) → caught by seeding with `nums.length`, as the third trace shows.\n• Missing value is 0 → handled naturally; the algebra doesn't care which value is missing.\n• Very large `n` — XOR is overflow-free; the sum formula `n*(n+1)/2` becomes unsafe above `Number.MAX_SAFE_INTEGER / 2 ≈ 4.5 × 10^15`, so for huge inputs the sum trick would silently lose precision. XOR doesn't have this issue because all values fit in int32 by the problem's range constraints.\n• Values >= 2^31 — by the problem's `0..n` range constraint, values fit in int32 as long as `n < 2^31`. If the interviewer allowed larger n, you'd switch to BigInt XOR.\n• Duplicate values (problem violation) → algorithm would return a wrong answer silently. Worth flagging that you'd add an input validation pass if the contract isn't guaranteed.",
+        "why": "The 'missing value is n' edge (third trace) is the structural one — it's why the seed exists. Most candidates write the loop first and forget to seed, then can't figure out why the [0,1]-style cases return 0. The overflow comparison is the senior-tier touch: it's the concrete answer to 'why XOR over sum?' beyond aesthetics. The 'duplicates would break it silently' note is the production-readiness lens that separates 'works on the examples' from 'safe to ship'."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — one pass over `nums`, two O(1) XOR operations per iteration (one to combine `i` and `nums[i]`, one to fold into `xor`).\n\nSpace is O(1) — a single integer accumulator, no auxiliary structures.\n\nIf you wanted to extend this: Find All Numbers Disappeared in an Array drops the 'exactly one missing' constraint and asks for all missing values — XOR no longer works (you'd lose the count of missing values), so you switch to in-place marking (negate `nums[abs(nums[i]) - 1]` to flag presence) or a hash set. Same problem family, but the 'exactly one' constraint is what unlocks the elegant XOR solution; remove it and you're back to a more conventional approach.\"",
+        "why": "The XOR-vs-sum comparison is the meat of the complexity defense — both are O(n) / O(1), but XOR's overflow-immunity is the structural argument for preferring it. Naming the Find All Disappeared extension proves you see WHEN the XOR trick applies (exactly one missing/duplicate) and WHEN it breaks (multiple), which is the level of generalization that separates 'memorized one trick' from 'understands the structure'. The same XOR pattern reappears in Single Number, Single Number II/III, and Find the Duplicate."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the XOR fold over both indices and values. The state panel shows `xor` in decimal AND binary so you can watch each matched (index, value) pair self-cancel — leaving only the bit pattern of the missing number.",
+    "examples": [
+      { "label": "[3,0,1] → 2", "input": [3, 0, 1], "expected": 2 },
+      { "label": "[0] → 1 (edge: missing 1)", "input": [0], "expected": 1 },
+      { "label": "[0,1] → 2", "input": [0, 1], "expected": 2 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  const bin = (x) => (x >>> 0).toString(2).padStart(8, '0');",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  let xor = nums.length;",
+      "  yield { line: 3, label: `seed xor = nums.length = ${nums.length} (covers index ${nums.length} which the loop never visits)`, state: { nums, xor: `${xor} (${bin(xor)})` } };",
+      "  for (let i = 0; i < nums.length; i++) {",
+      "    const prev = xor;",
+      "    const pair = i ^ nums[i];",
+      "    xor ^= pair;",
+      "    yield { line: 6, label: `i=${i}, nums[i]=${nums[i]} → xor ^= (${i} ^ ${nums[i]}) = ${pair}; xor: ${prev} → ${xor}`, state: { nums, i, 'nums[i]': nums[i], 'i^nums[i]': `${pair} (${bin(pair)})`, prev: `${prev} (${bin(prev)})`, xor: `${xor} (${bin(xor)})` } };",
+      "  }",
+      "  yield { line: 8, label: `return ${xor} (the missing number — all paired bits cancelled)`, state: { nums, xor: `${xor} (${bin(xor)})`, returns: xor } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function missingNumber(nums) {\n  // Seed with n — the loop never visits index n, so include it on the index side of the XOR.\n  let xor = nums.length;\n  for (let i = 0; i < nums.length; i++) {\n    // XOR every index and value: matched pairs cancel (a ^ a = 0), the missing value survives.\n    xor ^= i ^ nums[i];\n  }\n  return xor;\n}\n// Time O(n), Space O(1)",
     "notes": [

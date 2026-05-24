@@ -6,6 +6,100 @@
   "status": "full",
   "description": "Like Kadane's, but a negative number can flip the smallest (most-negative) product into the new maximum — so you must track BOTH the max and min ending at the current index.",
   "mechanics": ["dp-rolling-vars"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: given an integer array `nums`, return the largest product of any *contiguous non-empty subarray*. Contiguous means adjacent in the array; non-empty means we have to pick at least one element.\"\n\nThen a few quick clarifying questions:\n• Confirming contiguous (subarray), not subsequence — affects the recurrence shape entirely.\n• Are negatives and zeros both possible? (They are — that's what makes this harder than max-sum.)\n• Is the array guaranteed non-empty? Should I throw or return something specific on empty input?\n• Can values be floats, or integers only? (Floats add precision concerns.)\n• Return value — just the max product, or also the subarray itself?",
+        "why": "The contiguous question is the load-bearing clarification — if it were subsequence, you'd want to multiply all positives plus an even count of the most-negative values, a totally different algorithm. Confirming negatives are present is what justifies needing TWO rolling vars (max and min); without negatives, plain Kadane on the product would work. The non-empty guarantee pins down the seed: initialize `best = nums[0]` so a single-element array trivially works."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"The brute force is two nested loops: outer picks the start index `i`, inner walks `j` from `i` to the end multiplying as it goes, tracking the global max product. That's `O(n²)` time, `O(1)` space. Correct, but we can drop it to `O(n)` if we figure out how to keep just enough state per index to extend without restarting.\"",
+        "why": "Naming the `O(n²)` brute force out loud establishes the comparison baseline. The win in section 3 — `O(n)` time with two rolling vars — looks like magic without it. It also surfaces the question that motivates the trick: 'what's the minimum state I need to extend the running product through a new element?' Answer: the best AND worst product ending at the previous index, because a negative can flip them."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a two-track Kadane variant?",
+        "say": "\"This is a Kadane-shaped 1D DP, but with a twist: I need to track *both* the max AND min product ending at each index. The reason is the negative-number flip — at index `i`, multiplying by a negative number takes whatever the worst (most-negative) running product was and flips it into the new biggest positive. So the recurrence is:\n• `maxHere[i] = max(nums[i], maxHere[i-1] * nums[i], minHere[i-1] * nums[i])`\n• `minHere[i] = min(nums[i], maxHere[i-1] * nums[i], minHere[i-1] * nums[i])`\n\nThe three candidates are: (a) start fresh at `nums[i]` (resets after a zero or a wrong-sign run), (b) extend the running max product, (c) extend the running min product (which may now be the biggest because of a negative flip).\n\nGlobal answer `best = max(best, maxHere[i])` across all `i`. Two scalars suffice — drop to `O(1)` space. The critical implementation detail: compute candMax and candMin from the SAME (old) maxHere/minHere before assigning either back. If you overwrite maxHere first, candMin sees the new value and computes the wrong product.\"",
+        "why": "The negative-flip insight is the entire load-bearing pedagogy of this problem — without it, candidates write single-track Kadane and silently fail on `[-2, 3, -4]`. Articulating *why* min needs tracking ('a negative turns the worst into the best') is what shows real DP intuition, not just memorization. The 'start fresh at nums[i]' candidate handles the zero-reset case implicitly — no need for a `if (nums[i] === 0)` branch, the max/min recurrence handles it. The same-source-before-assign warning is the gotcha that the interviewer will probe."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the typical mixed case, a zero-reset, and the case where the whole array is the answer because two negatives cancel.",
+        "examples": [
+          {
+            "input": "[2, 3, -2, 4]",
+            "output": "6",
+            "note": "Canonical case — the best subarray is [2, 3] with product 6. The -2 then 4 don't get to 6, and including them would multiply through the -2.",
+            "trace": "seed: maxHere=2, minHere=2, best=2\ni=1 x=3:\n  candMax = max(3, 2*3=6, 2*3=6) = 6\n  candMin = min(3, 6, 6) = 3\n  maxHere=6, minHere=3, best=max(2,6)=6\ni=2 x=-2:\n  candMax = max(-2, 6*-2=-12, 3*-2=-6) = -2\n  candMin = min(-2, -12, -6) = -12\n  maxHere=-2, minHere=-12, best=max(6,-2)=6\ni=3 x=4:\n  candMax = max(4, -2*4=-8, -12*4=-48) = 4\n  candMin = min(4, -8, -48) = -48\n  maxHere=4, minHere=-48, best=max(6,4)=6\nreturn 6"
+          },
+          {
+            "input": "[-2, 0, -1]",
+            "output": "0",
+            "note": "Zero resets — the 'start fresh at nums[i]' candidate ensures the 0 wipes the running product without a special-case branch.",
+            "trace": "seed: maxHere=-2, minHere=-2, best=-2\ni=1 x=0:\n  candMax = max(0, -2*0=0, -2*0=0) = 0\n  candMin = min(0, 0, 0) = 0\n  maxHere=0, minHere=0, best=max(-2,0)=0\ni=2 x=-1:\n  candMax = max(-1, 0*-1=0, 0*-1=0) = 0\n  candMin = min(-1, 0, 0) = -1\n  maxHere=0, minHere=-1, best=max(0,0)=0\nreturn 0"
+          },
+          {
+            "input": "[-2, 3, -4]",
+            "output": "24",
+            "note": "The killer case — two negatives cancel. The minHere line keeps the highly-negative running product alive long enough for the second negative to flip it back positive.",
+            "trace": "seed: maxHere=-2, minHere=-2, best=-2\ni=1 x=3:\n  candMax = max(3, -2*3=-6, -2*3=-6) = 3\n  candMin = min(3, -6, -6) = -6 ← critical: keep -6 in minHere\n  maxHere=3, minHere=-6, best=max(-2,3)=3\ni=2 x=-4:\n  candMax = max(-4, 3*-4=-12, -6*-4=24) = 24 ← the flip!\n  candMin = min(-4, -12, 24) = -12\n  maxHere=24, minHere=-12, best=max(3,24)=24\nreturn 24"
+          }
+        ],
+        "why": "Tracing surfaces three things. (1) The `[-2, 3, -4]` case is the textbook demonstration of why min tracking matters — without minHere=-6 kept alive at i=1, the i=2 step couldn't flip to 24. That's the whole reason this problem exists as a separate puzzle from Kadane. (2) The zero-reset trace validates that 'start fresh at nums[i]' handles zeros without a guard. (3) The first canonical case shows the answer can lock in early and stay best, even as subsequent extensions degrade — that's why we update `best` after every step, not just at the end."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Single element `[5]` or `[-3]` — seed sets maxHere=minHere=best=nums[0], loop doesn't run, returns nums[0]. Works for both signs.\n• All positives `[1, 2, 3, 4]` — minHere stays small (it's the running min, which is just 1 after step 0), maxHere monotonically grows, answer is the product of the whole array.\n• All negatives `[-2, -3, -4]` — alternating signs flip max and min; odd-length all-negative arrays exclude the most-negative element from the answer. Trace: at i=2, candMax = max(-4, -3*-4=12, 6*-4=-24) = 12. Returns 12 (the pair, not the triple).\n• All zeros — every step computes max(0, 0, 0) = 0, returns 0.\n• Single negative surrounded by zeros `[0, -1, 0]` — best stays 0 (we'd never pick the standalone -1 over standalone 0). Verified by the trace.\n• Float precision — products can lose precision fast; on (-0.5, 0.5)-style floats the answer might drift. Out of scope for integer inputs.\n• Integer overflow — products can blow past `2^53` faster than sums (logarithmic growth). For large positive inputs, switch to BigInt or note that the answer fits in the spec's bound.\"",
+        "why": "The all-negative case is the senior signal — most candidates don't trace it and assume 'product of all = the answer', which is wrong for odd-length all-negative arrays. The single-negative-with-zeros case validates that we never accidentally choose a worse-than-zero answer when a zero is available. The integer-overflow note ties back to the product-vs-sum distinction: products explode much faster, and naming that shows you've actually considered the data type."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is `O(n)` — single pass, constant work per element (three multiplies, two min/max, three assignments, one global max update). Space is `O(1)` — just three scalars: maxHere, minHere, best.\n\nThe brute force was `O(n²)`; the two-track Kadane variant collapses it to `O(n)` because the only state we need to carry across the gap from index `i-1` to `i` is the max AND min product ending at `i-1`. That's it — no array, no history.\n\nThe critical implementation detail to call out: compute `candMax` and `candMin` from the SAME old `maxHere` and `minHere` before assigning either back. If you write `maxHere = candMax; minHere = ...` and the second line still references `maxHere`, you've already corrupted it. Use the two-scalar `candMax/candMin` pattern.\n\nThe template extends to: Maximum Sum Subarray (the original Kadane, single-track because addition doesn't flip sign); Maximum Product of Three Numbers (sort, max of `last_three.product` vs `first_two_negative * last_positive` — the same negative-flip insight); Maximum Sum Circular Subarray (Kadane plus a min-subarray-sum trick for the wrap-around case).\"",
+        "why": "Repeating the same-source-before-assign warning in the complexity section is the move — interviewers love seeing you flag the bug *before* writing the code, then explain the two-scalar fix. The Kadane vs. Kadane-product contrast is the load-bearing template insight: 'addition doesn't flip sign, multiplication does' is what tells you when to use single-track vs. two-track. That generalizes to any associative-but-sign-volatile operation."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the two-track Kadane variant. Watch maxHere and minHere swap roles whenever a negative number multiplies in — that's the whole reason a single-track max can't solve this.",
+    "examples": [
+      { "label": "[2,3,-2,4] → 6 ([2,3])", "input": [2, 3, -2, 4], "expected": 6 },
+      { "label": "[-2,0,-1] → 0 (zero resets)", "input": [-2, 0, -1], "expected": 0 },
+      { "label": "[-2,3,-4] → 24 (whole array — two negatives cancel)", "input": [-2, 3, -4], "expected": 24 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  yield { line: 1, label: `enter — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  let maxHere = nums[0];",
+      "  let minHere = nums[0];",
+      "  let best = nums[0];",
+      "  const dp = [{ max: maxHere, min: minHere }];",
+      "  yield { line: 5, label: `seed: maxHere=minHere=best=nums[0]=${nums[0]}`, state: { nums, maxHere, minHere, best, dp: [...dp] } };",
+      "  for (let i = 1; i < nums.length; i++) {",
+      "    const x = nums[i];",
+      "    yield { line: 6, label: `outer step: i=${i}, x=${x}`, state: { nums, i, x, maxHere, minHere, best, dp: [...dp] } };",
+      "    const candMax = Math.max(x, maxHere * x, minHere * x);",
+      "    const candMin = Math.min(x, maxHere * x, minHere * x);",
+      "    yield { line: 10, label: `candidates: x=${x}, maxHere*x=${maxHere * x}, minHere*x=${minHere * x} → candMax=${candMax}, candMin=${candMin}`, state: { nums, i, x, maxHere, minHere, candMax, candMin, best, dp: [...dp] } };",
+      "    maxHere = candMax;",
+      "    minHere = candMin;",
+      "    dp.push({ max: maxHere, min: minHere });",
+      "    yield { line: 12, label: `commit: maxHere=${maxHere}, minHere=${minHere}`, state: { nums, i, x, maxHere, minHere, best, dp: [...dp], lastFilled: i } };",
+      "    best = Math.max(best, maxHere);",
+      "    yield { line: 13, label: `best = max(prev_best, maxHere) = ${best}`, state: { nums, i, x, maxHere, minHere, best, dp: [...dp] } };",
+      "  }",
+      "  yield { line: 15, label: `return best = ${best}`, state: { nums, maxHere, minHere, best, dp: [...dp], returns: best } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function maxProduct(nums) {\n  // Track BOTH max and min ending here — a min × negative flips into the new max.\n  let maxHere = nums[0];\n  let minHere = nums[0];\n  let best   = nums[0];\n  for (let i = 1; i < nums.length; i++) {\n    const x = nums[i];\n    // Multiplying by a negative swaps max and min — capture both candidates.\n    const candMax = Math.max(x, maxHere * x, minHere * x);\n    const candMin = Math.min(x, maxHere * x, minHere * x);\n    maxHere = candMax;\n    minHere = candMin;\n    best = Math.max(best, maxHere);\n  }\n  return best;\n}\n// Time O(n), Space O(1)",
     "notes": [

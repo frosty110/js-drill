@@ -6,6 +6,104 @@
   "status": "full",
   "description": "Classic backtracking: explore every combination summing to target with unlimited reuse. A start index keeps combinations sorted and prevents duplicates like [2,3] vs [3,2].",
   "mechanics": ["backtrack-template"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down what 'combination' and 'reuse' actually mean here.",
+        "say": "\"Let me restate: given an array `candidates` of distinct positive integers and a `target` int, return every unique combination of candidates that sums exactly to target. Numbers can be reused unlimited times — so for candidates=[2,3] and target=7, [2,2,3] is valid (3 elements summing to 7).\"\n\nQuick clarifying questions:\n• 'Unique combination' — order doesn't matter, right? So [2,2,3] and [3,2,2] are the same combo, return only one?\n• Can candidates contain duplicates? (Combination Sum II differs — that one disallows reuse but allows duplicates in input.)\n• Are all candidates positive? (Critical — negatives would make the search infinite because you could undo overshoots.)\n• Could `target` be 0 or negative? (target=0 → just `[[]]`. Negative makes no sense for positive candidates.)\n• Output order matters? Within each combo? Across the list?",
+        "why": "The 'positive candidates' question is load-bearing — if negatives are allowed, the recursion never terminates because you can keep adding-then-subtracting forever. The 'reuse allowed' framing distinguishes this from Combination Sum II (no reuse, but duplicate candidates), and 'order within combo doesn't matter' distinguishes from a permutation-style enumeration. Three sibling problems with three different invariants — naming them up front shows you've internalized the family."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solution before reaching for the optimized recursion.",
+        "say": "\"The brute force I'd describe is: at each step, try every candidate (with reuse), subtract it from remaining target, recurse. Collect when remaining hits 0, abandon when remaining goes negative. The issue with this naive version is it produces every PERMUTATION of every combination — [2,2,3] would appear as [2,2,3], [2,3,2], [3,2,2], so I'd need a dedupe pass at the end. Probably sort each combo and stuff into a Set. That's correct but wastes huge amounts of work.\"\n\n\"The optimization is to enforce a canonical order during the search itself: at each recursion level, only consider candidates with index ≥ the current `start`. That way every combination comes out in non-decreasing index order — [2,2,3] is generated, [2,3,2] never is, no dedupe needed. Same recursion shape, one extra parameter, exponentially less work.\"",
+        "why": "Naming the 'dedupe after the fact' version explicitly is what makes the `start` parameter feel motivated rather than magical. Otherwise candidates write `start` because they remember the template but can't say WHY it's there. The framing 'enforce canonical order during search' is the load-bearing observation that transfers to Subsets, Combinations, and Subsets II — they all use the same trick for the same reason."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem says 'backtracking with target tracking'?",
+        "say": "\"This is a backtracking decision-tree problem with a twist: at each level, pick a candidate with index ≥ the current `start` (to avoid duplicate combos), and the recursive call passes the SAME `i` (not i+1) — that's what permits reusing the same number.\"\n\n\"The decision space at each level is: which candidate to pick from indices [start ... n-1]. Branching factor is up to n; depth is bounded by target/min(candidates). The two pruning rules: (a) if remaining hits 0, snapshot the path and return — that's the success base case. (b) If candidates[i] > remaining, skip (the value can't fit). If candidates were sorted, you could `break` instead of `continue` since all subsequent values would also be too big.\"\n\n\"Why backtracking over DP or iteration: this is enumeration, not optimization. DP would find the MINIMUM number of coins summing to target (Coin Change), or COUNT the number of combos summing to target — but if you need to LIST every actual combination, you have to enumerate them, and backtracking is the natural enumeration shape. The state is too rich for a DP table to recover: each cell would need to store every combination, which is the same data we'd build with backtracking anyway.\"",
+        "why": "The 'same i vs i+1' is the most diagnostic detail of this whole problem — i+1 gives you Combinations (no reuse), i gives you Combination Sum (with reuse). Naming it explicitly proves you understand WHY the code looks the way it does. The DP-vs-backtracking framing is the deeper insight: 'enumerate' is the keyword that disqualifies DP and forces you into backtracking. Coin Change vs Combination Sum is the textbook case-study — same input shape, different output type, completely different algorithm class."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to verify the recursion order and the reuse mechanic.",
+        "intro": "\"Let me trace a couple of cases to confirm the start-index discipline and the same-i reuse mechanic.\" Three cases — a small case showing repeated 2s, an impossible target showing the empty result, and a larger candidate set showing all three branches.",
+        "examples": [
+          {
+            "input": "candidates=[2,3,6,7], target=7",
+            "output": "[[2,2,3],[7]]",
+            "note": "Standard case — [2,2,3] requires reuse (same i twice), [7] is a single-pick.",
+            "trace": "backtrack(start=0, remaining=7, path=[])\n  i=0 (2): push 2, backtrack(0, 5, [2])\n    i=0 (2): push 2, backtrack(0, 3, [2,2])\n      i=0 (2): push 2, backtrack(0, 1, [2,2,2])\n        i=0..3: all candidates > 1 → continue\n        return\n      pop 2.\n      i=1 (3): push 3, backtrack(1, 0, [2,2,3]) → BASE! res.push [2,2,3]\n      pop 3.\n      i=2 (6): 6>3 → continue. i=3 (7): 7>3 → continue.\n    pop 2.\n    i=1 (3): push 3, backtrack(1, 2, [2,3])\n      i=1 (3): 3>2 → continue. i=2,3: too big → continue.\n    pop 3.\n    i=2 (6): 6>5. i=3 (7): 7>5.\n  pop 2.\n  i=1 (3): push 3, backtrack(1, 4, [3])\n    i=1 (3): push 3, backtrack(1, 1, [3,3])\n      i=1,2,3: all > 1 → continue\n    pop 3.\n    i=2 (6): 6>4. i=3 (7): 7>4.\n  pop 3.\n  i=2 (6): push 6, backtrack(2, 1, [6])\n    i=2,3: too big → continue\n  pop 6.\n  i=3 (7): push 7, backtrack(3, 0, [7]) → BASE! res.push [7]\n  pop 7."
+          },
+          {
+            "input": "candidates=[5], target=8",
+            "output": "[]",
+            "note": "Impossible target — every recursion prunes or overshoots, res stays empty.",
+            "trace": "backtrack(0, 8, [])\n  i=0 (5): push 5, backtrack(0, 3, [5])\n    i=0 (5): 5 > 3 → continue\n    return\n  pop 5.\n(no other candidates)\nres = []"
+          },
+          {
+            "input": "candidates=[2,3,5], target=8",
+            "output": "[[2,2,2,2],[2,3,3],[3,5]]",
+            "note": "Three branches — pure 2s, mixed 2s+3s, and a 3-and-5 pair. Sanity-checks the same-i reuse on the 2s branch.",
+            "trace": "backtrack(0, 8, [])\n  i=0 (2): push 2, backtrack(0, 6, [2])\n    i=0 (2): push 2, backtrack(0, 4, [2,2])\n      i=0 (2): push 2, backtrack(0, 2, [2,2,2])\n        i=0 (2): push 2, backtrack(0, 0, [2,2,2,2]) → BASE! push\n        pop. i=1 (3): 3>0 wait — actually we never enter the loop body once we hit BASE because we return.\n      pop 2.\n      i=1 (3): push 3, backtrack(1, 1, [2,2,3])\n        i=1 (3): 3>1. i=2 (5): 5>1.\n      pop 3.\n      i=2 (5): 5>4 → continue.\n    pop 2.\n    i=1 (3): push 3, backtrack(1, 3, [2,3])\n      i=1 (3): push 3, backtrack(1, 0, [2,3,3]) → BASE! push\n      pop 3.\n      i=2 (5): 5>3.\n    pop 3.\n    i=2 (5): 5>6? no, push 5, backtrack(2, 1, [2,5])\n      i=2: 5>1.\n    pop 5.\n  pop 2.\n  i=1 (3): push 3, backtrack(1, 5, [3])\n    i=1 (3): push 3, backtrack(1, 2, [3,3])\n      i=1: 3>2. i=2: 5>2.\n    pop 3.\n    i=2 (5): push 5, backtrack(2, 0, [3,5]) → BASE! push\n    pop 5.\n  pop 3.\n  i=2 (5): push 5, backtrack(2, 3, [5])\n    i=2: 5>3.\n  pop 5."
+          }
+        ],
+        "why": "Tracing the first example surfaces the single most-confused detail — why the recursive call is `backtrack(i, ...)` not `backtrack(i+1, ...)`. Watch how the [2,2,3] path goes i=0 → i=0 → i=1: it picks index 0 (value 2) twice before moving on. That repeated-i is the reuse mechanic in action. The impossible case defends the prune — every i either overshoots (continue) or recurses into a dead subtree. The third example's [2,2,2,2] branch is the most extreme reuse case and proves the recursion correctly terminates when remaining hits 0 exactly."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth calling out:\"\n\n• target=0 with non-empty candidates → returns `[[]]`. Base case fires before the loop, snapshot of empty path.\n• Impossible target (e.g., candidates=[5], target=8) → returns `[]`. Every path either overshoots or runs out of valid candidates.\n• `1` in candidates with reasonable target — recursion is fine but the result count explodes (target=10 with [1,2] → many many combos). Worth flagging that the runtime depends on target, not just on candidate count.\n• Forgetting to pass `i` (passing `i+1` instead) → produces COMBINATIONS without reuse, not Combination Sum. Diagnostic: [2,2,3] never appears, only [7].\n• Forgetting to loop from `start` (looping from 0 instead) → produces duplicates like [2,3] AND [3,2]. Diagnostic: result list is much longer than expected and contains permutations.\n• Forgetting `[...path]` on the base case → all results alias the same array, when recursion unwinds they all become []. Same diagnostic as Subsets/Permutations.\n• Non-positive candidates would make the search non-terminating — sanity-check this assumption in clarification.\n• Sorting candidates first lets you `break` instead of `continue` on the prune check, modest speedup.",
+        "why": "The 'forgot to pass `i` and passed `i+1` instead' bug is the diagnostic-difference between this problem and its no-reuse sibling — it's the one detail an interviewer will probe (\"what if I disallowed reuse, what changes?\"). Knowing the answer is literally one character (i → i+1) is the proof you see the family. The non-positive-candidates note is the depth flex — it explains why the problem statement bothers to specify 'positive integers' in the first place."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(N^(T/M)) where N is the candidate count, T is the target, and M is the minimum candidate value. The intuition: branching factor up to N at each level, max depth bounded by T/M (you need at least T/M picks if every pick is the minimum). It's a loose upper bound — pruning collapses most branches in practice — but it's the right bound to state.\n\nSpace is O(T/M) for the recursion stack plus the path array. The output itself can also blow up — exponential in the worst case.\n\nThis exponential bound is inherent: the problem asks us to ENUMERATE all valid combinations, and the count of combinations can itself be exponential in target. Backtracking is doing the minimum necessary work for the asked-for output.\n\nFor extensions: same template handles Combination Sum II (candidates have duplicates, no reuse — sort + skip sibling duplicates + recurse with i+1), Combinations (k-of-n choose, no reuse, no target — recurse with i+1, base case is path.length===k), and Subsets if you drop the target entirely. Drop one parameter, change one line — whole family.\"",
+        "why": "Stating the exponential bound without apology is the move — enumeration problems CAN'T do better than exponential in the worst case because the output itself can be exponential. The 'Combination Sum vs Combination Sum II vs Combinations' triple is the textbook family — all three share the same recursive skeleton with surgically different choices on the `i` vs `i+1` and 'sort + skip dupes' axes. Naming the family proves you don't just know this problem, you know the genus."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through combinationSum on a small candidate set. Each call has a `start` index (prevents [2,3]/[3,2] duplicates) and a `remaining` target. Watch: prune oversized candidates, push-recurse-pop, and notice recursion passes SAME i (not i+1) so the same number can repeat in a combo.",
+    "examples": [
+      { "label": "candidates=[2,3,6,7], target=7 → [[2,2,3],[7]]", "input": { "candidates": [2, 3, 6, 7], "target": 7 }, "expected": "[[2,2,3],[7]]" },
+      { "label": "candidates=[5], target=8 → []", "input": { "candidates": [5], "target": 8 }, "expected": "[]" },
+      { "label": "candidates=[2,3,5], target=8 → [[2,2,2,2],[2,3,3],[3,5]]", "input": { "candidates": [2, 3, 5], "target": 8 }, "expected": "[[2,2,2,2],[2,3,3],[3,5]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { candidates, target } = input;",
+      "  yield { line: 1, label: `enter combinationSum(candidates=${JSON.stringify(candidates)}, target=${target})`, state: { candidates, target } };",
+      "  const res = [];",
+      "  const path = [];",
+      "  yield { line: 3, label: 'init res=[], path=[]', state: { candidates, target, res: [], path: [] } };",
+      "  function* backtrack(start, remaining, depth) {",
+      "    if (remaining === 0) {",
+      "      res.push([...path]);",
+      "      yield { line: 6, label: `BASE (depth ${depth}): remaining=0 → res.push(${JSON.stringify(path)})`, state: { candidates, target, res: res.map(r => [...r]), path: [...path], start, remaining, depth } };",
+      "      return;",
+      "    }",
+      "    for (let i = start; i < candidates.length; i++) {",
+      "      if (candidates[i] > remaining) {",
+      "        yield { line: 9, label: `PRUNE i=${i}: candidates[${i}]=${candidates[i]} > remaining=${remaining}`, state: { candidates, target, res: res.map(r => [...r]), path: [...path], start, i, remaining, depth } };",
+      "        continue;",
+      "      }",
+      "      path.push(candidates[i]);",
+      "      yield { line: 10, label: `CHOOSE i=${i}: path.push(${candidates[i]}) → ${JSON.stringify(path)}, remaining ${remaining}→${remaining - candidates[i]}`, state: { candidates, target, res: res.map(r => [...r]), path: [...path], start, i, remaining: remaining - candidates[i], depth } };",
+      "      yield* backtrack(i, remaining - candidates[i], depth + 1);",
+      "      path.pop();",
+      "      yield { line: 13, label: `UNCHOOSE i=${i}: path.pop() → ${JSON.stringify(path)} (backtrack)`, state: { candidates, target, res: res.map(r => [...r]), path: [...path], start, i, remaining, depth } };",
+      "    }",
+      "  }",
+      "  yield* backtrack(0, target, 0);",
+      "  yield { line: 17, label: `return res (${res.length} combination(s))`, state: { candidates, target, res: res.map(r => [...r]), returns: JSON.stringify(res) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function combinationSum(candidates, target) {\n  const res = [];\n  const path = [];\n  function backtrack(start, remaining) {\n    // Base case: hit target exactly — snapshot path (later mutations corrupt refs).\n    if (remaining === 0) { res.push([...path]); return; }\n    // Loop from `start`, not 0 — keeps combos sorted, blocks [2,3] vs [3,2].\n    for (let i = start; i < candidates.length; i++) {\n      if (candidates[i] > remaining) continue;\n      path.push(candidates[i]);\n      // Recurse with SAME i (not i+1) — that allows reusing this number.\n      backtrack(i, remaining - candidates[i]);\n      path.pop();\n    }\n  }\n  backtrack(0, target);\n  return res;\n}\n// Time O(N^(T/M)) where M = min candidate, Space O(T/M) recursion depth",
     "notes": [

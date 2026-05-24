@@ -6,6 +6,103 @@
   "status": "full",
   "description": "Maintain a deque of indices whose values are strictly decreasing. The front is always the max of the current window. O(n) total because each index is pushed and popped at most once.",
   "mechanics": ["sliding-window"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given an array `nums` and a window size `k`. I slide a window of size `k` from left to right, one position at a time, and for each window position I record the maximum. The output array has length `nums.length - k + 1`.\"\n\nThen a few quick clarifying questions:\n• Is `k` guaranteed `1 ≤ k ≤ nums.length`, or do I have to handle `k > nums.length`?\n• Can `nums` contain duplicates, negatives, very large values?\n• Output shape — array of maxes, one per window, in left-to-right order?\n• What if `nums` is empty — return `[]`?",
+        "why": "The `k` bound matters because the canonical loop assumes `k ≤ nums.length` — at `i = k-1` the first window is complete, and if `k > n`, no window ever forms. Confirming that up front lets you skip a defensive check or add it explicitly if needed. Asking about duplicates also signals you're thinking about the comparison operator — strict vs non-strict in the deque pop affects whether duplicates pile up (matters for some variants like 'min plus index')."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n·k) solution before you discard it.",
+        "say": "\"The brute force is: for each window position `i` from 0 to `n - k`, take `Math.max(...nums.slice(i, i + k))`. That's O(n·k) — each window re-scans `k` elements from scratch. Correct but redundant — every time the window slides one step right, only one element enters and one leaves, but I'm rescanning the other `k-1` that didn't change.\"",
+        "why": "Two reasons. (1) Naming the O(n·k) bound out loud — not just 'slow' — proves you can read complexity off a loop. (2) The phrase 'one in, one out' is what motivates the deque: I need a data structure where I can amortize the 'find max' work across slides, given that slides are incremental. That points either to a heap (O(n log k)) or a monotonic deque (O(n)). Naming both options before picking shows you didn't just memorize one answer."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a monotonic-decreasing deque of indices?",
+        "say": "\"Fixed-size window + 'maximum of the window' + need O(n) total = monotonic deque. The key insight: when a new element `nums[i]` enters the window, any earlier element that's strictly smaller than `nums[i]` can NEVER be the max again — `nums[i]` is in the window, will leave the window later than they will, AND is larger. They're dominated. So I pop them off the back of the deque before pushing `i`.\n\nThe deque stores INDICES, not values — and this is the load-bearing choice. Why? Because I need to know WHEN the front falls out of the window (`dq[0] <= i - k`), and that's an index comparison, not a value comparison. Two elements with the same value at different indices are distinguishable by their expiry. Storing values would lose that.\n\nThe invariant the deque maintains: values at the indices in the deque are strictly decreasing from front to back. So `dq[0]` is always the index of the current window's maximum. Three operations per step: expire the front if it left the window, pop the back while it's dominated, push the new index, then record `nums[dq[0]]` once the window is fully formed (`i >= k - 1`).\"",
+        "why": "Naming WHY indices not values is the move — it's the question every interviewer asks, and a candidate who can't answer it has memorized the algorithm without understanding it. The 'dominated' framing (elements that can never be max again get evicted) is also how you derive the strictly-decreasing invariant from first principles, not by remembering 'I think it's decreasing.' The same monotonic-deque pattern shows up in 'Sliding Window Minimum' (flip the comparator), '132 Pattern,' 'Largest Rectangle in Histogram' (monotonic stack variant), and 'Daily Temperatures' — recognizing the family is what makes this problem feel like one of many, not a one-off trick."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a tiny case (window size 2), a degenerate k=1 case (every element is its own max), and the classic LeetCode example.",
+        "examples": [
+          {
+            "input": "nums=[9,11], k=2",
+            "output": "[11]",
+            "note": "Tiny case — when 11 enters, it dominates 9 and pops it. Window is fully formed at i=1, record nums[dq[0]]=11.",
+            "trace": "init dq=[], out=[]\ni=0 nums[0]=9 → dq=[0]. i < k-1=1, no output.\ni=1 nums[1]=11 → nums[dq[-1]]=nums[0]=9 < 11 → pop 0. dq=[]. push 1 → dq=[1]. i >= k-1, out.push(nums[1])=11.\nreturn [11]"
+          },
+          {
+            "input": "nums=[1,-1], k=1",
+            "output": "[1,-1]",
+            "note": "Degenerate k=1 — every element is its own window. The expiry check fires every step (dq[0]=i-1 ≤ i-k=i-1), so the deque always holds exactly one index.",
+            "trace": "init dq=[], out=[]\ni=0 nums[0]=1 → push 0 → dq=[0]. i >= k-1=0, out.push(nums[0])=1.\ni=1 nums[1]=-1 → dq[0]=0 <= i-k=0 → shift → dq=[]. push 1 → dq=[1]. out.push(nums[1])=-1.\nreturn [1, -1]"
+          },
+          {
+            "input": "nums=[1,3,-1,-3,5,3,6,7], k=3",
+            "output": "[3,3,5,5,6,7]",
+            "note": "Classic LeetCode case — the L3 prompt's own input. Notice 3 dominates 1 immediately, then -1 and -3 ride along as candidates, then 5 evicts everything smaller in one sweep.",
+            "trace": "init dq=[], out=[]\ni=0 nums[0]=1  → push 0. dq=[0] (values [1]).         i<2, no output.\ni=1 nums[1]=3  → nums[0]=1 < 3 → pop 0. push 1. dq=[1] (values [3]). i<2, no output.\ni=2 nums[2]=-1 → -1 < 3, no pop. push 2. dq=[1,2] (values [3,-1]). i=2 >= 2 → out.push(nums[1])=3.\ni=3 nums[3]=-3 → dq[0]=1 > i-k=0, no expire. -3 < -1, no pop. push 3. dq=[1,2,3] (values [3,-1,-3]). out.push(nums[1])=3.\ni=4 nums[4]=5  → dq[0]=1 <= i-k=1 → shift. dq=[2,3]. Now nums[3]=-3<5 pop, nums[2]=-1<5 pop. dq=[]. push 4. dq=[4] (values [5]). out.push(nums[4])=5.\ni=5 nums[5]=3  → dq[0]=4 > i-k=2, no expire. 3 < 5, no pop. push 5. dq=[4,5] (values [5,3]). out.push(nums[4])=5.\ni=6 nums[6]=6  → dq[0]=4 > i-k=3, no expire. nums[5]=3<6 pop, nums[4]=5<6 pop. dq=[]. push 6. dq=[6] (values [6]). out.push(nums[6])=6.\ni=7 nums[7]=7  → dq[0]=6 > i-k=4, no expire. nums[6]=6<7 pop. dq=[]. push 7. dq=[7] (values [7]). out.push(nums[7])=7.\nreturn [3,3,5,5,6,7]"
+          }
+        ],
+        "why": "The classic trace surfaces two subtle bugs. (1) Expiry uses `<=` not `<` — at i=4, dq[0]=1 and i-k=1, and that index IS at the trailing edge of the window for i=3 but OUT of the window for i=4 (window is [2,3,4]). Off-by-one here returns wrong answers silently. (2) When 5 arrives at i=4 and dominates everything, you have to pop -3 and -1 even though they're 'in the window' — they're dominated, so they're useless. A candidate who only pops the immediate predecessor (one pop, not a while loop) gets the right answer here by luck but fails on sequences like `[1,2,3,4,5], k=5`. The while loop is what makes this O(n)."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• `k = 1` → window is a single element; the expiry check fires every step, deque always has size 1, output is just `nums` itself.\n• `k = nums.length` → exactly one output (the max of the whole array). The expiry check never fires.\n• Strictly increasing `[1,2,3,4,5]` → every new element pops all predecessors. Deque only ever has one element. Output windows show the rightmost element each time.\n• Strictly decreasing `[5,4,3,2,1]` → no pops, deque grows up to `k` elements, expire fires once per step after the window forms. Output is the leftmost-but-still-in-window element each time.\n• All same `[3,3,3,3]` with `k=2` → since pop condition is `<` (strictly less), equal elements DON'T pop each other. Deque can hold up to k equal elements, expire shifts them off. Output is [3,3,3].\n• Empty array → loop doesn't run, return `[]`. Probably worth an early guard.\n• Negatives — math works fine, no special handling.\"",
+        "why": "The all-same case is the subtle one — the `<` vs `<=` choice in the pop loop only matters when values are equal, and using `<` is correct because keeping equal-valued elements means you don't lose the max prematurely when the front expires. Walking that out shows you actually reasoned about the comparator instead of typing one and hoping. The strictly-increasing and strictly-decreasing cases are also useful because they're the two ends of how full the deque gets — useful for proving the O(k) space bound."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — amortized. The for loop runs n times. Inside, the while loop can pop multiple elements, but each index enters the deque exactly once (via the final `push(i)`) and leaves at most once (via either the front `shift` or the back `pop`). So the total work across all iterations of the while is bounded by n, not n times k. Even though the worst case for any single step is O(k) pops, the average is O(1).\n\nSpace is O(k) — the deque can hold at most k indices (anything older would have been shifted off the front). Output is O(n - k + 1), but that's the answer, not auxiliary space.\n\nA few extensions worth naming. (1) Sliding Window Minimum is the same algorithm with the comparator flipped — pop tails while `nums[tail] > nums[i]`, deque is strictly INCREASING. (2) If you need both max and min simultaneously (e.g., 'longest subarray where max - min ≤ limit'), run two deques in parallel. (3) The monotonic-deque shape generalizes to 'maximum sum subarray of length ≤ k' and 'shortest subarray with sum ≥ target' via prefix sums + monotonic deque. (4) Implementation note — JavaScript arrays' `shift()` is O(n), which technically breaks the amortization in pure JS. For interviews this is fine, but in production you'd use a real deque (linked list, or an array with a head index that you advance) to keep it true O(n).\"",
+        "why": "The amortization defense is essential here — the inner while loop screams 'O(n·k)!' to anyone who hasn't seen the proof, and a candidate who can't explain why it's actually O(n) loses the credit for the optimization. Naming the `shift()` perf footgun in JS unprompted is the kind of language-specific detail that flags a senior engineer — most candidates write `shift()` and don't realize it's linear-time in V8. The two-deque extension for 'longest subarray with bounded spread' (LeetCode 1438) is a great follow-up to namedrop because it reuses this exact data structure twice."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the monotonic-deque solution on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use Prev/Next, or pick a different example.",
+    "examples": [
+      { "label": "nums=[9,11], k=2 → [11]",                       "input": { "nums": [9, 11], "k": 2 },                       "expected": "[11]" },
+      { "label": "nums=[1,-1], k=1 → [1,-1]",                     "input": { "nums": [1, -1], "k": 1 },                       "expected": "[1,-1]" },
+      { "label": "nums=[1,3,-1,-3,5,3,6,7], k=3 → [3,3,5,5,6,7]", "input": { "nums": [1, 3, -1, -3, 5, 3, 6, 7], "k": 3 },   "expected": "[3,3,5,5,6,7]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input.nums;",
+      "  const k = input.k;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}, k=${k}`, state: { nums, k } };",
+      "  const dq = [];",
+      "  const out = [];",
+      "  yield { line: 3, label: 'init dq=[] (indices, values strictly decreasing), out=[]', state: { nums, k, dq: [], out: [] } };",
+      "  for (let i = 0; i < nums.length; i++) {",
+      "    yield { line: 4, label: `outer step: i=${i}, nums[i]=${nums[i]}`, state: { nums, k, i, dq: [...dq], dqValues: dq.map(j => nums[j]), out: [...out] } };",
+      "    if (dq.length && dq[0] <= i - k) {",
+      "      const expired = dq.shift();",
+      "      yield { line: 6, label: `front dq[0]=${expired} <= i-k=${i - k} → shift (out of window)`, state: { nums, k, i, dq: [...dq], dqValues: dq.map(j => nums[j]), out: [...out] } };",
+      "    }",
+      "    while (dq.length && nums[dq[dq.length - 1]] < nums[i]) {",
+      "      const popped = dq.pop();",
+      "      yield { line: 8, label: `tail nums[${popped}]=${nums[popped]} < nums[${i}]=${nums[i]} → pop`, state: { nums, k, i, dq: [...dq], dqValues: dq.map(j => nums[j]), out: [...out] } };",
+      "    }",
+      "    dq.push(i);",
+      "    yield { line: 9, label: `push i=${i} → dq=${JSON.stringify(dq)} (values ${JSON.stringify(dq.map(j => nums[j]))})`, state: { nums, k, i, dq: [...dq], dqValues: dq.map(j => nums[j]), out: [...out] } };",
+      "    if (i >= k - 1) {",
+      "      out.push(nums[dq[0]]);",
+      "      yield { line: 11, label: `window formed (i=${i} >= k-1=${k - 1}) → record front nums[${dq[0]}]=${nums[dq[0]]}`, state: { nums, k, i, dq: [...dq], dqValues: dq.map(j => nums[j]), out: [...out] } };",
+      "    }",
+      "  }",
+      "  yield { line: 13, label: `return ${JSON.stringify(out)}`, state: { nums, k, dq: [...dq], out: [...out], returns: JSON.stringify(out) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function maxSlidingWindow(nums, k) {\n  const dq = [];                              // stores indices, values strictly decreasing\n  const out = [];\n  for (let i = 0; i < nums.length; i++) {\n    // drop indices that fell out of the window\n    if (dq.length && dq[0] <= i - k) dq.shift();\n    // drop tail values smaller than nums[i] — they can never be the max again\n    while (dq.length && nums[dq[dq.length - 1]] < nums[i]) dq.pop();\n    dq.push(i);\n    // Front of deque is the max; record only once the window is fully formed.\n    if (i >= k - 1) out.push(nums[dq[0]]);\n  }\n  return out;\n}\n// Time O(n), Space O(k)",
     "notes": [

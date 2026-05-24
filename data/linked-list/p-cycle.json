@@ -9,6 +9,104 @@
     "fast-slow-pointer",
     "linked-list-walk"
   ],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given the head of a singly linked list and I need to return true if any node's `next` pointer creates a cycle back to an earlier node, false otherwise. So the list is either acyclic and ends in null, or it loops back somewhere — possibly at the head (full loop) or deeper in the list (lollipop shape).\"\n\nThen a few quick clarifying questions:\n• Empty list — return false (no nodes, no cycle)?\n• Single node with `next = null` → false; single node pointing at itself → true. Both possible?\n• Can I mutate the input (mark nodes as visited)? Or do I need to leave it untouched?\n• Memory budget — is O(n) extra space fine, or do you want O(1)?",
+        "why": "The mutation and memory questions point at the answer. If you can mutate, you could mark visited nodes with a flag — O(n) time, O(1) extra space but destructive. If you can use O(n) extra space, a Set of visited nodes is the obvious answer. If neither is allowed — leave nodes untouched, O(1) space — you're forced into Floyd's tortoise-and-hare, which is the canonical answer interviewers are usually fishing for. Asking surfaces all three solutions cleanly."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n) extra-space solution before you discard it.",
+        "say": "\"The obvious solution is a hash Set: walk the list, and at each node check if I've seen it before. If I have, return true. If I hit null, return false. That's O(n) time but O(n) extra space because the Set can hold up to n nodes. Functionally correct, but I think we can do it in O(1) space — same correctness, but with two pointers instead of a Set.\"",
+        "why": "Two reasons to name the Set version out loud. (1) It proves you can solve the problem without the trick — interviewers worry about candidates who only know Floyd's and can't reason from first principles. (2) It frames Floyd's as 'same correctness guarantee, less memory' rather than a wholly different idea — which justifies the cleverness instead of just deploying it. The interviewer might even say 'Set is fine, ship it,' in which case you've saved time."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to Floyd's tortoise-and-hare?",
+        "say": "\"This is the canonical fast-and-slow pointer problem. The insight is: if there's a cycle, a pointer moving at 2x speed eventually laps a pointer moving at 1x speed inside that cycle — they MUST meet, because the gap between them closes by 1 node per iteration once they're both inside the loop. If there's no cycle, the fast pointer hits null first (specifically, `fast` or `fast.next` becomes null) and we exit. Two pointers moving at the SAME speed wouldn't work — they'd maintain a fixed gap forever. The 2-to-1 step ratio is what guarantees they collide inside any cycle.\n\nTwo things to be careful about: the loop guard checks BOTH `fast` AND `fast.next` because fast does a double-hop and both `.next` accesses have to be legal. And the meeting check uses `===` (reference equality on the node object), not `slow.val === fast.val` — different nodes can hold the same value.\"",
+        "why": "Naming the pattern *and* the mathematical reason it works is the move. 'Floyd's tortoise-and-hare' alone is just terminology; 'they collide because the 2-to-1 step ratio means the gap closes by 1 each iteration once both are in the loop' is a derivation. Calling out the `===` vs `.val` distinction upfront also short-circuits the most common bug — values can repeat across distinct nodes, so value equality would give false positives."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure the model is right.\" Three inputs cover the interesting behaviors — a small cycle at the head, an acyclic list where fast hits null, and a 2-node self-loop to confirm the smallest possible cycle works.",
+        "examples": [
+          {
+            "input": "1 → 2 → 3 → 1 (cycle at index 0)",
+            "output": "true",
+            "note": "Classic cycle — fast laps slow on the second pass.",
+            "trace": "init: slow=node#0(1), fast=node#0(1)\niter1: slow=node#1(2), fast=node#2(3). slow !== fast.\niter2: slow=node#2(3), fast=node#1(2). slow !== fast. (fast wrapped: 3→1→2)\niter3: slow=node#0(1), fast=node#0(1). slow === fast → return true."
+          },
+          {
+            "input": "1 → 2 → 3 → 4 → 5 → null (no cycle)",
+            "output": "false",
+            "note": "Acyclic — fast hits the end first. Loop guard catches `fast.next === null` and exits.",
+            "trace": "init: slow=node#0(1), fast=node#0(1)\niter1: slow=node#1(2), fast=node#2(3). slow !== fast.\niter2: slow=node#2(3), fast=node#4(5). slow !== fast.\nloop guard: fast=node#4(5), fast.next=null → false. Exit loop.\nreturn false."
+          },
+          {
+            "input": "1 → 2 → 1 (smallest non-trivial cycle)",
+            "output": "true",
+            "note": "Smallest cycle — fast laps slow in one iteration.",
+            "trace": "init: slow=node#0(1), fast=node#0(1)\niter1: slow=node#1(2), fast=node#1(2). (fast: 1→2→1→2, lands on 2.) slow === fast → return true."
+          }
+        ],
+        "why": "Tracing surfaces two bugs this problem rewards. (1) The acyclic case confirms the loop guard `fast && fast.next` is the right condition — if you only checked `fast`, the `fast.next.next` would throw on a single-step-from-null. (2) The 1→2→1 trace confirms that fast can land on the same node as slow in a single iteration when the cycle is small enough; without tracing, candidates sometimes think the meeting only happens after multiple wraps and get confused when it fires immediately. Worth verifying on the whiteboard before the interviewer points to a test case where slow and fast collide in iter 1."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty list (head = null) → loop guard `fast && fast.next` is false immediately, return false. ✓\n• Single node, no cycle (head.next = null) → loop guard `fast.next` is false, return false. ✓\n• Single node, self-loop (head.next = head) → first iteration: slow = head.next = head, fast = head.next.next = head. slow === fast, return true. ✓\n• Cycle at head (full loop, like 1→2→3→1) → handled — fast laps slow inside the cycle eventually.\n• Cycle deep in the list (lollipop, like 1→2→3→4→3) → also handled — slow walks the straight part first, then both end up in the cycle and fast catches up.\n• Very large list → O(n) time, O(1) space; no risk of memory blow-up.\n• Worth noting: this returns *whether* a cycle exists, not *where* it starts. The 'find the cycle's entry node' variant (LeetCode 142) is a follow-up that reuses the same meeting point with a clever second-pass trick.\"",
+        "why": "The self-loop edge is the one most candidates miss — they assume cycles have at least two distinct nodes. Walking through it on the whiteboard confirms the algorithm handles it without a special case. The lollipop case is also worth naming because it disproves a common misconception that 'fast and slow have to start at the cycle entry to collide' — they don't; fast catches up regardless. Flagging the LeetCode 142 follow-up unprompted shows you see the cycle-detection family, not just this one problem."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — the gap between slow and fast closes by 1 node per iteration once both are in the cycle, so they meet within at most C iterations where C is the cycle length. Before the cycle, slow walks at most n nodes to reach it. Total: bounded by 2n iterations, so O(n). For the acyclic case, fast hits null in at most n/2 iterations, also O(n).\n\nSpace is O(1) — two pointer variables, no auxiliary structure. This is what beats the hash-Set version.\n\nIf you wanted to extend to 'find the cycle's starting node' (LeetCode 142), it's the same two-pointer setup with a clever second phase: after slow and fast meet, reset one pointer to head and advance both at 1x — they meet again at the cycle entry. The math is from Floyd's full algorithm: distance from head to cycle entry equals distance from meeting point to cycle entry going forward. Same template, one extra walk.\"",
+        "why": "The amortized 2n bound is the right defense against an interviewer who pushes back with 'but slow and fast are both walking — isn't that more than n?'. The answer is that the gap closes by 1 per iteration, so even with the 2x speed difference, fast traverses at most 2n nodes total. The LeetCode 142 extension is the natural next problem and proves you see the slow/fast template as a family rather than a one-off — that's how it shows up in Find Duplicate Number, Linked List Cycle II, and Happy Number."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through Floyd tortoise-and-hare. Input is { values, cycleAt }: cycleAt = index where the last node loops back, or -1 for no cycle. Watch slow advance by 1 and fast by 2 — if they meet, return true.",
+    "examples": [
+      { "label": "1→2→3→1 (cycle at 0) → true",     "input": { "values": [1, 2, 3], "cycleAt": 0 },         "expected": true },
+      { "label": "1→2→3→4→5 (no cycle) → false",    "input": { "values": [1, 2, 3, 4, 5], "cycleAt": -1 }, "expected": false },
+      { "label": "1→2→1 (cycle at 0) → true",       "input": { "values": [1, 2], "cycleAt": 0 },           "expected": true }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { values, cycleAt } = input;",
+      "  const nodes = values.map((v) => ({ val: v, next: null }));",
+      "  for (let i = 0; i < nodes.length - 1; i++) nodes[i].next = nodes[i + 1];",
+      "  if (cycleAt >= 0 && nodes.length > 0) nodes[nodes.length - 1].next = nodes[cycleAt];",
+      "  const head = nodes[0] || null;",
+      "  const id = (n) => n ? `node#${nodes.indexOf(n)}(val=${n.val})` : 'null';",
+      "  yield { line: 1, label: `enter function — values=${JSON.stringify(values)}, cycleAt=${cycleAt}`, state: { values, cycleAt } };",
+      "  let slow = head, fast = head;",
+      "  yield { line: 2, label: `init slow=${id(slow)}, fast=${id(fast)}`, state: { slow: id(slow), fast: id(fast) } };",
+      "  let iter = 0;",
+      "  while (fast && fast.next) {",
+      "    iter++;",
+      "    yield { line: 3, label: `loop guard ok (iter ${iter}) — fast and fast.next both non-null`, state: { iter, slow: id(slow), fast: id(fast) } };",
+      "    slow = slow.next;",
+      "    yield { line: 4, label: `slow +1 → ${id(slow)}`, state: { iter, slow: id(slow), fast: id(fast) } };",
+      "    fast = fast.next.next;",
+      "    yield { line: 5, label: `fast +2 → ${id(fast)}`, state: { iter, slow: id(slow), fast: id(fast) } };",
+      "    if (slow === fast) {",
+      "      yield { line: 6, label: `slow === fast — cycle detected, return true`, state: { iter, slow: id(slow), fast: id(fast), returns: true } };",
+      "      return;",
+      "    }",
+      "    yield { line: 6, label: `slow !== fast — keep going`, state: { iter, slow: id(slow), fast: id(fast) } };",
+      "    if (iter > 50) { yield { line: 3, label: 'safety stop', state: { returns: false } }; return; }",
+      "  }",
+      "  yield { line: 8, label: `loop exit — fast or fast.next is null, return false`, state: { iter, slow: id(slow), fast: id(fast), returns: false } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function hasCycle(head) {\n  let slow = head, fast = head;\n  while (fast && fast.next) {\n    slow = slow.next;        // 1 step\n    fast = fast.next.next;   // 2 steps\n    if (slow === fast) return true;\n  }\n  return false;\n}\n// Time O(n), Space O(1)\n// Why: if there's a cycle, fast laps slow inside it.\n// If no cycle, fast hits null.",
     "notes": [

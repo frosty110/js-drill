@@ -6,6 +6,110 @@
   "status": "full",
   "description": "Debounce delays a function call until `ms` of quiet — every new call resets the timer. Built with an injectable fake clock so the verifier can advance time deterministically.",
   "mechanics": ["closure-state"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the timing contract.",
+        "say": "\"Let me make sure I have this right: I'm writing debounce(fn, ms) — a higher-order function that returns a wrapper. The wrapper, when called rapidly, only invokes the underlying fn once, after ms of silence. Every new call inside the window restarts the timer.\"\n\nThen a few quick clarifying questions:\n• Leading-edge or trailing-edge? The default and what most people mean by 'debounce' is trailing — fire after the quiet period. Leading-edge fires immediately on the first call then ignores the burst.\n• Which args does fn receive when it finally fires — the first call's, or the last call's? (Trailing-edge convention: the last call's.)\n• Do I need a `cancel()` method? Some specs ask for it.\n• Real setTimeout, or do you want an injectable fake clock for testability? Both are reasonable; the fake clock is easier to test deterministically.\n• What should `this` bind to inside fn when it fires — the wrapper's `this`, or always undefined?",
+        "why": "Leading vs trailing is the question candidates skip and then have to refactor halfway through — settle it up front. The 'which args wins' question matters because the wrapper has to capture args from every call but only one set wins, and which set you keep changes the closure state ('lastArgs' for trailing, 'firstArgs' for leading-only). Asking about an injectable clock is the testability move — saying 'I'll take an _now field and a tick() method instead of real setTimeout so the tests are synchronous' is a strong senior signal."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious naive version before you discard it.",
+        "say": "\"The brute force is: every call schedules its own setTimeout with no awareness of the others. Five rapid calls schedule five timers, all fire, fn runs five times. That's exactly what debounce is supposed to prevent.\n\nThe insight: I only want ONE pending timer at a time. So before scheduling a new one, I clear the previous one — or in the fake-clock version, I just overwrite the `scheduled` due-time. The closure holds that single timer reference (or due-time) across calls, which is what makes the wrapper stateful even though it's just a function.\"",
+        "why": "Naming the 'every call schedules its own timer' version makes the closure variable feel inevitable — of course there has to be persistent state between calls, that's where the previous timer lives. It also clarifies why this isn't just a stateless wrapper: debounce is fundamentally about *coordinating across* calls, which means the wrapper needs memory."
+      },
+      {
+        "title": "3. Spot the pattern — API shape & invariant",
+        "prompt": "What's the closure-state shape and what invariant keeps it correct?",
+        "say": "\"The API shape is: debounce returns a function. That returned function closes over a small piece of state — a `scheduled` due-time (or timer handle) and `lastArgs`. On each call: clear or overwrite `scheduled` (cancel the prior pending timer), set a new one for `_now + ms`, and stash `args` into `lastArgs`. The last call wins because each new call clobbers the previous schedule.\n\nThe invariant: at any moment, at most one pending invocation. When the timer fires, scheduled goes back to null (idle), fn runs with whatever lastArgs is at that moment.\n\nWith real setTimeout: `clearTimeout(timer); timer = setTimeout(() => { timer = null; fn(...lastArgs); }, ms);`. With an injectable clock: track `scheduled = _now + ms` and check inside tick whether `_now >= scheduled` and fire.\n\nThe pattern is closure-as-state — the returned function carries the timer and last args in its lexical environment, no class needed. Same template powers throttle, once(), memoize, and most rate-limiting primitives.\"",
+        "why": "Naming closure-as-state explicitly matters because the rusty engineer's first instinct is often to reach for a class — and a class works, but it's heavier than needed and obscures what's load-bearing (the captured variables). The 'last call wins' framing is the precise contract: it's not just 'delay the call', it's 'delay AND replace any pending one'. Without that crispness, candidates write code that schedules a new timer without cancelling the old, and end up firing twice."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few timelines to confirm the model before writing the wrapper.",
+        "intro": "\"Let me trace a few event timelines with the fake clock to make sure my model is right.\" Each example is a sequence of call(args) and tick(delta) events. I'll show _now, scheduled, lastArgs, and the fired array (each entry is the args fn received when it actually ran). Three examples cover the burst-then-fire case, the single-call case, and the boundary case where _now == scheduled.",
+        "examples": [
+          {
+            "input": "ms=100: call('a'), call('b'), call('c'), tick(50) [no fire], tick(60) [fires with 'c'], call('d'), tick(100) [fires with 'd']",
+            "output": "[[\"c\"],[\"d\"]]",
+            "note": "Classic burst case — three rapid calls reset the timer twice; only the last (c) survives. Then a fresh call(d) restarts the cycle and fires once.",
+            "trace": "init scheduled=null, lastArgs=null, _now=0, fired=[]\ncall('a')  → lastArgs=['a'], scheduled=0+100=100\ncall('b')  → lastArgs=['b'], scheduled=0+100=100 (RESET — previous schedule of 100 overwritten with new 100; the prior 'a' is dropped)\ncall('c')  → lastArgs=['c'], scheduled=0+100=100 (RESET again; 'b' is dropped)\ntick(50)   → _now=50, 50 < 100 → no fire\ntick(60)   → _now=110, 110 >= 100 → FIRE with lastArgs=['c'], scheduled=null, fired=[['c']]\ncall('d')  → lastArgs=['d'], scheduled=110+100=210 (fresh schedule after idle)\ntick(100)  → _now=210, 210 >= 210 → FIRE with lastArgs=['d'], scheduled=null, fired=[['c'],['d']]"
+          },
+          {
+            "input": "ms=50: single call(1), tick(60) — fires with [1]",
+            "output": "[[1]]",
+            "note": "Single call, no contention — just confirms the basic 'wait ms, then fire' path.",
+            "trace": "init scheduled=null, lastArgs=null, _now=0, fired=[]\ncall(1)  → lastArgs=[1], scheduled=0+50=50\ntick(60) → _now=60, 60 >= 50 → FIRE with lastArgs=[1], scheduled=null, fired=[[1]]"
+          },
+          {
+            "input": "ms=100: call('x'), tick(99) [no fire], tick(1) [fires — _now=100 >= scheduled=100]",
+            "output": "[[\"x\"]]",
+            "note": "Boundary case — _now exactly equals scheduled. The `>=` comparison is what makes this fire; with `>` it would silently wait one more tick.",
+            "trace": "init scheduled=null, lastArgs=null, _now=0, fired=[]\ncall('x') → lastArgs=['x'], scheduled=0+100=100\ntick(99)  → _now=99, 99 < 100 → no fire\ntick(1)   → _now=100, 100 >= 100 → FIRE (the `>=` is load-bearing; `>` would NOT fire here), scheduled=null, fired=[['x']]"
+          }
+        ],
+        "why": "The first trace catches the most common bug: scheduling a new timer without clearing the old one. If you just call setTimeout three times, all three timers exist and all three fire after ms — you'd see fired=[['a'],['b'],['c']] instead of [['c']]. The boundary case (`>=` vs `>`) is the kind of one-character bug that passes most tests and fails the one where the tick exactly matches the window — and it's the easiest thing to overlook during the implementation."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Single call → fires once after ms. The simple case. ✓\n• Burst of calls then silence → only the last one fires, with the last args. The whole point of debounce.\n• Burst of calls then ANOTHER burst then silence → fires once with the last args of the second burst (assuming the first burst's timer was cancelled by the second burst's first call). Wait — actually, if the gap between bursts is > ms, the first burst's last call DOES fire. So 'burst, silence > ms, burst' produces two firings, not one. Worth confirming with the interviewer which they expect.\n• ms = 0 → debounce-to-the-next-tick. Still useful for batching synchronous calls.\n• What does `this` bind to inside the wrapper? In my implementation I used `const api = function (...args)` so `this` would be whatever called api. To forward it to fn, use `fn.apply(this, args)` instead of `fn(...args)`. Worth mentioning even if the prompt doesn't ask.\n• Calling tick() with delta=0 → _now doesn't change, no fire (unless already due). Idempotent edge.\n• `cancel()` extension — if asked, just expose `api.cancel = () => { scheduled = null; lastArgs = null; }`. One line, common follow-up.\"",
+        "why": "The `this`-binding edge is the JS-specific call-out — arrow functions don't have their own `this` so if you wrote `const api = (...args) => {...}` you'd silently break any caller that relies on `this`. Naming this even when the prompt doesn't ask is what separates 'wrote code that passes' from 'wrote code that won't surprise the next person'. The two-bursts-with-gap subtlety is the one that catches candidates who say 'debounce = at most one call ever' — no, it's 'at most one pending call at a time'."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time per call is O(1) — set two variables. Time per tick is O(1) — increment, compare, maybe fire. There's no loop, no data structure beyond the two closure variables.\n\nSpace is O(1) — `scheduled` is a number (or null), `lastArgs` is one args array. No queue, no history.\n\nThis is the closure-as-state template. Same shape powers throttle (swap the 'reset on every call' for a 'gate on every call' — that's literally the only difference). once() is the same template with a boolean flag instead of a timer. memoize is the same template with a Map instead of two scalars. Anything that needs 'return a function that remembers stuff across calls' fits this mold.\n\nReal-world: lodash's debounce is the same algorithm with options for leading + trailing both, max-wait windows, and cancel/flush methods. Worth knowing it exists but the core 4-line version above is what an interviewer wants.\"",
+        "why": "The 'time is O(1) because there's no loop' framing is the right defense — debounce's complexity is boring, and that's the point. The throttle/once/memoize connections are the senior move that proves you see the closure-as-state template, not just this one problem. Naming lodash unprompted shows you know the production version exists and you've made a deliberate choice to write the simpler one."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through debounce on an event timeline. Each input is { ms, events: [...] } where an event is either { type: 'call', args: [...] } — a debounced invocation — or { type: 'tick', delta } — advance the fake clock by delta ms. The state panel shows _now, scheduled (the due-at), and lastArgs. The trace collects every actual fn(...) firing into a fired array and returns it as JSON — so you can see which calls survived debouncing and which got reset by a later call.",
+    "examples": [
+      { "label": "ms=100: call('a'), call('b'), call('c'), tick(50) [no fire], tick(60) [fires with 'c'], call('d'), tick(100) [fires with 'd']", "input": { "ms": 100, "events": [ { "type": "call", "args": ["a"] }, { "type": "call", "args": ["b"] }, { "type": "call", "args": ["c"] }, { "type": "tick", "delta": 50 }, { "type": "tick", "delta": 60 }, { "type": "call", "args": ["d"] }, { "type": "tick", "delta": 100 } ] }, "expected": "[[\"c\"],[\"d\"]]" },
+      { "label": "ms=50: single call(1), tick(60) — fires with [1]", "input": { "ms": 50, "events": [ { "type": "call", "args": [1] }, { "type": "tick", "delta": 60 } ] }, "expected": "[[1]]" },
+      { "label": "ms=100: call('x'), tick(99) [no fire], tick(1) [fires — _now=100 >= scheduled=100]", "input": { "ms": 100, "events": [ { "type": "call", "args": ["x"] }, { "type": "tick", "delta": 99 }, { "type": "tick", "delta": 1 } ] }, "expected": "[[\"x\"]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { ms, events } = input;",
+      "  let scheduled = null;",
+      "  let lastArgs = null;",
+      "  let _now = 0;",
+      "  const fired = [];",
+      "  yield { line: 2, label: `debounce(fn, ${ms}) created — scheduled=null, lastArgs=null, _now=0`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired] } };",
+      "  for (let k = 0; k < events.length; k++) {",
+      "    const ev = events[k];",
+      "    if (ev.type === 'call') {",
+      "      yield { line: 4, label: `event#${k}: api(${ev.args.map(a => JSON.stringify(a)).join(', ')}) — wrapper called`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "      lastArgs = ev.args.slice();",
+      "      yield { line: 5, label: `lastArgs = ${JSON.stringify(lastArgs)} (latest args win — older pending args dropped)`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "      scheduled = _now + ms;",
+      "      yield { line: 6, label: `scheduled = _now + ms = ${_now} + ${ms} → ${scheduled} (timer RESET, not accumulated)`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "    } else if (ev.type === 'tick') {",
+      "      yield { line: 9, label: `event#${k}: tick(${ev.delta}) — advancing clock`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "      _now += ev.delta;",
+      "      yield { line: 10, label: `_now += ${ev.delta} → ${_now}`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "      if (scheduled !== null && _now >= scheduled) {",
+      "        yield { line: 11, label: `_now (${_now}) >= scheduled (${scheduled}) and scheduled !== null → FIRE`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "        scheduled = null;",
+      "        yield { line: 12, label: `scheduled = null (back to idle)`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "        fired.push(lastArgs.slice());",
+      "        yield { line: 13, label: `fn(...${JSON.stringify(lastArgs)}) invoked — fired=${JSON.stringify(fired)}`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "      } else {",
+      "        const reason = scheduled === null ? 'no pending call' : `_now (${_now}) < scheduled (${scheduled})`;",
+      "        yield { line: 11, label: `no fire — ${reason}`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], event: ev } };",
+      "      }",
+      "    }",
+      "  }",
+      "  yield { line: 17, label: `timeline complete — fired=${JSON.stringify(fired)}`, state: { events, ms, _now, scheduled, lastArgs, fired: [...fired], returns: JSON.stringify(fired) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function debounce(fn, ms) {\n  let scheduled = null;       // due-at on fake clock, or null when idle\n  let lastArgs = null;\n  const api = function (...args) {\n    lastArgs = args;\n    scheduled = api._now + ms;     // (re)set the due time on every call\n  };\n  api._now = 0;\n  api.tick = (delta) => {          // advance fake clock; fire if due\n    api._now += delta;\n    if (scheduled !== null && api._now >= scheduled) {\n      scheduled = null;\n      fn(...lastArgs);\n    }\n  };\n  return api;\n}",
     "notes": [

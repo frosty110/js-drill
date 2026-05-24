@@ -6,6 +6,117 @@
   "status": "full",
   "description": "DFS backtracking on a char grid: mark visited by mutating the cell, recurse into 4 neighbors, then restore. O(m*n*4^L).",
   "mechanics": ["backtrack-template", "dfs-grid-flood"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the grid, the word, and the legal moves.",
+        "say": "\"Let me restate: I'm given a 2D `board` of single characters and a target `word`. I should return true if I can spell `word` by starting at any cell and walking to 4-directional neighbors, never reusing a cell within the same word. So if word='ABCCED' and the board has A→B→C→C→E→D laid out in connected positions, return true.\"\n\nQuick clarifying questions:\n• Are diagonals legal moves? (Almost always no — but ask.)\n• Can a cell be revisited within the same word, or strictly no reuse? (Standard problem says no reuse — confirm.)\n• Board size and word length bounds? (For complexity framing — typical bound is `m, n ≤ 6, len(word) ≤ 15`.)\n• Are characters case-sensitive?\n• What's the return — just boolean exists/doesn't-exist? (Word Search II returns the list; this one is just true/false.)",
+        "why": "The 'no reuse' question matters because the visited-marker is the load-bearing implementation detail. The diagonals question is small but shows attention to spec — interviewers occasionally throw in 8-direction variants. The size bound matters because it lets you frame the 4^L bound as 'manageable for L=15, catastrophic for L=30' rather than as a vague worst-case."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solution before reaching for the optimized one.",
+        "say": "\"The natural brute force IS DFS — there's not really a 'simpler' approach here because the problem is fundamentally 'find a path in a graph that spells the target word'. So the brute force is: try every cell as a starting point; from each start, recursively walk to neighbors that match the next character; bail out the moment the character doesn't match or we run off the board. The only thing the 'optimized' version adds is in-place visited marking — instead of carrying a separate `visited` Set, mutate `board[r][c]` to a sentinel character (`'#'`) and restore it on the way back up.\"\n\n\"The naive 'separate visited Set' version is O(L) extra space per recursion frame and harder to write cleanly. The in-place mutate-and-restore version is the canonical backtracking pattern — it's why this problem is in the backtracking section rather than the DFS section.\"",
+        "why": "Naming 'DFS is already the algorithm' is honest — there's no clever pivot away from a brute force here, only an implementation tightening (in-place visited marking). The in-place mutate-and-restore framing sets up section 3: backtracking shines when answer is a PATH, not just a count, because you have to be able to walk every candidate path AND cleanly undo it for the next try. That's the framing that distinguishes backtracking from generic DFS in interview language."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem says 'backtracking on a grid'?",
+        "say": "\"This is grid DFS with backtracking. The decision space at each step: from cell `(r,c)`, try each of the 4 neighbors (up/down/left/right) that's in bounds AND not visited AND matches the next character `word[i]`. Branching factor up to 4, depth up to `word.length`.\"\n\n\"The pruning rules: (a) out-of-bounds → return false. (b) board[r][c] !== word[i] → return false (mismatch). (c) i === word.length → return true (full match, success base case — must check FIRST so a tail match ends cleanly before bounds even matter). The visited marker is the backtracking part: I overwrite `board[r][c]` with `'#'` before recursing into neighbors, then restore it to the original char after the recursion frame returns. That mutate-then-restore is the BACKTRACKING signature — it lets the cell be reused by a future DFS starting from a different cell, just not within this same word-walk.\"\n\n\"Why backtracking is the right tool vs DP or pure iteration: this problem asks for a PATH (existence of a specific sequence), not a count or a min/max. DP works when subproblems overlap — but here the 'have I been at (r,c) with i=3' state depends on the full path I took to get there (which cells are marked visited), so there's no clean memoization. Pure iteration with explicit stacks could simulate it, but the backtrack/restore discipline is much cleaner expressed recursively. Backtracking is THE tool for 'find a path' problems on graphs/grids.\"",
+        "why": "The 'backtracking shines when the answer is a PATH, not just a count' framing is the load-bearing observation that distinguishes this from DP problems on grids (Unique Paths, Min Path Sum, etc., which ARE DP). Naming the mutate-then-restore as 'the backtracking signature' grounds the pattern in a concrete code shape — it's not just 'recurse'; it's 'recurse + undo'. The success-base-FIRST detail is the subtle correctness point — most candidates put the bounds check first and then have to handle a tail match awkwardly."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to verify the DFS recursion order and the mutate-restore pairing.",
+        "intro": "\"Let me trace a few cases to confirm the DFS order, the mismatch pruning, and the cell-restore on the way up.\" Three cases — a small grid with a path that bends through the middle, the trivial 1x1 base case, and a case where the word seems plausible but no valid path exists.",
+        "examples": [
+          {
+            "input": "board=[['A','B','C'],['D','E','F'],['G','H','I']], word='ABED'",
+            "output": "true",
+            "note": "Bending path — A(0,0) → B(0,1) → E(1,1) → D(1,0). Tests that the DFS explores multiple directions.",
+            "trace": "Outer loop tries each start cell.\n(0,0)='A' === word[0]='A' → mark '#', recurse.\n  Try (1,0)='D' vs word[1]='B' → mismatch, return false.\n  Try (-1,0) → oob, return false.\n  Try (0,1)='B' === word[1]='B' → mark '#', recurse.\n    Try (1,1)='E' vs word[2]='E' → match! mark '#', recurse.\n      Try (2,1)='H' vs word[3]='D' → mismatch.\n      Try (0,1)='#' → mismatch (already visited).\n      Try (1,2)='F' → mismatch.\n      Try (1,0)='D' === word[3]='D' → match! mark '#', recurse.\n        i=4 === word.length → return true.\n      true found, short-circuit up. Restore (1,0)='D'.\n      Restore (1,1)='E'. Return true.\n    Restore (0,1)='B'. Return true.\n  Restore (0,0)='A'. Return true.\nOuter loop short-circuits, return true."
+          },
+          {
+            "input": "board=[['A']], word='A'",
+            "output": "true",
+            "note": "1x1 base case — first call hits i=0, board matches, recurses with i=1, immediately hits the success base.",
+            "trace": "(0,0)='A' === word[0]='A' → mark '#', recurse into neighbors with i=1.\n  Try (1,0): oob. Try (-1,0): oob. Try (0,1): oob. Try (0,-1): oob.\n  Actually wait — before the neighbor loop, we check i === word.length AT THE TOP of the next call?\n  Re-reading: success base is checked FIRST in dfs(r,c,i). So when we recurse to (1,0) with i=1, the very first check is i===word.length, which is 1===1 → return true.\n  All four neighbors return true via the i-check before the bounds-check. Short-circuit, return true."
+          },
+          {
+            "input": "board=[['A','B'],['C','D']], word='ABCD'",
+            "output": "false",
+            "note": "Word seems plausible but no valid 4-adjacent path exists — A→B→C requires moving from B(0,1) to C(1,0), which aren't adjacent.",
+            "trace": "(0,0)='A' === word[0]='A' → mark '#', recurse.\n  (1,0)='C' vs word[1]='B' → mismatch.\n  (0,1)='B' === word[1]='B' → mark '#', recurse.\n    (1,1)='D' vs word[2]='C' → mismatch.\n    (0,0)='#' → mismatch.\n    (0,2)→oob. (-1,1)→oob.\n    Restore (0,1)='B'. Return false.\n  Restore (0,0)='A'. Return false.\n(0,1)='B' !== word[0]='A' → return false immediately.\n(1,0)='C' !== 'A'. (1,1)='D' !== 'A'.\nReturn false."
+          }
+        ],
+        "why": "Tracing ABED shows the bending path — proves the DFS will explore down (D mismatch), right (B match), then from (0,1) explore down (E match), then from (1,1) explore left (D match). The mutate-restore happens at every frame as it unwinds — you can SEE the board going back to original characters in the trace. The 1x1 case is the litmus test for the 'success base FIRST' detail — if you put bounds check first, that case fails. The ABCD-on-2x2 case earns its place by being the kind of input that LOOKS like it should work (all four characters are present!) but doesn't have a connected 4-adjacent path. Catching it requires actually executing the DFS, not just checking presence."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Single-character word matching a single cell → must return true. The success base must be checked BEFORE bounds and char-match, otherwise a 1x1 board with word='A' fails (the recursive call goes to a neighbor, hits oob, returns false).\n• Word longer than total cells → DFS will naturally fail, but worth a quick `if (word.length > rows*cols) return false` short-circuit.\n• Empty word → spec usually says word.length ≥ 1, but if empty, return true (the base case fires on the first call before anything else).\n• Forgetting to restore `board[r][c]` after recursion → the cell stays marked '#' forever, no future DFS path can use it, you get false negatives. Diagnostic: simple words succeed, complex ones with reuse-across-starts fail.\n• Using '#' as the sentinel when the board CAN contain '#' → use a value guaranteed not in the input (often safe to assume A-Z, so '#' is fine; double-check the spec).\n• Mutating the input board permanently → the restore step also covers this, but if you bailed out via `return true` somewhere without restoring, the board is permanently corrupted. The standard idiom restores BEFORE the return, so this is rare but worth a sanity check.\n• Diagonals → confirm not allowed. If they are, the dirs array becomes 8 entries.",
+        "why": "The 'forgot to restore' bug is the diagnostic-difference between a working solution and one that ships green on the example but fails on tests. The 'success base FIRST' detail is similarly diagnostic — putting bounds before the success check fails the 1x1 case in a surprising way. The 'permanently mutating the input board' callout matters because some interviewers explicitly say 'don't mutate the input' — knowing that the restore step covers it (as long as you don't early-return without restoring) is the right answer."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(m · n · 4^L) where m·n is the board size and L is the word length. We try each of m·n starting cells; from each start, the DFS has branching factor up to 4 (neighbors) and depth up to L. So 4^L paths per start, m·n starts, total m·n·4^L. In practice, the character-match check prunes most branches near the root — if the word starts with 'X' and only one cell has 'X', only that one cell explores at all.\n\nSpace is O(L) for the recursion stack — depth bounded by the word length. The in-place visited marking means no extra O(m·n) for a visited set. If you weren't allowed to mutate the input, you'd need O(m·n) for a visited boolean array, or O(L) for a Set of `(r,c)` keys (you only ever have L of them visited at a time).\n\nThe 4^L exponential bound is inherent to enumeration — you genuinely might have to explore many paths to confirm 'no such path exists'. That said, for L > 20 or so, the problem isn't solvable in practice without smarter constraints (which is exactly what Word Search II solves with a trie — it shares prefix work across many target words simultaneously).\n\nFor extensions: same template handles Word Search II (build a trie of multiple target words, walk trie and grid in parallel, prune when the trie has no edge for the current char), N-Queens (board is the chessboard, 'word' is N queens, constraints are column/diagonal exclusions), Sudoku Solver (board is the grid, 'word' is filling every empty cell, constraints are row/col/box uniqueness). The mutate-then-restore + short-circuit-on-success is the universal pattern.\"",
+        "why": "Defending 4^L as inherent rather than a flaw is the move — enumeration of grid paths is exponential by nature, and the trie trick in Word Search II is the natural follow-up extension that the interviewer might pivot to. Bringing up Word Search II preemptively shows you see the family. The N-Queens and Sudoku Solver extensions earn major depth credit — they prove you see grid-DFS-with-backtracking as a template that solves entire classes of constraint-satisfaction problems, not just this one path-finding task. The 'short-circuit on first true' detail is also worth highlighting — `||` chaining lets the function return as soon as ONE neighbor succeeds, which is the difference between 'find any path' (this problem) and 'count all paths' (which would NOT short-circuit)."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through exist() on a small grid. The outer loop tries every cell as a start. DFS marks the visited cell with '#', recurses into 4 neighbors via short-circuit `||`, and restores the char on backtrack. Watch the board mutate (visited cells = '#') and snap back as the recursion unwinds.",
+    "examples": [
+      { "label": "3x3 [ABC/DEF/GHI], word='ABED' → true", "input": { "board": [["A","B","C"],["D","E","F"],["G","H","I"]], "word": "ABED" }, "expected": true },
+      { "label": "1x1 [[A]], word='A' → true", "input": { "board": [["A"]], "word": "A" }, "expected": true },
+      { "label": "2x2 [AB/CD], word='ABCD' → false", "input": { "board": [["A","B"],["C","D"]], "word": "ABCD" }, "expected": false }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const board = input.board.map(row => row.slice());",
+      "  const word = input.word;",
+      "  yield { line: 1, label: `enter exist(board ${board.length}x${board[0].length}, word='${word}')`, state: { board: board.map(r => [...r]), word } };",
+      "  const rows = board.length, cols = board[0].length;",
+      "  function* dfs(r, c, i, depth) {",
+      "    if (i === word.length) {",
+      "      yield { line: 5, label: `MATCH at depth ${depth}: i=${i} === word.length → return true`, state: { board: board.map(row => [...row]), word, r, c, i, depth, returns: true } };",
+      "      return true;",
+      "    }",
+      "    if (r < 0 || r >= rows || c < 0 || c >= cols) {",
+      "      yield { line: 6, label: `oob (${r},${c}) — return false`, state: { board: board.map(row => [...row]), word, r, c, i, depth } };",
+      "      return false;",
+      "    }",
+      "    if (board[r][c] !== word[i]) {",
+      "      yield { line: 7, label: `mismatch at (${r},${c}): board='${board[r][c]}' !== word[${i}]='${word[i]}' — return false`, state: { board: board.map(row => [...row]), word, r, c, i, depth } };",
+      "      return false;",
+      "    }",
+      "    const tmp = board[r][c];",
+      "    board[r][c] = '#';",
+      "    yield { line: 9, label: `MATCH (${r},${c})='${tmp}' === word[${i}] — mark visited '#', recurse into neighbors`, state: { board: board.map(row => [...row]), word, r, c, i, depth } };",
+      "    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];",
+      "    let found = false;",
+      "    for (const [dr, dc] of dirs) {",
+      "      if (found) break;",
+      "      found = yield* dfs(r + dr, c + dc, i + 1, depth + 1);",
+      "    }",
+      "    board[r][c] = tmp;",
+      "    yield { line: 13, label: `RESTORE board[${r}][${c}]='${tmp}' (backtrack), found=${found}`, state: { board: board.map(row => [...row]), word, r, c, i, depth, found } };",
+      "    return found;",
+      "  }",
+      "  let answer = false;",
+      "  outer: for (let r = 0; r < rows; r++) {",
+      "    for (let c = 0; c < cols; c++) {",
+      "      yield { line: 19, label: `try start cell (${r},${c})='${board[r][c]}'`, state: { board: board.map(row => [...row]), word, r, c } };",
+      "      if (yield* dfs(r, c, 0, 0)) { answer = true; break outer; }",
+      "    }",
+      "  }",
+      "  yield { line: 20, label: `return ${answer}`, state: { board: board.map(row => [...row]), word, returns: answer } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function exist(board, word) {\n  const rows = board.length, cols = board[0].length;\n  function dfs(r, c, i) {\n    // Success base FIRST — check before bounds so a tail match ends cleanly.\n    if (i === word.length) return true;                  // matched all chars\n    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;\n    if (board[r][c] !== word[i]) return false;\n    const tmp = board[r][c];\n    board[r][c] = \"#\";                                   // mark visited\n    // Short-circuit `||` — first successful neighbor stops the recursion.\n    const found = dfs(r+1,c,i+1) || dfs(r-1,c,i+1)\n               || dfs(r,c+1,i+1) || dfs(r,c-1,i+1);\n    board[r][c] = tmp;                                   // restore (backtrack)\n    return found;\n  }\n  // Try every cell as a possible starting point.\n  for (let r = 0; r < rows; r++)\n    for (let c = 0; c < cols; c++)\n      if (dfs(r, c, 0)) return true;\n  return false;\n}\n// Time O(m*n*4^L) where L = word.length, Space O(L) recursion",
     "notes": [

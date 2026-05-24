@@ -6,6 +6,102 @@
   "status": "full",
   "description": "Fewest coins to make `amount`. Bottom-up dp[a] = min over coins of dp[a - c] + 1. Returns -1 if no combination reaches the amount.",
   "mechanics": ["dp-tabulation"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me play it back: I have an array of distinct positive integers `coins` representing denominations, and a target `amount`. I want the *fewest* number of coins (with unlimited supply of each) that sum exactly to `amount`, or `-1` if no combination reaches it.\"\n\nThen a few quick clarifying questions:\n• Unlimited supply of each coin, right? (As opposed to one-of-each — that's the 0/1 knapsack variant.)\n• Are coins always positive, distinct integers?\n• `amount = 0` — return 0 (zero coins needed)?\n• Range — what's the upper bound on `amount`? (Affects whether `O(amount × coins)` is acceptable.)\n• Return value — just the count, or also the actual coins used?",
+        "why": "The unlimited-supply question is *critical* — if it's one-of-each, the recurrence changes (you can't reuse `dp[a - c]` from the current pass, you'd need a 2D table or reverse iteration). The `amount = 0` clarification lets you anchor `dp[0] = 0` cleanly. The upper-bound question lets you preempt the 'is `O(amount × coins)` good enough?' pushback — for `amount ≤ 10^4` and a handful of coins, easily."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious exponential solution before you discard it.",
+        "say": "\"The brute force is recursive: `minCoins(a) = 1 + min(minCoins(a - c))` over every coin `c ≤ a`, with `minCoins(0) = 0` and `minCoins(negative) = Infinity`. Try every coin at every step, recurse on the remainder, take the best plus one. That's exponential — roughly `O(coins.length ^ amount)` — because the same subproblem `minCoins(7)` gets recomputed in countless branches (subtract 5 from 12, subtract 2 from 9 then 2 from 7, etc.). Massive overlap, perfect DP target.\"",
+        "why": "Two reasons to name it. (1) It's the natural framing — 'at each step pick a coin' is what an interviewer expects to hear first. (2) The overlap is the whole reason DP works here. Pointing out that `minCoins(7)` gets re-derived from many paths is what justifies caching, and the cache is exactly the bottom-up `dp` array."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to bottom-up tabulation?",
+        "say": "\"This is 1D DP over the amount. The recurrence is `dp[a] = min over coins c of dp[a - c] + 1`, where `dp[a]` is the fewest coins that sum to `a`. The decision at each step is *which coin to use last* — and once you commit to coin `c` as the last one, the remaining problem is `dp[a - c]`, which is strictly smaller. So I build up from `dp[0] = 0` to `dp[amount]`, and for each subproblem I try every coin. Initialize the whole array to `Infinity` so unreachable amounts stay unreachable; at the end, if `dp[amount]` is still `Infinity`, return -1.\"",
+        "why": "Naming the recurrence in 'last coin used' framing is what makes it click. Saying 'min over coins' alone is too abstract; 'I'm asking what was the last coin — try each, the rest is a smaller subproblem' is the derivation. The `Infinity` sentinel is the trick that makes the unreachable case fall out of the same recurrence — no special-case branching for 'impossible'."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the canonical case, an unreachable amount (returns -1), and a case where the greedy fails but DP wins.",
+        "examples": [
+          {
+            "input": "coins=[1,2,5], amount=11",
+            "output": "3",
+            "note": "Canonical case — optimal is 5+5+1 = 3 coins.",
+            "trace": "dp = [0, Inf, Inf, …, Inf] (length 12)\na=1: try c=1 → dp[0]+1=1. dp[1]=1\na=2: try c=1 → dp[1]+1=2. try c=2 → dp[0]+1=1. dp[2]=1\na=3: try c=1 → dp[2]+1=2. try c=2 → dp[1]+1=2. dp[3]=2\na=4: c=1→dp[3]+1=3, c=2→dp[2]+1=2. dp[4]=2\na=5: c=1→4, c=2→3, c=5→dp[0]+1=1. dp[5]=1\na=6: c=1→2, c=2→2, c=5→dp[1]+1=2. dp[6]=2\na=7: c=1→3, c=2→3, c=5→dp[2]+1=2. dp[7]=2\na=8: c=1→3, c=2→3, c=5→dp[3]+1=3. dp[8]=3\na=9: c=1→4, c=2→3, c=5→dp[4]+1=3. dp[9]=3\na=10: c=1→4, c=2→4, c=5→dp[5]+1=2. dp[10]=2\na=11: c=1→3, c=2→4, c=5→dp[6]+1=3. dp[11]=3\nreturn 3"
+          },
+          {
+            "input": "coins=[2], amount=3",
+            "output": "-1",
+            "note": "Unreachable — every odd amount stays at Infinity. The Infinity sentinel does the work.",
+            "trace": "dp = [0, Inf, Inf, Inf]\na=1: c=2 > 1, skip. dp[1] still Inf\na=2: c=2 → dp[0]+1=1. dp[2]=1\na=3: c=2 → dp[1]+1 = Inf+1 = Inf. dp[3] still Inf\ndp[3] === Infinity → return -1"
+          },
+          {
+            "input": "coins=[1,3,4], amount=6",
+            "output": "2",
+            "note": "Greedy fails here — greedy picks 4+1+1 = 3 coins, but DP finds 3+3 = 2 coins.",
+            "trace": "dp = [0, Inf, …, Inf] (length 7)\na=1: c=1→dp[0]+1=1. dp[1]=1\na=2: c=1→dp[1]+1=2. dp[2]=2\na=3: c=1→3, c=3→dp[0]+1=1. dp[3]=1\na=4: c=1→2, c=3→dp[1]+1=2, c=4→dp[0]+1=1. dp[4]=1\na=5: c=1→2, c=3→dp[2]+1=3, c=4→dp[1]+1=2. dp[5]=2\na=6: c=1→3, c=3→dp[3]+1=2, c=4→dp[2]+1=3. dp[6]=2\nreturn 2  (the 3+3 path, not greedy's 4+1+1)"
+          }
+        ],
+        "why": "Tracing surfaces two important things. (1) The `[1,3,4] amount=6` case is the textbook reason DP beats greedy: greedy picks the largest coin first and gets stuck. (2) The `[2] amount=3` case validates the `Infinity` sentinel — `Infinity + 1 === Infinity`, so the propagation works without any guard clauses, and the final `=== Infinity → -1` check is the only special-case branch."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• `amount = 0` — `dp[0] = 0`, loop doesn't run, return 0. ✓\n• Empty `coins` — every `dp[a]` for `a > 0` stays Infinity, return -1 for any positive amount. (Should clarify: do we even get empty coins?)\n• `amount` smaller than the smallest coin — every coin is bigger, inner `if (c <= a)` skips, dp[a] stays Infinity. Returns -1.\n• Coin value equals amount — `dp[a]` should be 1 via `dp[0] + 1`. Walked through it: works.\n• Very large amount with small coins (e.g. coins=[1], amount=10000) — runs in `O(10000 × 1) = 10^4` ops, fine. The complexity is tight but the constant is small.\n• Duplicate coins in the input — irrelevant for correctness (you'd just try the same coin twice per cell), but a dedupe would shave a tiny constant.\"",
+        "why": "The `amount = 0` case validates the seed without needing a guard — that's a senior signal, showing the recurrence's invariant is robust. The greedy-fail call-out (which you already made in section 4) is what justifies *why* this is DP and not a one-liner — interviewers often probe with 'why can't you just always use the biggest coin?'. Naming `[1,3,4] amount=6` as the counter-example is a clean rebuttal."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is `O(amount × coins.length)` — outer loop runs `amount` times, inner loop tries every coin, constant work per (amount, coin) pair. Space is `O(amount)` for the dp array.\n\nThe naive recursive version was `O(coins.length ^ amount)` — exponential. Memoization brings it to `O(amount × coins)` time / `O(amount)` space. Bottom-up tabulation keeps the same bounds with smaller constants (no recursion overhead).\n\nFor variants worth knowing: Coin Change II (count the *number of distinct ways* to make the amount instead of the minimum coins) — same `O(amount × coins)` shape, but you sum instead of taking min, and you iterate coins on the outer loop and amount on the inner to avoid double-counting permutations. The 0/1 knapsack (one coin of each) is also a small twist — iterate the amount in reverse to prevent reusing the same coin.\"",
+        "why": "Naming the `O(amount × coins)` bound with the exponential-to-polynomial trajectory is the defense — interviewers want to see you understand *why* DP saves you from the blow-up. The Coin Change II / 0/1 knapsack extensions prove you see the template family and know the loop-order trick (outer-vs-inner determines whether you count combinations or permutations). That same trick recurs in Combination Sum IV, Climbing Stairs Variant, and Partition Equal Subset Sum."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through bottom-up Coin Change. The dp array fills left-to-right; each cell tries every coin and keeps the minimum. Infinity means \"not reachable yet\".",
+    "examples": [
+      { "label": "coins=[1,2,5] amount=11 → 3 (5+5+1)", "input": { "coins": [1, 2, 5], "amount": 11 }, "expected": 3 },
+      { "label": "coins=[2] amount=3 → -1 (unreachable)", "input": { "coins": [2], "amount": 3 }, "expected": -1 },
+      { "label": "coins=[1,3,4] amount=6 → 2 (3+3 beats 4+1+1)", "input": { "coins": [1, 3, 4], "amount": 6 }, "expected": 2 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { coins, amount } = input;",
+      "  const INF = 'Inf';",
+      "  const show = (arr) => arr.map(v => v === Infinity ? INF : v);",
+      "  yield { line: 1, label: `enter — coins=${JSON.stringify(coins)}, amount=${amount}`, state: { coins, amount } };",
+      "  const dp = new Array(amount + 1).fill(Infinity);",
+      "  yield { line: 3, label: `init dp[0..${amount}] = Infinity (unreachable)`, state: { coins, amount, dp: show(dp) } };",
+      "  dp[0] = 0;",
+      "  yield { line: 5, label: 'base: dp[0] = 0 (zero coins to make amount 0)', state: { coins, amount, dp: show(dp), lastFilled: 0 } };",
+      "  for (let a = 1; a <= amount; a++) {",
+      "    const tries = [];",
+      "    for (const c of coins) {",
+      "      if (c <= a) {",
+      "        const cand = dp[a - c] + 1;",
+      "        tries.push(`c=${c}: dp[${a - c}]+1=${dp[a - c] === Infinity ? INF : dp[a - c]}+1=${cand === Infinity ? INF : cand}`);",
+      "        dp[a] = Math.min(dp[a], cand);",
+      "      } else {",
+      "        tries.push(`c=${c}: skip (c>a)`);",
+      "      }",
+      "    }",
+      "    yield { line: 10, label: `dp[${a}] = min over coins → ${dp[a] === Infinity ? INF : dp[a]}   [${tries.join(' | ')}]`, state: { coins, amount, a, dp: show(dp), lastFilled: a } };",
+      "  }",
+      "  const result = dp[amount] === Infinity ? -1 : dp[amount];",
+      "  yield { line: 13, label: `return ${dp[amount] === Infinity ? 'Infinity → -1' : `dp[${amount}] = ${dp[amount]}`}`, state: { coins, amount, dp: show(dp), returns: result } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function coinChange(coins, amount) {\n  // Infinity = unreachable; any subproblem still Infinity at the end becomes -1.\n  const dp = new Array(amount + 1).fill(Infinity);\n  // Base case: 0 coins make amount 0 — anchors the recurrence.\n  dp[0] = 0;\n  // Bottom-up: solve every amount from 1..target, reusing smaller solutions.\n  for (let a = 1; a <= amount; a++) {\n    for (const c of coins) {\n      // Skip coins bigger than current amount; otherwise try using one of c + best for the remainder.\n      if (c <= a) dp[a] = Math.min(dp[a], dp[a - c] + 1);\n    }\n  }\n  return dp[amount] === Infinity ? -1 : dp[amount];\n}\n// Time O(amount * coins.length), Space O(amount)",
     "notes": [

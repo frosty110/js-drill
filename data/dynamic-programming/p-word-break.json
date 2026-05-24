@@ -6,6 +6,106 @@
   "status": "full",
   "description": "Bottom-up DP: dp[i] is true iff s[0..i] can be segmented into dictionary words. Transition: dp[i] = ∃ j < i with dp[j] true AND s[j..i] in the dict.",
   "mechanics": ["dp-tabulation", "set-dedup"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: given a string `s` and a dictionary `wordDict`, return true if `s` can be segmented into a sequence of one or more dictionary words. Words can be reused; concatenation must equal `s` exactly with no leftover characters.\"\n\nThen a few quick clarifying questions:\n• Can a dictionary word be used multiple times? (Usually yes — confirm.)\n• Are `s` and the words guaranteed lowercase ASCII, or do I need to handle case / Unicode?\n• Empty string — return true (vacuous), or is `s` guaranteed non-empty?\n• Return value — just a boolean, not the actual segmentation?\n• Length bounds — is `O(n²)` acceptable on `n = |s|`?",
+        "why": "The reuse question is critical — if each word can be used at most once, this becomes a much harder problem (subset-cover, NP-hard in general). The boolean-only return is also worth confirming because the harder variant 'return ALL possible segmentations' explodes to `O(2^n)` in the worst case and needs backtracking. Pinning these down upfront saves you from over-engineering."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious exponential solution before you discard it.",
+        "say": "\"The brute force is recursive: `canBreak(s) = true if any word in dict is a prefix of s AND canBreak(s.slice(word.length)) is true`. Try every dict word as the first segment, recurse on the suffix. That's `O(n · d^n)` worst case where `d` is the dict size — every position branches up to `d` ways, and you recurse `n` deep. Massive overlap: `canBreak('cats and og')` and `canBreak('catsa nd og')` both recurse into `canBreak('nd og')` from different splits. Memoizing on the suffix (or equivalently the start index) brings it to `O(n²)` time.\"",
+        "why": "Naming the recursive 'try every word as prefix' shape is what plants the DP. The overlap insight — same suffix reached from many prefix splits — is exactly what justifies bottom-up tabulation. The brute force is also the recursion you'd write first if asked to enumerate all segmentations; here you're collapsing it to just the boolean."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to prefix-based bottom-up DP?",
+        "say": "\"This is 1D DP over prefixes. The recurrence is `dp[i] = OR over j < i of (dp[j] AND s[j..i] in dict)`, where `dp[i]` is true iff `s[0..i)` is segmentable. The decision at each step is *where the last word starts* — try every split point `j` from `0` to `i-1`; if `dp[j]` was reachable AND the substring `s[j..i)` is a dict word, then `dp[i]` is reachable too. One valid split is enough — break out of the inner loop on the first hit. Base case is `dp[0] = true` (empty prefix is vacuously segmentable), and the final answer is `dp[s.length]`.\n\nWrap `wordDict` in a `Set` once up-front so the membership check is `O(1)` instead of `O(d)` array.includes.\"",
+        "why": "The 'where the last word starts' framing is the load-bearing piece — it makes the inner loop's purpose obvious and the `dp[j] AND s[j..i] in dict` predicate read naturally. The `dp[0] = true` base case looks like a free pass but it's the seed that lets `dp[i]` ever turn true when `s[0..i)` is itself a word (because then `j = 0`, `dp[0] = true`, `s[0..i) in dict`, all conditions met). Wrapping `wordDict` in a Set is a small but real perf win and shows you think about hot-path costs."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the canonical segmentable case, two-word segmentable, and a case that fails at the very end.",
+        "examples": [
+          {
+            "input": "s=\"leetcode\", wordDict=[\"leet\",\"code\"]",
+            "output": "true",
+            "note": "Canonical case — one valid split is leet|code. dp turns on at i=4 (\"leet\") and i=8 (\"leetcode\" via dp[4]+\"code\").",
+            "trace": "set = {leet, code}\ndp = [T, F, F, F, F, F, F, F, F]\ni=1 \"l\": j=0 dp[0]=T but \"l\"∉dict. dp[1]=F\ni=2 \"le\": j=0 \"le\"∉. dp[2]=F\ni=3 \"lee\": j=0 \"lee\"∉. dp[3]=F\ni=4 \"leet\": j=0 dp[0]=T & \"leet\"∈ ✓. dp[4]=T, break\ni=5 \"leetc\": j=0 \"leetc\"∉, j=4 dp[4]=T & \"c\"∉. dp[5]=F\ni=6 \"leetco\": j=0,4 fail. dp[6]=F\ni=7 \"leetcod\": j=0,4 fail. dp[7]=F\ni=8 \"leetcode\": j=0 dp[0]=T & \"leetcode\"∉, j=4 dp[4]=T & \"code\"∈ ✓. dp[8]=T, break\nreturn dp[8] = true"
+          },
+          {
+            "input": "s=\"applepen\", wordDict=[\"apple\",\"pen\"]",
+            "output": "true",
+            "note": "Two-word split — dp turns on at i=5 (\"apple\") and i=8 (via dp[5]+\"pen\").",
+            "trace": "set = {apple, pen}\ndp = [T, F, F, F, F, F, F, F, F]\ni=1..4: no dict word matches any prefix. dp[1..4]=F\ni=5 \"apple\": j=0 dp[0]=T & \"apple\"∈ ✓. dp[5]=T, break\ni=6 \"applep\": j=0 \"applep\"∉, j=5 dp[5]=T & \"p\"∉. dp[6]=F\ni=7 \"applepe\": j=0 \"applepe\"∉, j=5 \"pe\"∉. dp[7]=F\ni=8 \"applepen\": j=0 \"applepen\"∉, j=5 dp[5]=T & \"pen\"∈ ✓. dp[8]=T, break\nreturn dp[8] = true"
+          },
+          {
+            "input": "s=\"catsog\", wordDict=[\"cats\",\"dog\"]",
+            "output": "false",
+            "note": "Fails at the tail — dp turns on at i=4 (\"cats\") but no word starting from position 4 reaches the end.",
+            "trace": "set = {cats, dog}\ndp = [T, F, F, F, F, F, F]\ni=1..3: no prefix in dict. dp=F\ni=4 \"cats\": j=0 dp[0]=T & \"cats\"∈ ✓. dp[4]=T, break\ni=5 \"catso\": j=0 \"catso\"∉, j=4 dp[4]=T & \"o\"∉. dp[5]=F\ni=6 \"catsog\": j=0 \"catsog\"∉, j=4 dp[4]=T & \"og\"∉. dp[6]=F\nreturn dp[6] = false"
+          }
+        ],
+        "why": "Tracing surfaces three things. (1) `dp[0] = true` is the seed that lets ANY `dp[i]` ever turn on — without it the first match would never fire. (2) The `break` on first hit is correct here (we only need one valid split), and it's a real speedup on dense matches. (3) The `catsog` failure case shows why we can't bail early on dp[i]=true halfway through — we still have to keep filling until the very end, because reaching some prefix doesn't guarantee reaching the whole string."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• `s = ''` — `dp[0] = true`, loop doesn't run, return `dp[0] = true`. (Vacuous case; check that the spec wants this.)\n• Empty `wordDict` — `dp[i]` stays false for all `i > 0`, returns `dp[s.length] = false` (unless `s` is also empty).\n• `s` is itself a single dict word — `dp[s.length]` turns true on `j = 0` with the whole string match. ✓\n• Repeating word like `s = \"aaaaaaa\"`, `wordDict = [\"a\", \"aa\"]` — many valid splits; we only care if any exists. The break ensures we don't enumerate them all.\n• Pathological no-match: `s = \"aaaaaaab\"`, `wordDict = [\"a\", \"aa\", \"aaa\", ...]` — every prefix segment looks promising, but the final 'b' kills it; we still scan the full quadratic table to find this out. (This is the worst-case input that motivates the Trie-based optimization.)\n• Very long words in dict — the `s.slice(j, i)` builds a substring `O(i - j)`, so the true bound including substring cost is `O(n² · k)` where `k` is the average word length. For huge dicts you might switch to a Trie traversal from each `i`.\"",
+        "why": "The pathological 'all a's then b' case is the senior signal — naming it shows you understand the worst-case shape that motivates the Trie variant. Most candidates leave the substring cost out of the complexity analysis; calling it out (and offering the Trie upgrade unprompted) demonstrates real complexity-awareness."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is `O(n² · k)` where `n = |s|` and `k` is the max dict word length — outer loop `n`, inner split point `n`, each `s.slice(j, i)` is `O(i - j) ≤ O(k)`, and Set membership is `O(k)` average (hashing the substring). If you cap word length, it's effectively `O(n²)`. Space is `O(n)` for `dp` plus `O(D)` for the Set where `D` is the total characters in the dict.\n\nFor the trie-based upgrade: build a Trie of `wordDict`, then for each `i` where `dp[i]` is true, walk the Trie character by character forward through `s`, marking `dp[i + word.length] = true` at every Trie terminal hit. That makes the inner work proportional to the matching prefixes from `i` rather than every split point. Often a real speedup on pathological inputs.\n\nFor variants: Word Break II (return ALL valid segmentations, not just whether one exists) — DFS with memoization on suffixes; the answer can be exponential in size, so you genuinely need backtracking. Concatenated Words (does word X consist of two or more shorter dict words?) — run Word Break on each candidate, with the candidate itself excluded from the dict.\"",
+        "why": "Including the substring `k` factor in the complexity analysis is what separates the careful answer from the textbook one — most candidates handwave to `O(n²)`. The Trie upgrade and the Word Break II variant prove you see the template family. Word Break II's exponential worst case is also the natural pushback if an interviewer asks 'why can't you just return a list of strings?' — naming it shows you've thought about why the boolean variant is the tractable one."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through bottom-up Word Break. dp[i] is true iff s[0..i) splits into dict words. For each i we scan split points j, taking the first j where dp[j] is true AND s[j..i) is in the dict.",
+    "examples": [
+      { "label": "\"leetcode\", [\"leet\",\"code\"] → true", "input": { "s": "leetcode", "wordDict": ["leet", "code"] }, "expected": true },
+      { "label": "\"applepen\", [\"apple\",\"pen\"] → true", "input": { "s": "applepen", "wordDict": ["apple", "pen"] }, "expected": true },
+      { "label": "\"catsog\", [\"cats\",\"dog\"] → false (no split)", "input": { "s": "catsog", "wordDict": ["cats", "dog"] }, "expected": false }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { s, wordDict } = input;",
+      "  yield { line: 1, label: `enter — s=\"${s}\", wordDict=${JSON.stringify(wordDict)}`, state: { s, wordDict } };",
+      "  const set = new Set(wordDict);",
+      "  yield { line: 3, label: `build set for O(1) membership: ${JSON.stringify([...set])}`, state: { s, wordDict, set: [...set] } };",
+      "  const dp = new Array(s.length + 1).fill(false);",
+      "  dp[0] = true;",
+      "  yield { line: 6, label: `init dp[0..${s.length}]=false; dp[0]=true (empty prefix is segmentable)`, state: { s, dp: [...dp], lastFilled: 0 } };",
+      "  for (let i = 1; i <= s.length; i++) {",
+      "    const tries = [];",
+      "    let hit = false;",
+      "    for (let j = 0; j < i; j++) {",
+      "      const word = s.slice(j, i);",
+      "      if (dp[j] && set.has(word)) {",
+      "        tries.push(`j=${j}: dp[${j}]=true & \"${word}\"∈dict ✓`);",
+      "        dp[i] = true;",
+      "        hit = true;",
+      "        break;",
+      "      } else if (dp[j]) {",
+      "        tries.push(`j=${j}: dp[${j}]=true but \"${word}\"∉dict`);",
+      "      } else {",
+      "        tries.push(`j=${j}: dp[${j}]=false (skip)`);",
+      "      }",
+      "    }",
+      "    const verdict = hit ? `dp[${i}]=TRUE` : `dp[${i}]=false (no split worked)`;",
+      "    yield { line: 11, label: `i=${i} prefix=\"${s.slice(0, i)}\" → ${verdict}   [${tries.join(' | ')}]`, state: { s, i, dp: [...dp], lastFilled: i } };",
+      "  }",
+      "  yield { line: 16, label: `return dp[${s.length}] = ${dp[s.length]}`, state: { s, dp: [...dp], returns: dp[s.length] } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function wordBreak(s, wordDict) {\n  // Set for O(1) word membership checks (vs O(d) array.includes).\n  const set = new Set(wordDict);\n  // dp[i] = can s[0..i) be segmented? Length n+1 to index past the end.\n  const dp = new Array(s.length + 1).fill(false);\n  dp[0] = true;                                  // empty prefix is segmentable\n  for (let i = 1; i <= s.length; i++) {\n    // j is the split point: prior segment ends at j, candidate word is s[j..i).\n    for (let j = 0; j < i; j++) {\n      if (dp[j] && set.has(s.slice(j, i))) {\n        dp[i] = true;\n        break;                                   // one valid split is enough\n      }\n    }\n  }\n  return dp[s.length];\n}\n// Time O(n^2 * k), Space O(n) for dp + O(d) for the Set",
     "notes": [

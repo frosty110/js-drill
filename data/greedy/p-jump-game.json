@@ -6,6 +6,96 @@
   "status": "full",
   "description": "Given nums where nums[i] is the max jump length from i, determine if you can reach the last index. Greedy: walk forward tracking the farthest reachable index.",
   "mechanics": ["greedy-single-pass"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I have an array `nums` where `nums[i]` is the maximum jump length I can take from position `i`. Starting at index 0, return true if I can reach the last index, false otherwise. From index `i`, I can land on any of `i+1, i+2, ..., i+nums[i]` — not exactly `nums[i]`, but anywhere up to that.\"\n\nThen a few quick clarifying questions:\n• Are values non-negative integers? (A 0 means 'stuck unless someone jumps over me.')\n• What about an empty array — vacuously true, or invalid input?\n• Single-element array — already at the last index, return true?\n• Are we returning just a boolean, or the actual jump sequence?",
+        "why": "The 'up to nums[i], not exactly nums[i]' clarification is the easy thing to misread — it changes the structure entirely. If jumps were exact, this would be a graph reachability problem (BFS). Because they're 'up to', every index in the reachable range contributes, which is what unlocks the greedy. The 0-handling question matters because 0s are the only way to get stuck — without them, `nums[i] >= 1` everywhere means index `i+1` is always reachable from `i`."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious exponential solution before you discard it.",
+        "say": "\"The brute force is recursive: from index `i`, try every jump length `k` from 1 to `nums[i]`, recurse to `i+k`, return true if any reaches the end. Worst case that's O(2^n) — at every index you branch over up to n possibilities. With memoization it collapses to O(n²): for each of n indices, you check up to n jump targets. Both work but waste effort, because once I know I can reach some index `j`, I can reach every index before `j` too. So I only need to track the FARTHEST reachable index, not per-index reachability.\"",
+        "why": "Two reasons to name brute force out loud. (1) It proves you can see the obvious recursive answer before the clever one — and the memoized DP version is a perfectly respectable O(n²) solution that some interviewers will accept. (2) It plants the seed for the greedy: 'I only need the farthest, not per-index reachability.' That sentence IS the greedy insight, and saying it out loud as a brute-force critique earns the optimization naturally."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a single-variable greedy?",
+        "say": "\"Here's the key structural property: if any index `j` is reachable from the start, then every index `i < j` is also reachable. That's because to reach `j`, some earlier index must have jumped over or onto every position in between. So the set of reachable indices is always a prefix `[0..reach]` — never a sparse set with holes.\n\nThat means I don't need to track which indices are reachable; I just need ONE number, `reach`, the maximum so far. Walk left to right. At each `i`, if `i > reach`, I never made it here, return false. Otherwise extend `reach = max(reach, i + nums[i])` and continue. If the loop finishes, `reach >= last index` and I return true.\n\nThe exchange argument: at every step, taking the max possible reach dominates any alternative — there's no future situation where a smaller `reach` helps you. So greedy is provably optimal, not just a heuristic.\"",
+        "why": "Naming the pattern *and* the structural property is the move. 'Greedy' alone is a guess; 'greedy because reachability is a prefix property, not a set property, so one running max captures everything' is a derivation. The exchange argument — 'a bigger reach never hurts' — is the correctness proof, which is what an interviewer wants to hear before they let you code."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a typical success, a stuck-at-zero failure, and a barely-makes-it edge.",
+        "examples": [
+          {
+            "input": "[2,3,1,1,4]",
+            "output": "true",
+            "note": "Typical case — index 1 jumps the farthest and carries you to the end.",
+            "trace": "init reach=0\ni=0: 0<=0 ✓. reach = max(0, 0+2=2) → 2\ni=1: 1<=2 ✓. reach = max(2, 1+3=4) → 4\ni=2: 2<=4 ✓. reach = max(4, 2+1=3) → 4\ni=3: 3<=4 ✓. reach = max(4, 3+1=4) → 4\ni=4: 4<=4 ✓. reach = max(4, 4+4=8) → 8\nloop finished → return true"
+          },
+          {
+            "input": "[3,2,1,0,4]",
+            "output": "false",
+            "note": "Stuck at index 3 — the 0 there means reach caps at 3 and we can't get to index 4.",
+            "trace": "init reach=0\ni=0: 0<=0 ✓. reach = max(0, 0+3=3) → 3\ni=1: 1<=3 ✓. reach = max(3, 1+2=3) → 3\ni=2: 2<=3 ✓. reach = max(3, 2+1=3) → 3\ni=3: 3<=3 ✓. reach = max(3, 3+0=3) → 3\ni=4: 4>3 → STUCK, return false"
+          },
+          {
+            "input": "[2,0,0]",
+            "output": "true",
+            "note": "Barely makes it — index 0 jumps directly over the zeros to the last index.",
+            "trace": "init reach=0\ni=0: 0<=0 ✓. reach = max(0, 0+2=2) → 2\ni=1: 1<=2 ✓. reach = max(2, 1+0=1) → 2\ni=2: 2<=2 ✓. reach = max(2, 2+0=2) → 2\nloop finished → return true"
+          }
+        ],
+        "why": "Tracing surfaces the subtle bug — the comparison is `i > reach` not `i >= reach`. Standing AT `reach` is fine (you just got carried here); standing PAST `reach` is when you're stuck. The [2,0,0] case is the clearest demonstration: when you're at index 2, `reach == 2`, and `2 > 2` is false, so you correctly return true. Off by one in either direction breaks one of the three examples."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Single element `[0]` → loop runs once, i=0 <= reach=0 ✓, no stuck check fires, return true. ✓ (Already at the last index.)\n• Single element `[5]` → same as above, return true. ✓\n• All zeros after index 0, like `[5,0,0,0,0,0]` → first index reaches end immediately, returns true.\n• Leading zero `[0,1,2]` → i=0 reach=0, i=1: 1>0 → return false. ✓ Stuck immediately.\n• All ones `[1,1,1,1,1]` → reach increments by exactly one each step, never falls behind, returns true.\n• Big jump on first index `[100, ...anything]` → reach jumps past end on first iteration, the loop happily finishes and returns true regardless of zeros downstream.\n• Could add an early-exit `if (reach >= nums.length - 1) return true;` inside the loop — cheap win on inputs with a big jump near the start, but the plain version is O(n) either way.\"",
+        "why": "The leading-zero `[0,1,2]` case is what catches a common bug: forgetting that the stuck check fires AT THE START of an iteration, not after the reach update. If you put the check after, `[0,1,2]` would update reach=0 at i=0, then at i=1 check `1>0` and bail — same answer, but the loop order matters more on more complex variants (Jump Game II asks for minimum jumps). Mentioning the optional early-exit is a junior-vs-senior thing — same big-O, but shows you think about real input distributions."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — one pass, constant work per index (one comparison, one max, one addition). No nested loop, no memoization table, no recursion stack. Just a single integer running across the array.\n\nSpace is O(1) — one variable `reach`. The input is read-only.\n\nThe key insight is the dimensional collapse: the brute-force DP needs an n-bit reachability vector, but the greedy collapses it to a single running max because reachability is a prefix property. That's the whole optimization.\n\nIf you wanted to extend to 'find the MINIMUM number of jumps to reach the end' (Jump Game II), the same template works but you need two reach variables — `currentEnd` (farthest reachable with `jumps` jumps so far) and `farthest` (farthest reachable with one more jump). Each time `i` passes `currentEnd`, you commit a jump and roll forward. Same greedy spirit, different aggregation.\"",
+        "why": "Calling out the 'dimensional collapse' from O(n)-state to O(1)-state is the move that shows you understand why the greedy works, not just that it works. The Jump Game II extension is a direct LeetCode follow-up and proves you see this as a family of problems, not a one-off — interviewers who know the problem set will recognize you've thought past the immediate question."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the greedy reachability check on a real input. Watch `reach` extend as each index contributes its jump — and watch the early-exit fire the moment `i` outruns it.",
+    "examples": [
+      { "label": "[2,3,1,1,4] → true", "input": [2, 3, 1, 1, 4], "expected": true },
+      { "label": "[3,2,1,0,4] → false (stuck at i=4)", "input": [3, 2, 1, 0, 4], "expected": false },
+      { "label": "[2,0,0] → true (just barely)", "input": [2, 0, 0], "expected": true }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  let reach = 0;",
+      "  yield { line: 2, label: 'init reach=0 (farthest index we can land on)', state: { nums, reach } };",
+      "  for (let i = 0; i < nums.length; i++) {",
+      "    yield { line: 3, label: `outer step: i=${i}, nums[${i}]=${nums[i]}`, state: { nums, i, reach } };",
+      "    if (i > reach) {",
+      "      yield { line: 4, label: `i=${i} > reach=${reach} — STUCK, return false`, state: { nums, i, reach, returns: false } };",
+      "      return;",
+      "    }",
+      "    yield { line: 4, label: `i=${i} <= reach=${reach} — reachable, continue`, state: { nums, i, reach } };",
+      "    const candidate = i + nums[i];",
+      "    const prevReach = reach;",
+      "    reach = Math.max(reach, candidate);",
+      "    yield { line: 5, label: `reach = max(${prevReach}, i+nums[i]=${candidate}) → ${reach}`, state: { nums, i, reach } };",
+      "  }",
+      "  yield { line: 7, label: 'loop finished without bailing — return true', state: { nums, reach, returns: true } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function canJump(nums) {\n  let reach = 0;                            // farthest index reachable so far\n  for (let i = 0; i < nums.length; i++) {\n    if (i > reach) return false;            // stuck before this index\n    reach = Math.max(reach, i + nums[i]);   // extend farthest\n  }\n  return true;\n}\n// Time O(n), Space O(1)",
     "notes": [

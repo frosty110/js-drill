@@ -6,6 +6,125 @@
   "status": "full",
   "description": "Traverse an m x n matrix in spiral order using four collapsing boundaries (top, bottom, left, right). O(m*n).",
   "mechanics": ["boundary-shrink-traversal"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given an m×n matrix, and I need to return all elements in spiral order — starting top-left, going right across the top row, down the right column, left across the bottom, up the left column, then spiraling inward.\"\n\nThen a few quick clarifying questions:\n• Always rectangular (m × n), or guaranteed square?\n• Empty matrix or empty rows — should I return []?\n• Starting corner is top-left and direction is clockwise, right? (Just confirming.)\n• Return a flat array of values, in spiral order? Not a list of coordinates?",
+        "why": "The m × n (not just n × n) question is load-bearing — it shapes the loop condition. For square matrices, `top <= bottom` and `left <= right` always cross simultaneously; for rectangular ones, one pair can become invalid before the other, which is exactly why the inner two walks need guards. Confirming the starting corner and direction up front prevents 'oh wait, you wanted counter-clockwise?' rework. The 'flat array of values' clarification distinguishes this from problems that want indices or paths."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solutions before picking the right one.",
+        "say": "\"There are two reasonable approaches. (1) Direction-vector walk: track (r, c) and a direction `(dr, dc)`, step forward, turn right when you hit a wall or a visited cell. Needs a `visited[m][n]` matrix or you mark cells with a sentinel like Infinity. Works, but O(m*n) extra space if you can't mutate, and the 'when do I turn' logic is finicky. (2) Four-boundary shrink: maintain top, bottom, left, right; walk one edge, shrink that boundary, repeat until they cross. O(1) extra space, no visited matrix, no direction state. Same O(m*n) time as the brute force, much cleaner state.\n\nI'd go with the four-boundary version.\"",
+        "why": "Two reasons to name both. (1) It shows you considered the obvious 'walk with direction vectors' approach and rejected it for a specific reason (extra space + finicky turn logic), not because you didn't think of it. (2) The four-boundary version is the senior-candidate move precisely because it factors the state into a problem-shaped abstraction (the four walls) instead of a generic walker. Interviewers reward that kind of state reduction."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the loop invariant that makes the four-boundary trick work?",
+        "say": "\"The trick is four collapsing bounds: top, bottom, left, right. They define the current 'unwalked rectangle'. Each iteration walks one edge of that rectangle — top row L→R, right col T→B, bottom row R→L, left col B→T — and after each walk, the corresponding boundary shrinks inward: top++, right--, bottom--, left++.\n\nThe loop invariant is: at the top of every iteration, every cell inside the rectangle `[top..bottom] × [left..right]` is unvisited. Each edge walk consumes one row or column, and the matching boundary update preserves the invariant. The loop terminates when the bounds cross: `top > bottom` or `left > right`.\n\nThere's one subtle thing — after the top walk shrinks `top`, the next iteration's check `top <= bottom` might still pass for the right-column walk; same for the right walk shrinking `right`. But after the right walk, when we want to walk the bottom row R→L, we need an *extra* guard: `if (top <= bottom)` — because in a single-row leftover (e.g., 1 × 5), the top walk already consumed everything, and the bottom walk would re-visit the same cells. Same guard for the left-column walk: `if (left <= right)`.\"",
+        "why": "Naming the loop invariant ('cells inside the unwalked rectangle') *and* the bounds-crossing termination *and* the inner guards is the move. 'Four boundaries, shrink each one' alone is half the answer; the guards are what make the algorithm actually correct on rectangular and degenerate cases. Interviewers will specifically construct a 1 × N test case to see if you remembered the guards — naming them up front shows you did."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the four-walk loop before writing the code.",
+        "intro": "\"Let me trace through a couple of cases.\" Three inputs cover a 3×3 (the canonical case with the center singleton), a 3×4 rectangle (so m ≠ n and the bounds cross at different times), and a 1×5 degenerate (where the guards are the only thing preventing a double-walk).",
+        "examples": [
+          {
+            "input": "[[1,2,3],[4,5,6],[7,8,9]]",
+            "output": "[1,2,3,6,9,8,7,4,5]",
+            "note": "Canonical 3×3 — two full laps plus a center singleton. Bounds: top/bottom collapse to 1, left/right collapse to 1, then the loop runs once more for the (1, 1) center.",
+            "trace": "init: top=0, bottom=2, left=0, right=2, result=[]\nlap 1:\n  walk top row r=0, c=0..2 → result=[1, 2, 3]. top→1.\n  walk right col c=2, r=1..2 → result=[1, 2, 3, 6, 9]. right→1.\n  guard top(1) <= bottom(2) ✓ — walk bottom row r=2, c=1..0 (R→L) → result=[..., 8, 7]. bottom→1.\n  guard left(0) <= right(1) ✓ — walk left col c=0, r=1..1 (B→T) → result=[..., 4]. left→1.\nlap 2:\n  loop check top(1) <= bottom(1) ✓ && left(1) <= right(1) ✓ — enter.\n  walk top row r=1, c=1..1 → result=[..., 5]. top→2.\n  walk right col c=1, r=2..1 → empty range (top > bottom). right→0.\n  guard top(2) <= bottom(1) ✗ — skip bottom walk.\n  guard left(1) <= right(0) ✗ — skip left walk.\nexit: top(2) > bottom(1). return [1, 2, 3, 6, 9, 8, 7, 4, 5] ✓"
+          },
+          {
+            "input": "[[1,2,3,4],[5,6,7,8],[9,10,11,12]]",
+            "output": "[1,2,3,4,8,12,11,10,9,5,6,7]",
+            "note": "3×4 rectangle — one full outer lap, then a 1×2 interior strip that's all top-row. The guards on bottom and left are essential here; without them you'd double-walk.",
+            "trace": "init: top=0, bottom=2, left=0, right=3, result=[]\nlap 1:\n  walk top row r=0, c=0..3 → result=[1, 2, 3, 4]. top→1.\n  walk right col c=3, r=1..2 → result=[..., 8, 12]. right→2.\n  guard top(1) <= bottom(2) ✓ — walk bottom row r=2, c=2..0 (R→L) → result=[..., 11, 10, 9]. bottom→1.\n  guard left(0) <= right(2) ✓ — walk left col c=0, r=1..1 (B→T) → result=[..., 5]. left→1.\nlap 2:\n  loop check top(1) <= bottom(1) ✓ && left(1) <= right(2) ✓ — enter.\n  walk top row r=1, c=1..2 → result=[..., 6, 7]. top→2.\n  walk right col c=2, r=2..1 → empty range. right→1.\n  guard top(2) <= bottom(1) ✗ — skip bottom walk. ← THE GUARD MATTERS\n  guard left(1) <= right(1) ✓ — walk left col c=1, r=1..2 (B→T) → empty range (r starts at bottom=1, ends at top=2; r >= top fails immediately).\n  left→2.\nexit: top(2) > bottom(1). return [1, 2, 3, 4, 8, 12, 11, 10, 9, 5, 6, 7] ✓"
+          },
+          {
+            "input": "[[1,2,3,4,5]]",
+            "output": "[1,2,3,4,5]",
+            "note": "Degenerate 1×5 — only the top walk does work; the guards prevent the bottom walk from re-walking the same row in reverse. Without `if (top <= bottom)`, the answer would be [1,2,3,4,5,5,4,3,2,1].",
+            "trace": "init: top=0, bottom=0, left=0, right=4, result=[]\nlap 1:\n  loop check top(0) <= bottom(0) ✓ && left(0) <= right(4) ✓ — enter.\n  walk top row r=0, c=0..4 → result=[1, 2, 3, 4, 5]. top→1.\n  walk right col c=4, r=1..0 → empty range (top > bottom). right→3.\n  guard top(1) <= bottom(0) ✗ — skip bottom walk. ← THE GUARD PREVENTS DOUBLE-WALK\n  guard left(0) <= right(3) ✓ — walk left col c=0, r=0..1 (B→T) → empty range. left→1.\nexit: top(1) > bottom(0). return [1, 2, 3, 4, 5] ✓"
+          }
+        ],
+        "why": "Tracing surfaces the bug the guards prevent. In the 1×5 case, without `if (top <= bottom)`, the bottom-row walk would re-walk row 0 right-to-left, appending [5, 4, 3, 2, 1] and returning the wrong answer. The 3×4 case shows the same bug in a less obvious form — after the inner top walk consumes the 1×2 strip, an unguarded bottom walk would re-walk those two cells. Tracing the degenerate case is also what defends the loop termination — the bounds-crossing check is what guarantees we exit even when one dimension is 1."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty matrix or `matrix[0]` empty → `matrix[0].length` throws or `right = -1` makes the loop never enter. Guard with an early return for `matrix.length === 0`.\n• 1 × n (single row) → only the top walk runs; the inner guards prevent re-walking row 0 backwards. ✓\n• n × 1 (single column) → only the top walk (which consumes the single column as a one-cell row at each iteration... actually no — the top walk goes L→R across the row at index `top`, which has length 1, so it pushes one cell; then top++, the right walk goes T→B across the right column... let me re-check. For 5×1: top walk pushes matrix[0][0], top=1. Right walk r=1..4 pushes matrix[1..4][0]. Right walk does the work, top walk just primes it. Either way: the guards are what keep it correct.\n• Square n × n → bounds cross at the same iteration; both guards trigger together when we hit the center or a 1×1 leftover.\n• Even-sized square (4×4) → bounds collapse cleanly with no center singleton. Odd-sized square (3×3) → bounds collapse to a single center cell.\n• Negative numbers, large numbers, duplicates in cell values — irrelevant. Only positions are walked, values don't affect control flow.\"",
+        "why": "The 1×n and n×1 edges are the killer ones to mention — they're where the guards earn their keep, and they're a common interviewer trick. The 'duplicates in values don't matter' callout shows you understand that the algorithm is position-driven, not value-driven — a small distinction but the kind of thing that distinguishes 'wrote the loop' from 'understood the loop'."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(m*n) — every cell of the input gets pushed to the result exactly once. The four boundaries collectively consume every position across the outer iterations, and each cell takes O(1) work to push. No cell is visited twice (that's what the guards enforce), so the bound is tight at m*n.\n\nSpace is O(1) extra, not counting the output array. Just four integers — top, bottom, left, right. No visited matrix, no recursion stack, no auxiliary structures.\n\nThe 'shrinking bounds' template extends to other matrix traversals — rotate-image's transpose loop is basically `j > i` shrinking the unswapped triangle, set-matrix-zeroes' interior pass starts at (1, 1) for the same reason. The general principle: when a 2D traversal needs to visit each cell exactly once with directional constraints, factor the state into a small number of integer bounds that monotonically converge.\"",
+        "why": "The 'every cell pushed exactly once, that's what the guards enforce' framing is the right defense of the O(m*n) claim — it ties the complexity to the algorithmic invariant rather than just stating the bound. The 'shrinking bounds template' framing — connecting this to rotate's transpose loop and the in-place patterns — proves you see the family of techniques, not just this one problem. Interviewers grading for senior signal love that kind of generalization."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the four-boundary spiral one edge at a time. The state panel shows top/bottom/left/right (the four collapsing walls) and the result array as it grows. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "3x3 [[1,2,3],[4,5,6],[7,8,9]] → [1,2,3,6,9,8,7,4,5]", "input": { "matrix": [[1,2,3],[4,5,6],[7,8,9]] }, "expected": "[1,2,3,6,9,8,7,4,5]" },
+      { "label": "3x4 [[1..4],[5..8],[9..12]] → [1,2,3,4,8,12,11,10,9,5,6,7]", "input": { "matrix": [[1,2,3,4],[5,6,7,8],[9,10,11,12]] }, "expected": "[1,2,3,4,8,12,11,10,9,5,6,7]" },
+      { "label": "1x5 [[1,2,3,4,5]] → [1,2,3,4,5]", "input": { "matrix": [[1,2,3,4,5]] }, "expected": "[1,2,3,4,5]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const matrix = input.matrix;",
+      "  const snap = () => matrix.map(row => row.slice());",
+      "  yield { line: 1, label: `enter function — matrix is ${matrix.length}x${matrix[0].length}`, state: { matrix: snap() } };",
+      "  const result = [];",
+      "  yield { line: 2, label: 'init result = [] (output buffer)', state: { matrix: snap(), result: [] } };",
+      "  let top = 0, bottom = matrix.length - 1;",
+      "  yield { line: 4, label: `init top=0, bottom=${matrix.length - 1}`, state: { matrix: snap(), result: [...result], top: 0, bottom: matrix.length - 1 } };",
+      "  let left = 0, right = matrix[0].length - 1;",
+      "  yield { line: 5, label: `init left=0, right=${matrix[0].length - 1}`, state: { matrix: snap(), result: [...result], top, bottom, left: 0, right: matrix[0].length - 1 } };",
+      "  let pass = 0;",
+      "  while (top <= bottom && left <= right) {",
+      "    pass++;",
+      "    yield { line: 6, label: `loop check: top(${top}) <= bottom(${bottom}) && left(${left}) <= right(${right}) — pass #${pass}`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    const before1 = result.length;",
+      "    for (let c = left; c <= right; c++) result.push(matrix[top][c]);",
+      "    yield { line: 7, label: `walk TOP row r=${top}, cols ${left}..${right} → pushed [${result.slice(before1).join(',')}]`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    top++;",
+      "    yield { line: 8, label: `shrink top → ${top}`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    const before2 = result.length;",
+      "    for (let r = top; r <= bottom; r++) result.push(matrix[r][right]);",
+      "    yield { line: 9, label: `walk RIGHT col c=${right}, rows ${top}..${bottom} → pushed [${result.slice(before2).join(',')}]`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    right--;",
+      "    yield { line: 10, label: `shrink right → ${right}`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    if (top <= bottom) {",
+      "      yield { line: 12, label: `guard top(${top}) <= bottom(${bottom}) → true, walk BOTTOM row`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "      const before3 = result.length;",
+      "      for (let c = right; c >= left; c--) result.push(matrix[bottom][c]);",
+      "      yield { line: 13, label: `walk BOTTOM row r=${bottom}, cols ${right}..${left} (R→L) → pushed [${result.slice(before3).join(',')}]`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "      bottom--;",
+      "      yield { line: 14, label: `shrink bottom → ${bottom}`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    } else {",
+      "      yield { line: 12, label: `guard top(${top}) <= bottom(${bottom}) → false, SKIP bottom walk (1-row leftover already covered)`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    }",
+      "    if (left <= right) {",
+      "      yield { line: 17, label: `guard left(${left}) <= right(${right}) → true, walk LEFT col`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "      const before4 = result.length;",
+      "      for (let r = bottom; r >= top; r--) result.push(matrix[r][left]);",
+      "      yield { line: 18, label: `walk LEFT col c=${left}, rows ${bottom}..${top} (B→T) → pushed [${result.slice(before4).join(',')}]`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "      left++;",
+      "      yield { line: 19, label: `shrink left → ${left}`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    } else {",
+      "      yield { line: 17, label: `guard left(${left}) <= right(${right}) → false, SKIP left walk (1-col leftover already covered)`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "    }",
+      "  }",
+      "  yield { line: 6, label: `loop check: top(${top}) <= bottom(${bottom}) && left(${left}) <= right(${right}) → false, exit`, state: { matrix: snap(), result: [...result], top, bottom, left, right } };",
+      "  yield { line: 22, label: `return ${JSON.stringify(result)}`, state: { matrix: snap(), result: [...result], top, bottom, left, right, returns: JSON.stringify(result) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function spiralOrder(matrix) {\n  const result = [];\n  // Four collapsing boundaries — shrink each one after its edge is walked.\n  let top = 0, bottom = matrix.length - 1;\n  let left = 0, right = matrix[0].length - 1;\n  while (top <= bottom && left <= right) {\n    for (let c = left; c <= right; c++) result.push(matrix[top][c]);\n    top++;\n    for (let r = top; r <= bottom; r++) result.push(matrix[r][right]);\n    right--;\n    // Guard: a 1-row leftover would be re-walked R->L without this check.\n    if (top <= bottom) {\n      for (let c = right; c >= left; c--) result.push(matrix[bottom][c]);\n      bottom--;\n    }\n    // Guard: a 1-col leftover would be re-walked B->T without this check.\n    if (left <= right) {\n      for (let r = bottom; r >= top; r--) result.push(matrix[r][left]);\n      left++;\n    }\n  }\n  return result;\n}\n// Time O(m*n), Space O(1) extra (excluding output)",
     "notes": [

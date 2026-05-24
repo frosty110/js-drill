@@ -6,6 +6,106 @@
   "status": "full",
   "description": "Compute the next generation of a 2D grid. Each cell's fate depends on its 8 neighbors: a live cell with 2 or 3 live neighbors survives; a dead cell with exactly 3 becomes alive. Write to a fresh grid — never mutate while iterating, or later cells will read updated state.",
   "mechanics": ["four-dir-neighbors"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the rules and the in-place question.",
+        "say": "\"Let me make sure I have this right: I get a 2D grid where each cell is 0 (dead) or 1 (alive), and I have to return the grid AFTER one tick of Conway's Game of Life. The rules: a live cell with 2 or 3 live neighbors survives, otherwise dies; a dead cell with exactly 3 live neighbors becomes alive, otherwise stays dead. Neighbors are the 8 cells touching this one (including diagonals).\"\n\nThen a few quick clarifying questions:\n• Edges of the board — are cells off the grid treated as dead, or does the board wrap (torus)? (Usually dead-off-board; torus is a fun variant but uncommon in interviews.)\n• Return a new grid, or mutate in place? (LeetCode 289 famously asks for in-place; this version returns a new grid, which is simpler.)\n• Multiple ticks, or just one? (Just one.)\n• Sparse grids — could the live cells be way fewer than the cell count, so an iteration over only-live makes sense? (Maybe — depends on input.)",
+        "why": "The in-place question is THE question for this problem. The classic LeetCode framing is 'mutate in place' specifically because doing so naively breaks the rules — when you flip cell (1,1) from 1→0, cell (1,2)'s neighbor count is now wrong for its own evaluation. The trick is to encode 'was-live + will-be-dead' as a temporary value (like 2 or -1) so the original state can be recovered when counting. For a return-new-grid version that complication goes away entirely. Asking up-front signals you know there are two flavors of this problem and want to know which you're being asked."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the in-place bug before defending the two-pass approach.",
+        "say": "\"The brute force people reach for is: walk the grid, and for each cell, compute its new state and overwrite the cell in place. That breaks immediately. When you flip cell (1,1), the cells you haven't visited yet — (1,2), (2,1), (2,2), and so on — will read THIS cell as the new value, not the old. So their neighbor counts are wrong.\n\nThe fix: read from one grid, write to another. I'll allocate a fresh `out` grid of the same dimensions, walk every cell of `grid`, compute the neighbor count using the unmodified `grid`, write the new value to `out`, then return `out` at the end. Two passes worth of memory access, one grid worth of writes, zero contamination.\n\nIf I needed to optimize for memory and do it in-place, the trick is to encode transitions as intermediate values — 0→0 stays 0, 1→1 stays 1, 0→1 becomes 2, 1→0 becomes -1 (or some other distinct value). The neighbor-count step only counts 1s and -1s as 'was-alive', and a second pass normalizes 2→1 and -1→0. Worth knowing the technique but the two-grid version is what I'd write first.\"",
+        "why": "Two reasons to narrate the in-place bug. (1) It frames the snapshot-before-write rule as a forced response to a concrete bug, not arbitrary best-practice. The interviewer can FEEL why two grids are needed because they just heard the bug described. (2) Mentioning the in-place encoding trick unprompted is a senior signal — most candidates either don't know it or accidentally implement it without naming it. Naming it shows you've seen this problem before and know its variants."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the algorithm shape, and why does it need a snapshot?",
+        "say": "\"This is a two-pass cellular automaton update — compute next state from current, then swap. The key invariant: when computing the next state of any cell, the neighbor reads must come from the ORIGINAL grid, not a partially-updated one. That's why we write to a fresh `out` grid instead of mutating `grid` in place — we need the snapshot of current state to be stable for the entire pass.\n\nFor each cell at (r, c), I count live neighbors by walking the 3x3 box around it with `dr` and `dc` each in [-1, 0, 1], skipping the (0, 0) case (which is the cell itself), and bounds-checking each (nr, nc). Then I apply the rules: if the cell was alive, it survives iff neighbor count is 2 or 3; if it was dead, it becomes alive iff neighbor count is exactly 3.\n\nThe 8-neighbor pattern with a double nested dr/dc loop is the cleanest way to express this — eight if-statements unrolled would be faster to read for THIS problem but doesn't generalize. The dr/dc loop pattern is the same shape used for chess knight moves, BFS on a grid, flood fill — any 'visit the cells touching this one' algorithm.\"",
+        "why": "Naming the snapshot invariant explicitly is the move. 'Use two grids' alone is trivia; 'two grids because the next-state computation reads neighbors and we can't have in-flight writes corrupting those reads' is the design. The dr/dc-as-pattern callout signals you see this as one shape among many neighbor-iteration problems, not a one-off — which is exactly the level of generalization that gets you marked as a senior pattern-recognizer."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few small grids to confirm the rules and the snapshot behavior.",
+        "intro": "\"Let me trace three tiny grids. The first is a 3x3 blinker — it should rotate from horizontal to vertical. The second is a 4x4 block — a still life that doesn't change. The third is a 3x3 L-shaped triomino that births a fourth live cell into a 2x2 block. For each, I'll spot-check a couple of cells' neighbor counts so the rules are visible.\"",
+        "examples": [
+          {
+            "input": "[[0,0,0],[1,1,1],[0,0,0]]",
+            "output": "[[0,1,0],[0,1,0],[0,1,0]]",
+            "note": "Blinker — horizontal bar becomes vertical bar after one tick. The middle column births because dead cells (0,1) and (2,1) each have exactly 3 live neighbors; the two end live cells (1,0) and (1,2) die because they have only 1 live neighbor.",
+            "trace": "init grid=[[0,0,0],[1,1,1],[0,0,0]], out=[[0,0,0],[0,0,0],[0,0,0]]\n(0,0) dead, neighbors at (0,1),(1,0),(1,1) live → count=2 → stays dead, out[0][0]=0\n(0,1) dead, neighbors at (1,0),(1,1),(1,2) live → count=3 → BIRTH, out[0][1]=1\n(0,2) dead, neighbors at (0,1),(1,1),(1,2) live → count=2 → stays dead, out[0][2]=0\n(1,0) live, neighbors at (0,1) dead + (1,1) live + (2,1) dead + others dead → count=1 → DIE, out[1][0]=0\n(1,1) live, neighbors at (1,0),(1,2) live + others dead → count=2 → SURVIVE, out[1][1]=1\n(1,2) live, neighbors at (1,1) live + others dead → count=1 → DIE, out[1][2]=0\n(2,0) dead, neighbors (1,0),(1,1) live → count=2 → stays dead, out[2][0]=0\n(2,1) dead, neighbors (1,0),(1,1),(1,2) live → count=3 → BIRTH, out[2][1]=1\n(2,2) dead, neighbors (1,1),(1,2) live → count=2 → stays dead, out[2][2]=0\nreturn [[0,1,0],[0,1,0],[0,1,0]]"
+          },
+          {
+            "input": "[[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]]",
+            "output": "[[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]]",
+            "note": "Block — a still life. Each of the four live cells has exactly 3 live neighbors (the other three in the block), so each survives. No dead cell has exactly 3 live neighbors, so no births. Grid unchanged.",
+            "trace": "init grid=4x4 block, out=4x4 zeros\n(1,1) live, neighbors include (1,2),(2,1),(2,2) live → count=3 → SURVIVE, out[1][1]=1\n(1,2) live, neighbors include (1,1),(2,1),(2,2) live → count=3 → SURVIVE, out[1][2]=1\n(2,1) live, neighbors include (1,1),(1,2),(2,2) live → count=3 → SURVIVE, out[2][1]=1\n(2,2) live, neighbors include (1,1),(1,2),(2,1) live → count=3 → SURVIVE, out[2][2]=1\nall other cells: ≤2 live neighbors → stay dead\nreturn [[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]]"
+          },
+          {
+            "input": "[[1,1,0],[1,0,0],[0,0,0]]",
+            "output": "[[1,1,0],[1,1,0],[0,0,0]]",
+            "note": "L-triomino — the dead cell at (1,1) has exactly 3 live neighbors so it births, forming a 2x2 block (a still life from then on).",
+            "trace": "init grid=[[1,1,0],[1,0,0],[0,0,0]]\n(0,0) live, neighbors at (0,1),(1,0) live → count=2 → SURVIVE, out[0][0]=1\n(0,1) live, neighbors at (0,0),(1,0) live → count=2 → SURVIVE, out[0][1]=1\n(0,2) dead, neighbor (0,1) live → count=1 → stays dead, out[0][2]=0\n(1,0) live, neighbors at (0,0),(0,1) live → count=2 → SURVIVE, out[1][0]=1\n(1,1) dead, neighbors at (0,0),(0,1),(1,0) live → count=3 → BIRTH, out[1][1]=1\n(1,2) dead, neighbor (0,1) live → count=1 → stays dead, out[1][2]=0\n(2,0) dead, neighbor (1,0) live → count=1 → stays dead, out[2][0]=0\n(2,1) dead, neighbor (1,0) live → count=1 → stays dead, out[2][1]=0\n(2,2) dead, no live neighbors → stays dead, out[2][2]=0\nreturn [[1,1,0],[1,1,0],[0,0,0]]"
+          }
+        ],
+        "why": "The blinker is the load-bearing trace — it's the first place the snapshot invariant matters. If you mutated in place, by the time you got to (1,2) the value at (1,0) might already be 0 instead of 1, and the count would be off by one. The block trace is the sanity check that the survive rule (count == 2 or 3) handles 3-neighbor cases correctly — careless implementations sometimes write `count > 1 && count < 4` which is equivalent but invites typos. The L-triomino is the trace that confirms the birth rule fires on exactly-3, not on 2-or-3 — the difference between dead-cell rules and live-cell rules is the asymmetry candidates flub most often."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty grid → return empty. Defensive: check `grid.length === 0` before accessing `grid[0].length`.\n• 1x1 grid → only itself, no neighbors. Live cell with 0 neighbors dies (underpopulation); dead cell with 0 neighbors stays dead. ✓\n• 1xN row → only horizontal neighbors. The dr/dc loop's bounds checks handle this automatically — top and bottom rows are out of bounds, contributing 0 to the count.\n• Corner cells → 3 in-bounds neighbors max. Edge cells → 5. Interior → 8. The bounds-check pattern handles all three uniformly without special-casing.\n• All-dead grid → every cell stays dead (no births possible). Two passes, zero work, return all zeros.\n• All-live grid → interior cells die from overpopulation (8 neighbors), corner cells survive (3 neighbors), edge cells die (5 neighbors). A common 'fun' trace.\n• Off-by-one in the dr/dc bounds — `<` vs `<=`, easy to typo. The condition `nr >= 0 && nr < h` is correct; `nr <= h` would walk off the end.\n• Skipping the (0,0) self-cell — if you forget the `if (dr === 0 && dc === 0) continue`, you'll count the cell itself as a neighbor, giving live cells one extra neighbor and breaking every rule.\n• In-place version specifically — the encoding trick (2 for 0→1, -1 for 1→0) only works if your neighbor count treats 1 and -1 as alive and 0 and 2 as dead. Easy to flub the count predicate.\"",
+        "why": "The skip-self bullet is the single most common bug — even experienced candidates ship this once or twice in a career. Naming it explicitly is the 'I've debugged this exact problem before' signal. The 1xN row case is the proof that the bounds-check pattern is uniform: it handles 'no rows above' the same way it handles 'no columns to the left' — both are out-of-bounds and contribute 0. Mentioning that means you've thought about WHY the bounds check makes corner/edge/interior code identical, which is the elegance of the pattern."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity and place this design?",
+        "say": "\"Time: O(h × w × 8) which simplifies to O(h × w). Each cell visits its 8-cell box, constant work per visit, so total work is bounded by 8 × cell_count. The dr/dc loop adds a small constant overhead vs. eight unrolled if-statements but the asymptotic is the same.\n\nSpace: O(h × w) for the fresh `out` grid. The in-place encoding trick brings that down to O(1) extra space — same time complexity, smaller working set. Worth knowing for follow-ups.\n\nThe 'snapshot-then-update' pattern (read from immutable view A, write to fresh view B, swap) is everywhere: React's virtual DOM diff (build new tree, diff against old, commit), database MVCC (writers don't block readers because they're writing to a new version), even Git itself (each commit is a snapshot, never mutates prior commits). Same shape: never read-and-write simultaneously when consistency matters.\n\nFor sparse grids — say a glider gun in an otherwise empty 1000x1000 board — the O(h × w) full-grid sweep wastes time on the 99.9% of cells that have no live neighbors. The fix is to keep a Set of live-cell coordinates and only re-evaluate cells in the 'influence zone' (live cells and their dead neighbors). Same algorithm, just iterating over Set + boundary rather than the full grid. Trade space and code complexity for time on sparse inputs.\"",
+        "why": "The snapshot-then-update generalization is the wrap-up move — naming React's VDOM diff and database MVCC as instances of the same pattern shows you see one design across three domains, which is exactly what 'pattern recognition' grades at the senior level. The sparse-grid optimization is the unprompted bonus — most candidates stop at O(h × w), but the live-cells-Set approach is the production-realistic answer for any real simulator (cellular automaton libraries, agent-based models, particle systems). It signals you've thought past the interview prompt to where the algorithm actually runs."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through one tick of Conway's Game of Life on a small grid. The trace visits cells in row-major order, computes the live-neighbor count for each, and writes the new state into a fresh `out` grid. Watch how a live cell with 2-3 neighbors survives, and how a dead cell with exactly 3 takes a birth — anything else dies. Boards are kept ≤4x4 so step counts stay scrollable.",
+    "examples": [
+      { "label": "3x3 blinker → vertical bar", "input": { "board": [[0,0,0],[1,1,1],[0,0,0]] }, "expected": "[[0,1,0],[0,1,0],[0,1,0]]" },
+      { "label": "4x4 block → still life (no change)", "input": { "board": [[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]] }, "expected": "[[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]]" },
+      { "label": "3x3 L-triomino → 2x2 block forms (birth at center)", "input": { "board": [[1,1,0],[1,0,0],[0,0,0]] }, "expected": "[[1,1,0],[1,1,0],[0,0,0]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const grid = input.board;",
+      "  const h = grid.length, w = grid[0].length;",
+      "  yield { line: 2, label: 'enter — h=' + h + ', w=' + w + ', grid=' + JSON.stringify(grid), state: { grid, h, w } };",
+      "  const out = Array.from({ length: h }, () => Array(w).fill(0));",
+      "  yield { line: 3, label: 'init out — fresh ' + h + 'x' + w + ' grid of zeros', state: { grid, out: out.map(r => [...r]), h, w } };",
+      "  for (let r = 0; r < h; r++) {",
+      "    for (let c = 0; c < w; c++) {",
+      "      let n = 0;",
+      "      for (let dr = -1; dr <= 1; dr++) {",
+      "        for (let dc = -1; dc <= 1; dc++) {",
+      "          if (dr === 0 && dc === 0) continue;",
+      "          const nr = r + dr, nc = c + dc;",
+      "          if (nr >= 0 && nr < h && nc >= 0 && nc < w) n += grid[nr][nc];",
+      "        }",
+      "      }",
+      "      const self = grid[r][c];",
+      "      let next;",
+      "      if (self === 1) next = (n === 2 || n === 3) ? 1 : 0;",
+      "      else            next = (n === 3) ? 1 : 0;",
+      "      out[r][c] = next;",
+      "      const verdict = self === 1",
+      "        ? (next === 1 ? 'live + ' + n + ' neigh → survive' : 'live + ' + n + ' neigh → die')",
+      "        : (next === 1 ? 'dead + 3 neigh → birth' : 'dead + ' + n + ' neigh → stay dead');",
+      "      yield { line: 16, label: '(' + r + ',' + c + ') self=' + self + ', liveNeighbors=' + n + ' → ' + verdict, state: { grid, out: out.map(row => [...row]), r, c, self, liveNeighbors: n, next } };",
+      "    }",
+      "  }",
+      "  yield { line: 20, label: 'tick complete — return out=' + JSON.stringify(out), state: { grid, out: out.map(r => [...r]), returns: JSON.stringify(out) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function nextGen(grid) {\n  const h = grid.length, w = grid[0].length;\n  // Write to a fresh grid — in-place would corrupt neighbor counts of unvisited cells.\n  const out = Array.from({ length: h }, () => Array(w).fill(0));\n  for (let r = 0; r < h; r++) {\n    for (let c = 0; c < w; c++) {\n      let n = 0;\n      for (let dr = -1; dr <= 1; dr++) {\n        for (let dc = -1; dc <= 1; dc++) {\n          // Skip the cell itself when summing the 8 neighbors.\n          if (dr === 0 && dc === 0) continue;\n          const nr = r + dr, nc = c + dc;\n          if (nr >= 0 && nr < h && nc >= 0 && nc < w) n += grid[nr][nc];\n        }\n      }\n      // Live survives on 2 or 3; dead births on EXACTLY 3. Anything else dies.\n      if (grid[r][c] === 1) out[r][c] = (n === 2 || n === 3) ? 1 : 0;\n      else                  out[r][c] = (n === 3) ? 1 : 0;\n    }\n  }\n  return out;\n}\n// Time O(h*w), Space O(h*w) for the new grid",
     "notes": [

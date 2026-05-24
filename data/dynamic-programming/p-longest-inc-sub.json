@@ -6,6 +6,98 @@
   "status": "full",
   "description": "Length of the Longest Increasing Subsequence. dp[i] = 1 + max dp[j] over j < i with nums[j] < nums[i]. O(n²) DP; O(n log n) with patience-sort + binary search.",
   "mechanics": ["dp-tabulation"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: given an integer array `nums`, find the length of the longest *strictly increasing subsequence*. Subsequence means I can drop elements but I must preserve order; I do NOT need contiguous elements.\"\n\nThen a few quick clarifying questions:\n• Strictly increasing or non-decreasing (i.e. are equals allowed)?\n• Subsequence vs subarray — confirming it's subsequence (gaps allowed), not contiguous.\n• Empty array — return 0?\n• Return value — just the length, or the subsequence itself?\n• Range — is `O(n²)` acceptable, or do they want `O(n log n)`?",
+        "why": "The strict-vs-non-decreasing question is the easy thing to miss — it flips the recurrence's comparison from `<` to `<=`. The subseq-vs-subarray clarification matters even more: if it were subarray (contiguous), the problem becomes a Kadane-style single-pass scan and is much easier. Asking up-front about the complexity expectation lets you decide whether to ship the textbook `O(n²)` DP or the `O(n log n)` patience-sort variant — both are correct, but the second is harder to derive on the fly."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious exponential solution before you discard it.",
+        "say": "\"The brute force is generating every subsequence and checking which ones are strictly increasing — that's `O(2^n)` subsequences, each `O(n)` to verify, total `O(n · 2^n)`. Pure enumeration. The natural recursive shape is: `lis(i, prevIdx) = max(lis(i+1, prevIdx), 1 + lis(i+1, i) if nums[i] > nums[prevIdx])` — at each index, either skip or take if it's greater than the last taken. Same `2^n` shape; memoization on `(i, prevIdx)` brings it to `O(n²)` time and space.\"",
+        "why": "The recursive 'skip or take' decomposition is what plants the DP. Once you say 'I'm deciding at each index whether to extend the subsequence', the bottom-up table falls out: `dp[i]` is the best LIS *ending at* `i`, and the decision is which earlier `j` to extend from. Naming the brute force as `2^n` also justifies the `O(n²)` improvement as a real win, not just a refactor."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to ending-at-i tabulation?",
+        "say": "\"This is 1D DP with a twist: the recurrence is `dp[i] = max over j < i where nums[j] < nums[i] of dp[j] + 1`, where `dp[i]` is the LIS length that *ends exactly at index i*. The decision at each step is: 'what's the best predecessor I can extend from?' — try every earlier index, and if its value is smaller, this is a valid extension; take the best plus one. The final answer is `max(...dp)`, NOT `dp[n-1]` — the longest subsequence can end anywhere.\n\nIf they want `O(n log n)`, the patience-sort trick: maintain a `tails` array where `tails[k]` is the smallest possible tail of any length-`(k+1)` increasing subsequence seen so far. For each new number, binary-search for the first tail `≥` it (lower_bound) and replace it. The length of `tails` at the end is the LIS length. Tails stays sorted; binary search makes each insert `O(log n)`.\"",
+        "why": "The 'ending at i' framing is the load-bearing piece — most candidates instinctively want `dp[i]` to mean 'LIS of `nums[0..i]`' (a prefix property), but that doesn't compose with extension; you need the ending position pinned so you can ask 'can I extend from `j` to `i`?'. Naming `max(...dp)` as the answer (not `dp[n-1]`) is the second easy-to-miss detail. The patience-sort mention shows you know the upgrade path without forcing you to write it unless asked."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the canonical mixed input, a strictly decreasing case where dp stays all 1s, and a small mixed case showing dp can be non-monotonic.",
+        "examples": [
+          {
+            "input": "[10, 9, 2, 5, 3, 7, 101, 18]",
+            "output": "4",
+            "note": "Canonical case — one optimal subsequence is [2, 3, 7, 18] or [2, 3, 7, 101]. Note the answer is at dp[5]=3 chains into 18 not 101.",
+            "trace": "dp init: [1, 1, 1, 1, 1, 1, 1, 1]\ni=1 (9): no j<i has nums[j]<9 (only nums[0]=10). dp[1]=1\ni=2 (2): no j<i has nums[j]<2. dp[2]=1\ni=3 (5): nums[2]=2<5 → dp[2]+1=2. dp[3]=2\ni=4 (3): nums[2]=2<3 → dp[2]+1=2. dp[4]=2\ni=5 (7): nums[2]=2<7→2, nums[3]=5<7→3, nums[4]=3<7→3. dp[5]=3\ni=6 (101): every prior < 101. Best is dp[5]+1=4. dp[6]=4\ni=7 (18): every prior except 101 is < 18. Best is dp[5]+1=4. dp[7]=4\ndp = [1,1,1,2,2,3,4,4]. return max = 4"
+          },
+          {
+            "input": "[5, 4, 3, 2, 1]",
+            "output": "1",
+            "note": "Strictly decreasing — no j extends any i, so dp stays all 1s. The Math.max(...dp) is what saves us.",
+            "trace": "dp init: [1, 1, 1, 1, 1]\ni=1 (4): no j<i with nums[j]<4. dp[1]=1\ni=2 (3): no extension. dp[2]=1\ni=3 (2): no extension. dp[3]=1\ni=4 (1): no extension. dp[4]=1\ndp = [1,1,1,1,1]. return max = 1"
+          },
+          {
+            "input": "[1, 3, 2, 4]",
+            "output": "3",
+            "note": "Small mixed case — both [1,2,4] and [1,3,4] are valid LIS of length 3; dp doesn't disambiguate which, just the length.",
+            "trace": "dp init: [1, 1, 1, 1]\ni=1 (3): nums[0]=1<3 → dp[0]+1=2. dp[1]=2\ni=2 (2): nums[0]=1<2 → dp[0]+1=2. dp[2]=2\ni=3 (4): nums[0]=1<4→2, nums[1]=3<4→3, nums[2]=2<4→3. dp[3]=3\ndp = [1,2,2,3]. return max = 3"
+          }
+        ],
+        "why": "Tracing surfaces three things. (1) The all-decreasing case proves why we need `Math.max(...dp)` and not `dp[n-1]` — the last element's `dp` value isn't always the answer. (2) The canonical case shows dp is non-monotonic (dp[4]=2 < dp[3]=2 < dp[5]=3 < dp[6]=4 — it can dip back). (3) `[1,3,2,4]` shows multiple optimal subsequences exist for the same length — dp gives the length, not the actual subseq."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• `[]` — `Math.max(...[])` returns `-Infinity`, which is wrong. Guard with `if (nums.length === 0) return 0` up front.\n• `[5]` — single element, dp = [1], `Math.max(...[1]) = 1`. ✓\n• All same values `[3, 3, 3]` — strict comparison `<` means no extensions ever fire, dp stays all 1s, returns 1. (If it were non-decreasing, the answer would be 3.)\n• Strictly increasing `[1, 2, 3, 4]` — dp grows linearly, returns n.\n• Very large input — `O(n²)` becomes prohibitive past `n ≈ 10^4`. Switch to patience-sort `O(n log n)` if `n ≥ 10^5`.\n• Negative numbers — irrelevant; the recurrence compares values, not signs.\"",
+        "why": "The empty-array gotcha is the senior signal here — `Math.max(...[])` returning `-Infinity` is a classic JS footgun, and acknowledging it shows you actually thought about the spread-into-Math.max idiom. The strict-vs-non-decreasing call-out ties back to clarification: that single character (`<` vs `<=`) is the difference between two different problems."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"For the `O(n²)` DP: outer loop runs `n` times, inner scan runs up to `n` times, constant work per pair. Time `O(n²)`, space `O(n)` for the dp array.\n\nFor the patience-sort `O(n log n)` upgrade: each element triggers one binary search (`O(log n)`) and one in-place replacement (`O(1)`). Total `O(n log n)` time, `O(n)` space for the tails array. The subtle bit is that `tails` is NOT the actual LIS — it's just an array of best-possible tails of each length; only the *length* of `tails` is meaningful.\n\nIf they want the actual subsequence (not just length), I'd add a `prev[i]` array tracking which `j` produced `dp[i]`'s best extension, then walk backward from the argmax. That's still `O(n²)` time but `O(n)` extra space for the backpointers.\n\nThe template extends to: Russian Doll Envelopes (sort by width ascending, height descending, then LIS on heights), Number of LIS (parallel count array tracking how many subseqs achieve each dp value), and Longest Chain of Word Pairs (sort + LIS-style DP).\"",
+        "why": "Defending both complexity bounds — and naming what `tails` actually represents — shows you understand the patience-sort trick, not just memorized it. The 'recover the actual subsequence' note proves you've thought past the length-only spec, which is a common follow-up. The Russian Doll / Number of LIS extensions prove you see LIS as a *template* — any problem with a 'longest increasing-by-some-property' shape reduces to LIS after the right sort."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the O(n²) LIS DP. dp[i] tracks the LIS that ENDS at index i; for each i, we scan all earlier j and extend whenever nums[j] < nums[i].",
+    "examples": [
+      { "label": "[10,9,2,5,3,7,101,18] → 4 ([2,3,7,18])", "input": [10, 9, 2, 5, 3, 7, 101, 18], "expected": 4 },
+      { "label": "[5,4,3,2,1] → 1 (strictly decreasing)", "input": [5, 4, 3, 2, 1], "expected": 1 },
+      { "label": "[1,3,2,4] → 3 ([1,2,4] or [1,3,4])", "input": [1, 3, 2, 4], "expected": 3 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  yield { line: 1, label: `enter — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  const n = nums.length;",
+      "  const dp = new Array(n).fill(1);",
+      "  yield { line: 4, label: `init dp=[${dp.join(',')}] (every element alone is a length-1 subseq)`, state: { nums, n, dp: [...dp] } };",
+      "  for (let i = 1; i < n; i++) {",
+      "    const extensions = [];",
+      "    for (let j = 0; j < i; j++) {",
+      "      if (nums[j] < nums[i]) {",
+      "        const cand = dp[j] + 1;",
+      "        extensions.push(`j=${j} (${nums[j]}<${nums[i]}): dp[${j}]+1=${cand}`);",
+      "        dp[i] = Math.max(dp[i], cand);",
+      "      }",
+      "    }",
+      "    const note = extensions.length ? extensions.join(' | ') : 'no j extends (nothing smaller before)';",
+      "    yield { line: 9, label: `dp[${i}] = ${dp[i]}   [${note}]`, state: { nums, i, dp: [...dp], lastFilled: i } };",
+      "  }",
+      "  const result = Math.max(...dp);",
+      "  yield { line: 14, label: `return max(...dp) = ${result}`, state: { nums, dp: [...dp], returns: result } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function lengthOfLIS(nums) {\n  const n = nums.length;\n  // dp[i] = LIS length that ENDS at i. Every element alone is a length-1 subseq.\n  const dp = new Array(n).fill(1);          // each element alone has LIS 1\n  for (let i = 1; i < n; i++) {\n    // Scan every j < i; extend if nums[j] < nums[i] (strictly increasing).\n    for (let j = 0; j < i; j++) {\n      if (nums[j] < nums[i]) {\n        dp[i] = Math.max(dp[i], dp[j] + 1);\n      }\n    }\n  }\n  // Answer is max over ALL ending positions, not dp[n-1].\n  return Math.max(...dp);\n}\n// Time O(n^2), Space O(n)",
     "notes": [

@@ -6,6 +6,125 @@
   "status": "full",
   "description": "Snake on a w x h grid. Maintain the body as a queue of cells plus a Set for O(1) self-collision lookup. Each move: compute the new head, drop the tail UNLESS the new cell eats food, then check walls and self-overlap.",
   "mechanics": ["set-dedup", "array-as-queue"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Design a Snake game class. Constructor takes width, height, and a list of food positions. Every call to `move(dir)` returns the new score, or -1 if the snake crashes. Let me confirm a few things:\"\n\n• Starting position — head at `[0,0]` with length 1?\n• Food order — is the food list a queue (FIFO, must eat in order) or a set (any food at any time)?\n• Coordinate convention — is `[r, c]` row-then-column, with row 0 at top?\n• Direction strings — 'U', 'D', 'L', 'R'? Anything else throws / no-ops?\n• After a crash, does the game end forever, or do callers just stop calling `move`?",
+        "why": "The food-as-queue question is load-bearing — it changes whether you use an array shift (FIFO) or a Set lookup. The 'crash forever?' question lets you avoid building game-over state machinery the caller doesn't need (the canonical just returns -1 and trusts the caller). These are 30 seconds of clarifications that prevent half the bugs."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n) per move solution before you discard it.",
+        "say": "\"The naive approach: store the snake body as an array of `[r, c]` pairs, head at the end. On each move, compute the new head, walk the whole body to check self-collision. That's O(snake_length) per move — fine for short games, but if the snake gets long (a few hundred cells), every move is doing a linear scan. We can do better with a Set keyed `'r,c'` for O(1) collision lookup.\"",
+        "why": "The brute force here isn't 'wrong' — it's just slow. Naming it shows you understand that O(snake_length) per move adds up: in a long game with thousands of moves, you're doing thousands of body scans. The Set is the standard optimization and pairing it with the array (which preserves tail order) is the canonical two-structure trick worth verbalizing."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why the snake body needs BOTH an array AND a Set.",
+        "say": "\"This is a 'parallel data structures' problem. The snake body needs two operations that no single structure does well:\n\n1. **O(1) self-collision check** — \"is the new head cell already in the body?\" That's a Set.\n2. **FIFO ordering for the tail** — \"which cell is the oldest? Drop it on a non-eating move.\" That's a queue, naturally an array with `push`/`shift`.\n\nSo I keep both, in sync: when I add the new head I `push` to the array AND `add` to the Set; when I drop the tail I `shift` the array AND `delete` from the Set. The Set holds string keys `'r,c'` because objects/arrays compare by reference in JS — `Set.has([0,1])` won't find a previously added `[0,1]`.\n\nThe subtle thing: I drop the tail BEFORE the self-collision check, EXCLUDING the case where I ate food (because then I'm growing, not sliding). If I check before dropping, then a legal move into the current tail cell would falsely register as a collision — the tail is about to vacate that cell.\"",
+        "why": "Naming the 'two structures in sync' pattern matters because it shows up everywhere: LRU cache (Map + doubly-linked list), median-from-stream (two heaps), Snake (array + Set). The tail-drop-before-collision-check insight is the canonical bug here — interviewers actively look for whether you reason about it or stumble into it via debugging."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace three sequences — eating food then continuing, no food at all, and an immediate wall crash on a small board.\"",
+        "examples": [
+          {
+            "input": "3x3, food=[[0,1]], moves: R, R, U",
+            "output": "[1, 1, -1]",
+            "note": "Eat food on first move, slide on second, wall-crash up.",
+            "trace": "init: snake=[[0,0]], set={'0,0'}, food=[[0,1]], score=0\nR: head=[0,0]→new=[0,1]. ate? food[0]=[0,1] === [0,1] YES. (skip tail drop). set has '0,1'? no. push [0,1]. food.shift, score=1. return 1\nR: head=[0,1]→new=[0,2]. ate? food empty, no. drop tail [0,0], set={'0,1'}. set has '0,2'? no. push [0,2]. return 1\nU: head=[0,2]→new=[-1,2]. wall! return -1"
+          },
+          {
+            "input": "3x3, no food, moves: R, D",
+            "output": "[0, 0]",
+            "note": "Pure sliding — tail drops each move, score stays at 0.",
+            "trace": "init: snake=[[0,0]], set={'0,0'}, food=[], score=0\nR: head=[0,0]→new=[0,1]. ate? food empty, no. drop tail [0,0], set={}. push [0,1], set={'0,1'}. return 0\nD: head=[0,1]→new=[1,1]. ate? no. drop tail [0,1], set={}. push [1,1], set={'1,1'}. return 0"
+          },
+          {
+            "input": "2x2, food=[[0,1]], moves: L",
+            "output": "[-1]",
+            "note": "Immediate wall — leftward from [0,0] goes to col -1.",
+            "trace": "init: snake=[[0,0]], set={'0,0'}, food=[[0,1]], score=0\nL: head=[0,0]→new=[0,-1]. nc<0, wall! return -1"
+          }
+        ],
+        "why": "Tracing the first case shows exactly why the tail-drop is gated on `!ate`: on R-eating, the snake grows from length 1 to 2 (head [0,1] added, tail [0,0] kept). On the next R, it slides — [0,0] vacates, [0,2] arrives. The trace also surfaces the wall-check ordering: walls are checked BEFORE the tail drop, so a move that immediately crashes doesn't mutate state. This is the kind of ordering bug that ships if you don't trace it."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me walk through edges:\n• **Head onto current tail position** — the snake is moving forward and the new head lands on the cell the tail was occupying. This is LEGAL because the tail moves out before the head arrives. The drop-tail-before-check ordering handles this; the false-positive happens if you check first.\n• **Wall on first move** — a 1x1 board, or starting at [0,0] and moving L or U. The wall check should fire before any state mutation.\n• **Eat the last food, then keep moving** — once `food` is empty, `food[0]` is undefined, so `food.length && food[0][0] === nr ...` short-circuits cleanly. Without the `food.length` guard you'd crash on `undefined[0]`.\n• **Food on the starting cell** — does the snake immediately eat it without moving? Implementation-defined. The canonical only checks food on `move()`, so a food at [0,0] only counts if the snake moves AWAY and back. Worth surfacing.\n• **Two consecutive food positions** — eat first, immediately eat second. Snake grows by 2 in 2 moves. Standard.\n• **Invalid direction string** — current code silently does nothing (no `nr`/`nc` change, then the new-head IS the old head — would self-collide). Worth defending or no-oping.\"",
+        "why": "The head-onto-tail case is the classic interview-question follow-up. The interviewer wants to hear the words 'the tail moves out before the head arrives,' because that's the model that justifies the implementation order. The invalid-direction case is a defensiveness signal — most candidates don't think about it, the strong candidates either guard it or explicitly say 'I'd add an `else throw` here.'"
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(1) per move — wall check is constant, food peek is constant, Set add/delete are amortized O(1), array push/shift... well, `shift` is O(n) in V8. If we wanted strict O(1) we'd use a circular buffer with head/tail indices, or a doubly-linked list with explicit pointers. For the interview problem `array.shift()` is fine — the constant is small and snakes don't get THAT long.\n\nSpace is O(snake_length) — the array and the Set both grow linearly. Two structures with the same content, so 2× the storage of a single structure, but still O(n).\n\nThe template generalizes to any 'sliding-collection-with-membership' problem — LRU cache uses the same array+Set/Map duo, just keyed differently. Same idea: ordered structure for eviction, hashed structure for lookup.\"",
+        "why": "Naming the `array.shift()` O(n) caveat is the senior-candidate move — most interviewers won't push on it, but the ones who do are looking for whether you know the V8 implementation. Mentioning the circular-buffer alternative without actually implementing it gives you credit for knowing it exists without spending interview time on it. The LRU connection is the 'I see the template' beat."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of Snake moves on a small grid. The state panel shows the snake body array, the parallel position Set, and the food queue evolving move-by-move. Each move's return value is collected into a results array.",
+    "examples": [
+      { "label": "3x3, food=[[0,1]] — move R, R, U → [1, 1, -1]", "input": { "w": 3, "h": 3, "food": [[0,1]], "moves": ["R", "R", "U"] }, "expected": "[1,1,-1]" },
+      { "label": "3x3, no food — move R, D → [0, 0]", "input": { "w": 3, "h": 3, "food": [], "moves": ["R", "D"] }, "expected": "[0,0]" },
+      { "label": "2x2, food=[[0,1]] — move L hits wall → [-1]", "input": { "w": 2, "h": 2, "food": [[0,1]], "moves": ["L"] }, "expected": "[-1]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { w, h, food: initialFood, moves } = input;",
+      "  const foodQ = initialFood.map(p => p.slice());",
+      "  const snake = [[0, 0]];",
+      "  const set = new Set(['0,0']);",
+      "  let score = 0;",
+      "  const results = [];",
+      "  yield { line: 2, label: `new Snake(${w}, ${h}, ${JSON.stringify(initialFood)}) — snake=[[0,0]], score=0`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, results: [...results] } };",
+      "  for (let k = 0; k < moves.length; k++) {",
+      "    const dir = moves[k];",
+      "    const head = snake[snake.length - 1];",
+      "    const r = head[0], c = head[1];",
+      "    yield { line: 10, label: `move#${k}: dir='${dir}', head=[${r},${c}]`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, dir, r, c, results: [...results] } };",
+      "    let nr = r, nc = c;",
+      "    if (dir === 'U') nr--; else if (dir === 'D') nr++;",
+      "    else if (dir === 'L') nc--; else if (dir === 'R') nc++;",
+      "    yield { line: 13, label: `new head candidate = [${nr},${nc}]`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, dir, nr, nc, results: [...results] } };",
+      "    if (nr < 0 || nr >= h || nc < 0 || nc >= w) {",
+      "      results.push(-1);",
+      "      yield { line: 14, label: `wall crash — [${nr},${nc}] out of ${h}x${w}; return -1`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, results: [...results] } };",
+      "      continue;",
+      "    }",
+      "    const ate = foodQ.length && foodQ[0][0] === nr && foodQ[0][1] === nc;",
+      "    yield { line: 15, label: `ate? food[0]=${foodQ[0] ? JSON.stringify(foodQ[0]) : 'none'} vs [${nr},${nc}] → ${ate ? 'YES' : 'no'}`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, ate, results: [...results] } };",
+      "    if (!ate) {",
+      "      const t = snake.shift();",
+      "      set.delete(t[0] + ',' + t[1]);",
+      "      yield { line: 18, label: `no eat → drop tail [${t[0]},${t[1]}] (before self-check)`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, results: [...results] } };",
+      "    }",
+      "    const key = nr + ',' + nc;",
+      "    if (set.has(key)) {",
+      "      results.push(-1);",
+      "      yield { line: 22, label: `self-collision at [${nr},${nc}]; return -1`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, results: [...results] } };",
+      "      continue;",
+      "    }",
+      "    snake.push([nr, nc]);",
+      "    set.add(key);",
+      "    yield { line: 23, label: `push new head [${nr},${nc}]`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, results: [...results] } };",
+      "    if (ate) {",
+      "      foodQ.shift();",
+      "      score++;",
+      "      yield { line: 24, label: `consume food → score=${score}, food=${JSON.stringify(foodQ)}`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, results: [...results] } };",
+      "    }",
+      "    results.push(score);",
+      "    yield { line: 25, label: `move#${k} returns ${score}`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, results: [...results] } };",
+      "  }",
+      "  yield { line: 25, label: `all moves processed — results=${JSON.stringify(results)}`, state: { w, h, food: foodQ.map(p => p.slice()), snake: snake.map(p => p.slice()), set: [...set], score, results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class Snake {\n  constructor(width, height, food) {\n    this.w = width; this.h = height;\n    // Food is a FIFO queue — only food[0] is eligible to eat.\n    this.food = food.slice();\n    this.snake = [[0, 0]];              // head is last; tail is first\n    // Set keyed 'r,c' — O(1) self-collision lookup; array gives ordering.\n    this.set = new Set([\"0,0\"]);\n    this.score = 0;\n  }\n  move(dir) {\n    const [r, c] = this.snake[this.snake.length - 1];\n    let nr = r, nc = c;\n    if (dir === \"U\") nr--; else if (dir === \"D\") nr++;\n    else if (dir === \"L\") nc--; else if (dir === \"R\") nc++;\n    if (nr < 0 || nr >= this.h || nc < 0 || nc >= this.w) return -1;\n    const ate = this.food.length && this.food[0][0] === nr && this.food[0][1] === nc;\n    // Drop tail BEFORE self-check so moving into the old tail cell isn't a false collision.\n    if (!ate) {\n      const t = this.snake.shift();\n      this.set.delete(t[0] + \",\" + t[1]);\n    }\n    const key = nr + \",\" + nc;\n    if (this.set.has(key)) return -1;   // self-collision\n    this.snake.push([nr, nc]); this.set.add(key);\n    if (ate) { this.food.shift(); this.score++; }\n    return this.score;\n  }\n}\n// Time O(1) per move, Space O(snake length)",
     "notes": [

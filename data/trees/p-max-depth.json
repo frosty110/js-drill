@@ -6,6 +6,121 @@
   "status": "full",
   "description": "Depth of a node = 1 + the deeper of its two children. Null subtree contributes 0.",
   "mechanics": ["tree-recursion"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"So I need to return the maximum depth of a binary tree — by depth you mean the number of nodes on the longest root-to-leaf path, right? (As opposed to number of edges, which would be one less.)\"\n\nThen a few quick clarifying questions:\n• Empty tree — return 0?\n• Node shape — is it `{ val, left, right }` with `null` for missing children?\n• Can values be anything (negative, duplicates), or does that not matter here?\n• Any constraint on tree size — do I need to worry about recursion stack overflow for very deep trees?",
+        "why": "The node-count vs. edge-count distinction is the easy thing to get wrong — LeetCode uses node count (a single-node tree has depth 1), but some textbooks use edge count (depth 0). Asking up front avoids an off-by-one that doesn't surface until the test cases run. The stack-overflow question hints that you know recursion has a ceiling and have an iterative BFS in your back pocket if needed."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious recursive solution — there's no slower naive.",
+        "say": "\"There isn't really a 'brute force' separate from the optimal here — the natural solution is already O(n). I'd describe it as: every node's depth is 1 plus the deeper of its two children. Base case: null contributes 0. Recurse left, recurse right, return `1 + Math.max(left, right)`. The whole algorithm is three lines.\"",
+        "why": "Some problems don't have a slow-then-fast arc — saying so out loud is better than inventing a strawman. Interviewers worry about candidates who pad their answer to fit a template; calling out that the natural solution IS optimal demonstrates judgment about when an optimization step is or isn't needed."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to pure tree recursion?",
+        "say": "\"The depth of a tree is defined recursively in terms of the depth of its subtrees — that's the textbook signature of structural recursion on a tree. Each node only needs information from its two children to compute its own answer, and those children compute the same way. So I'd reach for pure recursion: base case at null, combine the two children's answers, return. No need for BFS, no need for memoization, no need for an accumulator parameter. If interview constraints forbid recursion — say, the tree is a million levels deep — I'd switch to BFS with a queue and count levels, but for a typical interview tree, recursion is the cleanest expression.\"",
+        "why": "Naming the pattern *and* the property that makes the pattern apply is the move. 'Tree recursion' alone is a guess; 'tree recursion because depth is a recursive function of subtree depths' is the derivation. The unprompted callout to BFS as a stack-safe fallback is bonus: it shows you know the standard alternative without being asked."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the classic balanced tree, the empty tree, and a left-skewed tree that stresses the recursion depth.",
+        "examples": [
+          {
+            "input": "[3,9,20,null,null,15,7]",
+            "output": "3",
+            "note": "Classic balanced — the deeper path is root→20→either 15 or 7.",
+            "trace": "maxDepth(3)\n  maxDepth(9) → no children, 1 + max(0, 0) = 1\n  maxDepth(20)\n    maxDepth(15) → 1 + max(0, 0) = 1\n    maxDepth(7)  → 1 + max(0, 0) = 1\n    return 1 + max(1, 1) = 2\n  return 1 + max(1, 2) = 3"
+          },
+          {
+            "input": "[] (empty tree, root=null)",
+            "output": "0",
+            "note": "Degenerate — base case fires immediately, no recursion.",
+            "trace": "maxDepth(null)\n  !root is true → return 0"
+          },
+          {
+            "input": "[1,2,null,3,null,4] (left-skewed)",
+            "output": "4",
+            "note": "Skewed → recursion depth equals node count. Stresses the stack.",
+            "trace": "maxDepth(1)\n  maxDepth(2)\n    maxDepth(3)\n      maxDepth(4)\n        return 1 + max(0, 0) = 1\n      return 1 + max(1, 0) = 2\n    return 1 + max(2, 0) = 3\n  return 1 + max(3, 0) = 4"
+          }
+        ],
+        "why": "The skewed-tree trace surfaces the stack-depth concern in concrete form — recursion depth is O(h), which on a degenerate tree equals n. The empty-tree case defends the `if (!root) return 0` base — without it the recursion would crash on `null.left`. Both bugs are easier to catch on the whiteboard than after the interviewer points to a failing test."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Null root → returns 0 via the base case. ✓\n• Single node → 1 + max(0, 0) = 1. ✓\n• Left-skewed (degenerate to linked list) → recursion depth equals n; for a million-node skewed tree the call stack would overflow. The fix is iterative BFS with a queue counting levels.\n• Right-skewed → same as above, mirror image.\n• Perfectly balanced → recursion depth is log₂(n), totally safe.\n• All-same values → depth doesn't depend on values, only structure, so identical to the same shape with distinct values.\"",
+        "why": "The skewed-tree call-out is the senior signal. Most candidates write the three-line recursion and stop; flagging that recursion depth equals tree height — and that for adversarial inputs the height can equal n — shows you understand the difference between O(h) space (the right bound) and O(log n) space (the bound you'd get only on balanced inputs). Interviewers either nod or say 'assume the tree fits in the stack' — either response is good."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — every node is visited exactly once. The work per node is constant: one comparison, one max, one addition. No memoization needed because the recursion tree mirrors the actual tree, no overlap.\n\nSpace is O(h) for the recursion stack, where h is the tree height. For a balanced tree that's O(log n); for a skewed tree it's O(n). If the input could be adversarial — a deliberately skewed tree larger than the JS engine's stack frame budget — I'd convert to an iterative BFS: queue, level counter, `queue.length` snapshot per level. Same O(n) time, O(w) space where w is the max level width.\n\nIf you wanted to extend to 'find the node at maximum depth' or 'minimum depth', the recursive skeleton is identical — only the combine step changes. Min depth has the gotcha that a node with one null child shouldn't claim depth 1 from that side; you have to special-case it.\"",
+        "why": "The O(h) vs O(log n) distinction is the right defense against pushback. Calling out the iterative BFS fallback unprompted demonstrates you see the template, not just this solution. The min-depth extension is a real interview gotcha — LeetCode 111 — and naming it shows you've thought about the family of problems that share this shape, not just the specific question being asked."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the recursive max-depth on a real tree. The trace simulates the recursion with an explicit post-order stack so each call's depth is computed bottom-up. Pick an example and scrub.",
+    "examples": [
+      { "label": "[3,9,20,null,null,15,7] → 3", "input": [3, 9, 20, null, null, 15, 7], "expected": 3 },
+      { "label": "[] (empty) → 0",              "input": [],                            "expected": 0 },
+      { "label": "[1,2,null,3,null,4] → 4 (left-skewed)", "input": [1, 2, null, 3, null, 4], "expected": 4 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  function buildTree(arr) {",
+      "    if (!arr || arr.length === 0 || arr[0] == null) return null;",
+      "    const root = { val: arr[0], left: null, right: null };",
+      "    const q = [root];",
+      "    let i = 1;",
+      "    while (q.length && i < arr.length) {",
+      "      const node = q.shift();",
+      "      if (i < arr.length && arr[i] != null) { node.left = { val: arr[i], left: null, right: null }; q.push(node.left); }",
+      "      i++;",
+      "      if (i < arr.length && arr[i] != null) { node.right = { val: arr[i], left: null, right: null }; q.push(node.right); }",
+      "      i++;",
+      "    }",
+      "    return root;",
+      "  }",
+      "  const root = buildTree(input);",
+      "  yield { line: 1, label: `enter maxDepth — tree ${JSON.stringify(input)}`, state: { treeShape: input, root: root ? root.val : null } };",
+      "  if (!root) {",
+      "    yield { line: 3, label: 'root is null → return 0', state: { treeShape: input, returns: 0 } };",
+      "    return;",
+      "  }",
+      "  yield { line: 3, label: `root=${root.val} not null — recurse`, state: { treeShape: input, root: root.val } };",
+      "  const depth = new Map();",
+      "  const stack = [[root, false]];",
+      "  while (stack.length) {",
+      "    const [node, visited] = stack[stack.length - 1];",
+      "    if (!node) { stack.pop(); depth.set(node, 0); continue; }",
+      "    if (!visited) {",
+      "      yield { line: 5, label: `call maxDepth(${node.val}) — first visit, descend to children`, state: { treeShape: input, current: node.val, stackDepth: stack.length } };",
+      "      stack[stack.length - 1][1] = true;",
+      "      if (node.right) stack.push([node.right, false]);",
+      "      if (node.left)  stack.push([node.left, false]);",
+      "    } else {",
+      "      stack.pop();",
+      "      const leftD  = node.left  ? depth.get(node.left)  : 0;",
+      "      const rightD = node.right ? depth.get(node.right) : 0;",
+      "      const d = 1 + Math.max(leftD, rightD);",
+      "      depth.set(node, d);",
+      "      yield { line: 5, label: `return maxDepth(${node.val}) = 1 + max(${leftD}, ${rightD}) = ${d}`, state: { treeShape: input, current: node.val, leftDepth: leftD, rightDepth: rightD, depthOfNode: d, stackDepth: stack.length } };",
+      "    }",
+      "  }",
+      "  const ans = depth.get(root);",
+      "  yield { line: 5, label: `root depth = ${ans}`, state: { treeShape: input, returns: ans } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function maxDepth(root) {\n  // Null contributes 0 depth — the +1 comes from the parent above.\n  if (!root) return 0;\n  // Deeper of the two subtrees, plus 1 for the current node.\n  return 1 + Math.max(maxDepth(root.left), maxDepth(root.right));\n}\n// Time O(n), Space O(h) for recursion stack",
     "notes": [

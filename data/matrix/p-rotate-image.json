@@ -6,6 +6,103 @@
   "status": "full",
   "description": "Rotate an n×n matrix 90° clockwise in place by transposing then reversing each row.",
   "mechanics": ["matrix-transpose-swap"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given an n×n matrix and I need to rotate it 90° clockwise — and the catch is it has to be in place, no allocating a second matrix.\"\n\nThen a few quick clarifying questions:\n• Always square (n×n), or can it be rectangular? (90° rotation of a rectangle would change the shape, so square is the norm.)\n• Clockwise specifically, or should I handle counter-clockwise too?\n• In place means O(1) extra space — no second matrix — right?\n• Return value — mutate and return nothing, or return the same reference?",
+        "why": "The in-place constraint is the whole point of the problem — the obvious O(n²)-space solution (allocate a new matrix, write `out[j][n-1-i] = matrix[i][j]`) is trivial. Confirming square is also load-bearing: a rectangular rotation can't be done in place because the dimensions swap. Asking these up front signals you noticed the constraint isn't decorative — it's what makes the problem worth asking."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²)-space solution before you discard it.",
+        "say": "\"The brute force is straightforward: allocate a new n×n matrix `out`, then for every (i, j) in the input, write `out[j][n-1-i] = matrix[i][j]`. That's the direct rotation formula — a cell at (i, j) lands at (j, n-1-i) after a 90° CW turn. O(n²) time, O(n²) space. Then copy `out` back over `matrix` cell by cell if I have to mutate in place. Works, but it fails the 'no extra matrix' constraint, and the copy-back step is wasteful.\"",
+        "why": "Two reasons to name it. (1) It surfaces the rotation formula `(i, j) → (j, n-1-i)` — that formula is exactly the math identity we're about to factor into two simpler operations. (2) It frames the optimization: we're not inventing a new algorithm, we're factoring the same map into two passes that each happen to be in-place-friendly (a swap-based transpose, a row reverse)."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the math identity that makes the two-pass trick work?",
+        "say": "\"The trick is recognizing that 90° CW rotation equals transpose then row-reverse. Let me verify the math:\n• Transpose: (i, j) → (j, i).\n• Then reverse row j: (j, i) → (j, n-1-i).\n• Compose: (i, j) → (j, n-1-i). ✓ — exactly the rotation formula.\n\nBoth operations are in-place: transpose swaps pairs across the main diagonal (no allocation), row-reverse is `Array.prototype.reverse()` per row (in-place). So composing two in-place ops gives an in-place rotation. O(n²) time, O(1) extra space.\"",
+        "why": "Naming the pattern *and* deriving the math is the move. 'Transpose then reverse rows' alone is a memorized recipe; verifying `(i, j) → (j, i) → (j, n-1-i)` lands at the rotation formula is the derivation. Interviewers grade on the second — and it lets you generate the counter-clockwise variant on the spot (reverse rows first, *then* transpose — or transpose then reverse columns) without re-memorizing a separate trick."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the two-pass model before writing the loops.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the standard 3×3, the tiniest non-trivial case (2×2), and a 4×4 where the two phases are easier to eyeball separately.",
+        "examples": [
+          {
+            "input": "[[1,2,3],[4,5,6],[7,8,9]]",
+            "output": "[[7,4,1],[8,5,2],[9,6,3]]",
+            "note": "Classic 3×3 — the diagonal (1, 5, 9) stays fixed across the transpose; row reverse then flips horizontally.",
+            "trace": "input:        transpose:    reverse rows:\n[1, 2, 3]     [1, 4, 7]     [7, 4, 1]\n[4, 5, 6]     [2, 5, 8]     [8, 5, 2]\n[7, 8, 9]     [3, 6, 9]     [9, 6, 3]\n\ntranspose swaps (i, j) with (j, i) for j > i:\n  swap (0, 1)↔(1, 0): 2 ↔ 4\n  swap (0, 2)↔(2, 0): 3 ↔ 7\n  swap (1, 2)↔(2, 1): 6 ↔ 8\nthen reverse each row in place."
+          },
+          {
+            "input": "[[1,2],[3,4]]",
+            "output": "[[3,1],[4,2]]",
+            "note": "Smallest non-trivial — only one transpose swap (2 ↔ 3) and two row reverses. Easy to verify by hand.",
+            "trace": "input:        transpose:    reverse rows:\n[1, 2]        [1, 3]        [3, 1]\n[3, 4]        [2, 4]        [4, 2]\n\ntranspose: swap (0, 1)↔(1, 0): 2 ↔ 3\nreverse row 0: [1, 3] → [3, 1]\nreverse row 1: [2, 4] → [4, 2]"
+          },
+          {
+            "input": "[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]]",
+            "output": "[[13,9,5,1],[14,10,6,2],[15,11,7,3],[16,12,8,4]]",
+            "note": "4×4 makes the off-by-one in the transpose loop visible — j starts at i+1 so the swap (1, 2)↔(2, 1) happens, but (2, 1)↔(1, 2) doesn't repeat. If you set j=0, every pair swaps twice and you're back to the original.",
+            "trace": "input:                  transpose:              reverse rows:\n[ 1,  2,  3,  4]        [ 1,  5,  9, 13]        [13,  9,  5,  1]\n[ 5,  6,  7,  8]        [ 2,  6, 10, 14]        [14, 10,  6,  2]\n[ 9, 10, 11, 12]        [ 3,  7, 11, 15]        [15, 11,  7,  3]\n[13, 14, 15, 16]        [ 4,  8, 12, 16]        [16, 12,  8,  4]\n\ntranspose swaps (counting only j > i):\n  (0,1)↔(1,0) (0,2)↔(2,0) (0,3)↔(3,0)\n  (1,2)↔(2,1) (1,3)↔(3,1) (2,3)↔(3,2)\n→ 6 swaps for a 4×4 (n(n-1)/2 in general)"
+          }
+        ],
+        "why": "Tracing surfaces the killer off-by-one — the inner loop must start at `j = i + 1`, not `j = 0`. If you set `j = 0`, every pair (i, j) and (j, i) swaps twice, which restores the original matrix. The 4×4 trace makes the pair count explicit (6 swaps = n(n-1)/2), which is the right way to defend the 'starting at i+1' choice to a skeptical interviewer."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• n = 0 (empty matrix) → loops don't execute, nothing to do. ✓\n• n = 1 (single cell) → transpose loop body never runs (j starts at i+1 = 1, never < 1), reverse on a 1-element row is a no-op. ✓\n• n = 2 → one transpose swap, two row reverses — smallest case that actually does work.\n• Rectangular m × n where m ≠ n — the in-place trick doesn't apply; the shape changes after rotation. Worth flagging that the algorithm assumes square; if rectangular is in scope, I'd allocate `out` of size n × m.\n• Counter-clockwise variant — reverse rows first then transpose, or transpose then reverse columns. Same math identity, different composition order.\n• 180° rotation — apply this algorithm twice, or simpler: reverse all rows AND reverse the row order.\"",
+        "why": "Edge-case enumeration is the difference between 'works on the example' and 'production-ready'. The rectangular call-out in particular shows depth — most candidates assume square without noticing they assumed it. The 180°/counter-clockwise extensions show that you see the algorithm as a composition of primitive operations (transpose, reverse rows, reverse columns), not as a frozen recipe."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n²) — transpose does n(n-1)/2 swaps (so n²/2 - n/2), and the row reverses do n*n/2 element swaps total. Both are Θ(n²), so the whole thing is O(n²). You can't do better than O(n²) because every one of the n² cells has to move.\n\nSpace is O(1) extra — the swaps and reverses are all in-place. No auxiliary matrix.\n\nThe 'compose two simpler in-place operations' template extends to other matrix problems: 180° = reverse rows + reverse column order (or apply 90° twice); 90° counter-clockwise = transpose + reverse columns (or reverse rows + transpose). Reflect across the anti-diagonal? That's `(i, j) → (n-1-j, n-1-i)` — transpose + reverse both rows and columns. Once you see rotations and reflections as compositions of transpose and reverse, the whole family becomes one template.\"",
+        "why": "The O(n²) lower bound argument ('every cell must move') is what wins the pushback 'can you do better?'. The composition-template framing — naming counter-clockwise, 180°, and anti-diagonal reflection as variations of the same primitives — proves you see the family, not just this one problem. That's how the same shape powers any 'rotate/reflect an in-place grid' question."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the two-phase rotation: transpose across the main diagonal, then reverse each row. The state panel snapshots the matrix after each swap so you can see the reflection forming, then watch the rows flip.",
+    "examples": [
+      { "label": "3x3 [[1,2,3],[4,5,6],[7,8,9]] → [[7,4,1],[8,5,2],[9,6,3]]", "input": { "matrix": [[1,2,3],[4,5,6],[7,8,9]] }, "expected": "[[7,4,1],[8,5,2],[9,6,3]]" },
+      { "label": "2x2 [[1,2],[3,4]] → [[3,1],[4,2]]", "input": { "matrix": [[1,2],[3,4]] }, "expected": "[[3,1],[4,2]]" },
+      { "label": "4x4 [[1..4],[5..8],[9..12],[13..16]] → rotated 90° CW", "input": { "matrix": [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]] }, "expected": "[[13,9,5,1],[14,10,6,2],[15,11,7,3],[16,12,8,4]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const matrix = input.matrix;",
+      "  const snap = () => matrix.map(row => row.slice());",
+      "  yield { line: 1, label: `enter function — matrix is ${matrix.length}x${matrix.length}`, state: { matrix: snap() } };",
+      "  const n = matrix.length;",
+      "  yield { line: 2, label: `n = ${n}`, state: { matrix: snap(), n } };",
+      "  yield { line: 3, label: 'PHASE 1: transpose (swap matrix[i][j] with matrix[j][i] for j > i)', state: { matrix: snap(), n } };",
+      "  for (let i = 0; i < n; i++) {",
+      "    yield { line: 4, label: `outer transpose: i=${i}`, state: { matrix: snap(), n, i } };",
+      "    for (let j = i + 1; j < n; j++) {",
+      "      yield { line: 5, label: `inner: j=${j} — about to swap matrix[${i}][${j}](${matrix[i][j]}) with matrix[${j}][${i}](${matrix[j][i]})`, state: { matrix: snap(), n, i, j } };",
+      "      const tmp = matrix[i][j];",
+      "      matrix[i][j] = matrix[j][i];",
+      "      matrix[j][i] = tmp;",
+      "      yield { line: 6, label: `swapped — matrix[${i}][${j}]=${matrix[i][j]}, matrix[${j}][${i}]=${matrix[j][i]}`, state: { matrix: snap(), n, i, j } };",
+      "    }",
+      "  }",
+      "  yield { line: 8, label: 'transpose complete — matrix reflected across main diagonal', state: { matrix: snap(), n } };",
+      "  yield { line: 9, label: 'PHASE 2: reverse each row in place → completes 90° CW rotation', state: { matrix: snap(), n } };",
+      "  for (let i = 0; i < n; i++) {",
+      "    const before = matrix[i].slice();",
+      "    matrix[i].reverse();",
+      "    yield { line: 10, label: `row ${i}: [${before.join(',')}] → [${matrix[i].join(',')}]`, state: { matrix: snap(), n, i } };",
+      "  }",
+      "  yield { line: 10, label: `done — final matrix = ${JSON.stringify(matrix)}`, state: { matrix: snap(), n, returns: JSON.stringify(matrix) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function rotate(matrix) {\n  const n = matrix.length;\n  // Transpose: swap across the main diagonal. j starts at i+1 so each pair flips once.\n  for (let i = 0; i < n; i++) {\n    for (let j = i + 1; j < n; j++) {\n      [matrix[i][j], matrix[j][i]] = [matrix[j][i], matrix[i][j]];\n    }\n  }\n  // Transpose + row-reverse = 90° clockwise. (Reverse columns instead for counter-clockwise.)\n  for (let i = 0; i < n; i++) matrix[i].reverse();\n}\n// Time O(n^2), Space O(1)",
     "notes": [

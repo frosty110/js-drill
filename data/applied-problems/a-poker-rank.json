@@ -6,6 +6,163 @@
   "status": "full",
   "description": "Classify a 5-card poker hand into its category. Parse `rank+suit` strings, build a rank histogram, check straight + flush flags, then walk the ranking ladder from royal-flush downward.",
   "mechanics": ["freq-map", "array-chain"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the input format and the output categories.",
+        "say": "\"Let me restate: I get a 5-card poker hand as an array of strings like `'KH'` or `'10S'`, and I return the category name as a string — `'royal-flush'`, `'straight-flush'`, `'four-of-a-kind'`, `'full-house'`, `'flush'`, `'straight'`, `'three-of-a-kind'`, `'two-pair'`, `'pair'`, or `'high-card'`. Quick clarifying questions:\"\n\n• Card format — `'10H'` for ten of hearts (two-char rank), or `'TH'` (single char)? Affects how I parse.\n• Always exactly 5 cards? (Variants like 7-card stud find the best 5-card hand from 7.)\n• Wheel straight — does A-2-3-4-5 count as a straight? (Standard yes, but worth confirming.)\n• Royal flush — separate category, or just the highest straight-flush? (Standard: separate.)\n• Tie-breaking — do I need to return the kicker / high card for ranking two hands? (Out of scope for category only.)",
+        "why": "The card-format question is the load-bearing one for parsing — '10' as two chars means `c.slice(0, -1)` returns '10', which is multi-char and breaks any single-char indexing scheme. Normalizing '10' to 'T' early is the canonical fix; asking the question signals you anticipated the gotcha. The wheel-straight question is the classic edge-case probe — most rule books include it, but interviewers sometimes scope it out to simplify."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious shape before optimizing.",
+        "say": "\"There's no real 'brute force vs. optimization' here because the input is bounded — 5 cards, at most 52 unique card values, so even the dumbest implementation is O(1). What I want to avoid instead is the *fragile* version: a giant chain of nested-loop boolean checks like 'count quadruples by iterating pairs of pairs of pairs.' That code is hard to read and easy to get wrong.\n\nThe cleaner shape: do ONE pass over the cards to extract three independent features — a rank histogram, a flush flag, a straight flag — then walk a top-down ladder of `if` checks that maps feature combinations to categories.\"",
+        "why": "Framing this as 'avoid the fragile nested version, prefer the feature-extraction shape' is the right move because the problem doesn't have an interesting time complexity — the complexity question is structural, not algorithmic. Saying 'O(1) because the hand is bounded' first gets that out of the way; the real interview signal is whether you can decompose the problem cleanly. Showing the decomposition (3 features + 1 ladder) is what gets graded."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the classification structure?",
+        "say": "\"This is a classification ladder backed by a frequency histogram. The pattern: parse rank + suit, then derive three independent features:\"\n\n1. **Group histogram** — `counts = {rank: frequency}`. Sort values descending. `[4,1]` = four-of-a-kind, `[3,2]` = full-house, `[3,1,1]` = trips, `[2,2,1]` = two-pair, `[2,1,1,1]` = pair, `[1,1,1,1,1]` = none. This single sorted-values array distinguishes every group-based category.\n\n2. **Flush** — `suits.every(s => s === suits[0])`. One bit.\n\n3. **Straight** — sort the rank-indices, check each is one more than the previous. Special case: the wheel (A-2-3-4-5) needs an explicit override because A's index is 12, not -1.\n\n\"Then the ladder, checked top-down: royal-flush → straight-flush → four → full-house → flush → straight → three → two-pair → pair → high-card. TOP-DOWN matters because a full-house ALSO matches three-of-a-kind (and a pair); returning the stronger category first is what makes the ladder correct.\"",
+        "why": "Naming the three features as INDEPENDENT and then composing them via the ladder is the load-bearing insight. A candidate who tries to write one giant nested `if` ends up with 9 deeply-nested branches and bugs. Spelling out the sorted-counts array specifically (`[4,1]`, `[3,2]`, `[2,2,1]`) is the trick that collapses 5 different group-counting checks into one sort + one comparison. The top-down ordering is the second test — getting it wrong means a full-house is reported as three-of-a-kind."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk three hands to confirm the model.",
+        "intro": "\"Let me trace three representative hands — a royal flush to hit the top of the ladder, a wheel straight to exercise the ace-low override, and a full house to show how `groups = [3,2]` short-circuits the ladder at the right spot.\"",
+        "examples": [
+          {
+            "input": "['10S','JS','QS','KS','AS']",
+            "output": "royal-flush",
+            "note": "Top of the ladder — every flag positive, plus the T-A range.",
+            "trace": "ranks=['T','J','Q','K','A'] (normalize 10→T)\nsuits=['S','S','S','S','S']\nidx=[8,9,10,11,12] (positions in '23456789TJQKA')\ncounts={T:1,J:1,Q:1,K:1,A:1} → groups=[1,1,1,1,1]\nflush: every suit==='S' → true\nstraight: idx all consecutive → true\nladder: straight && flush && idx[0]===8 (T's position) → 'royal-flush' ✓ (first ladder check fires)"
+          },
+          {
+            "input": "['AH','2D','3S','4C','5H']",
+            "output": "straight",
+            "note": "Wheel straight — indices are NOT consecutive (A is at 12, not -1); the explicit override is what saves it.",
+            "trace": "ranks=['A','2','3','4','5']\nsuits=['H','D','S','C','H'] (mixed → not flush)\nidx=[0,1,2,3,12] (2,3,4,5 at front; A at 12)\ngroups=[1,1,1,1,1]\nflush: false\nstraight: idx.every consecutive? 0,1,2,3,12 — false (12 != 3+1)\nWHEEL OVERRIDE: ranks include A,2,3,4,5 → straight = true\nladder: not royal/straight-flush (no flush), not four/full/three/two/pair (groups=[1,1,1,1,1]), flush=false → falls through to `straight` → 'straight' ✓"
+          },
+          {
+            "input": "['KH','KD','KS','2H','2D']",
+            "output": "full-house",
+            "note": "groups=[3,2] is THE diagnostic for full-house. Ladder also matches three-of-a-kind and pair downstream — top-down ordering is what makes the correct one win.",
+            "trace": "ranks=['K','K','K','2','2']\nsuits=['H','D','S','H','D'] (mixed → not flush)\nidx=[0,0,11,11,11] (sorted: 2,2,K,K,K)\ncounts={K:3, 2:2} → groups=[3,2] sorted desc\nflush: false\nstraight: 0,0,11,11,11 not consecutive → false\nladder: skip royal/straight-flush, skip four (groups[0]=3 not 4), groups[0]===3 && groups[1]===2 → 'full-house' ✓ (would also match three-of-a-kind two checks later, but ladder fired earlier)"
+          }
+        ],
+        "why": "The wheel-straight trace is the load-bearing one — it exposes WHY the override exists. Without it, `idx=[0,1,2,3,12]` fails the consecutive check, and you'd misreport A-5 as high-card. The full-house trace defends the top-down ordering — note that `groups=[3,2]` ALSO satisfies `groups[0]===3` (three-of-a-kind, two ladder entries below). Returning at the first match is what makes the higher category win. If you reordered the ladder, you'd get wrong answers."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Wheel straight (A-2-3-4-5) — ace is low here; without an explicit override, the index check (12 vs. 3+1) fails and you misclassify as high-card. Hand-checked above.\n• Royal flush — A-K-Q-J-T of one suit. Just an A-high straight-flush; whether you call it 'royal-flush' or roll it into 'straight-flush' depends on the contract. The standard contract treats it as a separate top category, so it must be checked BEFORE straight-flush.\n• Two-pair vs three-of-a-kind — both have a leading `groups[0]` element, but the histogram shape disambiguates: `[2,2,1]` is two-pair, `[3,1,1]` is three. The `groups[0]===3` check is what separates them in the ladder.\n• Full-house vs three-of-a-kind — both have `groups[0]===3`. Full-house also has `groups[1]===2`. Check the more-specific full-house pattern first (top-down ordering).\n• Card format ambiguity — `'10H'` is 3 chars while every other card is 2. `c.slice(0, -1)` returns '10', which is multi-char. Normalize to 'T' upfront or every subsequent indexing op needs a special case.\n• Duplicate cards — undefined behavior in real poker (impossible with one deck). If the input might contain duplicates by mistake, the histogram still gives a meaningful count, but it's worth flagging that two `KH`s would give `groups=[2,...]` and be misreported as a pair.\n• Empty / wrong-length hand — `cards.length !== 5` should probably throw or return a sentinel. Worth confirming with the interviewer.",
+        "why": "The wheel-straight and the full-house-vs-three-of-a-kind cases are the two correctness traps that catch most candidates. Calling them out unprompted shows you've thought past the obvious cases. The card-format ambiguity is the parser-level edge — getting it wrong silently corrupts every downstream check. Flagging the duplicate-cards case is the senior signal: real-world inputs sometimes have data-quality issues, and 'I'd validate or trust the contract' is the right framing."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the bounds, and what does this generalize to?",
+        "say": "\"Time is O(1) — the hand is fixed at 5 cards. Every loop runs at most 5 times, the sort is on at most 5 elements, the ladder is at most 10 checks. The bound is the same whether you think of it as O(n) for n=5 or just O(1) constant.\n\nSpace is also O(1) — the counts object has at most 5 keys, the sorted arrays are at most 5 elements.\n\nThe interesting analysis isn't asymptotic — it's about the *structure*: feature extraction (group counts + flush + straight) followed by a top-down classification ladder. The same shape shows up in any rule-based classifier — fraud-scoring rules engines (extract features from a transaction, walk a priority-ordered rule list), spam classifiers before ML took over, even ESLint-style linting (parse the AST once, walk rules in priority order). If you wanted me to extend: compare two hands for tie-breaking, you'd need to surface the *kicker* — the high cards within the category. That's another sort-and-compare on the rank indices, layered on top of this category check.\"",
+        "why": "Saying 'the interesting analysis isn't asymptotic, it's structural' is the senior framing — you're acknowledging that O(1) is the trivial answer and pivoting to what the interviewer probably actually cares about (clean decomposition). The rules-engine / fraud-scoring analogy is the transfer move — it proves you see this as a *template* for any feature-extract-then-classify problem, not a poker-specific trick. The tie-breaker extension hints at the next level of poker logic without getting lost in it."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through rankHand on three hands — a royal flush, a wheel straight (ace-low special case), and a full house. Watch the parsed ranks/suits, the count histogram, and the straight/flush flags before the ladder of `if` checks fires.",
+    "examples": [
+      { "label": "['10S','JS','QS','KS','AS'] → royal-flush", "input": ["10S","JS","QS","KS","AS"], "expected": "royal-flush" },
+      { "label": "['AH','2D','3S','4C','5H'] → straight (wheel)", "input": ["AH","2D","3S","4C","5H"], "expected": "straight" },
+      { "label": "['KH','KD','KS','2H','2D'] → full-house", "input": ["KH","KD","KS","2H","2D"], "expected": "full-house" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const cards = input;",
+      "  yield { line: 1, label: `enter rankHand(cards) — cards=${JSON.stringify(cards)}`, state: { cards } };",
+      "  const order = '23456789TJQKA';",
+      "  yield { line: 2, label: `order = '${order}' — index = rank strength (0=2, 12=A)`, state: { cards, order } };",
+      "  const ranks = cards.map(c => c.slice(0, -1) === '10' ? 'T' : c.slice(0, -1));",
+      "  yield { line: 4, label: `parse ranks (normalize '10'→'T') → ${JSON.stringify(ranks)}`, state: { cards, order, ranks } };",
+      "  const suits = cards.map(c => c.slice(-1));",
+      "  yield { line: 5, label: `parse suits (last char of each card) → ${JSON.stringify(suits)}`, state: { cards, ranks, suits } };",
+      "  const idx = ranks.map(r => order.indexOf(r)).sort((a, b) => a - b);",
+      "  yield { line: 6, label: `idx = ranks→order-positions, sorted asc → ${JSON.stringify(idx)}`, state: { cards, ranks, suits, idx } };",
+      "  const counts = {};",
+      "  yield { line: 7, label: 'init counts {} (rank histogram)', state: { cards, ranks, suits, idx, counts: {} } };",
+      "  for (const r of ranks) {",
+      "    counts[r] = (counts[r] || 0) + 1;",
+      "    yield { line: 8, label: `count '${r}' → ${counts[r]}`, state: { cards, ranks, suits, idx, counts: { ...counts } } };",
+      "  }",
+      "  const groups = Object.values(counts).sort((a, b) => b - a);",
+      "  yield { line: 10, label: `groups = counts.values sorted desc → ${JSON.stringify(groups)} ([4,1]=four, [3,2]=full-house, [2,2,1]=two-pair, …)`, state: { cards, ranks, suits, idx, counts: { ...counts }, groups } };",
+      "  const flush = suits.every(s => s === suits[0]);",
+      "  yield { line: 11, label: `flush? every suit === '${suits[0]}' → ${flush}`, state: { cards, ranks, suits, idx, groups, flush } };",
+      "  let straight = idx.every((v, i) => i === 0 || v === idx[i-1] + 1);",
+      "  yield { line: 12, label: `straight? idx all consecutive → ${straight}`, state: { cards, ranks, suits, idx, groups, flush, straight } };",
+      "  if (!straight && ranks.includes('A') && ranks.includes('2') && ranks.includes('3') && ranks.includes('4') && ranks.includes('5')) {",
+      "    straight = true;",
+      "    yield { line: 14, label: `wheel-straight override: A-2-3-4-5 all present → straight = true`, state: { cards, ranks, suits, idx, groups, flush, straight } };",
+      "  } else {",
+      "    yield { line: 14, label: `no wheel-straight override (straight already ${straight} or not A-2-3-4-5)`, state: { cards, ranks, suits, idx, groups, flush, straight } };",
+      "  }",
+      "  yield { line: 15, label: `--- ladder check (top-down, first match wins) ---`, state: { cards, groups, flush, straight, idx } };",
+      "  if (straight && flush && idx[0] === order.indexOf('T')) {",
+      "    yield { line: 16, label: `straight && flush && idx[0]===${order.indexOf('T')} ('T') → royal-flush`, state: { cards, groups, flush, straight, idx, returns: 'royal-flush' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 16, label: `royal-flush? straight=${straight}, flush=${flush}, idx[0]=${idx[0]} (need ${order.indexOf('T')}) → no`, state: { cards, groups, flush, straight, idx } };",
+      "  }",
+      "  if (straight && flush) {",
+      "    yield { line: 17, label: `straight && flush → straight-flush`, state: { cards, groups, flush, straight, returns: 'straight-flush' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 17, label: `straight-flush? straight=${straight}, flush=${flush} → no`, state: { cards, groups, flush, straight } };",
+      "  }",
+      "  if (groups[0] === 4) {",
+      "    yield { line: 18, label: `groups[0]===4 → four-of-a-kind`, state: { cards, groups, returns: 'four-of-a-kind' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 18, label: `four-of-a-kind? groups[0]=${groups[0]} → no`, state: { cards, groups } };",
+      "  }",
+      "  if (groups[0] === 3 && groups[1] === 2) {",
+      "    yield { line: 19, label: `groups[0]===3 && groups[1]===2 → full-house`, state: { cards, groups, returns: 'full-house' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 19, label: `full-house? groups=[${groups.join(',')}] → no`, state: { cards, groups } };",
+      "  }",
+      "  if (flush) {",
+      "    yield { line: 20, label: `flush=true → flush`, state: { cards, groups, flush, returns: 'flush' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 20, label: `flush? ${flush} → no`, state: { cards, groups, flush } };",
+      "  }",
+      "  if (straight) {",
+      "    yield { line: 21, label: `straight=true → straight`, state: { cards, groups, straight, returns: 'straight' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 21, label: `straight? ${straight} → no`, state: { cards, groups, straight } };",
+      "  }",
+      "  if (groups[0] === 3) {",
+      "    yield { line: 22, label: `groups[0]===3 → three-of-a-kind`, state: { cards, groups, returns: 'three-of-a-kind' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 22, label: `three-of-a-kind? groups[0]=${groups[0]} → no`, state: { cards, groups } };",
+      "  }",
+      "  if (groups[0] === 2 && groups[1] === 2) {",
+      "    yield { line: 23, label: `groups[0]===2 && groups[1]===2 → two-pair`, state: { cards, groups, returns: 'two-pair' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 23, label: `two-pair? groups=[${groups.join(',')}] → no`, state: { cards, groups } };",
+      "  }",
+      "  if (groups[0] === 2) {",
+      "    yield { line: 24, label: `groups[0]===2 → pair`, state: { cards, groups, returns: 'pair' } };",
+      "    return;",
+      "  } else {",
+      "    yield { line: 24, label: `pair? groups[0]=${groups[0]} → no`, state: { cards, groups } };",
+      "  }",
+      "  yield { line: 25, label: `no category matched → high-card`, state: { cards, groups, returns: 'high-card' } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function rankHand(cards) {\n  const order = '23456789TJQKA';\n  // Normalize '10' to 'T' so every rank is a single char (indexable + sortable).\n  const ranks = cards.map(c => c.slice(0, -1) === '10' ? 'T' : c.slice(0, -1));\n  const suits = cards.map(c => c.slice(-1));\n  const idx = ranks.map(r => order.indexOf(r)).sort((a, b) => a - b);\n  const counts = {};\n  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;\n  // Sort counts desc: [4,1]=four, [3,2]=full-house, [2,2,1]=two-pair.\n  const groups = Object.values(counts).sort((a, b) => b - a);\n  const flush = suits.every(s => s === suits[0]);\n  let straight = idx.every((v, i) => i === 0 || v === idx[i-1] + 1);\n  // Wheel straight (A-2-3-4-5): ace is low — indices aren't consecutive otherwise.\n  if (!straight && ranks.includes('A') && ranks.includes('2') && ranks.includes('3') && ranks.includes('4') && ranks.includes('5')) straight = true;\n  // Ladder checked top-down — first match wins; stronger categories sit above weaker.\n  if (straight && flush && idx[0] === order.indexOf('T')) return 'royal-flush';\n  if (straight && flush)                                   return 'straight-flush';\n  if (groups[0] === 4)                                     return 'four-of-a-kind';\n  if (groups[0] === 3 && groups[1] === 2)                  return 'full-house';\n  if (flush)                                               return 'flush';\n  if (straight)                                            return 'straight';\n  if (groups[0] === 3)                                     return 'three-of-a-kind';\n  if (groups[0] === 2 && groups[1] === 2)                  return 'two-pair';\n  if (groups[0] === 2)                                     return 'pair';\n  return 'high-card';\n}",
     "notes": [

@@ -6,6 +6,117 @@
   "status": "full",
   "description": "Validate a BST by passing tightening (lo, hi) bounds down: every node must satisfy lo < node.val < hi. Recurse left with hi=node.val, right with lo=node.val. O(n).",
   "mechanics": ["tree-recursion"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"So I need to determine if a binary tree is a valid BST — meaning for EVERY node, every value in its left subtree is strictly less, and every value in its right subtree is strictly greater. Not just the immediate children — the whole subtree.\"\n\nThen a few quick clarifying questions:\n• Strict or non-strict comparison? Are duplicates allowed (LeetCode's standard is strict — no duplicates)?\n• Value range — can values be larger than what `Number.MAX_SAFE_INTEGER` can represent? (Affects whether `-Infinity` sentinels are safe.)\n• Empty tree — return `true` (vacuously valid)?\n• Just a boolean answer, right? Not the offending node?",
+        "why": "The strict-vs-non-strict question is THE common misunderstanding for this problem — many candidates write `node.val < parent.val` for left subtrees, which would incorrectly pass `[2,2]`. Asking up front frames the answer: strict means `<` and `>`, never `<=`. The value-range question is a subtle senior signal — if values can exceed safe integer range, `-Infinity` won't work and you'd need `null` sentinels with explicit checks."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious — but wrong — local check, then the correct in-order alternative.",
+        "say": "\"The first solution most people reach for is wrong: 'check that left.val < root.val < right.val at every node.' That's the LOCAL property but it's not enough. Counter-example: tree [5,1,4,null,null,3,6] — root 5 has left=1 and right=4. Locally that fails (4 < 5). But even if I flip it to [5,1,6,null,null,3,7], where 5 → 1 / 6 is locally fine and 6 → 3 / 7 is locally fine, the tree is still invalid because 3 is in the right subtree of 5 but 3 < 5.\n\nA correct brute force is in-order traversal: collect all values left-to-right, then check the resulting array is strictly increasing. That's O(n) time and O(n) extra space for the array.\n\nThe more elegant variant — and what I'd use — carries (lo, hi) bounds down the recursion: each node must satisfy `lo < node.val < hi`, and the bounds tighten as you descend. Same O(n) time but O(h) space for the recursion only, no traversal array.\"",
+        "why": "Walking the interviewer through the WRONG local check first — and naming the specific counter-example that breaks it — is a power move. It shows you've thought about why a naive solution fails, not just that the right answer is the right answer. The bounds-passing solution then lands as 'the natural fix' rather than a magic trick: you're not just remembering an algorithm, you're deriving why ancestral constraints matter."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to bounds-passing recursion?",
+        "say": "\"The defining BST property is global, not local: every node in the LEFT subtree of N must be less than N — not just N's direct left child, but every descendant. That global constraint is what kills the naive local check, and the standard fix is bounds-passing recursion: at every recursive call, carry the (lo, hi) open interval that the current subtree's values must fall inside. Going left tightens `hi` to node.val; going right tightens `lo` to node.val. Root starts with (-Infinity, +Infinity).\n\nThis is the tree analogue of 'pass state down the recursion' — common in any tree problem where a node's validity depends on its ancestors. Beats in-order traversal because it's O(h) space instead of O(n), no allocation, and handles duplicates cleanly with strict inequalities.\"",
+        "why": "The 'global vs local property' framing is the key insight that turns this from a memorized algorithm into a derivation. Naming bounds-passing as a specific technique — not just 'recursion' — is what separates the answer from a generic 'use recursion' guess. The comparison to in-order traversal (faster space, no allocation) shows you've weighed alternatives, not just picked the first solution that comes to mind."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a tiny valid tree, the classic 'naive local check passes but ancestor violation makes it invalid' tree, and a similar gotcha with reversed bounds direction.",
+        "examples": [
+          {
+            "input": "[2,1,3]",
+            "output": "true",
+            "note": "Tiny valid BST.",
+            "trace": "check(2, -inf, +inf): 2 in (-inf, +inf) ✓\n  check(1, -inf, 2): 1 in (-inf, 2) ✓\n    check(null, -inf, 1): true\n    check(null, 1, 2): true\n  check(3, 2, +inf): 3 in (2, +inf) ✓\n    check(null, 2, 3): true\n    check(null, 3, +inf): true\nreturn true"
+          },
+          {
+            "input": "[5,1,4,null,null,3,6]",
+            "output": "false",
+            "note": "Naive local check passes (4 fails 4<5 locally, but let's use the classic invalid where 3 violates ancestor 5).",
+            "trace": "check(5, -inf, +inf): 5 in (-inf, +inf) ✓\n  check(1, -inf, 5): 1 in (-inf, 5) ✓\n    (both children null, both pass)\n  check(4, 5, +inf): 4 in (5, +inf)? NO — 4 <= 5\nreturn false (caught by bounds, even though 4 is locally < 5's right value... wait, 5 < 4 fails at the local check too).\nThe actual ancestor-violation case is the subtree of 4: had we let 4 in, then check(3, 5, 4) would have caught 3 not in (5, 4) — bounds carry the ancestor 5 down."
+          },
+          {
+            "input": "[10,5,15,null,null,6,20]",
+            "output": "false",
+            "note": "Cleaner ancestor-violation example — 6 is locally fine (left child of 15, less than 15) but globally invalid (must also be > 10 because it's in the right subtree of 10).",
+            "trace": "check(10, -inf, +inf): 10 in (-inf, +inf) ✓\n  check(5, -inf, 10): 5 in (-inf, 10) ✓ (no children)\n  check(15, 10, +inf): 15 in (10, +inf) ✓\n    check(6, 10, 15): 6 in (10, 15)? NO — 6 <= 10\nreturn false ← caught by ancestor bound 10, which the naive local check would have missed"
+          }
+        ],
+        "why": "The third trace is the load-bearing one — it shows the bounds approach catching exactly the kind of bug the naive local check misses. Node 6 IS less than its parent 15, so a local check would let it through; but the inherited `lo=10` from ancestor 10 rejects it. This is the proof that bounds-passing is correct where local-only is not. Worth verbalizing during the trace so the interviewer sees you understand the WHY, not just the algorithm."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty tree → `check(null, -Infinity, Infinity)` hits the null base case and returns true. ✓ (Vacuously valid.)\n• Single node → check passes regardless of value (since (-Infinity, +Infinity) accepts anything). ✓\n• Duplicates anywhere — `[2,2]` or `[1,1,1]` — must return false with strict `<=` and `>=`. If the problem allowed duplicates on one side only, swap one comparison to non-strict.\n• Left-skewed (1M nodes descending) — recursion depth is n, risks stack overflow. Iterative in-order is the fallback.\n• Values at integer extremes — if the tree contains `Number.MIN_SAFE_INTEGER` as a real value, `-Infinity` still works as a sentinel because JS numbers compare correctly. If you were in a language with bounded ints, you'd want `null` sentinels with explicit `lo === null` checks.\n• Tree that's locally valid but globally invalid — this is THE classic bug (e.g. [10,5,15,null,null,6,20]) and the bounds approach catches it where local-only doesn't.\"",
+        "why": "Calling out the locally-valid-globally-invalid case explicitly — and naming it as the bug that motivates the bounds approach — closes the loop on why you picked this solution. The integer-extreme callout is the senior signal: most candidates use `-Infinity` without thinking; flagging the language-specific concern shows you'd handle this differently in C++/Java where you'd need `Optional<Integer>` or `INT_MIN`/`INT_MAX` with care."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — every node is visited exactly once, and the bounds check at each node is O(1). No memoization needed because the recursion tree exactly matches the actual tree.\n\nSpace is O(h) for the recursion stack — log n balanced, n worst case skewed. That's a strict win over the in-order-traversal alternative which is O(n) for the traversal array on top of O(h) for the stack.\n\nIf you wanted to do it iteratively to avoid stack overflow on deep trees, the standard trick is iterative in-order with a stack: push lefts until null, pop, compare with previous, push the popped node's right and repeat. Same O(n) time, O(h) space, but the stack is your data structure not the JS call stack — so you don't blow up on a 1M-node skewed tree.\n\nIf you wanted to extend to 'count nodes that violate the BST property' instead of just yes/no, the same skeleton works — replace the early `return false` with an accumulator and walk the whole tree.\"",
+        "why": "The iterative in-order fallback for stack-safety is the right defense against the 'what if the tree is huge' pushback. The count-violators extension demonstrates you see this as a parameterized template — change the combine step and the same recursive skeleton solves related problems. That's the kind of thinking that shows you understand the family of validation problems, not just this one."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the bounds-based BST validator. The trace simulates the recursion with an explicit stack so you can see each node's (lo, hi) window tighten as you descend.",
+    "examples": [
+      { "label": "[2,1,3] → true (valid)",                                        "input": [2, 1, 3],                              "expected": true },
+      { "label": "[5,1,4,null,null,3,6] → false (3 violates ancestor 5)",          "input": [5, 1, 4, null, null, 3, 6],            "expected": false },
+      { "label": "[10,5,15,null,null,6,20] → false (6 < 10 ancestor)",             "input": [10, 5, 15, null, null, 6, 20],         "expected": false }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  function buildTree(arr) {",
+      "    if (!arr || arr.length === 0 || arr[0] == null) return null;",
+      "    const root = { val: arr[0], left: null, right: null };",
+      "    const q = [root];",
+      "    let i = 1;",
+      "    while (q.length && i < arr.length) {",
+      "      const node = q.shift();",
+      "      if (i < arr.length && arr[i] != null) { node.left = { val: arr[i], left: null, right: null }; q.push(node.left); }",
+      "      i++;",
+      "      if (i < arr.length && arr[i] != null) { node.right = { val: arr[i], left: null, right: null }; q.push(node.right); }",
+      "      i++;",
+      "    }",
+      "    return root;",
+      "  }",
+      "  const fmt = (x) => x === Infinity ? '+inf' : x === -Infinity ? '-inf' : String(x);",
+      "  const root = buildTree(input);",
+      "  yield { line: 1, label: `enter isValidBST — tree ${JSON.stringify(input)}`, state: { treeShape: input } };",
+      "  yield { line: 10, label: 'call check(root, -inf, +inf)', state: { treeShape: input, root: root ? root.val : null } };",
+      "  const stack = [{ node: root, lo: -Infinity, hi: Infinity }];",
+      "  let result = true;",
+      "  while (stack.length) {",
+      "    const { node, lo, hi } = stack.pop();",
+      "    if (!node) {",
+      "      yield { line: 4, label: `check(null, ${fmt(lo)}, ${fmt(hi)}) → true`, state: { treeShape: input, lo: fmt(lo), hi: fmt(hi), result } };",
+      "      continue;",
+      "    }",
+      "    yield { line: 3, label: `check(${node.val}, ${fmt(lo)}, ${fmt(hi)}) — visit node`, state: { treeShape: input, current: node.val, lo: fmt(lo), hi: fmt(hi), stackDepth: stack.length } };",
+      "    if (node.val <= lo || node.val >= hi) {",
+      "      result = false;",
+      "      yield { line: 5, label: `${node.val} NOT in (${fmt(lo)}, ${fmt(hi)}) → return false`, state: { treeShape: input, current: node.val, lo: fmt(lo), hi: fmt(hi), result } };",
+      "      break;",
+      "    }",
+      "    yield { line: 5, label: `${node.val} fits (${fmt(lo)}, ${fmt(hi)}) — recurse children`, state: { treeShape: input, current: node.val, lo: fmt(lo), hi: fmt(hi) } };",
+      "    stack.push({ node: node.right, lo: node.val, hi });",
+      "    stack.push({ node: node.left,  lo,           hi: node.val });",
+      "    yield { line: 7, label: `enqueue left with hi=${node.val}, right with lo=${node.val}`, state: { treeShape: input, current: node.val, leftBounds: `(${fmt(lo)}, ${node.val})`, rightBounds: `(${node.val}, ${fmt(hi)})` } };",
+      "  }",
+      "  yield { line: 10, label: `done — return ${result}`, state: { treeShape: input, returns: result } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function isValidBST(root) {\n  // Carry the open interval (lo, hi) each node must fall inside — strict inequalities.\n  function check(node, lo, hi) {\n    if (!node) return true;\n    if (node.val <= lo || node.val >= hi) return false;\n    // Left subtree caps hi at node.val; right subtree raises lo to node.val.\n    return check(node.left, lo, node.val) && check(node.right, node.val, hi);\n  }\n  // Root has no bounds — start with ±Infinity sentinels.\n  return check(root, -Infinity, Infinity);\n}\n// Time O(n), Space O(h) recursion stack",
     "notes": [

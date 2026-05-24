@@ -8,6 +8,133 @@
   "mechanics": [
     "tree-recursion"
   ],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"So I need to invert a binary tree — by 'invert' you mean produce the mirror image, where every node's left and right children are swapped, and that swap cascades through all descendants. Yes? (As opposed to, say, reversing the values per level or rotating the tree.)\"\n\nThen a few quick clarifying questions:\n• Mutate in place, or return a new tree?\n• Node shape — `{ val, left, right }` with `null` for missing children?\n• What should I return for an empty tree — `null`?\n• Are duplicate values allowed? (Doesn't change the algorithm but worth confirming.)",
+        "why": "The 'mirror' framing is the clearest plain-English description and pins down what's actually being asked. In-place vs. new-tree matters for the API: the canonical answer mutates and returns the same root, which is fine for LeetCode but a real codebase might want immutability. The empty-tree question surfaces the base case before you write it. This is the famous Max Howell tweet problem — Google rejected him for failing it on a whiteboard, so the bar for crisp execution is high."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious recursive solution.",
+        "say": "\"There isn't a meaningfully slower 'brute force' here — the natural recursive solution is already O(n) and visits each node once. I'd describe it as: at every node, swap the left and right children, then recurse into both subtrees so they get inverted too. Base case: null returns null. Three or four lines.\n\nThe only variation worth mentioning is whether you swap first then recurse, or recurse first then swap — both work, the order of operations doesn't affect correctness because the recursive calls are independent.\"",
+        "why": "Calling out that there's no slower variant — and that the order doesn't matter — is the move. Interviewers worry about candidates who pad with a strawman; saying 'the natural solution is already optimal, here's why the order doesn't matter' shows you've thought about it rather than memorized it. The order-independence callout is a frequent interviewer follow-up; pre-empting it saves a round-trip."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to pure tree recursion?",
+        "say": "\"Mirror is a per-node transformation defined recursively: the mirror of a tree rooted at N is a tree with N's value, the mirror of N.right as left subtree, the mirror of N.left as right subtree. Each node's output depends only on its two children's outputs — that's the textbook signature of structural recursion on a tree. So I'd do exactly that: base case null returns null, recursively invert both children, swap. This is also the classic 'exam of recursion' problem — the algorithm is so trivial that what's being tested is whether you can write clean recursive code under pressure, not algorithm design. So I'd focus on writing it cleanly first and only optimize if asked.\"",
+        "why": "The 'exam of recursion' framing is the key insight. The interviewer almost certainly isn't testing whether you know the algorithm — they're testing whether you can express it in clean code without thinking. Calling that out tells them you understand what's actually being graded, which is itself a signal of interview maturity."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a balanced BST whose inversion has a clean property (inorder becomes sorted descending), the empty tree, and a tiny asymmetric tree that shows the structural change.",
+        "examples": [
+          {
+            "input": "[4,2,7,1,3,6,9]",
+            "output": "[4,7,2,9,6,3,1]",
+            "note": "Classic balanced BST — inversion produces the mirror; inorder traversal goes from sorted ASC to sorted DESC.",
+            "trace": "invert(4)\n  invert(2)\n    invert(1) → leaf, swap nulls, return 1\n    invert(3) → leaf, swap nulls, return 3\n    swap 2's children: now left=3, right=1; return 2\n  invert(7)\n    invert(6) → leaf, return 6\n    invert(9) → leaf, return 9\n    swap 7's children: now left=9, right=6; return 7\n  swap 4's children: now left=7, right=2; return 4\nfinal: root=4, left=7 (with children 9,6), right=2 (with children 3,1)"
+          },
+          {
+            "input": "[] (empty tree, root=null)",
+            "output": "[]",
+            "note": "Degenerate — base case returns null immediately, no recursion.",
+            "trace": "invert(null)\n  !root is true → return null"
+          },
+          {
+            "input": "[1,2] (single left child)",
+            "output": "[1,null,2]",
+            "note": "Tiny asymmetric — shows the swap turning a left-only child into a right-only child.",
+            "trace": "invert(1)\n  invert(2) → leaf, return 2\n  invert(null) → return null\n  swap 1's children: now left=null, right=2; return 1"
+          }
+        ],
+        "why": "The BST trace is the cleanest sanity check: inverting a BST should make its inorder traversal go from sorted-ascending to sorted-descending. If your code is wrong, that property will visibly break. The `[1,2]` trace exposes the subtle bug where a careless implementation forgets to assign the swapped result — if you only recurse into existing children, the lone child never moves to the other side."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Null root → base case returns null. ✓\n• Single node → no children to swap, returns unchanged.\n• Perfectly balanced tree → all swaps happen, recursion depth is log₂(n).\n• Left-skewed (degenerate to linked list) → becomes right-skewed. Recursion depth equals n, so a million-node skewed tree would overflow the call stack. The iterative alternative uses a queue or stack — same swap logic, no recursion.\n• All-same values → swap is structurally identical to the original tree; inorder traversal is unchanged, but the references on left/right have flipped. Worth mentioning that visual equivalence doesn't mean object identity.\n• Asymmetric subtrees (e.g. lots of lefts, few rights) → recursion handles it naturally because each subtree is processed independently.\"",
+        "why": "The skewed-tree callout is the senior signal — for a degenerate tree the recursion depth equals n, which is the same O(h) space concern that shows up across every tree problem. The all-same-values observation about reference vs. value equality is the kind of subtle thing that separates engineers who think about object identity from those who only think about output. Either prompt earns you bonus points."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — every node is visited exactly once. Work per node is constant: two recursive calls and a swap.\n\nSpace is O(h) for the recursion stack, where h is the tree height. Balanced is O(log n); skewed is O(n) worst case. If the interviewer pushes back on stack safety, I'd convert to iterative BFS or DFS — push root onto a queue/stack, pop, swap children, push the children back, repeat. Same O(n) time, O(w) extra space where w is max level width (or stack size).\n\nIf you wanted to extend this to 'check if a tree is a mirror of itself' — Symmetric Tree, LeetCode 101 — you'd use parallel recursion on the original tree against its mirror, comparing values and inverted subtrees at each step. Same recursive shape, different combine step. And of course the Max Howell rejection is the canonical interview folklore here — if you can't write this in 60 seconds under pressure, you'll get filtered. The drill is to make it muscle memory.\"",
+        "why": "The iterative fallback is the right answer to the stack-overflow pushback. The Symmetric Tree extension demonstrates you see invert-tree as a primitive in a family of mirror problems, not just a one-off question. Surfacing the Howell folklore is appropriate here in a way it wouldn't be for most problems — it tells the interviewer you know this problem's reputation, which signals you've taken it seriously enough to make the implementation reflexive."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the recursive invert on a real tree. The trace simulates post-order recursion with an explicit stack — each node's children are inverted before its own swap. The final return is flattened back to level-order for comparison.",
+    "examples": [
+      { "label": "[4,2,7,1,3,6,9] → [4,7,2,9,6,3,1]", "input": [4, 2, 7, 1, 3, 6, 9], "expected": "[4,7,2,9,6,3,1]" },
+      { "label": "[] → []",                          "input": [],                    "expected": "[]" },
+      { "label": "[1,2] → [1,null,2]",               "input": [1, 2],                "expected": "[1,null,2]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  function buildTree(arr) {",
+      "    if (!arr || arr.length === 0 || arr[0] == null) return null;",
+      "    const root = { val: arr[0], left: null, right: null };",
+      "    const q = [root];",
+      "    let i = 1;",
+      "    while (q.length && i < arr.length) {",
+      "      const node = q.shift();",
+      "      if (i < arr.length && arr[i] != null) { node.left = { val: arr[i], left: null, right: null }; q.push(node.left); }",
+      "      i++;",
+      "      if (i < arr.length && arr[i] != null) { node.right = { val: arr[i], left: null, right: null }; q.push(node.right); }",
+      "      i++;",
+      "    }",
+      "    return root;",
+      "  }",
+      "  function toLevelOrder(root) {",
+      "    if (!root) return [];",
+      "    const out = [];",
+      "    const q = [root];",
+      "    while (q.length) {",
+      "      const n = q.shift();",
+      "      if (n === null) { out.push(null); continue; }",
+      "      out.push(n.val);",
+      "      q.push(n.left);",
+      "      q.push(n.right);",
+      "    }",
+      "    while (out.length && out[out.length - 1] === null) out.pop();",
+      "    return out;",
+      "  }",
+      "  const root = buildTree(input);",
+      "  yield { line: 1, label: `enter invertTree — tree ${JSON.stringify(input)}`, state: { treeShape: input } };",
+      "  if (!root) {",
+      "    yield { line: 2, label: 'root is null → return null', state: { treeShape: input, returns: JSON.stringify([]) } };",
+      "    return;",
+      "  }",
+      "  yield { line: 2, label: `root=${root.val} not null`, state: { treeShape: input, root: root.val } };",
+      "  const stack = [[root, false]];",
+      "  while (stack.length) {",
+      "    const frame = stack[stack.length - 1];",
+      "    const [node, visited] = frame;",
+      "    if (!visited) {",
+      "      yield { line: 3, label: `call invertTree(${node.val}) — descend left then right`, state: { treeShape: input, current: node.val, stackDepth: stack.length } };",
+      "      frame[1] = true;",
+      "      if (node.right) stack.push([node.right, false]);",
+      "      if (node.left)  stack.push([node.left,  false]);",
+      "    } else {",
+      "      stack.pop();",
+      "      const l = node.left, r = node.right;",
+      "      node.left = r;",
+      "      node.right = l;",
+      "      yield { line: 5, label: `at node ${node.val}: swap children — left=${r ? r.val : 'null'}, right=${l ? l.val : 'null'}`, state: { treeShape: input, current: node.val, newLeft: r ? r.val : null, newRight: l ? l.val : null, stackDepth: stack.length } };",
+      "    }",
+      "  }",
+      "  const out = toLevelOrder(root);",
+      "  yield { line: 7, label: `return inverted tree → ${JSON.stringify(out)}`, state: { treeShape: input, inverted: out, returns: JSON.stringify(out) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function invertTree(root) {\n  if (!root) return null;          // base case: null subtree stays null\n  const left = invertTree(root.left);\n  const right = invertTree(root.right);\n  root.left = right;               // swap the two recursed subtrees\n  root.right = left;\n  return root;\n}\n// Time O(n), Space O(h) for recursion stack\n// Famous Max Howell tweet: rejected from Google after failing this whiteboard.",
     "notes": [

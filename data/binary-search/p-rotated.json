@@ -6,6 +6,113 @@
   "status": "full",
   "description": "Binary search on a rotated sorted array. At each step one half is sorted — check if target lies inside. O(log n).",
   "mechanics": ["binary-search-interval"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given an array that was sorted ascending, then rotated at some unknown pivot, and I need to return the index of `target` in O(log n) — or `-1` if it's not there. Quick clarifying questions:\"\n\n• Are values guaranteed unique? (If duplicates are allowed, the algorithm degrades to O(n) worst case — that's a different problem.)\n• Can the rotation be by 0 (i.e. the array is still in original order)?\n• Empty input — return `-1`?\n• Output is the index, not the value, correct?",
+        "why": "The unique-values question is the load-bearing one. With duplicates, the `nums[l] <= nums[m]` check becomes ambiguous (`[1,1,1,1,1,2,1]` — both halves look sorted), and you'd have to fall back to incrementing `l` past the ambiguity, breaking the log-n bound. Confirming uniqueness up front lets you commit to the standard template. The rotation-by-zero question matters too — the canonical needs to handle that as the degenerate case where the 'left half is sorted' branch covers the whole array."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n) solutions before you discard them.",
+        "say": "\"Two brute forces, both O(n). One: a linear scan — return `i` when `nums[i] === target`. Doesn't use the structure at all. Two: find the rotation pivot first (where `nums[i] > nums[i+1]`), then binary-search the appropriate half. That's two O(log n) passes plus an O(n) pivot scan — overall still O(n) because the pivot search is linear.\n\nThe interesting brute force is actually the second one done right — find the pivot in O(log n) too, then do a standard BS in the correct half. That's two binary searches glued together. But there's a one-pass version that does the same logic inside a single loop, and that's cleaner — let me build that.\"",
+        "why": "Walking through 'find pivot then BS' is the bridge from 'rotated' to 'one-pass.' It shows you considered the decomposed version — which is a legitimate solution — and chose the unified template because it's cleaner, not because you didn't see the alternative. That's an upgrade signal: the candidate who can name both and pick is stronger than the one who only knows the magic one-pass version."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What invariant makes binary search still work after rotation?",
+        "say": "\"The key insight: even after rotation, at every iteration AT LEAST ONE of `[l..m]` or `[m..r]` is still sorted. The pivot can only land in one of the halves, not both. So I can:\"\n\n\"(1) Identify which half is sorted — compare `nums[l]` to `nums[m]`. If `nums[l] <= nums[m]`, the LEFT half `[l..m]` is the sorted one.\"\n\n\"(2) Check whether target lies inside that sorted half's value range — that's a simple `nums[l] <= target < nums[m]` comparison.\"\n\n\"(3) If yes, recurse into the sorted half (standard BS). If no, target must be in the OTHER half (the rotated one), so recurse there. Either way I halve the range — O(log n).\"\n\n\"The monotonicity that BS needs is still there, it's just locally true on whichever half is sorted, instead of globally true on the whole array.\"",
+        "why": "This is the entire problem in three sentences — and it's how you'd say it on the whiteboard. Naming the 'one half is always sorted' invariant explicitly is the move; without that, you're just guessing at branches. The monotonicity callback to plain BS is the synthesis: same template, the prerequisite is just satisfied differently (locally on one half instead of globally on the whole)."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace these to make sure the half-identification logic is right.\" Three cases — target on the wrap-around side, target on the original side, and a miss to confirm the loop terminates.",
+        "examples": [
+          {
+            "input": "nums=[4,5,6,7,0,1,2], target=0",
+            "output": "4",
+            "note": "Target is in the rotated portion — first step must walk past the sorted-left.",
+            "trace": "l=0 r=6  m=3 nums[m]=7   nums[l]=4 <= 7 → LEFT [0..3] sorted (4,5,6,7)\n         is target=0 in [4, 7)? no → search right: l = m+1 = 4\nl=4 r=6  m=5 nums[m]=1   nums[l]=0 <= 1 → LEFT [4..5] sorted (0,1)\n         is target=0 in [0, 1)? yes → search left: r = m-1 = 4\nl=4 r=4  m=4 nums[m]=0   === 0 → return 4 ✓"
+          },
+          {
+            "input": "nums=[6,7,0,1,2,4,5], target=4",
+            "output": "5",
+            "note": "Target is in the sorted-right portion — exercises the right-half branch.",
+            "trace": "l=0 r=6  m=3 nums[m]=1   nums[l]=6 > 1 → RIGHT [3..6] sorted (1,2,4,5)\n         is target=4 in (1, 5]? yes → search right: l = m+1 = 4\nl=4 r=6  m=5 nums[m]=4   === 4 → return 5 ✓"
+          },
+          {
+            "input": "nums=[4,5,6,7,0,1,2], target=3",
+            "output": "-1",
+            "note": "Miss — confirms the loop exits cleanly via l > r.",
+            "trace": "l=0 r=6  m=3 nums[m]=7   nums[l]=4 <= 7 → LEFT sorted (4,5,6,7)\n         is target=3 in [4, 7)? no → search right: l = m+1 = 4\nl=4 r=6  m=5 nums[m]=1   nums[l]=0 <= 1 → LEFT sorted (0,1)\n         is target=3 in [0, 1)? no → search right: l = m+1 = 6\nl=6 r=6  m=6 nums[m]=2   nums[l]=2 <= 2 → LEFT sorted (just [2])\n         is target=3 in [2, 2)? no → search right: l = m+1 = 7\nl=7 r=6  → l > r, loop exits → return -1 ✓"
+          }
+        ],
+        "why": "The first example is the one to narrate — it exposes the subtle bit, that target=0 lies in the rotated half, so the algorithm has to recognize 'sorted-left doesn't contain 0' and jump RIGHT, even though intuitively '0 is less than everything' might suggest going left. The boundary strictness in `nums[l] <= target && target < nums[m]` (note the `<` not `<=` on the right) is also worth flagging — `nums[m]` already failed the equality check at the top of the loop, so excluding it from the range avoids re-testing it."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty array → `r = -1`, loop never enters, return `-1`. ✓\n• Single element → `l == r == m`, equality check fires or we return -1.\n• No rotation (e.g. `[1,2,3,4,5]`) → `nums[l] <= nums[m]` is always true, so we always take the left-sorted branch. Falls back to plain BS. ✓\n• Full rotation (rotated by length) → same as no rotation.\n• `nums[l] == nums[m]` (with unique values, only possible when `l == m`) → the `<=` in the half-check handles it; without `=`, a 2-element subarray breaks.\n• Duplicates allowed (different problem — Search Rotated II) → would need to `l++` past the ambiguous prefix, degrading to O(n) worst case. Worth flagging that you'd ask before assuming unique.\n• Integer overflow on `(l + r) / 2` → JS is safe (Number is 64-bit float), but in a typed language I'd write `l + ((r - l) >> 1)`.",
+        "why": "The no-rotation edge is the one to mention out loud — it's the test case that proves the template degrades gracefully to plain BS. The duplicates flag is the senior-tier touch: most candidates don't realize the algorithm assumes uniqueness, and interviewers either nod or follow up with 'how would you handle duplicates?' — either response is good. The `nums[l] == nums[m]` callout is what justifies the `<=` (not `<`) in the half-check, which is a real bug in 2-element subarrays if you get it wrong."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(log n) — each iteration halves the search range, same as plain BS. The extra work per step (deciding which half is sorted, then which half to search) is O(1), so the asymptotic bound is unchanged.\n\nSpace is O(1) — same three pointers, no extra structure, iterative loop.\n\nThe defense against pushback is straightforward: 'I'm halving the range every step; the only new work is constant per step.' The hard part isn't the complexity proof — it's convincing the interviewer the BRANCHING is correct, which is what the trace above does.\n\nIf you wanted to extend: Find Minimum in Rotated Sorted Array uses the same family — it's the same setup but you anchor to `nums[r]` instead of `nums[l]`, and you converge to the pivot itself instead of a target. And if duplicates were allowed, Search Rotated II keeps the same skeleton but adds an `l++` fallback to skip past ambiguity, accepting O(n) worst case.\"",
+        "why": "The 'same complexity, harder correctness argument' framing is exactly what makes this problem interview-classic: the asymptotic story is easy, but the branch logic is where you live or die. Naming Find Minimum and Search Rotated II unprompted is the bonus that proves you see the rotated-BS family as a template — three related problems, one skeleton, three different convergence/anchor choices."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the rotated binary search one statement at a time. The state panel shows l, r, m, and nums[m], plus which half is identified as sorted at each step.",
+    "examples": [
+      { "label": "[4,5,6,7,0,1,2] target=0 → 4", "input": { "nums": [4, 5, 6, 7, 0, 1, 2], "target": 0 }, "expected": 4 },
+      { "label": "[6,7,0,1,2,4,5] target=4 → 5", "input": { "nums": [6, 7, 0, 1, 2, 4, 5], "target": 4 }, "expected": 5 },
+      { "label": "[4,5,6,7,0,1,2] target=3 → -1", "input": { "nums": [4, 5, 6, 7, 0, 1, 2], "target": 3 }, "expected": -1 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input.nums;",
+      "  const target = input.target;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}, target=${target}`, state: { nums, target } };",
+      "  let l = 0, r = nums.length - 1;",
+      "  yield { line: 2, label: `init l=0, r=${r}`, state: { nums, target, l, r } };",
+      "  while (l <= r) {",
+      "    yield { line: 3, label: `loop check: l=${l} <= r=${r} → enter`, state: { nums, target, l, r } };",
+      "    const m = Math.floor((l + r) / 2);",
+      "    yield { line: 4, label: `m = floor((${l}+${r})/2) = ${m}, nums[m]=${nums[m]}`, state: { nums, target, l, r, m, midVal: nums[m] } };",
+      "    if (nums[m] === target) {",
+      "      yield { line: 5, label: `nums[m]=${nums[m]} === target=${target} → return ${m}`, state: { nums, target, l, r, m, midVal: nums[m], returns: m } };",
+      "      return;",
+      "    }",
+      "    if (nums[l] <= nums[m]) {",
+      "      yield { line: 7, label: `nums[l]=${nums[l]} <= nums[m]=${nums[m]} → LEFT half [${l}..${m}] is sorted`, state: { nums, target, l, r, m, midVal: nums[m], sortedHalf: 'left' } };",
+      "      if (nums[l] <= target && target < nums[m]) {",
+      "        r = m - 1;",
+      "        yield { line: 10, label: `target=${target} lies in sorted-left [${nums[l]}, ${nums[m]}) → r = m-1 = ${r}`, state: { nums, target, l, r, m, midVal: nums[m], sortedHalf: 'left' } };",
+      "      } else {",
+      "        l = m + 1;",
+      "        yield { line: 11, label: `target=${target} NOT in sorted-left → search right: l = m+1 = ${l}`, state: { nums, target, l, r, m, midVal: nums[m], sortedHalf: 'left' } };",
+      "      }",
+      "    } else {",
+      "      yield { line: 13, label: `nums[l]=${nums[l]} > nums[m]=${nums[m]} → RIGHT half [${m}..${r}] is sorted`, state: { nums, target, l, r, m, midVal: nums[m], sortedHalf: 'right' } };",
+      "      if (nums[m] < target && target <= nums[r]) {",
+      "        l = m + 1;",
+      "        yield { line: 14, label: `target=${target} lies in sorted-right (${nums[m]}, ${nums[r]}] → l = m+1 = ${l}`, state: { nums, target, l, r, m, midVal: nums[m], sortedHalf: 'right' } };",
+      "      } else {",
+      "        r = m - 1;",
+      "        yield { line: 15, label: `target=${target} NOT in sorted-right → search left: r = m-1 = ${r}`, state: { nums, target, l, r, m, midVal: nums[m], sortedHalf: 'right' } };",
+      "      }",
+      "    }",
+      "  }",
+      "  yield { line: 18, label: `loop ended (l=${l} > r=${r}) — target not found, return -1`, state: { nums, target, l, r, returns: -1 } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function search(nums, target) {\n  let l = 0, r = nums.length - 1;\n  while (l <= r) {\n    const m = Math.floor((l + r) / 2);\n    if (nums[m] === target) return m;\n    // Invariant: after any rotation at least ONE half is still sorted. Identify it.\n    if (nums[l] <= nums[m]) {\n      // left half [l..m] is sorted\n      // If target lies in the sorted-left range, discard the right; else discard the left.\n      if (nums[l] <= target && target < nums[m]) r = m - 1;\n      else l = m + 1;\n    } else {\n      // right half [m..r] is sorted\n      if (nums[m] < target && target <= nums[r]) l = m + 1;\n      else r = m - 1;\n    }\n  }\n  return -1;\n}\n// Time O(log n), Space O(1)",
     "notes": [

@@ -6,6 +6,96 @@
   "status": "full",
   "description": "Binary search anchored to the right boundary. If `nums[mid] > nums[right]`, the rotation point — and the minimum — lies strictly right of mid. Otherwise it is at mid or left. O(log n).",
   "mechanics": ["binary-search-interval"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given an array that was sorted ascending, then rotated some number of times, and I need to return the minimum value in O(log n). Clarifying:\"\n\n• Unique values guaranteed? (Duplicates change the algorithm to O(n) worst case — different problem.)\n• Can the rotation be by 0? (i.e. the array is in original sorted order.)\n• Empty array — what's the contract? Throw? Return undefined?\n• Return the value, not the index, right?",
+        "why": "The unique-values question is the load-bearing one again — with duplicates (the Find Min II variant) the comparison `nums[m] > nums[r]` becomes ambiguous when `nums[m] == nums[r]`, and you fall back to `r--`, which is O(n) worst case. The rotation-by-zero question matters too because it's the boundary case that tests whether your loop handles the 'no rotation' degenerate: the minimum is just `nums[0]` and the algorithm must converge to index 0."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n) solution before you discard it.",
+        "say": "\"Brute force is a linear scan: `Math.min(...nums)`, or a `for` loop tracking the running min. O(n) time, O(1) space. Doesn't use the sortedness-after-rotation at all, which is the giveaway that we can do better — same as plain BS, the sorted structure is information we're throwing away.\"\n\n\"A cleverer brute force is 'find the rotation pivot' (where `nums[i] > nums[i+1]`) and return `nums[pivot+1]`. That's still O(n) if you scan, but it points at the optimization: if I can find the pivot in O(log n) — and I can, because of the rotated-sortedness invariant — then I get an O(log n) algorithm. And the minimum IS the pivot, so it's the same loop.\"",
+        "why": "The 'find the pivot' brute force is the bridge — it reframes the problem from 'find the min' to 'find the pivot,' which is what makes the BS structure visible. The minimum and the pivot are the same element, so a converging search for one is a search for the other. Saying this aloud signals you derived the algorithm, you didn't memorize it."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What makes binary search work here without a target?",
+        "say": "\"Even after rotation, the array has a 'sorted-half' invariant — given indices `l`, `m`, `r`, at least one of `[l..m]` or `[m..r]` is fully sorted, and the OTHER half contains the rotation pivot (which is the minimum). I just need to figure out which half is unsorted and recurse there.\"\n\n\"The cleanest test: compare `nums[m]` to `nums[r]`.\"\n\n\"• If `nums[m] > nums[r]`, the right half `[m..r]` is NOT sorted (because the last element is smaller than the middle), so the pivot — the min — is strictly RIGHT of `m`. Set `l = m + 1`.\"\n\n\"• If `nums[m] <= nums[r]`, the right half IS sorted, so the pivot is at `m` or to its LEFT. Set `r = m` (NOT `m - 1`, because `m` itself could be the min).\"\n\n\"Why anchor to `nums[r]` and not `nums[l]`? Because `nums[l] <= nums[m]` is true whether the array is rotated (left half sorted) OR not rotated at all (whole thing sorted) — ambiguous. `nums[m] vs nums[r]` cleanly separates the two cases.\"\n\n\"Loop condition is `l < r` (not `<=`) and the answer is `nums[l]` when they converge — same template as 'find the leftmost true in a monotone predicate.'\"",
+        "why": "The 'why anchor right' question is the THE question on this problem — interviewers will probe it specifically. Saying it out loud unprompted ('left-anchor is ambiguous in the unrotated case') proves you understand WHY the canonical is structured this way, not just THAT it works. The `r = m` (not `m - 1`) discipline is the second classic bug — excluding the candidate min loses the answer. Both deserve to be flagged before you write the loop."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace these to make sure both branches are right.\" Three cases — a rotated array with the min in the middle, an unrotated array (rotation-by-zero degenerate), and a 2-element rotation (smallest non-trivial case).",
+        "examples": [
+          {
+            "input": "nums=[4,5,6,7,0,1,2]",
+            "output": "0",
+            "note": "Standard rotation — min is in the right half.",
+            "trace": "l=0 r=6  m=3 nums[m]=7  nums[r]=2  7 > 2 → min is right of m: l = m+1 = 4\nl=4 r=6  m=5 nums[m]=1  nums[r]=2  1 <= 2 → min at m or left: r = m = 5\nl=4 r=5  m=4 nums[m]=0  nums[r]=1  0 <= 1 → min at m or left: r = m = 4\nl=4 r=4  → converged → return nums[4] = 0 ✓"
+          },
+          {
+            "input": "nums=[11,13,15,17]",
+            "output": "11",
+            "note": "No rotation — the algorithm must NOT misfire and pick something other than nums[0].",
+            "trace": "l=0 r=3  m=1 nums[m]=13 nums[r]=17 13 <= 17 → r = m = 1\nl=0 r=1  m=0 nums[m]=11 nums[r]=13 11 <= 13 → r = m = 0\nl=0 r=0  → converged → return nums[0] = 11 ✓"
+          },
+          {
+            "input": "nums=[2,1]",
+            "output": "1",
+            "note": "Smallest rotation — `m = floor(0+1)/2) = 0`, exercises both the half-check and the convergence.",
+            "trace": "l=0 r=1  m=0 nums[m]=2  nums[r]=1  2 > 1 → min is right of m: l = m+1 = 1\nl=1 r=1  → converged → return nums[1] = 1 ✓"
+          }
+        ],
+        "why": "The unrotated trace is the one to narrate slowly — it's the case that proves the right-anchor choice was correct. The whole array is sorted, so `nums[m] <= nums[r]` is always true, the algorithm walks `r` leftward until it converges on index 0, and returns `nums[0]`. A left-anchor algorithm would also see `nums[l] <= nums[m]` always true and would have no signal to terminate correctly. The 2-element trace is the one that defends `l = m + 1` — without the `+1`, `m` stays at 0 forever and the loop never terminates."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty array → undefined behavior by problem constraints, but `r = -1` and `l = 0` would cause `nums[l]` to be `undefined`. Defensive guard if the contract requires it.\n• Single element → `l = r = 0`, loop never enters, return `nums[0]`. ✓\n• No rotation (`[1,2,3,4,5]`) → already covered in the trace — algorithm converges to index 0.\n• Full rotation (rotated by length, same as no rotation) → same.\n• Rotation by 1 (`[2,1]` or `[5,1,2,3,4]`) → min is at index `n-1` or `1`. Covered.\n• Duplicates (different problem — Find Min II) → `nums[m] == nums[r]` becomes ambiguous (the min could be in either half), and the fallback is `r--`, which degrades to O(n) worst case. Worth flagging that you'd ask before assuming uniqueness.\n• Integer overflow on `(l + r) / 2` → safe in JS, but I'd write `l + ((r - l) >> 1)` in a typed language.",
+        "why": "The no-rotation edge is the one to mention explicitly — it's the test case that demonstrates the right-anchor algorithm degrades correctly. The duplicates flag is the senior-tier touch: the canonical assumes unique values, and articulating WHY duplicates break the bound (because `nums[m] == nums[r]` no longer tells you which half is sorted) shows you understand the algorithm's preconditions, not just its mechanics."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(log n) — each iteration halves the search range. The half-check is O(1), the pointer update is O(1), so each step is constant work and the loop runs at most `⌈log₂(n)⌉` times.\n\nSpace is O(1) — same three pointers as plain BS, no recursion, no auxiliary structure.\n\nThe defense is straightforward: it's plain BS with a different convergence target. Plain BS converges on a target value via equality; this converges on a pivot index by repeatedly discarding the sorted half. Same halving, same O(log n).\n\nIf you wanted to extend: Search Rotated Sorted Array uses the same 'one half is always sorted' invariant — same skeleton, but you anchor on `nums[l]` and check whether `target` lies in the sorted half, rather than converging to the pivot. Find Min in Rotated II handles duplicates with an `r--` fallback when `nums[m] == nums[r]`, accepting O(n) worst case. The three problems are siblings — same invariant, three different convergence strategies.\"",
+        "why": "Framing this as 'plain BS with a different convergence target' is the conceptual move that makes the algorithm memorable — instead of memorizing 'compare m to r, anchor right, r = m,' you remember 'I'm converging to the pivot via the always-sorted-half invariant.' Naming Search Rotated and Find Min II unprompted is the bonus that proves you see the rotated-BS family as a coherent set — three problems, one invariant, three convergence patterns. That's the template-level understanding interviewers grade for."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through find-min on a rotated sorted array. Each iteration compares nums[m] to the RIGHT boundary nums[r] to decide which half holds the minimum. The state panel shows l, r, m, and the values at m and r.",
+    "examples": [
+      { "label": "[4,5,6,7,0,1,2] → 0", "input": { "nums": [4, 5, 6, 7, 0, 1, 2] }, "expected": 0 },
+      { "label": "[11,13,15,17] → 11",  "input": { "nums": [11, 13, 15, 17] },       "expected": 11 },
+      { "label": "[2,1] → 1",           "input": { "nums": [2, 1] },                  "expected": 1 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input.nums;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}`, state: { nums } };",
+      "  let l = 0, r = nums.length - 1;",
+      "  yield { line: 2, label: `init l=0, r=${r}`, state: { nums, l, r } };",
+      "  while (l < r) {",
+      "    yield { line: 4, label: `loop check: l=${l} < r=${r} → enter`, state: { nums, l, r } };",
+      "    const m = Math.floor((l + r) / 2);",
+      "    yield { line: 5, label: `m = floor((${l}+${r})/2) = ${m}, nums[m]=${nums[m]}, nums[r]=${nums[r]}`, state: { nums, l, r, m, midVal: nums[m], rightVal: nums[r] } };",
+      "    if (nums[m] > nums[r]) {",
+      "      l = m + 1;",
+      "      yield { line: 8, label: `nums[m]=${nums[m]} > nums[r]=${nums[r]} → min is strictly right of m: l = m+1 = ${l}`, state: { nums, l, r, m, midVal: nums[m], rightVal: nums[r] } };",
+      "    } else {",
+      "      r = m;",
+      "      yield { line: 11, label: `nums[m]=${nums[m]} <= nums[r]=${nums[r]} → min is at m or left of it: r = m = ${r} (do NOT exclude m)`, state: { nums, l, r, m, midVal: nums[m], rightVal: nums[r] } };",
+      "    }",
+      "  }",
+      "  yield { line: 14, label: `pointers converged: l=r=${l} → return nums[l] = ${nums[l]}`, state: { nums, l, r, returns: nums[l] } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function findMin(nums) {\n  let l = 0, r = nums.length - 1;\n  // Loop is `l < r` (not <=) — converge until pointers meet at the min.\n  while (l < r) {\n    const m = Math.floor((l + r) / 2);\n    // Anchor to nums[r] — comparing to nums[l] is ambiguous in the unrotated case.\n    if (nums[m] > nums[r]) {\n      l = m + 1;            // min is strictly right of mid\n    } else {\n      // r = m (not m-1) — mid itself could BE the min, can't exclude it.\n      r = m;                // min is at mid or to its left\n    }\n  }\n  return nums[l];           // l === r points at the minimum\n}\n// Time O(log n), Space O(1)",
     "notes": [

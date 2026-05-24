@@ -6,6 +6,122 @@
   "status": "full",
   "description": "Reveal logic for a Minesweeper click. Hitting a mine ('M') turns to 'X'. Hitting an empty cell ('E') reveals its mine-neighbor count; if zero, flood-fill out to adjacent zero cells, stopping at numbered borders. Use a stack DFS to avoid recursion depth blow-ups on big boards.",
   "mechanics": ["array-as-stack", "four-dir-neighbors"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Implement Minesweeper reveal. Given a 2D board with `'M'` (mine), `'E'` (empty unrevealed), `'B'` (empty revealed), or `'1'`..'8' (numbered), and a click position, mutate the board: if click is on a mine, flip to `'X'`; if click is on empty, reveal a number OR flood-fill out to all reachable zero-mine cells. Let me confirm:\"\n\n• Cell encoding — are `'E'`, `'M'`, `'B'`, and digit strings the only states? Single-character strings throughout?\n• Neighbors — 8-directional (king's-move), right? (Not 4-directional like grid BFS problems.)\n• Mutate in place and return the same board, or return a new one?\n• What if the user clicks on an already-revealed cell (`'B'` or digit) — no-op, or throw?\n• Recursion depth — for a large board (1000×1000) all zeros, naive DFS would stack-overflow. OK to use an explicit stack?",
+        "why": "The 8-directional vs 4-directional question is the trap. Most grid-flood problems use 4-dir, Minesweeper specifically uses 8 because diagonals count for mine adjacency in the real game. The recursion-depth question is the senior-candidate beat — large all-zero boards crash recursive solutions, and stating it up front signals you've thought about JS's ~10k call stack limit."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious recursive flood-fill before you discard it.",
+        "say": "\"The textbook flood fill is recursive: `reveal(board, r, c)` — if out of bounds or not `'E'`, return; count 8-neighbor mines; if count > 0, write the digit and stop; else mark `'B'` and recurse on all 8 neighbors. That's the canonical DFS, super clean.\n\nThe problem is recursion depth. On a 1000×1000 all-zeros board, the call stack could reach 10⁶ before unwinding — JS's stack is roughly 10k frames in V8, way under that. We'd blow the stack.\n\nThe fix is an explicit stack: same algorithm, but `stack.push([r, c])` instead of recursing, and `stack.pop()` in a while loop. Iterative DFS with the same traversal order, no stack-overflow risk, identical complexity.\"",
+        "why": "Naming recursive-then-iterative shows you know the algorithm AND know JS's limitations. Most candidates write recursive without thinking; the senior candidate either starts iterative or explains why they're pivoting. Either is fine — what matters is that you VERBALIZE the choice rather than silently picking."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why flood-fill with stop-conditions on numbered cells?",
+        "say": "\"This is a graph-flood (DFS or BFS) where the graph is the grid of `'E'` cells, edges are 8-directional adjacency, and the flood propagates through cells with ZERO mine neighbors. Numbered cells are revealed (write the digit) but they're ABSORBING — they don't propagate. So the algorithm is:\n\n1. Click on `'M'` → write `'X'`, short-circuit. No flood.\n2. Click on `'E'` → count mine neighbors. If > 0, write the digit, done. If 0, write `'B'`, push 8 neighbors onto the stack.\n3. For each popped cell: re-check `'E'` (skip if already revealed via another path), count mines, repeat step 2.\n\nWhy DFS over BFS? Both work — the question only asks for final state, not shortest path or layer order. DFS uses less memory in practice (stack of frontier rather than full layer), and the iterative version is the same code shape. Either is defensible.\n\nThe absorbing-numbered-cell rule is what makes this NOT a simple flood: a numbered cell IS revealed (visible to the user) but it's a wall to further propagation. This matches the real game — the digits give you clues about adjacent mines, and they form the boundary of the cleared region.\"",
+        "why": "Calling out 'absorbing boundary' is the structural answer — most candidates implement it correctly by following the n > 0 branch, but can't articulate why. Naming DFS vs BFS as a deliberate choice (rather than 'DFS because that's what I remember') signals algorithm fluency. The 'either works' caveat is the honest take that interviewers respect."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace three clicks — a mine click (short-circuit), a numbered click (single-cell reveal, no flood), and a flood from a corner that propagates and stops at a numbered border.\"",
+        "examples": [
+          {
+            "input": "[['E','M'],['E','E']], click [0,1]",
+            "output": "[['E','X'],['E','E']]",
+            "note": "Click is on a mine — flip to 'X', short-circuit before entering the flood loop.",
+            "trace": "enter reveal — click=[0,1]\nboard[0][1]='M' → board[0][1]='X', return\nfinal: [['E','X'],['E','E']]"
+          },
+          {
+            "input": "[['E','M'],['E','E']], click [0,0]",
+            "output": "[['1','M'],['E','E']]",
+            "note": "Adjacent to mine — reveal '1', no flood propagation.",
+            "trace": "enter reveal — click=[0,0]\nboard[0][0]='E' (not 'M'), enter flood loop\nstack=[[0,0]]\npop [0,0] — board[0][0]='E', count 8 neighbors for 'M':\n  (0,1)='M' yes — n=1\n  others bounds-clipped or 'E'\n  n=1 > 0 → board[0][0]='1', do NOT push neighbors\nstack empty — return\nfinal: [['1','M'],['E','E']]"
+          },
+          {
+            "input": "3x3 all 'E' with mine at [2,2], click [0,0]",
+            "output": "[['B','B','B'],['B','1','1'],['B','1','M']]",
+            "note": "Click far from mine — flood propagates, stops at the '1' boundary.",
+            "trace": "enter reveal — click=[0,0], board[0][0]='E'\nstack=[[0,0]]\npop [0,0] — count mines in 8 neighbors of (0,0): (1,1)='E', (0,1)='E', (1,0)='E', etc. n=0\n  → board[0][0]='B', push 'E' neighbors: [0,1],[1,0],[1,1]\npop [1,1] — count mines in (1,1)'s 8 neighbors: (2,2)='M' yes. n=1\n  → board[1][1]='1' (absorbing — no neighbor push)\npop [1,0] — count mines: (2,1)='E' etc, n=0\n  → board[1][0]='B', push [0,0](skip — not 'E'),[0,1],[2,0],[2,1]\npop [2,1] — count mines: (2,2)='M' yes. n=1\n  → board[2][1]='1' (absorbing)\npop [2,0] — count mines: (2,1)='1' not 'M'. n=0\n  → board[2][0]='B', push 'E' neighbors of [2,0]: none left\npop [0,1] — already 'B'? wait — count mines of (0,1): (1,2)='E', etc. n=0\n  → board[0][1]='B', push remaining 'E' nbrs: [0,2],[1,2]\npop [1,2] — count mines: (2,2)='M' yes. n=1\n  → board[1][2]='1' (absorbing)\npop [0,2] — count: (1,2)='1' (now), (1,1)='1' (now). n=0\n  → board[0][2]='B'\n... eventually stack empty\nfinal: [['B','B','B'],['B','1','1'],['B','1','M']]"
+          }
+        ],
+        "why": "The third trace is where the model gets stress-tested. The 'mark cell as B BEFORE pushing neighbors' discipline shows up when a neighbor gets pushed twice (once via diagonal, once via cardinal) — on the second pop, the `if (board[cr][cc] !== 'E') continue` short-circuits cleanly. If you push BEFORE marking, you'd re-count mines on the second pop, wasting work but still correct. If you forget to skip-if-not-'E', you'd OVERWRITE the digit on the second visit and corrupt the board."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me walk through edges:\n• **Click on already-revealed 'B' cell** — top-level: `board[r][c] !== 'M'`, enter flood loop with `stack=[[r,c]]`. The first pop hits `board[cr][cc] !== 'E'` ('B'), `continue`. Stack empties immediately. Effectively no-op. ✓\n• **Click on already-revealed digit cell** — same as above. The 'not E' guard catches both. ✓\n• **Click on flagged cell** — the problem doesn't model flags ('F' isn't in the spec), but if it were: `board[r][c] !== 'M'`, enters loop, `'F' !== 'E'`, continue, no-op. Either correct (matches 'flagged cells protect from misclicks') or you'd handle it explicitly.\n• **All-mines board** — click anywhere is 'M', short-circuit to 'X'. No flood. Done in O(1).\n• **All-empty board, no mines anywhere** — click any cell: n=0 (no mines), mark 'B', push 8 neighbors. Flood propagates to every cell. Final state: every cell is 'B'. O(h*w).\n• **Click on corner of small board** — bounds clipping kicks in (`nr < 0` etc) when probing 8 neighbors. The clipping is per-direction, so 3-5 of the 8 probes get clipped on edges/corners. Correct, no special-case code needed.\n• **Large flood, 1000×1000 all zeros** — iterative stack handles it. Recursion would blow the stack at ~10k cells; iterative goes to 10⁶ without issue.\"",
+        "why": "The 'click on already-revealed' case is the most-asked follow-up — interviewers want to hear you trace what happens (the guard catches it cleanly, no special case). The 'all-mines' edge is the symmetry check: the short-circuit branch handles it. The 1000×1000 callback closes the loop with the recursion question raised in section 1 — you said it'd blow the stack, the iterative version proves it doesn't."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(h × w) worst case — every cell can be pushed to the stack at most once (the `'E'` guard ensures it), and each pop does O(8) constant work counting neighbors. So total work is bounded by h × w × constant. For the largest all-zero case, every cell gets visited; for a click on a mine, O(1).\n\nSpace is O(h × w) worst case for the stack — in the all-zero flood, the stack can grow to hold a large fraction of the cells before any pops process them. The board mutation is in place, so no extra board copy.\n\nThe template generalizes to any 'flood-fill with absorbing boundaries' problem — image segmentation (flood until edge), region detection in graphs, infection spread with immune nodes. The 'mark BEFORE pushing neighbors' discipline is the universal protection against repushing — same trick shows up in Number of Islands, Pacific Atlantic, Word Search.\n\nOne micro-optimization if interviewed further: BFS with a Set of seen cells avoids the re-pop short-circuit at the cost of memory. DFS with mutate-board-as-visited (what we do here) trades one Set-of-seen for cheaper push/pop. Both are O(h*w), and the in-place mark is slightly cleaner because the board IS the visited set.\"",
+        "why": "The 'board mutation IS the visited set' insight is the elegant frame — it shows you understand why the algorithm works without a separate Set. The Number of Islands / Pacific Atlantic connection demonstrates transferability. The DFS-vs-BFS memory trade-off is the senior-level micro-detail that earns the bonus point if the interviewer pushes for it."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through reveal() one stack-pop at a time. Watch the DFS stack, the board snapshot, and how zero-mine cells become 'B' (and push neighbors) while numbered cells become digits (and stop the flood).",
+    "examples": [
+      { "label": "Click mine at [0,1] on a 2x2 → flips to 'X', short-circuits", "input": { "board": [["E","M"],["E","E"]], "click": [0,1] }, "expected": "[[\"E\",\"X\"],[\"E\",\"E\"]]" },
+      { "label": "Click [0,0] adjacent to mine → single '1' cell, no flood", "input": { "board": [["E","M"],["E","E"]], "click": [0,0] }, "expected": "[[\"1\",\"M\"],[\"E\",\"E\"]]" },
+      { "label": "Click [0,0] on 3x3 with mine at [2,2] → flood propagates", "input": { "board": [["E","E","E"],["E","E","E"],["E","E","M"]], "click": [0,0] }, "expected": "[[\"B\",\"B\",\"B\"],[\"B\",\"1\",\"1\"],[\"B\",\"1\",\"M\"]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const board = input.board.map(row => row.slice());",
+      "  const click = input.click;",
+      "  const r = click[0], c = click[1];",
+      "  const h = board.length, w = board[0].length;",
+      "  yield { line: 2, label: `enter reveal — click=[${r},${c}], board ${h}x${w}`, state: { board: board.map(row => row.slice()), r, c, h, w } };",
+      "  if (board[r][c] === 'M') {",
+      "    board[r][c] = 'X';",
+      "    yield { line: 5, label: `clicked a mine — board[${r}][${c}] = 'X'; short-circuit return`, state: { board: board.map(row => row.slice()), returns: JSON.stringify(board) } };",
+      "    return;",
+      "  }",
+      "  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];",
+      "  const stack = [[r, c]];",
+      "  yield { line: 8, label: `init DFS stack with click cell — stack=[[${r},${c}]]`, state: { board: board.map(row => row.slice()), stack: stack.map(p => p.slice()) } };",
+      "  while (stack.length) {",
+      "    const popped = stack.pop();",
+      "    const cr = popped[0], cc = popped[1];",
+      "    yield { line: 10, label: `pop [${cr},${cc}] — stack size now ${stack.length}`, state: { board: board.map(row => row.slice()), stack: stack.map(p => p.slice()), cr, cc } };",
+      "    if (board[cr][cc] !== 'E') {",
+      "      yield { line: 12, label: `board[${cr}][${cc}]='${board[cr][cc]}' is already revealed — skip`, state: { board: board.map(row => row.slice()), stack: stack.map(p => p.slice()), cr, cc } };",
+      "      continue;",
+      "    }",
+      "    let n = 0;",
+      "    for (let d = 0; d < dirs.length; d++) {",
+      "      const nr = cr + dirs[d][0], nc = cc + dirs[d][1];",
+      "      if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === 'M') n++;",
+      "    }",
+      "    yield { line: 19, label: `count mine neighbors of [${cr},${cc}] → n=${n}`, state: { board: board.map(row => row.slice()), stack: stack.map(p => p.slice()), cr, cc, n } };",
+      "    if (n > 0) {",
+      "      board[cr][cc] = String(n);",
+      "      yield { line: 20, label: `n>0 → board[${cr}][${cc}]='${n}' (flood stopper, do NOT push neighbors)`, state: { board: board.map(row => row.slice()), stack: stack.map(p => p.slice()), cr, cc, n } };",
+      "    } else {",
+      "      board[cr][cc] = 'B';",
+      "      yield { line: 23, label: `n=0 → mark 'B' BEFORE pushing neighbors`, state: { board: board.map(row => row.slice()), stack: stack.map(p => p.slice()), cr, cc } };",
+      "      for (let d = 0; d < dirs.length; d++) {",
+      "        const nr = cr + dirs[d][0], nc = cc + dirs[d][1];",
+      "        if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === 'E') {",
+      "          stack.push([nr, nc]);",
+      "        }",
+      "      }",
+      "      yield { line: 26, label: `pushed 'E' neighbors of [${cr},${cc}] — stack size now ${stack.length}`, state: { board: board.map(row => row.slice()), stack: stack.map(p => p.slice()), cr, cc } };",
+      "    }",
+      "  }",
+      "  yield { line: 31, label: `stack empty — return board`, state: { board: board.map(row => row.slice()), returns: JSON.stringify(board) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function reveal(board, click) {\n  const [r, c] = click;\n  const h = board.length, w = board[0].length;\n  // Clicked a mine: flip to 'X' and short-circuit before entering the flood loop.\n  if (board[r][c] === \"M\") { board[r][c] = \"X\"; return board; }\n  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];\n  // Stack DFS instead of recursion — avoids depth blow-up on large boards.\n  const stack = [[r, c]];\n  while (stack.length) {\n    const [cr, cc] = stack.pop();\n    // Already revealed (B or digit) — skip; prevents double-counting.\n    if (board[cr][cc] !== \"E\") continue;\n    let n = 0;\n    for (const [dr, dc] of dirs) {\n      const nr = cr + dr, nc = cc + dc;\n      if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === \"M\") n++;\n    }\n    // Numbered cell — flood-fill stops here; do NOT push neighbors.\n    if (n > 0) { board[cr][cc] = String(n); }\n    else {\n      // Mark BEFORE pushing neighbors — same cell could be reached via many paths.\n      board[cr][cc] = \"B\";\n      for (const [dr, dc] of dirs) {\n        const nr = cr + dr, nc = cc + dc;\n        if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === \"E\") stack.push([nr, nc]);\n      }\n    }\n  }\n  return board;\n}\n// Time O(h*w), Space O(h*w) worst case",
     "notes": [

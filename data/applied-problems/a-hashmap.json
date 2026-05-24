@@ -6,6 +6,146 @@
   "status": "full",
   "description": "Hash table with separate chaining. Each bucket is an array of [key, value] entries. Hashing: Knuth's multiplicative hash for ints, djb2-style for strings, both modulo capacity. put updates in place if the key exists; otherwise appends. get/has/remove walk the bucket linearly — O(1) average with a decent hash.",
   "mechanics": [],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the API and the collision policy.",
+        "say": "\"Let me make sure I have this right: I need a hash table from scratch supporting put(k,v), get(k), has(k), and remove(k) — average O(1) per op. I can't just lean on JavaScript's built-in Object or Map; the interviewer wants me to own the bucket structure.\"\n\nThen a few quick clarifying questions:\n• Key types — integers only, strings, or both? That changes which hash function I use.\n• Fixed capacity, or do I need to resize when the load factor gets too high?\n• Collision strategy — separate chaining (array per bucket) or open addressing (linear probe)? I'd default to chaining unless told otherwise.\n• On get(missing), do I return undefined, null, -1 (LeetCode style), or throw?\n• Do I need to support a `size` accessor?",
+        "why": "The collision policy is the load-bearing decision — chaining and open addressing have completely different remove() logic, completely different load-factor thresholds (chaining can run at 1.0+, probing chokes around 0.7), and completely different worst-case behavior. Confirming key types matters too: integer keys want a multiplicative hash (Knuth), string keys want something like djb2 — using `key % cap` directly on a number is fine but gives terrible distribution if keys cluster sequentially. The return-on-missing question is a 5-second clarification that prevents a wrong-answer-shaped bug at the end."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n)-per-op solution before you discard it.",
+        "say": "\"The brute force is: just keep one flat array of [k, v] pairs. put scans for the key — if found, update in place; otherwise push. get/has/remove also linear-scan. Every op is O(n), so put + n get is O(n²). That's the whole point of a hash table — we want O(1) per op on average.\n\nThe insight: a hash function lets us index *directly* into a bucket instead of scanning every entry. We trade a single scan of n entries for a hash + scan of (n / capacity) entries, which is O(1) when the load factor stays bounded.\"",
+        "why": "Naming the flat-array brute force does two things. (1) It shows the interviewer you understand why hashing is the move — the win isn't magic, it's 'index instead of scan'. (2) It frames separate chaining as a hybrid: hash to pick the right small list, then linear-scan that small list. That makes the bucket-walk inside put/get/remove feel obviously correct rather than ad-hoc."
+      },
+      {
+        "title": "3. Spot the pattern — API shape & invariant",
+        "prompt": "Why separate chaining, and what's the load-bearing invariant?",
+        "say": "\"The API is: buckets array of length capacity, plus a hash function that maps key → bucket index. Collision strategy is separate chaining — each bucket is itself an array of [key, value] pairs. put walks the bucket first to check if the key is already there (update in place); if not, push a new pair and bump size. get/has/remove walk the bucket linearly looking for matching key.\n\nThe invariant that makes it correct: at most one entry per (key) across the whole map. put MUST search the bucket before appending — without that, the same key can appear twice in the bucket, get returns the first one (stale), size lies, remove only removes one of two, and the map silently corrupts. That single 'walk before append' line is the most-skipped detail in a 45-minute interview.\n\nResize when load factor > threshold (say 0.75): double capacity, rehash everything. That's how put stays amortized O(1) — without resize, buckets grow unbounded and put degrades to O(n). I'd default to chaining over open addressing because remove() in open addressing requires tombstones, which is fiddly to get right under time pressure.\"",
+        "why": "The 'walk bucket first on put' detail is the interview's tell-tale — interviewers explicitly watch for it because skipping it produces a hash map that looks right on the first put + get and silently breaks on the second put with a duplicate key. Naming the load-factor + resize story unprompted shows you know why amortized O(1) is amortized rather than worst-case. The chaining-vs-probing tradeoff is a one-sentence senior-candidate move: probe is faster cache-wise but harder to delete from correctly, chain is slower per op but bulletproof."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few operation sequences to confirm the model before writing the class.",
+        "intro": "\"Let me trace a few sequences to make sure my model is right.\" Three examples cover the canonical collision case, the in-place-update case (the trap), and the L3 prompt's full sequence as a final sanity check. Capacity is 16 and the hash is Knuth's multiplier — keys 1 and 17 happen to collide in bucket 1, which is the whole reason chaining is interesting.",
+        "examples": [
+          {
+            "input": "put(1,'a'), put(2,'b'), put(17,'c'), get(1)→'a', get(17)→'c', get(99)→-1",
+            "output": "[\"a\",\"c\",-1]",
+            "note": "Canonical collision case — 1 and 17 both hash to bucket 1 with Knuth's multiplier mod 16. Chaining keeps both pairs alive in the same bucket; get walks the bucket and finds the matching key.",
+            "trace": "init buckets={} (all 16 empty), size=0\nput(1,'a')  → hash(1)=1   → bucket 1 empty → push [1,'a'], size=1\nput(2,'b')  → hash(2)=2   → bucket 2 empty → push [2,'b'], size=2\nput(17,'c') → hash(17)=1  → bucket 1 has [[1,'a']], key 1 != 17 → push [17,'c'], bucket 1 = [[1,'a'],[17,'c']], size=3\nget(1)      → hash(1)=1   → walk bucket 1, [1,'a'] matches → return 'a'\nget(17)     → hash(17)=1  → walk bucket 1, skip [1,'a'], [17,'c'] matches → return 'c'\nget(99)     → hash(99)=15 → bucket 15 empty → return -1\nresults = ['a','c',-1]"
+          },
+          {
+            "input": "put(1,'a'), put(1,'A'), get(1)→'A', has(1)→true",
+            "output": "[\"A\",true]",
+            "note": "The in-place-update case — the load-bearing detail. Second put MUST find the existing [1,'a'] in bucket 1 and overwrite the value in place. If you skip the bucket walk and just push, bucket 1 = [[1,'a'],[1,'A']], size lies (says 2 but only one key), and get returns whichever you find first.",
+            "trace": "init buckets={} size=0\nput(1,'a') → hash(1)=1 → bucket 1 empty → push [1,'a'], bucket 1=[[1,'a']], size=1\nput(1,'A') → hash(1)=1 → walk bucket 1, [1,'a'] key === 1 → e[1] = 'A' IN PLACE, return early, bucket 1=[[1,'A']], size STILL 1 ✓\nget(1)     → hash(1)=1 → walk bucket 1, [1,'A'] matches → return 'A'\nhas(1)     → hash(1)=1 → walk bucket 1, [1,'A'] matches → return true\nresults = ['A', true]"
+          },
+          {
+            "input": "L3 sequence: put 1,2,17; get(1), get(99), has(2); put(2,'B'); get(2); remove(1); has(1)",
+            "output": "[\"a\",-1,true,\"B\",true,false]",
+            "note": "L3 prompt's full sequence — covers collision (1 and 17), miss (99), in-place update (put(2,'B')), and remove. After remove(1), bucket 1 = [[17,'c']] — splice took out the [1,'a'] entry, [17,'c'] survives because they're independent entries in the chain.",
+            "trace": "init buckets={} size=0\nput(1,'a')  → bucket 1=[[1,'a']],          size=1\nput(2,'b')  → bucket 2=[[2,'b']],          size=2\nput(17,'c') → bucket 1=[[1,'a'],[17,'c']], size=3\nget(1)      → bucket 1, [1,'a'] match → 'a'\nget(99)     → bucket 15 empty       → -1\nhas(2)      → bucket 2, [2,'b'] match → true\nput(2,'B')  → bucket 2, [2,'b'] key === 2 → update in place, bucket 2=[[2,'B']], size STILL 3\nget(2)      → bucket 2, [2,'B'] match → 'B'\nremove(1)   → bucket 1, find [1,'a'] at index 0 → splice(0,1), bucket 1=[[17,'c']], size=2\nhas(1)      → bucket 1, scan [17,'c'], key 17 != 1 → return false\nresults = ['a',-1,true,'B',true,false]"
+          }
+        ],
+        "why": "The second example is the one that catches sloppy implementations — without the 'walk bucket first' line in put, the in-place-update silently fails and the bug only shows up when the test asserts size or asserts that get returns the *latest* value rather than the first. The third example is also worth tracing because it shows remove + collision interacting: removing key 1 from bucket 1 must NOT disturb key 17 in the same bucket. That's why we splice by index rather than emptying the bucket."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Collisions — two keys land in the same bucket. Chaining handles it for free; just walk the chain. (Already traced above with 1 and 17.)\n• Duplicate put on the same key — must update in place, not append. The bucket walk before push is what enforces this; size must NOT increment.\n• Remove a missing key — return false (or whatever the spec says), don't throw. Same with get on a missing key — return -1 or undefined per the spec.\n• Load factor / resize — once size exceeds 0.75 * capacity, get/put start degrading. The fix is double capacity and rehash everything; that's where amortized O(1) comes from.\n• JS-specific gotcha: `__proto__` as a key. If you used a plain `{}` as the buckets container instead of `Array.from(..., () => [])`, setting handlers['__proto__'] would mutate the object's prototype chain — security hole and weird bugs. Using a true Array (or Object.create(null)) sidesteps this.\n• Negative integer keys — `key % capacity` can return negative in JS. Coerce to unsigned with `>>> 0` before mod-ing, or do `((key % cap) + cap) % cap`. Otherwise bucket index is negative and the array read returns undefined.\n• Float keys — equality is fine but watch for NaN, which is !== itself. Standard play is to convert keys to strings, or document that float keys are unsupported.\"",
+        "why": "The `__proto__` gotcha is the JS-specific call-out that separates senior candidates from juniors — it's not a CS concept, it's a language-specific pitfall, and naming it shows you've actually built things in JS rather than just done the algorithm in your head. The negative-modulo edge is the other one interviewers love — it's the kind of bug that passes 19 tests and fails the 20th because someone put -1 in as a key."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Average time is O(1) per op — put/get/has/remove all hash to a single bucket then walk the chain, and with a decent hash function the expected chain length is the load factor, which is bounded by the resize threshold (say 0.75). So expected work per op is constant.\n\nWorst case is O(n) per op — if every key happens to hash to the same bucket (adversarial input or a terrible hash function), the chain is the whole table and we're back to the brute-force flat array. Real-world hash maps defend against this with cryptographic-ish hashes (SipHash in Python 3, etc.) so attackers can't construct pathological inputs.\n\nSpace is O(n + capacity) — the entries themselves plus the bucket array.\n\nResize amortization: every resize is O(n) work, but it only happens when n doubles, so the per-op amortized cost is still O(1). Same argument as ArrayList / Vector doubling.\n\nIf I wanted to extend this — LRU cache is the same chain structure plus a doubly-linked list threaded through the entries for ordering. Open addressing with linear probing is a different bucket layout (one entry per slot, probe on collision) — faster cache behavior but remove() requires tombstones to avoid breaking probe sequences. The Map abstraction is the template; the bucket strategy is the implementation choice.\"",
+        "why": "The 'average vs worst' framing is the right defense against an interviewer who pushes back with 'but isn't this O(n) if everything collides?'. Yes, technically — and that's why real hash maps spend effort on the hash function. Mentioning the resize amortization unprompted is the senior move; it's the same argument as ArrayList doubling and shows you see the pattern across data structures. The LRU and open-addressing connections prove you see this as a template, not just one problem."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of HashMap operations. Each example is a list of method calls — put/get/has/remove. The state panel shows the bucket array (only non-empty buckets), the size counter, and the collected results from every observation op (get/has/remove). With capacity=16 and Knuth's multiplier, keys 1 and 17 collide in bucket 1 — watch how separate chaining keeps both pairs alive in the same bucket.",
+    "examples": [
+      { "label": "put(1,'a'), put(2,'b'), put(17,'c') [collides with 1], get(1)→'a', get(17)→'c', get(99)→-1", "input": [ { "op": "put", "args": [1, "a"] }, { "op": "put", "args": [2, "b"] }, { "op": "put", "args": [17, "c"] }, { "op": "get", "args": [1] }, { "op": "get", "args": [17] }, { "op": "get", "args": [99] } ], "expected": "[\"a\",\"c\",-1]" },
+      { "label": "put(1,'a'), put(1,'A') [in-place update, size stays 1], get(1)→'A', has(1)→true", "input": [ { "op": "put", "args": [1, "a"] }, { "op": "put", "args": [1, "A"] }, { "op": "get", "args": [1] }, { "op": "has", "args": [1] } ], "expected": "[\"A\",true]" },
+      { "label": "L3 sequence: put 1,2,17; get(1), get(99), has(2); put(2,'B'); get(2); remove(1); has(1)", "input": [ { "op": "put", "args": [1, "a"] }, { "op": "put", "args": [2, "b"] }, { "op": "put", "args": [17, "c"] }, { "op": "get", "args": [1] }, { "op": "get", "args": [99] }, { "op": "has", "args": [2] }, { "op": "put", "args": [2, "B"] }, { "op": "get", "args": [2] }, { "op": "remove", "args": [1] }, { "op": "has", "args": [1] } ], "expected": "[\"a\",-1,true,\"B\",true,false]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  const capacity = 16;",
+      "  const buckets = Array.from({ length: capacity }, () => []);",
+      "  let size = 0;",
+      "  const results = [];",
+      "  const hashNum = (k) => ((k * 2654435761) >>> 0) % capacity;",
+      "  const snap = () => {",
+      "    const out = {};",
+      "    for (let i = 0; i < capacity; i++) if (buckets[i].length) out[i] = buckets[i].map(e => [e[0], e[1]]);",
+      "    return out;",
+      "  };",
+      "  yield { line: 2, label: `new HashMap(${capacity}) — all buckets empty`, state: { ops, buckets: snap(), size, results: [...results] } };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const { op, args } = ops[k];",
+      "    if (op === 'put') {",
+      "      const [key, val] = args;",
+      "      const idx = hashNum(key);",
+      "      yield { line: 17, label: `op#${k}: put(${JSON.stringify(key)}, ${JSON.stringify(val)}) — hash(${key}) → bucket ${idx}`, state: { ops, buckets: snap(), size, results: [...results], op, key, val, bucketIdx: idx } };",
+      "      const b = buckets[idx];",
+      "      let updated = false;",
+      "      for (const e of b) {",
+      "        if (e[0] === key) {",
+      "          e[1] = val;",
+      "          updated = true;",
+      "          yield { line: 19, label: `key ${JSON.stringify(key)} already in bucket ${idx} — update in place (size unchanged)`, state: { ops, buckets: snap(), size, results: [...results], op, key, val, bucketIdx: idx } };",
+      "          break;",
+      "        }",
+      "      }",
+      "      if (!updated) {",
+      "        b.push([key, val]);",
+      "        size++;",
+      "        yield { line: 20, label: `key ${JSON.stringify(key)} new — append [${JSON.stringify(key)},${JSON.stringify(val)}] to bucket ${idx}, size → ${size}`, state: { ops, buckets: snap(), size, results: [...results], op, key, val, bucketIdx: idx } };",
+      "      }",
+      "    } else if (op === 'get') {",
+      "      const [key] = args;",
+      "      const idx = hashNum(key);",
+      "      yield { line: 23, label: `op#${k}: get(${JSON.stringify(key)}) — hash(${key}) → bucket ${idx}`, state: { ops, buckets: snap(), size, results: [...results], op, key, bucketIdx: idx } };",
+      "      const b = buckets[idx];",
+      "      let found = -1;",
+      "      for (const e of b) {",
+      "        if (e[0] === key) { found = e[1]; break; }",
+      "      }",
+      "      results.push(found);",
+      "      yield { line: found === -1 ? 25 : 24, label: found === -1 ? `key not in bucket — return -1` : `match in bucket — return ${JSON.stringify(found)}`, state: { ops, buckets: snap(), size, results: [...results], op, key, bucketIdx: idx, got: found } };",
+      "    } else if (op === 'has') {",
+      "      const [key] = args;",
+      "      const idx = hashNum(key);",
+      "      yield { line: 28, label: `op#${k}: has(${JSON.stringify(key)}) — hash(${key}) → bucket ${idx}`, state: { ops, buckets: snap(), size, results: [...results], op, key, bucketIdx: idx } };",
+      "      const b = buckets[idx];",
+      "      let present = false;",
+      "      for (const e of b) if (e[0] === key) { present = true; break; }",
+      "      results.push(present);",
+      "      yield { line: present ? 29 : 30, label: `has(${JSON.stringify(key)}) → ${present}`, state: { ops, buckets: snap(), size, results: [...results], op, key, bucketIdx: idx, got: present } };",
+      "    } else if (op === 'remove') {",
+      "      const [key] = args;",
+      "      const idx = hashNum(key);",
+      "      yield { line: 33, label: `op#${k}: remove(${JSON.stringify(key)}) — hash(${key}) → bucket ${idx}`, state: { ops, buckets: snap(), size, results: [...results], op, key, bucketIdx: idx } };",
+      "      const b = buckets[idx];",
+      "      let removed = false;",
+      "      for (let i = 0; i < b.length; i++) {",
+      "        if (b[i][0] === key) { b.splice(i, 1); size--; removed = true; break; }",
+      "      }",
+      "      results.push(removed);",
+      "      yield { line: removed ? 34 : 35, label: removed ? `spliced [${JSON.stringify(key)},…] out of bucket ${idx}, size → ${size}` : `key not found — return false`, state: { ops, buckets: snap(), size, results: [...results], op, key, bucketIdx: idx, got: removed } };",
+      "    }",
+      "  }",
+      "  yield { line: 36, label: `all ops processed — collected results=${JSON.stringify(results)}`, state: { ops, buckets: snap(), size, results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class HashMap {\n  constructor(capacity = 16) {\n    this.capacity = capacity;\n    // Separate chaining — each bucket is an array of [k,v] entries.\n    this.buckets = Array.from({ length: capacity }, () => []);\n    this.size = 0;\n  }\n  _hash(k) {\n    // Knuth multiplier 2654435761 ≈ 2^32/phi — good spread for sequential int keys.\n    if (typeof k === \"number\") return ((k * 2654435761) >>> 0) % this.capacity;\n    const s = String(k); let h = 0;\n    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;\n    // >>> 0 coerces to unsigned 32-bit before modulo — avoids negative bucket index.\n    return (h >>> 0) % this.capacity;\n  }\n  put(k, v) {\n    const b = this.buckets[this._hash(k)];\n    // Walk bucket FIRST to update in place; otherwise duplicates leak and size lies.\n    for (const e of b) if (e[0] === k) { e[1] = v; return; }\n    b.push([k, v]); this.size++;\n  }\n  get(k) {\n    const b = this.buckets[this._hash(k)];\n    for (const e of b) if (e[0] === k) return e[1];\n    return -1;\n  }\n  has(k) {\n    const b = this.buckets[this._hash(k)];\n    for (const e of b) if (e[0] === k) return true;\n    return false;\n  }\n  remove(k) {\n    const b = this.buckets[this._hash(k)];\n    for (let i = 0; i < b.length; i++) if (b[i][0] === k) { b.splice(i, 1); this.size--; return true; }\n    return false;\n  }\n}\n// Avg O(1) per op, worst O(n) on pathological collisions",
     "notes": [

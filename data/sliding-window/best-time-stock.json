@@ -6,6 +6,97 @@
   "status": "full",
   "description": "Track the minimum price seen so far; compute profit at each step. Single pass, O(1) space.",
   "mechanics": ["greedy-single-pass"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: `prices[i]` is the stock price on day `i`, and I want the max profit from exactly one buy followed by exactly one sell on a later day. If no profitable trade exists, I return 0 — I just don't trade.\"\n\nThen a few quick clarifying questions:\n• Can buy and sell happen on the same day? (Standard answer: no — sell must be strictly after buy.)\n• Can prices be negative or zero, or always positive integers?\n• Empty array or single-day input — return 0?\n• Just the profit, or the (buy_day, sell_day) pair too?",
+        "why": "The buy-before-sell constraint is the entire reason this isn't just `max(prices) - min(prices)` — if the min comes after the max, that subtraction is wrong. Asking the same-day question pins down that the indices must be strictly ordered. Confirming the return shape matters because a follow-up often asks for the days, and you don't want to redesign halfway through."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"The brute force is: for every buy day `i`, walk every sell day `j > i`, compute `prices[j] - prices[i]`, and track the max. Two nested loops, O(n²) time, O(1) space. Correct but slow — let me see if we can do it in one pass.\"",
+        "why": "Two reasons to name it out loud. (1) It proves you understand the constraint — every candidate pair is `(i, j)` with `j > i`, and the brute force makes that explicit. (2) It frames the optimization clearly: instead of re-scanning all earlier days for each `j`, we can keep a running `min` of everything before `j` and compute `prices[j] - min_so_far` in O(1). The brute force is doing redundant work; we just memoize the one piece that matters."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to single-pass running-min tracking?",
+        "say": "\"This is technically grouped under sliding window, but it's not a classic two-pointer window — it's a one-pass greedy. The key observation: the best profit ending on day `i` is `prices[i] - min(prices[0..i-1])`. So I only need ONE piece of state from the past — the minimum price seen so far. Not a window of values, not a frequency map, just a single number that monotonically decreases (or stays the same) as I scan left to right. That's the running-min/running-max template: when the answer at position `i` depends only on `nums[i]` and one summary statistic of everything before it, you collapse the prefix to that statistic and walk once.\"",
+        "why": "Naming why this isn't a 'real' sliding window is the move — the rusty engineer sees this in the Sliding Window section and might try to over-engineer with two pointers and a window structure. The structural insight is that the 'window' here is degenerate: it's everything before `i`, summarized by a single scalar. That's why the canonical is so short. Recognizing 'I only need ONE summary stat of the prefix' is the trigger that picks running-min over a literal sliding window — and the same trigger applies to Maximum Subarray (Kadane's) and Largest Rectangle prefixes."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a normal mix with a clear buy/sell point, a strictly-decreasing degenerate case (no trade), and a strictly-increasing case (buy day 0, sell last day).",
+        "examples": [
+          {
+            "input": "[7,1,5,3,6,4]",
+            "output": "5",
+            "note": "Classic mix — minSoFar updates twice (7→1), then profits compete (4, 2, 5, 3) and best lands on 5 (buy at 1, sell at 6).",
+            "trace": "init minSoFar=Infinity, best=0\nidx=0 p=7  → p < minSoFar → minSoFar=7,           best=0\nidx=1 p=1  → p < minSoFar → minSoFar=1,           best=0\nidx=2 p=5  → else: profit = 5-1 = 4, best=max(0,4)=4\nidx=3 p=3  → else: profit = 3-1 = 2, best=max(4,2)=4\nidx=4 p=6  → else: profit = 6-1 = 5, best=max(4,5)=5\nidx=5 p=4  → else: profit = 4-1 = 3, best=max(5,3)=5\nreturn 5"
+          },
+          {
+            "input": "[7,6,4,3,1]",
+            "output": "0",
+            "note": "Strictly decreasing — every day updates minSoFar, the else branch never runs, best stays 0. This is why best starts at 0, not -Infinity.",
+            "trace": "init minSoFar=Infinity, best=0\nidx=0 p=7 → minSoFar=7, best=0\nidx=1 p=6 → minSoFar=6, best=0\nidx=2 p=4 → minSoFar=4, best=0\nidx=3 p=3 → minSoFar=3, best=0\nidx=4 p=1 → minSoFar=1, best=0\nreturn 0  (no trade — best stayed at its initial 0)"
+          },
+          {
+            "input": "[1,2,3,4,5]",
+            "output": "4",
+            "note": "Strictly increasing — minSoFar locks at 1 on day 0, then every day extends best by exactly 1 until it hits 4.",
+            "trace": "init minSoFar=Infinity, best=0\nidx=0 p=1 → minSoFar=1,             best=0\nidx=1 p=2 → else: profit=2-1=1,     best=1\nidx=2 p=3 → else: profit=3-1=2,     best=2\nidx=3 p=4 → else: profit=4-1=3,     best=3\nidx=4 p=5 → else: profit=5-1=4,     best=4\nreturn 4"
+          }
+        ],
+        "why": "The decreasing case is the one that defends the `best = 0` initialization — if you initialized `best = -Infinity` instead, you'd return -Infinity here, which is wrong (the problem says 'don't trade'). The mixed case surfaces the order-of-operations bug: if you update `minSoFar` BEFORE checking profit, then on a day where `p < minSoFar` you'd compute `p - p = 0` and miss the real profit. The `if/else` (update min OR sell, never both same iteration) sidesteps that — worth stating out loud so the interviewer knows you saw it."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty array `[]` → loop doesn't run, best=0. Probably what you want, but worth confirming the spec.\n• Single day `[5]` → loop runs once, updates minSoFar to 5, never enters else (no profit possible with one day). best=0. ✓\n• Strictly decreasing `[5,4,3,2,1]` → no profitable trade, best stays at its initial 0. This is why `best = 0` (not `-Infinity`).\n• All-same `[3,3,3,3]` → first day sets minSoFar=3, then every later day `p < minSoFar` is FALSE (3 is not less than 3), so we take the else branch and compute `3-3=0`. best stays 0. ✓\n• Strictly increasing `[1,2,3,4,5]` → minSoFar locks at day 0, max profit is `last - first`.\n• Negative prices — math still works, but worth flagging that real stock prices can't go negative; if they can be 0, also fine.\"",
+        "why": "The all-same case is the subtle one — `p < minSoFar` is strict, so on equal-price days you fall into the else branch and compute a zero profit, which doesn't change `best`. That's the right behavior, but a candidate who used `<=` would still get the right answer here by coincidence (`minSoFar = p` is a no-op when they're equal). Calling out the equality semantics shows you actually traced what the operator does instead of just typing `<` because it 'felt right'."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — exactly one pass, constant work per element (a comparison and at most one subtraction + Math.max). No nested loops, no amortization argument needed.\n\nSpace is O(1) — two scalars, `minSoFar` and `best`. Doesn't grow with input.\n\nA natural follow-up is 'Best Time to Buy and Sell Stock II' — unlimited transactions, just no overlapping. That collapses to: sum every positive `prices[i] - prices[i-1]`, because any monotonic upward run is a buy-low/sell-high you should take. Different problem, but the same one-pass greedy mindset. The 'with at most K transactions' variant (LeetCode 188) is where it actually becomes DP — you need a 2D state because the optimal-substructure breaks at K=2+. Worth knowing the boundary between greedy and DP for this family.\"",
+        "why": "The complexity here is easy — the interesting wrap-up is the follow-up family. Naming Stock II (greedy, O(n)) and Stock III/IV (DP, O(nK)) without being asked signals you've seen the whole template, not just this one variant. The 'one summary stat → greedy; K-bounded transactions → DP' boundary is the kind of meta-insight that closes a senior interview cleanly."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical one-pass min-tracking solution on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use Prev/Next, or pick a different example.",
+    "examples": [
+      { "label": "[7,1,5,3,6,4] → 5", "input": [7, 1, 5, 3, 6, 4], "expected": 5 },
+      { "label": "[7,6,4,3,1] → 0",   "input": [7, 6, 4, 3, 1],    "expected": 0 },
+      { "label": "[1,2,3,4,5] → 4",   "input": [1, 2, 3, 4, 5],    "expected": 4 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const prices = input;",
+      "  yield { line: 1, label: `enter function — prices=${JSON.stringify(prices)}`, state: { prices } };",
+      "  let minSoFar = Infinity, best = 0;",
+      "  yield { line: 3, label: 'init minSoFar=Infinity, best=0', state: { prices, minSoFar: 'Infinity', best } };",
+      "  for (let idx = 0; idx < prices.length; idx++) {",
+      "    const p = prices[idx];",
+      "    yield { line: 4, label: `outer step: idx=${idx}, p=${p}`, state: { prices, idx, p, minSoFar: minSoFar === Infinity ? 'Infinity' : minSoFar, best } };",
+      "    if (p < minSoFar) {",
+      "      minSoFar = p;",
+      "      yield { line: 6, label: `p (${p}) < minSoFar → minSoFar = ${p}`, state: { prices, idx, p, minSoFar, best } };",
+      "    } else {",
+      "      const profit = p - minSoFar;",
+      "      const prevBest = best;",
+      "      best = Math.max(best, profit);",
+      "      yield { line: 7, label: `else: profit = p - minSoFar = ${p} - ${minSoFar} = ${profit}; best = max(${prevBest}, ${profit}) → ${best}`, state: { prices, idx, p, minSoFar, profit, best } };",
+      "    }",
+      "  }",
+      "  yield { line: 9, label: `return ${best}`, state: { prices, minSoFar, best, returns: best } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function maxProfit(prices) {\n  // best starts at 0: if prices only decline, you simply don't buy (profit 0).\n  let minSoFar = Infinity, best = 0;\n  for (const p of prices) {\n    // Update min OR sell — can't do both same day, and you must buy before selling.\n    if (p < minSoFar) minSoFar = p;\n    else best = Math.max(best, p - minSoFar);\n  }\n  return best;\n}\n// Time O(n), Space O(1)",
     "notes": [

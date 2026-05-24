@@ -6,6 +6,138 @@
   "status": "full",
   "description": "Array-as-binary-heap with siftUp on push and siftDown on pop — the real priority-queue primitive behind heapsort, Dijkstra, and Top-K.",
   "mechanics": ["heap-sift"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the contract.",
+        "say": "\"Let me restate: I'm implementing a min-heap class — a priority queue where the smallest element is always accessible at the root. The standard API is `push(x)`, `pop()` returns and removes the min, `peek()` returns the min without removing, and `size()`. Pop on an empty heap — return undefined or throw? I'll assume undefined unless you say otherwise.\"\n\nThen a few quick clarifying questions:\n• Are elements just numbers, or do they have keys/priorities — like `{value, priority}` objects?\n• Should the heap be stable — i.e. equal-priority elements come out in insertion order?\n• Do you want me to use the array-as-binary-tree representation, or a linked tree of nodes?\n• Should `push` and `pop` both be O(log n), or are you OK with some other tradeoff?",
+        "why": "The stability question is the one most candidates skip — heaps are NOT stable by default, and if the interviewer cares about FIFO-on-tie behavior, you need to add a tiebreaker (typically a monotonic counter as a secondary key). The array-vs-node-tree question matters for code volume: array-backed is the standard interview answer because the index math `(i-1)>>1` / `2i+1` / `2i+2` is what they're testing — a node-tree implementation hides exactly the part they want to see."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name a degenerate priority-queue before reaching for the heap.",
+        "say": "\"A naive priority queue is just an unsorted array with O(1) push and O(n) pop — scan for the min on every removal. Or flip it: a sorted array with O(n) push (insertion) and O(1) pop. Either way, one of the two ops is linear, which means N operations cost O(n²) in the worst case. For something like 'process a million events by priority,' that's a trillion ops — unacceptable.\n\n\"The heap is the trade: both push AND pop become O(log n), so N ops cost O(n log n). And the implementation is *not* a balanced binary search tree — it's much simpler. We exploit the fact that we only ever access the minimum: we don't need the tree fully sorted, just the *heap property* — every node ≤ its children.\"",
+        "why": "Two reasons. First, contrasting against the sorted-array and unsorted-array versions teaches the trade explicitly: 'log n on both' is the heap's whole purpose. Second, naming what the heap *doesn't* need — full ordering — sets up the explanation of why it can be array-backed: a fully-ordered structure (BST) needs node pointers because it's irregular; a heap is always a *complete* binary tree, so we can flatten it into an array and address parent/children with arithmetic. That insight is the whole reason the heap is fast in practice."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why does the array-as-heap representation work, and what are the invariants?",
+        "say": "\"Two structural properties together make this work. First, *shape*: a heap is always a complete binary tree — every level full except possibly the last, which fills left-to-right. That lets us number nodes in level order (root=0, then left-to-right by level) and store them contiguously in an array. From any index `i`: parent is `(i - 1) >> 1`, left child is `2*i + 1`, right child is `2*i + 2`. No pointers, no allocations per node — just integer indexing.\n\n\"Second, *order*: every parent ≤ both its children (for a min-heap). This is weaker than full sort — siblings can be in any order. That weakness is exactly why insertions and removals only cost log n: we only have to fix one *path* from leaf to root (siftUp on push) or root to leaf (siftDown on pop), and the height of a complete tree of n nodes is `floor(log2(n))`.\n\n\"Push: append at the tail (preserves complete shape), then siftUp — swap with parent while parent is larger. Pop: save the root, move the *last* element to index 0 (preserves complete shape), then siftDown — repeatedly swap with the *smaller* child while it's smaller than the current. Both walk one root-to-leaf path, so both are O(log n).\"",
+        "why": "Naming both invariants is what separates the interview answer from a copy-paste implementation. The shape invariant (always complete) is what enables the array representation; the order invariant (parent ≤ children) is what makes the operations log n. Spelling them out *before* writing code lets the interviewer follow your reasoning, and protects against the most common bug — swapping with the *larger* child on siftDown, which leaves the smaller child violating the heap property under it. If you can explain WHY you pick the smaller child, you'll never write that bug."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few operation sequences to confirm the model.",
+        "intro": "\"Let me trace through a few sequences to make sure my model is solid.\" Three sequences cover the load-bearing cases — a mixed push/pop sequence showing siftUp/siftDown, a push-then-drain showing the heap-sort property, and an alternating peek/push showing that peek doesn't mutate.",
+        "examples": [
+          {
+            "input": "push(5), push(3), push(8), push(1), pop, pop",
+            "output": "[1, 3]",
+            "note": "Basic push/pop. Watch the array shape: each push appends and bubbles; each pop swaps last to root and sinks.",
+            "trace": "push(5): a=[5]\npush(3): a=[5,3] → siftUp: parent(1)=0, a[0]=5>3 → swap → a=[3,5]\npush(8): a=[3,5,8] → siftUp: parent(2)=0, a[0]=3<=8 → stop\npush(1): a=[3,5,8,1] → siftUp: parent(3)=1, a[1]=5>1 → swap → a=[3,1,8,5] → parent(1)=0, a[0]=3>1 → swap → a=[1,3,8,5]\npop: top=1, last=5, a=[5,3,8] → siftDown: l=1,r=2, smaller=1 (a[1]=3<5) → swap → a=[3,5,8] → l=3 out of bounds → stop. return 1\npop: top=3, last=8, a=[8,5] → siftDown: l=1,r=2 (r oob), smaller=1 (a[1]=5<8) → swap → a=[5,8] → l=3 oob → stop. return 3"
+          },
+          {
+            "input": "push 5,3,8,1,9,2 then pop all",
+            "output": "[1, 2, 3, 5, 8, 9]",
+            "note": "Heap-sort property: popping repeatedly yields ascending order. This is what makes the heap a priority queue.",
+            "trace": "after pushes: a=[1,3,2,5,9,8] (final heap shape)\npop: top=1, last=8 → a=[8,3,2,5,9] → siftDown sinks 8 → a=[2,3,8,5,9]. return 1\npop: top=2, last=9 → a=[9,3,8,5] → siftDown → a=[3,5,8,9]. return 2\npop: top=3, last=9 → a=[9,5,8] → siftDown → a=[5,9,8]. return 3\npop: top=5, last=8 → a=[8,9] → siftDown → a=[8,9]. return 5\npop: top=8, last=9 → a=[9] → empty after pop. return 8\npop: top=9, a=[] → return 9 (no siftDown)\nresults: [1,2,3,5,8,9] — ascending ✓"
+          },
+          {
+            "input": "push(10), peek, push(4), peek, pop, peek",
+            "output": "[10, 4, 4, 10]",
+            "note": "Peek doesn't mutate. After pop(4), the heap holds {10} again.",
+            "trace": "push(10): a=[10]\npeek: a[0]=10 → 10 (no mutation)\npush(4): a=[10,4] → siftUp: parent(1)=0, a[0]=10>4 → swap → a=[4,10]\npeek: a[0]=4 → 4 (no mutation)\npop: top=4, last=10, a=[10] (no siftDown needed, length 1). return 4\npeek: a[0]=10 → 10"
+          }
+        ],
+        "why": "The first trace surfaces the classic bug: after `last = a.pop()`, you need to check `if (!a.length) return top;` before writing `a[0] = last` — otherwise on a single-element heap you'd assign back the very element you just popped. The second trace defends the heap-sort claim concretely: dump everything, popping in a loop gives ascending order. The third trace defends that peek is a non-mutating read — a surprisingly common bug is implementing peek as 'pop then push back,' which is O(log n) instead of O(1)."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\n• Pop on empty → return undefined (or throw, depending on contract). Decide and document.\n• Pop on single-element heap → after `a.pop()`, the array is empty; do NOT then write `a[0] = last` or you'll restore the element you just removed.\n• Push of a duplicate → no special handling needed; equal-priority elements coexist in the heap (just not in any guaranteed order between them).\n• Equal-priority on siftDown → the `a[l] < a[s]` comparison uses strict `<`, so we don't swap on equality — that's correct (avoids infinite loops) but means stability across equals is NOT guaranteed.\n• Numeric vs object comparison → if elements are objects with a priority field, you need a comparator parameter; the canonical assumes raw numbers and the `<=` / `<` operators work directly.\n• Very large heaps → log n grows slowly; even a billion elements is only ~30 levels. The array can hit GC pressure but the algorithm doesn't.\"",
+        "why": "The 'empty after pop' edge is the one that crashes implementations under test — `a.pop()` on a length-1 array leaves length 0, and writing `a[0] = last` silently revives it. The 'equality = no swap' edge defends correctness (avoids infinite swap loops on equal siblings) but also calls out a real-world tradeoff: if you need stable priority-queue semantics (FIFO on ties), you have to add a monotonic counter as a secondary key. Mentioning that unprompted is the senior-tier signal."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time: push and pop are both O(log n) — each walks one root-to-leaf path of a complete binary tree, and the height of a complete binary tree of n nodes is ⌊log₂ n⌋. Peek and size are O(1). Building a heap from n existing elements by calling push n times is O(n log n), BUT there's a clever trick — `heapify` — that builds a heap in O(n) by sift-down-ing from the middle of the array backward. Worth mentioning if asked.\n\n\"Space: O(n) for the backing array, O(1) per operation.\n\n\"If you wanted me to extend this: a max-heap is the same code with `<=` flipped to `>=` and the smaller-child pick flipped to larger. A priority queue with key/value pairs swaps the raw comparison for a comparator callback. And this is the building block for heapsort (push everything, pop everything, you get O(n log n) sorting), Dijkstra's shortest-path (PQ keyed by distance), A* search, top-K problems, and Median-of-Stream — they all sit on top of this one primitive.\"",
+        "why": "The amortized defense for heap is the cleanest of any common data structure: 'complete binary tree, height log n, each op walks one path.' No subtleties. The bonus material — heapify-in-O(n), max-heap variant, downstream uses — is what proves you see this as a *foundation*, not a one-off. Naming heapsort, Dijkstra, and Median-of-Stream unprompted shows you understand the heap's role in the broader algorithmic toolbox."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of MinHeap operations. Each example is a list of method calls; the state panel shows the backing array `a` (in heap-array form — root at index 0, children at 2i+1 and 2i+2). Every peek / pop result is collected into a `results` array so you can verify pops come out in ascending order.",
+    "examples": [
+      { "label": "push(5), push(3), push(8), push(1), pop→1, pop→3", "input": [ { "op": "push", "arg": 5 }, { "op": "push", "arg": 3 }, { "op": "push", "arg": 8 }, { "op": "push", "arg": 1 }, { "op": "pop" }, { "op": "pop" } ], "expected": "[1,3]" },
+      { "label": "push 5,3,8,1,9,2 then pop all", "input": [ { "op": "push", "arg": 5 }, { "op": "push", "arg": 3 }, { "op": "push", "arg": 8 }, { "op": "push", "arg": 1 }, { "op": "push", "arg": 9 }, { "op": "push", "arg": 2 }, { "op": "pop" }, { "op": "pop" }, { "op": "pop" }, { "op": "pop" }, { "op": "pop" }, { "op": "pop" } ], "expected": "[1,2,3,5,8,9]" },
+      { "label": "push(10), peek→10, push(4), peek→4, pop→4, peek→10", "input": [ { "op": "push", "arg": 10 }, { "op": "peek" }, { "op": "push", "arg": 4 }, { "op": "peek" }, { "op": "pop" }, { "op": "peek" } ], "expected": "[10,4,4,10]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  const a = [];",
+      "  const results = [];",
+      "  yield { line: 2, label: `new MinHeap() — a=[]`, state: { ops, a: [], results: [] } };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const { op, arg } = ops[k];",
+      "    if (op === 'push') {",
+      "      yield { line: 5, label: `op#${k}: push(${arg})`, state: { ops, a: [...a], results: [...results], op, arg } };",
+      "      a.push(arg);",
+      "      let i = a.length - 1;",
+      "      yield { line: 7, label: `a.push(${arg}) → a=${JSON.stringify(a)}, i=${i}`, state: { ops, a: [...a], results: [...results], op, arg, i } };",
+      "      while (i > 0) {",
+      "        const p = (i - 1) >> 1;",
+      "        yield { line: 11, label: `siftUp: i=${i}, parent p=(i-1)>>1=${p}, a[p]=${a[p]}, a[i]=${a[i]}`, state: { ops, a: [...a], results: [...results], op, arg, i, p } };",
+      "        if (a[p] <= a[i]) {",
+      "          yield { line: 12, label: `a[${p}]=${a[p]} <= a[${i}]=${a[i]} — heap OK, stop`, state: { ops, a: [...a], results: [...results], op, arg, i, p } };",
+      "          break;",
+      "        }",
+      "        const tmp = a[p]; a[p] = a[i]; a[i] = tmp;",
+      "        yield { line: 13, label: `swap a[${p}] <-> a[${i}] → a=${JSON.stringify(a)}`, state: { ops, a: [...a], results: [...results], op, arg, i, p } };",
+      "        i = p;",
+      "        yield { line: 14, label: `i → ${i}`, state: { ops, a: [...a], results: [...results], op, arg, i } };",
+      "      }",
+      "    } else if (op === 'pop') {",
+      "      yield { line: 17, label: `op#${k}: pop()`, state: { ops, a: [...a], results: [...results], op } };",
+      "      const top = a[0];",
+      "      const last = a.pop();",
+      "      yield { line: 19, label: `save top=${top}, pop last=${last} from tail → a=${JSON.stringify(a)}`, state: { ops, a: [...a], results: [...results], op, top, last } };",
+      "      if (!a.length) {",
+      "        results.push(top);",
+      "        yield { line: 20, label: `array empty after pop — return ${top} (no siftDown needed)`, state: { ops, a: [...a], results: [...results], op, top } };",
+      "      } else {",
+      "        a[0] = last;",
+      "        yield { line: 21, label: `a[0] = ${last} (moved last to root) → a=${JSON.stringify(a)}`, state: { ops, a: [...a], results: [...results], op, top, last } };",
+      "        let i = 0;",
+      "        while (true) {",
+      "          const l = 2 * i + 1, r = 2 * i + 2;",
+      "          let s = i;",
+      "          if (l < a.length && a[l] < a[s]) s = l;",
+      "          if (r < a.length && a[r] < a[s]) s = r;",
+      "          yield { line: 28, label: `siftDown: i=${i}, l=${l}, r=${r}, smaller=${s} (a[${s}]=${a[s]})`, state: { ops, a: [...a], results: [...results], op, top, i, l, r, s } };",
+      "          if (s === i) {",
+      "            results.push(top);",
+      "            yield { line: 30, label: `no smaller child — heap restored, return ${top}`, state: { ops, a: [...a], results: [...results], op, top } };",
+      "            break;",
+      "          }",
+      "          const tmp = a[s]; a[s] = a[i]; a[i] = tmp;",
+      "          yield { line: 31, label: `swap a[${s}] <-> a[${i}] → a=${JSON.stringify(a)}`, state: { ops, a: [...a], results: [...results], op, top, i, s } };",
+      "          i = s;",
+      "          yield { line: 32, label: `i → ${i}`, state: { ops, a: [...a], results: [...results], op, top, i } };",
+      "        }",
+      "      }",
+      "    } else if (op === 'peek') {",
+      "      const t = a[0];",
+      "      results.push(t);",
+      "      yield { line: 4, label: `op#${k}: peek() → ${t} (read a[0], O(1))`, state: { ops, a: [...a], results: [...results], op } };",
+      "    }",
+      "  }",
+      "  yield { line: 35, label: `all ops processed — collected results=${JSON.stringify(results)}`, state: { ops, a: [...a], results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class MinHeap {\n  constructor() { this.a = []; }\n  size() { return this.a.length; }\n  peek() { return this.a[0]; }\n  push(x) {\n    const a = this.a;\n    a.push(x);\n    let i = a.length - 1;\n    // siftUp: parent = (i-1)>>1; swap while parent is larger.\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (a[p] <= a[i]) break;\n      [a[p], a[i]] = [a[i], a[p]];\n      i = p;\n    }\n  }\n  pop() {\n    // Save root; move LAST to index 0 to keep the array (and tree) contiguous.\n    const a = this.a, top = a[0], last = a.pop();\n    if (!a.length) return top;\n    a[0] = last;\n    let i = 0;\n    // siftDown: swap with the SMALLER child while it is smaller than current.\n    while (true) {\n      const l = 2 * i + 1, r = 2 * i + 2;\n      let s = i;\n      if (l < a.length && a[l] < a[s]) s = l;\n      if (r < a.length && a[r] < a[s]) s = r;\n      // No smaller child — heap property restored, done.\n      if (s === i) return top;\n      [a[s], a[i]] = [a[i], a[s]];\n      i = s;\n    }\n  }\n}\n// Time O(log n) per push/pop, Space O(n)",
     "notes": [

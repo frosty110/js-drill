@@ -6,6 +6,131 @@
   "status": "full",
   "description": "Pub/sub primitive — multiple listeners per event, remove a specific handler with off(), invoke all in registration order on emit().",
   "mechanics": ["map-keyed-state"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the API and the listener-identity contract.",
+        "say": "\"Let me make sure I have this right: I'm building a pub/sub primitive — on(event, fn) subscribes a handler, emit(event, ...args) invokes every handler for that event in order with those args, off(event, fn) removes a specific handler.\"\n\nThen a few quick clarifying questions:\n• How does off() match — by function reference, by string name, or by some token returned from on()? Reference is the standard.\n• Can the same fn be registered twice on the same event? If so, does emit fire it twice, and does off remove one or all?\n• What's the call order on emit — registration order or arbitrary? Registration order is the common contract.\n• Should I support once(event, fn) — a one-shot listener that auto-removes after firing? Common follow-up; trivial extension.\n• If a listener throws inside emit, do the rest still fire, or does the throw propagate up and stop dispatch?",
+        "why": "The off-matching question is the load-bearing one — if off matches by reference, callers must keep a handle to the original fn (passing `() => {...}` to both on and off is two different functions and won't match). Naming this up front prevents the bug where someone subscribes with an anonymous fn and is then unable to unsubscribe. The duplicate-registration question matters too — most implementations store duplicates and fire twice, but some specs dedupe; pick one and document it. The throw-during-emit question is what separates a toy implementation from a real one (Node's EventEmitter goes to great lengths around this)."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious 'no off' version before discarding it.",
+        "say": "\"The brute force is: just an array of handlers per event, no off() support — leak everything. on pushes, emit iterates. That works for a script that runs once and exits, but in any long-lived app you'd leak listeners on every component mount, and emits would get slower and slower as zombies accumulate.\n\nThe insight: off() is what makes this useful. To remove by reference, find the index in the array (indexOf does this because === compares function references), then splice it out. That's why we need a per-event ARRAY rather than a Set — we want stable iteration order and we want indexOf, and we want to allow duplicates (interpretation: 'two subscriptions = two callbacks').\n\nThe other subtle bit: emit must iterate a COPY of the array, not the array itself. If a listener calls off() inside itself (or on() to add a new one), mutating the array during iteration skips neighbors or visits new ones in unpredictable order. Slicing is the cheapest fix.\"",
+        "why": "Calling out 'no off = leak' makes off() feel like a real requirement rather than a nice-to-have. Naming the 'iterate a copy' detail before writing emit is what shows you've actually built something like this before — it's the kind of bug that doesn't show up until a listener removes itself, then suddenly the next listener gets skipped and you spend an hour debugging. Surface it on the whiteboard so the interviewer knows you know."
+      },
+      {
+        "title": "3. Spot the pattern — API shape & invariant",
+        "prompt": "What's the registry shape and what invariant keeps off + emit safe?",
+        "say": "\"The registry shape is: `handlers` — a plain object keyed by event name, values are arrays of fn references. `(this.handlers[event] ||= []).push(fn)` is the canonical on(): lazy-create the bucket on first subscription, then append.\n\noff(event, fn) walks the bucket with indexOf to find the matching reference, then splice(i, 1). Identity match — same exact function reference. If you registered with an arrow and try to off with a different arrow that looks the same, indexOf returns -1 and nothing happens.\n\nemit(event, ...args) reads the bucket, copies it with .slice(), then for-of's the copy calling fn(...args). The copy is the safety invariant: while we're dispatching, listeners are allowed to call on() or off() inside themselves without disturbing the in-flight emit. The current emit will fire exactly the snapshot that existed at emit-time, and any subsequent emit sees the post-mutation state.\n\nThe pattern is map-keyed-state — a registry keyed by event name. Same template powers DOM addEventListener/removeEventListener, Node's EventEmitter, RxJS Subjects (with extra buffering), Redux's subscribe. The 'iterate a copy' invariant shows up everywhere; it's how you make dispatch safe under reentrancy.\"",
+        "why": "Explicitly naming the 'identity match via indexOf' rule is the move that catches the 'why doesn't my unsubscribe work?' bug — once you've said 'off needs the SAME reference', you'll instinctively store the handler in a variable rather than passing inline arrows. The 'iterate a copy for reentrancy safety' detail is the senior-candidate flourish; it's invisible until you hit the bug, and naming it on the whiteboard saves you ever hitting the bug."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few operation sequences to confirm the registry behaves correctly.",
+        "intro": "\"Let me trace a few sequences to confirm on/off/emit interact correctly.\" Handlers are referenced by id (one/two/a/b/etc.) — each id resolves to a real function that records `id:args` into a results array. Three examples cover the canonical subscribe-fire-unsubscribe loop, the off-on-missing no-op behavior, and event isolation + duplicate registration.",
+        "examples": [
+          {
+            "input": "on(tick,one), on(tick,two), emit(tick,1), emit(tick,2), off(tick,one), emit(tick,3)",
+            "output": "[\"one:1\",\"two:1\",\"one:2\",\"two:2\",\"two:3\"]",
+            "note": "Canonical case — two listeners both fire in registration order on each emit. After off(one), only two survives. Verifies emit walks in order AND off correctly drops one without disturbing the other.",
+            "trace": "init handlers={}, results=[]\non('tick', one) → handlers={tick:[one]}\non('tick', two) → handlers={tick:[one,two]}\nemit('tick', 1) → copy=[one,two]; one(1) → results=['one:1']; two(1) → results=['one:1','two:1']\nemit('tick', 2) → copy=[one,two]; one(2) → results=[...,'one:2']; two(2) → results=[...,'two:2']\noff('tick', one) → indexOf(one)=0, splice(0,1), handlers={tick:[two]}\nemit('tick', 3) → copy=[two]; two(3) → results=[...,'two:3']\nfinal results = ['one:1','two:1','one:2','two:2','two:3']"
+          },
+          {
+            "input": "off on unknown event/fn is a silent no-op",
+            "output": "[\"a:hi\",\"a:bye\"]",
+            "note": "off('msg', b) finds no b in the bucket → silent no-op. off('unknown', a) finds no bucket at all → silent no-op (early return). Verifies both no-op branches don't throw.",
+            "trace": "init handlers={}, results=[]\non('msg', a)       → handlers={msg:[a]}\nemit('msg', 'hi')  → copy=[a]; a('hi') → results=['a:hi']\noff('msg', b)      → bucket=[a], indexOf(b)=-1 → no-op (a stays)\nemit('msg', 'bye') → copy=[a]; a('bye') → results=['a:hi','a:bye']\noff('unknown', a)  → no bucket for 'unknown' → early return, no-op\nfinal results = ['a:hi','a:bye']"
+          },
+          {
+            "input": "events are isolated; duplicate on() stores TWO entries → fires twice",
+            "output": "[\"f:1\",\"f:1\",\"g:2\"]",
+            "note": "Two on('x', f) calls store f TWICE in the x bucket; emit('x',1) fires f twice. emit('y',2) only fires g — events are isolated by key. Confirms: events are independent buckets, duplicates are stored not deduped.",
+            "trace": "init handlers={}, results=[]\non('x', f) → handlers={x:[f]}\non('y', g) → handlers={x:[f], y:[g]}\non('x', f) → handlers={x:[f,f], y:[g]} (f appears TWICE in x bucket)\nemit('x', 1) → copy=[f,f]; f(1) → 'f:1'; f(1) → 'f:1'; results=['f:1','f:1']\nemit('y', 2) → copy=[g]; g(2) → 'g:2'; results=['f:1','f:1','g:2'] (y bucket unaffected by x emit)\nfinal results = ['f:1','f:1','g:2']"
+          }
+        ],
+        "why": "The first trace confirms the registration-order invariant — interviewers care that emit fires in the order subscribers came in, not some hash-table iteration order. The second trace defends the off-as-no-op behavior, which is the contract Node's EventEmitter and most production libraries use. The third trace catches the dedupe-vs-store-duplicates choice — pick one explicitly and stick to it; the indexOf-based off then only removes the FIRST occurrence, which is worth calling out (if you wanted to remove all, you'd loop or use filter)."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• off during emit — listener A calls off(event, B) while emitting. If we iterated the live array, A's off would shift B out and the for-loop's next index would skip the original B's neighbor. Iterating .slice() makes A and B both fire in this emit (the snapshot was taken before A ran), and any *subsequent* emit sees B gone. Defensible and the standard behavior.\n• Removing self during emit — same logic; listener removes itself, current dispatch still completes, next dispatch doesn't see it.\n• No listeners for an event → emit is a no-op (early-return on missing bucket). Should NOT throw, NOT log.\n• Multiple subscribers to same event → all fire in registration order on each emit. (Traced above.)\n• Same fn registered twice → fires twice; off removes only the first occurrence (indexOf returns first match).\n• A listener throws → in this minimal version, the throw propagates and stops dispatch. Production EventEmitters (Node's) often catch+re-emit as 'error' events; worth mentioning, deliberately out of scope here.\n• Memory leak via forgotten off → if a long-lived subscriber on()s but the subscribee's lifetime is shorter, you've leaked a reference to the subscribee (in the registry). Common in SPAs; the standard fix is to off() in the component teardown.\n• Anonymous-fn off() — passing `() => {...}` to off when you registered with a different `() => {...}` won't match. Always store the reference if you plan to off.\"",
+        "why": "The 'off-during-emit' edge is the most likely interview pushback — once you've named .slice() as a safety mechanism, the interviewer might ask 'what does the spec say about a listener that removes another listener mid-dispatch?'. Having a defensible answer ('current dispatch sees the pre-mutation snapshot, subsequent dispatch sees the new state') shows you've thought about the contract. The memory-leak call-out is the production-readiness move; it's the bug that takes down real apps in the wild."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time on() is O(1) — array push. Time off() is O(k) where k is the number of listeners on that event — indexOf + splice both scan the bucket. Time emit() is O(k) — iterate the bucket and call each fn (plus whatever the fns themselves cost, which we don't count toward the dispatcher's complexity).\n\nSpace is O(total listeners) — the registry holds every active subscription.\n\nIf off needed to be O(1), I'd swap the per-event Array for a per-event Set, but then I'd lose stable registration order (Set iteration order is insertion order in JS, so actually it might be fine — but emit-order guarantees are the kind of thing specs are picky about, so I'd default to Array unless asked).\n\nThis is the map-keyed-state template. Same shape as DOM addEventListener (with one-event-many-listeners), Node's EventEmitter, Redux's subscribe, RxJS Subjects (Subject is EventEmitter plus value-buffering plus completion semantics). The 'iterate a copy for reentrancy safety' invariant shows up in every one of those — it's the universal lesson.\"",
+        "why": "Naming off() as O(k) (not O(1)) is the honest complexity defense — candidates sometimes claim O(1) and get caught. The Set-vs-Array tradeoff is the senior-candidate aside that shows you know what would change. The 'this is the same template as Node EventEmitter and RxJS' connection proves you see the abstraction, not just this one problem — and the 'iterate a copy is universal' lesson is the takeaway that generalizes beyond pub/sub."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of EventEmitter operations. Handlers are referenced by id (e.g. 'one', 'two') in the input — the trace resolves each id to a real function that records what it was called with into a results array. Watch the handlers map evolve as on/off mutate the buckets, and how emit walks a copy so any off() inside a listener wouldn't skip neighbors.",
+    "examples": [
+      { "label": "on(tick,one), on(tick,two), emit(tick,1), emit(tick,2), off(tick,one), emit(tick,3)", "input": [ { "op": "on", "event": "tick", "fn": "one" }, { "op": "on", "event": "tick", "fn": "two" }, { "op": "emit", "event": "tick", "args": [1] }, { "op": "emit", "event": "tick", "args": [2] }, { "op": "off", "event": "tick", "fn": "one" }, { "op": "emit", "event": "tick", "args": [3] } ], "expected": "[\"one:1\",\"two:1\",\"one:2\",\"two:2\",\"two:3\"]" },
+      { "label": "off on unknown event/fn is a silent no-op", "input": [ { "op": "on", "event": "msg", "fn": "a" }, { "op": "emit", "event": "msg", "args": ["hi"] }, { "op": "off", "event": "msg", "fn": "b" }, { "op": "emit", "event": "msg", "args": ["bye"] }, { "op": "off", "event": "unknown", "fn": "a" } ], "expected": "[\"a:hi\",\"a:bye\"]" },
+      { "label": "events are isolated; duplicate on() stores TWO entries → fires twice", "input": [ { "op": "on", "event": "x", "fn": "f" }, { "op": "on", "event": "y", "fn": "g" }, { "op": "on", "event": "x", "fn": "f" }, { "op": "emit", "event": "x", "args": [1] }, { "op": "emit", "event": "y", "args": [2] } ], "expected": "[\"f:1\",\"f:1\",\"g:2\"]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  const handlers = {};",
+      "  const results = [];",
+      "  const fnRegistry = {};",
+      "  const getFn = (id) => {",
+      "    if (!fnRegistry[id]) fnRegistry[id] = (...args) => { results.push(id + ':' + args.join(',')); };",
+      "    return fnRegistry[id];",
+      "  };",
+      "  const snap = () => {",
+      "    const out = {};",
+      "    for (const k of Object.keys(handlers)) out[k] = handlers[k].map((_, i) => '[fn#' + i + ']');",
+      "    return out;",
+      "  };",
+      "  yield { line: 3, label: `new EventEmitter() — handlers={}, results=[]`, state: { ops, handlers: snap(), results: [...results] } };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const op = ops[k];",
+      "    if (op.op === 'on') {",
+      "      yield { line: 6, label: `op#${k}: on('${op.event}', ${op.fn})`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, fn: op.fn } };",
+      "      (handlers[op.event] ||= []).push(getFn(op.fn));",
+      "      yield { line: 6, label: `bucket '${op.event}' now has ${handlers[op.event].length} handler(s)`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, fn: op.fn } };",
+      "    } else if (op.op === 'off') {",
+      "      yield { line: 9, label: `op#${k}: off('${op.event}', ${op.fn})`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, fn: op.fn } };",
+      "      const arr = handlers[op.event];",
+      "      if (!arr) {",
+      "        yield { line: 10, label: `no bucket for '${op.event}' — no-op`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, fn: op.fn } };",
+      "      } else {",
+      "        const target = getFn(op.fn);",
+      "        const i = arr.indexOf(target);",
+      "        yield { line: 11, label: `indexOf(${op.fn}) in bucket '${op.event}' → ${i}`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, fn: op.fn, foundIndex: i } };",
+      "        if (i !== -1) {",
+      "          arr.splice(i, 1);",
+      "          yield { line: 12, label: `splice index ${i} — bucket '${op.event}' size → ${arr.length}`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, fn: op.fn } };",
+      "        } else {",
+      "          yield { line: 12, label: `not found — no-op`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, fn: op.fn } };",
+      "        }",
+      "      }",
+      "    } else if (op.op === 'emit') {",
+      "      yield { line: 15, label: `op#${k}: emit('${op.event}', ${JSON.stringify(op.args)})`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, args: op.args } };",
+      "      const arr = handlers[op.event];",
+      "      if (!arr) {",
+      "        yield { line: 16, label: `no bucket for '${op.event}' — emit is a no-op`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, args: op.args } };",
+      "      } else {",
+      "        const copy = arr.slice();",
+      "        yield { line: 17, label: `iterate copy of bucket — ${copy.length} handler(s) to invoke`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, args: op.args, toInvoke: copy.length } };",
+      "        for (let h = 0; h < copy.length; h++) {",
+      "          copy[h](...op.args);",
+      "          yield { line: 17, label: `handler#${h} fired — results=${JSON.stringify(results)}`, state: { ops, handlers: snap(), results: [...results], op: op.op, event: op.event, args: op.args, handlerIdx: h } };",
+      "        }",
+      "      }",
+      "    }",
+      "  }",
+      "  yield { line: 19, label: `all ops processed — collected results=${JSON.stringify(results)}`, state: { ops, handlers: snap(), results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class EventEmitter {\n  constructor() {\n    this.handlers = {};                          // event -> array of fns\n  }\n  on(event, fn) {\n    (this.handlers[event] ||= []).push(fn);      // lazy-create the bucket\n  }\n  off(event, fn) {\n    const arr = this.handlers[event];\n    if (!arr) return;\n    const i = arr.indexOf(fn);                   // identity match — exact same fn reference\n    if (i !== -1) arr.splice(i, 1);\n  }\n  emit(event, ...args) {\n    const arr = this.handlers[event];\n    if (!arr) return;\n    for (const fn of arr.slice()) fn(...args);   // copy so off-during-emit is safe\n  }\n}",
     "notes": [

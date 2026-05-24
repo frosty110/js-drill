@@ -8,6 +8,100 @@
   "mechanics": [
     "backtrack-template"
   ],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down what \"every subset\" actually means.",
+        "say": "\"Let me restate: given an array `nums` with all unique values, return every possible subset — the power set. So for [1,2,3] I should return [], [1], [2], [3], [1,2], [1,3], [2,3], [1,2,3] in some order.\"\n\nA few quick clarifying questions:\n• Are the elements guaranteed unique, or could there be duplicates? (Duplicates change the algorithm — Subsets II uses sort + skip-repeat.)\n• Does output order matter? Within each subset? Across the result list?\n• Should the empty subset be included? (Yes by convention, but worth confirming.)\n• What's the size bound on `nums`? (2^n grows fast — n=20 is already a million subsets.)",
+        "why": "The duplicate question is the load-bearing one. If you assume uniqueness and the input has [1,2,2], you'll emit [1,2] twice and the test fails on the first hidden case. The size question matters because you want to flag that you understand 2^n is inherent — if `nums` could be length 30 there's no algorithm that helps, the output itself has a billion entries."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solution before reaching for recursion.",
+        "say": "\"The brute force I'd describe is the bitmask enumeration: there are 2^n subsets, and each subset maps to an n-bit binary number where bit i means 'include nums[i]'. So I'd loop `mask` from 0 to (1<<n)-1, and for each mask, walk the bits and collect the included elements. That's O(n · 2^n) — n work per mask, 2^n masks.\"\n\n\"Same asymptotic cost as the recursive backtracking solution, but I'd rather write the recursion because it generalizes — the moment the problem adds a constraint like 'only subsets of size k' or 'skip duplicates', the bitmask version starts fighting me while the recursion just gets one extra check.\"",
+        "why": "Naming the bitmask version proves you see the combinatorial structure clearly — every subset is an include/exclude decision per element. Then explaining why you'd still write the recursion is the actual interview move: same Big-O, but the recursive template generalizes to all the sibling problems (Subsets II, Combinations, Combination Sum, partitioning) so the time you invest learning it pays off across the whole family."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem says 'backtracking'?",
+        "say": "\"This is a classic backtracking problem. The decision space is: at each element, two choices — IN or OUT. That gives 2^n leaves of a decision tree. The shape is enumeration, not optimization — I'm not looking for the best subset, I want all of them.\"\n\n\"Concretely the template is: DFS with a `path` array I mutate, a `start` index so I never look backward (which prevents [1,2] AND [2,1] both showing up as the 'same' subset), and a snapshot push at the top of every call. There's no pruning rule for Subsets specifically — every node is a valid subset, so I record at the top of every call rather than only at leaves. The 'backtrack' part is just the `path.pop()` after each recursive call so the same array can be reused down the next branch.\"\n\n\"Why backtracking over DP or iteration: backtracking is the right tool for combinatorial enumeration. DP would be wrong because there's no subproblem-overlap to memoize — every subset is distinct. Pure iteration works (the bitmask version) but is harder to extend. The recursive shape is the lingua franca for this whole family of problems.\"",
+        "why": "The 'no pruning rule, record at every node' detail is what distinguishes Subsets from its siblings — Permutations records only at leaves (when path is full), Combination Sum records only when remaining hits zero. Subsets is the simplest of the family because EVERY node of the tree is a valid answer. Naming the decision space ('IN or OUT per element → 2^n leaves') AND the optimization framing ('enumeration, not optimization → backtracking, not DP') is what shows you see the problem class, not just the trick."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the recursion shape before writing it.",
+        "intro": "\"Let me trace a couple of cases to verify the recursion order and confirm the snapshot timing.\" Three inputs cover the interesting behaviors — a small case to see the full tree, the empty edge, and a 2-element to watch the include/exclude branching explicitly.",
+        "examples": [
+          {
+            "input": "[1,2,3]",
+            "output": "[[],[1],[1,2],[1,2,3],[1,3],[2],[2,3],[3]]",
+            "note": "Standard case — pre-order traversal of the decision tree gives subsets in lexicographic order by index.",
+            "trace": "backtrack(start=0, path=[]) → push [] (res=[[]])\n  i=0: push 1, backtrack(1, [1]) → push [1] (res=[[],[1]])\n    i=1: push 2, backtrack(2, [1,2]) → push [1,2] (res=[[],[1],[1,2]])\n      i=2: push 3, backtrack(3, [1,2,3]) → push [1,2,3] (res=[[],[1],[1,2],[1,2,3]])\n        loop empty, return. pop 3.\n      pop 2.\n    i=2: push 3, backtrack(3, [1,3]) → push [1,3] (res=[...,[1,3]])\n      pop 3.\n    pop 1.\n  i=1: push 2, backtrack(2, [2]) → push [2] (res=[...,[2]])\n    i=2: push 3, backtrack(3, [2,3]) → push [2,3] (res=[...,[2,3]])\n      pop 3.\n    pop 2.\n  i=2: push 3, backtrack(3, [3]) → push [3] (res=[...,[3]])\n    pop 3."
+          },
+          {
+            "input": "[]",
+            "output": "[[]]",
+            "note": "Empty input — the empty subset is still a valid result. One call, one push, no loop iterations.",
+            "trace": "backtrack(start=0, path=[]) → push [] (res=[[]])\n  for loop: i starts at 0, nums.length=0, loop body never runs\n  return\nres = [[]]"
+          },
+          {
+            "input": "[7,8]",
+            "output": "[[],[7],[7,8],[8]]",
+            "note": "2-element case — easiest place to verify the start-index discipline: when we pick 8 first, we never go back to 7.",
+            "trace": "backtrack(0, []) → push [] (res=[[]])\n  i=0: push 7, backtrack(1, [7]) → push [7]\n    i=1: push 8, backtrack(2, [7,8]) → push [7,8]\n      pop 8.\n    pop 7.\n  i=1: push 8, backtrack(2, [8]) → push [8]\n    (i would start at 2 — never loops back to 7)\n    pop 8."
+          }
+        ],
+        "why": "Tracing [1,2,3] catches the single most common bug — pushing `path` instead of `[...path]`. If you skip the copy, every `res` entry ends up pointing at the same array, and when the recursion unwinds you see [[],[],[],...] all empty. The [7,8] trace defends the `start` discipline: notice the 'pick 8 first' branch only looks at indices ≥ 2, so it can never produce [8,7]. The empty case is worth tracing to confirm the empty subset is included — the snapshot fires at the top of the call, before the loop, so even the zero-iteration call produces one result."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging before I call it done:\"\n\n• Empty input `[]` → returns `[[]]`, just the empty subset. One call, no loop iterations, the snapshot at the top still fires.\n• Single element `[5]` → returns `[[], [5]]`. The simplest non-empty case.\n• Duplicates in input — this problem assumes unique elements. If they're not, you'd need Subsets II (sort + `if (i > start && nums[i] === nums[i-1]) continue`).\n• Forgetting `[...path]` and pushing `path` directly → every result entry aliases the same array, you end up with N copies of `[]`. The single most common bug in this whole family.\n• Looping from 0 instead of `start` → produces both [1,2] AND [2,1], which inflates the result and breaks uniqueness.\n• Large n (n=20+) → 2^n explodes. Worth mentioning that 2^n is inherent to the output size, not a flaw to optimize away.",
+        "why": "The 'forgot to copy path' bug is the diagnostic one — it ships green on a manual trace but fails the first automated test. Calling it out unprompted signals you've actually written this and hit the bug. The Subsets II callout is bonus credit — most candidates don't anticipate the duplicate variant, and naming the sort + skip-repeat trick proves you see how the template extends."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n · 2^n). There are 2^n subsets in the output, and each subset has up to n elements that we have to copy into the result via `[...path]`. The recursion itself does O(2^n) work in the tree nodes, but the copy at each leaf is what pushes the total to n · 2^n.\n\nSpace is O(n) for the recursion stack and the `path` array itself, plus O(n · 2^n) for the output. The exponential output size is inherent — there's no algorithm that can do better, because the answer literally IS 2^n subsets.\n\nFor extensions: the same template handles Subsets II (add a sort, skip duplicate siblings at the same level), Combinations (add `if (path.length === k) push & return`), and Combination Sum (loop with `i` instead of `i+1` to allow reuse, track remaining target). All four problems are one template with one or two lines swapped.\"",
+        "why": "The exponential bound is non-negotiable here — the output size IS 2^n, so any algorithm has to do at least that much work. The interview move is to NOT apologize for exponential time — it's inherent to enumeration, not a flaw. The 'one template, four problems' extension is the punchline that shows you understand the family: Subsets, Subsets II, Combinations, and Combination Sum all share the same recursive skeleton with one or two surgical changes."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through subsets() on a small input. Watch the decision tree: at each call we snapshot path into res, then for each i from start onwards we push, recurse deeper, pop. The state panel shows the current path, the accumulated res, and the recursion depth.",
+    "examples": [
+      { "label": "[1,2,3] → 8 subsets", "input": [1, 2, 3], "expected": "[[],[1],[1,2],[1,2,3],[1,3],[2],[2,3],[3]]" },
+      { "label": "[] → [[]]", "input": [], "expected": "[[]]" },
+      { "label": "[7,8] → 4 subsets", "input": [7, 8], "expected": "[[],[7],[7,8],[8]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input;",
+      "  yield { line: 1, label: `enter subsets(nums=${JSON.stringify(nums)})`, state: { nums } };",
+      "  const res = [];",
+      "  yield { line: 2, label: 'init res = []', state: { nums, res: [] } };",
+      "  function* backtrack(start, path, depth) {",
+      "    yield { line: 3, label: `ENTER backtrack(start=${start}, path=${JSON.stringify(path)}) — depth ${depth}`, state: { nums, res: res.map(r => [...r]), path: [...path], start, depth } };",
+      "    res.push([...path]);",
+      "    yield { line: 5, label: `record snapshot: res.push(${JSON.stringify(path)})`, state: { nums, res: res.map(r => [...r]), path: [...path], start, depth } };",
+      "    for (let i = start; i < nums.length; i++) {",
+      "      yield { line: 7, label: `loop: i=${i}, consider nums[${i}]=${nums[i]}`, state: { nums, res: res.map(r => [...r]), path: [...path], start, i, depth } };",
+      "      path.push(nums[i]);",
+      "      yield { line: 8, label: `CHOOSE: path.push(${nums[i]}) → ${JSON.stringify(path)}`, state: { nums, res: res.map(r => [...r]), path: [...path], start, i, depth } };",
+      "      yield* backtrack(i + 1, path, depth + 1);",
+      "      path.pop();",
+      "      yield { line: 10, label: `UNCHOOSE: path.pop() → ${JSON.stringify(path)} (backtrack)`, state: { nums, res: res.map(r => [...r]), path: [...path], start, i, depth } };",
+      "    }",
+      "    yield { line: 12, label: `RETURN from depth ${depth} (start=${start})`, state: { nums, res: res.map(r => [...r]), path: [...path], start, depth } };",
+      "  }",
+      "  yield { line: 13, label: 'kickoff: backtrack(0, [])', state: { nums, res: res.map(r => [...r]) } };",
+      "  yield* backtrack(0, [], 0);",
+      "  yield { line: 14, label: `return res (${res.length} subsets)`, state: { nums, res: res.map(r => [...r]), returns: JSON.stringify(res) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function subsets(nums) {\n  const res = [];\n  function backtrack(start, path) {\n    // Record at EVERY node — every prefix is a valid subset (no leaf base case).\n    res.push([...path]);              // every node is a valid subset\n    // Loop from `start`, not 0 — prevents revisiting earlier indices (no duplicates).\n    for (let i = start; i < nums.length; i++) {\n      path.push(nums[i]);              // choose\n      backtrack(i + 1, path);          // explore (i+1 prevents reuse)\n      path.pop();                      // un-choose\n    }\n  }\n  backtrack(0, []);\n  return res;\n}\n// Time O(n * 2^n), Space O(n) recursion + output",
     "notes": [

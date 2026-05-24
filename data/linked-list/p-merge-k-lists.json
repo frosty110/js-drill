@@ -6,6 +6,115 @@
   "status": "full",
   "description": "Pairwise divide-and-conquer: merge lists in pairs, then pairs of pairs, until one remains. Each level merges N total nodes; log k levels gives O(N log k).",
   "mechanics": ["linked-list-walk", "dummy-head-sentinel"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given an array of `k` linked-list heads, each list already sorted ascending, and I need to return the head of a single merged sorted list. Total node count across all lists is N.\"\n\nThen a few quick clarifying questions:\n• Empty input array (k = 0) — return null?\n• Lists containing only nulls (e.g. `[null, null, null]`) — also return null?\n• Single list (k = 1) — return that list as-is?\n• Mutation OK — can I splice the existing nodes, or do I need to allocate fresh ones?\n• Are k and N both potentially large, or is one of them bounded? (Shapes which optimization wins: heap when k is small relative to N, pairwise when k is large.)",
+        "why": "The relative sizes of k and N are the load-bearing detail. Both heap and pairwise divide-and-conquer hit O(N log k); the difference is constant factor and code complexity. The 'lists containing nulls' question is the empty-input edge — it's not the same as an empty array, and a sloppy implementation would crash on `lists[0].val` if it didn't filter nulls or handle them in the merge. Asking surfaces both decision points cleanly."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious bad solutions before you discard them.",
+        "say": "\"Two brute forces worth naming. (1) Collect every value into one array, sort it, build a fresh list. O(N log N) time, O(N) extra space — and ignores the precondition that the inputs are already sorted. (2) Merge lists one at a time into an accumulator: merge(list₁, list₂), then merge(result, list₃), etc. That uses my mergeTwo helper k-1 times. But the math is bad — by round k, the accumulator has roughly N nodes and we're walking over it AGAIN. So the i-th merge processes roughly i × (N/k) nodes. Summing: N/k × (1 + 2 + … + k-1) = O(N × k). Way worse than what we can do.\n\nThe optimization is to balance the work — instead of one growing accumulator, pair-merge in rounds so each node is touched at most log k times. That gets us O(N log k).\"",
+        "why": "Two reasons to walk through the bad-merge-order brute force explicitly. (1) It proves you know why the naive 'just merge them all' approach is wrong — many candidates write that and don't realize it's O(Nk). (2) It motivates the optimization: pairwise merging isn't a clever new algorithm, it's the same mergeTwo applied in a smarter order. That framing makes the O(N log k) bound feel earned rather than asserted."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to pairwise divide-and-conquer (or a min-heap)?",
+        "say": "\"There are two canonical patterns here, both hitting O(N log k).\n\nPattern 1 — pairwise divide-and-conquer: pair adjacent lists, merge each pair, then pair the results, repeat. After log k rounds you have one list. Each round processes N nodes total (every node moves once per round), and there are log k rounds, so total work is N log k. This is what I'd reach for in JavaScript because the language doesn't ship a heap — implementing one is a 30-line detour.\n\nPattern 2 — min-heap of size k: maintain a heap of (head value, list index). Pop the smallest, splice it onto the output, push its successor. Each pop+push is O(log k), and we do N of them. Same N log k bound, but lower constant in practice because each node moves exactly once instead of log k times.\n\nThe signal that points at either pattern is the phrase 'k sorted things, merge them all' — that family always hits O(N log k). The choice between heap and pairwise is about language ergonomics and whether the interviewer asked for the absolute fastest constant.\"",
+        "why": "Naming BOTH patterns and stating WHEN to pick each one is the senior move. Most candidates either know only the heap version (and have to write a heap from scratch in JS, eating time) or only the pairwise version (and can't defend why they didn't use the heap). Saying 'I'd choose pairwise for JS, heap if I had `heapq`' shows you understand the constraints driving the choice. Calling out 'each round processes N nodes; there are log k rounds' is also the cleanest way to derive the bound on the spot."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure the model is right.\" Three inputs cover the interesting behaviors — the classic 3-list case (odd count, last list pairs with null), an empty input, and a power-of-2 count where every round divides evenly.",
+        "examples": [
+          {
+            "input": "[[1,4,5], [1,3,4], [2,6]]",
+            "output": "[1,1,2,3,4,4,5,6]",
+            "note": "Three lists — odd count, so round 1 pairs list 0 with list 1, and list 2 pairs with null (passes through unchanged).",
+            "trace": "round 1: 3 lists → pair (0,1) and (2,null)\n  merge([1,4,5], [1,3,4]) = [1,1,3,4,4,5]\n  merge([2,6], null)      = [2,6]\n  → 2 lists: [[1,1,3,4,4,5], [2,6]]\nround 2: 2 lists → pair (0,1)\n  merge([1,1,3,4,4,5], [2,6]) = [1,1,2,3,4,4,5,6]\n  → 1 list, done.\nreturn [1,1,2,3,4,4,5,6]"
+          },
+          {
+            "input": "[]",
+            "output": "null",
+            "note": "Empty input — early return before the loop. No pair-merging happens.",
+            "trace": "lists.length === 0 → return null immediately."
+          },
+          {
+            "input": "[[1,2], [3,4], [5,6], [7,8]]",
+            "output": "[1,2,3,4,5,6,7,8]",
+            "note": "Power-of-2 count — each round halves cleanly. Two rounds for k=4.",
+            "trace": "round 1: 4 lists → pair (0,1) and (2,3)\n  merge([1,2], [3,4]) = [1,2,3,4]\n  merge([5,6], [7,8]) = [5,6,7,8]\n  → 2 lists\nround 2: 2 lists → pair (0,1)\n  merge([1,2,3,4], [5,6,7,8]) = [1,2,3,4,5,6,7,8]\n  → 1 list, done.\nreturn [1,2,3,4,5,6,7,8]"
+          }
+        ],
+        "why": "Tracing surfaces two specific bugs. (1) The odd-count case (3 lists) confirms that `mergeTwo(lists[i], lists[i+1] || null)` handles the unpaired tail without an explicit `if` — most candidates either write a special case or forget the last list entirely. (2) The power-of-2 trace counts the rounds: k=4 gives log₂(4) = 2 rounds, and each round processes all N nodes. That's the visual proof of the N log k bound — if you can count rounds and confirm 'all N nodes appear in this round's output', the math is right."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty input array (`lists = []`) → return null immediately. ✓\n• All nulls (`lists = [null, null, null]`) → first round pairs them, mergeTwo(null, null) = null, mergeTwo(null, null) = null. Eventually one null remains. Return null. ✓\n• Single list (`lists = [head]`) → loop condition `lists.length > 1` is false, return lists[0] as-is. ✓\n• Single very long list, rest are short → each round still touches all N nodes, but the bound is still O(N log k). The long list participates in every round but the work is proportional to its length each time.\n• k > N (more lists than total nodes — most are single-node or null) → log k rounds, but the per-round work is small. Still O(N log k); the bound holds.\n• Integer overflow not a concern here (we're moving pointers, not adding values).\n• Very large k (millions) → log k is still small (≈20 for a million), so 20 rounds of N-work is fine.\"",
+        "why": "The all-nulls case is the one most candidates miss — they assume each input list has at least one node. Walking through it shows the algorithm handles it because mergeTwo accepts null on either side. The k > N edge is the small-k-large-N inverse and confirms the bound generalizes. The 'pointer movement, not addition' note about overflow is the senior reflex — every numeric-feeling problem deserves a moment of overflow consideration, and this one happens to be safe."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(N log k). The argument: in each round we walk every node that's still in the input (call that N') and produce N' nodes of output. Over log k rounds, every node is touched at most log k times — pair → merged into a longer list → that longer list pairs with another → and so on, log k times until one list remains. Total: N × log k.\n\nSpace is O(1) extra beyond the input — we're splicing existing nodes, not allocating. The dummy node in mergeTwo is one node per merge call, but those are GC'd between calls. (If you wrote this with a heap instead, you'd have O(k) heap space.)\n\nIf the interview wanted the heap version, the picture is: maintain a min-heap of `{val, listIdx}` seeded with each list's head. Pop, splice, push the successor. Each pop+push is O(log k); N total pops gives N log k. Both versions hit the same bound; heap has a slightly lower constant but JavaScript doesn't ship one, so pairwise is the pragmatic interview answer.\"",
+        "why": "The 'each node touched log k times' argument is the clean defense — it generalizes immediately to mergesort (which is structurally the same algorithm applied to array indices instead of list pointers). Calling out the heap alternative AND its space cost shows you've thought about the full design space. The 'JS doesn't ship a heap' detail is the practical interview judgment: yes, the heap version is theoretically the same bound, but if you have to spend 5 minutes writing a heap from scratch, you've eaten your interview time on infrastructure rather than the algorithm."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through pairwise divide-and-conquer. Input is { lists } — an array of pre-sorted arrays. Watch each round halve the count of lists. We trace mergeKLists; the inner mergeTwo runs to completion inline, with its result shown in the merged-array snapshot.",
+    "examples": [
+      { "label": "[[1,4,5],[1,3,4],[2,6]] → [1,1,2,3,4,4,5,6]", "input": { "lists": [[1, 4, 5], [1, 3, 4], [2, 6]] }, "expected": "[1,1,2,3,4,4,5,6]" },
+      { "label": "[] → null   (empty input)",                   "input": { "lists": [] },                            "expected": "null" },
+      { "label": "[[1,2],[3,4],[5,6],[7,8]] → [1,2,3,4,5,6,7,8]", "input": { "lists": [[1, 2], [3, 4], [5, 6], [7, 8]] }, "expected": "[1,2,3,4,5,6,7,8]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { lists: arrLists } = input;",
+      "  const toList = (arr) => { const d = { next: null }; let c = d; for (const v of arr) { c.next = { val: v, next: null }; c = c.next; } return d.next; };",
+      "  const toArr = (h) => { const o = []; while (h) { o.push(h.val); h = h.next; } return o; };",
+      "  const mergeTwo = (a, b) => {",
+      "    const dummy = { next: null };",
+      "    let tail = dummy;",
+      "    while (a && b) {",
+      "      if (a.val <= b.val) { tail.next = a; a = a.next; } else { tail.next = b; b = b.next; }",
+      "      tail = tail.next;",
+      "    }",
+      "    tail.next = a || b;",
+      "    return dummy.next;",
+      "  };",
+      "  let lists = arrLists.map(toList);",
+      "  yield { line: 14, label: `enter mergeKLists — ${arrLists.length} lists: ${JSON.stringify(arrLists)}`, state: { listsView: arrLists, count: arrLists.length } };",
+      "  if (lists.length === 0) {",
+      "    yield { line: 15, label: 'empty input — return null', state: { returns: 'null' } };",
+      "    return;",
+      "  }",
+      "  let round = 0;",
+      "  while (lists.length > 1) {",
+      "    round++;",
+      "    yield { line: 17, label: `round ${round} — ${lists.length} lists to pair-merge`, state: { round, listsView: lists.map(toArr), count: lists.length } };",
+      "    const merged = [];",
+      "    for (let i = 0; i < lists.length; i += 2) {",
+      "      const left = lists[i];",
+      "      const right = lists[i + 1] || null;",
+      "      yield { line: 19, label: `pair (${i}, ${i + 1}) — merge ${JSON.stringify(toArr(left))} + ${right ? JSON.stringify(toArr(right)) : 'null'}`, state: { round, i, left: toArr(left), right: right ? toArr(right) : null } };",
+      "      const m = mergeTwo(left, right);",
+      "      merged.push(m);",
+      "      yield { line: 21, label: `merged pair → ${JSON.stringify(toArr(m))}`, state: { round, mergedSoFar: merged.map(toArr) } };",
+      "    }",
+      "    lists = merged;",
+      "    yield { line: 23, label: `end of round ${round} — now ${lists.length} list(s)`, state: { round, listsView: lists.map(toArr), count: lists.length } };",
+      "  }",
+      "  yield { line: 25, label: 'one list remains — return lists[0]', state: { result: toArr(lists[0]), returns: JSON.stringify(toArr(lists[0])) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function mergeTwo(a, b) {\n  // Dummy sentinel — first append doesn't need a special case.\n  const dummy = { next: null };\n  let tail = dummy;\n  while (a && b) {\n    if (a.val <= b.val) { tail.next = a; a = a.next; }\n    else { tail.next = b; b = b.next; }\n    tail = tail.next;\n  }\n  // Attach whichever list still has nodes — it's already sorted.\n  tail.next = a || b;\n  return dummy.next;\n}\nfunction mergeKLists(lists) {\n  if (lists.length === 0) return null;\n  // Pair-merge each round → log k rounds, N work per round = O(N log k).\n  while (lists.length > 1) {\n    const merged = [];\n    for (let i = 0; i < lists.length; i += 2) {\n      // Odd-length round: last list pairs with null — mergeTwo handles it.\n      merged.push(mergeTwo(lists[i], lists[i + 1] || null));\n    }\n    lists = merged;\n  }\n  return lists[0];\n}\n// Time O(N log k), Space O(1) extra",
     "notes": [

@@ -6,6 +6,115 @@
   "status": "full",
   "description": "Serialize a list of arbitrary strings into one string and round-trip it back. Length-prefix scheme `len#payload` avoids any delimiter collision.",
   "mechanics": [],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: I need two functions — `encode(strs)` that takes a list of arbitrary strings and produces a single string, and `decode(str)` that takes that string back to the original list. The round trip must be lossless for any input. A few critical clarifying questions:\"\n\n• What's the character domain of the input strings — ASCII, full Unicode, or arbitrary bytes? This decides what we can use as a delimiter.\n• Can the strings be empty? Can the input list be empty?\n• Is the encoded form constrained — must it be ASCII-printable, or anything goes?\n• Am I optimizing for encode/decode speed, or for the smallest encoded size?",
+        "why": "The character-domain question is the most important one in this whole problem. If the answer is 'arbitrary strings including any Unicode codepoint,' then no single character can serve as a safe delimiter — payloads might contain it. That's the entire motivation for the length-prefix scheme. Confirming it up front turns the rest of the conversation into 'here's why length-prefix is the right answer' rather than 'why didn't you just join with a comma?'"
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the naive solution and walk through why it breaks.",
+        "say": "\"The naive solution is to pick a separator and `join` on it — `strs.join('#')`. Decode would be `str.split('#')`. That works perfectly UNTIL the input contains the separator: `encode(['a', '#b'])` produces `'a##b'`, and `'a##b'.split('#')` gives `['a', '', 'b']` — three elements, not two. The round trip is broken.\"\n\n\"You could try escaping — replace `'#'` in payloads with `'\\\\#'` and unescape on decode — but now you've got escape rules to track, and you have to escape the escape character too. It's brittle.\"\n\n\"The clean fix is to make the encoding self-describing: instead of relying on a delimiter to find the boundary, prefix each payload with its length. Then the decoder doesn't need to scan for a delimiter inside the payload at all — it reads the length, jumps that far, and lands on the next header.\"",
+        "why": "This is the unusual case where the brute force ISN'T O(n²) — it's the wrong solution, period. Walking through how `split('#')` breaks with a concrete payload (`'#b'`) is the move that earns the length-prefix solution. Saying 'I'd use a length prefix' without first showing why simpler approaches fail is just memorization."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to length-prefix framing?",
+        "say": "\"This is a self-delimiting encoding problem — the structural property is that the encoded form must be unambiguously parseable without external context, and the payload alphabet overlaps with any candidate delimiter alphabet. The classic solution: encode each item as `length` + `delimiter` + `payload`. The length tells the decoder exactly how many bytes to consume for the payload, so the delimiter only needs to separate the length-header from the payload — and the length is digits, which can't collide with the `'#'` separator.\"\n\n\"This is the same trick that powers Pascal strings, network protocols like HTTP's `Content-Length`, and serialization formats like Protobuf and BSON. Length-prefix beats delimiter-scan whenever payloads can be arbitrary.\"",
+        "why": "Naming the encoding pattern AND the structural property — 'self-delimiting framing where payload alphabet overlaps delimiter alphabet' — is what separates this from a memorized template. The comparison to HTTP `Content-Length` and Protobuf is the senior-tier touch: it shows you've seen this problem in production, not just on a problem set."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace a couple of round trips.\" Three cases — a typical two-string input, an empty string in the list (the case that breaks naive delimiter schemes), and a payload containing the delimiter character itself (the case that proves length-prefix earns its keep).",
+        "examples": [
+          {
+            "input": "[\"hello\",\"world\"]",
+            "output": "[\"hello\",\"world\"]",
+            "note": "Typical case. Encoded form is `5#hello5#world`.",
+            "trace": "ENCODE:\ns=\"hello\" (len 5) → out += \"5#hello\" → out=\"5#hello\"\ns=\"world\" (len 5) → out += \"5#world\" → out=\"5#hello5#world\"\nDECODE str=\"5#hello5#world\":\ni=0: scan to '#' at j=1. len=Number(\"5\")=5. payload=str.slice(2,7)=\"hello\". push. i=j+1+len=1+1+5=7\ni=7: scan to '#' at j=8. len=Number(\"5\")=5. payload=str.slice(9,14)=\"world\". push. i=8+1+5=14\nreturn [\"hello\",\"world\"] ✓"
+          },
+          {
+            "input": "[\"\"]",
+            "output": "[\"\"]",
+            "note": "Empty string — encodes as `0#`, decodes back to `[\"\"]`. Naive `split(',')` could lose this case entirely.",
+            "trace": "ENCODE:\ns=\"\" (len 0) → out += \"0#\" → out=\"0#\"\nDECODE str=\"0#\":\ni=0: scan to '#' at j=1. len=Number(\"0\")=0. payload=str.slice(2,2)=\"\". push. i=1+1+0=2\nloop ends (i=2=str.length)\nreturn [\"\"] ✓"
+          },
+          {
+            "input": "[\"a\",\"#b\",\"c\"]",
+            "output": "[\"a\",\"#b\",\"c\"]",
+            "note": "Payload contains '#' itself — this is the case that proves length-prefix beats delimiter-scan. Notice we never try to interpret the '#' inside `#b` as a delimiter.",
+            "trace": "ENCODE:\ns=\"a\" (len 1) → out=\"1#a\"\ns=\"#b\" (len 2) → out=\"1#a2##b\"\ns=\"c\" (len 1) → out=\"1#a2##b1#c\"\nDECODE str=\"1#a2##b1#c\":\ni=0: scan to '#' at j=1. len=1. payload=str.slice(2,3)=\"a\". push. i=3\ni=3: scan to '#' at j=4. len=2. payload=str.slice(5,7)=\"#b\". push. i=7  ← length-prefix consumed the '#' as payload, NOT delimiter\ni=7: scan to '#' at j=8. len=1. payload=str.slice(9,10)=\"c\". push. i=10\nreturn [\"a\",\"#b\",\"c\"] ✓"
+          }
+        ],
+        "why": "The third example is the one to mention out loud — it's the case that justifies the entire design. The trace shows the decoder NEVER mistakes the `'#'` inside `'#b'` for a delimiter, because once it's read length=2 it just consumes 2 chars of payload mechanically. The empty-string case is also worth narrating; many candidates' first instinct is to filter empties out, which breaks lossless round-tripping."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty list `[]` → encodes to `\"\"`, decodes back to `[]` (the while loop never enters).\n• List with empty strings (`[\"\"]`, `[\"\", \"\"]`) → encodes as `0#`, `0#0#`. Length-prefix handles them cleanly.\n• Payload containing `'#'` → handled because we scan to the FIRST `'#'` per header, not any `'#'`.\n• Payload containing digits at the front → no problem, because the digits BEFORE the first `'#'` are unambiguously the header.\n• Very long payload → string concatenation in encode is technically O(n²) on some engines; for production you'd use an array + join at the end. Not usually an issue in practice for V8.\n• Unicode/emoji → `s.length` returns UTF-16 code units, not codepoints. A single emoji counts as length 2. As long as encode and decode both use `.length` and `.slice`, the round trip is still correct — both sides agree on the unit. But if someone consumes the encoded form by codepoint count, they'd be off.",
+        "why": "The Unicode call-out is the senior-tier touch — `.length` and `.slice` are consistent (both UTF-16 units) so the round trip is correct internally, but the encoded form is undefined behavior if a *different* system tries to parse it counting codepoints. That kind of cross-system reasoning is what separates implementations from production code. The O(n²) string-concat note also shows depth — knowing that the canonical might not be optimal at scale."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(N) where N is the total character count across all input strings. Encode does one pass with O(1) per char (modulo string-concat caveats above). Decode does one pass with O(1) per char — the inner while that scans for `'#'` looks like it could be O(k²), but each character is visited at most twice (once by the scan, once by the slice), so the amortized cost is O(N) total.\n\nSpace is O(N) — the encoded string and the decoded list both hold the same total character payload.\n\nIf you wanted to extend this: the same length-prefix framing scales to nested structures (encode a list of lists by recursively prefixing). For binary data, you'd swap the digit-header for a fixed-width 4-byte big-endian length, which is what most network protocols actually do. Same template — self-delimiting via explicit length — at every scale.\"",
+        "why": "The amortization defense for the decode's nested while loop is the move — without it, an interviewer might press you on 'isn't that nested?' The recursive-nested and binary-protocol extensions show you see this as a *template*, which is the truth: every serialization format in production uses some flavor of length-prefix or escape-and-delimit, and length-prefix wins for anything where the payload alphabet isn't restricted. That's the senior-track wrap-up."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a round trip — encode the input list, then decode the result. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[\"hello\",\"world\"] → round-trip", "input": ["hello", "world"], "expected": "[\"hello\",\"world\"]" },
+      { "label": "[\"\"] → round-trip (empty string)", "input": [""], "expected": "[\"\"]" },
+      { "label": "[\"a\",\"#b\",\"c\"] → round-trip (payload contains '#')", "input": ["a", "#b", "c"], "expected": "[\"a\",\"#b\",\"c\"]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const strs = input;",
+      "  yield { line: 1, label: `enter encode — strs=${JSON.stringify(strs)}`, state: { strs } };",
+      "  let out = '';",
+      "  yield { line: 2, label: 'init out = \"\"', state: { strs, out } };",
+      "  let ei = 0;",
+      "  for (const s of strs) {",
+      "    yield { line: 4, label: `encode step: ei=${ei}, s=\"${s}\" (len ${s.length})`, state: { strs, out, ei, s } };",
+      "    out += s.length + '#' + s;",
+      "    yield { line: 4, label: `out += '${s.length}#${s}' → out=\"${out}\"`, state: { strs, out, ei, s } };",
+      "    ei++;",
+      "  }",
+      "  yield { line: 5, label: `encode returns out=\"${out}\"`, state: { strs, out } };",
+      "  const str = out;",
+      "  yield { line: 7, label: `enter decode — str=\"${str}\"`, state: { strs, str } };",
+      "  const res = [];",
+      "  yield { line: 8, label: 'init res = []', state: { strs, str, res: [...res] } };",
+      "  let i = 0;",
+      "  yield { line: 9, label: 'init i = 0', state: { strs, str, res: [...res], i } };",
+      "  while (i < str.length) {",
+      "    yield { line: 10, label: `outer while: i=${i} < ${str.length}`, state: { strs, str, res: [...res], i } };",
+      "    let j = i;",
+      "    yield { line: 11, label: `init j = i = ${j}`, state: { strs, str, res: [...res], i, j } };",
+      "    while (str[j] !== '#') {",
+      "      j++;",
+      "      yield { line: 12, label: `str[${j-1}]='${str[j-1]}' ≠ '#' — advance to j=${j}`, state: { strs, str, res: [...res], i, j } };",
+      "    }",
+      "    yield { line: 12, label: `str[${j}]='#' — delimiter found at j=${j}`, state: { strs, str, res: [...res], i, j } };",
+      "    const len = Number(str.slice(i, j));",
+      "    yield { line: 14, label: `len = Number(str.slice(${i}, ${j})) = Number(\"${str.slice(i, j)}\") = ${len}`, state: { strs, str, res: [...res], i, j, len } };",
+      "    const payload = str.slice(j + 1, j + 1 + len);",
+      "    res.push(payload);",
+      "    yield { line: 15, label: `res.push(str.slice(${j+1}, ${j+1+len})) = res.push(\"${payload}\")`, state: { strs, str, res: [...res], i, j, len } };",
+      "    i = j + 1 + len;",
+      "    yield { line: 17, label: `i = j + 1 + len = ${j} + 1 + ${len} = ${i}`, state: { strs, str, res: [...res], i, j, len } };",
+      "  }",
+      "  yield { line: 19, label: `decode returns ${JSON.stringify(res)}`, state: { strs, str, res: [...res], returns: JSON.stringify(res) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function encode(strs) {\n  let out = \"\";\n  // Length-prefix is delimiter-safe — payload may contain '#' itself.\n  for (const s of strs) out += s.length + \"#\" + s;\n  return out;\n}\nfunction decode(str) {\n  const res = [];\n  let i = 0;\n  while (i < str.length) {\n    let j = i;\n    while (str[j] !== \"#\") j++;            // find delimiter\n    // Header is the digits in [i, j); the '#' lives at j.\n    const len = Number(str.slice(i, j));\n    res.push(str.slice(j + 1, j + 1 + len));\n    // Jump past '#' (1) + payload (len) to land on next header.\n    i = j + 1 + len;\n  }\n  return res;\n}\n// Time O(N) total chars, Space O(N).",
     "notes": [

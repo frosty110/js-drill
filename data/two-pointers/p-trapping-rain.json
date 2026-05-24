@@ -6,6 +6,109 @@
   "status": "full",
   "description": "Total water trapped above a height array. Two pointers march inward; the shorter side fixes the water level on that column.",
   "mechanics": ["two-pointer"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: each entry in `height` is a 1-unit-wide vertical bar at that index. After rain, water collects on top of bars wherever there's a 'basin' — a low spot with taller bars on both sides. I return the total trapped water across all columns. So for `[0,1,0,2,1,0,1,3,2,1,2,1]` the answer is 6 units.\"\n\nThen a few quick clarifying questions:\n• Heights all non-negative? (0 is a flat ground tile.)\n• `height.length` could be 0 or 1, right? (Can't trap water with fewer than 3 bars.)\n• Total water as a single number, not per-column?\n• Any upper bound on heights? (Affects integer-overflow concern, though in JS we have a wide safe-int range.)",
+        "why": "The mental model — 'water sits above column `i` up to `min(leftMax, rightMax) - height[i]`' — is unambiguous once you state it, but ambiguous if you don't. Some candidates conflate this with Container With Most Water (which is between two chosen walls, not above a histogram). The restatement prevents that misread."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"The brute force is column-by-column: for each index `i`, scan left to find `leftMax[i]` (the tallest bar at or before `i`), scan right to find `rightMax[i]`, then add `min(leftMax, rightMax) - height[i]` to the total. That's O(n²) — n columns times an O(n) scan each side.\n\nThe first natural optimization is to precompute two arrays — `leftMax[]` and `rightMax[]` — in two linear passes, then do a third pass adding `min(leftMax[i], rightMax[i]) - height[i]` per column. That's O(n) time but O(n) extra space.\n\nThe two-pointer version drops the precompute by maintaining running `lMax` and `rMax` as we walk inward — O(n) time, O(1) extra space.\"",
+        "why": "Two reasons to walk all three. (1) The precompute-arrays version is a perfectly good interview answer and many candidates stop there — naming it shows you know it, then upgrading to two-pointer shows you can go further. (2) The two-pointer version is the kind of optimization that looks like magic if you skip the intermediate step; framing it as 'same accumulator, but maintain the maxes incrementally instead of precomputing' makes the leap intuitive."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to two pointers + running maxes?",
+        "say": "\"The core formula is `water[i] = min(leftMax, rightMax) - height[i]`, summed over all `i`. The key insight: I don't actually need *both* maxes' exact values at every step. I only need the smaller of the two, because that's the binding constraint. Here's the move: with `l` and `r` walking inward, if `height[l] < height[r]`, then I know the running `lMax` (built only from positions ≤ `l`) is strictly less than `rMax` (which is at least `height[r]`) — because `lMax` includes `height[l]` and `height[r] > height[l]`. So `lMax` IS the binding constraint at column `l`, and I can safely settle column `l` using `lMax - height[l]` and advance `l`. Symmetrically when `height[r] ≤ height[l]`. Two pointers + running maxes from each side — O(n) time, O(1) space.\n\nThe `min(lMax, rMax)` is replaced by 'whichever side's running max is provably smaller' — which is the side I'm advancing.\"",
+        "why": "This is one of the harder pattern derivations in the catalog because the correctness argument is subtle — the fact that 'the running max on the shorter side IS the binding constraint' isn't obvious until you trace it. Spelling out the inequality chain ('lMax ≤ height[l] in the future direction is irrelevant; lMax already exists from positions ≤ l, and height[r] > height[l] guarantees rMax > lMax') is exactly the rigor that distinguishes a genuine derivation from a memorized rule."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — the canonical mixed terrain, a sharp single-basin case, and a flat case to confirm we return 0.",
+        "examples": [
+          {
+            "input": "[0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]",
+            "output": "6",
+            "note": "Canonical case — multiple basins, the two pointers alternate sides as they walk in.",
+            "trace": "init l=0 r=11 lMax=0 rMax=0 water=0\nl=0 r=11: h[0]=0 < h[11]=1, settle left. lMax=max(0,0)=0. water += 0-0 = 0. l=1\nl=1 r=11: h[1]=1 ≥ h[11]=1, settle right. rMax=max(0,1)=1. water += 1-1 = 0. r=10\nl=1 r=10: h[1]=1 < h[10]=2, settle left. lMax=max(0,1)=1. water += 1-1 = 0. l=2\nl=2 r=10: h[2]=0 < h[10]=2, settle left. lMax=max(1,0)=1. water += 1-0 = 1 → water=1. l=3\nl=3 r=10: h[3]=2 ≥ h[10]=2, settle right. rMax=max(1,2)=2. water += 2-2 = 0. r=9\nl=3 r=9: h[3]=2 ≥ h[9]=1, settle right. rMax=max(2,1)=2. water += 2-1 = 1 → water=2. r=8\nl=3 r=8: h[3]=2 ≥ h[8]=2, settle right. rMax=max(2,2)=2. water += 2-2 = 0. r=7\nl=3 r=7: h[3]=2 < h[7]=3, settle left. lMax=max(1,2)=2. water += 2-2 = 0. l=4\nl=4 r=7: h[4]=1 < h[7]=3, settle left. lMax=max(2,1)=2. water += 2-1 = 1 → water=3. l=5\nl=5 r=7: h[5]=0 < h[7]=3, settle left. lMax=max(2,0)=2. water += 2-0 = 2 → water=5. l=6\nl=6 r=7: h[6]=1 < h[7]=3, settle left. lMax=max(2,1)=2. water += 2-1 = 1 → water=6. l=7\nl<r false (7<7), exit. return 6"
+          },
+          {
+            "input": "[4, 2, 0, 3, 2, 5]",
+            "output": "9",
+            "note": "Asymmetric — the global max is on the right (5), but the algorithm advances from the smaller side and accumulates correctly without needing to know that in advance.",
+            "trace": "init l=0 r=5 lMax=0 rMax=0 water=0\nl=0 r=5: h[0]=4 < h[5]=5, settle left. lMax=max(0,4)=4. water += 4-4 = 0. l=1\nl=1 r=5: h[1]=2 < h[5]=5, settle left. lMax=max(4,2)=4. water += 4-2 = 2 → water=2. l=2\nl=2 r=5: h[2]=0 < h[5]=5, settle left. lMax=max(4,0)=4. water += 4-0 = 4 → water=6. l=3\nl=3 r=5: h[3]=3 < h[5]=5, settle left. lMax=max(4,3)=4. water += 4-3 = 1 → water=7. l=4\nl=4 r=5: h[4]=2 < h[5]=5, settle left. lMax=max(4,2)=4. water += 4-2 = 2 → water=9. l=5\nl<r false, exit. return 9"
+          },
+          {
+            "input": "[3, 3, 3]",
+            "output": "0",
+            "note": "Flat case — no basin can form, water=0. Equal heights take the else branch and r marches in.",
+            "trace": "init l=0 r=2 lMax=0 rMax=0 water=0\nl=0 r=2: h[0]=3 ≥ h[2]=3, settle right. rMax=max(0,3)=3. water += 3-3 = 0. r=1\nl=0 r=1: h[0]=3 ≥ h[1]=3, settle right. rMax=max(3,3)=3. water += 3-3 = 0. r=0\nl<r false (0<0), exit. return 0"
+          }
+        ],
+        "why": "Two things the trace makes concrete. (1) The 'update max BEFORE adding water' discipline — on the first iteration of any side, the running max is 0 and `height` could equal the new max; if you added water first and then updated, you'd subtract a stale max. The trace shows `lMax = max(lMax, height[l])` always happens first, and the subsequent `lMax - height[l]` is always non-negative. (2) The `[4,2,0,3,2,5]` case shows the two-pointer doesn't need to know in advance which side holds the global max — it just keeps settling the smaller side, and the invariant guarantees correctness."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• `[]` or single element `[5]` → `r = length - 1` is -1 or 0, `l < r` is false at entry, water=0. ✓\n• Two elements `[5, 5]` → loop runs once, settles right, adds 0, exits. water=0 (no basin possible with 2 bars).\n• Flat array `[3,3,3,3]` → no basin, water=0. Trace shows every iteration adds 0.\n• Monotone increasing `[1,2,3,4,5]` → no water can be trapped (no right wall higher than the increasing side). The algorithm always settles left (since `h[l] < h[r]` for every step), adds `lMax - h[l]` which is 0 each time because `lMax === h[l]` after the update.\n• Monotone decreasing `[5,4,3,2,1]` → same logic, mirror image, water=0.\n• A bar taller than any context `[0,5,0]` → lMax/rMax both eventually hit 5, the 0 in the middle gets water += 5-0 = 5. ✓\n• All zeros `[0,0,0,0]` → water=0 trivially, no actual basin.\n• Heights that pile high without an opposing wall `[5,0,0,0]` → no right wall to trap, water=0; the algorithm advances from the right side adding 0 each time.\"",
+        "why": "The monotone cases are the ones that look like they 'should' trap water (a wall exists on one side!) but don't, because trapping requires a higher bar on BOTH sides. Naming why the algorithm correctly returns 0 — `lMax === h[l]` after the update so the contribution is 0 — confirms you understand the invariant rather than memorizing 'monotone returns 0'."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n). Each iteration advances exactly one of `l` or `r`, never both, never neither. They start `n-1` apart and meet, so total iterations is `n - 1`. Each iteration is O(1) — a compare, a max, a subtract, an add, a pointer move.\n\nSpace is O(1). Four scalars: `l`, `r`, `lMax`, `rMax`, plus the `water` accumulator. No precomputed arrays, no stack, no hash. This is the win over the precompute-arrays version (which is also O(n) time but O(n) space).\n\nThe correctness defense is the invariant: at any iteration where `height[l] < height[r]`, the running `lMax` is provably the smaller of the two true maxes, because `rMax ≥ height[r] > height[l]` and `lMax` already includes `height[l]`. So settling column `l` with `lMax - height[l]` gives exactly the right water amount for that column. Symmetric on the other side.\n\nIf you wanted related problems: there's a stack-based O(n) version that processes water 'horizontally' — every time you encounter a bar that's taller than the top of stack, you pop and compute the rectangle of water trapped at that level. Same total complexity, different mental model. Container With Most Water is the sister problem on the same `height` array shape but a different question (max area between two chosen walls instead of water above a histogram).\"",
+        "why": "Calling out the O(1) space win unprompted is the move — both the precompute-arrays version and this version are O(n) time, but the space difference is what makes this the preferred answer for an interviewer. The stack-based variant proves you see that 'trap water above a histogram' has a family of solutions, and the Container With Most Water callout flags the family connection that interviewers often probe for ('have you seen another problem with this shape?')."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical solution one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[0,1,0,2,1,0,1,3,2,1,2,1] → 6", "input": [0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1], "expected": 6 },
+      { "label": "[4,2,0,3,2,5] → 9",              "input": [4, 2, 0, 3, 2, 5],                  "expected": 9 },
+      { "label": "[3,3,3] → 0 (flat, no trap)",    "input": [3, 3, 3],                           "expected": 0 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const height = input.slice();",
+      "  yield { line: 1, label: `enter function — height=${JSON.stringify(height)}`, state: { height: [...height] } };",
+      "  let l = 0, r = height.length - 1;",
+      "  yield { line: 2, label: `init l=0, r=${r}`, state: { height: [...height], l, r } };",
+      "  let lMax = 0, rMax = 0, water = 0;",
+      "  yield { line: 4, label: 'init lMax=0, rMax=0, water=0', state: { height: [...height], l, r, lMax, rMax, water } };",
+      "  while (l < r) {",
+      "    yield { line: 5, label: `loop check: l=${l} < r=${r} ? true — enter iteration`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "    if (height[l] < height[r]) {",
+      "      yield { line: 7, label: `height[${l}]=${height[l]} < height[${r}]=${height[r]} → left is shorter, settle column l`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "      lMax = Math.max(lMax, height[l]);",
+      "      yield { line: 9, label: `lMax = max(prev_lMax, height[${l}]=${height[l]}) → lMax=${lMax}`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "      const add = lMax - height[l];",
+      "      water += add;",
+      "      yield { line: 10, label: `water += lMax(${lMax}) - height[${l}](${height[l]}) = +${add} → water=${water}`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "      l++;",
+      "      yield { line: 11, label: `l++ → l=${l}`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "    } else {",
+      "      yield { line: 12, label: `height[${l}]=${height[l]} ≥ height[${r}]=${height[r]} → right is shorter/equal, settle column r`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "      rMax = Math.max(rMax, height[r]);",
+      "      yield { line: 13, label: `rMax = max(prev_rMax, height[${r}]=${height[r]}) → rMax=${rMax}`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "      const add = rMax - height[r];",
+      "      water += add;",
+      "      yield { line: 14, label: `water += rMax(${rMax}) - height[${r}](${height[r]}) = +${add} → water=${water}`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "      r--;",
+      "      yield { line: 15, label: `r-- → r=${r}`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "    }",
+      "  }",
+      "  yield { line: 5, label: `loop check: l=${l} < r=${r} ? false — exit loop`, state: { height: [...height], l, r, lMax, rMax, water } };",
+      "  yield { line: 18, label: `return ${water}`, state: { height: [...height], l, r, lMax, rMax, water, returns: water } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function trap(height) {\n  let l = 0, r = height.length - 1;\n  // Running max on each side — the cap on water level at the inner pointer.\n  let lMax = 0, rMax = 0, water = 0;\n  while (l < r) {\n    if (height[l] < height[r]) {                  // left side is the bottleneck\n      // Update max BEFORE adding water — otherwise lMax - height[l] could go negative.\n      lMax = Math.max(lMax, height[l]);\n      water += lMax - height[l];\n      l++;\n    } else {\n      rMax = Math.max(rMax, height[r]);\n      water += rMax - height[r];\n      r--;\n    }\n  }\n  return water;\n}\n// Time O(n), Space O(1)",
     "notes": [

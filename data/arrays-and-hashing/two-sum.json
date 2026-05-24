@@ -6,6 +6,99 @@
   "status": "full",
   "description": "Find indices of two values that sum to target. The canonical hash-map pattern. O(n).",
   "mechanics": ["hash-complement"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: I'm given an array of integers `nums` and a target. I want to return the indices of the two numbers that add up to `target` — indices, not the values themselves. Quick checks before I code:\"\n\n• Is exactly one solution guaranteed, or could there be zero or multiple?\n• Can I use the same element twice? (i.e. if `nums[3] = 4` and `target = 8`, is `[3,3]` legal?)\n• Are the numbers integers, possibly negative? Any range I should worry about?\n• Does the output order matter — `[i,j]` with `i<j`?",
+        "why": "The 'can I reuse the same element' question is the one that decides the implementation: if reuse is allowed you can do it in one line with a count check, but the standard problem forbids it — which is exactly why we check `seen.has(need)` BEFORE inserting the current element. Confirming the 'exactly one solution' guarantee also tells you whether to return `[]` on miss or whether a miss is impossible by contract."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"The brute force is two nested loops: outer `i` from 0, inner `j` from `i+1`, and check whether `nums[i] + nums[j] === target`. First pair that matches, return `[i, j]`. That's O(n²) time, O(1) extra space — let me see if we can trade space for time.\"",
+        "why": "Saying the brute force out loud does two things. First, it proves you understand the problem before reaching for a clever data structure — interviewers worry about candidates who pattern-match straight to 'hash map' without showing they could solve it the dumb way. Second, it sets up the optimization narratively: 'the inner loop is searching for the complement of `nums[i]` — what if we could look that up in O(1) instead of scanning?' The hash map answers exactly that question, so the leap feels earned rather than memorized."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a hash map?",
+        "say": "\"This is the canonical hash-map-of-complements problem. The signal: for each element I'm asking 'have I seen `target - nums[i]` before?' — that's an O(1) membership-and-retrieval question, and the order of the input doesn't matter. Hash map gives me both. I'll walk the array once, and at each index `i`, before I store `nums[i]`, I check whether its complement is already in the map. If it is, I've got my answer.\"\n\n\"Two subtle choices: value → index (not the reverse), so when the match fires I can return the partner's index; and check-then-set order, so an element doesn't match itself.\"",
+        "why": "Naming the pattern AND the structural property — 'O(1) complement lookup, order doesn't matter' — is what distinguishes derivation from guessing. If the problem said 'find any two elements that sum to target' (values, not indices) you'd still use a hash set; if it said 'find them with the smallest index gap' you'd need a sorted structure; if it said 'find them in a sorted array' you'd switch to two-pointers and skip the hash entirely. Spelling out which property unlocks hash map is what the interviewer is grading."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me run a couple of inputs through the model.\" Three cases cover the interesting behaviors — a typical match-on-the-second-step, an early-match where the complement is already there by the time the loop starts seeing duplicates, and a case where the matching pair contains repeated values (the 'don't match yourself' check earns its keep).",
+        "examples": [
+          {
+            "input": "nums=[2,7,11,15], target=9",
+            "output": "[0,1]",
+            "note": "The textbook case — match on the second iteration.",
+            "trace": "i=0 nums[i]=2  need=7  → seen={} no hit → seen={2:0}\ni=1 nums[i]=7  need=2  → seen has 2! return [seen.get(2), 1] = [0,1] ✓"
+          },
+          {
+            "input": "nums=[3,2,4], target=6",
+            "output": "[1,2]",
+            "note": "Match comes from indices 1 and 2 — proves we don't return [0,0] even though 3+3=6.",
+            "trace": "i=0 nums[i]=3  need=3  → seen={} no hit → seen={3:0}\ni=1 nums[i]=2  need=4  → seen has only 3 → seen={3:0, 2:1}\ni=2 nums[i]=4  need=2  → seen has 2! return [seen.get(2), 2] = [1,2] ✓"
+          },
+          {
+            "input": "nums=[3,2,3], target=6",
+            "output": "[0,2]",
+            "note": "Two 3s in the array, and 3+3=target — this is exactly the case where check-before-set matters.",
+            "trace": "i=0 nums[i]=3  need=3  → seen={} no hit (we DON'T match ourselves) → seen={3:0}\ni=1 nums[i]=2  need=4  → seen={3:0} no hit → seen={3:0, 2:1}\ni=2 nums[i]=3  need=3  → seen has 3! return [seen.get(3), 2] = [0,2] ✓"
+          }
+        ],
+        "why": "The third example is the one to mention out loud — it's why the order is `check → set`, not `set → check`. If you stored `nums[i]` first and then checked, the very first 3 would 'find' itself and you'd return `[0,0]`. Tracing surfaces that bug before code does. The second example is also worth narrating because it shows the complement that wins is the *earlier* one in the array, which is why the map stores value → index rather than the other way."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty or one-element array → loop just doesn't fire; return `[]` (or whatever the contract says on miss).\n• Negative numbers and zero → no special-case logic needed; `target - nums[i]` still works because Map keys handle any number.\n• Duplicate values where the pair *is* the duplicate (like `[3,3]` target=6) → handled by the check-before-set order; we don't match an element with itself.\n• No valid pair → the contract usually promises one exists, but a defensive `return []` after the loop is cheap insurance.\n• Floating-point values → would still work for exact representations, but you'd want to switch to an epsilon comparison if floats are in play. Worth flagging that you'd ask before assuming.",
+        "why": "The 'duplicate values that ARE the pair' edge is the one that catches careless candidates — it's where the seemingly arbitrary 'check-then-set' order turns out to encode a real correctness property. Calling it out unprompted signals that you understand WHY the canonical is structured this way, not just THAT it works. The floating-point flag is the senior-tier touch: most candidates never raise it, and an interviewer either nods or says 'assume integers for now' — both fine."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — one pass over the array, with two O(1) hash operations per element (a `has` and a `set`).\n\nSpace is O(n) — the map holds at most `n` entries (one per index visited before the match). On the very last element, in the worst case, it holds `n-1`.\n\nIf you wanted me to extend this: 3Sum is a clean evolution — sort the array, fix one index `i`, then run a two-pointer sweep on the remaining slice to find pairs that sum to `-nums[i]`. The hash-map template here is the building block; 3Sum just wraps it in an outer loop and trades the map for two pointers because the slice is now sorted.\"",
+        "why": "The amortized defense here is much simpler than for sliding window — there's no nested loop to explain away, just 'each element pays O(1) for two hash ops'. That makes the wrap-up's job structural rather than analytical: show you see this as a *template* (value-keyed map for O(1) complement lookup) that generalizes, not as a one-off trick. Naming 3Sum unprompted is the move that proves transfer."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical Two Sum one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[2,7,11,15] target=9 → [0,1]", "input": { "nums": [2, 7, 11, 15], "target": 9 }, "expected": "[0,1]" },
+      { "label": "[3,2,4] target=6 → [1,2]",    "input": { "nums": [3, 2, 4],     "target": 6 }, "expected": "[1,2]" },
+      { "label": "[3,2,3] target=6 → [0,2]",    "input": { "nums": [3, 2, 3],     "target": 6 }, "expected": "[0,2]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const nums = input.nums;",
+      "  const target = input.target;",
+      "  yield { line: 1, label: `enter function — nums=${JSON.stringify(nums)}, target=${target}`, state: { nums, target } };",
+      "  const seen = new Map();",
+      "  yield { line: 2, label: 'init seen (empty Map: value → index)', state: { nums, target, seen: [] } };",
+      "  for (let i = 0; i < nums.length; i++) {",
+      "    yield { line: 3, label: `outer step: i=${i}, nums[i]=${nums[i]}`, state: { nums, target, seen: [...seen.entries()], i } };",
+      "    const need = target - nums[i];",
+      "    yield { line: 5, label: `compute need = target - nums[i] = ${target} - ${nums[i]} = ${need}`, state: { nums, target, seen: [...seen.entries()], i, need } };",
+      "    if (seen.has(need)) {",
+      "      yield { line: 7, label: `seen.has(${need}) → true (complement found at index ${seen.get(need)})`, state: { nums, target, seen: [...seen.entries()], i, need } };",
+      "      const result = [seen.get(need), i];",
+      "      yield { line: 7, label: `return [seen.get(${need}), ${i}] = ${JSON.stringify(result)}`, state: { nums, target, seen: [...seen.entries()], i, need, returns: JSON.stringify(result) } };",
+      "      return;",
+      "    }",
+      "    yield { line: 7, label: `seen.has(${need}) → false (no complement yet)`, state: { nums, target, seen: [...seen.entries()], i, need } };",
+      "    seen.set(nums[i], i);",
+      "    yield { line: 8, label: `seen.set(${nums[i]}, ${i}) — store value → index`, state: { nums, target, seen: [...seen.entries()], i, need } };",
+      "  }",
+      "  yield { line: 10, label: 'loop ended with no match (canonical falls off the end)', state: { nums, target, seen: [...seen.entries()], returns: undefined } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function twoSum(nums, target) {\n  const seen = new Map();          // value → index\n  for (let i = 0; i < nums.length; i++) {\n    // Complement: the partner value we'd need to hit target.\n    const need = target - nums[i];\n    // Check BEFORE set — prevents matching the current element with itself.\n    if (seen.has(need)) return [seen.get(need), i];\n    seen.set(nums[i], i);\n  }\n}\n// Time O(n), Space O(n)",
     "notes": [

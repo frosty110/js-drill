@@ -6,6 +6,129 @@
   "status": "full",
   "description": "Cart class with add/remove/setQty/total — the canonical Map-keyed-by-name design that every e-commerce interview problem starts from.",
   "mechanics": ["map-keyed-state"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the API surface and the identity rule.",
+        "say": "\"Let me make sure I have this right: I need a Cart class supporting add(item, qty), remove(item), setQty(item, qty), and total(). An 'item' is an object with at least a name and a price. I need to handle the case where the same item is added twice — bump the qty, not duplicate the line.\"\n\nThen a few quick clarifying questions:\n• How are items identified — by name string, by a SKU id, or by object reference? (Almost always name or SKU; reference equality is fragile.)\n• If `setQty(item, 0)` — does the row stay with qty 0, or get removed? (Removed is the standard, but worth confirming.)\n• Are prices integers (cents) or floats (dollars)? (Floats cause floating-point rounding bugs in totals; cents-as-int is the prod-safe answer.)\n• Negative qty — error, no-op, or treat as remove?",
+        "why": "The identity question — by name vs. by reference — is the single biggest gotcha. If you key the cart by object reference, two `{name: 'apple', price: 1}` literals are different keys, and `add(apple); add(apple)` creates two lines. Asking up-front shows you've seen that bug in real code. The 'setQty(0) removes' question is the API quirk most candidates miss; if you don't handle it, the cart shows phantom zero-qty rows forever. Even framing it as a clarification signals you're thinking about the user-facing consequence."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious array-of-lines design before discarding it.",
+        "say": "\"The brute force is: an array of `{item, qty}` line objects. `add` does `lines.find(l => l.item.name === item.name)` — if found, bump qty; else push. `remove` does `lines.findIndex(...)` + `splice`. `setQty` is the same find. `total` is `lines.reduce((s, l) => s + l.item.price * l.qty, 0)`.\n\nThat works. The problem is the find — it's O(n) per operation, so add/remove/setQty are all O(n). For a five-item cart that's fine; for a thousand-item cart (think bulk B2B order) it stops being fine fast. The fix is to swap the array for a Map keyed by `item.name`. Map.get is O(1), so add/remove/setQty all drop to O(1). Total is still O(n) because we have to visit every line — that's unavoidable.\"",
+        "why": "Naming the array version explicitly is what shows you understand the tradeoff. The Map-keyed version reads as 'obvious' only AFTER you've named the O(n)-find problem it solves. Without that framing, an interviewer might think you're just reaching for a Map because Maps feel fancier — and that's a yellow flag. Saying 'array.find is O(n) per op, Map.get is O(1)' is the actual reason, and stating the reason matters more than picking the right structure."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the data structure, and what invariants does it enforce?",
+        "say": "\"The data structure is a Map keyed by `item.name` (or SKU id), with values shaped `{item, qty}`. Two invariants tie the whole API together. (1) Each item.name maps to AT MOST ONE line — `add` of an existing item bumps qty rather than creating a second entry. That's what 'merge duplicates' means in cart-speak. (2) qty is always > 0 in stored lines — `setQty(item, 0)` removes, not zero-out. Otherwise the cart shows phantom rows the user can't get rid of.\n\nGiven those invariants, `total` is just a reduce over `lines.values()` — `values()` is critical, not `keys()`, because we need the `{item, qty}` records, not the name strings. The Map's insertion order means iteration is stable, so the line ordering in the cart is whatever order the user added items — usually the desired UX.\"",
+        "why": "Naming both invariants is the move. 'Use a Map' alone is a guess; 'Map with two invariants — one-line-per-item, qty>0' is the design. The values()-vs-keys() callout is the load-bearing implementation detail — if you wrote `for (const x of this.lines)` you'd get [name, record] pairs (the default Map iterator), which works but means destructuring twice. Using `.values()` and destructuring `{item, qty}` directly is cleaner and shows you've used Maps enough to know the iterator shapes."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few operation sequences to confirm the model — especially the dedup and setQty(0) cases.",
+        "intro": "\"Let me trace three sequences. Each shows the lines Map (as [name, {price, qty}] pairs) after each op, with the results list collecting every total() output. The first example covers all four operations including the setQty(0)→remove case. The second isolates that quirk. The third checks the empty-cart edge.\"",
+        "examples": [
+          {
+            "input": "add 2 apple($1), add 1 bread($3), total, add 1 apple, total, setQty(apple,5), total, remove(bread), total, setQty(apple,0), total",
+            "output": "[5,6,8,5,0]",
+            "note": "Canonical case — exercises every API method. The second `add apple` bumps qty to 3 instead of creating a duplicate line. setQty(apple, 0) removes apple entirely, leaving an empty cart.",
+            "trace": "init lines = empty Map\nadd(apple,2)   → lines={apple:{$1,qty:2}}\nadd(bread,1)   → lines={apple:{$1,qty:2}, bread:{$3,qty:1}}\ntotal          → 1*2 + 3*1 = 5    results=[5]\nadd(apple)     → existing line, qty 2→3 → lines={apple:{$1,qty:3}, bread:{$3,qty:1}}\ntotal          → 1*3 + 3*1 = 6    results=[5,6]\nsetQty(apple,5)→ lines={apple:{$1,qty:5}, bread:{$3,qty:1}}\ntotal          → 1*5 + 3*1 = 8    results=[5,6,8]\nremove(bread)  → lines={apple:{$1,qty:5}}\ntotal          → 1*5 = 5         results=[5,6,8,5]\nsetQty(apple,0)→ qty<=0 → remove → lines={}\ntotal          → 0                results=[5,6,8,5,0]\nreturn [5,6,8,5,0]"
+          },
+          {
+            "input": "add 1 milk($2), total, setQty(milk,0), total",
+            "output": "[2,0]",
+            "note": "Isolates the setQty(0)→remove rule. After setQty(milk, 0) the cart is empty, not 'one milk line with qty 0'. Total reflects empty.",
+            "trace": "init lines = empty Map\nadd(milk,1)    → lines={milk:{$2,qty:1}}\ntotal          → 2*1 = 2          results=[2]\nsetQty(milk,0) → qty<=0 → remove → lines={}\ntotal          → 0                results=[2,0]\nreturn [2,0]"
+          },
+          {
+            "input": "total (empty), add 3 egg($1), total, setQty(egg,1), total",
+            "output": "[0,3,1]",
+            "note": "Empty-cart total is 0 (reduce over empty iterator). setQty replaces the qty rather than incrementing — 3 → 1, not 3 → 4.",
+            "trace": "init lines = empty Map\ntotal          → 0 (no lines)     results=[0]\nadd(egg,3)     → lines={egg:{$1,qty:3}}\ntotal          → 1*3 = 3          results=[0,3]\nsetQty(egg,1)  → replaces qty 3→1 → lines={egg:{$1,qty:1}}\ntotal          → 1*1 = 1          results=[0,3,1]\nreturn [0,3,1]"
+          }
+        ],
+        "why": "The first trace catches the dedup bug: if `add` doesn't check for an existing line, the second `add apple` would create a second {apple, qty:1} entry — and Map.set on an existing key would just overwrite to qty:1, dropping the original 2. The merge-into-existing logic is the single line that prevents that. The third example catches the setQty-vs-add confusion: setQty REPLACES the quantity, it doesn't add to it. Candidates who pattern-match 'increment' on every cart op ship this bug routinely."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• add(item) with no qty → default to 1 via the parameter default. Caller should be able to write `cart.add(apple)` and get one of them.\n• add an item already in the cart → bump qty, don't duplicate. The trace above demonstrates this.\n• setQty(item, 0) → remove, not store-with-zero. The standard cart UX expectation.\n• setQty(item, -3) → also remove (qty <= 0 catches both). Don't store negative qty, don't throw.\n• setQty for an item NOT in the cart → no-op. The user can't `setQty` something they haven't added — don't auto-insert with a fake price.\n• remove for an item not in cart → Map.delete returns false silently, so it's a no-op. Don't throw.\n• total() on empty cart → 0 (reduce starts at 0).\n• Floating-point prices — `0.1 + 0.2` is `0.30000000000000004`. In real prod code, prices live in cents (int) and the display layer formats. In interview scope, the prompt usually uses whole-dollar prices so it doesn't bite.\n• Concurrent updates from two browser tabs — out of scope here, but in real code the cart needs server-side reconciliation or last-write-wins.\"",
+        "why": "The setQty-on-missing-item case (no-op vs. auto-insert) is the design call most candidates skip past — naming it shows you've thought about API contracts beyond 'works in the happy path'. The floating-point bullet is the production-savvy flag; senior interviewers immediately know you've worked on real e-commerce code if you mention cents-as-int unprompted. It's the kind of edge that doesn't show up in algorithmic prep but absolutely shows up in customer support tickets."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity and place this design?",
+        "say": "\"Time: add/remove/setQty are O(1) — each is one Map.get plus one Map.set or Map.delete. No iteration. total() is O(n) in the number of unique line items — we have to visit each line to compute price × qty, no shortcut. If we wanted O(1) total, we'd maintain a running subtotal field on every add/setQty/remove — the speedup is real but it adds an invariant (`this.subtotal` must always equal `sum(lines)`) that's easy to get wrong on one of the API methods. I'd start with the O(n) total and only cache if profiling shows it's hot.\n\nSpace: O(n) where n is the number of unique line items. The Map's overhead is small; the only thing that grows is the entries themselves.\n\nThe 'map keyed by canonical identity' design is the same shape that powers a session store keyed by session-id, a friendslist keyed by user-id, a routing table keyed by URL pattern. Any time you have a collection of records where you need O(1) lookup-by-id AND ordered iteration, Map (not plain Object) is the right tool — Maps preserve insertion order, allow non-string keys, and have a saner API. An LRU cache adds an eviction list on top of this; a versioned-cart adds a change history; the core CRUD-by-key shape stays the same.\"",
+        "why": "Naming when to add the subtotal cache (only after profiling) is the senior-engineer move — most candidates either ship it preemptively (and ship the invariant bug) or never mention it. The Map-vs-Object aside is the JS-specific knowledge that separates 'I write JS' from 'I know JS' — Object key coercion (everything becomes a string), no insertion-order guarantee on numeric-looking keys, no .size, are the gotchas that make Object the wrong choice here even though it's syntactically lighter."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of Cart operations. Each example is an op list — add/remove/setQty/total. The state panel shows the `lines` Map (as [name, {price, qty}] pairs) after each op. The trace collects every total() result into a `results` array so you can verify price × qty math after each change.",
+    "examples": [
+      { "label": "add 2 apple($1), add bread($3) → total 5; add 1 apple → 6; setQty(apple,5) → 8; remove(bread) → 5; setQty(apple,0) → 0", "input": [ { "op": "add", "name": "apple", "price": 1, "qty": 2 }, { "op": "add", "name": "bread", "price": 3 }, { "op": "total" }, { "op": "add", "name": "apple", "price": 1 }, { "op": "total" }, { "op": "setQty", "name": "apple", "qty": 5 }, { "op": "total" }, { "op": "remove", "name": "bread" }, { "op": "total" }, { "op": "setQty", "name": "apple", "qty": 0 }, { "op": "total" } ], "expected": "[5,6,8,5,0]" },
+      { "label": "add 1 milk($2); total → 2; setQty(milk,0) removes → total 0", "input": [ { "op": "add", "name": "milk", "price": 2 }, { "op": "total" }, { "op": "setQty", "name": "milk", "qty": 0 }, { "op": "total" } ], "expected": "[2,0]" },
+      { "label": "empty total → 0; add 3 egg($1); total → 3; setQty(egg,1) → 1", "input": [ { "op": "total" }, { "op": "add", "name": "egg", "price": 1, "qty": 3 }, { "op": "total" }, { "op": "setQty", "name": "egg", "qty": 1 }, { "op": "total" } ], "expected": "[0,3,1]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  const lines = new Map();",
+      "  const results = [];",
+      "  const snap = () => [...lines.entries()].map(([k, v]) => [k, { price: v.item.price, qty: v.qty }]);",
+      "  yield { line: 3, label: 'new Cart() — lines = empty Map', state: { ops, lines: snap(), results: [] } };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const o = ops[k];",
+      "    if (o.op === 'add') {",
+      "      const item = { name: o.name, price: o.price };",
+      "      const qty = o.qty == null ? 1 : o.qty;",
+      "      yield { line: 5, label: 'op#' + k + ': add(' + o.name + ' $' + o.price + ', qty=' + qty + ')', state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "      const existing = lines.get(item.name);",
+      "      yield { line: 6, label: existing ? 'existing line found: qty=' + existing.qty + ' → bump' : 'no existing line — insert new', state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "      if (existing) {",
+      "        existing.qty += qty;",
+      "        yield { line: 7, label: existing.item.name + '.qty += ' + qty + ' → qty=' + existing.qty, state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "      } else {",
+      "        lines.set(item.name, { item, qty });",
+      "        yield { line: 8, label: 'lines.set(\"' + item.name + '\", { item, qty: ' + qty + ' })', state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "      }",
+      "    } else if (o.op === 'remove') {",
+      "      yield { line: 11, label: 'op#' + k + ': remove(' + o.name + ')', state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "      lines.delete(o.name);",
+      "      yield { line: 11, label: 'lines.delete(\"' + o.name + '\") → lines=' + JSON.stringify(snap()), state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "    } else if (o.op === 'setQty') {",
+      "      yield { line: 12, label: 'op#' + k + ': setQty(' + o.name + ', ' + o.qty + ')', state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "      if (o.qty <= 0) {",
+      "        lines.delete(o.name);",
+      "        yield { line: 14, label: 'qty<=0 → remove(' + o.name + ') instead of zero-qty row', state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "      } else {",
+      "        const line = lines.get(o.name);",
+      "        if (line) {",
+      "          line.qty = o.qty;",
+      "          yield { line: 16, label: o.name + '.qty = ' + o.qty, state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "        } else {",
+      "          yield { line: 16, label: 'no line for ' + o.name + ' — no-op', state: { ops, lines: snap(), results: [...results], op: o.op } };",
+      "        }",
+      "      }",
+      "    } else if (o.op === 'total') {",
+      "      let sum = 0;",
+      "      const parts = [];",
+      "      for (const { item, qty } of lines.values()) {",
+      "        sum += item.price * qty;",
+      "        parts.push(item.name + ':' + item.price + '*' + qty);",
+      "      }",
+      "      results.push(sum);",
+      "      yield { line: 20, label: 'op#' + k + ': total() = ' + (parts.length ? parts.join(' + ') + ' = ' : '') + sum, state: { ops, lines: snap(), results: [...results], op: o.op, sum } };",
+      "    }",
+      "  }",
+      "  yield { line: 23, label: 'all ops processed — totals=' + JSON.stringify(results), state: { ops, lines: snap(), results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class Cart {\n  constructor() {\n    // Map keyed by item.name — O(1) add/remove/setQty vs O(n) array.find.\n    this.lines = new Map();\n  }\n  add(item, qty = 1) {\n    const line = this.lines.get(item.name);\n    // Existing item: bump qty rather than duplicate the line (easy bug to ship).\n    if (line) line.qty += qty;\n    else this.lines.set(item.name, { item, qty });\n  }\n  remove(item) { this.lines.delete(item.name); }\n  setQty(item, qty) {\n    // qty <= 0 == remove. No phantom zero-qty rows.\n    if (qty <= 0) return this.remove(item);\n    const line = this.lines.get(item.name);\n    if (line) line.qty = qty;\n  }\n  total() {\n    let sum = 0;\n    // values() yields {item, qty} records; keys() would only give names.\n    for (const { item, qty } of this.lines.values()) sum += item.price * qty;\n    return sum;\n  }\n  items() { return [...this.lines.values()]; }\n}",
     "notes": [

@@ -5,6 +5,128 @@
   "track": "patterns",
   "status": "full",
   "description": "If a cell is 0, zero its entire row and column — in place, with O(1) extra space, by using the first row and column as flag arrays.",
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: I'm given an m×n matrix; if any cell is 0, I need to zero out its entire row and column. In place. And the bonus version asks for O(1) extra space — not O(m + n).\"\n\nThen a few quick clarifying questions:\n• In place means mutate the input — no return value, just side effect, right?\n• Space target — O(m + n) with separate flag arrays is easy; the interesting version is O(1) extra. Which are you asking for?\n• Are zeros that *result* from the wipe themselves triggers? (Important: no — only the *original* zeros trigger.)\n• Can m or n be 0?",
+        "why": "The 'result zeros don't trigger' question is the load-bearing clarification. A naive 'scan, find a zero, wipe row + col' loop will cascade: the zeros it writes become triggers on the next scan, and you wipe the whole matrix. Confirming that only the originals trigger forces a two-pass design (mark, then act) — which is the door to the O(1) solution. The space-target question signals you noticed there's a tiered version of the problem; interviewers often start with O(m + n) and push to O(1)."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(m + n)-space solution before you discard it.",
+        "say": "\"The brute force is: allocate two boolean arrays — `rows` of length m and `cols` of length n. First pass: scan the matrix, and whenever `matrix[i][j] === 0`, set `rows[i] = true` and `cols[j] = true`. Second pass: walk every cell; if `rows[i] || cols[j]`, write 0. O(m*n) time, O(m + n) space.\n\nThe two-pass structure is non-negotiable — if you wipe inline during the first pass, the zeros you write trigger more wipes and you destroy the matrix. Two passes separates *detection* from *action*.\"",
+        "why": "Two reasons to name it. (1) The two-pass structure (mark, then act) is the same structure the O(1) solution uses — we're just going to be smarter about *where* the marks live. (2) Explicitly calling out the 'inline wipe poisons the next iteration' trap shows you saw why two passes are needed before the interviewer asks. That's a free signal that you understand the algorithm, not just the recipe."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What's the trick that gets us from O(m + n) to O(1)?",
+        "say": "\"The insight is: I already have m + n free booleans sitting right there in the matrix — row 0 and column 0. If I want to mark row i as 'needs to be zeroed', I can write a 0 to `matrix[i][0]`. Same for columns and row 0. So I reuse the first row and first column as my flag arrays — that's the O(1) trick.\n\nBut there's a subtle conflict: row 0 and column 0 are *also* part of the matrix, so they might legitimately need to be zeroed themselves. If they originally contained a 0, that information will be overwritten the instant I start writing flags. So I need two scalar booleans — `firstRowZero` and `firstColZero` — captured BEFORE any flag-writing. Then the order becomes: (1) capture the two scalars, (2) write flags into row 0 / col 0 for the interior, (3) read flags and zero the interior, (4) finally apply the captured scalars to row 0 / col 0 themselves. Four phases, and the order is rigid — if you zero row 0 / col 0 earlier than phase 4, you destroy the flags phase 3 still needs to read.\"",
+        "why": "Naming the marker-reuse trick *and* the four-phase ordering is the move. 'Use the first row and column as flags' alone is half the answer; the rigid 'capture scalars first, apply them last' framing is what makes the answer actually work. Interviewers grade on the ordering — they'll specifically ask 'what if you applied the firstRowZero boolean right after capturing it?' to probe whether you understand the dependency."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the four-phase model before writing the loops.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover a single interior zero (canonical case), a zero in row 0 itself (the scalar boolean has to do work), and a zero in an interior position the interviewer might ask about.",
+        "examples": [
+          {
+            "input": "[[1,1,1],[1,0,1],[1,1,1]]",
+            "output": "[[1,0,1],[0,0,0],[1,0,1]]",
+            "note": "Canonical case — one interior zero at (1, 1). Row 0 and col 0 had no originals, so the scalars stay false and phase 4 is a no-op.",
+            "trace": "phase 1: scan row 0 → firstRowZero=false. scan col 0 → firstColZero=false.\nphase 2: scan interior. find 0 at (1, 1) → mark matrix[1][0]=0 and matrix[0][1]=0.\n  matrix now: [[1, 0, 1], [0, 0, 1], [1, 1, 1]]\nphase 3: read flags, zero interior.\n  (1, 1): matrix[1][0]=0 → write 0 (already 0). \n  (1, 2): matrix[1][0]=0 → write 0.\n  (2, 1): matrix[0][1]=0 → write 0.\n  matrix now: [[1, 0, 1], [0, 0, 0], [1, 0, 1]]\nphase 4: firstRowZero=false, firstColZero=false → no-op.\nfinal: [[1, 0, 1], [0, 0, 0], [1, 0, 1]] ✓"
+          },
+          {
+            "input": "[[0,1,2,0],[3,4,5,2],[1,3,1,5]]",
+            "output": "[[0,0,0,0],[0,4,5,0],[0,3,1,0]]",
+            "note": "Row 0 itself contains zeros. The scalars do work — firstRowZero=true, firstColZero=true (matrix[0][0]=0). Phase 4 applies them last so the flags survive phase 3.",
+            "trace": "phase 1: scan row 0 → matrix[0][0]=0 and matrix[0][3]=0 → firstRowZero=true.\n         scan col 0 → matrix[0][0]=0 → firstColZero=true.\nphase 2: scan interior (i≥1, j≥1). no interior zeros! matrix[0] already has 0s at (0, 0) and (0, 3) — those ARE the flags for col 0 and col 3.\n  matrix unchanged: [[0, 1, 2, 0], [3, 4, 5, 2], [1, 3, 1, 5]]\nphase 3: read flags from row 0.\n  row 1: matrix[0][1]=1, matrix[0][2]=2, matrix[0][3]=0 → zero (1, 3) only (no col 0 flag effect yet).\n  row 2: same — zero (2, 3).\n  matrix now: [[0, 1, 2, 0], [3, 4, 5, 0], [1, 3, 1, 0]]\nphase 4: firstRowZero=true → zero entire row 0: [0, 0, 0, 0].\n         firstColZero=true → zero entire col 0: matrix[i][0]=0 for all i.\nfinal: [[0, 0, 0, 0], [0, 4, 5, 0], [0, 3, 1, 0]] ✓"
+          },
+          {
+            "input": "[[1,2,3],[4,0,6],[7,8,9]]",
+            "output": "[[1,0,3],[0,0,0],[7,0,9]]",
+            "note": "Cross through (1, 1) — interior zero, no row-0/col-0 effect. The scalars stay false, phase 4 no-op. Demonstrates the 'cross' shape cleanly.",
+            "trace": "phase 1: scan row 0 → firstRowZero=false. scan col 0 → firstColZero=false.\nphase 2: scan interior. find 0 at (1, 1) → matrix[1][0]=0, matrix[0][1]=0.\n  matrix now: [[1, 0, 3], [0, 0, 6], [7, 8, 9]]\nphase 3: read flags, zero interior.\n  (1, 1): matrix[1][0]=0 → 0. (1, 2): matrix[1][0]=0 → 0.\n  (2, 1): matrix[0][1]=0 → 0. (2, 2): neither flag set → unchanged.\n  matrix now: [[1, 0, 3], [0, 0, 0], [7, 0, 9]]\nphase 4: both scalars false → no-op.\nfinal: [[1, 0, 3], [0, 0, 0], [7, 0, 9]] ✓"
+          }
+        ],
+        "why": "Tracing surfaces the two bugs this problem rewards. (1) Capturing the scalars too late — if you scan row 0 / col 0 *after* phase 2, you've already overwritten them with flags, and `firstRowZero` will be true whenever any interior column had a zero (because phase 2 wrote a 0 into row 0 to mark it). (2) Applying the scalars too early — if you zero row 0 right after phase 2 instead of waiting until phase 4, you wipe the flags that phase 3 still needs to read for the interior. Both bugs pass the canonical 'single interior zero' test and fail the harder 'zero in row 0' test."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Single row (1 × n) → there is no interior; the whole matrix IS row 0. The interior loops never run. The firstRowZero scalar does all the work — if the row contains any 0, the whole row gets wiped in phase 4. ✓\n• Single column (m × 1) → mirror image — firstColZero does all the work.\n• 1 × 1 matrix → if it's 0, firstRowZero=true and firstColZero=true → wiped (still 0, trivially). If it's nonzero, nothing happens.\n• No zeros at all → both scalars stay false, phase 2 marks nothing, phase 3 zeros nothing, phase 4 no-op. Matrix unchanged. ✓\n• Matrix entirely of zeros → every cell triggers, every flag gets set, everything ends up 0. ✓\n• Matrix.length === 0 — guard with an early return, otherwise `matrix[0].length` throws.\n• Big trap to flag explicitly: do NOT use the same scan-and-wipe loop for the interior; the order must be 'mark all, then act'. Otherwise zeros written in phase 2/3 cascade.\"",
+        "why": "The single-row and single-column edges are the ones where the algorithm collapses to just the scalars — surfacing them shows the scalars aren't decorative for the general case, they're load-bearing for the degenerate ones. The 'do not scan-and-wipe in the same loop' callout is the load-bearing constraint that distinguishes this algorithm from the naive approach the user was almost going to write — saying it out loud before the interviewer asks is the move."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(m * n) — we touch every cell a constant number of times across the four phases (scan row 0, scan col 0, scan interior twice, then write row 0 / col 0). No nested unbounded loops, so the bound is tight.\n\nSpace is O(1) extra — just the two scalar booleans `firstRowZero` and `firstColZero`. The flag 'arrays' are reusing existing matrix cells, so they don't count toward extra space.\n\nThe 'reuse part of the input as auxiliary storage' template shows up elsewhere — encode-decode strings packs length prefixes into the encoded string itself. Move zeroes uses the array's tail as the 'zero parking lot'. In-place quicksort uses a single pivot cell as the partition boundary. The general principle: when O(1) extra space is the constraint, look for k cells of the input that can be repurposed as bookkeeping, capture their original semantics in scalars first, and restore them at the end.\"",
+        "why": "The 'reuse the input as scratch space' framing is the senior-candidate framing — it generalizes this problem to a family rather than memorizing the row-0/col-0 trick. The encode-decode and move-zeroes connections prove you see the template, not just this problem. Interviewers love hearing 'this is a special case of a more general technique' because it suggests you'll pattern-match the next problem in the family without help."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the four-phase in-place zeroing. Phase 1 captures whether row 0 / col 0 originally had any zero. Phase 2 marks the interior by writing flags into row 0 / col 0. Phase 3 reads those flags and zeros the interior. Phase 4 finally applies the captured booleans to row 0 / col 0 themselves.",
+    "examples": [
+      { "label": "3x3 single interior zero → ring of zeros around center", "input": { "matrix": [[1,1,1],[1,0,1],[1,1,1]] }, "expected": "[[1,0,1],[0,0,0],[1,0,1]]" },
+      { "label": "3x4 row-0 has zeros → top row + first/last col wiped", "input": { "matrix": [[0,1,2,0],[3,4,5,2],[1,3,1,5]] }, "expected": "[[0,0,0,0],[0,4,5,0],[0,3,1,0]]" },
+      { "label": "3x3 interior zero at (1,1) → cross through row 1, col 1", "input": { "matrix": [[1,2,3],[4,0,6],[7,8,9]] }, "expected": "[[1,0,3],[0,0,0],[7,0,9]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const matrix = input.matrix;",
+      "  const snap = () => matrix.map(row => row.slice());",
+      "  yield { line: 1, label: `enter function — matrix is ${matrix.length}x${matrix[0].length}`, state: { matrix: snap() } };",
+      "  const m = matrix.length, n = matrix[0].length;",
+      "  yield { line: 2, label: `m=${m}, n=${n}`, state: { matrix: snap(), m, n } };",
+      "  yield { line: 3, label: 'PHASE 1: capture firstRowZero / firstColZero BEFORE writing any flags', state: { matrix: snap(), m, n } };",
+      "  let firstRowZero = false, firstColZero = false;",
+      "  yield { line: 4, label: 'init firstRowZero=false, firstColZero=false', state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  for (let j = 0; j < n; j++) if (matrix[0][j] === 0) firstRowZero = true;",
+      "  yield { line: 5, label: `scan row 0 → firstRowZero = ${firstRowZero}`, state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  for (let i = 0; i < m; i++) if (matrix[i][0] === 0) firstColZero = true;",
+      "  yield { line: 6, label: `scan col 0 → firstColZero = ${firstColZero}`, state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  yield { line: 7, label: 'PHASE 2: scan interior — for each zero, mark matrix[i][0] and matrix[0][j] as flags', state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  for (let i = 1; i < m; i++) {",
+      "    for (let j = 1; j < n; j++) {",
+      "      if (matrix[i][j] === 0) {",
+      "        matrix[i][0] = 0;",
+      "        matrix[0][j] = 0;",
+      "        yield { line: 12, label: `found interior zero at (${i},${j}) → flag row: matrix[${i}][0]=0, flag col: matrix[0][${j}]=0`, state: { matrix: snap(), m, n, firstRowZero, firstColZero, i, j } };",
+      "      }",
+      "    }",
+      "  }",
+      "  yield { line: 15, label: 'PHASE 2 complete — row 0 / col 0 now encode which interior rows + cols must be zeroed', state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  yield { line: 16, label: 'PHASE 3: read flags from row 0 / col 0, zero interior cells', state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  for (let i = 1; i < m; i++) {",
+      "    let rowChanged = false;",
+      "    for (let j = 1; j < n; j++) {",
+      "      if (matrix[i][0] === 0 || matrix[0][j] === 0) {",
+      "        if (matrix[i][j] !== 0) rowChanged = true;",
+      "        matrix[i][j] = 0;",
+      "      }",
+      "    }",
+      "    yield { line: 19, label: `row ${i}: applied flags (flag matrix[${i}][0]=${matrix[i][0]}) → ${rowChanged ? 'cells zeroed' : 'no new zeros'}`, state: { matrix: snap(), m, n, firstRowZero, firstColZero, i } };",
+      "  }",
+      "  yield { line: 21, label: 'PHASE 3 complete — interior fully zeroed per flags', state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  yield { line: 22, label: 'PHASE 4: apply captured booleans LAST (earlier would have destroyed the flags Pass 2 needed)', state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  if (firstRowZero) {",
+      "    for (let j = 0; j < n; j++) matrix[0][j] = 0;",
+      "    yield { line: 23, label: `firstRowZero=true → zeroed entire row 0`, state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  } else {",
+      "    yield { line: 23, label: `firstRowZero=false → row 0 left as-is`, state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  }",
+      "  if (firstColZero) {",
+      "    for (let i = 0; i < m; i++) matrix[i][0] = 0;",
+      "    yield { line: 24, label: `firstColZero=true → zeroed entire col 0`, state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  } else {",
+      "    yield { line: 24, label: `firstColZero=false → col 0 left as-is`, state: { matrix: snap(), m, n, firstRowZero, firstColZero } };",
+      "  }",
+      "  yield { line: 24, label: `done — final matrix = ${JSON.stringify(matrix)}`, state: { matrix: snap(), m, n, firstRowZero, firstColZero, returns: JSON.stringify(matrix) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function setZeroes(matrix) {\n  const m = matrix.length, n = matrix[0].length;\n  // Capture row-0 / col-0 zeroness BEFORE we overwrite them with flags.\n  let firstRowZero = false, firstColZero = false;\n  for (let j = 0; j < n; j++) if (matrix[0][j] === 0) firstRowZero = true;\n  for (let i = 0; i < m; i++) if (matrix[i][0] === 0) firstColZero = true;\n  // Pass 1: use row 0 / col 0 as flag arrays for the interior.\n  for (let i = 1; i < m; i++) {\n    for (let j = 1; j < n; j++) {\n      if (matrix[i][j] === 0) {\n        matrix[i][0] = 0;\n        matrix[0][j] = 0;\n      }\n    }\n  }\n  // Pass 2: read the flags and zero interior cells.\n  for (let i = 1; i < m; i++) {\n    for (let j = 1; j < n; j++) {\n      if (matrix[i][0] === 0 || matrix[0][j] === 0) matrix[i][j] = 0;\n    }\n  }\n  // Apply captured booleans LAST — earlier would destroy the flags Pass 2 still needs.\n  if (firstRowZero) for (let j = 0; j < n; j++) matrix[0][j] = 0;\n  if (firstColZero) for (let i = 0; i < m; i++) matrix[i][0] = 0;\n}\n// Time O(m*n), Space O(1)",
     "notes": [

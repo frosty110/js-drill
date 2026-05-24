@@ -6,6 +6,105 @@
   "status": "full",
   "description": "Score a Blackjack hand. J/Q/K=10, numbers as-is, Aces are 11 unless that busts — then count that ace as 1. Demotes one ace at a time until the total fits or runs out.",
   "mechanics": [],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"So I'm given a list of card values like `['A','K','7']` and I need to return the best Blackjack score that doesn't bust — Ace is 1 or 11, face cards are 10. Let me clarify a few things:\"\n\n• Card format — strings like `'A'`, `'K'`, `'Q'`, `'J'`, `'10'`, `'2'`..`'9'`? No suits?\n• If the hand busts unavoidably (say `['10','Q','5']` = 25), do I return the busted total or some sentinel like -1?\n• Can I assume the input is well-formed — no `'1'`, no `'11'`, no lowercase?\n• Are there ever more than 4 Aces? (Single deck, no.)",
+        "why": "The ace-bust question is the load-bearing one. Most candidates assume \"return the busted number\" and that's usually right, but asking it explicitly signals that you've already noticed Aces can be 1 OR 11 — which is the whole problem. The face-card format question prevents the silly bug of writing `c === 'J' || c === 'Q' || c === 'K'` four times when `'JQK'.includes(c)` is tighter."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious exponential solution before you discard it.",
+        "say": "\"The naive solution is: for each Ace, try both 1 and 11. With `k` aces that's `2^k` combinations — evaluate each, throw out the bust ones, take the max of what's left. For up to 4 aces in a single deck that's 16 combos, totally fine in practice. But it's exponential in aces and we can do better — I think there's a greedy that works in one pass.\"",
+        "why": "Naming the exponential first proves you actually see why the greedy isn't obvious. The reason the greedy works is non-trivial: it's not always the case that 'try one option first then fix' beats enumeration. Showing you'd have written the exponential gives you credit for understanding the search space, even though you're about to skip past it."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why does a single-pass greedy work for Aces?",
+        "say": "\"Key observation: at most ONE Ace in any hand can be worth 11. Because 11+11 = 22, which already busts. So the optimal scoring is at most one 'soft' Ace, and the rest are hard 1s.\n\nSo the algorithm is greedy in one pass: sum the non-aces, count the aces, add 1 for each ace. Then — and only then — check if I can upgrade exactly one ace from 1 to 11 without busting. That's a `+10` swap and it's safe iff `total + 10 <= 21`, i.e., the current total is ≤ 11.\n\nThe equivalent inverse formulation, which the canonical uses: count every ace as 11 upfront, then demote one ace at a time (subtract 10) as long as we're busted and have aces left to demote. Same answer, terminates in at most `aces` demotions.\"",
+        "why": "The 'at most one soft Ace' fact is the derivation that justifies the greedy. Without it, an interviewer could push back with 'how do you know you don't need to try both 11s?' — and you'd have an answer. Naming the inverse formulation (count-as-11-then-demote vs. count-as-1-then-upgrade) shows you understand the structure, not just the line of code."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace three cases — a clean Ace+face, the multi-ace case that broke my first attempt, and a guaranteed bust to confirm the loop exits.\"",
+        "examples": [
+          {
+            "input": "['A','K']",
+            "output": "21",
+            "note": "The headline case — Blackjack itself. One Ace stays soft.",
+            "trace": "init total=0, aces=0\n'A' → total += 11 → 11; aces++ → 1\n'K' → total += 10 → 21\npost-loop: total=21, aces=1\nwhile (21 > 21 && aces > 0): false — no demote\nreturn 21"
+          },
+          {
+            "input": "['A','A','9']",
+            "output": "21",
+            "note": "Two aces — demote exactly one. The greedy's whole point.",
+            "trace": "init total=0, aces=0\n'A' → total += 11 → 11; aces++ → 1\n'A' → total += 11 → 22; aces++ → 2\n'9' → total += 9 → 31\npost-loop: total=31, aces=2\nwhile (31 > 21 && aces > 0): demote → total=21, aces=1\nwhile (21 > 21 && ...): false — stop\nreturn 21"
+          },
+          {
+            "input": "['10','Q','2']",
+            "output": "22",
+            "note": "Unavoidable bust — no aces to demote, return the busted total.",
+            "trace": "init total=0, aces=0\n'10' → total += 10 → 10\n'Q' → total += 10 → 20\n'2' → total += 2 → 22\npost-loop: total=22, aces=0\nwhile (22 > 21 && aces > 0): aces is 0 — stop\nreturn 22"
+          }
+        ],
+        "why": "Tracing `['A','A','9']` exposes the demote-ONE-at-a-time discipline. The naive instinct is to demote all aces at once when busted — that gives `31 - 20 = 11`, way off. The loop has to demote one, check again, demote again only if still busted. The third case defends the loop termination: when `aces` hits 0 the while exits even if still over 21, so unavoidable busts return cleanly."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me walk through edges:\n• Empty hand → total=0, loop doesn't enter, return 0. ✓\n• Single Ace `['A']` → counts as 11, no demote needed (11 ≤ 21). Return 11.\n• All Aces `['A','A','A','A']` → starts at 44, demotes three times → 44 - 30 = 14. One soft Ace, three hard. ✓\n• Exactly 21 with Aces `['A','K']` → must NOT demote. The loop condition `total > 21` (strict) is what saves us — `21 > 21` is false. If you accidentally write `>=`, you'd demote and return 11.\n• Busted with no aces `['10','Q','5']` → returns 25. The `&& aces > 0` guard prevents an infinite demote loop.\n• Busted with aces but still busted after all demotes `['A','K','Q']` → 11+10+10=31, demote → 21. Actually that lands at 21. A truer 'busted with aces' case: `['A','9','K','5']` = 11+9+10+5 = 35, demote → 25. Returns 25.\"",
+        "why": "The `total > 21` vs `total >= 21` distinction is the exact off-by-one that ships bugs. Calling it out in the edge pass shows you've thought about loop-termination conditions, not just the happy path. The all-Aces case is the math sanity check the interviewer will ask if you don't volunteer it."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) where n is the number of cards — one pass to sum, plus at most `aces` demotions which is bounded by n. So strictly O(n).\n\nSpace is O(1) — just `total` and `aces` counters, no auxiliary data structures.\n\nIf you wanted to extend to dealer logic or a full game loop, the scoring function stays this exact shape — it's a pure function of the card list. The same template generalizes to any 'one resource has multiple values, prefer the highest non-busting' problem (loyalty points with cap, coin redemption with bonus, etc.).\"",
+        "why": "The amortization defense here is trivial — the demote loop runs at most `aces` times which is bounded by `n`, so the worst case is 2n. But the WHY of choosing the count-as-11-then-demote formulation over count-as-1-then-upgrade is worth a sentence: both are O(n), but the demote form composes more cleanly with bust detection because the termination condition is the same as the bust condition (`total > 21`)."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through handValue card-by-card. Aces start at 11 and get demoted to 1 only when the total busts — watch how the running total and ace counter co-evolve.",
+    "examples": [
+      { "label": "['A','K'] → 21", "input": ["A","K"], "expected": 21 },
+      { "label": "['A','A','9'] → 21 (one ace demoted)", "input": ["A","A","9"], "expected": 21 },
+      { "label": "['10','Q','2'] → 22 (bust, no aces to demote)", "input": ["10","Q","2"], "expected": 22 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const cards = input;",
+      "  yield { line: 1, label: `enter handValue(cards) — cards=${JSON.stringify(cards)}`, state: { cards } };",
+      "  let total = 0, aces = 0;",
+      "  yield { line: 2, label: 'init total=0, aces=0', state: { cards, total: 0, aces: 0 } };",
+      "  for (let i = 0; i < cards.length; i++) {",
+      "    const c = cards[i];",
+      "    yield { line: 3, label: `iter ${i}: c='${c}'`, state: { cards, i, c, total, aces } };",
+      "    if (c === 'A') {",
+      "      total += 11; aces++;",
+      "      yield { line: 4, label: `Ace → total += 11 → ${total}; aces → ${aces}`, state: { cards, i, c, total, aces } };",
+      "    } else if ('JQK'.includes(c)) {",
+      "      total += 10;",
+      "      yield { line: 6, label: `face '${c}' → total += 10 → ${total}`, state: { cards, i, c, total, aces } };",
+      "    } else {",
+      "      total += Number(c);",
+      "      yield { line: 7, label: `number '${c}' → total += ${Number(c)} → ${total}`, state: { cards, i, c, total, aces } };",
+      "    }",
+      "  }",
+      "  yield { line: 9, label: `loop done — pre-demote total=${total}, aces=${aces}`, state: { cards, total, aces } };",
+      "  while (total > 21 && aces > 0) {",
+      "    yield { line: 9, label: `bust check: total=${total} > 21 AND aces=${aces} > 0 → demote`, state: { cards, total, aces } };",
+      "    total -= 10;",
+      "    aces--;",
+      "    yield { line: 11, label: `demote one ace: total -= 10 → ${total}; aces → ${aces}`, state: { cards, total, aces } };",
+      "  }",
+      "  yield { line: 13, label: `return ${total}`, state: { cards, total, aces, returns: total } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function handValue(cards) {\n  let total = 0, aces = 0;\n  for (const c of cards) {\n    // Count aces as 11 optimistically; demote later only if busted.\n    if (c === 'A')           { total += 11; aces++; }\n    // 'JQK'.includes(c) is tighter than an array for face-card test.\n    else if ('JQK'.includes(c)) total += 10;\n    else                        total += Number(c);\n  }\n  // Demote one ace at a time — ['A','A','9'] should land at 21, not 11.\n  while (total > 21 && aces > 0) {\n    total -= 10;\n    aces--;\n  }\n  return total;\n}",
     "notes": [

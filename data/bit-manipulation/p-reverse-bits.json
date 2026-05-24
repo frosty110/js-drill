@@ -5,6 +5,92 @@
   "track": "patterns",
   "status": "full",
   "description": "Walk all 32 bits: shift result left, OR in the lowest bit of n, then shift n right. Coerce with `>>> 0` for unsigned result.",
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: given a 32-bit unsigned integer `n`, return the integer formed by reversing its 32-bit binary representation — bit at position 0 ends up at position 31 and vice versa. A few quick checks:\"\n\n• Is it always exactly 32 bits, or could the width vary?\n• Should leading zeros be preserved? (Yes — that's why width matters. `0b1` reverses to `0b10000000…000`, all 32 positions.)\n• Should I return a number or a string? (Number, in JS — but I need to coerce to unsigned at the end since bit-reversed values often have the high bit set.)\n• Could the input arrive as a negative number (sign bit set)? In JS, bitwise ops are signed int32, so values >= 2^31 come in negative. Worth confirming the contract.",
+        "why": "The 'exactly 32 bits, preserve leading zeros' detail is the single most important clarification — without it, candidates often write a reverse that strips trailing zeros (which become LEADING zeros after reversal) and lose information. The output-as-number-vs-string question pins down the return type and justifies the final `>>> 0` coercion. Asking about signed-vs-unsigned inputs is the JS-specific touch that shows you understand the language's bitwise semantics — the algorithm itself doesn't care, but the I/O interpretation does."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious solution before optimizing.",
+        "say": "\"The cleanest 'brute force' is the standard 32-iteration shift loop, which IS the canonical solution here — there isn't really a slower correct approach worth comparing to. But a worse alternative is to convert to a binary string with `n.toString(2).padStart(32, '0')`, reverse the string, and `parseInt(reversed, 2)`. That works but allocates a 32-character string, does string reversal, and re-parses — three allocations vs. zero in the bit-loop version.\n\n\"Another approach is divide-and-conquer with bit-mask swaps: swap halves, then swap quarters within each half, then eighths, etc. — five operations total instead of 32 iterations. That's actually faster for high-throughput cases but harder to write from memory; the shift-loop is the right answer in an interview because it's correct on the first try.\"",
+        "why": "Reverse Bits is one of those problems where the 'brute force' and the 'optimal' are roughly the same — there's no obvious O(n²)-to-O(n) gap. So instead of pretending there's a brute-force-to-optimal narrative, naming the alternatives honestly (string conversion, divide-and-conquer with masks) shows you know the design space. The divide-and-conquer mention is the senior-tier touch — it's the answer to 'can we do better than O(32)?' (yes, O(log 32) = O(5) with parallel bit-swaps), but you'd only use it in performance-critical code, not an interview where correctness on the first try beats raw speed."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to the shift loop?",
+        "say": "\"The pattern is a two-stream pipeline: bits flow out of `n` from the right (via `n & 1` and `n >>>= 1`) and into `result` from the right (via `result << 1` then OR with the extracted bit). Because `result << 1` shifts the previous contents leftward, the FIRST bit extracted from `n` ends up at the TOP of `result` after 32 iterations — exactly the reversal you want.\n\n\"The three load-bearing pieces: (1) `n & 1` reads the lowest bit, (2) `result = (result << 1) | bit` pushes the bit into result's bottom slot, shifting earlier bits leftward, (3) `n >>>= 1` advances n. The unsigned `>>>` matters — plain `>>` would sign-extend the high bit, polluting the loop with 1s if `n` had the sign bit set.\"",
+        "why": "Naming the 'two-stream pipeline' framing is the move that makes the algorithm click — bits flow out of one register and into another, with the shift directions doing the reversal automatically. The `>>>` vs `>>` distinction is the JS-specific gotcha that catches careless candidates: with the wrong shift, the high bit of a signed-negative input would smear 1s into the running n, and you'd loop forever (or return wrong results). Verbalizing why `>>>` specifically is the right choice shows you understand JS's signed-int32 bitwise model."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace a couple of inputs — at least one with a single set bit so you can see the bit travel from position 0 to position 31, plus a more complex case that the L3 prompt uses.\" Three cases — a low-bit-to-high-bit single-set case, the n=0 degenerate, and the canonical LeetCode example.",
+        "examples": [
+          {
+            "input": "n=1",
+            "output": "2147483648",
+            "note": "Single bit at position 0 → must end up at position 31. Result is 2^31.",
+            "trace": "n = 1 (0b00000000000000000000000000000001), result = 0\ni=0:  low = n&1 = 1; result = (0<<1) | 1 = 1; n >>>= 1 → n = 0\ni=1:  low = 0;        result = (1<<1) | 0 = 2; n = 0\ni=2:  low = 0;        result = (2<<1) | 0 = 4; n = 0\n...(29 more iterations, each just shifts result left by 1)...\ni=31: low = 0;        result = (2^30 << 1) | 0 = 2^31 = -2147483648 (signed view)\nreturn result >>> 0 = 2147483648 ✓\n(The final >>> 0 reinterprets the int32's sign bit as a large unsigned value.)"
+          },
+          {
+            "input": "n=0",
+            "output": "0",
+            "note": "Degenerate — all 32 bits are 0, reversal is still 0.",
+            "trace": "n = 0, result = 0\nLoop runs 32 times, each iteration: low=0, result stays 0, n stays 0.\nreturn 0 >>> 0 = 0 ✓"
+          },
+          {
+            "input": "n=43261596",
+            "output": "964176192",
+            "note": "Canonical LeetCode example — 0b00000010100101000001111010011100 reverses to 0b00111001011110000010100101000000.",
+            "trace": "n = 43261596 = 0b00000010100101000001111010011100, result = 0\n\nI won't write all 32 steps, but the structure is:\n- Each step pulls the lowest bit of the CURRENT n into result's lowest position\n- Then shifts n right by 1 (the next-lowest bit becomes the new lowest)\n- After 32 iterations, the original bit at position k of n sits at position (31-k) of result\n\nAfter all 32 iterations:\nresult (binary) = 0b00111001011110000010100101000000\nresult (signed int32) = 964176192 (high bit is 0 here, so no >>> 0 surprise)\nreturn 964176192 ✓"
+          }
+        ],
+        "why": "The first trace is the one to mention out loud — it shows the round-trip behavior most viscerally: a single bit at position 0 ends up at position 31, which means in signed-int32 view the result is NEGATIVE (-2147483648), and the `>>> 0` coercion is what reinterprets it as the correct unsigned value (2147483648). That's the reason `>>> 0` exists in the algorithm — you can't tell from the third trace alone because its high bit happens to be 0. The n=0 degenerate confirms the loop runs in constant 32 iterations regardless of input (no early exit), which is the right answer for 'is your loop dependent on n?'."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• n=0 → all 32 iterations execute with low=0, result stays 0. Return 0. ✓\n• n with only the sign bit set (n = 2^31) → reverses to 1. In JS, the input arrives as -2147483648; the algorithm's `n & 1` correctly returns 0 for that, and the bit propagates through to position 31 of n... wait, actually for this input, position 31 of n is set, which after reversal goes to position 0 of result. The `>>>` shift correctly clears the sign bit each step, so the loop terminates cleanly.\n• n with high bit set generally → use `>>>` not `>>` for the right shift on n. Plain `>>` would sign-extend, smearing 1s into n's upper bits forever and breaking termination semantics if you used a `while (n !== 0)` style loop (but the fixed 32-iteration `for` saves you from that). Still, `>>>` is correct because we want pure bit shifts, not arithmetic.\n• Result with high bit set → the signed-int32 view will look negative; final `>>> 0` reinterprets as unsigned. This is the ONLY reason `>>> 0` is in the algorithm.\n• 64-bit / BigInt inputs → algorithm assumes exactly 32 bits. For BigInt you'd loop 64 times (or whatever width) with `n & 1n` and `n >>= 1n` (BigInt `>>` is arithmetic but doesn't sign-extend in the same way), and skip the `>>> 0` coercion since BigInt is sign-agnostic.\n• Verifying round-trip — `reverseBits(reverseBits(n)) === n` should hold for any int32 input; that's a cheap sanity test if you have time at the end.",
+        "why": "The `>>>` vs `>>` distinction is the load-bearing edge case here. It's also the most JS-specific gotcha in all of bit manipulation — most candidates from other languages don't think about it because their language's right shift is unambiguously logical or unambiguously arithmetic. Calling it out explicitly proves you've internalized JS's two-shift-operator model. The `>>> 0` for the final result is the OTHER critical detail: without it, inputs that reverse to a value with the high bit set return a negative number, which fails most test harnesses silently. The round-trip property is the bonus that proves you can validate your own code."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(1) — the loop runs exactly 32 iterations regardless of input. You could call it O(w) where w is the word width (32 here), but for a fixed-width integer type it's a constant.\n\nSpace is O(1) — two integers (`n` and `result`), no auxiliary structures.\n\nIf you wanted to extend this: the divide-and-conquer version uses 5 mask-swaps to reverse a 32-bit word in O(log 32) = O(5) operations instead of 32. The masks alternate between adjacent-bit swaps (`0x55555555`), 2-bit pair swaps (`0x33333333`), nibble swaps (`0x0F0F0F0F`), byte swaps (`0x00FF00FF`), and the final 16-bit halves swap. It's the technique used in real hardware popcount and bit-reverse instructions. Same correctness, much faster for tight inner loops — but the shift loop is the right interview answer because it's correct on the first try.\"",
+        "why": "The O(1) bound is structural (word width is a constant in the language), so the interesting wrap-up content is the divide-and-conquer extension — it's the answer to 'can you do better?'. Naming the specific masks (`0x55555555` for adjacent swap, etc.) proves you've seen the technique, not just heard of it. The trade-off framing — 'shift loop is right in an interview, divide-and-conquer is right in production' — shows you understand WHEN to prefer each, which is the senior-engineer answer. The same masks reappear in popcount (the SWAR/parallel-bits popcount uses the exact same five masks)."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the 32-bit reverse loop. The state panel shows `n` and `result` as full 32-bit binary strings so you can watch n's bits flow rightward (consumed by `n & 1`) while result's bits flow leftward (shifted by `<< 1`). Exactly one bit moves per iteration.",
+    "examples": [
+      { "label": "n=1 → 2147483648 (low bit → high)", "input": 1, "expected": 2147483648 },
+      { "label": "n=0 → 0 (edge: no set bits)", "input": 0, "expected": 0 },
+      { "label": "n=43261596 → 964176192", "input": 43261596, "expected": 964176192 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  let n = input;",
+      "  const bin = (x) => (x >>> 0).toString(2).padStart(32, '0');",
+      "  yield { line: 1, label: `enter function — n=${n}`, state: { n: `${n} (${bin(n)})` } };",
+      "  let result = 0;",
+      "  yield { line: 2, label: 'init result = 0', state: { n: `${n} (${bin(n)})`, result: `0 (${bin(0)})` } };",
+      "  for (let i = 0; i < 32; i++) {",
+      "    const low = n & 1;",
+      "    result = (result << 1) | low;",
+      "    n >>>= 1;",
+      "    yield { line: 5, label: `i=${i}: pulled bit ${low} from n's low end → shifted into result's low end`, state: { i, low, n: `${(n >>> 0)} (${bin(n)})`, result: `${(result >>> 0)} (${bin(result)})` } };",
+      "  }",
+      "  const ret = result >>> 0;",
+      "  yield { line: 10, label: `return result >>> 0 = ${ret} (reinterpret signed int32 as unsigned)`, state: { n: `${(n >>> 0)} (${bin(n)})`, result: `${(result >>> 0)} (${bin(result)})`, returns: ret } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function reverseBits(n) {\n  let result = 0;\n  // Exactly 32 iterations — each moves n's current lowest bit into result's next slot.\n  for (let i = 0; i < 32; i++) {\n    result = (result << 1) | (n & 1);\n    // Unsigned >>> — plain >> would sign-extend and leak 1s from the top.\n    n >>>= 1;\n  }\n  // JS bitwise yields signed int32; >>> 0 reinterprets as unsigned.\n  return result >>> 0;\n}\n// Time O(32) = O(1), Space O(1)",
     "notes": [

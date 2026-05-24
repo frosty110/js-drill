@@ -15,6 +15,10 @@ for validation, browser-driven QA, and historical migrations.
 | `cdp/mobile-l3.js` | iPhone-viewport probe specifically for the L3 editor — verifies `lineWrapping` and the sticky action bar. |
 | `cdp/binder-check.js` | Vertical binder tabs — presence, counts, switching, lesson-sync. |
 | `cdp/l2-mobile-check.js` | L2 mobile tap-to-fill experience: chip rendering, sheet open, live update, Reveal/Check. |
+| `cdp/conversation-tab.js` | Conversation tab regression — 15 assertions × desktop + mobile. Tab renders, sections collapse, worked-examples sub-blocks expand independently, "See the solution" CTA routes to Reference, non-conversation lessons unaffected. |
+| `cdp/walkthrough-tab.js` | Walkthrough tab regression — 17 assertions × desktop + mobile. Tab order (Conversation → Walkthrough → Reference → L1-L3), initial step 1, line highlight, prev/next/reset, example dropdown switch, end-of-trace `returns` value, non-walkthrough lessons omit tab. |
+| `cdp/walkthrough-cross-shapes.js` | Cross-shape Walkthrough audit — one representative per shape family (14 shapes including hash-map, two-pointers, class-based, binary-search, linked-list, tree-recursion, graph-matrix-DFS, DP-1d, DP-2d, backtracking, bit-manipulation, applied/timing, applied/board-evolution, class-based design). 70 assertions × desktop + mobile. Run after wide content changes that might break a shape's rendering. |
+| `cdp/tab-switch-preserves-state.js` | BS-12 regression — L1/L2/L3/Walkthrough state survives tab round-trip; cleared on lesson switch. |
 
 ### Running
 

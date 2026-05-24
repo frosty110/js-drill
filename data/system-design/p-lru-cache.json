@@ -5,6 +5,119 @@
   "track": "patterns",
   "status": "full",
   "description": "Least Recently Used cache with O(1) get and put. JS Map preserves INSERTION order — delete+re-set on every hit promotes to most-recent end; the first key is the LRU evict target.",
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the operations and the recency rules.",
+        "say": "\"Let me make sure I have this right: I need a fixed-capacity key-value cache with two operations — `get(key)` returns the value or -1 if absent, and `put(key, value)` inserts or updates. Both must be O(1). And when `put` would exceed capacity, I evict the least-recently-used entry. The catch is that 'used' includes reads — a `get` hit also counts as a use and bumps that key to most-recent.\"\n\nThen a few quick clarifying questions:\n• Does a `get` hit count as a 'use' for recency, or only `put`? (Standard LRU says yes — confirming.)\n• On `put` of an existing key — does that count as a use too, even if the value didn't change?\n• Key types — integers only, or arbitrary (strings, objects)?\n• What does `get` return on a miss — `-1`, `null`, `undefined`? (LeetCode says -1; production code usually returns `undefined`.)\n• Capacity guaranteed > 0?",
+        "why": "The 'does get count as a use' question is the entire problem. If reads don't promote recency, this collapses to a FIFO cache — much simpler, no `delete+set` on get. Confirming up front prevents a candidate from building the wrong cache and discovering it only when the interviewer's test sequence has interleaved gets and puts. The key-type question matters because if keys can be arbitrary objects, you need a `Map` (not a plain object) — and that decision flows into the whole design."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n)-per-put solution before discarding it.",
+        "say": "\"The brute force is: store entries in a plain array of `[key, value, lastUsed]` triples, with a global counter that increments on every access. `get` scans the array for the key (O(n)), updates its `lastUsed` to the new counter. `put` scans for the key — if found, update value and lastUsed; if not and we're at capacity, scan the whole array to find the entry with the minimum `lastUsed` (O(n)) and evict it. So both ops are O(n) — fails the O(1) constraint.\n\nA half-step better: replace the counter with array position itself — every access moves the entry to the back via splice. Lookup is still O(n) for the scan, and splice is O(n) for the shift. Doesn't help.\"",
+        "why": "Two reasons to name the array+counter trap. (1) It's the natural first instinct — 'I'll just remember when each thing was used' — and showing you see why it's O(n) proves you understand what the constraint is *forcing*. (2) The 'scan to find LRU' is exactly the cost the real solution eliminates: we need a structure where the LRU entry is identifiable in O(1), which means we need *order tracking*, not just a counter. Naming this primes the 'combine two structures' insight in section 3."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "Why two requirements force two structures — and the JS shortcut.",
+        "say": "\"Two requirements: O(1) get, O(1) put-with-eviction. HashMap alone gives O(1) lookup but no order tracking — to find the LRU I'd have to scan. Doubly-linked-list alone gives O(1) move-to-front and O(1) tail-pop, but lookup is O(n) — I'd have to walk it to find the node for a key. Combine them: a HashMap of `key → DLL-node`, with the DLL maintaining access order (front = LRU, back = most-recent). On `get`, hash to the node in O(1), unlink it, push to the back. On `put`-at-capacity, drop the head node and delete its key from the map. That's the textbook LRU implementation.\n\nJS shortcut: a `Map` is *already* a hashmap whose keys iterate in insertion order. So `delete(key)` + `set(key, value)` on every hit moves the key to the back — same effect as the DLL move-to-front, no node bookkeeping. And `map.keys().next().value` gives me the front key for eviction in O(1). One structure does both jobs. I'd build with `Map` directly in JS and mention the hashmap+DLL design for languages without an ordered map.\"",
+        "why": "Two moves matter here. (1) Articulating why *neither* structure alone works — and what each is missing — is the derivation an interviewer wants. 'I'll use a hashmap and a linked list' is a memorized answer; 'I need O(1) lookup AND O(1) reordering, and no single classical structure gives both' is the reasoning that produces it. (2) Naming the JS-specific `Map` shortcut *and* still mentioning the language-agnostic hashmap+DLL design is the senior move — it shows you know the underlying pattern, not just the JS trick, and you can articulate the tradeoff (less code in JS, but the DLL version is what you'd reach for in Java or C++)."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few operation sequences to confirm the model before writing the class.",
+        "intro": "\"Let me trace through a few sequences to make sure my model is right.\" Each example is a sequence of `get` / `put` calls against a capacity. I'll show the Map's keys in insertion order (front = LRU candidate, back = most-recent) and the collected `get` results after each op. Three sequences cover the canonical eviction case, a capacity-1 edge, and a `get`-promotes-then-evicts case.",
+        "examples": [
+          {
+            "input": "cap=2: put(1,1), put(2,2), get(1)→1, put(3,3), get(2)→-1, put(4,4), get(1)→-1, get(3)→3, get(4)→4",
+            "output": "[1,-1,-1,3,4]",
+            "note": "Canonical LeetCode case. The `get(1)` after the first two puts bumps key 1 to the back — so when put(3,3) needs to evict, the LRU is now key 2, not key 1.",
+            "trace": "init map=[] cap=2\nput(1, 1)  → map=[1]                              (set 1)\nput(2, 2)  → map=[1, 2]                           (set 2 at back)\nget(1)     → hit, v=1. delete(1), set(1,1). map=[2, 1]   ← key 1 bumped to back\n             results=[1]\nput(3, 3)  → at cap (2/2). LRU = front = key 2. evict 2. set 3.\n             map=[1, 3]\nget(2)     → miss. results=[1, -1]\nput(4, 4)  → at cap. LRU = front = key 1. evict 1. set 4.\n             map=[3, 4]\nget(1)     → miss. results=[1, -1, -1]\nget(3)     → hit, v=3. delete(3), set(3,3). map=[4, 3]. results=[1, -1, -1, 3]\nget(4)     → hit, v=4. delete(4), set(4,4). map=[3, 4]. results=[1, -1, -1, 3, 4]\nreturn [1, -1, -1, 3, 4]"
+          },
+          {
+            "input": "cap=1: put(1,'a'), get(1)→'a', put(2,'b'), get(1)→-1, get(2)→'b'",
+            "output": "[\"a\",-1,\"b\"]",
+            "note": "Capacity-1 edge — every put either updates the only key or evicts it. Forces the eviction branch to handle map.size === capacity correctly.",
+            "trace": "init map=[] cap=1\nput(1, 'a') → map=[1]\nget(1)      → hit, v='a'. delete(1), set(1,'a'). map=[1]. results=['a']\nput(2, 'b') → at cap (1/1). LRU = key 1. evict 1. set 2.\n              map=[2]\nget(1)      → miss. results=['a', -1]\nget(2)      → hit, v='b'. delete(2), set(2,'b'). map=[2]. results=['a', -1, 'b']\nreturn ['a', -1, 'b']"
+          },
+          {
+            "input": "cap=3: put(1,1), put(2,2), put(3,3), get(1)→1, put(4,4), get(2)→-1, get(1)→1",
+            "output": "[1,-1,1]",
+            "note": "Re-promote case — get(1) reaches back into the middle of the order and bumps it to the back, making key 2 the LRU. The subsequent put(4,4) evicts 2, not 1.",
+            "trace": "init map=[] cap=3\nput(1, 1) → map=[1]\nput(2, 2) → map=[1, 2]\nput(3, 3) → map=[1, 2, 3]\nget(1)    → hit, v=1. delete(1), set(1,1). map=[2, 3, 1]   ← key 1 now most-recent\n            results=[1]\nput(4, 4) → at cap (3/3). LRU = front = key 2. evict 2. set 4.\n            map=[3, 1, 4]                                    ← key 1 survived thanks to the get!\nget(2)    → miss. results=[1, -1]\nget(1)    → hit, v=1. delete(1), set(1,1). map=[3, 4, 1]. results=[1, -1, 1]\nreturn [1, -1, 1]"
+          }
+        ],
+        "why": "Tracing surfaces the two bugs this problem most often hides. (1) Forgetting the `delete+set` on `get` — the cache silently behaves as FIFO. The re-promote example is exactly the test case that fails: `get(1)` is supposed to save key 1 from eviction, and if you forget to bump it, key 1 gets evicted instead of key 2, and the final `get(1)` returns -1 instead of 1. (2) Forgetting that `put` on an *existing* key also needs to bump recency — without `if (map.has(key)) map.delete(key)` before the final `set`, an update leaves the key in its old position. The capacity-1 case also defends the `map.size >= capacity` check: a careless `>` instead of `>=` would let the cache grow to capacity+1 before evicting."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Capacity 1 → every `put` of a new key evicts the previous one. The `map.size >= capacity` check has to use `>=`, not `>`, or you'd grow to 2.\n• `put` on an existing key → must delete-and-re-set to bump recency. If you just call `set` without the delete, the key value updates but its position in iteration order stays put — the key is 'used' but not marked recent. Subtle and easy to miss.\n• `get` on a miss → return -1 (per the spec) without touching the map. Don't accidentally `set(key, undefined)`.\n• Same key put twice with same value → still counts as a use, still bumps to the back. `put(1, 5); put(1, 5)` should leave key 1 at the back, not where it was originally.\n• `get` immediately followed by `put` of the same key → both bump it; harmless, just two delete+sets in a row.\n• Capacity 0 → degenerate; technically the cache stores nothing, every `get` is -1, every `put` is a no-op (or you could throw — depends on what the spec says). Worth asking.\n• Very large capacity → `Map` handles millions of entries fine; iteration order is amortized O(1) per access regardless of size.\"",
+        "why": "The 'put on existing key bumps recency' edge is the one most candidates miss — they handle the new-key case correctly but forget that the update path also needs the delete-and-reinsert. Calling it out unprompted shows you've actually thought through the spec rather than copy-pasted a template. The capacity-1 case is worth mentioning because it forces the `>=` vs `>` distinction — that's exactly the kind of off-by-one a sharp interviewer would probe with a follow-up."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(1) per op — amortized. `get` does `map.has` (O(1)), `map.get` (O(1)), `map.delete` (O(1)), `map.set` (O(1)). `put` does at most one `has`, one or two `delete`s, one `set`, and possibly a `keys().next()` for the eviction case — all O(1). The 'amortized' caveat is because hashmap operations are amortized O(1), not strict worst-case (rare rehashing on growth is O(n) but spreads across n ops). For LRU purposes, that's the standard claim.\n\nSpace is O(capacity) — the Map never holds more than `capacity` entries by construction. Doesn't depend on the number of operations, only on the cache size.\n\nExtensions worth mentioning:\n• **LFU cache** — least *frequently* used instead of least *recently* used. More complex: you need a hashmap from frequency-count to an inner LRU list, plus a hashmap from key to its current frequency. The 'min frequency' pointer has to be maintained as buckets empty out. The JS-Map shortcut doesn't apply because frequency creates a second ordering dimension.\n• **TTL eviction** — entries also expire after a time-to-live, concurrent with the LRU policy. Add an expiry timestamp per entry and lazily evict on access, or maintain a min-heap of (expiry, key) for proactive eviction. The two policies interact: TTL can evict a frequently-accessed entry, which LRU alone would have kept.\n• **Thread-safety** — in a multi-threaded language you'd put a lock around the whole Map (mutex per cache, or finer-grained per-bucket with a `ConcurrentHashMap` + an explicit lock for the recency-ordering invariant). In JS this is moot for single-threaded code; for Web Workers / Node clusters you'd shard the cache by key hash across workers rather than locking.\"",
+        "why": "The 'amortized' qualifier on O(1) is the senior touch — most candidates say 'O(1)' flat and miss that hashmap operations have an amortization caveat. Naming LFU and TTL as extensions proves you see the cache-eviction *family*, not just LRU as a one-off problem. The thread-safety note is the kind of system-design adjacent thing that distinguishes someone who's only done LeetCode from someone who's actually built a cache in production — even just acknowledging 'in JS this is moot, but here's what changes in Java' shows the bigger picture."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of LRUCache operations. The state panel shows the Map's keys in INSERTION order — the front (index 0) is the LRU evict target, the back is most-recent. Watch how `get` on a hit deletes-and-re-sets to bump a key to the back. The trace collects every `get` return value into a results array.",
+    "examples": [
+      { "label": "cap=2: put(1,1), put(2,2), get(1)→1, put(3,3), get(2)→-1, put(4,4), get(1)→-1, get(3)→3, get(4)→4", "input": { "capacity": 2, "ops": [ { "op": "put", "arg": [1, 1] }, { "op": "put", "arg": [2, 2] }, { "op": "get", "arg": 1 }, { "op": "put", "arg": [3, 3] }, { "op": "get", "arg": 2 }, { "op": "put", "arg": [4, 4] }, { "op": "get", "arg": 1 }, { "op": "get", "arg": 3 }, { "op": "get", "arg": 4 } ] }, "expected": "[1,-1,-1,3,4]" },
+      { "label": "cap=1 edge: put(1,'a'), get(1)→'a', put(2,'b'), get(1)→-1, get(2)→'b'", "input": { "capacity": 1, "ops": [ { "op": "put", "arg": [1, "a"] }, { "op": "get", "arg": 1 }, { "op": "put", "arg": [2, "b"] }, { "op": "get", "arg": 1 }, { "op": "get", "arg": 2 } ] }, "expected": "[\"a\",-1,\"b\"]" },
+      { "label": "re-promote: cap=3, put(1,1), put(2,2), put(3,3), get(1)→1 bumps 1, put(4,4) evicts 2, get(2)→-1, get(1)→1", "input": { "capacity": 3, "ops": [ { "op": "put", "arg": [1, 1] }, { "op": "put", "arg": [2, 2] }, { "op": "put", "arg": [3, 3] }, { "op": "get", "arg": 1 }, { "op": "put", "arg": [4, 4] }, { "op": "get", "arg": 2 }, { "op": "get", "arg": 1 } ] }, "expected": "[1,-1,1]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { capacity, ops } = input;",
+      "  const map = new Map();",
+      "  const results = [];",
+      "  const order = () => [...map.keys()];",
+      "  yield { line: 2, label: `new LRUCache(${capacity}) — map empty, capacity=${capacity}`, state: { capacity, ops, mapOrder: [], entries: [], results: [] } };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const { op, arg } = ops[k];",
+      "    if (op === 'put') {",
+      "      const [key, value] = arg;",
+      "      yield { line: 15, label: `op#${k}: put(${JSON.stringify(key)}, ${JSON.stringify(value)})`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, value } };",
+      "      if (map.has(key)) {",
+      "        map.delete(key);",
+      "        yield { line: 17, label: `key ${JSON.stringify(key)} already present — delete to re-insert at back`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, value } };",
+      "      } else if (map.size >= capacity) {",
+      "        const oldest = map.keys().next().value;",
+      "        yield { line: 20, label: `at capacity (${map.size}/${capacity}) — LRU = front key ${JSON.stringify(oldest)}`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, value, oldest } };",
+      "        map.delete(oldest);",
+      "        yield { line: 21, label: `evict ${JSON.stringify(oldest)} — map.delete(${JSON.stringify(oldest)})`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, value } };",
+      "      }",
+      "      map.set(key, value);",
+      "      yield { line: 23, label: `map.set(${JSON.stringify(key)}, ${JSON.stringify(value)}) — now at back (most-recent)`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, value } };",
+      "    } else if (op === 'get') {",
+      "      const key = arg;",
+      "      yield { line: 7, label: `op#${k}: get(${JSON.stringify(key)})`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key } };",
+      "      if (!map.has(key)) {",
+      "        results.push(-1);",
+      "        yield { line: 8, label: `miss — key ${JSON.stringify(key)} not in map, return -1`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, got: -1 } };",
+      "      } else {",
+      "        const v = map.get(key);",
+      "        yield { line: 9, label: `hit — v = map.get(${JSON.stringify(key)}) = ${JSON.stringify(v)}`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, v } };",
+      "        map.delete(key);",
+      "        yield { line: 11, label: `map.delete(${JSON.stringify(key)}) — remove from current position`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, v } };",
+      "        map.set(key, v);",
+      "        yield { line: 12, label: `map.set(${JSON.stringify(key)}, ${JSON.stringify(v)}) — re-insert at back (now most-recent)`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, v } };",
+      "        results.push(v);",
+      "        yield { line: 13, label: `return ${JSON.stringify(v)}`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], op, key, got: v } };",
+      "      }",
+      "    }",
+      "  }",
+      "  yield { line: 25, label: `all ops processed — collected get results=${JSON.stringify(results)}`, state: { capacity, ops, mapOrder: order(), entries: [...map.entries()], results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class LRUCache {\n  constructor(capacity) {\n    this.capacity = capacity;\n    // JS Map preserves INSERTION order — leverage that to skip a doubly-linked list.\n    this.map = new Map();\n  }\n  get(key) {\n    if (!this.map.has(key)) return -1;\n    const v = this.map.get(key);\n    // Delete + re-set bumps key to the back (most-recent end). Skip this and it becomes FIFO.\n    this.map.delete(key);\n    this.map.set(key, v);\n    return v;\n  }\n  put(key, value) {\n    if (this.map.has(key)) {\n      this.map.delete(key);\n    } else if (this.map.size >= this.capacity) {\n      // First key in iteration order = LRU. Evict the front.\n      const oldest = this.map.keys().next().value;\n      this.map.delete(oldest);\n    }\n    this.map.set(key, value);\n  }\n}\n// Time O(1) per op, Space O(capacity)",
     "notes": [

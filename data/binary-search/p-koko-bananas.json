@@ -6,6 +6,106 @@
   "status": "full",
   "description": "Binary search the ANSWER on [1, max(piles)]: find the minimum k such that `canFinish(k)` is true.",
   "mechanics": ["binary-search-interval"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me restate: Koko has `piles` of bananas and `h` hours. She picks one eating speed `k` (bananas per hour) at the start and uses it for every hour. Each hour she eats from one pile — if the pile has fewer than `k` bananas left, she eats those and stops for that hour (she doesn't move on to another pile). I need the minimum integer `k` such that she finishes all piles within `h` hours.\"\n\n\"Clarifying questions:\"\n\n• Is `h >= piles.length` guaranteed? (If not, there's no feasible `k` — every pile takes at least one hour even at infinite speed.)\n• Are pile values bounded? That'll set the upper search bound.\n• `k` must be a positive integer, correct? (Not fractional.)\n• If multiple `k` values tie at exactly `h` hours, return the smallest, right?",
+        "why": "The `h >= piles.length` precondition is the one that quietly makes the problem solvable — it's worth confirming because it's also why the upper bound on `k` is `max(piles)` (any faster and a pile still takes exactly 1 hour). The integer-k clarification matters because it tells you you're searching over `[1, max(piles)]`, not a real interval — that determines whether BS-on-the-answer is even the right family."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n * max(piles)) solution before you discard it.",
+        "say": "\"The brute force is: try every speed from 1 upward. For each `k`, compute total hours as `sum(ceil(p / k) for p in piles)`. Return the first `k` where the total is `<= h`. That's O(n * max(piles)) — for each of up to `max(piles)` candidate speeds we do an O(n) feasibility check. With piles up to 10⁹, that's untenable.\"\n\n\"But notice the structure of what I'm doing: I'm scanning the answer space `[1, max(piles)]` looking for the smallest `k` that satisfies a predicate. If that predicate has the right shape, I can binary-search the answer space and skip from O(max(piles)) to O(log max(piles)) on the outer loop.\"",
+        "why": "This brute force is the bridge — it has to be stated as 'scanning the *answer space*' rather than 'scanning the *array*,' because that's the conceptual leap. Once you frame it as 'I'm searching for an integer that satisfies a monotone predicate,' BS-on-the-answer feels inevitable rather than magic. The phrasing matters: candidates who say 'use binary search' without saying 'on what' fail to communicate the actual insight."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What property of the predicate unlocks binary search on the answer?",
+        "say": "\"This is binary-search-on-the-answer — also called parametric binary search. The trigger: I'm looking for the minimum value of a parameter `k` such that a feasibility function `canFinish(k)` returns true. BS applies because the predicate is **monotone in k** — if Koko can finish at speed `k`, she can also finish at any speed `k' > k` (faster never hurts). So the sequence `canFinish(1), canFinish(2), ..., canFinish(max(piles))` is a string of `false`s followed by a string of `true`s. That's the exact shape BS converges on — find the boundary.\"\n\n\"The monotonicity is the prerequisite, just like 'sorted array' is for plain BS. The 'array' here is the implicit one indexed by k, and 'sorted' is the predicate's monotonicity. Same skeleton, just the search space is conceptual.\"\n\n\"Template choice: half-open `while (l < r)` with `r = m` on success and `l = m + 1` on failure — converges to the leftmost true, which is exactly the minimum feasible `k`.\"",
+        "why": "Naming the monotonicity explicitly is the entire derivation — without it, 'binary search on the answer' is a memorized trick instead of a principled application. The 'sorted array → monotone predicate' analogy is the one that generalizes to every parametric-BS problem (Capacity to Ship, Split Array Largest Sum, Aggressive Cows), so it's worth saying out loud — it's the transferable insight, not a problem-specific trick."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace these to make sure the feasibility function and the convergence are both right.\" Three cases — a standard mid-range answer, a case where the answer is large (forces the upper end of the range), and a degenerate all-ones case.",
+        "examples": [
+          {
+            "input": "piles=[3,6,7,11], h=8",
+            "output": "4",
+            "note": "Standard case — answer sits in the middle of the range.",
+            "trace": "lo=1 hi=11\nm=6 canFinish(6): ceil(3/6)+ceil(6/6)+ceil(7/6)+ceil(11/6) = 1+1+2+2 = 6 <= 8 ✓ → hi = 6\nlo=1 hi=6\nm=3 canFinish(3): 1+2+3+4 = 10 > 8 ✗ → lo = 4\nlo=4 hi=6\nm=5 canFinish(5): 1+2+2+3 = 8 <= 8 ✓ → hi = 5\nlo=4 hi=5\nm=4 canFinish(4): 1+2+2+3 = 8 <= 8 ✓ → hi = 4\nlo=4 hi=4 → converged → return 4 ✓"
+          },
+          {
+            "input": "piles=[30,11,23,4,20], h=6",
+            "output": "23",
+            "note": "Tight schedule — h equals piles.length+1, so the answer is forced high.",
+            "trace": "lo=1 hi=30\nm=15 canFinish(15): 2+1+2+1+2 = 8 > 6 ✗ → lo = 16\nlo=16 hi=30\nm=23 canFinish(23): 2+1+1+1+1 = 6 <= 6 ✓ → hi = 23\nlo=16 hi=23\nm=19 canFinish(19): 2+1+2+1+2 = 8 > 6 ✗ → lo = 20\nlo=20 hi=23\nm=21 canFinish(21): 2+1+2+1+1 = 7 > 6 ✗ → lo = 22\nlo=22 hi=23\nm=22 canFinish(22): 2+1+2+1+1 = 7 > 6 ✗ → lo = 23\nlo=23 hi=23 → converged → return 23 ✓"
+          },
+          {
+            "input": "piles=[1,1,1,1], h=4",
+            "output": "1",
+            "note": "Degenerate — answer is the lower bound of the range.",
+            "trace": "lo=1 hi=1 → loop never enters (lo < hi is false) → return 1 ✓"
+          }
+        ],
+        "why": "The first trace exposes the subtlety: `canFinish(5)` returns true and we set `hi = 5`, then `canFinish(4)` ALSO returns true and we set `hi = 4`. The half-open template keeps pulling `hi` down to find the leftmost true, even when the predicate keeps succeeding. The third trace defends the loop condition — with `[1,1,1,1]` the answer is 1, and `while (l < r)` correctly skips the loop and returns the initial `l`. With `while (l <= r)` the loop would enter, compute `m = 1`, do unnecessary work, and could infinite-loop without careful bounds. The convergence pattern (`hi = m` on success, `lo = m + 1` on failure) is the one to memorize for leftmost-true."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• `h == piles.length` → minimum feasible `k` is `max(piles)` (one pile per hour at the slowest speed that still finishes the biggest pile in one hour).\n• `h` very large (>> sum of piles) → answer is 1 (eat one banana per hour, never miss).\n• Single huge pile (e.g. `piles=[10⁹], h=2`) → answer is `⌈10⁹/2⌉ = 500000000`. The upper bound `max(piles)=10⁹` is essential — without it the search space is wrong.\n• Integer-division vs ceiling — must use `Math.ceil`, not `Math.floor`. A pile of 7 bananas at speed 3 takes 3 hours (not 2), because the last hour she only eats 1 banana but the hour is still consumed.\n• Empty piles → not possible by problem constraints, but defensively `Math.max(...[])` returns `-Infinity`, so a guard might be warranted.\n• `(l + r) / 2` overflow → safe in JS (Number is 64-bit float), but in C++/Java I'd write `l + ((r - l) >> 1)`.",
+        "why": "The single-huge-pile edge is the one to mention — it justifies why the upper bound is `max(piles)`, not `sum(piles)` (a common wrong guess). The ceiling-vs-floor edge is the load-bearing semantic bug; getting it wrong silently passes some tests and fails others, which is exactly the kind of mistake that's painful to debug in an interview. The overflow flag is the senior-tier touch."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n log M) where `M = max(piles)`. The outer binary search runs O(log M) iterations, and each one calls `canFinish` which is O(n) (sum a `ceil` per pile). So O(n log M) total.\n\nSpace is O(1) — just the pointers and the loop locals, no auxiliary structure.\n\nThe defense against pushback like 'but you have an O(n) function inside an O(log M) loop, isn't that just O(n * M)?' is: the OUTER loop runs `log M` times, not `M` times, because of the halving — each iteration kills half the candidate-speed range. So `log M` outer × `n` inner = `n log M`, much smaller than `n * M`.\n\nIf you wanted to extend: same template fits Capacity To Ship Packages Within D Days (search the answer space of ship capacities, predicate is 'does this capacity finish in <= D days'), Split Array Largest Sum (search the answer space of max-subarray-sum, predicate is 'can I split into <= K subarrays each with sum <= this?'), and Aggressive Cows (search the answer space of minimum gap, predicate is 'can I place K cows with gap >= this?'). All same skeleton: monotone predicate → BS the answer.\"",
+        "why": "The 'log M not M' clarification is the exact pushback interviewers throw because the loop syntax LOOKS like a linear scan over candidate speeds. Articulating that the outer loop is BS, not iteration, is what defends the bound. Naming the family of problems unprompted is the bonus — Capacity To Ship, Split Array Largest Sum, Aggressive Cows are all the same template, and showing you see them as a family is what proves you can apply this in a new problem you haven't memorized."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through binary-search-on-the-answer. The search range is [lo, hi] over candidate eating speeds k; for each midpoint we compute total hours and check feasibility. The state panel shows lo, hi, mid (candidate speed), and hours (the feasibility computation).",
+    "examples": [
+      { "label": "piles=[3,6,7,11], h=8 → 4",       "input": { "piles": [3, 6, 7, 11],        "h": 8 }, "expected": 4 },
+      { "label": "piles=[30,11,23,4,20], h=6 → 23", "input": { "piles": [30, 11, 23, 4, 20], "h": 6 }, "expected": 23 },
+      { "label": "piles=[1,1,1,1], h=4 → 1",        "input": { "piles": [1, 1, 1, 1],         "h": 4 }, "expected": 1 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const piles = input.piles;",
+      "  const h = input.h;",
+      "  yield { line: 1, label: `enter function — piles=${JSON.stringify(piles)}, h=${h}`, state: { piles, h } };",
+      "  let lo = 1, hi = Math.max(...piles);",
+      "  yield { line: 3, label: `init answer-space lo=1, hi=max(piles)=${hi}`, state: { piles, h, lo, hi } };",
+      "  const canFinish = (k) => {",
+      "    let hours = 0;",
+      "    for (const p of piles) hours += Math.ceil(p / k);",
+      "    return { ok: hours <= h, hours };",
+      "  };",
+      "  yield { line: 4, label: 'define canFinish(k): sum of ceil(p/k) for each pile, true if total <= h', state: { piles, h, lo, hi } };",
+      "  while (lo < hi) {",
+      "    yield { line: 10, label: `loop check: lo=${lo} < hi=${hi} → enter`, state: { piles, h, lo, hi } };",
+      "    const mid = Math.floor((lo + hi) / 2);",
+      "    yield { line: 11, label: `mid = floor((${lo}+${hi})/2) = ${mid} (candidate speed)`, state: { piles, h, lo, hi, mid } };",
+      "    const { ok, hours } = canFinish(mid);",
+      "    const breakdown = piles.map((p) => `ceil(${p}/${mid})=${Math.ceil(p / mid)}`).join(' + ');",
+      "    yield { line: 12, label: `canFinish(${mid}): ${breakdown} = ${hours}, ${hours} <= ${h} → ${ok}`, state: { piles, h, lo, hi, mid, hours, ok } };",
+      "    if (ok) {",
+      "      hi = mid;",
+      "      yield { line: 12, label: `speed ${mid} works → try slower: hi = mid = ${hi}`, state: { piles, h, lo, hi, mid, hours } };",
+      "    } else {",
+      "      lo = mid + 1;",
+      "      yield { line: 13, label: `speed ${mid} too slow → must go faster: lo = mid+1 = ${lo}`, state: { piles, h, lo, hi, mid, hours } };",
+      "    }",
+      "  }",
+      "  yield { line: 15, label: `loop ended (lo=hi=${lo}) — minimum feasible speed is ${lo}`, state: { piles, h, lo, hi, returns: lo } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function minEatingSpeed(piles, h) {\n  // Binary-search the ANSWER (speed), not an array index — answer space is [1, max(piles)].\n  let l = 1, r = Math.max(...piles);\n  const canFinish = (k) => {\n    let hours = 0;\n    // Ceiling because Koko can't split a pile across hours.\n    for (const p of piles) hours += Math.ceil(p / k);\n    return hours <= h;\n  };\n  while (l < r) {\n    const m = Math.floor((l + r) / 2);\n    if (canFinish(m)) r = m;     // m works — try smaller\n    else l = m + 1;              // too slow — must go faster\n  }\n  return l;\n}\n// Time O(n log(max(piles))), Space O(1)",
     "notes": [

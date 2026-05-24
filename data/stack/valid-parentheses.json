@@ -6,6 +6,104 @@
   "status": "full",
   "description": "Push openers; on a closer, the top of the stack must match. Empty stack at the end = valid.",
   "mechanics": ["array-as-stack"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the inputs.",
+        "say": "\"Let me make sure I have this right: given a string `s` of bracket characters, return true iff every opener has a matching closer of the same type AND the brackets are properly nested — so '([])' is valid but '([)]' isn't, because the '(' opened first must close last.\"\n\nThen a few quick clarifying questions:\n• Which bracket types — just `()[]{}` or also angle brackets / custom pairs?\n• Can the string contain non-bracket characters mixed in, or is it brackets only?\n• Empty string — true by convention?\n• Return value — just a boolean, not the position of the first mismatch?",
+        "why": "The 'properly nested' rule is the easy thing to skim past — if you read it as 'every opener has *some* matching closer somewhere', you'd build a counter-based solution that wrongly accepts '([)]'. The non-bracket-chars question matters because the answer changes the `if` shape: skip them, or treat them as invalid? Confirming brackets-only here lets you write the tight two-branch loop."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n²) solution before you discard it.",
+        "say": "\"The brute force is: repeatedly scan the string for an adjacent matched pair like '()' or '[]' or '{}', delete it, and rescan from the start. Keep doing that until either the string is empty (true) or no pair was deleted in a full pass (false). That works because the innermost matched pair is always adjacent — peeling it off reveals the next innermost pair. But it's O(n²) — each pass is O(n) and you might do n/2 passes. Let me see if we can do it in one pass.\"",
+        "why": "Two reasons to name peel-the-innermost out loud. (1) It proves you actually understand WHY nesting works — the innermost pair has to be adjacent, which is the structural insight the stack exploits. (2) It frames the stack solution as 'same peeling logic, but tracked left-to-right with a stack instead of repeatedly rescanning' rather than a clever trick pulled from nowhere — which is exactly what it is."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the problem points to a stack?",
+        "say": "\"The 'properly nested' constraint IS the LIFO invariant — the most recently opened bracket must be the first to close. That's the literal definition of a stack: last in, first out. So as I scan left to right, every opener I see is a 'pending obligation' that must be resolved by the matching closer before any earlier opener can close. Push openers onto a stack; on every closer, pop the top and verify it's the matching opener. At the end, if the stack isn't empty, there are unclosed openers — invalid.\"",
+        "why": "Naming the pattern *and* the structural property that makes it apply is the move. 'Use a stack' alone is pattern-matching on the section header; 'LIFO matching is the literal definition of a stack — most recent opener must close first' is a derivation. The 'pending obligation' framing also generalizes — it's the same insight behind expression parsing, function-call frames, and HTML tag matching, all of which use the same stack template."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a clean multi-type valid string, an interleaved invalid that a counter-based approach would wrongly accept, and an unclosed opener.",
+        "examples": [
+          {
+            "input": "\"()[]{}\"",
+            "output": "true",
+            "note": "Classic case — three separate pairs, stack pushes once and pops immediately, never grows past size 1.",
+            "trace": "stack=[]\ni=0 c='(' → opener, push. stack=['(']\ni=1 c=')' → closer, pop → '(' === pairs[')']='(' ✓. stack=[]\ni=2 c='[' → opener, push. stack=['[']\ni=3 c=']' → closer, pop → '[' === pairs[']']='[' ✓. stack=[]\ni=4 c='{' → opener, push. stack=['{']\ni=5 c='}' → closer, pop → '{' === pairs['}']='{' ✓. stack=[]\nloop done — stack.length === 0 → true"
+          },
+          {
+            "input": "\"([)]\"",
+            "output": "false",
+            "note": "Interleaved — a naive counter (count of '(', '[', etc.) would say true, but the stack catches it on the first closer.",
+            "trace": "stack=[]\ni=0 c='(' → opener, push. stack=['(']\ni=1 c='[' → opener, push. stack=['(','[']\ni=2 c=')' → closer, pop → '[' !== pairs[')']='(' ✗ MISMATCH\nreturn false"
+          },
+          {
+            "input": "\"(\"",
+            "output": "false",
+            "note": "Unclosed opener — loop completes without error, but the final stack-empty check catches it.",
+            "trace": "stack=[]\ni=0 c='(' → opener, push. stack=['(']\nloop done — stack.length === 1, not 0 → return false"
+          }
+        ],
+        "why": "Tracing surfaces the two bugs this problem rewards. (1) The closer-on-empty-stack case — `stack.pop()` returns `undefined`, which mismatches every opener via `!==`, so the explicit empty check isn't needed inside the loop. Naming that out loud shows you considered it. (2) The final `stack.length === 0` check — without it, the unclosed-opener case '(' would silently return true. Both are off-by-one-style oversights that interviewers specifically probe for."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty string '' → loop doesn't execute, stack is empty, returns true. ✓ (vacuously valid)\n• Single opener '(' → push, loop ends, stack non-empty, returns false. ✓\n• Single closer ')' → pop on empty returns undefined, which !== '(' → returns false. ✓ (the `undefined` mismatch is the implicit guard)\n• All openers '(((' → push three times, stack non-empty at end, returns false. ✓\n• Long alternating '(((...)))' deep nesting — stack grows to n/2 then drains. O(n) time, O(n) space. ✓\n• Mismatched-type close '(]' → pop '(' !== pairs[']']='[' → returns false. ✓ The pairs map handles this for free.\"",
+        "why": "Walking the closer-on-empty case explicitly is what shows the interviewer you understood why the loop body doesn't need a separate empty-stack check — `undefined !== anything` is the elegant trick that lets the code stay tight. The deep-nesting case quietly defends the O(n) space bound: worst case the stack holds half the string, which is still linear."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) — single pass through the string, each character does one push or one pop plus a constant-time map lookup. No nested loops, no amortization needed.\n\nSpace is O(n) — worst case is all openers (e.g. '((((' of length n), where the stack holds all n characters before any pop fires. Realistic well-formed inputs stay much smaller, but the bound is n.\n\nIf you wanted to extend to mixed bracket-and-text input — e.g. validate '{name: [1, 2]}' — same skeleton, but you `continue` on any non-bracket char. If you wanted to return the index of the first mismatch instead of a boolean, just track `i` in the for loop and return it on the mismatch path. The stack-of-openers template is reused in expression parsing, HTML/XML validation, and any 'most-recent X' undo problem.\"",
+        "why": "Defending O(n) space explicitly is the move that distinguishes from candidates who say 'O(1) — it's just a stack' without thinking. The 'extend to mixed text' and 'return index' extensions are unprompted bonus material that proves you see the template, not just this problem — that's how the same shape shows up in Min Remove to Make Valid Parentheses, Decode String, and Basic Calculator."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical solution one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "\"()[]{}\" → true", "input": "()[]{}", "expected": true },
+      { "label": "\"([)]\" → false (interleaved)", "input": "([)]", "expected": false },
+      { "label": "\"(\" → false (unclosed)", "input": "(", "expected": false }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  yield { line: 1, label: `enter function — input \"${input}\"`, state: { input } };",
+      "  const stack = [];",
+      "  yield { line: 2, label: 'init stack (empty)', state: { input, stack: [] } };",
+      "  const pairs = { ')': '(', ']': '[', '}': '{' };",
+      "  yield { line: 4, label: 'init pairs map: closer → opener', state: { input, stack: [], pairs } };",
+      "  let i = 0;",
+      "  for (const c of input) {",
+      "    yield { line: 5, label: `outer step: i=${i}, c='${c}'`, state: { input, stack: [...stack], pairs, i, c } };",
+      "    if (c in pairs) {",
+      "      yield { line: 6, label: `'${c}' is a closer — pop and compare to pairs['${c}']='${pairs[c]}'`, state: { input, stack: [...stack], pairs, i, c } };",
+      "      const popped = stack.pop();",
+      "      yield { line: 8, label: `stack.pop() → ${popped === undefined ? 'undefined (empty stack)' : `'${popped}'`}`, state: { input, stack: [...stack], pairs, i, c, popped: popped === undefined ? null : popped } };",
+      "      if (popped !== pairs[c]) {",
+      "        yield { line: 8, label: `mismatch: popped ${popped === undefined ? 'undefined' : `'${popped}'`} !== expected '${pairs[c]}' → return false`, state: { input, stack: [...stack], pairs, i, c, returns: false } };",
+      "        return;",
+      "      }",
+      "      yield { line: 8, label: `match: popped '${popped}' === expected '${pairs[c]}' → continue`, state: { input, stack: [...stack], pairs, i, c } };",
+      "    } else {",
+      "      stack.push(c);",
+      "      yield { line: 10, label: `'${c}' is an opener — push onto stack`, state: { input, stack: [...stack], pairs, i, c } };",
+      "    }",
+      "    i++;",
+      "  }",
+      "  const ok = stack.length === 0;",
+      "  yield { line: 14, label: `loop done — stack.length === 0 → ${ok}, return ${ok}`, state: { input, stack: [...stack], pairs, returns: ok } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function isValid(s) {\n  const stack = [];\n  // Map CLOSER → opener so the lookup at a closer is O(1).\n  const pairs = { ')': '(', ']': '[', '}': '{' };\n  for (const c of s) {\n    if (c in pairs) {\n      // pop() on empty returns undefined, mismatching any opener — works as guard.\n      if (stack.pop() !== pairs[c]) return false;\n    } else {\n      stack.push(c);\n    }\n  }\n  // Non-empty means unclosed openers remain — invalid.\n  return stack.length === 0;\n}\n// Time O(n), Space O(n)",
     "notes": [

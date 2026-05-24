@@ -5,6 +5,154 @@
   "track": "patterns",
   "status": "full",
   "description": "Prefix tree of nested objects: each character is a key, an `end` flag marks a complete word.",
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the API and the character domain.",
+        "say": "\"Let me make sure I have the API right: a class with `insert(word)`, `search(word)` that returns true only for a fully inserted word, and `startsWith(prefix)` that returns true if any inserted word begins with `prefix`. Three quick checks:\"\n\n• Character set — lowercase ASCII only, or arbitrary strings (Unicode, digits, punctuation)?\n• Can `insert` be called with the empty string? If yes, does `search(\"\")` return true?\n• Are duplicate inserts allowed (insert the same word twice)? Same end behavior, I assume — but worth confirming.",
+        "why": "The character-domain question is the load-bearing one — it decides between a fixed 26-slot child array (lowercase ASCII), a Map (arbitrary keys), or a plain object with one specific gotcha (the `__proto__` collision, which is the classic follow-up). If the interviewer says 'lowercase ASCII' you can simplify the children to `new Array(26)`; if they say 'arbitrary' you should reach for `Object.create(null)` or a `Map` and call out why."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious data structure before you reach for a trie.",
+        "say": "\"The brute force is just a `Set<string>` for inserted words. `insert` and `search` are both O(1) average — better than a trie's O(L). But `startsWith(prefix)` becomes O(N * L) because I have to scan every stored word and check whether it starts with `prefix`. That's the operation a trie was built to make cheap, so the trade-off is: pay O(L) on every op to get O(L) on `startsWith` instead of O(N * L).\"",
+        "why": "Naming the Set baseline out loud does two things. First, it shows you don't reach for a trie reflexively — you know there's a simpler structure and you can defend why it's wrong for this workload. Second, it frames the trie not as a magic data structure but as a deliberate trade-off: you trade per-character work on insert/search for prefix queries that don't have to scan the whole dictionary. That framing makes the next step feel earned."
+      },
+      {
+        "title": "3. Spot the pattern",
+        "prompt": "What signal in the API points to a trie?",
+        "say": "\"`startsWith` is the giveaway. Whenever the API asks 'does any stored string share a prefix with X?' you want a structure where prefixes are physically shared — that's exactly what a trie is: each node is one character, children are the legal next characters, and walking down the tree IS walking a prefix. `insert`, `search`, and `startsWith` all become the same loop — descend character-by-character — they just differ in what they do at the end. Insert creates missing children and sets a terminal flag; search walks and checks the flag; startsWith walks and ignores the flag. That last bit is the crucial asymmetry: `startsWith` is genuinely cheaper than `search` because it doesn't care about word boundaries.\"",
+        "why": "The 'three operations are one walk with different endings' framing is what shows you see the trie as ONE structure, not three special-case methods. The startsWith-doesn't-need-the-flag observation is the specific structural property that justifies the design: if you didn't have the `end` flag at all, you couldn't tell 'apple' (stored) from 'app' (a prefix that walks part of 'apple'), so search would be broken — but startsWith would still work. That asymmetry is what interviewers want to hear named."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few operation sequences to confirm the model before writing the class.",
+        "intro": "\"Let me run a few sequences through the model to make sure I have the end-flag semantics right.\" Three cases cover the interesting behaviors — the classic apple/app prefix interaction (proves search vs startsWith differ), two words sharing a prefix (proves the tree branches correctly), and an empty trie (proves search/startsWith fail-fast without crashing).",
+        "examples": [
+          {
+            "input": "insert('apple'), search('apple'), search('app'), startsWith('app'), insert('app'), search('app')",
+            "output": "[true, false, true, true]",
+            "note": "The textbook prefix interaction — 'app' is reachable but not an end until inserted.",
+            "trace": "insert('apple') → root.a.p.p.l.e = {end:true}\nsearch('apple')   → walk a→p→p→l→e, node.end===true → true\nsearch('app')     → walk a→p→p, node exists but node.end is undefined → false\nstartsWith('app') → walk a→p→p, node exists → true (we don't check end)\ninsert('app')     → walk a→p→p (reuse), set node.end=true on the 'p' node\nsearch('app')     → walk a→p→p, node.end===true → true"
+          },
+          {
+            "input": "insert('cat'), insert('car'), startsWith('ca'), search('ca'), search('cat'), startsWith('dog')",
+            "output": "[true, false, true, false]",
+            "note": "Two words sharing a prefix — the tree branches at 'a', and 'ca' is a prefix of both but not a stored word.",
+            "trace": "insert('cat') → root.c.a.t = {end:true}\ninsert('car') → reuse c→a, branch new 'r' child; root.c.a.r = {end:true}\nstartsWith('ca') → walk c→a, node exists (has 't' and 'r' children) → true\nsearch('ca')     → walk c→a, node.end is undefined → false\nsearch('cat')    → walk c→a→t, node.end===true → true\nstartsWith('dog') → walk c... root.d is missing → false"
+          },
+          {
+            "input": "search('hi'), insert('hi'), search('hi'), search('hit'), startsWith('h')",
+            "output": "[false, true, false, true]",
+            "note": "Empty-trie probe — proves search/startsWith fail-fast on missing children, no crash on undefined.",
+            "trace": "search('hi')      → root.h is undefined → return false (no crash)\ninsert('hi')      → root.h.i = {end:true}\nsearch('hi')      → walk h→i, node.end===true → true\nsearch('hit')     → walk h→i, then look for 't' on the 'i' node — missing → false\nstartsWith('h')   → walk h, node exists → true"
+          }
+        ],
+        "why": "The first example is the one to walk live — it makes the search-vs-startsWith asymmetry concrete in a way nothing else does. The trace also surfaces a subtle bug to mention: if you wrote `node.end` instead of `node.end === true` in the return, an inserted word like 'app' followed by a child also named 'end' could lie (since you'd return the truthy child object). The third example earns its place by proving you don't need any special-case handling for the empty-trie — the missing-child check at the top of the walk already covers it."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty trie / never-inserted prefix → both `search` and `startsWith` should return false without crashing. The 'missing child → return early' branch handles it; no special case.\n• Single-character words → 'a' inserts as `root.a = {end: true}`. `search('a')` and `startsWith('a')` both true; same code path as longer words.\n• Words that are prefixes of each other (\"app\" and \"apple\") → both terminal flags coexist; the inner node has both `end: true` AND child characters. Make sure your insert reuses existing children rather than overwriting them.\n• Duplicate insert of the same word → no-op effectively; we walk the existing path and re-set `end = true`. Worth saying out loud that we don't track counts unless asked.\n• Empty string `insert(\"\")` → the for-loop body never runs, we just set `root.end = true`. Then `search(\"\")` and `startsWith(\"\")` both return true. Worth asking the interviewer if that's the intended contract.\n• Arbitrary string keys including `__proto__`, `constructor`, etc. → if `this.root = {}`, then `root.__proto__` already exists (it's the prototype chain), so `if (!node[ch])` returns false and you walk into Object.prototype. The fix is `Object.create(null)` or a `Map`. This is the canonical interview follow-up — flag it unprompted.",
+        "why": "The `__proto__` flag is the senior-tier move on this problem — most candidates ship the `this.root = {}` version, it passes the basic tests, and they never see why it's wrong. Calling it out unprompted (with the fix) is the single highest-leverage signal you can send on this problem. The prefixes-of-each-other case is also worth raising because it forces you to articulate that the `end` flag and child characters coexist on the same node — that's the data-model insight that distinguishes someone who actually built a trie from someone who memorized one."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Each operation walks at most L nodes where L is the input string's length, doing O(1) work per node — a hash lookup and a possible child creation. So all three operations are O(L) time.\n\nSpace is O(total characters across all inserted words) in the worst case (every word disjoint), and as low as O(longest word) when words share long prefixes — that's the win over a Set, which is always O(total characters with no sharing).\n\nIf you wanted to extend this: 'Add Word' (`.` matches any single character) is the natural next problem — search becomes a small DFS over children whenever you hit a `.`. Same trie, the only change is the search method branches on the wildcard. Word Search II is the heavyweight extension — you embed the trie inside a grid DFS and use 'no child here' as a pruning signal, which collapses the per-word brute force into one pass over the board.\"",
+        "why": "The amortized argument is simple here — there's no nested loop to defend, just 'one hash op per character'. So the wrap-up's job is to show transfer: name two natural extensions (`addWord` with wildcards, `findWords` with grid DFS) that reuse the trie as a building block. That proves you see the trie as a reusable substrate, not a one-off class. Mentioning the space comparison to a Set unprompted also defends WHY you chose a trie in the first place — it loops back to the section-2 trade-off you set up."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through a sequence of Trie operations. Each example is a list of method calls. The state panel shows the trie as a flat set of inserted words plus the nested-object representation, and a running results array for search/startsWith returns. The final returns value is JSON.stringify(results).",
+    "examples": [
+      { "label": "insert('apple'), search('apple')→true, search('app')→false, startsWith('app')→true, insert('app'), search('app')→true", "input": [ { "op": "insert", "arg": "apple" }, { "op": "search", "arg": "apple" }, { "op": "search", "arg": "app" }, { "op": "startsWith", "arg": "app" }, { "op": "insert", "arg": "app" }, { "op": "search", "arg": "app" } ], "expected": "[true,false,true,true]" },
+      { "label": "insert('cat'), insert('car'), startsWith('ca')→true, search('ca')→false, search('cat')→true, startsWith('dog')→false", "input": [ { "op": "insert", "arg": "cat" }, { "op": "insert", "arg": "car" }, { "op": "startsWith", "arg": "ca" }, { "op": "search", "arg": "ca" }, { "op": "search", "arg": "cat" }, { "op": "startsWith", "arg": "dog" } ], "expected": "[true,false,true,false]" },
+      { "label": "search('hi')→false (empty trie), insert('hi'), search('hi')→true, search('hit')→false, startsWith('h')→true", "input": [ { "op": "search", "arg": "hi" }, { "op": "insert", "arg": "hi" }, { "op": "search", "arg": "hi" }, { "op": "search", "arg": "hit" }, { "op": "startsWith", "arg": "h" } ], "expected": "[false,true,false,true]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const ops = input;",
+      "  const root = Object.create(null);",
+      "  const words = [];",
+      "  const results = [];",
+      "  const snapshot = (node) => {",
+      "    const out = {};",
+      "    for (const k of Object.keys(node)) {",
+      "      if (k === 'end') { out.end = true; continue; }",
+      "      out[k] = snapshot(node[k]);",
+      "    }",
+      "    return out;",
+      "  };",
+      "  yield { line: 3, label: 'new Trie() — root is empty (Object.create(null))', state: { ops, words: [], trie: {}, results: [] } };",
+      "  for (let k = 0; k < ops.length; k++) {",
+      "    const { op, arg } = ops[k];",
+      "    if (op === 'insert') {",
+      "      yield { line: 5, label: `op#${k}: insert('${arg}')`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg } };",
+      "      let node = root;",
+      "      yield { line: 6, label: 'node ← root', state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg } };",
+      "      for (const ch of arg) {",
+      "        if (!node[ch]) {",
+      "          node[ch] = Object.create(null);",
+      "          yield { line: 8, label: `'${ch}' missing — create child node`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, ch } };",
+      "        } else {",
+      "          yield { line: 8, label: `'${ch}' edge already exists — reuse`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, ch } };",
+      "        }",
+      "        node = node[ch];",
+      "        yield { line: 9, label: `descend into '${ch}'`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, ch } };",
+      "      }",
+      "      node.end = true;",
+      "      if (!words.includes(arg)) words.push(arg);",
+      "      yield { line: 11, label: `mark terminal: node.end = true → '${arg}' is now a complete word`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg } };",
+      "    } else if (op === 'search') {",
+      "      yield { line: 13, label: `op#${k}: search('${arg}')`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg } };",
+      "      let node = root;",
+      "      let missed = false;",
+      "      for (const ch of arg) {",
+      "        if (!node[ch]) {",
+      "          yield { line: 23, label: `'${ch}' edge missing → _walk returns null`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, ch } };",
+      "          missed = true;",
+      "          break;",
+      "        }",
+      "        node = node[ch];",
+      "        yield { line: 24, label: `descend into '${ch}'`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, ch } };",
+      "      }",
+      "      let res;",
+      "      if (missed) {",
+      "        res = false;",
+      "        yield { line: 15, label: `_walk returned null → search returns false`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, result: false } };",
+      "      } else {",
+      "        res = node.end === true;",
+      "        yield { line: 15, label: `walk landed on node — end flag is ${node.end === true ? 'true' : 'undefined'} → search returns ${res}`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, end: node.end === true, result: res } };",
+      "      }",
+      "      results.push(res);",
+      "      yield { line: 15, label: `results.push(${res}) → results=${JSON.stringify(results)}`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg } };",
+      "    } else if (op === 'startsWith') {",
+      "      yield { line: 17, label: `op#${k}: startsWith('${arg}')`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg } };",
+      "      let node = root;",
+      "      let missed = false;",
+      "      for (const ch of arg) {",
+      "        if (!node[ch]) {",
+      "          yield { line: 23, label: `'${ch}' edge missing → _walk returns null`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, ch } };",
+      "          missed = true;",
+      "          break;",
+      "        }",
+      "        node = node[ch];",
+      "        yield { line: 24, label: `descend into '${ch}'`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, ch } };",
+      "      }",
+      "      const res = !missed;",
+      "      yield { line: 18, label: `_walk ${missed ? 'returned null' : 'reached a node'} → startsWith returns ${res} (no end-flag check needed)`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg, result: res } };",
+      "      results.push(res);",
+      "      yield { line: 18, label: `results.push(${res}) → results=${JSON.stringify(results)}`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], op, arg } };",
+      "    }",
+      "  }",
+      "  yield { line: 27, label: `all ops processed — collected results=${JSON.stringify(results)}`, state: { ops, words: [...words], trie: snapshot(root), results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "class Trie {\n  constructor() {\n    // Object.create(null) — no prototype, so input \"__proto__\" cannot collide\n    this.root = Object.create(null);\n  }\n  insert(word) {\n    let node = this.root;\n    for (const ch of word) {\n      if (!node[ch]) node[ch] = Object.create(null);\n      node = node[ch];\n    }\n    node.end = true;\n  }\n  search(word) {\n    const node = this._walk(word);\n    return !!node && node.end === true;\n  }\n  startsWith(prefix) {\n    return !!this._walk(prefix);\n  }\n  _walk(s) {\n    let node = this.root;\n    for (const ch of s) {\n      if (!node[ch]) return null;\n      node = node[ch];\n    }\n    return node;\n  }\n}\n// Time O(L) per op where L is the string length",
     "notes": [

@@ -28,10 +28,30 @@
         "why": "Naming the pattern *and* the property that makes the pattern apply is the move. \"Sliding window\" alone is a guess; \"sliding window because the property is monotone in shrinkage\" is a derivation. Interviewers grade on the second."
       },
       {
-        "title": "4. Walk a small example",
-        "prompt": "Trace \"abcabcbb\" before writing the loop.",
-        "say": "\"Let me trace through 'abcabcbb' to make sure my model is right:\"\n\n  r=0 'a' → seen={a},     window [0,0], best=1\n  r=1 'b' → seen={a,b},   window [0,1], best=2\n  r=2 'c' → seen={a,b,c}, window [0,2], best=3\n  r=3 'a' → duplicate! delete s[0]='a', l=1. seen={b,c}. add 'a'. window [1,3], best=3\n  r=4 'b' → duplicate! delete s[1]='b', l=2. seen={c,a}. add 'b'. window [2,4], best=3\n  r=5 'c' → duplicate! delete s[2]='c', l=3. seen={a,b}. add 'c'. window [3,5], best=3\n  r=6 'b' → duplicate! delete s[3]='a', l=4. still dup. delete s[4]='b', l=5. add 'b'. window [5,6], best=3\n  r=7 'b' → duplicate! delete s[5]='c', l=6. still dup. delete s[6]='b', l=7. add 'b'. window [7,7], best=3\n\n\"Return 3.\"",
-        "why": "Tracing exposes off-by-ones before they hit the code. It also surfaces the subtle bug — you have to delete `s[l]` *before* you increment `l`, otherwise you delete the wrong character. Catching that on the whiteboard is much cheaper than catching it after the interviewer points out failing tests."
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me trace through a couple of cases to make sure my model is right.\" Three inputs cover the interesting behaviors — a normal mix, an all-same-char degenerate case, and the L3 prompt's own input as a final sanity check.",
+        "examples": [
+          {
+            "input": "\"abcabcbb\"",
+            "output": "3",
+            "note": "Classic mix — multiple single-step shrinks.",
+            "trace": "r=0 'a' → seen={a},     window [0,0], best=1\nr=1 'b' → seen={a,b},   window [0,1], best=2\nr=2 'c' → seen={a,b,c}, window [0,2], best=3\nr=3 'a' → dup! delete s[0]='a', l=1. seen={b,c}. add 'a'. window [1,3], best=3\nr=4 'b' → dup! delete s[1]='b', l=2. seen={c,a}. add 'b'. window [2,4], best=3\nr=5 'c' → dup! delete s[2]='c', l=3. seen={a,b}. add 'c'. window [3,5], best=3\nr=6 'b' → dup! delete s[3]='a', l=4. still dup. delete s[4]='b', l=5. add 'b'. window [5,6], best=3\nr=7 'b' → dup! delete s[5]='c', l=6. still dup. delete s[6]='b', l=7. add 'b'. window [7,7], best=3"
+          },
+          {
+            "input": "\"bbbbb\"",
+            "output": "1",
+            "note": "Degenerate all-same-char — every step triggers a full shrink, but still O(n) amortized.",
+            "trace": "r=0 'b' → seen={b}, window [0,0], best=1\nr=1 'b' → dup! delete s[0]='b', l=1. add 'b'. window [1,1], best=1\nr=2 'b' → dup! delete s[1]='b', l=2. add 'b'. window [2,2], best=1\nr=3 'b' → dup! delete s[2]='b', l=3. add 'b'. window [3,3], best=1\nr=4 'b' → dup! delete s[3]='b', l=4. add 'b'. window [4,4], best=1"
+          },
+          {
+            "input": "\"pwwkew\"",
+            "output": "3",
+            "note": "Sanity-check the L3 prompt's own input — the longest unique substring is \"wke\", not the prefix.",
+            "trace": "r=0 'p' → seen={p},     window [0,0], best=1\nr=1 'w' → seen={p,w},   window [0,1], best=2\nr=2 'w' → dup! delete s[0]='p', l=1. still dup. delete s[1]='w', l=2. add 'w'. window [2,2], best=2\nr=3 'k' → seen={w,k},   window [2,3], best=2\nr=4 'e' → seen={w,k,e}, window [2,4], best=3\nr=5 'w' → dup! delete s[2]='w', l=3. add 'w'. window [3,5], best=3"
+          }
+        ],
+        "why": "Tracing surfaces the subtle bug — you have to delete `s[l]` *before* you increment `l`, otherwise you delete the wrong character. The all-same-char case also defends the O(n) claim: even when every step shrinks, each character still enters and exits the set exactly once. Catching both on the whiteboard is much less painful than catching them after the interviewer points out failing tests."
       },
       {
         "title": "5. Edge cases to mention",
@@ -45,6 +65,38 @@
         "say": "\"Time is O(n) — even with the nested `while`, each character enters `seen` at most once and is removed at most once, so total work across the outer loop is bounded by 2n.\n\nSpace is O(min(n, |alphabet|)) — the Set never holds more than the alphabet size, which is 128 for ASCII, much smaller in practice.\n\nIf you wanted to extend to 'at most K distinct chars,' I'd swap the Set for a count-Map and shrink while `map.size > K`. Same template, different shrink condition.\"",
         "why": "The amortized-analysis argument (\"each char enters/exits once\") is the right defense against an interviewer who pushes back with \"but you have a nested loop, isn't that O(n²)?\". The extension to 'at most K distinct' is unprompted bonus material that demonstrates you see the template, not just this one problem — that's how the same pattern shows up in Minimum Window Substring, Longest Substring with At Most K Distinct, etc."
       }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical solution one statement at a time on a real input. The highlighted line is what just ran; the state panel shows the locals after that step. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "\"abcabcbb\" → 3", "input": "abcabcbb" },
+      { "label": "\"bbbbb\" → 1",    "input": "bbbbb" },
+      { "label": "\"pwwkew\" → 3",   "input": "pwwkew" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  yield { line: 1, label: `enter function — input \"${input}\"`, state: { input } };",
+      "  const seen = new Set();",
+      "  yield { line: 2, label: 'init seen (empty Set)', state: { input, seen: [] } };",
+      "  let l = 0, best = 0;",
+      "  yield { line: 3, label: 'init l=0, best=0', state: { input, seen: [], l: 0, best: 0 } };",
+      "  for (let r = 0; r < input.length; r++) {",
+      "    yield { line: 5, label: `outer step: r=${r}, char='${input[r]}'`, state: { input, seen: [...seen], l, r, best } };",
+      "    while (seen.has(input[r])) {",
+      "      yield { line: 6, label: `'${input[r]}' is already in seen — must shrink`, state: { input, seen: [...seen], l, r, best } };",
+      "      seen.delete(input[l]);",
+      "      yield { line: 7, label: `delete s[${l}]='${input[l]}' from seen`, state: { input, seen: [...seen], l, r, best } };",
+      "      l++;",
+      "      yield { line: 8, label: `l → ${l}`, state: { input, seen: [...seen], l, r, best } };",
+      "    }",
+      "    seen.add(input[r]);",
+      "    yield { line: 10, label: `add '${input[r]}' to seen`, state: { input, seen: [...seen], l, r, best } };",
+      "    best = Math.max(best, r - l + 1);",
+      "    yield { line: 12, label: `best = max(prev_best, r-l+1) → ${best}`, state: { input, seen: [...seen], l, r, best } };",
+      "  }",
+      "  yield { line: 14, label: `return ${best}`, state: { input, seen: [...seen], l, best, returns: best } };",
+      "}"
     ]
   },
   "reference": {

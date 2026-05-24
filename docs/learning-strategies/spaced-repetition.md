@@ -18,6 +18,17 @@ specifically toward lessons their memory is currently weakest on.
 
 - **1d → 3d → 7d → 14d → 30d interval ladder.** L3 pass on a mastered
   lesson advances one bucket; L3 pass at the top bucket holds at 30d.
+- **Path-aware review queue (iter 45).** When the Starter Path is on
+  AND scoped to a single track (Syntax / Patterns / Applied — see iter
+  39's per-track paths), the Review queue (`dueReviewIds()`) filters to
+  in-scope lessons only. Off-scope due lessons are still tracked in
+  localStorage; flipping back to track='all' or toggling path off
+  re-surfaces them. The Review badge reflects scope ("1 due in syntax
+  path, 4 more in other tracks — switch path scope to see") so off-
+  scope work isn't silently hidden. Closes the iter-43 SR walkthrough
+  gap #2: per-track paths previously filtered the sidebar list but not
+  the review queue, so a user on the Patterns-only path could still
+  get a Syntax-lesson review surfacing.
 - **L2 pass on a due lesson HOLDS the bucket but resets `dueAt`.** Mobile
   users can keep their due list moving from a phone (L3 is high-friction
   there — see [[desirable-difficulty]]) without inflating intervals they

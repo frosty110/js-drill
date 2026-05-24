@@ -195,6 +195,9 @@ const TRACK_PILLS = {
 // The 📅 Today's Plan button routes by the subscribed path's `kind`:
 //   - 'lessons' → opens the in-app Today's Plan modal (curated due/path/weak session)
 //   - 'prep'    → navigates to a standalone dashboard page (e.g. prep.html)
+// The 🧭 Path View sidebar filter scopes the sidebar to the path's drill-lesson
+// sequence (`lessonOrderKey` → resolved by getPathLessonOrder). A path with no
+// drill-lesson mapping disables the 🧭 button.
 // Progress is keyed by lesson id, NOT by path, so switching plans never resets
 // mastery — two-sum stays mastered whether you reach it via Starter or Prep.
 const PATHS = [
@@ -203,6 +206,7 @@ const PATHS = [
     label: 'Starter Path',
     icon: '🧭',
     kind: 'lessons',
+    lessonOrderKey: 'STARTER_PATH',
     blurb: 'Linear recommended order through the full JS Drill curriculum.',
   },
   {
@@ -211,12 +215,33 @@ const PATHS = [
     icon: '📅',
     kind: 'prep',
     url: 'prep.html',
+    lessonOrderKey: 'PREP_4DAY_PATH',
     blurb: 'Day-by-day interview cram: drills, glossary, code shapes, and mocks.',
   },
 ];
 
 function getSubscribedPath() {
   return PATHS.find(p => p.id === state.subscribedPathId) || PATHS[0];
+}
+
+// Resolve a path's ordered drill-lesson list. Indirection (string key → array)
+// avoids a TDZ problem: the arrays (STARTER_PATH, PREP_4DAY_PATH) are declared
+// later in the file, but this resolver only runs at call-time. Returns null for
+// paths with no drill-lesson sequence (→ 🧭 Path View disabled for that path).
+function getPathLessonOrder(path) {
+  if (!path) return null;
+  switch (path.lessonOrderKey) {
+    case 'STARTER_PATH': return STARTER_PATH;
+    case 'PREP_4DAY_PATH': return PREP_4DAY_PATH;
+    default: return null;
+  }
+}
+
+// True when the subscribed path exposes a non-empty drill-lesson sequence the
+// sidebar can filter to. Drives the enabled/disabled state of the 🧭 button.
+function subscribedPathHasLessons() {
+  const order = getPathLessonOrder(getSubscribedPath());
+  return Array.isArray(order) && order.length > 0;
 }
 
 function updatePathChip() {
@@ -245,9 +270,16 @@ function openPathModal() {
   body.querySelectorAll('[data-path-id]').forEach(btn => {
     btn.addEventListener('click', () => {
       state.subscribedPathId = btn.getAttribute('data-path-id');
+      // The Path View filter base just changed — drop the cache and, if the
+      // new path has no drillable lessons, clear an active filter.
+      _invalidateStarterPathCache();
+      if (!subscribedPathHasLessons()) state.starterPath = false;
       saveProgress();
       updatePathChip();
       modal.style.display = 'none';
+      // Re-render the sidebar so the 🧭 button state + (if active) the filtered
+      // lesson list reflect the newly-subscribed path.
+      if (typeof renderSidebar === 'function') renderSidebar();
     });
   });
   modal.style.display = 'block';
@@ -327,19 +359,42 @@ const STARTER_PATH = [
   // different practice mode (build me X) rather than a learning progression.
 ];
 
-// iter 39: per-track Starter Paths. The single curated STARTER_PATH above
-// mixes Syntax + Patterns; this helper filters by `state.starterPathTrack`
-// so a user can drill Syntax-end-to-end or Patterns-end-to-end without
-// track-mixing distraction. Cache is invalidated on track change.
-// See ideas-by-category.md § Paths & Sessions → "Per-track Starter Paths".
+// Drill lessons referenced across the 4-Day Interview Prep plan, in prep-day
+// order (deduped). This is the lessonOrder for the 'prep-4day' path, so the
+// 🧭 Path View filter scopes the sidebar to just the prep lessons in sequence.
+//
+// SOURCE OF TRUTH is prep.html's PLAN (each item's `lesson.id`). This array is
+// a hardcoded mirror — tools/validate-data.js re-extracts the IDs from prep.html
+// and fails if the two drift, so editing the prep plan flags a required re-sync.
+const PREP_4DAY_PATH = [
+  'sorting', 's-bigo-intuition', 'binary-search', 's-bfs-template', 's-tree-traversals',
+  'p-max-subarray', 'two-sum', 'p-contains-dup', 'p-anagrams', 'p-valid-anagram',
+  'p-encode-decode-strings', 'p-longest-consecutive', 'valid-palindrome', 'p-3sum',
+  'p-container', 'p-trapping-rain', 'best-time-stock', 'p-longest-sub', 'p-min-window',
+  'p-sliding-window-max', 'valid-parentheses', 'p-daily-temp', 'p-min-stack',
+  'p-largest-rect-hist', 'p-rotated', 'p-koko-bananas', 'p-reverse-list', 'p-cycle',
+  'p-merge-two-sorted', 'p-max-depth', 'p-invert', 'p-bfs', 'p-same-tree', 's-heap-ops',
+  'p-valid-bst', 'p-lca-bst', 'p-construct-tree', 'p-kth-largest', 'p-top-k-frequent',
+  'p-merge-intervals', 'p-meeting-rooms-ii', 'p-insert-interval', 'p-islands', 'p-course',
+  'p-clone-graph', 'p-climbing-stairs', 'p-coin-change'
+];
+
+// The 🧭 Path View sidebar filter scopes the sidebar to the *subscribed* path's
+// drill-lesson sequence (getPathLessonOrder), then applies the per-track
+// sub-filter (`state.starterPathTrack`) so a user can drill Syntax-only or
+// Patterns-only without track-mixing distraction. Cache is keyed by
+// subscribedPathId + track and invalidated on either change.
+// iter 39: per-track sub-filter. Unified across paths: see PATHS registry.
 let _activeStarterPathCache = null;
 let _activeStarterPathCacheKey = null;
 function getActiveStarterPath() {
+  const base = getPathLessonOrder(getSubscribedPath()) || [];
   const track = (state && state.starterPathTrack) || 'all';
-  if (track === _activeStarterPathCacheKey && _activeStarterPathCache) return _activeStarterPathCache;
-  _activeStarterPathCacheKey = track;
-  if (track === 'all') { _activeStarterPathCache = STARTER_PATH; return _activeStarterPathCache; }
-  _activeStarterPathCache = STARTER_PATH.filter(id => {
+  const cacheKey = (state && state.subscribedPathId || 'starter') + '|' + track;
+  if (cacheKey === _activeStarterPathCacheKey && _activeStarterPathCache) return _activeStarterPathCache;
+  _activeStarterPathCacheKey = cacheKey;
+  if (track === 'all') { _activeStarterPathCache = base; return _activeStarterPathCache; }
+  _activeStarterPathCache = base.filter(id => {
     const lesson = findLesson(id);
     return lesson && lesson.track === track;
   });
@@ -458,6 +513,25 @@ function isDueForReview(lessonId) {
   return Date.now() >= r.dueAt;
 }
 function dueReviewIds() {
+  // iter 45: path-aware SR. When Starter Path is on AND scoped to a single
+  // track, only surface reviews from lessons in that track-path — closes
+  // the gap that per-track paths (iter 39) filtered the sidebar LIST but
+  // not the REVIEW QUEUE. Off-path or track='all' → unchanged global queue.
+  // Lessons outside scope are still tracked in localStorage; flipping to
+  // 'all' or toggling path off re-surfaces them. See iter-43 SR walkthrough
+  // gap #2; ideas-by-category.md § Paths & Sessions.
+  const scoped = state.starterPath && state.starterPathTrack && state.starterPathTrack !== 'all';
+  const inScope = scoped ? new Set(getActiveStarterPath()) : null;
+  return CURRICULUM
+    .filter(l => l.status === 'full' && isDueForReview(l.id))
+    .filter(l => !inScope || inScope.has(l.id))
+    .sort((a, b) => state.reviews[a.id].dueAt - state.reviews[b.id].dueAt)
+    .map(l => l.id);
+}
+// Iter 45 — true global due count, ignoring path-scope. Used by the Review
+// button's scope-aware label so the user can see "3 due in scope (12 total)"
+// instead of having the broader pool silently hidden.
+function allDueReviewIds() {
   return CURRICULUM
     .filter(l => l.status === 'full' && isDueForReview(l.id))
     .sort((a, b) => state.reviews[a.id].dueAt - state.reviews[b.id].dueAt)
@@ -939,9 +1013,24 @@ function updateReviewBadge() {
   const cnt = document.getElementById('review-count');
   if (btn && cnt) {
     const due = dueReviewIds().length;
+    // iter 45: when path-scoped, surface BOTH the in-scope count and the total
+    // so the user sees that off-scope lessons aren't disappeared — just hidden
+    // from the current scope.
+    const scoped = state.starterPath && state.starterPathTrack && state.starterPathTrack !== 'all';
+    const totalDue = scoped ? allDueReviewIds().length : due;
+    const hiddenByScope = totalDue - due;
     if (due > 0) {
       btn.classList.remove('hidden');
       cnt.textContent = due;
+      btn.title = scoped && hiddenByScope > 0
+        ? `Drill the lessons whose review interval is up — ${due} in ${state.starterPathTrack} path, ${hiddenByScope} more in other tracks (switch path scope to see)`
+        : 'Drill the lessons whose review interval is up';
+    } else if (scoped && totalDue > 0) {
+      // Zero in-scope but there ARE due lessons elsewhere — keep the button visible
+      // with a 0/N badge so the user knows the path scope is hiding work.
+      btn.classList.remove('hidden');
+      cnt.textContent = `0/${totalDue}`;
+      btn.title = `0 due in ${state.starterPathTrack} path, but ${totalDue} due in other tracks. Switch path scope or toggle path off to see them.`;
     } else {
       btn.classList.add('hidden');
     }
@@ -1141,7 +1230,25 @@ async function runCode(code) {
   }
 }
 function normalize(s) { return (s ?? '').toString().trim().replace(/\r\n/g, '\n'); }
-function outputsMatch(a, b) { return normalize(a) === normalize(b); }
+function normalizeLines(s) {
+  return normalize(s).split('\n').map(l => l.replace(/\s+$/, '')).filter(l => l.length > 0);
+}
+// Subsequence match: every expected line must appear in actual, in order.
+// Extra lines in actual (debug `console.log` calls the user left in) are
+// tolerated — they just don't match any expected line. Identical sequences
+// pass under subsequence too, so this is strictly more permissive than the
+// old equality check.
+function outputsMatch(actual, expected) {
+  const exp = normalizeLines(expected);
+  const act = normalizeLines(actual);
+  if (exp.length === 0) return act.length === 0;
+  let i = 0;
+  for (const line of act) {
+    if (line === exp[i]) i++;
+    if (i === exp.length) return true;
+  }
+  return false;
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 //  SIDEBAR RENDER
@@ -1204,18 +1311,31 @@ function renderSidebar() {
     return lessonOverallStatus(lesson.id) !== 'mastered';
   };
 
-  // Reflect starter-path toggle on the button itself
+  // Reflect the Path View toggle on the button itself. The button filters the
+  // sidebar to whichever path the user is subscribed to (see PATHS registry).
+  // If the subscribed path has no drill-lesson sequence, the button is visible
+  // but disabled — there's nothing to filter to.
   const pathBtn = document.getElementById('path-btn');
   if (pathBtn) {
-    pathBtn.classList.toggle('text-blue-300', state.starterPath);
-    pathBtn.classList.toggle('text-slate-500', !state.starterPath);
-    // Show "🧭 Starter Path · Syn" etc. when a track is selected, so the
+    const hasLessons = subscribedPathHasLessons();
+    // Auto-clear a stale active filter if we somehow ended up on a path with
+    // no lessons (e.g. switched paths while the filter was on).
+    if (!hasLessons && state.starterPath) state.starterPath = false;
+    pathBtn.disabled = !hasLessons;
+    pathBtn.style.opacity = hasLessons ? '' : '0.4';
+    pathBtn.style.cursor = hasLessons ? '' : 'not-allowed';
+    pathBtn.title = hasLessons
+      ? 'Filter the sidebar to your current study plan’s lessons, in order'
+      : 'Your current study plan has no drillable lesson sequence to filter to';
+    pathBtn.classList.toggle('text-blue-300', state.starterPath && hasLessons);
+    pathBtn.classList.toggle('text-slate-500', !(state.starterPath && hasLessons));
+    // Show "🧭 Path View · Syn" etc. when a track sub-filter is selected, so the
     // user always sees which scope is active without opening the chip row.
     if (state.starterPath && state.starterPathTrack && state.starterPathTrack !== 'all') {
       const shortLabel = state.starterPathTrack[0].toUpperCase() + state.starterPathTrack.slice(1, 3);
-      pathBtn.textContent = '🧭 Starter Path · ' + shortLabel;
+      pathBtn.textContent = '🧭 Path View · ' + shortLabel;
     } else {
-      pathBtn.textContent = '🧭 Starter Path';
+      pathBtn.textContent = '🧭 Path View';
     }
   }
 
@@ -1228,12 +1348,12 @@ function renderSidebar() {
   // Render the binder tab strip (independent of which lessons are visible).
   renderBinderTabs(tracks);
 
-  // iter 39: when path mode is on, surface a track-picker chip row above
-  // the lesson list. Lets the user scope the Starter Path to one track
-  // (Syntax-only, Patterns-only, Applied-only) or keep "All" (legacy).
-  // No new authoring — the active path is just STARTER_PATH filtered by
-  // the picked track.
+  // When Path View is on, surface a track-picker chip row above the lesson
+  // list. Lets the user scope the active path to one track (Syntax-only,
+  // Patterns-only, Applied-only) or keep "All". No new authoring — the active
+  // path is just the subscribed path's lessonOrder filtered by the picked track.
   if (state.starterPath) {
+    const pathBase = getPathLessonOrder(getSubscribedPath()) || [];
     const trackRow = document.createElement('div');
     trackRow.className = 'path-track-row';
     const choices = [
@@ -1245,8 +1365,8 @@ function renderSidebar() {
     const cur = state.starterPathTrack || 'all';
     trackRow.innerHTML = choices.map(c => {
       const count = c.id === 'all'
-        ? STARTER_PATH.length
-        : STARTER_PATH.filter(id => {
+        ? pathBase.length
+        : pathBase.filter(id => {
             const l = findLesson(id);
             return l && l.track === c.id;
           }).length;
@@ -1262,6 +1382,8 @@ function renderSidebar() {
       state.starterPathTrack = newTrack;
       _invalidateStarterPathCache();
       saveProgress();
+      // iter 45: review badge depends on path scope — refresh after track change.
+      updateReviewBadge();
       // If current lesson is no longer in the new track-path, jump to next un-mastered.
       if (!getActiveStarterPath().includes(state.currentLessonId)) {
         const next = starterPathNextId();
@@ -1300,7 +1422,7 @@ function renderSidebar() {
     let lessons = CURRICULUM.filter(l => l.track === track.id && matches(l) && inStarter(l) && hideMasteredOk(l));
     if (!lessons.length) continue;
 
-    // In path mode, sort by STARTER_PATH index so the visible step numbers
+    // In path mode, sort by active-path index so the visible step numbers
     // read monotonically top-to-bottom. Sections then appear in the order
     // of their first path-step (because `[...new Set(...)]` preserves
     // first-occurrence order). Without this, HASH STRUCTURES could read
@@ -1570,8 +1692,9 @@ function renderLesson() {
   const pathIdx = _activePath ? _activePath.indexOf(lesson.id) + 1 : 0;
   const _trackLabel = state.starterPath && state.starterPathTrack && state.starterPathTrack !== 'all'
     ? ' (' + state.starterPathTrack[0].toUpperCase() + state.starterPathTrack.slice(1) + ')' : '';
+  const _pathName = getSubscribedPath().label;
   const pathPill = pathIdx > 0
-    ? `<span class="pill pill-path ml-2" title="Starter Path step ${pathIdx} of ${_activePath.length}${_trackLabel}">🧭 Step ${pathIdx} of ${_activePath.length}${_trackLabel}</span>`
+    ? `<span class="pill pill-path ml-2" title="${escapeHtml(_pathName)} step ${pathIdx} of ${_activePath.length}${_trackLabel}">🧭 Step ${pathIdx} of ${_activePath.length}${_trackLabel}</span>`
     : '';
   const nextId = nextLessonId(lesson.id);
   const nextLessonObj = nextId ? findLesson(nextId) : null;
@@ -1663,12 +1786,16 @@ function renderLesson() {
     // when selectLesson set state.currentTab = 'auto'.
     _updateHash();
   }
-  for (const t of tabDefs) {
+  for (let i = 0; i < tabDefs.length; i++) {
+    const t = tabDefs[i];
     const btn = document.createElement('button');
     btn.className = 'tab-btn';
     btn.dataset.level = t.id;
     if (state.currentTab === t.id) btn.classList.add('active');
-    btn.innerHTML = `${t.label}${t.status === 'passed' ? ' <span class="text-emerald-400 ml-1">✓</span>' : ''}`;
+    // Prefix with "N. " so the keyboard shortcut (number key = Nth tab) is
+    // discoverable without opening the help modal.
+    const num = `<span class="text-slate-500 mr-1">${i + 1}.</span>`;
+    btn.innerHTML = `${num}${t.label}${t.status === 'passed' ? ' <span class="text-emerald-400 ml-1">✓</span>' : ''}`;
     btn.addEventListener('click', () => selectTab(t.id));
     tabs.appendChild(btn);
   }
@@ -2903,8 +3030,8 @@ function renderL3(body, lesson, content) {
       <div class="output-box" data-output>(run your code…)</div>
     </div>
     <div data-diff-panel class="mt-4 hidden">
-      <div class="text-xs text-slate-500 mb-1">Diff vs canonical (yours on top):</div>
-      <div data-diff class="code-block" style="white-space: pre-wrap;"></div>
+      <div class="text-xs text-slate-500 mb-1">Diff vs canonical (comments stripped):</div>
+      <div data-diff class="diff-side"></div>
     </div>
   `;
   body.appendChild(wrap);
@@ -3003,21 +3130,21 @@ function renderL3(body, lesson, content) {
     diffBtn.addEventListener('click', () => {
       const panel = wrap.querySelector('[data-diff-panel]');
       const target = wrap.querySelector('[data-diff]');
-      const userLines = cm.getValue().split('\n');
-      const canonLines = drill.canonical.split('\n');
-      const max = Math.max(userLines.length, canonLines.length);
-      const out = [];
-      for (let i = 0; i < max; i++) {
-        const u = userLines[i] ?? '';
-        const c = canonLines[i] ?? '';
-        if (u === c) {
-          out.push(`<span style="color:#64748b">  ${escapeHtml(u || ' ')}</span>`);
-        } else {
-          if (u.length) out.push(`<span style="color:#fca5a5">- ${escapeHtml(u)}</span>`);
-          if (c.length) out.push(`<span style="color:#86efac">+ ${escapeHtml(c)}</span>`);
-        }
+      const userLines = stripCommentsForDiff(cm.getValue());
+      const canonLines = stripCommentsForDiff(drill.canonical);
+      const rows = lcsDiffRows(userLines, canonLines);
+      // Header row + a (left, right) pair per diff row, laid out in a 2-col grid.
+      const cells = [
+        '<div class="diff-side-header">Yours</div>',
+        '<div class="diff-side-header diff-side-header-right">Canonical</div>'
+      ];
+      for (const r of rows) {
+        const leftCls = `diff-row diff-row-left diff-${r.status === 'eq' ? 'eq' : (r.status === 'del' ? 'del' : 'empty')}`;
+        const rightCls = `diff-row diff-row-right diff-${r.status === 'eq' ? 'eq' : (r.status === 'add' ? 'add' : 'empty')}`;
+        cells.push(`<div class="${leftCls}">${escapeHtml(r.left) || '&nbsp;'}</div>`);
+        cells.push(`<div class="${rightCls}">${escapeHtml(r.right) || '&nbsp;'}</div>`);
       }
-      target.innerHTML = out.join('\n');
+      target.innerHTML = cells.join('');
       panel.classList.remove('hidden');
     });
   }
@@ -3111,6 +3238,42 @@ function escapeHtml(s) {
   return (s ?? '').toString()
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Comment stripping for the L3 side-by-side diff. Drops block comments,
+// then line comments, then any line that's now whitespace-only — comments
+// are noise when comparing recalled code to the canonical's annotated form.
+// Naive: doesn't track string/regex literals. Safe for our canonicals (no
+// `//` inside template strings), reviewer-enforced going forward.
+function stripCommentsForDiff(code) {
+  return code
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map(line => line.replace(/\/\/.*$/, '').replace(/\s+$/, ''))
+    .filter(line => line.trim().length > 0);
+}
+
+// LCS-based line alignment for side-by-side diff. O(n*m) DP — fine for
+// snippets under a few hundred lines (our canonicals top out ~40).
+// Returns rows of `{left, right, status: 'eq'|'del'|'add'}`.
+function lcsDiffRows(a, b) {
+  const n = a.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const rows = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { rows.push({ left: a[i], right: b[j], status: 'eq' }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { rows.push({ left: a[i], right: '', status: 'del' }); i++; }
+    else { rows.push({ left: '', right: b[j], status: 'add' }); j++; }
+  }
+  while (i < n) rows.push({ left: a[i++], right: '', status: 'del' });
+  while (j < m) rows.push({ left: '', right: b[j++], status: 'add' });
+  return rows;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -3418,10 +3581,16 @@ async function init() {
     renderSidebar();
   });
 
-  // Starter-path toggle
+  // Path View toggle — filters the sidebar to the subscribed path's lessons.
   document.getElementById('path-btn').addEventListener('click', () => {
+    // No-op when the subscribed path has no drill-lesson sequence (button is
+    // also visually disabled, but guard here too for keyboard/programmatic clicks).
+    if (!subscribedPathHasLessons()) return;
     state.starterPath = !state.starterPath;
     _invalidateStarterPathCache();
+    saveProgress();
+    // iter 45: review badge depends on path scope — refresh after toggle.
+    updateReviewBadge();
     renderSidebar();
     // If toggling ON and current lesson isn't in the path, jump to next un-mastered in path
     if (state.starterPath && !getActiveStarterPath().includes(state.currentLessonId)) {
@@ -3435,6 +3604,11 @@ async function init() {
 
   // Keyboard nav (global)
   document.addEventListener('keydown', (e) => {
+    // All in-app shortcuts are bare keys. If a modifier is held, defer to the
+    // browser/OS — otherwise we'd hijack Cmd+C (copy), Cmd+1-9 (browser tabs),
+    // Cmd+/ (devtools-style), etc.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
     // Skip when typing into inputs / editors
     const target = e.target;
     const inEditable = target && (
@@ -3470,17 +3644,17 @@ async function init() {
     } else if (e.key === 'k' || e.key === 'ArrowUp') {
       const p = prevLessonId(state.currentLessonId);
       if (p) { e.preventDefault(); selectLesson(p); }
-    } else if (e.key === '1') { selectTab('reference'); }
-    else if (e.key === '2') { selectTab('L1'); }
-    else if (e.key === '3') { selectTab('L2'); }
-    else if (e.key === '4') { selectTab('L3'); }
-    else if (e.key === 'c') {
-      // Conversation is opt-in per lesson; ignore the shortcut on lessons
-      // that don't expose it.
-      const c = CONTENT[state.currentLessonId];
-      if (c && c.conversation) selectTab('conversation');
+    } else if (/^[1-9]$/.test(e.key)) {
+      // Number keys map to the Nth tab in current render order. Patterns/Applied
+      // lessons expose up to 6 tabs (Conversation, Walkthrough, Reference,
+      // L1, L2, L3); Syntax lessons expose 4. The visible "N. " prefix on each
+      // tab label makes the mapping discoverable.
+      const tabBtns = document.querySelectorAll('.tab-btn[data-level]');
+      const idx = parseInt(e.key, 10) - 1;
+      const btn = tabBtns[idx];
+      if (btn && btn.dataset.level) selectTab(btn.dataset.level);
     }
-    else if (e.key === 's' && (e.metaKey === false && e.ctrlKey === false)) {
+    else if (e.key === 's') {
       const id = pickShuffleReview();
       if (id) { e.preventDefault(); selectLesson(id); }
     }

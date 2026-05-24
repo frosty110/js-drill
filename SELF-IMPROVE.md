@@ -7,9 +7,9 @@
 > the parking lots after each pass.
 
 ## Next iteration
-- **Suggested mode:** audit (run the `/lesson-audit` skill against all 149 lessons — produces the first real audit artifact + state-file baseline)
-- **Signal pointing there:** Iter 26 vision just populated `iter-artifacts/roadmap.md` with 3 cross-subagent-converged entries (#1 Pattern Recognition Speed Drill — single-iter ship; #2 Error Post-Mortem — 2-iter scaffold+ship; #3 Commute Audio Mode — 3-iter scaffold+wire+ship). Per iter 25 adversary's "no measurement-only artifacts without committed next-iter plan" constraint, the 25→26→27→28 sequence promised iter 27 = `/lesson-audit` first invocation, then iter 28 = ship from roadmap top. Honoring that sequence: iter 27 audit produces the first `iter-artifacts/lesson-audit-{date}.md` + `.lesson-audit-state.json` baseline, validates plan-first-then-priors flow, and exercises the parallel-section-subagent fan-out. Evidence floor: audit is evidence-producing; ≥1 in rolling 6 stays satisfied. Vision floor: just fired iter 26, satisfied through iter 32.
-- **Veto condition:** skip audit if (a) user wants to immediately ship the top roadmap entry (Pattern Recognition Speed Drill — clean single-iter scope, mobile-native, validates the new architecture's first non-trivial ship); (b) user wants to ratify or amend one of the three PROFILE.md amendments drafted in PROFILE.md HTML comments before any new-bucket feature lands (this would be a frame iter, currently at the rate-limit ceiling of 2-per-10 but user can override); (c) user wants a research iter to pre-instrument Page Visibility API alone before scoping Commute Audio Mode (validates Amendment C's premise before any audio UI lands).
+- **Suggested mode:** ship — Tier 1 bottom-quartile rewrites surfaced by iter-27 audit (`linked-list/p-remove-nth` L2 rewrite + `applied-problems/a-minesweeper` L2 expansion). Atomically commitable single-iter ship; 2 lessons.
+- **Signal pointing there:** Iter 27 audit produced `iter-artifacts/lesson-audit-2026-05-24.md` covering all 150 lessons with l1l2 rubric. Two new bottom-quartile lessons surfaced (both mean 1.75): `linked-list/p-remove-nth` (all 4 L2 blanks are literal `next` — pattern-matchable) and `applied-problems/a-minesweeper` (single trivial `"X"` blank for a flood-fill lesson). Per the audit's own next-iter-plan and the iter-25 adversary's "no measurement-only artifacts without committed next-iter plan" constraint, iter 28 ships the Tier 1 fixes. Both rewrites are mechanical given the audit's specified rewrite directions; high-confidence atomic ship. **Adversary fires per SKILL.md Step 2A** (first ship-iter consuming audit output → first real adversary test under new architecture; BS-14 pivot-rate criterion starts ticking).
+- **Veto condition:** skip Tier 1 ship if (a) user wants iter 28 to consume roadmap entry #1 instead (Pattern Recognition Speed Drill — also single-iter scope; validates vision-iter-26 thread); (b) user prefers iter 28 to start the section-wide L2 under-build remediation pass (theme 6 from audit: 33 patterns + 17 applied lessons ship with only 1 L2 — bigger leverage but multi-iter); (c) user wants iter 28 to be the L1 absurd-distractor cleanup pass (theme 7: ~25 questions across all sections — mechanical, single-iter, lifts global L1 mean ~0.05-0.08).
 
 ## Current focus
 - **Status: ACTIVE** — loop architecture restructured iter 24 per BS-14 / iter-23 meta-review. New architecture (vision mode + adversarial subagent + vision floor) needs validation in the next 5-6 iters. Pedagogical quality lens (BS-08) still has queued work in iter-23 L1/L2 audit.
@@ -32,6 +32,7 @@
 | 24 | frame | [engineering/meta] User-authorized quota override to act on iter-23 loop meta-review immediately rather than defer to iter 29. SKILL.md restructured per Part 4 recommendation: (1) added 6th mode `vision` for periodic big-feature roadmap generation; (2) added mandatory adversarial subagent step to ship mode (every ship target must be confronted with an adversary proposing alternatives, then commit body must pivot or rebut in ≥3 sentences); (3) replaced ship-quota floor (`≥3 ships per 6`) with vision floor (`≥1 vision per 6`) + evidence floor (`≥1 evidence-producing per 6`); (4) removed `3+ consecutive ships → forced non-ship` and `multiple of 10 → forced frame` rules (now redundant); (5) reframed coverage prompt from "what's missing from curriculum?" to "what user need has no current surface?"; (6) added multi-iter feature pattern with `[product/feature-scaffold]` → `[product/feature-wire]` → `[product/feature-ship]` subtypes for roadmap entries too big for one iter. New `iter-artifacts/roadmap.md` stub created. CLAUDE.md commit convention updated with the new subtypes. BS-14 marked partially closed; success criterion = adversary pivot rate ≥30% over first 6 ship iters. |
 | 25 | ship | [engineering/tooling] First ship under new architecture. User-requested `/lesson-audit` skill at `.claude/skills/lesson-audit/SKILL.md` — makes iter-23's one-off L1/L2 quality audit reproducible. Plan-first-then-check-priors discipline (orchestrator drafts audit plan BEFORE loading prior outputs, refines after). One parallel subagent per section group (algorithmic, 8-12 agents for full 149-lesson project). Embeds the iter-23 rubric verbatim; parameterizable via flags (`--scope`, `--changed-only`, `--rubric`, `--max-agents`). Outputs `iter-artifacts/lesson-audit-{date}.md` + `iter-artifacts/.lesson-audit-state.json` (delta cache). **Mandatory adversary fired (per new SKILL.md Step 2A):** verdict weak-case-against; alternatives = (a) audit+auto-fix in one skill, (b) L1-count backfill deterministic pass. Rebut: user explicitly directed reproducible skill not one-shot, alternatives can land as future flags/iters, audit's `--auto-fix` mode is a natural extension. Adversary's "no measurement-only artifacts" constraint honored in § Next iteration nomination. Skill structurally validated (YAML frontmatter parses, all required sections present, 202 lines) but NOT smoke-tested — first real invocation is the user's `/lesson-audit` call. Validator 359/0. |
 | 26 | vision | [engineering/meta] First vision iter ever — satisfies vision floor (≥1 per rolling 6) established iter 24 to enforce BS-14 close. Spawned 2 parallel fresh-eyes product-designer subagents (neither read SELF-IMPROVE.md, iteration log, or .claude/skills/); A primed by general product framing, B primed by "unfair-advantage zones" framing (browser APIs + cognitive surfaces the ladder doesn't cover). **Cross-subagent convergence on 3 buckets:** audio modality (A#1, B#1), miss-classification post-mortem (A#2, B#2), pattern-recognition / inverse direction (A#4, B#3). Promoted as roadmap entries #1 Pattern Recognition Speed Drill (single-iter ship, no schema migration, mobile-native), #2 Error Post-Mortem with Miss Classification (2-iter scaffold+ship, `__v: 6` bump), #3 Commute Audio Mode (3-iter scaffold+wire+ship, listen-only MVP, voice-in deferred). 3 PROFILE.md amendments drafted as HTML comments (commented-out per SKILL.md Step 2D step 3 — frame iter ratifies). 4 sub-proposals NOT promoted but retained in roadmap traceability section (AI Interview Coach, Daily Push+Sync, Side-by-Side Diff, Standalone PWA). § Next iteration nominates audit (run `/lesson-audit`) per iter 25 adversary's measurement-with-plan constraint. |
+| 27 | audit | [engineering/meta] First real `/lesson-audit` invocation — validates the iter-25 skill end-to-end. Spawned 12 parallel agents (Basics, Algorithms, Trees, DP, Applied, Arrays+Hash+Modern, Iter+JSToolbox, Classes+Async+Adv, A&H+TwoPtr+Sliding, Stack+BS+LL, Tries+Heap+Graphs, Greedy+Bktk+Intervals+Matrix+Bit+SysDes); none read SELF-IMPROVE.md/iteration log/SKILL.md. Plan-first-then-priors discipline honored (pre-prior plan drafted before loading iter-23 audit; refined plan unchanged). **Aggregate: L1 2.63, L2 2.60, lesson 2.61 across 150 lessons.** Two NEW bottom-quartile lessons (`linked-list/p-remove-nth` 1.75 — all 4 L2 blanks are literal `next`; `applied-problems/a-minesweeper` 1.75 — single trivial `"X"` blank for a flood-fill lesson). 12 watchlist. **Key cross-cutting themes:** (1) linked-list `.next` blanking disease across 5 of 7 LL lessons; (2) L2 under-build is systemic (33 of 79 patterns + 17 of 20 applied have only 1 L2 — violates PROFILE.md ≥2 floor); (3) recurring "Why dummy head?" Q across 4 LL lessons (spaced-rep redundancy); (4) complexity-question fatigue across ~70 patterns lessons (always with one absurd distractor). **Delta vs iter-23:** 13 improved / 3 regressed / 7 unchanged / 126 newly scored — but 3 of the "improved" (`s-promises` +1.00, `s-trycatch` +1.00, `s-class` +0.62) had NO git changes since iter 23, flagged as agent-leniency noise in the artifact's delta-integrity caveat. Real story: zero lessons drifted into bottom-quartile from prior watchlist; the two new bottoms are first-ever-audited (LL + applied). Outputs: `iter-artifacts/lesson-audit-2026-05-24.md` (1700-line report), `iter-artifacts/.lesson-audit-state.json` (baseline for delta on future runs). Validator 362/0. |
 
 ## Blind spots ledger
 *(things the loop has historically not questioned; promote to Current focus or Parking lot when actioned)*
@@ -43,7 +44,7 @@
 - **[BS-05] Modern syntax gaps** — rest params, computed/shorthand keys, logical assignment (`||=`, `??=`, `&&=`), ES2022+ array variants (`findLast`, `toSorted`, `toReversed`). *Seeded iter 19; queue for ship iter ~22.*
 - **[BS-06] L1→L2→L3 ladder treated as axiomatic** — no iter has questioned whether the ladder shape fits all topic types (system design likely needs a different shape; quick conceptual quizzes might want L1-only). *Seeded iter 19; revisit in a future frame iter (~iter 30).*
 - **[BS-07] PROFILE.md assumption decay** — "80% phone" was written at project start and never re-validated. Could be more/less phone now after months of actual use. *Seeded iter 19; revisit in a future frame iter (~iter 30) when usage data is available.*
-- **[BS-08] Content quality vs. content validity** — validator passes ≠ lessons are well-authored. *Audited iter 23 (see `iter-artifacts/iter-23-l1-l2-audit.md`): 51 syntax lessons scored, mean 2.49/3.00. 5 bottom-quartile lessons identified for L1+L2 rewrite (`async/s-promises` 1.38, `basics/s-strings` 1.75, `basics/s-template` 1.75, `hash-structures/s-obj-basics` 1.75, `async/s-trycatch` 1.75). 6 more on watchlist. Audit closed; rewrites queued for iter 24+ Tier 1 ship. **Reproducibility shipped iter 25:** `/lesson-audit` skill (`.claude/skills/lesson-audit/SKILL.md`) makes future audits a slash-command away. Covers all 149 lessons by default with delta detection against prior runs via `iter-artifacts/.lesson-audit-state.json`. Outstanding question: should the threshold move to ≥2.00 to catch the watchlist tier?*
+- **[BS-08] Content quality vs. content validity** — validator passes ≠ lessons are well-authored. *Audited iter 23 (51 syntax only, mean 2.49). **Re-audited iter 27 (all 150 lessons via `/lesson-audit` first real invocation, see `iter-artifacts/lesson-audit-2026-05-24.md`):** L1 mean 2.63, L2 mean 2.60, lesson mean 2.61. **2 new bottom-quartile lessons** surfaced from never-audited tracks: `linked-list/p-remove-nth` 1.75 (all 4 L2 blanks are literal `next`) and `applied-problems/a-minesweeper` 1.75 (single trivial `"X"` blank for flood-fill lesson). 12 watchlist (1.80-2.15). State file `iter-artifacts/.lesson-audit-state.json` created — delta computation available for all 150 lessons on next run. **Iter-23 bottom-quartile lessons all cleared 1.80 line in iter-27 re-score, but 3 of those positive deltas (s-promises +1.00, s-trycatch +1.00, s-class +0.62) had NO git changes — likely agent-leniency artifact, flagged in delta-integrity caveat.** Outstanding cross-cutting themes: (1) linked-list `.next` blanking disease across 5 of 7 LL lessons (highest-leverage section-level rewrite target); (2) L2 under-build is systemic (33 of 79 patterns + 17 of 20 applied have only 1 L2 — violates PROFILE.md ≥2 floor); (3) recurring "Why dummy head?" Q across 4 LL lessons (interleaving redundancy); (4) ~25 L1 questions with absurd-distractor anti-pattern. **BS-08 close criterion (the lessons-are-well-authored question) now has reproducible measurement infrastructure + first re-audit baseline.** Outstanding watchlist threshold question (move to ≥2.00?) still open. Tier 1 rewrites (the 2 new bottoms) nominated for iter 28 ship.*
 - **[BS-09] Tooling debt in `tools/cdp/`** — 12+ probes accumulated; never audited for staleness, DRY violations, or coverage. Schema `__v` not bumped despite `mockHistory` field added iter 13. `_iter16-survey.js` left untracked across iters 16–19. *Seeded iter 19; queue for audit iter.*
 - **[BS-10] Storage backend (localStorage-only)** — cross-device sync would be a strong win for the 80%-phone profile if scoped tight (anonymous-first, opt-in login). User flagged iter 19 discussion; deferred for now to ship the syllabus work first. *Seeded iter 19; queue for a future frame iter to decide scope before any code.*
 - **[BS-11] "I passed but nothing saved" UX gap** — user-reported 2026-05-23 after iter 20. Investigation via CDP probes confirmed localStorage save/load works correctly on both localhost and the live Pages URL. Actual cause: pass conditions are strict — L1 requires ALL questions correct in one session (any wrong click locks that question; user must hit Retry), L2 requires every exercise's every blank correct, L3 requires exact output match. Navigation state (lastLessonId, lastTab, sidebarTrack, welcomed) saves on nav so the user sees "something" persisted, but `progress` stays empty until a full pass fires `markPassed()`. The single feedback message "Some answers were off — hit Retry to start over" is the only signal, and it's easy to miss when individual questions show "✓ Correct" mid-session. *Candidate product/ux fixes: (a) persistent per-session score chip ("2/3 correct — Retry for full pass"); (b) post-attempt summary surface; (c) loosen strict-pass to ≥N% with a note that the SR bucket still requires full mastery; (d) different copy on the "✓ Correct" per-question feedback to make clear it's per-question, not the lesson pass. Queue for iter 22+ as a [product/ux] candidate — discuss with user before implementing since (c) touches the SR mechanism's core assumption.*
@@ -69,6 +70,9 @@
 | `/lesson-audit` reproducible audit skill | 25 |
 | PROFILE.md (commented-out amendment drafts) | 26 (3 amendments awaiting frame iter) |
 | Vision-mode subagent template + roadmap promotion criteria | 26 (first invocation) |
+| `/lesson-audit` skill (first real invocation) | 27 (12-agent parallel audit, 150 lessons scored) |
+| Lesson-audit state file (`iter-artifacts/.lesson-audit-state.json`) | 27 (baseline created — delta computation available for future runs) |
+| L1/L2 quality across full curriculum (BS-08 close confirmation) | 27 (2 new bottom-quartile surfaced: `linked-list/p-remove-nth` + `applied-problems/a-minesweeper`) |
 | L3 surface / CTA injection | 17 |
 | Cheatsheet | 15 |
 | Applied-track surfaces (pills, stats panel) | 14 |
@@ -130,6 +134,55 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-24 — iter 27 — Audit mode: first real `/lesson-audit` invocation across all 150 lessons
+First real invocation of the iter-25 `/lesson-audit` skill — validates
+the plan-first-then-priors flow + parallel-section-subagent fan-out
+end-to-end. Spawned 12 parallel agents (one per section group: Basics,
+Algorithms, Trees, DP, Applied — single 20-lesson agent — plus 7 grouped-
+small-section agents covering remaining 87 lessons). All 12 agents fresh-
+eyes (none read SELF-IMPROVE.md, iteration log, prior audit, or SKILL.md).
+Plan-first discipline honored: pre-prior plan drafted from manifest only
+(12 agents × ~12 lessons each), then iter-23 prior loaded and per-lesson
+prior scores threaded into each agent's prompt for delta computation; no
+plan delta required. **Challenge-the-focus answers:** (1) loop hasn't
+touched comprehensive curriculum measurement since iter 23 syntax-only
+audit; never touched patterns track or applied track for quality. (2)
+PROFILE.md "L2 must blank load-bearing tokens not identifiers" is testable
+via this rubric — audit confirms it's the dominant L2 failure mode. (3)
+New contributor would ask "why is `p-remove-nth`'s L2 four blanks of the
+same `next` token? did the L2 system check?" — and the answer is: validator
+checks correctness, not pedagogical fitness; the audit IS the missing check.
+(4) Yes highest-leverage — `/lesson-audit` going unused for 2 iters after
+shipping would have validated iter-25 adversary's "no measurement-only
+artifacts without committed plan" criticism. **Aggregate result: L1 2.63,
+L2 2.60, lesson 2.61 across 150 lessons.** Two new bottom-quartile
+(`linked-list/p-remove-nth` 1.75, `applied-problems/a-minesweeper` 1.75).
+12 watchlist. Iter-23 5 bottoms all cleared 1.80 line but 3 of the +1.00
+deltas (s-promises, s-trycatch, s-class) had NO git changes — flagged as
+agent-leniency noise in artifact's delta-integrity caveat. **Top
+cross-cutting findings:** (1) linked-list `.next` blanking disease across
+5 of 7 LL lessons; (2) systemic L2 under-build (33+17 lessons with only
+1 L2, violates PROFILE.md ≥2 floor); (3) recurring "Why dummy head?" Q
+4× across LL; (4) ~25 L1 absurd-distractor questions. Artifacts written:
+`iter-artifacts/lesson-audit-2026-05-24.md` (~1700 lines), state file
+`iter-artifacts/.lesson-audit-state.json` (per-lesson L1/L2/mean +
+scoreHistory for delta computation on future runs). Validator 362/0 (3
+extra exercises since iter 26 — unrelated WIP on `p-longest-sub.json`).
+**Learning:** the 12-agent parallel fan-out worked cleanly first-shot —
+no agent failed, all returned structured reports in the expected format,
+cross-agent themes converged independently (multiple agents flagged
+"complexity-question fatigue" and "L2 under-build" without prompting).
+The plan-first-then-priors discipline cost an extra ~30 seconds (write
+pre-prior plan first) and produced no behavior change this time — but
+that's by design; the discipline pays off when prior outputs would
+otherwise anchor the orchestrator into auditing only what was audited
+before. Also notable: my iter-23 priors were partly incomplete (only
+24 of 51 syntax lessons had explicit L1/L2 scores published; others
+only had aggregate "≥2.25" labels), so the state file is the FIRST time
+all 150 lessons have explicit-and-recoverable scores — every future
+audit run gets a real delta column instead of "newly scored" for 60%+
+of lessons.
 
 ### 2026-05-23 — iter 26 — Vision mode: populate roadmap.md with 3 ranked big-feature candidates
 First-ever vision iter. Forced by Step 1 procedure rule 2 (vision floor
@@ -424,32 +477,15 @@ from iter 16's mobile cold-survey; left in place since deletion sits
 outside the directive's scope. **Loop paused.** Resume only on fresh
 user signal (see Current focus criteria).
 
-### 2026-05-23 — iter 17 — Next-CTA injects on fresh L3 pass
-Iter 16 added the "Review N due → / Next lesson →" CTA in the header
-on mastered lessons, but only on a fresh `renderLesson()`. Audit
-revealed the same "hidden behind drawer" problem on the FIRST L3
-pass: `markPassed` → `updateLessonHeaderInPlace` was adding the
-Mastered pill but NOT the CTA row, so the user passed L3, saw the
-success message, and had no inline next action until they navigated.
-Extended `updateLessonHeaderInPlace` to inject the same CTA row (with
-the same review-priority logic from iter 16) when transitioning to
-mastered. Marked both CTA rows with `[data-cta-row]` for dedup +
-testability. Validator 336/0; new probe
-`tools/cdp/cta-injects-on-l3-pass.js` (4/4) confirms no CTA before
-pass, row present after pass with correct primary label, mastered
-pill preserved. Iter 16 probe still passes 5/5. **Learning:** the
-"main-viewport vs. drawer" pattern is now closed across both the
-fresh-render path AND the in-place update path. After 17 iterations,
-the marginal find is narrower each pass — time to stop and let the
-user actually use the app.
+*(iter 17 trimmed; see git `2d6325d` — Next-CTA injects on fresh L3 pass, closed the "main-viewport vs. drawer" pattern on both fresh-render and in-place update paths.)*
 
-*(iters 1–16 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–17 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
 `4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7; `dc41586` iter 8;
 `b65df72` iter 9; `7728e0c` iter 10; `56068c7` iter 11; `31ba22b` iter 12;
 `8bc5306` iter 13; `dac973e` iter 14; `29a2556` iter 15 data-layer audit
 clean + cheatsheet/README 3-track pitch fix; `e542bd0` iter 16 mastered-CTA
-prefers due-reviews on mobile.)*
+prefers due-reviews on mobile; `2d6325d` iter 17 next-CTA injects on L3 pass.)*
 
 ## Hypotheses parking lot
 *(re-audited every 5 iters; last curated: iter 10)*

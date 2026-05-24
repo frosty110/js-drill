@@ -122,6 +122,7 @@ const state = {
   mock: { active: false, startTime: 0, lessonId: null, tickHandle: null },
   starterPath: false, // when true, sidebar shows only the linear starter path
   starterPathTrack: 'all', // 'all' | 'syntax' | 'patterns' | 'applied' — track-scope filter for the path (iter 39)
+  subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
   lastTab: null,
@@ -189,6 +190,68 @@ const TRACK_PILLS = {
   patterns: { cls: 'pill-pattern', label: 'Pattern' },
   applied:  { cls: 'pill-applied', label: 'Applied' },
 };
+
+// Study-plan registry. The user subscribes to exactly one (state.subscribedPathId).
+// The 📅 Today's Plan button routes by the subscribed path's `kind`:
+//   - 'lessons' → opens the in-app Today's Plan modal (curated due/path/weak session)
+//   - 'prep'    → navigates to a standalone dashboard page (e.g. prep.html)
+// Progress is keyed by lesson id, NOT by path, so switching plans never resets
+// mastery — two-sum stays mastered whether you reach it via Starter or Prep.
+const PATHS = [
+  {
+    id: 'starter',
+    label: 'Starter Path',
+    icon: '🧭',
+    kind: 'lessons',
+    blurb: 'Linear recommended order through the full JS Drill curriculum.',
+  },
+  {
+    id: 'prep-4day',
+    label: '4-Day Interview Prep',
+    icon: '📅',
+    kind: 'prep',
+    url: 'prep.html',
+    blurb: 'Day-by-day interview cram: drills, glossary, code shapes, and mocks.',
+  },
+];
+
+function getSubscribedPath() {
+  return PATHS.find(p => p.id === state.subscribedPathId) || PATHS[0];
+}
+
+function updatePathChip() {
+  const label = document.getElementById('path-chip-label');
+  if (label) label.textContent = getSubscribedPath().label;
+}
+
+function openPathModal() {
+  const modal = document.getElementById('path-modal');
+  const body = document.getElementById('path-body');
+  if (!modal || !body) return;
+  const currentId = state.subscribedPathId;
+  body.innerHTML = PATHS.map(p => {
+    const active = p.id === currentId;
+    const border = active ? '#34d399' : '#1e293b';
+    const bg = active ? 'rgba(52,211,153,0.08)' : '#0b1220';
+    const check = active ? `<span style="color:#34d399;font-size:13px;">● Current</span>` : `<span style="color:#64748b;font-size:13px;">Switch →</span>`;
+    return `<button data-path-id="${escapeHtml(p.id)}" style="text-align:left;padding:12px 14px;border-radius:8px;background:${bg};border:1px solid ${border};color:#e2e8f0;cursor:pointer;display:flex;flex-direction:column;gap:4px;">
+      <span style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-weight:600;font-size:14px;">${escapeHtml(p.icon || '')} ${escapeHtml(p.label)}</span>
+        ${check}
+      </span>
+      <span style="color:#94a3b8;font-size:12px;">${escapeHtml(p.blurb)}</span>
+    </button>`;
+  }).join('');
+  body.querySelectorAll('[data-path-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.subscribedPathId = btn.getAttribute('data-path-id');
+      saveProgress();
+      updatePathChip();
+      modal.style.display = 'none';
+    });
+  });
+  modal.style.display = 'block';
+}
 
 // Spaced-repetition intervals (in ms). Each pass advances to the next bucket.
 const REVIEW_INTERVALS = [
@@ -305,6 +368,10 @@ function loadProgress() {
     state.starterPath = !!parsed.starterPath;
     // iter 39: track-scoped path. Legacy users (no field) default to 'all' = existing behavior.
     state.starterPathTrack = ['all','syntax','patterns','applied'].includes(parsed.starterPathTrack) ? parsed.starterPathTrack : 'all';
+    // Subscribed study plan. Legacy users (no field) default to 'starter' = existing behavior.
+    // Validate against the registry so a stale/removed path id falls back gracefully.
+    state.subscribedPathId = (typeof PATHS !== 'undefined' && PATHS.some(p => p.id === parsed.subscribedPathId))
+      ? parsed.subscribedPathId : 'starter';
     state.welcomed = !!parsed.welcomed;
     state.hideMastered = !!parsed.hideMastered;
     state.reviews = parsed.reviews || {};
@@ -356,6 +423,7 @@ function saveProgress() {
     lastTab: state.currentTab,
     starterPath: state.starterPath,
     starterPathTrack: state.starterPathTrack,
+    subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
     reviews: state.reviews,
@@ -2823,6 +2891,7 @@ function renderL3(body, lesson, content) {
     <div class="l3-actions mt-3 flex items-center gap-2 flex-wrap">
       <button class="primary" data-action="run">Run <span class="text-blue-200">(⌘↵)</span></button>
       ${isMock ? '' : '<button class="secondary" data-action="hint" data-hint-btn>💡 Hint</button>'}
+      ${isMock || !Array.isArray(drill.criticalLines) || drill.criticalLines.length === 0 ? '' : `<button class="secondary" data-action="critical-fill" data-critical-btn title="Pre-fill the editor with the canonical; you fill just the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'}">🎯 Critical lines</button>`}
       ${isMock ? '' : '<button class="secondary" data-action="diff">Compare to canonical</button>'}
       ${isMock ? '' : '<button class="secondary" data-action="reveal">Reveal canonical</button>'}
       <button class="secondary" data-action="clear">Clear</button>
@@ -2950,6 +3019,32 @@ function renderL3(body, lesson, content) {
       }
       target.innerHTML = out.join('\n');
       panel.classList.remove('hidden');
+    });
+  }
+
+  // "Critical lines" pre-fill — load the canonical with `criticalLines`
+  // replaced by `/* ___ FILL THIS LINE ___ */` markers. User types just the
+  // load-bearing lines (the algorithm's insight), not the boilerplate.
+  // Hint tier; does NOT mark the lesson as revealed (no SR demote) — the
+  // canonical is structurally available either way; this is just easier
+  // recall scaffolding. See ideas-by-category.md § Drilling Surfaces →
+  // "What's missing?" critical-line fill.
+  const criticalBtn = wrap.querySelector('[data-action="critical-fill"]');
+  if (criticalBtn && Array.isArray(drill.criticalLines) && drill.criticalLines.length > 0) {
+    criticalBtn.addEventListener('click', () => {
+      const lines = drill.canonical.split('\n');
+      const blanked = lines.map((line, i) => {
+        // 1-indexed match — criticalLines stores user-facing line numbers.
+        if (drill.criticalLines.includes(i + 1)) {
+          // Preserve leading indentation so the editor's bracket-match keeps
+          // working and the line still looks "in place" structurally.
+          const indent = line.match(/^\s*/)[0];
+          return indent + '/* ___ FILL LINE ' + (i + 1) + ' ___ */';
+        }
+        return line;
+      }).join('\n');
+      cm.setValue(blanked);
+      feedback.innerHTML = `<span class="text-amber-300">🎯 Fill the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'} marked <code>/* ___ FILL ___ */</code> — that's the insight of this pattern.</span>`;
     });
   }
 
@@ -3361,7 +3456,7 @@ async function init() {
     }
     if (e.key === 'Escape') {
       // Close any open modal on Escape
-      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal'];
+      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);
         if (m && m.style.display === 'block') { m.style.display = 'none'; e.preventDefault(); return; }
@@ -3520,8 +3615,28 @@ async function init() {
     }
     todayModal.style.display = 'block';
   }
-  document.getElementById('today-btn').addEventListener('click', openToday);
+  // Today's Plan routes by the subscribed study plan. A 'prep' path navigates
+  // to its standalone dashboard; a 'lessons' path opens the in-app curated modal.
+  function openTodaysPlan() {
+    const path = getSubscribedPath();
+    if (path.kind === 'prep' && path.url) {
+      window.location.href = path.url;
+      return;
+    }
+    openToday();
+  }
+  document.getElementById('today-btn').addEventListener('click', openTodaysPlan);
   document.getElementById('today-close').addEventListener('click', () => todayModal.style.display = 'none');
+
+  // Path switcher — sidebar chip opens the modal; picking a path is handled
+  // inside openPathModal (sets subscription, saves, updates chip, closes).
+  const pathModal = document.getElementById('path-modal');
+  document.getElementById('path-chip').addEventListener('click', openPathModal);
+  document.getElementById('path-close').addEventListener('click', () => pathModal.style.display = 'none');
+  pathModal.addEventListener('click', (e) => {
+    if (e.target === pathModal) pathModal.style.display = 'none';
+  });
+  updatePathChip();
   todayModal.addEventListener('click', (e) => {
     if (e.target === todayModal) todayModal.style.display = 'none';
   });

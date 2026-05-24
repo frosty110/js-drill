@@ -231,6 +231,27 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
       } else {
         pass++;
       }
+      // iter 41: bounds-check `criticalLines` against the canonical's line count.
+      // Each entry must be a 1-indexed line number in `[1, lineCount]` that points
+      // at a non-empty, non-comment-only line. Catches authoring drift if the
+      // canonical is edited but criticalLines isn't updated.
+      if (Array.isArray(lesson.L3.criticalLines)) {
+        const lines = lesson.L3.canonical.split('\n');
+        for (const lineNo of lesson.L3.criticalLines) {
+          if (!Number.isInteger(lineNo) || lineNo < 1 || lineNo > lines.length) {
+            fail++;
+            failures.push(`${id} L3.criticalLines: ${lineNo} out of bounds (canonical has ${lines.length} lines)`);
+            continue;
+          }
+          const line = lines[lineNo - 1].trim();
+          if (!line || line.startsWith('//')) {
+            fail++;
+            failures.push(`${id} L3.criticalLines: line ${lineNo} is empty or comment-only ("${line}")`);
+            continue;
+          }
+          pass++;
+        }
+      }
     }
 
     // Walkthrough — compile the trace generator (array-of-lines joined to

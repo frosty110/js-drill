@@ -27,6 +27,20 @@ app's existence.
   to lie about it.
 - **No "show solution then quiz"** pattern — Reference is a separate tab the
   user must explicitly leave to drill.
+- **L3 "Critical lines" pre-fill (iter 41)** turns the L3 blank-editor
+  into a targeted retrieval drill. The 🎯 button (visible only on
+  lessons that have authored `L3.criticalLines`) pre-fills the canonical
+  scaffold with the 1-2 load-bearing lines replaced by `/* ___ FILL ___ */`
+  markers — the user types just the algorithm's *insight* (the partition
+  step, the complement check, the sorted-key fingerprint), not the
+  boilerplate. Bridges the L2 (many tiny token blanks) ↔ L3 (fully
+  blank) gap with a new recall shape: identify-the-insight-AND-produce-
+  it. Authored per-lesson by an editor who marks which lines are
+  load-bearing; that authoring decision is itself a learning signal
+  (the user sees: "this line is the insight"). Hint tier — does NOT
+  demote SR. Three lessons authored as MVP iter 41 (two-sum,
+  valid-parentheses, p-anagrams); follow-up iters expand the set.
+  See `iter-artifacts/ideas-by-category.md § Drilling Surfaces`.
 - **Walkthrough Quiz mode (iter 36)** turns the previously-passive
   Walkthrough scrub into an active-recall surface. The 🔮 Quiz button
   picks a midpoint step K, shows steps 1..K, then asks "what's the next

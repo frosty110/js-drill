@@ -209,6 +209,126 @@ Deployment is GitHub Pages off `main` — just push to deploy. Pages refresh tak
 ~30–90 seconds; poll for the new content (e.g., grep for a unique string from
 the new commit) before running the CDP probe against the live URL.
 
+## Commit message convention
+
+Every commit subject is prefixed with a category tag so `git log` is searchable
+by impact type. The killer use case:
+
+```bash
+git log --grep="^\[product" --oneline -20    # recent user-facing improvements
+```
+
+### Subject format
+
+```
+[<category>] <one-line summary>
+```
+
+For commits that genuinely span categories, list the *primary* tag first:
+
+```
+[<primary>] [<secondary>] <summary>
+```
+
+For loop-driven iterations, the iter+mode marker goes inside the summary so
+the meta-loop's framing stays intact:
+
+```
+[<category>] iter N (mode): <summary>
+```
+
+### Categories
+
+**Product — anything a drilling user can notice.** Tag this when the change
+affects what the user sees, reads, or interacts with on the live URL.
+- `[product/feature]` — net-new functionality (a new mode, a new tracker, a new surface). Use when "the app does something it didn't do before."
+- `[product/content]` — new lessons, new L1 questions, new L2 exercises, new sections, or substantive expansion of an existing lesson's surface. Use when "there's more to drill than before."
+- `[product/ux]` — refinement to an existing feature: copy changes, CTA reordering, sidebar sort, banner refresh, layout tweaks. Use when "an existing feature got better but the feature set didn't grow."
+- `[product/fix]` — bug fix the user would notice (crash, broken interaction, wrong content shown, mobile overflow). Use when "something the user could have hit is now fixed."
+
+**Engineering — internal, no direct user impact.** Tag this when the change is
+invisible to the drilling user.
+- `[engineering/tooling]` — validator, CDP probes/helpers, `tools/` scripts, `.gitignore`, build helpers. Use when "the way we build, verify, or deploy changed."
+- `[engineering/meta]` — loop framework (`.claude/skills/`, `SELF-IMPROVE.md`), `iter-artifacts/`, planning docs that drive future iterations. Use when "the way we plan or evaluate the next iteration changed."
+- `[engineering/refactor]` — code reorganization with no behavior change, file moves, dead-code removal, type/lint cleanup. Use when "the code is the same, just cleaner."
+- `[engineering/docs]` — `README.md`, `CLAUDE.md`, `PROFILE.md`, `docs/learning-strategies/`, in-code comments. Use when "the project's documented understanding changed."
+
+### Body format
+
+For any `[product/*]` commit, the body **MUST** include:
+
+```
+## Product impact
+<one-sentence user-facing description — what the drilling user notices and why it helps>
+```
+
+That single line is the durable record. It's what `git log --pretty` queries
+will surface to answer "what shipped that helps users?"
+
+Other labeled sections, use as relevant:
+
+```
+## Engineering
+<implementation notes — files, technical approach, tradeoffs>
+
+## Verification
+<validator output, CDP probe results, manual test notes>
+```
+
+For loop iterations, keep the iter-and-mode + Challenge-the-focus + Learning
+framing already established by the drill-improve skill — those live inside
+or alongside the labeled sections, not replacing them.
+
+### Multi-category example
+
+```
+[product/content] [engineering/tooling] iter 20 (ship): 6 boilerplate-as-syntax lessons + isolation validator
+
+## Product impact
+Algorithms section grew from 3 to 9 lessons — the boilerplate (matrix
+dirs, BFS queue, DFS template, tree traversal shapes, LL walk, heap
+math) the rusty engineer reaches for BEFORE the algorithm is now
+drillable as standalone syntax instead of being buried inside Patterns
+solutions.
+
+## Engineering
+Added tools/validate-files.js for in-isolation lesson validation. New
+durable probe tools/cdp/algorithms-section-expansion.js.
+
+## Verification
+node tools/validate-data.js: 336 → 355 (+19 exercises, 0 fail)
+node tools/cdp/algorithms-section-expansion.js: 29/29
+```
+
+### Common queries
+
+```bash
+# Recently shipped user-facing improvements (overview)
+git log --grep="^\[product" --oneline -20
+
+# New content added this month
+git log --grep="^\[product/content" --since="1 month ago" --oneline
+
+# Recent bug fixes the user would have noticed
+git log --grep="^\[product/fix" --since="1 month ago" --oneline
+
+# Full "Product impact" descriptions for the last 10 user-facing commits
+git log --grep="^\[product" -10 --pretty=format:"%h %s%n%n%b%n---%n"
+
+# Internal changes (no direct user impact)
+git log --grep="^\[engineering" --oneline -20
+
+# Loop iterations that actually shipped product (vs framework changes)
+git log --grep="^\[product" --grep="iter " --all-match --oneline
+```
+
+### When to skip the convention
+
+- **Merge commits** — auto-generated, leave them alone.
+- **Pre-convention history** — no retroactive rewrite. The convention applies
+  going forward; earlier commits are still readable via `--since`/`--until` +
+  topical grep.
+
 ## Sub-agent workflow
 
 When asked to author multiple lessons at once, spawn parallel `general-purpose`

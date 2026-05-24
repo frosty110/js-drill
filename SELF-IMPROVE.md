@@ -97,7 +97,7 @@
   yet, document it. The app and the strategy docs evolve together.
 - No build step. No new deps. Vanilla JS + Tailwind / CodeMirror via CDN only.
 - `node tools/validate-data.js` must show **0 failures** after every change.
-- Atomic commits — one improvement per commit, clear message naming the mode.
+- Atomic commits per `CLAUDE.md § Commit message convention` — one improvement per commit, subject-line tag (`[product/*]` or `[engineering/*]`), mandatory `## Product impact` line for any `[product/*]` commit. Iter+mode marker still goes in the subject summary.
 - Don't edit lesson content unless the directive explicitly makes lessons the
   focus this iteration.
 - Preserve backwards-compatible `localStorage` schema (`jsdrill.progress.v1`).

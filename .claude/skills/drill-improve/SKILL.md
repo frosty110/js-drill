@@ -115,7 +115,7 @@ Bias toward changes that strengthen mobile L1/L2 surface area (the 80%-phone use
 - Edit code / write artifact.
 - Run `node tools/validate-data.js` — **must show 0 failures regardless of mode**. Audit reports against a broken validator are worse than useless.
 - If `ship` mode and UX-affecting, run the relevant CDP probe. **Mobile probe is mandatory for any UI change** (80% mobile profile means desktop-only verification is insufficient).
-- Commit atomically. Message must name the **mode**, the **change**, and the **principle** (or external reference).
+- Commit atomically. Follow `CLAUDE.md § Commit message convention` — subject-line tag (`[product/feature]`, `[product/content]`, `[product/ux]`, `[product/fix]`, `[engineering/tooling]`, `[engineering/meta]`, `[engineering/refactor]`, `[engineering/docs]`), iter+mode marker inside the summary, and labeled body sections. Any `[product/*]` commit MUST include a `## Product impact` line. Mode-to-tag mapping is usually: ship → `product/*` or `engineering/tooling`; audit/coverage/research → `engineering/meta` (their artifacts) or no commit; frame → `engineering/meta` or `engineering/docs`.
 - **Push to remote after every successful iteration commit.** Run `git push` (no force) immediately after the commit lands. This deploys to GitHub Pages (~30–90s to refresh) so the user can validate between iterations. If `git push` fails (auth, conflict, hook rejection), surface the error and stop — do NOT retry with `--force` and do NOT skip the hook.
 
 If anything fails, do not commit. Roll back, log what blocked the iteration, and stop — the loop continues to the next interval with a clean tree.

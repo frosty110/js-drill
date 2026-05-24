@@ -50,6 +50,17 @@ recall friction with much less typing.
   friction so the typing burden is at least clean.
 - **Line wrapping in the L3 editor** — removes horizontal-scroll friction
   that has nothing to do with recall.
+- **L3 hint ladder (iter 37)** — 3-tier graduated retrieval support
+  (approach → skeleton → first step) replaces the previous flat hint cycle.
+  Each tap stacks below the previous, so the user sees the growing trail
+  of cues rather than a single rotating message. Tier 1 uses authored
+  `L3.hints[0]`; tier 2 and 3 fall back to regex-derived function
+  signature and first canonical line if the lesson didn't author them.
+  Calibrates difficulty to the user's actual point of stuck-ness — they
+  unblock incrementally instead of bouncing between "no cue" and "full
+  canonical reveal" (which demotes SR). Hint tiers do NOT demote;
+  only the explicit Reveal canonical does. See
+  `iter-artifacts/ideas-by-category.md § Drilling Surfaces`.
 - **SR advancement is graded by difficulty (both sides).** L3 pass on a due
   lesson advances the interval bucket (1d → 3d → 7d → 14d → 30d). L2 pass
   HOLDS the bucket but resets `dueAt`. Reveal on a due lesson DEMOTES the

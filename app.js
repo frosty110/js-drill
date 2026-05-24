@@ -103,7 +103,11 @@ async function ensureMechanicIndex() {
 // ──────────────────────────────────────────────────────────────────────────
 //  STATE + LOCALSTORAGE
 // ──────────────────────────────────────────────────────────────────────────
-const LS_KEY = 'jsdrill.progress.v1';
+// Canonical key is owned by js/storage.js (DrillStorage.MAIN_APP_KEY). Mirror
+// it here for the few places that still need raw localStorage access (backup
+// download bytes, restore replace, multi-tab storage event filter). Fallback
+// literal is purely defensive — storage.js is loaded before app.js in index.html.
+const LS_KEY = (typeof window !== 'undefined' && window.DrillStorage && window.DrillStorage.MAIN_APP_KEY) || 'jsdrill.progress.v1';
 const state = {
   currentLessonId: null,
   // 'auto' = resolve to the first available tab once content loads
@@ -259,83 +263,79 @@ const STARTER_PATH = [
   // different practice mode (build me X) rather than a learning progression.
 ];
 
+// I/O is delegated to window.DrillStorage (js/storage.js) — single source of
+// truth for localStorage access across main app + prep + diagnostic. Domain
+// logic (migration backfill, GC, defaults) stays here.
 function loadProgress() {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      // Support old shape ({lessonId: {...}}), v2 (progress + bestTimes), v3 (+ lastLesson, +revealed),
-      // v6 adds per-lesson event history for the sparkline scaffold (iter-32 / roadmap entry iter-31 #6).
-      if (parsed && (parsed.__v === 2 || parsed.__v === 3 || parsed.__v === 4 || parsed.__v === 5 || parsed.__v === 6)) {
-        state.progress = parsed.progress || {};
-        state.bestTimes = parsed.bestTimes || {};
-        state.mockHistory = parsed.mockHistory || {};
-        state.revealed = parsed.revealed || {};
-        state.lastLessonId = parsed.lastLessonId || null;
-        state.lastTab = parsed.lastTab || null;
-        state.starterPath = !!parsed.starterPath;
-        state.welcomed = !!parsed.welcomed;
-        state.hideMastered = !!parsed.hideMastered;
-        state.reviews = parsed.reviews || {};
-        state.weakness = parsed.weakness || {};
-        state.history = parsed.history || {};
-        if (parsed.sidebarTrack === 'syntax' || parsed.sidebarTrack === 'patterns' || parsed.sidebarTrack === 'applied') {
-          state.sidebarTrack = parsed.sidebarTrack;
-        }
-        // Backfill: if a lesson is mastered but has no review schedule (legacy
-        // data), seed it with the first interval so spaced-rep starts working
-        // for existing users.
-        if (parsed.__v < 4) {
-          const now = Date.now();
-          for (const id of Object.keys(state.progress)) {
-            const p = state.progress[id];
-            if (p?.L1 === 'passed' && p?.L2 === 'passed' && p?.L3 === 'passed') {
-              if (!state.reviews[id]) {
-                state.reviews[id] = {
-                  lastPassedAt: now,
-                  interval: REVIEW_INTERVALS[0],
-                  dueAt: now + REVIEW_INTERVALS[0]
-                };
-              }
-            }
+    const parsed = window.DrillStorage ? window.DrillStorage.loadAppProgress() : null;
+    if (!parsed) return;
+    // DrillStorage already validated __v ∈ MAIN_APP_ACCEPTED_VERSIONS (2..6).
+    // Hydrate state from the parsed shape, then apply app-domain migrations + GC.
+    state.progress = parsed.progress || {};
+    state.bestTimes = parsed.bestTimes || {};
+    state.mockHistory = parsed.mockHistory || {};
+    state.revealed = parsed.revealed || {};
+    state.lastLessonId = parsed.lastLessonId || null;
+    state.lastTab = parsed.lastTab || null;
+    state.starterPath = !!parsed.starterPath;
+    state.welcomed = !!parsed.welcomed;
+    state.hideMastered = !!parsed.hideMastered;
+    state.reviews = parsed.reviews || {};
+    state.weakness = parsed.weakness || {};
+    state.history = parsed.history || {};
+    if (parsed.sidebarTrack === 'syntax' || parsed.sidebarTrack === 'patterns' || parsed.sidebarTrack === 'applied') {
+      state.sidebarTrack = parsed.sidebarTrack;
+    }
+    // Backfill: if a lesson is mastered but has no review schedule (legacy
+    // v<4 data), seed it with the first interval so spaced-rep starts working
+    // for existing users.
+    if (parsed.__v < 4) {
+      const now = Date.now();
+      for (const id of Object.keys(state.progress)) {
+        const p = state.progress[id];
+        if (p?.L1 === 'passed' && p?.L2 === 'passed' && p?.L3 === 'passed') {
+          if (!state.reviews[id]) {
+            state.reviews[id] = {
+              lastPassedAt: now,
+              interval: REVIEW_INTERVALS[0],
+              dueAt: now + REVIEW_INTERVALS[0]
+            };
           }
         }
-      } else {
-        state.progress = parsed || {};
       }
-      // Garbage-collect stale lesson ids — skip until manifest is loaded
-      // (CURRICULUM may be empty during the first boot-time loadProgress call).
-      if (CURRICULUM.length) {
-        let mutated = false;
-        for (const id of Object.keys(state.progress)) {
-          if (!findLesson(id)) { delete state.progress[id]; mutated = true; }
-        }
-        if (mutated) saveProgress();
+    }
+    // Garbage-collect stale lesson ids — skip until manifest is loaded
+    // (CURRICULUM may be empty during the first boot-time loadProgress call).
+    if (CURRICULUM.length) {
+      let mutated = false;
+      for (const id of Object.keys(state.progress)) {
+        if (!findLesson(id)) { delete state.progress[id]; mutated = true; }
       }
+      if (mutated) saveProgress();
     }
   } catch (e) {
     state.progress = {}; state.bestTimes = {}; state.revealed = {}; state.mockHistory = {}; state.history = {};
   }
 }
 function saveProgress() {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify({
-      __v: 6,
-      progress: state.progress,
-      bestTimes: state.bestTimes,
-      mockHistory: state.mockHistory,
-      revealed: state.revealed,
-      lastLessonId: state.currentLessonId,
-      lastTab: state.currentTab,
-      starterPath: state.starterPath,
-      welcomed: state.welcomed,
-      hideMastered: state.hideMastered,
-      reviews: state.reviews,
-      weakness: state.weakness,
-      sidebarTrack: state.sidebarTrack,
-      history: state.history
-    }));
-  } catch (e) {}
+  if (!window.DrillStorage) return; // storage.js not loaded — degrade silently
+  window.DrillStorage.saveAppProgress({
+    __v: 6,
+    progress: state.progress,
+    bestTimes: state.bestTimes,
+    mockHistory: state.mockHistory,
+    revealed: state.revealed,
+    lastLessonId: state.currentLessonId,
+    lastTab: state.currentTab,
+    starterPath: state.starterPath,
+    welcomed: state.welcomed,
+    hideMastered: state.hideMastered,
+    reviews: state.reviews,
+    weakness: state.weakness,
+    sidebarTrack: state.sidebarTrack,
+    history: state.history
+  });
 }
 function scheduleReview(lessonId, { advance = true } = {}) {
   // L3 pass → advance to the next interval bucket.
@@ -571,31 +571,41 @@ function renderCheatsheetBody() {
   const sections = [...new Set(filtered.map(l => l.section))];
   const curLesson = findLesson(state.currentLessonId);
   const curSection = curLesson && curLesson.track === _cheatsheetTrack ? curLesson.section : null;
+  const curLessonId = curLesson && curLesson.track === _cheatsheetTrack ? curLesson.id : null;
 
   let html = '';
   for (const section of sections) {
     const lessons = filtered.filter(l => l.section === section);
     // Default-open the current lesson's section, OR all sections when the
     // user is actively filtering (search-results expectation is "show me").
-    const open = q || section === curSection;
-    html += `<details data-cs-section="${escapeHtml(section)}"${open ? ' open' : ''} style="margin-bottom:8px;border:1px solid #1e293b;border-radius:8px;background:#0b1220;">
-      <summary style="padding:8px 12px;cursor:pointer;color:#cbd5e1;font-weight:600;font-size:13px;list-style:none;">
+    const sectionOpen = q || section === curSection || _cheatsheetExpandAll;
+    html += `<details data-cs-section="${escapeHtml(section)}"${sectionOpen ? ' open' : ''} style="margin-bottom:8px;border:1px solid #1e293b;border-radius:8px;background:#0b1220;">
+      <summary style="padding:8px 12px;cursor:pointer;color:#cbd5e1;font-weight:600;font-size:13px;">
         ${escapeHtml(section)} <span style="color:#64748b;font-weight:400;font-size:11px;">· ${lessons.length}</span>
       </summary>
-      <div style="padding:4px 12px 12px 12px;display:flex;flex-direction:column;gap:14px;">`;
+      <div style="padding:4px 8px 10px 8px;display:flex;flex-direction:column;gap:4px;">`;
     for (const lesson of lessons) {
       const c = CONTENT[lesson.id];
       if (!c) continue;
+      // Each lesson gets its own collapsible card. Default-collapsed unless
+      // it's the lesson the user is currently on, OR they're searching, OR
+      // they've hit "Expand all" — matches the "browse titles, drill in on demand" flow.
+      const lessonOpen = q || lesson.id === curLessonId || _cheatsheetExpandAll;
       const desc = c.description ? `<div style="color:#94a3b8;font-size:12px;margin:2px 0 6px 0;">${escapeHtml(c.description)}</div>` : '';
       const notesHtml = (c.reference && c.reference.notes && c.reference.notes.length)
         ? `<ul style="margin:6px 0 0 0;padding-left:18px;color:#cbd5e1;font-size:12px;">${c.reference.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
         : '';
-      html += `<div data-cs-lesson="${escapeHtml(lesson.id)}">
-        <button data-cs-goto="${escapeHtml(lesson.id)}" style="background:none;border:none;color:#f1f5f9;font-weight:600;font-size:13px;cursor:pointer;padding:0;text-align:left;">${escapeHtml(lesson.title)} →</button>
-        ${desc}
-        <pre class="cm-s-dracula" data-cs-code="${escapeHtml(lesson.id)}" style="margin:0;padding:8px 10px;background:#020617;border:1px solid #1e293b;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.45;white-space:pre;"></pre>
-        ${notesHtml}
-      </div>`;
+      html += `<details data-cs-lesson="${escapeHtml(lesson.id)}"${lessonOpen ? ' open' : ''} class="cs-lesson" style="border-left:2px solid #1e293b;padding:2px 0 2px 8px;">
+        <summary style="cursor:pointer;color:#e2e8f0;font-weight:600;font-size:13px;padding:4px 0;">
+          ${escapeHtml(lesson.title)}
+        </summary>
+        <div style="padding:4px 0 6px 0;">
+          ${desc}
+          <pre class="cm-s-dracula" data-cs-code="${escapeHtml(lesson.id)}" style="margin:0;padding:8px 10px;background:#020617;border:1px solid #1e293b;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.45;white-space:pre;"></pre>
+          ${notesHtml}
+          <button data-cs-goto="${escapeHtml(lesson.id)}" style="background:none;border:1px solid #1e293b;color:#67e8f9;font-size:11px;cursor:pointer;padding:4px 8px;border-radius:4px;margin-top:8px;">Open lesson →</button>
+        </div>
+      </details>`;
     }
     html += `</div></details>`;
   }
@@ -604,21 +614,63 @@ function renderCheatsheetBody() {
 
   // Wire jump-to-lesson buttons.
   body.querySelectorAll('[data-cs-goto]').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      // Stop propagation so the click doesn't also toggle the parent <details>.
+      e.stopPropagation();
       const id = btn.getAttribute('data-cs-goto');
       closeCheatsheetModal();
       selectLesson(id);
     });
   });
 
-  // Colorize all visible code blocks. <details> keeps content in the DOM
-  // either way, so runMode now is fine; the perf cost is bounded by the
-  // current track's lesson count (max ~80 patterns).
-  body.querySelectorAll('[data-cs-code]').forEach(pre => {
+  // Colorize code in lessons that are open right now, AND lazily colorize on
+  // first expand for the rest. Avoids running runMode 80× upfront on mobile.
+  body.querySelectorAll('details[data-cs-lesson]').forEach(det => {
+    const pre = det.querySelector('[data-cs-code]');
+    if (!pre) return;
     const id = pre.getAttribute('data-cs-code');
     const c = CONTENT[id];
-    if (c && c.reference && c.reference.code) colorizeInto(pre, c.reference.code);
+    if (!c || !c.reference || !c.reference.code) return;
+    const colorize = () => {
+      if (pre.dataset.colorized === '1') return;
+      colorizeInto(pre, c.reference.code);
+      pre.dataset.colorized = '1';
+    };
+    if (det.open) colorize();
+    else det.addEventListener('toggle', () => { if (det.open) colorize(); }, { once: true });
   });
+
+  // Sync the Expand-all button label to the new tree.
+  updateCheatsheetExpandAllLabel();
+}
+
+let _cheatsheetExpandAll = false;
+
+function updateCheatsheetExpandAllLabel() {
+  const btn = document.getElementById('cheatsheet-expand-all');
+  if (!btn) return;
+  btn.textContent = _cheatsheetExpandAll ? 'Collapse all' : 'Expand all';
+}
+
+function toggleCheatsheetExpandAll() {
+  _cheatsheetExpandAll = !_cheatsheetExpandAll;
+  // Toggle every <details> inside the body — both section-level and lesson-level.
+  const body = document.getElementById('cheatsheet-body');
+  if (!body) return;
+  body.querySelectorAll('details').forEach(d => { d.open = _cheatsheetExpandAll; });
+  // Newly-opened lesson <details> need their code colorized on demand.
+  if (_cheatsheetExpandAll) {
+    body.querySelectorAll('details[data-cs-lesson][open] [data-cs-code]').forEach(pre => {
+      if (pre.dataset.colorized === '1') return;
+      const id = pre.getAttribute('data-cs-code');
+      const c = CONTENT[id];
+      if (c && c.reference && c.reference.code) {
+        colorizeInto(pre, c.reference.code);
+        pre.dataset.colorized = '1';
+      }
+    });
+  }
+  updateCheatsheetExpandAllLabel();
 }
 
 async function generateCheatsheet() {
@@ -2518,6 +2570,50 @@ function renderL2Mobile(body, lesson, content) {
 // ──────────────────────────────────────────────────────────────────────────
 //  L3 — TYPE FROM MEMORY (DRILL)
 // ──────────────────────────────────────────────────────────────────────────
+// L3 hint ladder — graduated tap-to-reveal hints. Tier 1 names the approach;
+// tier 2 reveals the function skeleton; tier 3 reveals the first real step.
+// Falls back to auto-derivation when `L3.hints` has fewer than 3 authored
+// entries so every lesson has a 3-tier ladder. Hint tiers do NOT demote the
+// SR bucket — only the explicit "Reveal canonical" does that.
+// See ideas-by-category.md § Drilling Surfaces → "L3 hint ladder" entry.
+function _deriveCanonicalSkeleton(canonical) {
+  if (!canonical) return null;
+  // Find a top-level function declaration or arrow assignment.
+  const fnDecl = canonical.match(/^\s*function\s+\w+\s*\([^)]*\)/m);
+  if (fnDecl) return fnDecl[0].trim() + ' { ... }';
+  const arrowAssign = canonical.match(/^\s*(?:const|let|var)\s+\w+\s*=\s*(?:function\s*\([^)]*\)|\([^)]*\)\s*=>)/m);
+  if (arrowAssign) return arrowAssign[0].trim() + ' { ... }';
+  // Top-level IIFE pattern.
+  if (/^\s*\(async\s*\(\)\s*=>\s*\{/m.test(canonical)) return '(async () => { ... })();';
+  return null;
+}
+
+function _deriveCanonicalFirstStep(canonical) {
+  if (!canonical) return null;
+  const lines = canonical.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('//')) continue;
+    // Skip the function signature line itself.
+    if (/^\s*(?:function|const|let|var|class)\b/.test(line) && /\{?\s*$/.test(trimmed)) continue;
+    if (trimmed === '{' || trimmed === '}') continue;
+    return line.trim();
+  }
+  return null;
+}
+
+function _buildHintLadder(drill) {
+  const authored = drill.hints || [];
+  const skeleton = _deriveCanonicalSkeleton(drill.canonical);
+  const firstStep = _deriveCanonicalFirstStep(drill.canonical);
+  return [
+    { label: 'Approach', text: authored[0] || 'Think about which data structure or pattern fits this problem.' },
+    { label: 'Skeleton', text: authored[1] || (skeleton ? skeleton : 'Top-level script — no wrapper function needed.') },
+    { label: 'First step', text: authored[2] || (firstStep ? firstStep : 'Initialize your data structure and start the main loop.') }
+  ];
+}
+
 function renderL3(body, lesson, content) {
   const drill = content.L3;
   const isMock = state.mock.active && state.mock.lessonId === lesson.id;
@@ -2567,12 +2663,13 @@ function renderL3(body, lesson, content) {
     <textarea id="drill-editor"></textarea>
     <div class="l3-actions mt-3 flex items-center gap-2 flex-wrap">
       <button class="primary" data-action="run">Run <span class="text-blue-200">(⌘↵)</span></button>
-      ${isMock ? '' : '<button class="secondary" data-action="hint">Hint</button>'}
+      ${isMock ? '' : '<button class="secondary" data-action="hint" data-hint-btn>💡 Hint</button>'}
       ${isMock ? '' : '<button class="secondary" data-action="diff">Compare to canonical</button>'}
       ${isMock ? '' : '<button class="secondary" data-action="reveal">Reveal canonical</button>'}
       <button class="secondary" data-action="clear">Clear</button>
       <div class="feedback text-sm ml-2"></div>
     </div>
+    ${isMock ? '' : '<div class="hint-stack mt-3 hidden" data-hint-stack></div>'}
     <div class="mt-4">
       <div class="text-xs text-slate-500 mb-1">Output:</div>
       <div class="output-box" data-output>(run your code…)</div>
@@ -2632,9 +2729,27 @@ function renderL3(body, lesson, content) {
 
   const outputBox = wrap.querySelector('[data-output]');
   const feedback = wrap.querySelector('.feedback');
-  let hintIndex = 0;
+  const hintStack = wrap.querySelector('[data-hint-stack]');
+  const ladder = _buildHintLadder(drill);
+  let hintsUsed = 0;
   let attempts = 0;
   let running = false;
+
+  function renderHintStack() {
+    if (!hintStack) return;
+    if (hintsUsed === 0) {
+      hintStack.classList.add('hidden');
+      hintStack.innerHTML = '';
+      return;
+    }
+    hintStack.classList.remove('hidden');
+    hintStack.innerHTML = ladder.slice(0, hintsUsed).map((tier, i) => `
+      <div class="hint-tier">
+        <div class="hint-tier-label">Tier ${i+1} · ${escapeHtml(tier.label)}</div>
+        <div class="hint-tier-text">${escapeHtml(tier.text)}</div>
+      </div>
+    `).join('');
+  }
 
   wrap.querySelector('[data-action="run"]').addEventListener('click', run);
   // Hint / diff / reveal buttons are omitted in Mock Interview mode (isMock).
@@ -2644,10 +2759,15 @@ function renderL3(body, lesson, content) {
   const hintBtn = wrap.querySelector('[data-action="hint"]');
   if (hintBtn) {
     hintBtn.addEventListener('click', () => {
-      const hints = drill.hints || [];
-      if (hints.length === 0) { feedback.innerHTML = '<span class="text-slate-500">No hints for this one.</span>'; return; }
-      feedback.innerHTML = `<span class="text-amber-300">💡 ${escapeHtml(hints[Math.min(hintIndex, hints.length-1)])}</span>`;
-      hintIndex++;
+      if (hintsUsed >= ladder.length) return;
+      hintsUsed++;
+      renderHintStack();
+      if (hintsUsed >= ladder.length) {
+        hintBtn.textContent = '💡 No more hints';
+        hintBtn.disabled = true;
+      } else {
+        hintBtn.textContent = `💡 Hint (${hintsUsed}/${ladder.length})`;
+      }
     });
   }
   const diffBtn = wrap.querySelector('[data-action="diff"]');
@@ -2691,7 +2811,13 @@ function renderL3(body, lesson, content) {
       }
     });
   }
-  wrap.querySelector('[data-action="clear"]').addEventListener('click', () => cm.setValue(''));
+  wrap.querySelector('[data-action="clear"]').addEventListener('click', () => {
+    cm.setValue('');
+    // Reset hint ladder so a fresh attempt starts unhinted.
+    hintsUsed = 0;
+    renderHintStack();
+    if (hintBtn) { hintBtn.textContent = '💡 Hint'; hintBtn.disabled = false; }
+  });
 
   async function run() {
     if (running) return;
@@ -3293,6 +3419,7 @@ async function init() {
     _cheatsheetSearch = e.target.value.toLowerCase().trim();
     renderCheatsheetBody();
   });
+  document.getElementById('cheatsheet-expand-all').addEventListener('click', toggleCheatsheetExpandAll);
 
   updateStreakUI();
   updateReviewBadge();

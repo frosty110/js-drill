@@ -64,6 +64,24 @@ Default mode is `ship`. To find what to ship, walk this list **in order** and st
 
 If multiple categories trigger, pick the one whose triggered rows are closest to PROFILE.md's load-bearing claims. If no category triggers (everything's fresh), that's an honest signal the existing roadmap has been worked through — fall through to `vision`.
 
+### Step 1A.5 — Prioritize candidates by argmax(impact), tiebreak argmin(cost)
+
+Multiple sources will often surface multiple candidates. Pick by **user impact first, cost second** (user-directed framing as of iter 37 — supersedes the older "cheapest+highest-confidence" framing for normal iters).
+
+**Impact heuristic** — answer in one sentence: "What would the drilling user FEEL the difference of?" Higher impact:
+- Fixes a user-reported friction (BS-11 class) OR a moment the rusty engineer hits a wall (PROFILE line 21 stuck-ness, line 31 mobile L1/L2 throughput).
+- Unlocks a recall direction the L1→L2→L3 ladder doesn't cover (read+recall-no-input, concrete→abstract recognition, mental simulation).
+- Closes a measurement gap on a stated PROFILE.md success criterion (line 65–69).
+
+Lower impact:
+- Pure UX polish (sidebar reorder, copy tweak, color change) — visible but doesn't change the recall loop.
+- Tooling / probes / artifacts — invisible to the drilling user.
+- Adding cells in existing buckets (one more lesson, one more L1 question) — the additive-bias trap.
+
+**Cost** is the tiebreaker, not the primary signal. A medium-cost high-impact ship beats a cheap low-impact ship. Cost includes implementation LOC, per-lesson authoring effort, schema migration risk, and conflict risk with other in-flight work.
+
+**The Step 0 exception:** if Step 0 fires (loop is over-indexed on meta-work), the framing flips back to "cheapest + highest-confidence" — the goal there is to restore shipping velocity, not maximize per-ship impact. Step 0's response is explicitly "pick the cheapest, highest-confidence enhancement."
+
 ### Step 1B — Mode switches (signal-based)
 
 Stay in `ship` unless one of these fires:

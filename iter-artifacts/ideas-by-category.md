@@ -43,15 +43,15 @@ The convention:
 - **Two-direction L2** — template with NO blanks; user must IDENTIFY (tap) which token is most load-bearing. Forces understand-before-type rather than guess-and-fill; reuses existing L2 templates with no new content.
 - **Crystal Ball mental-execution drill** — show a 5-15 line snippet of `reference.code` (or a small mutation of it); user picks the `expectedOutput` from 4 MC distractors WITHOUT running. Pure code-reading-with-mental-simulation — the foundational interview skill the app currently never drills (everything today is "produce code"; this drills "execute code in your head"). Mobile-native (tap only); distractors auto-generatable from common simulation errors (off-by-one, wrong order, missed mutation).
 - **Solution-shape library (per-pattern meta-Reference)** — a "Shapes" sub-tab on each pattern lesson surfaces the 3-6 *variants* of that pattern (e.g., Sliding Window: fixed-size, variable-shrink, longest, shortest, atMostK, exactly-K; DP: memo top-down, tab bottom-up, 1D space-opt). Each shape is a 5-line skeleton with one-sentence "use when..." Bridges Reference into a *meta-Reference* mirroring how interviewers think ("which sliding-window variant is this?").
-- **"What's missing?" critical-line fill** — different shape from L2 (which has many tiny blanks across templates): show a 90-95%-complete solution missing only 1-2 *load-bearing* lines (the actual insight); user fills the gap. Higher leverage per question for high-traffic patterns where the insight is concentrated (partition step in quickselect, relax step in Bellman-Ford, contraction step in Karger).
-- **Code-reading speed drill** — show a 10-15 line snippet → MC "what does this code do?" in ≤5 words (4 distractors). Trains skimming/reading-speed; complementary to all writing-direction surfaces today. Mobile-native; sourced from existing canonicals (no new content).
-- **Pure-flashcard pattern mode** — abstract per-pattern cards with NO code: front "Two-sum variant 3"; back "hash map + complement; O(n)/O(n); preferred over sort+two-ptr when input is unsorted". Mobile-native tap-reveal. Bridges the gap between Reference (concrete code) and pure mental model — surfaces only the *retrieval cues* an interviewer uses to probe ("have you seen this pattern before?").
+- **"What's missing?" critical-line fill** — a new shape between L2 and L3. L2 has 4-6 tiny token-level blanks scattered across a template; L3 is fully blank. "What's missing?" shows a 90-95% complete solution where only 1-2 ENTIRE LINES are missing — and those lines are the *load-bearing insight* of the algorithm (e.g., the partition step in quickselect, the relax step in Bellman-Ford, the dummy-head allocation in linked-list merge). User types the missing line(s) into a chip-style input. Forces the user to spot WHAT MATTERS in a solution, not just fill tokens. Mobile-friendly (typing 1-2 lines vs full solution). Requires per-lesson `criticalLines: [int]` metadata for 5-10 high-traffic pattern lessons as MVP.
+- ~~**Code-reading speed drill**~~ — **DEMOTED iter 38** per user feedback: code-writing is the priority for the rusty engineer; reading-speed drills don't address the primary deficit. Retained here for historical traceability only; do not surface to ship.
+- ~~**Pure-flashcard pattern mode**~~ — **DEMOTED iter 38** per user feedback (code-writing > code-reading; abstract cards don't drill production). Retained for traceability only.
 - **"What comes next?" trace-sequence drill** — **SHIPPED iter 36** as Walkthrough Quiz mode (🔮 Quiz button on Walkthrough tab). Picks midpoint step K, shows 1..K, asks "what's next?" with 4 MC option cards from adjacent trace states (no-advance, skip-one, regression, final/initial). Mobile probe `tools/cdp/walkthrough-quiz.js`. **First parking-lot idea graduated directly to ship from `ideas-by-category.md` without a roadmap.md intermediate step.**
 
 **Cross-cutting concerns:**
 - Audit theme #3 ("Why dummy head?" Q recurs 4× across LL) — see BS-08 in SELF-IMPROVE.md.
 - L2 under-build (50 lessons violate ≥2 floor) — see BS-08.
-- **[iter 36] Code-reading vs code-writing surface balance:** the current 9-category catalog is heavily skewed toward code-*writing* surfaces (every L1/L2/L3 plus all Cat-9 entries below). Real interviews split roughly 50/50 between writing and reading (debugging, others' code, system review). The four new entries above (Crystal Ball, "What's missing?", Code-reading speed, Solution-shape library) introduce the reading-direction. Track whether the loop ships any of them; if zero ship in 6 iters that's a signal the additive bias persists in a new dimension.
+- **[iter 38 — REVISED] Code-writing prioritized over code-reading.** Iter 36 originally framed the catalog as "skewed toward writing; need reading-direction balance" — user feedback iter 38 explicitly down-weighted this: code-writing is the priority because the rusty engineer's primary deficit is producing canonical code under interview pressure, not reading others' code. Reading-direction entries (Code-reading speed drill, Pure-flashcard pattern mode) demoted; "What's missing?" critical-line fill remains active because it's a *writing*-direction surface that happens to bridge L2-to-L3 (user fills missing lines, doesn't classify them). Crystal Ball is mental-execution-of-writing, not pure reading — retained but lower priority.
 
 ---
 
@@ -65,9 +65,14 @@ The convention:
 - **Commute Audio Mode** — see [`roadmap.md` iter-26 entry #3](roadmap.md). BLOCKED (Amendment C + Page Visibility instrumentation).
 
 **Parking-lot ideas:**
+- **[iter 38 — USER-NAMED GAP] Path enhancements (HIGH PRIORITY)** — user surfaced this iter 38 as one of three explicit gaps. Concrete candidates (pick one per ship; ordered argmax(impact)):
+  - **Per-track Starter Paths** — separate Syntax / Patterns / Applied path heads. Today's single linear path forces a track-mixing sequence; some users want to drill Patterns end-to-end before touching Syntax. Per-track paths preserve the existing linear-sequence design but let the user pick which to walk.
+  - **Path-progress visualization in lesson header** — "Step 17 of 60" → a tiny progress bar showing visited/passed/upcoming steps. Today the user sees "Step N of M" pill but no visual sense of where they are in the path.
+  - **"Where am I?" in path** — when on a non-path lesson, show a small "← Back to path step N" affordance to return to the path sequence.
+  - **Path-step prompts** — between path steps, show "Why this next?" rationale so the user understands the path's intent (e.g., "You just shipped arrays; this lesson introduces hash maps as the natural complement").
+  - **Branchable paths** — Starter Path forks at decision points (e.g., "Comfortable with arrays? Skip ahead to hash maps. Need more practice? Stay here.").
 - Mock interview "topic-aware" mode — pull from a single section instead of full random pool.
 - Today's Plan size-tunable (15-min vs 30-min vs 60-min slices).
-- Starter Path branching — separate Syntax / Patterns / Applied path heads instead of one linear sequence.
 - Mock-interview replay — view your code from a past mock side-by-side with the canonical.
 - "Resume yesterday's session" — surface partial-completion across days.
 - Insert the 6 iter-20 Algorithms lessons + iter-22 `s-index-math` into Starter Path (currently noted as iter-20 follow-up in `SELF-IMPROVE.md § Current focus`).
@@ -149,9 +154,12 @@ The convention:
 **Active ideas:**
 - **Lesson-history sparkline** — see [`roadmap.md` iter-31 entry #6](roadmap.md). SHIPPED iter 33; mobile probe added iter 34.
 
+**Active ideas:**
+- **[iter 38 — USER-NAMED GAP] URL deep-linking** — **SHIPPED iter 38.** Hash format `#/<lesson-id>/<tab>` (e.g. `#/two-sum/L1`). `history.replaceState` updates the URL on lesson/tab change so URLs stay shareable without polluting history; `hashchange` listener handles back/forward and pasted URLs. Invalid lesson IDs fall back gracefully (no nav). User can now share a URL pointing to a specific lesson and tab; recipient lands there directly. Mobile-friendly (cross-device URL sharing closes part of the BS-10 sync gap for read-only navigation). Mobile probe `tools/cdp/url-deep-link.js` (5 assertions).
+
 **Parking-lot ideas:**
 - Per-lesson "estimated time" chip in the sidebar (5-min / 10-min / 30-min).
-- Section-level progress bar in sidebar (3 of 9 mastered).
+- Section-level progress bar in sidebar (3 of 9 mastered) — see Metacognition category for the full dashboard entry.
 - Dark/light mode toggle (currently single theme).
 - "Filter sidebar by track + section + status" — currently hide-mastered is the only filter.
 - Keyboard nav for L1 (number keys = A/B/C/D) — currently only sidebar nav.
@@ -197,6 +205,12 @@ The convention:
 - **Error Post-Mortem with Miss Classification** — see [`roadmap.md` iter-26 entry #2](roadmap.md). BLOCKED (Amendment B). The concept-grain weak-spot tracker.
 
 **Parking-lot ideas:**
+- **[iter 38 — USER-NAMED GAP] Dashboard / progress visibility (HIGH PRIORITY)** — user surfaced this iter 38 as one of three explicit gaps. Concrete candidates (pick one per ship; ordered argmax(impact)):
+  - **Section-level progress bar in sidebar** — show "3 of 9 mastered" per section in section headers, with a thin bar. Today the user has to count dots to know section completion. High visibility, motivation boost, mobile-friendly.
+  - **Mastery progression graph** — over time, # of mastered lessons trending up; per-week / per-month. Closes PROFILE.md success criterion line 66 ("mastered lessons stay mastered") with a temporal view at the curriculum-grain (vs sparkline's lesson-grain).
+  - **"Time invested" panel** — total drill time, time per section, time per track. Many users want to feel the accumulation; the current dashboard shows counts but not effort.
+  - **Weak-spot dashboard** — surface all lessons in the weak-spot tracker as a single view with "drill this now" affordances. Today weak-spots are scattered across the sidebar; a dedicated view is faster on mobile.
+  - **Per-section "where are my gaps?" view** — show which lessons in a section are bottom-quartile / un-attempted / due-soon. Helps target the next session.
 - Section-level retention sparkline (aggregate across all lessons in a section).
 - "You re-missed this question 3 times in 14 days" callout — concrete pattern, no classifier needed.
 - Time-to-pass distribution per lesson (rolling avg of mock-interview attempts).

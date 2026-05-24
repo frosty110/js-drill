@@ -1235,6 +1235,53 @@ function renderSidebar() {
 // ──────────────────────────────────────────────────────────────────────────
 //  MAIN LESSON RENDER
 // ──────────────────────────────────────────────────────────────────────────
+// URL deep-linking. Hash format: #/<lesson-id>/<tab>
+// Tab is optional; if absent, the lesson resolves to its default tab.
+// `history.replaceState` is used to update the URL on selectLesson/selectTab
+// so the URL stays shareable but doesn't pollute browser history with one
+// entry per tap. `hashchange` (fired on back/forward and paste) re-routes
+// via selectLesson + selectTab. See ideas-by-category.md § UI/UX Experience
+// → "URL deep linking" entry.
+const _VALID_TABS = new Set(['conversation', 'walkthrough', 'reference', 'L1', 'L2', 'L3']);
+
+function _parseHash() {
+  const raw = (window.location.hash || '').replace(/^#\/?/, '');
+  if (!raw) return null;
+  const parts = raw.split('/').filter(Boolean);
+  if (parts.length === 0) return null;
+  let lessonId;
+  try { lessonId = decodeURIComponent(parts[0]); } catch (_) { return null; }
+  const tab = parts[1] && _VALID_TABS.has(parts[1]) ? parts[1] : null;
+  return { lessonId, tab };
+}
+
+function _updateHash() {
+  if (!state.currentLessonId) return;
+  let h = '#/' + encodeURIComponent(state.currentLessonId);
+  if (state.currentTab && state.currentTab !== 'auto' && _VALID_TABS.has(state.currentTab)) {
+    h += '/' + state.currentTab;
+  }
+  if (window.location.hash !== h) {
+    try { history.replaceState(null, '', h); } catch (_) { window.location.hash = h; }
+  }
+}
+
+// hashchange fires for back/forward navigation, pasted URLs, and manual
+// hash edits — NOT for replaceState (which we use internally). So this
+// listener handles only external URL changes; no infinite-loop risk.
+function _handleHashChange() {
+  const parsed = _parseHash();
+  if (!parsed) return;
+  const lesson = findLesson(parsed.lessonId);
+  if (!lesson || lesson.status !== 'full') return;
+  if (state.currentLessonId !== parsed.lessonId) {
+    selectLesson(parsed.lessonId);
+  }
+  if (parsed.tab && state.currentTab !== parsed.tab) {
+    selectTab(parsed.tab);
+  }
+}
+
 function selectLesson(id) {
   // If the user navigates away from a live mock interview, end it cleanly
   // (don't record best time — they bailed). Otherwise the tickHandle leaks
@@ -1260,6 +1307,7 @@ function selectLesson(id) {
   saveProgress();
   renderSidebar();
   renderLesson();
+  _updateHash();
   if (window.matchMedia('(max-width: 767px)').matches) {
     document.body.classList.remove('sidebar-open');
   }
@@ -1268,6 +1316,7 @@ function selectTab(tab) {
   state.currentTab = tab;
   saveProgress();
   renderLesson();
+  _updateHash();
 }
 
 function renderLesson() {
@@ -1435,6 +1484,9 @@ function renderLesson() {
   // first available tab so we don't render a blank body.
   if (!tabDefs.some(t => t.id === state.currentTab)) {
     state.currentTab = tabDefs[0].id;
+    // Reflect the resolved tab in the URL so the hash stays accurate even
+    // when selectLesson set state.currentTab = 'auto'.
+    _updateHash();
   }
   for (const t of tabDefs) {
     const btn = document.createElement('button');
@@ -3052,9 +3104,22 @@ async function init() {
     }
     if (mutated) saveProgress();
   }
-  // Resume the last lesson + tab if they still resolve to a valid full lesson
+  // URL deep-link takes precedence over lastLessonId resume. Sharing a URL
+  // like #/two-sum/L1 should land the recipient on that exact surface even
+  // if their localStorage points elsewhere.
   let resumed = false;
-  if (state.lastLessonId) {
+  const hashRoute = _parseHash();
+  if (hashRoute) {
+    const target = findLesson(hashRoute.lessonId);
+    if (target && target.status === 'full') {
+      state.currentLessonId = hashRoute.lessonId;
+      if (hashRoute.tab) state.currentTab = hashRoute.tab;
+      resumed = true;
+    }
+  }
+  // Fall back to the last lesson + tab if no valid hash, then to the first
+  // full lesson if no resume state.
+  if (!resumed && state.lastLessonId) {
     const last = findLesson(state.lastLessonId);
     if (last && last.status === 'full') {
       state.currentLessonId = state.lastLessonId;
@@ -3071,6 +3136,11 @@ async function init() {
   if (state.currentLessonId) syncBinderToLesson(state.currentLessonId);
   renderSidebar();
   renderLesson();
+  _updateHash();
+  // Listen for browser back/forward + paste-new-URL navigation. replaceState
+  // (used internally by selectLesson/selectTab) does NOT fire this event, so
+  // no infinite-loop risk.
+  window.addEventListener('hashchange', _handleHashChange);
 
   document.getElementById('reset-btn').addEventListener('click', () => {
     if (confirm('Reset ALL progress, reviews, best times, and weak-spot history? This cannot be undone (use Backup first if you want to save).')) {

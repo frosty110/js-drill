@@ -1,0 +1,123 @@
+{
+  "id": "s-bigo-intuition",
+  "title": "Big-O intuition (read complexity off code shapes)",
+  "section": "Algorithms",
+  "track": "syntax",
+  "status": "full",
+  "description": "Read time complexity off the code shape — what loop and recursion structures map to O(1), O(log n), O(n), O(n log n), and O(n²). Meta-lesson: the canonical is a recognition checklist, not one algorithm.",
+  "reference": {
+    "code": "// ────────────────────────────────────────────────────────────\n// 1. O(1) — CONSTANT TIME\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: no loop. No recursion. Direct lookups, arithmetic,\n//   hash-table read/write — work that doesn't depend on input size.\n//\nconst first = arr => arr[0];                  // bracket access\nconst last  = arr => arr[arr.length - 1];     // .length is O(1) too\nconst has   = (set, key) => set.has(key);     // Map/Set ops O(1) avg\n//\n//   n=10 → 1 step.  n=10,000,000 → 1 step.  Input size doesn't matter.\n\n\n// ────────────────────────────────────────────────────────────\n// 2. O(log n) — LOGARITHMIC: HALVE EACH STEP\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: each iteration discards HALF the remaining problem.\n//   Binary search, balanced-tree descent, heap sift, repeated halving.\n//\nfunction binarySearch(arr, target) {\n  let l = 0, r = arr.length - 1;\n  while (l <= r) {\n    const m = (l + r) >> 1;\n    if (arr[m] === target) return m;\n    if (arr[m] < target) l = m + 1;          // discard LEFT half\n    else                 r = m - 1;          // discard RIGHT half\n  }\n  return -1;\n}\n//\n//   Why \"log\"?  After k halvings the size is n / 2^k.\n//   Loop ends when size ≤ 1, i.e. 2^k ≥ n, i.e. k ≥ log₂(n).\n//\n//   n=1,024            → ~10 steps\n//   n=1,000,000        → ~20 steps\n//   n=1,000,000,000    → ~30 steps\n//\n//   Logs grow GLACIALLY. Doubling n adds ONE step, not double the steps.\n//   This is why binary search feels like cheating: 10 billion elements\n//   take ~33 comparisons.\n\n\n// ────────────────────────────────────────────────────────────\n// 3. O(n) — LINEAR: ONE PASS\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: one loop over the input doing O(1) work per element.\n//   Sum, count, max, single-pass two-pointer, hash-map first pass.\n//\nfunction maxOf(arr) {\n  let best = -Infinity;\n  for (const x of arr) {                     // ← one pass\n    if (x > best) best = x;                  // ← O(1) per element\n  }\n  return best;\n}\n//\n//   Doubling n doubles the time. Often optimal — you can't beat O(n)\n//   for anything that has to LOOK AT every input element.\n\n\n// ────────────────────────────────────────────────────────────\n// 4. O(n log n) — LINEAR × LOG: SORT, MERGE, DIVIDE-AND-CONQUER\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: a sort step, or recursion that halves the input AND\n//   does O(n) work at each level. Merge sort, heap sort, JS .sort().\n//\nfunction distinctCount(arr) {\n  arr.sort((a, b) => a - b);                 // ← O(n log n) — dominates\n  let runs = 1;\n  for (let i = 1; i < arr.length; i++) {     // ← O(n) — dominated\n    if (arr[i] !== arr[i - 1]) runs++;\n  }\n  return runs;\n}\n//\n//   Big-O addition rule: O(n log n) + O(n) = O(n log n).\n//   Keep the biggest term, drop the rest.\n//\n//   This is the floor for any comparison-based sort.\n\n\n// ────────────────────────────────────────────────────────────\n// 5. O(n²) — QUADRATIC: NESTED LOOPS OVER THE SAME INPUT\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: two nested loops, BOTH bounded by input size.\n//   Pair brute force, naive substring search, distance matrix build.\n//\nfunction hasPairSum(arr, target) {\n  for (let i = 0; i < arr.length; i++) {\n    for (let j = i + 1; j < arr.length; j++) {   // ← inner ALSO ∝ n\n      if (arr[i] + arr[j] === target) return true;\n    }\n  }\n  return false;\n}\n//\n//   Even though the inner only runs n-i times, the SUM\n//   1 + 2 + ... + (n-1) = n(n-1)/2 ≈ n²/2 — still O(n²).\n//\n//   Doubling n QUADRUPLES the time.\n//   The canonical interview move is replacing an O(n²) brute force\n//   with an O(n) single pass + hash map. Two Sum is the textbook case.\n\n\n// ────────────────────────────────────────────────────────────\n// THE RECOGNITION CHECKLIST\n// ────────────────────────────────────────────────────────────\n//\n//   No loop at all? ............................. O(1)\n//   Single loop, halving each step? ............. O(log n)\n//   Single loop, one pass over n? ............... O(n)\n//   Sort + single pass? ......................... O(n log n)\n//   Two nested loops over the same input? ....... O(n²)",
+    "notes": [
+      "Halving each step → log. After k halvings, size is n / 2^k; loop ends when 2^k ≥ n, so k ≈ log₂(n). Doubling n adds ONE step, not double the steps — that's the logarithmic signature.",
+      "Drop constants and lower-order terms when reporting Big-O: O(2n + 3) = O(n), O(n log n + n) = O(n log n). The largest term dominates as n grows.",
+      "Nested loops aren't always O(n²) IF the inner bound is independent of n — but if the inner bound shrinks predictably (j = i+1…n), the sum is still ~n²/2 → still O(n²). What matters is whether the inner work is proportional to n.",
+      "Hash-map operations (`Map.get`, `Map.set`, `Set.has`) are O(1) AVERAGE — assume O(1) for interview analysis. The pathological O(n) only happens on adversarial inputs designed to collide."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "A loop runs while `n > 0` and does `n = Math.floor(n / 2)` each iteration. What's the complexity in terms of input n?",
+        "options": [
+          "O(1)",
+          "O(log n)",
+          "O(n)",
+          "O(n log n)"
+        ],
+        "answer": 1,
+        "explain": "Halving each step → log. After k halvings, size is n/2^k; loop ends when 2^k ≥ n, so iterations ≈ log₂(n)."
+      },
+      {
+        "q": "An algorithm runs in 100 steps when n=1,000 and 200 steps when n=2,000. Most likely complexity?",
+        "options": [
+          "O(log n)",
+          "O(n)",
+          "O(n log n)",
+          "O(n²)"
+        ],
+        "answer": 1,
+        "explain": "Doubling n doubled the step count — linear's signature. O(log n) would add ~1 step; O(n²) would quadruple to ~400."
+      },
+      {
+        "q": "An algorithm runs in 100 steps when n=1,000 and ~110 steps when n=2,000. Most likely complexity?",
+        "options": [
+          "O(1)",
+          "O(log n)",
+          "O(n)",
+          "O(n log n)"
+        ],
+        "answer": 1,
+        "explain": "Doubling n added only ~1 step — the unmistakable logarithmic signature. Each doubling of n bumps log₂(n) by exactly 1."
+      },
+      {
+        "q": "Outer `for i in 0..n`, inner `for j in i+1..n`, constant work in the body. What's the complexity?",
+        "options": [
+          "O(n)",
+          "O(n log n)",
+          "O(n²)",
+          "O(2ⁿ)"
+        ],
+        "answer": 2,
+        "explain": "Inner runs n-i times per outer i. Sum is (n-1) + (n-2) + … + 1 = n(n-1)/2 ≈ n²/2 — still O(n²) after dropping constants."
+      },
+      {
+        "q": "`arr.sort()` followed by one linear scan of `arr`. Total complexity?",
+        "options": [
+          "O(n)",
+          "O(n log n)",
+          "O(n²)",
+          "O(log n)"
+        ],
+        "answer": 1,
+        "explain": "Sort is O(n log n), scan is O(n). Sum is O(n log n) + O(n) = O(n log n) by the largest-term rule — the sort dominates."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Halving loop: how many iterations until n hits 0? Fill in the termination check.",
+        "template": "let n = 16, steps = 0;\nwhile (n > ___) {\n  n = Math.floor(n / 2);\n  steps++;\n}\nconsole.log(steps);",
+        "blanks": [
+          {
+            "answer": "0",
+            "hint": "stop when n drops to 0 — the final halving of 1 gets you there"
+          }
+        ],
+        "expectedOutput": "5"
+      },
+      {
+        "prompt": "Nested pair count (the O(n²) shape). Fill in the inner start so each pair is counted once.",
+        "template": "const arr = [1, 2, 3, 4];\nlet count = 0;\nfor (let i = 0; i < arr.length; i++) {\n  for (let j = i + ___; j < arr.length; j++) {\n    count++;\n  }\n}\nconsole.log(count);",
+        "blanks": [
+          {
+            "answer": "1",
+            "hint": "start j one PAST i so you skip self-pairs and duplicates"
+          }
+        ],
+        "expectedOutput": "6"
+      },
+      {
+        "prompt": "Sort-then-scan (the O(n log n) shape). Fill in the comparator for ascending sort.",
+        "template": "const arr = [3, 1, 4, 1, 5, 9, 2, 6, 5];\narr.sort((a, b) => a - ___);\nlet distinct = 1;\nfor (let i = 1; i < arr.length; i++) {\n  if (arr[i] !== arr[i - 1]) distinct++;\n}\nconsole.log(distinct);",
+        "blanks": [
+          {
+            "answer": "b",
+            "hint": "ascending: return negative when a should come before b — so a minus b"
+          }
+        ],
+        "expectedOutput": "7"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `countHalvings(n)` that returns how many times the loop body runs in `while (n > 0) { n = Math.floor(n / 2); }`. Log `countHalvings(64)`.",
+    "expectedOutput": "7",
+    "canonical": "function countHalvings(n) {\n  let steps = 0;\n  while (n > 0) {\n    n = Math.floor(n / 2);\n    steps++;\n  }\n  return steps;\n}\nconsole.log(countHalvings(64));",
+    "hints": [
+      "Initialize a counter at 0 and increment after each halving.",
+      "On n=64 you'll see 7 — that's ⌈log₂(64)⌉ + 1 = 6 + 1, because the final halving takes 1 down to 0.",
+      "This is the empirical proof of why binary search is O(log n): the step count grows by exactly 1 each time you double n."
+    ]
+  }
+}

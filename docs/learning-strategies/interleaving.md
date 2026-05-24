@@ -84,6 +84,20 @@ surfaced as a competing access pattern.
   conflate fluency-of-execution with learning. Don't let UI metrics
   optimize for "user feels productive" if the choice would push toward
   blocking.
+- **Interleaving fails when the surface forms are too similar across
+  interleaved items.** Spaced-rep + Mock Interview both surface lessons
+  from across the curriculum out of order — but if every linked-list L2
+  blanks the literal token `next`, the rusty engineer pattern-matches
+  `next…next…next` across the whole section under interleaving and
+  *never has to discriminate*. The retrieval shape collapses to "type the
+  word that comes after the dot." Caught iter 27 (lesson audit theme #1:
+  five of seven LL lessons had this pattern), fixed iter 28 by varying
+  the load-bearing blank tokens across the LL section so no two
+  consecutive interleaved LL drills resolve to the same token. The
+  general principle: **the interleaving signal lives in the variation
+  *between* items, not just in their out-of-order delivery** — if items
+  share an answer-token across the section, interleaving stops surfacing
+  the discrimination it's supposed to train.
 
 ## References
 

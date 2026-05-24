@@ -8,8 +8,8 @@
 
 ## Next iteration
 - **Suggested mode:** ship
-- **Signal pointing there:** iter 19 (frame) produced [iter-artifacts/iter-19-gap-list.md](iter-artifacts/iter-19-gap-list.md). Iter 20 shipped **Cluster 1 Tier 1** (6 boilerplate-as-syntax lessons). **Cluster 1 Tier 2** is the natural next ship — 7 more lessons completing the cluster: `s-matrix-bounds`, `s-dfs-recursive-template`, `s-dfs-iter-template`, `s-ll-node-shape`, `s-binsearch-template`, `s-union-find`, `s-grid-init`. Same parallel-author pattern (3 agents × 2-3 lessons) should work cleanly now that the template is proven.
-- **Veto condition:** skip ship if (a) user redirects to Cluster 4 (Modern Syntax, 5 lessons) or Cluster 5 (Hash/Set ergonomics, 3 lessons) — both feasible alternative ship targets, (b) rolling-6-window already has 3 ships at iter 21 (would force audit/coverage; current count: iters 18=audit, 19=frame, 20=ship → only 1 ship in last 3, so iter 21 ship is well within quota), or (c) user surfaces a higher-priority friction during real drilling.
+- **Signal pointing there:** iter 21 was a user-redirect ship that paused Cluster 1 Tier 2. The queued artifact at [iter-artifacts/iter-19-gap-list.md](iter-artifacts/iter-19-gap-list.md) Cluster 1 Tier 2 (7 lessons: `s-matrix-bounds`, `s-dfs-recursive-template`, `s-dfs-iter-template`, `s-ll-node-shape`, `s-binsearch-template`, `s-union-find`, `s-grid-init`) is still the queued ship — same parallel-author pattern that worked first-shot in iter 20. Tier 2 closes BS-02 fully.
+- **Veto condition:** skip Tier 2 if (a) user surfaces another in-flight friction (BS-11 chip + BS-12 mechanics-modal merge are both candidate ships), (b) user redirects to Cluster 4 (Modern Syntax, 5 lessons) or Cluster 5 (Hash/Set ergonomics, 3 lessons), or (c) rolling-6-window would exceed ship quota (current count: iters 18=audit, 19=frame, 20=ship, 21=ship → 2 ships in last 4, well within ≥3-per-6 floor).
 
 ## Current focus
 - **Status: ACTIVE** — syllabus completeness lens, Cluster 1 of the iter-19 gap list. Tier 1 shipped iter 20 (149 lessons, +19 exercises). Tier 2 queued for iter 21.
@@ -25,6 +25,7 @@
 | 18 | audit | Wind-down audit; 12 probes regression-green, validator 336/0, loop paused |
 | 19 | frame | Redesigned SKILL.md (mode rotation + fresh-eyes subagent + research lens + nominate-next-mode), restructured SELF-IMPROVE.md (Next iteration, Mode ledger, Blind spots ledger, Last-touched index, External references), spawned 3 fresh-eyes subagents producing `iter-artifacts/iter-19-gap-list.md` |
 | 20 | ship | Cluster 1 Tier 1: 6 boilerplate-as-syntax lessons in Algorithms section via 3 parallel author agents (s-matrix-neighbors, s-bfs-template, s-tree-traversals, s-heap-ops, s-ll-traversal, s-ll-fast-slow). Validator 336→355 (+19 exercises, 0 fail). New durable probe `algorithms-section-expansion.js` (29/29). Regressions clean on welcome-banner-dynamic + sidebar-path-order. New helper `tools/validate-files.js` for in-isolation lesson validation |
+| 21 | ship | [product/fix] tab-switch state cache (BS-12 close): user-redirect from queued Tier 2 to fix in-flight friction — switching to Reference mid-attempt was wiping L1 picks / L2 fills / L3 typing. Added `inProgressCache` keyed on lessonId, cleared in selectLesson. L1 replays locked-state visuals; L2 desktop+mobile restore input values via input listeners + shared array refs; L3 syncs cm.on('change'). New durable probe `tab-switch-preserves-state.js` (10/10). Regressions clean on sr-l2-holds-bucket, sr-reveal-demotes-bucket, mock-interview-loads, cta-injects-on-l3-pass |
 
 ## Blind spots ledger
 *(things the loop has historically not questioned; promote to Current focus or Parking lot when actioned)*
@@ -39,7 +40,8 @@
 - **[BS-08] Content quality vs. content validity** — validator passes ≠ lessons are well-authored. No probe samples "is this explanation good? Are L1 distractors plausible? Is canonical idiomatic?" *Seeded iter 19; queue for audit iter.*
 - **[BS-09] Tooling debt in `tools/cdp/`** — 12+ probes accumulated; never audited for staleness, DRY violations, or coverage. Schema `__v` not bumped despite `mockHistory` field added iter 13. `_iter16-survey.js` left untracked across iters 16–19. *Seeded iter 19; queue for audit iter.*
 - **[BS-10] Storage backend (localStorage-only)** — cross-device sync would be a strong win for the 80%-phone profile if scoped tight (anonymous-first, opt-in login). User flagged iter 19 discussion; deferred for now to ship the syllabus work first. *Seeded iter 19; queue for a future frame iter to decide scope before any code.*
-- **[BS-11] "I passed but nothing saved" UX gap** — user-reported 2026-05-23 after iter 20. Investigation via CDP probes confirmed localStorage save/load works correctly on both localhost and the live Pages URL. Actual cause: pass conditions are strict — L1 requires ALL questions correct in one session (any wrong click locks that question; user must hit Retry), L2 requires every exercise's every blank correct, L3 requires exact output match. Navigation state (lastLessonId, lastTab, sidebarTrack, welcomed) saves on nav so the user sees "something" persisted, but `progress` stays empty until a full pass fires `markPassed()`. The single feedback message "Some answers were off — hit Retry to start over" is the only signal, and it's easy to miss when individual questions show "✓ Correct" mid-session. *Candidate product/ux fixes: (a) persistent per-session score chip ("2/3 correct — Retry for full pass"); (b) post-attempt summary surface; (c) loosen strict-pass to ≥N% with a note that the SR bucket still requires full mastery; (d) different copy on the "✓ Correct" per-question feedback to make clear it's per-question, not the lesson pass. Queue for iter 21+ as a [product/ux] candidate — discuss with user before implementing since (c) touches the SR mechanism's core assumption.*
+- **[BS-11] "I passed but nothing saved" UX gap** — user-reported 2026-05-23 after iter 20. Investigation via CDP probes confirmed localStorage save/load works correctly on both localhost and the live Pages URL. Actual cause: pass conditions are strict — L1 requires ALL questions correct in one session (any wrong click locks that question; user must hit Retry), L2 requires every exercise's every blank correct, L3 requires exact output match. Navigation state (lastLessonId, lastTab, sidebarTrack, welcomed) saves on nav so the user sees "something" persisted, but `progress` stays empty until a full pass fires `markPassed()`. The single feedback message "Some answers were off — hit Retry to start over" is the only signal, and it's easy to miss when individual questions show "✓ Correct" mid-session. *Candidate product/ux fixes: (a) persistent per-session score chip ("2/3 correct — Retry for full pass"); (b) post-attempt summary surface; (c) loosen strict-pass to ≥N% with a note that the SR bucket still requires full mastery; (d) different copy on the "✓ Correct" per-question feedback to make clear it's per-question, not the lesson pass. Queue for iter 22+ as a [product/ux] candidate — discuss with user before implementing since (c) touches the SR mechanism's core assumption.*
+- **[BS-12] Tab-switch wipes in-flight work** — user-reported 2026-05-23 mid-iter-21 investigation. Switching from L1/L2/L3 to Reference and back rebuilt the renderX DOM from scratch, losing any clicked L1 answers, typed L2 blanks, or L3 editor code. Root cause: each `renderX` initialized local state fresh (`localState = qs.map(...)`, `exerciseState = exercises.map(...)`, fresh CodeMirror instance) with no persistence layer between renders. *Closed iter 21 by adding `inProgressCache` keyed on `lesson.id`, cleared in `selectLesson` when lesson changes, restored on every renderX. Probe `tab-switch-preserves-state.js` 10/10 verifies all three tiers + cross-lesson cache clear.*
 
 ## Last-touched index
 *(forces audit-mode selection to be data-driven; bumped at Step 6 of every iteration)*
@@ -48,6 +50,7 @@
 |---|---|
 | Skill / SELF-IMPROVE structure | 19 |
 | Algorithms section (boilerplate-as-syntax expansion) | 20 |
+| L1 / L2 / L3 render state cache (BS-12 fix) | 21 |
 | L3 surface / CTA injection | 17 |
 | Cheatsheet | 15 |
 | Applied-track surfaces (pills, stats panel) | 14 |
@@ -109,6 +112,39 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 21 — Ship mode: tab-switch state cache closes BS-12
+User-redirect ship — paused queued Cluster 1 Tier 2 to fix user-
+reported friction: switching to Reference mid-attempt was wiping L1
+picks / L2 fills / L3 typing. Mode-selection passed quota easily
+(iters 18=audit, 19=frame, 20=ship → 1 ship in last 3). Challenge-
+the-focus answers: (1) render-lifecycle / tab-switch behavior never
+audited before; (2) "80% phone" assumption still load-bearing — fix
+benefits mobile L1/L2 most where switching to Reference for context
+is common; (3) new contributor would have asked "why does Reference
+look up wipe my answers — bug or feature?"; (4) yes highest-leverage,
+losing user input is worse than the BS-11 strict-pass UX gap.
+Implementation: module-scope `inProgressCache` keyed on `lesson.id`,
+cleared in `selectLesson` when lesson changes. L1 cache holds
+`localState` array (selected/locked per question); on render, replays
+correct/incorrect/disabled classes + explain panels for any locked
+question + calls `maybePassL1()` so a cached pass surfaces ✓ + next
+button. L2 desktop/mobile share the cache slot using a `{passed,
+values[]}` shape; desktop wires per-input `input` listeners to write
+through, mobile uses getter/setter on `passed` + shared `values` array
+reference so existing chip-tap/reveal/check write sites are
+auto-cache-mirroring. L3 uses `cm.on('change')` + `cm.setValue` on
+render. Mock-interview skips the cache (mock should always start
+blank). Validator 355/0; new probe `tab-switch-preserves-state.js`
+10/10 covers L1 lock-state survival, L2 mobile chip value survival,
+L3 editor text survival, cross-lesson cache clearance. Regressions
+clean on sr-l2-holds-bucket, sr-reveal-demotes-bucket,
+mock-interview-loads, cta-injects-on-l3-pass. **Learning:** user-
+reported friction during real drilling beats the queued artifact —
+the SKILL.md veto clause "user surfaces a higher-priority friction"
+fired exactly as designed. BS-11 (strict-pass legibility) is less
+urgent now that users won't lose answers when looking up Reference
+mid-attempt to retry.
 
 ### 2026-05-23 — iter 20 — Ship mode: Cluster 1 Tier 1 — 6 boilerplate-as-syntax lessons
 First ship using the iter 19 framework. Mode-selected ship because §
@@ -306,31 +342,12 @@ bugs in features the user might not exercise often. A "least-touched"
 lens (which PROFILE.md success criterion hasn't been improved?) is a
 good way to surface those.
 
-### 2026-05-23 — iter 11 — Sidebar lessons sort by STARTER_PATH index in path mode
-The iter 10 parking-lot audit handed iter 11 a concrete ship-now: in
-path mode, the sidebar's intra-section order tracks the manifest, not
-the path, so HASH STRUCTURES read "22, 20, 21" because Map & Set,
-Object literals, keys/values/entries appeared in that manifest order
-while their global path steps were 22, 20, 21. Added one sort:
-`lessons.sort((a,b) => STARTER_PATH.indexOf(a.id) - STARTER_PATH.indexOf(b.id))`
-when path mode is on; sections naturally appear in the order of their
-first path step too (because `[...new Set(...)]` preserves first-
-occurrence order). Non-path mode unchanged. Also added two test
-affordances (`data-lesson-id` on lesson-links, `class="lesson-label"`
-on the label span) so future probes can target sidebar entries cleanly.
-Validator 336/0; new probe `tools/cdp/sidebar-path-order.js` (6/6)
-confirms monotonic top-to-bottom step ordering AND the specific HASH
-STRUCTURES case (s-obj-basics → s-obj-iter → map-set) AND that non-path
-mode shows no step prefixes. All 5 prior probes still pass.
-**Learning:** test affordances are cheap to add (1-line per element)
-and pay back across iterations — the probe was easy to write once
-selectors were stable.
-
-*(iters 1–10 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–11 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
 `4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7; `dc41586` iter 8;
 `b65df72` iter 9; `7728e0c` iter 10 welcome banner refresh + parking-lot
-curation — dynamic count + 3-track pitch.)*
+curation — dynamic count + 3-track pitch; `56068c7` iter 11 sidebar
+sort by STARTER_PATH index in path mode + data-lesson-id affordances.)*
 
 ## Hypotheses parking lot
 *(re-audited every 5 iters; last curated: iter 10)*

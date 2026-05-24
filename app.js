@@ -127,6 +127,30 @@ const state = {
 // Production-safe: it's the same object the runtime uses; readers only.
 window.__jsdrillState = state;
 
+// In-flight per-tab state cache. Lives in memory only — survives tab
+// switches inside the same lesson, cleared when the lesson changes.
+// Solves BS-12: a user reaching for the Reference tab mid-attempt would
+// otherwise wipe their L1 picks, L2 input values, and L3 editor text on
+// every tab switch because each renderX() rebuilds its DOM from scratch.
+// The cache holds DATA only (selections, typed values, code text) — never
+// DOM refs, since renders create fresh elements.
+const inProgressCache = {};   // { [lessonId]: { L1?: array, L2?: array, L3?: string } }
+function _cacheGet(lessonId, level) {
+  return inProgressCache[lessonId]?.[level];
+}
+function _cacheSet(lessonId, level, val) {
+  inProgressCache[lessonId] = inProgressCache[lessonId] || {};
+  inProgressCache[lessonId][level] = val;
+}
+function _cacheClearLesson(lessonId) {
+  if (lessonId) delete inProgressCache[lessonId];
+}
+function _cacheClearLevel(lessonId, level) {
+  if (inProgressCache[lessonId]) delete inProgressCache[lessonId][level];
+}
+// Expose for probes.
+window.__jsdrillCache = inProgressCache;
+
 // Mock interview attempts kept per lesson — enough to see a trend
 // (improving / plateaued / regressing) without bloating localStorage.
 const MOCK_HISTORY_MAX = 5;
@@ -973,6 +997,12 @@ function selectLesson(id) {
   if (state.mock.active && state.mock.lessonId !== id) {
     endMockInterview(false);
   }
+  // Drop in-flight per-tab cache for the lesson we're leaving — switching
+  // lessons (vs. switching tabs within the same lesson) is when a fresh
+  // start makes sense. See BS-12 + inProgressCache.
+  if (state.currentLessonId && state.currentLessonId !== id) {
+    _cacheClearLesson(state.currentLessonId);
+  }
   state.currentLessonId = id;
   state.currentTab = 'reference';
   // Keep the binder tab in sync — the chosen lesson may belong to the
@@ -1213,7 +1243,17 @@ function renderReference(body, content) {
 // ──────────────────────────────────────────────────────────────────────────
 function renderL1(body, lesson, content) {
   const qs = content.L1.questions;
-  const localState = qs.map(() => ({ selected: null, locked: false }));
+  // Use cached in-flight state if present (and shape-compatible) so a tab
+  // switch back into L1 preserves the user's locked picks. See BS-12.
+  let localState = _cacheGet(lesson.id, 'L1');
+  if (!Array.isArray(localState) || localState.length !== qs.length) {
+    localState = qs.map(() => ({ selected: null, locked: false }));
+    _cacheSet(lesson.id, 'L1', localState);
+  }
+  // Capture per-question render handles so we can replay locked-state
+  // visuals after all cards are appended. (Replaying inline would require
+  // moving the click-handler logic up; this stays in sync more easily.)
+  const cardHandles = [];
 
   const wrap = document.createElement('div');
   wrap.innerHTML = `<div class="mb-4 text-sm text-slate-400">Pick the right answer for each. Pass = all correct in one session.</div>`;
@@ -1259,6 +1299,7 @@ function renderL1(body, lesson, content) {
       });
       optsContainer.appendChild(optEl);
     });
+    cardHandles.push({ card, optsContainer });
     wrap.appendChild(card);
   });
 
@@ -1274,7 +1315,27 @@ function renderL1(body, lesson, content) {
   wrap.appendChild(status);
   body.appendChild(wrap);
 
-  status.querySelector('[data-action="retry-l1"]').addEventListener('click', () => renderLesson());
+  // Replay any cached locked-state visuals from a prior tab visit. This runs
+  // AFTER the cards are in the DOM so classList.add side-effects stick.
+  qs.forEach((q, qi) => {
+    const s = localState[qi];
+    if (!s.locked) return;
+    const { card, optsContainer } = cardHandles[qi];
+    [...optsContainer.children].forEach((el, idx) => {
+      el.classList.add('disabled');
+      if (idx === q.answer) el.classList.add('correct');
+      if (idx === s.selected && s.selected !== q.answer) el.classList.add('incorrect');
+    });
+    const ex = card.querySelector('.explain');
+    ex.classList.remove('hidden');
+    const isRight = s.selected === q.answer;
+    ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${q.explain ? ' ' + escapeHtml(q.explain) : ''}`;
+  });
+
+  status.querySelector('[data-action="retry-l1"]').addEventListener('click', () => {
+    _cacheClearLevel(lesson.id, 'L1');
+    renderLesson();
+  });
   status.querySelector('[data-action="next-l2"]').addEventListener('click', () => selectTab('L2'));
 
   function maybePassL1() {
@@ -1291,6 +1352,11 @@ function renderL1(body, lesson, content) {
       statusEl.innerHTML = '<span class="text-amber-400">Some answers were off — hit Retry to start over.</span>';
     }
   }
+
+  // After replay: if the cached state was already fully answered (e.g. user
+  // passed L1, switched to Reference, switched back), update the status
+  // badge + reveal the next-L2 button without requiring another click.
+  maybePassL1();
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1303,7 +1369,20 @@ function renderL2(body, lesson, content) {
     return renderL2Mobile(body, lesson, content);
   }
   const exercises = content.L2.exercises;
-  const exerciseState = exercises.map(() => ({ passed: false }));
+  // Cache shape mirrors mobile so a viewport switch mid-attempt doesn't
+  // lose typing: { passed: bool, values: [str, str, ...] } per exercise.
+  let exerciseState = _cacheGet(lesson.id, 'L2');
+  if (!Array.isArray(exerciseState) || exerciseState.length !== exercises.length) {
+    exerciseState = exercises.map(ex => ({ passed: false, values: ex.blanks.map(() => '') }));
+    _cacheSet(lesson.id, 'L2', exerciseState);
+  } else {
+    // Defensive: an older cache entry may lack `values` if it predates BS-12.
+    exercises.forEach((ex, exi) => {
+      if (!Array.isArray(exerciseState[exi].values) || exerciseState[exi].values.length !== ex.blanks.length) {
+        exerciseState[exi].values = ex.blanks.map(() => '');
+      }
+    });
+  }
 
   const wrap = document.createElement('div');
   wrap.innerHTML = `<div class="mb-4 text-sm text-slate-400">Fill the blanks so the code prints the expected output. Pass when all exercises produce the expected output.</div>`;
@@ -1352,6 +1431,12 @@ function renderL2(body, lesson, content) {
         inp.setAttribute('spellcheck', 'false');
         // Uniform 96px width — never leak the answer length via the slot size.
         inp.style.width = '96px';
+        // Restore cached value (preserves typing across tab switches).
+        const blankIdx = inputs.length;
+        inp.value = exerciseState[exi].values[blankIdx] || '';
+        inp.addEventListener('input', () => {
+          exerciseState[exi].values[blankIdx] = inp.value;
+        });
         templEl.appendChild(inp);
         inputs.push(inp);
       }
@@ -1440,6 +1525,17 @@ function renderL2(body, lesson, content) {
       status.querySelector('[data-action="next-l3"]').classList.remove('hidden');
     }
   }
+
+  // Replay cached per-exercise pass state — if the user passed L2 in a
+  // previous tab visit, surface the ✓ Pass feedback and L3 button without
+  // requiring another Check click.
+  exerciseState.forEach((s, exi) => {
+    if (!s.passed) return;
+    const card = wrap.children[exi + 1]; // +1 for the intro div
+    const feedback = card?.querySelector('.feedback');
+    if (feedback) feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
+  });
+  checkL2Overall();
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1453,9 +1549,27 @@ function renderL2(body, lesson, content) {
 // ──────────────────────────────────────────────────────────────────────────
 function renderL2Mobile(body, lesson, content) {
   const exercises = content.L2.exercises;
-  const exerciseState = exercises.map(ex => ({
-    passed: false,
-    values: ex.blanks.map(() => ''),
+  // Share the L2 cache slot with the desktop variant — `values` + `passed`
+  // shape is identical; chips are DOM and per-render so they stay local.
+  let cached = _cacheGet(lesson.id, 'L2');
+  if (!Array.isArray(cached) || cached.length !== exercises.length) {
+    cached = exercises.map(ex => ({ passed: false, values: ex.blanks.map(() => '') }));
+    _cacheSet(lesson.id, 'L2', cached);
+  } else {
+    exercises.forEach((ex, exi) => {
+      if (!Array.isArray(cached[exi].values) || cached[exi].values.length !== ex.blanks.length) {
+        cached[exi].values = ex.blanks.map(() => '');
+      }
+    });
+  }
+  // exerciseState wraps the cached data with per-render chip refs.
+  // Use getter/setter for `passed` and share the `values` array reference
+  // so every existing write site (chip taps, reveal, check) automatically
+  // mutates the cache too — no manual sync calls needed.
+  const exerciseState = cached.map((c) => ({
+    get passed() { return c.passed; },
+    set passed(v) { c.passed = v; },
+    values: c.values,
     chips: []
   }));
 
@@ -1505,6 +1619,13 @@ function renderL2Mobile(body, lesson, content) {
         chip.addEventListener('click', (e) => { e.preventDefault(); activate(exi, idx); });
         templEl.appendChild(chip);
         exerciseState[exi].chips.push(chip);
+        // Restore cached fill (preserves tap-input across tab/viewport switches).
+        const cachedVal = exerciseState[exi].values[idx];
+        if (cachedVal) {
+          const valueEl = chip.querySelector('.chip-value');
+          if (valueEl) valueEl.textContent = cachedVal;
+          chip.classList.add('has-value');
+        }
       }
     });
 
@@ -1691,6 +1812,16 @@ function renderL2Mobile(body, lesson, content) {
       status.querySelector('[data-action="next-l3"]').classList.remove('hidden');
     }
   }
+
+  // Replay cached pass state (mobile path). Mirrors the desktop replay so
+  // viewport-switching mid-attempt is symmetric.
+  exerciseState.forEach((s, exi) => {
+    if (!s.passed) return;
+    const card = wrap.querySelectorAll('.feedback')[exi]?.closest('.mb-6');
+    const feedback = card?.querySelector('.feedback');
+    if (feedback) feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
+  });
+  checkL2Overall();
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1793,6 +1924,20 @@ function renderL3(body, lesson, content) {
     }
   });
   cm.setSize('100%', null);
+
+  // Restore cached editor text from a prior tab visit. Skip during a mock
+  // interview — mock should always start from a blank editor.
+  if (!isMock) {
+    const cachedCode = _cacheGet(lesson.id, 'L3');
+    if (typeof cachedCode === 'string' && cachedCode.length) {
+      cm.setValue(cachedCode);
+    }
+    // Persist every keystroke (and programmatic setValue from Clear/Reveal)
+    // back to the cache so the editor survives Reference/L1/L2 round-trips.
+    cm.on('change', () => {
+      _cacheSet(lesson.id, 'L3', cm.getValue());
+    });
+  }
 
   const outputBox = wrap.querySelector('[data-output]');
   const feedback = wrap.querySelector('.feedback');

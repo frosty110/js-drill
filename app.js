@@ -494,6 +494,133 @@ function renderSparkline(lessonId) {
 }
 // Expose for E2E probes / DevTools toggling.
 window.__renderSparkline = renderSparkline;
+// ---------- Cheatsheet modal (in-app quick reference) ----------
+// Mirrors the Mechanics modal pattern: a scrollable overlay you open over
+// whatever lesson you're on, browse the canonical code for any lesson, then
+// either jump to it (closes the modal + selectLesson) or close and resume.
+let _cheatsheetTrack = null;      // 'syntax' | 'patterns' | 'applied'
+let _cheatsheetSearch = '';
+
+async function openCheatsheetModal() {
+  const modal = document.getElementById('cheatsheet-modal');
+  if (!modal) return;
+  // Default the track tab to the current lesson's track (if any).
+  if (!_cheatsheetTrack) {
+    const cur = findLesson(state.currentLessonId);
+    _cheatsheetTrack = (cur && cur.track) || 'patterns';
+  }
+  const body = document.getElementById('cheatsheet-body');
+  if (body) body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Loading cheatsheet…</div>`;
+  const searchInput = document.getElementById('cheatsheet-search');
+  if (searchInput) searchInput.value = _cheatsheetSearch;
+  modal.style.display = 'block';
+  await ensureAllContentLoaded();
+  renderCheatsheetTabs();
+  renderCheatsheetBody();
+}
+
+function closeCheatsheetModal() {
+  const modal = document.getElementById('cheatsheet-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function renderCheatsheetTabs() {
+  const tabs = document.getElementById('cheatsheet-tabs');
+  if (!tabs) return;
+  const trackDefs = [
+    { id: 'syntax',   label: 'Syntax' },
+    { id: 'patterns', label: 'Patterns' },
+    { id: 'applied',  label: 'Applied' },
+  ];
+  tabs.innerHTML = trackDefs.map(t => {
+    const active = t.id === _cheatsheetTrack;
+    const bg = active ? '#1e293b' : 'transparent';
+    const color = active ? '#f8fafc' : '#94a3b8';
+    const border = active ? '#334155' : '#1e293b';
+    return `<button data-cs-track="${t.id}" style="background:${bg};color:${color};border:1px solid ${border};border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">${t.label}</button>`;
+  }).join('');
+  tabs.querySelectorAll('[data-cs-track]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _cheatsheetTrack = btn.getAttribute('data-cs-track');
+      renderCheatsheetTabs();
+      renderCheatsheetBody();
+    });
+  });
+}
+
+function renderCheatsheetBody() {
+  const body = document.getElementById('cheatsheet-body');
+  if (!body) return;
+  const fullLessons = CURRICULUM.filter(l => l.status === 'full' && l.track === _cheatsheetTrack);
+  const q = _cheatsheetSearch;
+  const filtered = q
+    ? fullLessons.filter(l => {
+        if (l.title.toLowerCase().includes(q)) return true;
+        if ((l.section || '').toLowerCase().includes(q)) return true;
+        const c = CONTENT[l.id];
+        if (c && c.description && c.description.toLowerCase().includes(q)) return true;
+        return false;
+      })
+    : fullLessons;
+
+  if (!filtered.length) {
+    body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">No lessons match.</div>`;
+    return;
+  }
+
+  const sections = [...new Set(filtered.map(l => l.section))];
+  const curLesson = findLesson(state.currentLessonId);
+  const curSection = curLesson && curLesson.track === _cheatsheetTrack ? curLesson.section : null;
+
+  let html = '';
+  for (const section of sections) {
+    const lessons = filtered.filter(l => l.section === section);
+    // Default-open the current lesson's section, OR all sections when the
+    // user is actively filtering (search-results expectation is "show me").
+    const open = q || section === curSection;
+    html += `<details data-cs-section="${escapeHtml(section)}"${open ? ' open' : ''} style="margin-bottom:8px;border:1px solid #1e293b;border-radius:8px;background:#0b1220;">
+      <summary style="padding:8px 12px;cursor:pointer;color:#cbd5e1;font-weight:600;font-size:13px;list-style:none;">
+        ${escapeHtml(section)} <span style="color:#64748b;font-weight:400;font-size:11px;">· ${lessons.length}</span>
+      </summary>
+      <div style="padding:4px 12px 12px 12px;display:flex;flex-direction:column;gap:14px;">`;
+    for (const lesson of lessons) {
+      const c = CONTENT[lesson.id];
+      if (!c) continue;
+      const desc = c.description ? `<div style="color:#94a3b8;font-size:12px;margin:2px 0 6px 0;">${escapeHtml(c.description)}</div>` : '';
+      const notesHtml = (c.reference && c.reference.notes && c.reference.notes.length)
+        ? `<ul style="margin:6px 0 0 0;padding-left:18px;color:#cbd5e1;font-size:12px;">${c.reference.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
+        : '';
+      html += `<div data-cs-lesson="${escapeHtml(lesson.id)}">
+        <button data-cs-goto="${escapeHtml(lesson.id)}" style="background:none;border:none;color:#f1f5f9;font-weight:600;font-size:13px;cursor:pointer;padding:0;text-align:left;">${escapeHtml(lesson.title)} →</button>
+        ${desc}
+        <pre class="cm-s-dracula" data-cs-code="${escapeHtml(lesson.id)}" style="margin:0;padding:8px 10px;background:#020617;border:1px solid #1e293b;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.45;white-space:pre;"></pre>
+        ${notesHtml}
+      </div>`;
+    }
+    html += `</div></details>`;
+  }
+  body.innerHTML = html;
+  body.scrollTop = 0;
+
+  // Wire jump-to-lesson buttons.
+  body.querySelectorAll('[data-cs-goto]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-cs-goto');
+      closeCheatsheetModal();
+      selectLesson(id);
+    });
+  });
+
+  // Colorize all visible code blocks. <details> keeps content in the DOM
+  // either way, so runMode now is fine; the perf cost is bounded by the
+  // current track's lesson count (max ~80 patterns).
+  body.querySelectorAll('[data-cs-code]').forEach(pre => {
+    const id = pre.getAttribute('data-cs-code');
+    const c = CONTENT[id];
+    if (c && c.reference && c.reference.code) colorizeInto(pre, c.reference.code);
+  });
+}
+
 async function generateCheatsheet() {
   await ensureAllContentLoaded();
   const fullLessons = CURRICULUM.filter(l => l.status === 'full');
@@ -1509,6 +1636,49 @@ function _formatStateVal(v) {
   return String(v);
 }
 
+// Quiz-mode helper — picks a midpoint K and assembles 4 unique MC options
+// from adjacent trace steps. Distractor priorities: no-advance (steps[K]),
+// skip-one (steps[K+2]), regression (steps[K-1]), final, initial. Returns
+// null if the trace is too short or too uniform for a meaningful quiz.
+// See ideas-by-category.md § Drilling Surfaces → "What comes next?" entry.
+function _pickQuizOptions(steps) {
+  if (steps.length < 4) return null;
+  const K = Math.max(1, Math.floor(steps.length / 2));
+  const correctIdx = K + 1;
+  if (correctIdx >= steps.length) return null;
+  const correct = steps[correctIdx];
+  const candidatePool = [
+    { idx: K },
+    { idx: K + 2 },
+    { idx: K - 1 },
+    { idx: steps.length - 1 },
+    { idx: 0 },
+    { idx: K + 3 },
+    { idx: Math.max(0, K - 2) }
+  ];
+  const stepKey = s => JSON.stringify({ line: s.line, label: s.label, state: s.state });
+  const seen = new Set([stepKey(correct)]);
+  const distractors = [];
+  for (const c of candidatePool) {
+    if (c.idx === correctIdx || c.idx < 0 || c.idx >= steps.length) continue;
+    const k = stepKey(steps[c.idx]);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    distractors.push({ step: steps[c.idx], idx: c.idx });
+    if (distractors.length === 3) break;
+  }
+  if (distractors.length < 3) return null;
+  const options = [
+    { step: correct, idx: correctIdx, isCorrect: true },
+    ...distractors.map(d => ({ step: d.step, idx: d.idx, isCorrect: false }))
+  ];
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return { K, correctIdx, options };
+}
+
 function renderWalkthrough(body, lesson, content) {
   const w = content.walkthrough;
   const compiled = _compileWalkthrough(lesson.id, w);
@@ -1545,6 +1715,7 @@ function renderWalkthrough(body, lesson, content) {
         <span class="walk-step-counter" data-walk-counter>Step 1 of N</span>
         <button class="walk-btn walk-btn-primary" data-walk-next aria-label="Next step">Next ▶</button>
         <button class="walk-btn walk-btn-ghost" data-walk-reset>Reset</button>
+        <button class="walk-btn walk-btn-ghost" data-walk-quiz title="Predict the next step (active-recall mode)">🔮 Quiz</button>
       </div>
     </div>
     <div class="walk-label-bar" data-walk-label>—</div>
@@ -1557,6 +1728,13 @@ function renderWalkthrough(body, lesson, content) {
         <div class="walk-state-table" data-walk-state></div>
       </div>
     </div>
+    <div class="walk-quiz hidden" data-walk-quiz-panel>
+      <div class="walk-quiz-q">What's the next step?</div>
+      <div class="walk-quiz-opts" data-walk-quiz-opts></div>
+      <div class="walk-quiz-actions">
+        <button class="walk-btn walk-btn-ghost" data-walk-quiz-close>✕ Close quiz</button>
+      </div>
+    </div>
   `;
 
   const codeEl = body.querySelector('[data-walk-code]');
@@ -1566,7 +1744,12 @@ function renderWalkthrough(body, lesson, content) {
   const prevBtn = body.querySelector('[data-walk-prev]');
   const nextBtn = body.querySelector('[data-walk-next]');
   const resetBtn = body.querySelector('[data-walk-reset]');
+  const quizBtn = body.querySelector('[data-walk-quiz]');
+  const quizPanel = body.querySelector('[data-walk-quiz-panel]');
+  const quizOptsEl = body.querySelector('[data-walk-quiz-opts]');
+  const quizCloseBtn = body.querySelector('[data-walk-quiz-close]');
   const exampleSelect = body.querySelector('[data-walk-example]');
+  let quizActive = false;
 
   // Render the code block once with line wrappers — highlight on update.
   // Each line gets a row wrapper with a line-number gutter and a syntax-
@@ -1624,9 +1807,65 @@ function renderWalkthrough(body, lesson, content) {
       : entries.map(([k, v]) =>
           `<div class="walk-state-row"><span class="walk-state-key">${escapeHtml(k)}</span><span class="walk-state-val">${escapeHtml(_formatStateVal(v))}</span></div>`
         ).join('');
-    // Disable prev at step 0, next at last step
-    prevBtn.disabled = uiState.stepIdx === 0;
-    nextBtn.disabled = uiState.stepIdx >= steps.length - 1;
+    // Disable prev/next at boundaries OR when quiz is active (quiz holds K).
+    prevBtn.disabled = quizActive || uiState.stepIdx === 0;
+    nextBtn.disabled = quizActive || uiState.stepIdx >= steps.length - 1;
+    resetBtn.disabled = quizActive;
+    exampleSelect.disabled = quizActive;
+  }
+
+  function exitQuiz() {
+    quizActive = false;
+    quizPanel.classList.add('hidden');
+    quizOptsEl.innerHTML = '';
+    quizBtn.classList.remove('active');
+    quizBtn.textContent = '🔮 Quiz';
+    render();
+  }
+
+  function startQuiz() {
+    const steps = currentSteps();
+    const quiz = _pickQuizOptions(steps);
+    if (!quiz) {
+      quizBtn.disabled = true;
+      quizBtn.title = 'Trace too short for a quiz (need ≥4 steps)';
+      return;
+    }
+    quizActive = true;
+    uiState.stepIdx = quiz.K;  // show step K; ask "what's next?"
+    render();
+    quizPanel.classList.remove('hidden');
+    quizBtn.classList.add('active');
+    quizBtn.textContent = '🔮 Quiz on';
+    quizOptsEl.innerHTML = '';
+    let picked = false;
+    quiz.options.forEach(opt => {
+      const card = document.createElement('button');
+      card.className = 'walk-quiz-opt';
+      const stateSnippet = opt.step.state
+        ? Object.entries(opt.step.state).slice(0, 2)
+            .map(([k, v]) => `${escapeHtml(k)}=${escapeHtml(_formatStateVal(v))}`).join(', ')
+        : '';
+      card.innerHTML = `
+        <div class="walk-quiz-opt-line">Line ${opt.step.line}</div>
+        <div class="walk-quiz-opt-label">${escapeHtml(opt.step.label || '—')}</div>
+        ${stateSnippet ? `<div class="walk-quiz-opt-state">${stateSnippet}</div>` : ''}
+      `;
+      card.addEventListener('click', () => {
+        if (picked) return;
+        picked = true;
+        card.classList.add(opt.isCorrect ? 'correct' : 'incorrect');
+        // Always reveal the correct one too
+        if (!opt.isCorrect) {
+          [...quizOptsEl.children].forEach((el, i) => {
+            if (quiz.options[i].isCorrect) el.classList.add('correct');
+          });
+        }
+        // Disable all option cards
+        [...quizOptsEl.children].forEach(el => el.classList.add('locked'));
+      });
+      quizOptsEl.appendChild(card);
+    });
   }
 
   prevBtn.addEventListener('click', () => {
@@ -1640,7 +1879,13 @@ function renderWalkthrough(body, lesson, content) {
     uiState.stepIdx = 0;
     render();
   });
+  quizBtn.addEventListener('click', () => {
+    if (quizActive) exitQuiz();
+    else startQuiz();
+  });
+  quizCloseBtn.addEventListener('click', exitQuiz);
   exampleSelect.addEventListener('change', (e) => {
+    if (quizActive) exitQuiz();
     uiState.exampleIdx = Number(e.target.value);
     uiState.stepIdx = 0;
     render();
@@ -2812,7 +3057,7 @@ async function init() {
     }
     if (e.key === 'Escape') {
       // Close any open modal on Escape
-      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal'];
+      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);
         if (m && m.style.display === 'block') { m.style.display = 'none'; e.preventDefault(); return; }
@@ -3037,18 +3282,16 @@ async function init() {
     e.target.value = '';
   });
 
-  // Export cheatsheet — markdown download of every reference card
-  document.getElementById('export-btn').addEventListener('click', async () => {
-    const md = await generateCheatsheet();
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `js-drill-cheatsheet-${new Date().toISOString().slice(0, 10)}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  // Cheatsheet — in-app quick-reference overlay (no download).
+  const cheatsheetModal = document.getElementById('cheatsheet-modal');
+  document.getElementById('export-btn').addEventListener('click', openCheatsheetModal);
+  document.getElementById('cheatsheet-close').addEventListener('click', closeCheatsheetModal);
+  cheatsheetModal.addEventListener('click', (e) => {
+    if (e.target === cheatsheetModal) closeCheatsheetModal();
+  });
+  document.getElementById('cheatsheet-search').addEventListener('input', (e) => {
+    _cheatsheetSearch = e.target.value.toLowerCase().trim();
+    renderCheatsheetBody();
   });
 
   updateStreakUI();

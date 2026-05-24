@@ -27,6 +27,18 @@ app's existence.
   to lie about it.
 - **No "show solution then quiz"** pattern — Reference is a separate tab the
   user must explicitly leave to drill.
+- **Walkthrough Quiz mode (iter 36)** turns the previously-passive
+  Walkthrough scrub into an active-recall surface. The 🔮 Quiz button
+  picks a midpoint step K, shows steps 1..K, then asks "what's the next
+  step?" with 4 MC option cards drawn from adjacent trace states
+  (no-advance, skip-one, regression, final/initial). Zero new content —
+  reuses every trace generator already authored across 99 Patterns +
+  Applied lessons. Mobile-native (2-column option grid, tap to answer,
+  Prev/Next disabled while quiz holds K). First active-recall surface
+  on the Walkthrough tab; closes the "passive observation" gap the
+  scrub interface introduced. See
+  `iter-artifacts/ideas-by-category.md § Drilling Surfaces`
+  ("What comes next?" parking-lot entry).
 - **Reference-Card Flash mode (iter 35)** turns the previously-passive
   Reference tab into an active-recall surface without requiring typing.
   Toggling 🃏 Flash hides 1–3 randomly-chosen "good" tokens (length ≥3,

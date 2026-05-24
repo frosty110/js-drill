@@ -121,6 +121,7 @@ const state = {
   mockHistory: {},  // { lessonId: [ms, ms, ...] } — last N=MOCK_HISTORY_MAX successful mock times, oldest→newest
   mock: { active: false, startTime: 0, lessonId: null, tickHandle: null },
   starterPath: false, // when true, sidebar shows only the linear starter path
+  starterPathTrack: 'all', // 'all' | 'syntax' | 'patterns' | 'applied' — track-scope filter for the path (iter 39)
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
   lastTab: null,
@@ -263,6 +264,29 @@ const STARTER_PATH = [
   // different practice mode (build me X) rather than a learning progression.
 ];
 
+// iter 39: per-track Starter Paths. The single curated STARTER_PATH above
+// mixes Syntax + Patterns; this helper filters by `state.starterPathTrack`
+// so a user can drill Syntax-end-to-end or Patterns-end-to-end without
+// track-mixing distraction. Cache is invalidated on track change.
+// See ideas-by-category.md § Paths & Sessions → "Per-track Starter Paths".
+let _activeStarterPathCache = null;
+let _activeStarterPathCacheKey = null;
+function getActiveStarterPath() {
+  const track = (state && state.starterPathTrack) || 'all';
+  if (track === _activeStarterPathCacheKey && _activeStarterPathCache) return _activeStarterPathCache;
+  _activeStarterPathCacheKey = track;
+  if (track === 'all') { _activeStarterPathCache = STARTER_PATH; return _activeStarterPathCache; }
+  _activeStarterPathCache = STARTER_PATH.filter(id => {
+    const lesson = findLesson(id);
+    return lesson && lesson.track === track;
+  });
+  return _activeStarterPathCache;
+}
+function _invalidateStarterPathCache() {
+  _activeStarterPathCache = null;
+  _activeStarterPathCacheKey = null;
+}
+
 // I/O is delegated to window.DrillStorage (js/storage.js) — single source of
 // truth for localStorage access across main app + prep + diagnostic. Domain
 // logic (migration backfill, GC, defaults) stays here.
@@ -279,6 +303,8 @@ function loadProgress() {
     state.lastLessonId = parsed.lastLessonId || null;
     state.lastTab = parsed.lastTab || null;
     state.starterPath = !!parsed.starterPath;
+    // iter 39: track-scoped path. Legacy users (no field) default to 'all' = existing behavior.
+    state.starterPathTrack = ['all','syntax','patterns','applied'].includes(parsed.starterPathTrack) ? parsed.starterPathTrack : 'all';
     state.welcomed = !!parsed.welcomed;
     state.hideMastered = !!parsed.hideMastered;
     state.reviews = parsed.reviews || {};
@@ -329,6 +355,7 @@ function saveProgress() {
     lastLessonId: state.currentLessonId,
     lastTab: state.currentTab,
     starterPath: state.starterPath,
+    starterPathTrack: state.starterPathTrack,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
     reviews: state.reviews,
@@ -742,7 +769,7 @@ function dailyPlan() {
   for (const id of dueReviewIds().slice(0, 3)) add(id, 'review due');
   add(topWeakLessonId(), 'weak spot');
   let added = 0;
-  for (const id of STARTER_PATH) {
+  for (const id of getActiveStarterPath()) {
     if (added >= 2) break;
     const l = findLesson(id);
     if (!l || l.status !== 'full') continue;
@@ -807,8 +834,9 @@ function startRandomMockInterview() {
   startMockInterview(pick.id);
 }
 function starterPathNextId() {
-  // First lesson in STARTER_PATH that is full but not yet mastered.
-  for (const id of STARTER_PATH) {
+  // First lesson in the active (track-scoped) starter path that is full
+  // but not yet mastered.
+  for (const id of getActiveStarterPath()) {
     const lesson = findLesson(id);
     if (!lesson || lesson.status !== 'full') continue;
     if (lessonOverallStatus(id) !== 'mastered') return id;
@@ -1098,8 +1126,9 @@ function renderSidebar() {
         || lesson.section.toLowerCase().includes(q)
         || lesson.id.toLowerCase().includes(q);
   };
-  const inStarter = (lesson) => !state.starterPath || STARTER_PATH.includes(lesson.id);
-  const starterIndex = (id) => STARTER_PATH.indexOf(id) + 1;  // 1-based for display
+  const activeStarter = getActiveStarterPath();
+  const inStarter = (lesson) => !state.starterPath || activeStarter.includes(lesson.id);
+  const starterIndex = (id) => activeStarter.indexOf(id) + 1;  // 1-based for display
   const hideMasteredOk = (lesson) => {
     if (!state.hideMastered) return true;
     // Always keep due-for-review items even in focus mode.
@@ -1112,6 +1141,14 @@ function renderSidebar() {
   if (pathBtn) {
     pathBtn.classList.toggle('text-blue-300', state.starterPath);
     pathBtn.classList.toggle('text-slate-500', !state.starterPath);
+    // Show "🧭 Starter Path · Syn" etc. when a track is selected, so the
+    // user always sees which scope is active without opening the chip row.
+    if (state.starterPath && state.starterPathTrack && state.starterPathTrack !== 'all') {
+      const shortLabel = state.starterPathTrack[0].toUpperCase() + state.starterPathTrack.slice(1, 3);
+      pathBtn.textContent = '🧭 Starter Path · ' + shortLabel;
+    } else {
+      pathBtn.textContent = '🧭 Starter Path';
+    }
   }
 
   const tracks = [
@@ -1122,6 +1159,51 @@ function renderSidebar() {
 
   // Render the binder tab strip (independent of which lessons are visible).
   renderBinderTabs(tracks);
+
+  // iter 39: when path mode is on, surface a track-picker chip row above
+  // the lesson list. Lets the user scope the Starter Path to one track
+  // (Syntax-only, Patterns-only, Applied-only) or keep "All" (legacy).
+  // No new authoring — the active path is just STARTER_PATH filtered by
+  // the picked track.
+  if (state.starterPath) {
+    const trackRow = document.createElement('div');
+    trackRow.className = 'path-track-row';
+    const choices = [
+      { id: 'all', label: 'All' },
+      { id: 'syntax', label: 'Syntax' },
+      { id: 'patterns', label: 'Patterns' },
+      { id: 'applied', label: 'Applied' }
+    ];
+    const cur = state.starterPathTrack || 'all';
+    trackRow.innerHTML = choices.map(c => {
+      const count = c.id === 'all'
+        ? STARTER_PATH.length
+        : STARTER_PATH.filter(id => {
+            const l = findLesson(id);
+            return l && l.track === c.id;
+          }).length;
+      const active = cur === c.id ? ' active' : '';
+      const disabled = count === 0 ? ' disabled' : '';
+      return `<button class="path-track-chip${active}${disabled}" data-track="${c.id}" ${count === 0 ? 'disabled' : ''} title="${count} lessons in this track-path">${c.label} <span class="path-track-count">${count}</span></button>`;
+    }).join('');
+    trackRow.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-track]');
+      if (!btn || btn.disabled) return;
+      const newTrack = btn.dataset.track;
+      if (newTrack === state.starterPathTrack) return;
+      state.starterPathTrack = newTrack;
+      _invalidateStarterPathCache();
+      saveProgress();
+      // If current lesson is no longer in the new track-path, jump to next un-mastered.
+      if (!getActiveStarterPath().includes(state.currentLessonId)) {
+        const next = starterPathNextId();
+        if (next) { selectLesson(next); return; }
+      }
+      renderSidebar();
+      if (state.currentLessonId) renderLesson();
+    });
+    nav.appendChild(trackRow);
+  }
 
   // Search overrides the binder filter — if the user is searching, show
   // matches across all tracks (and auto-switch the active tab if the active
@@ -1158,7 +1240,7 @@ function renderSidebar() {
     // path order. Non-path mode is unaffected.
     if (state.starterPath) {
       lessons = [...lessons].sort((a, b) =>
-        STARTER_PATH.indexOf(a.id) - STARTER_PATH.indexOf(b.id));
+        activeStarter.indexOf(a.id) - activeStarter.indexOf(b.id));
     }
 
     const sections = [...new Set(lessons.map(l => l.section))];
@@ -1394,9 +1476,12 @@ function renderLesson() {
   // but they group by section, so 22 / 20 / 21 can appear adjacent —
   // confusing. The header pill gives the user a stable "Step N of M"
   // anchor in the main viewport.
-  const pathIdx = state.starterPath ? STARTER_PATH.indexOf(lesson.id) + 1 : 0;
+  const _activePath = state.starterPath ? getActiveStarterPath() : null;
+  const pathIdx = _activePath ? _activePath.indexOf(lesson.id) + 1 : 0;
+  const _trackLabel = state.starterPath && state.starterPathTrack && state.starterPathTrack !== 'all'
+    ? ' (' + state.starterPathTrack[0].toUpperCase() + state.starterPathTrack.slice(1) + ')' : '';
   const pathPill = pathIdx > 0
-    ? `<span class="pill pill-path ml-2" title="Starter Path step ${pathIdx} of ${STARTER_PATH.length}">🧭 Step ${pathIdx} of ${STARTER_PATH.length}</span>`
+    ? `<span class="pill pill-path ml-2" title="Starter Path step ${pathIdx} of ${_activePath.length}${_trackLabel}">🧭 Step ${pathIdx} of ${_activePath.length}${_trackLabel}</span>`
     : '';
   const nextId = nextLessonId(lesson.id);
   const nextLessonObj = nextId ? findLesson(nextId) : null;
@@ -3219,9 +3304,10 @@ async function init() {
   // Starter-path toggle
   document.getElementById('path-btn').addEventListener('click', () => {
     state.starterPath = !state.starterPath;
+    _invalidateStarterPathCache();
     renderSidebar();
     // If toggling ON and current lesson isn't in the path, jump to next un-mastered in path
-    if (state.starterPath && !STARTER_PATH.includes(state.currentLessonId)) {
+    if (state.starterPath && !getActiveStarterPath().includes(state.currentLessonId)) {
       const next = starterPathNextId();
       if (next) { selectLesson(next); return; }
     }

@@ -66,7 +66,7 @@ The convention:
 
 **Parking-lot ideas:**
 - **[iter 38 — USER-NAMED GAP] Path enhancements (HIGH PRIORITY)** — user surfaced this iter 38 as one of three explicit gaps. Concrete candidates (pick one per ship; ordered argmax(impact)):
-  - **Per-track Starter Paths** — separate Syntax / Patterns / Applied path heads. Today's single linear path forces a track-mixing sequence; some users want to drill Patterns end-to-end before touching Syntax. Per-track paths preserve the existing linear-sequence design but let the user pick which to walk.
+  - **Per-track Starter Paths** — **SHIPPED iter 39.** A 4-chip track picker (All / Syntax / Patterns / Applied) appears above the sidebar lesson list when Starter Path is on. Picks filter the existing curated `STARTER_PATH` by `lesson.track` — no new authoring; relative order within each track preserved from the hand-crafted sequence. Header pill shows "🧭 Step N of M (Syntax)" when scoped. `state.starterPathTrack` added (default 'all' for legacy). Mobile probe `tools/cdp/per-track-starter-path.js` (7 assertions).
   - **Path-progress visualization in lesson header** — "Step 17 of 60" → a tiny progress bar showing visited/passed/upcoming steps. Today the user sees "Step N of M" pill but no visual sense of where they are in the path.
   - **"Where am I?" in path** — when on a non-path lesson, show a small "← Back to path step N" affordance to return to the path sequence.
   - **Path-step prompts** — between path steps, show "Why this next?" rationale so the user understands the path's intent (e.g., "You just shipped arrays; this lesson introduces hash maps as the natural complement").

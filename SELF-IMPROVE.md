@@ -5,22 +5,25 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Wind down — 17 iterations is enough; let the user
-  use what's been built.* The last several iterations have each shipped
-  small, real improvements, but the marginal value per iteration is
-  trending down — each finding is now narrower than the last. The user
-  has 17 iterations of incremental UX, mechanism, content, and bug
-  fixes to actually use, validate against their own drill sessions, and
-  push to Pages. The loop should pause here, let the user feed back, and
-  resume only when they have a fresh signal that a specific thread is
-  worth pulling on.
-- **Hypothesis to test:** No new feature this iteration. Instead — do
-  one final session-summary pass: commit history reading clean, all 11
-  probes regression-green, validator passes, docs in sync, parking lot
-  has 0 untriaged items. If everything checks out, log the wind-down and
-  stop scheduling new iterations until the user re-engages.
-- **Out of scope this iteration:** new features, content, audits,
-  refactors. This is a stop-and-summarize iteration.
+- **Status: PAUSED** since iter 18 (2026-05-23). The loop shipped 17
+  improvement iterations + 1 wind-down audit. Marginal value per
+  iteration was trending down — each new finding was narrower than the
+  last. Stop now, let the user drill against what's been built, and
+  resume only with fresh signal from real usage.
+- **Re-engagement criteria** (any one of these resumes the loop):
+  1. User reports a specific friction during a real drill session
+     ("X is still painful on mobile", "Y doesn't surface when I expect
+     it", "Z feature crashes when…").
+  2. User reports a PROFILE.md success criterion isn't moving (mock
+     PBs flat over weeks, mastered lessons slipping past SR, friction
+     between "20 free minutes" and "drilling" feels non-zero).
+  3. User wants to attack a parking-lot item or revive an Avoid entry
+     with new evidence.
+  4. User asks the loop to expand into a new area (content, pedagogy,
+     infra) not currently scoped.
+- **When resuming:** replace this block with a fresh Primary lens +
+  Hypothesis to test, drawn from whatever the user surfaces. Don't
+  invent a focus — wait for signal.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -47,6 +50,21 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 18 — Wind-down audit; loop paused
+Final stop-and-summarize pass per iter 17's directive — no new
+features, content, audits, or refactors. Ran the full wind-down sweep:
+`node tools/validate-data.js` 336/0 (143 lessons, 327 L2/L3
+exercises); all 12 durable iter probes regression-green, 73/73
+assertions across iters 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16, 17;
+commit history clean — 17 atomic, improvement-named commits since
+`262380c`; learning-strategies docs in sync (active-recall, spaced-
+repetition, desirable-difficulty); parking lot has 1 item, explicitly
+triaged Deprioritized in iter 10. Housekeeping note: `tools/cdp/
+_iter16-survey.js` is untracked — `_`-prefix flags it as throwaway
+from iter 16's mobile cold-survey; left in place since deletion sits
+outside the directive's scope. **Loop paused.** Resume only on fresh
+user signal (see Current focus criteria).
 
 ### 2026-05-23 — iter 17 — Next-CTA injects on fresh L3 pass
 Iter 16 added the "Review N due → / Next lesson →" CTA in the header
@@ -221,24 +239,10 @@ path labeling). **Learning:** stress-surveying under a seeded
 unhappy-path state surfaces UX inconsistencies that happy-path probes
 miss — worth keeping in the technique toolbox.
 
-### 2026-05-23 — iter 8 — 2nd L2 for 3 syntax + 1 applied; template generalizes
-Audited under-built syntax lessons — only 3 were under-built
-(s-template, s-iter-custom, s-async-iter), so hit all three plus
-a-debounce as an applied data point. Validated that the iter 7
-template generalizes to non-pattern lessons with track-specific
-adaptations: syntax = "different *use* of the feature" rather than
-different input data; applied = blank closure surfaces (args capture,
-state reset, spread) that the canonical leaves untouched in #1.
-Validator 336/0 (+4); density 97 → 93. **Syntax track is now fully
-built** at ≥2 L2 (44/44 lessons). Remaining backlog: 74 pattern + 19
-applied. **Learning:** three iterations grinding the same backlog
-thread is enough — the template is validated, the user can pace the
-remaining 93 lessons themselves. Iter 9 should re-survey for
-something the loop is uniquely positioned to find.
-
-*(iters 1–7 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–8 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
-`4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7 5-pattern 2nd L2.)*
+`4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7; `dc41586` iter 8
+2nd L2 for 3 syntax + 1 applied, syntax track fully built at ≥2 L2.)*
 
 ## Hypotheses parking lot
 *(curated iter 10; sidebar-ordering shipped iter 11)*

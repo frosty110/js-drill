@@ -463,6 +463,10 @@ function topWeakLessonId() {
 // off by default. Iter-33 ship iter flips the default + adds mobile probe.
 // Until then the function is exercised only via `window.__sparklineEnabled =
 // true; renderLesson()` in DevTools.
+// iter-33: default flag to true so the surface lands for all users.
+if (typeof window !== 'undefined' && window.__sparklineEnabled === undefined) {
+  window.__sparklineEnabled = true;
+}
 function renderSparkline(lessonId) {
   if (!window.__sparklineEnabled) return '';
   const events = state.history[lessonId] || [];
@@ -680,6 +684,10 @@ function updateLessonHeaderInPlace() {
   const lesson = findLesson(state.currentLessonId);
   if (!lesson) return;
   const overall = lessonOverallStatus(lesson.id);
+  // Refresh sparkline in-place — every pass/miss appended a history event so
+  // the user sees the new tick land immediately without a full re-render.
+  const sparkSlot = document.querySelector('#lesson-shell [data-sparkline-slot]');
+  if (sparkSlot) sparkSlot.innerHTML = renderSparkline(lesson.id);
   // Tabs: each .tab-btn — append ✓ to the label if its level passed.
   // Reads the level off data-level so the optional Conversation tab doesn't
   // shift the index zip.
@@ -1198,6 +1206,7 @@ function renderLesson() {
     </div>
     <h2 class="text-2xl font-bold text-white">${escapeHtml(lesson.title)}</h2>
     <p class="text-slate-400 mt-1 text-sm">${escapeHtml(content.description)}</p>
+    <div data-sparkline-slot class="mt-1">${renderSparkline(lesson.id)}</div>
     ${nextCta}
   `;
   shell.appendChild(header);

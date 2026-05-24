@@ -45,6 +45,8 @@ The convention:
 - **Solution-shape library (per-pattern meta-Reference)** — a "Shapes" sub-tab on each pattern lesson surfaces the 3-6 *variants* of that pattern (e.g., Sliding Window: fixed-size, variable-shrink, longest, shortest, atMostK, exactly-K; DP: memo top-down, tab bottom-up, 1D space-opt). Each shape is a 5-line skeleton with one-sentence "use when..." Bridges Reference into a *meta-Reference* mirroring how interviewers think ("which sliding-window variant is this?").
 - **"What's missing?" critical-line fill** — different shape from L2 (which has many tiny blanks across templates): show a 90-95%-complete solution missing only 1-2 *load-bearing* lines (the actual insight); user fills the gap. Higher leverage per question for high-traffic patterns where the insight is concentrated (partition step in quickselect, relax step in Bellman-Ford, contraction step in Karger).
 - **Code-reading speed drill** — show a 10-15 line snippet → MC "what does this code do?" in ≤5 words (4 distractors). Trains skimming/reading-speed; complementary to all writing-direction surfaces today. Mobile-native; sourced from existing canonicals (no new content).
+- **Pure-flashcard pattern mode** — abstract per-pattern cards with NO code: front "Two-sum variant 3"; back "hash map + complement; O(n)/O(n); preferred over sort+two-ptr when input is unsorted". Mobile-native tap-reveal. Bridges the gap between Reference (concrete code) and pure mental model — surfaces only the *retrieval cues* an interviewer uses to probe ("have you seen this pattern before?").
+- **"What comes next?" trace-sequence drill** — given a partial trace state from an existing Walkthrough generator (steps 1-3 visible), MC the next state from 4 distractors. Active-recall variant of the passive Walkthrough scrub; zero new content (reuses every trace generator that already exists).
 
 **Cross-cutting concerns:**
 - Audit theme #3 ("Why dummy head?" Q recurs 4× across LL) — see BS-08 in SELF-IMPROVE.md.
@@ -76,6 +78,8 @@ The convention:
 - **60-second daily warm-up sprint** — first-load-of-the-day pure L1 sprint (8-12 questions across mastered lessons in 60s, tap-only). Gym-friendly, phone-friendly, no warmup-warmup required. Distinct from Cold open daily (which lands on L3 — high friction); this is the *low-friction* anti-cold-open: gets the brain online fast and resurfaces stale lessons.
 - **1-minute panic recovery drill (mock variant)** — within mock interview, when 1 min remains and L3 isn't passing, app forces a 2-tap decision: (a) "submit partial + leave a comment explaining what's missing" or (b) "try one more thing — 60s on the clock". Trains decision-under-pressure (a real graded interview skill: knowing when to stop and document vs push).
 - **"Slot machine" lesson roulette** — single-tap "shuffle" on the sidebar header pulls a random not-yet-mastered lesson straight into view. Decision-fatigue antidote for the user who opens the app and freezes on "what should I drill?". 5 LOC ship.
+- **Time-budget allocator on mock** — before mock starts, user pre-allocates the 45-min budget across phases (e.g., 5 clarify / 10 approach / 25 code / 5 test). App tracks adherence and surfaces "you overspent on approach by 8 min" post-mock. Trains time-discipline — the #1 interview-killer the rusty engineer falls into ("I had it but I ran out of time").
+- **Auto-difficulty selector ("too easy / right / too hard")** — 3-tap rating after each lesson pass; next surfaced lesson is one tier in that direction (uses existing track-position metadata). Adaptive difficulty without a rating system; closes the "what next?" decision-fatigue gap for the mid-session user.
 
 **Cross-cutting concerns:**
 - Weak-spot tracker operates only at lesson grain (not concept grain) — see [`roadmap.md` iter-26 entry #2 (Error Post-Mortem)](roadmap.md).
@@ -175,6 +179,7 @@ The convention:
 - IndexedDB migration path (when localStorage hits 5MB — distant).
 - "Reset just this section" instead of full progress wipe.
 - Cloud backup via gist URL (deferred from iter-26 vision subagent A entry #5).
+- **AI-tutor export (BYOK bridge)** — single button "Export weak-spots for AI tutoring" generates a structured JSON blob (failed L1 questions + their context + your recent miss timestamps + canonical excerpts) sized for an LLM context window; user pastes it into their preferred Claude/ChatGPT/etc. chat for personalized tutoring on weaknesses. **No API integration needed** — purely a clipboard export. Unlocks the AI-coach idea (deferred iter 26 — "AI Interview Coach") without the BYOK-creds onboarding friction; user already has their LLM session open. Massive leverage from ~50 LOC.
 
 **Cross-cutting concerns:**
 - Current schema `__v: 6` (bumped iter 32 for `history` field). Load accepts 2-6 for legacy users.
@@ -199,6 +204,7 @@ The convention:
 - **"Your weakest verb" surface** — auto-aggregated keyword tally from miss history ("you've missed `splice` 6× across 4 lessons" / "you've missed `>>>` 3× in bit-manipulation"). No classifier needed — keyword match against L1 question text + canonical tokens. Lighter than the BLOCKED Error Post-Mortem entry, same metacognitive spirit.
 - **Post-mock self-evaluation journal** — after each mock interview, optional 30s text capture: "what would the interviewer comment on?". Stored as a flat reviewable list, exportable. Trains self-evaluation without classifier infrastructure.
 - **Section-mastery progress arc** — sparkline at the section header (not lesson header) showing aggregate L1 + L2 pass rate week-over-week. Surfaces "you're plateauing in DP" without per-lesson drill-down.
+- **Skill-tree visualization** — RPG-style node graph of patterns showing prerequisites and "boss" lessons (e.g., to unlock Hard DP, master Easy DP and Recursion). Visual at-a-glance "where am I in this universe?" — pure motivation surface. Could be a one-time canvas render from a static prerequisite-edges table (~100 edges total across 79 patterns lessons).
 
 **Cross-cutting concerns:**
 - Sparkline shipped iter 33 — first per-lesson temporal surface. Establishes the category.
@@ -260,6 +266,7 @@ The convention:
 - **Anti-templating "what would break?"** — present canonical + a near-identical problem variant; MC: "which line of this canonical breaks under the variant?" Trains *why-this-works* understanding, not just template recall. Forces the distinction between "I memorized" and "I understood".
 - **"Narrate while you code" voice journal** — opt-in: during L3, app passively records audio (Web Audio API, in-browser only, no upload); on pass, transcript is offered via Web Speech for self-review of your own narration density and clarity. Trains the *talk-while-typing* interview skill — the single most-graded behavior in pair interviews — without a human listener.
 - **Re-derive without Reference** — periodically, even on a lesson with passing SR-bucket, surface a "re-derive — no Reference visible" prompt: user must produce L3 from L3.prompt alone with the Reference tab locked. Trains transfer from recognition (Reference visible) to recall (truly blank). The current SR ladder asymptotically tests reading-not-recall as the user keeps having Reference available.
+- **Adversarial-example trainer** — per pattern lesson, a curated *worst-case input* card: the specific input that breaks the obvious approach (for two-sum: `[3,3], target=6` → identical-element trap; for binary search: `[1,1,1,...,2,1,1,1]` → no monotonic invariant; for sliding window: `[a,a,a,a,...]` → window never shrinks). User drills: "given this input, does the canonical work?" → reveals why. Trains the highest-leverage interview reflex: "what input would break my solution?" — graded as senior signal in every coding interview.
 
 **Cross-cutting concerns:**
 - Several entries here would slot cleanly into Mock Interview as toggles rather than standalone modes — design coherence question for the first vision iter that picks from this category.
@@ -297,3 +304,41 @@ When the next ship target isn't obvious from `SELF-IMPROVE.md § Next iteration`
 5. If no category triggers, fall through to the existing Step 1 mode-selection (likely vision).
 
 The trigger check is bounded: 9 categories × ~3 rows each = ~27 freshness lookups, all derivable from one file. No per-idea state, no coordination overhead.
+
+---
+
+## Promotion shortlist (iter 37)
+
+> **Purpose:** the catalog has grown rapidly across iters 35-37 (now ~140 parking-lot entries across 9 categories). Without curation, `/drill-improve` Step 1 can't scan it usefully. This section names the **top 8 candidates for promotion to `roadmap.md`** — selected for high interview-passing leverage, mobile-native shape, no BLOCKED dependencies, and 1-2-iter scope. It is a *recommendation surface* for the next `vision`-mode iter, NOT a promotion (vision iter does the actual roadmap.md write with full value-claim/mechanic/success-criterion framing).
+>
+> **Selection criteria (in priority order):**
+> 1. **Mobile-native** (PROFILE 80%-phone) — tap-shaped or short-token surface.
+> 2. **No new content authoring** — uses existing 143-lesson × 327-exercise corpus.
+> 3. **No BLOCKED dependency** — no PROFILE amendment, no schema migration > `__v: 6`, no instrumentation prereq.
+> 4. **Single-iter ship OR 2-iter scaffold+ship** — not a multi-iter epic.
+> 5. **Closes a measurable interview gap** — code-reading direction, debugging, recognition, time-discipline, etc.
+
+**Shortlist (highest leverage first):**
+
+1. **Crystal Ball mental-execution drill** *(Cat 1, iter 36)* — code-reading direction, mobile-native, distractors auto-generatable from existing canonicals. Closes the all-writing-no-reading imbalance flagged in Cat-1 cross-cutting. Single-iter ship.
+2. **L3 hint ladder (interview-realistic)** *(Cat 1, iter 35)* — graduated reveal (data-structure name → loop skeleton → first line). Hints-used metric trends down over SR. Single-iter ship; uses existing `reference.code` parsing.
+3. **JS gotcha trap bag** *(Cat 4, iter 36)* — concentrated ~30-lesson L1 section (typeof null, Array(n).fill([]), this binding, hoisting). Mobile-native; addresses BS-03 with the *trap*-flavored angle. 2-iter (authoring + ship).
+4. **PWA install + offline drilling** *(Cat 5, iter 36)* — manifest.json + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter.
+5. **Pattern-family heatmap** *(Cat 7, iter 35)* — per-section mastery grid on sidebar; tap red → drill weakest. Visual "where do I study tonight?". Single-iter ship; uses existing `progress` field.
+6. **"Where's your bug?" debugging drill** *(Cat 9, iter 36)* — when L3 fails, force user to tap-the-line BEFORE edit unlocks; stores debugging accuracy. Closes the blind-editing gap; single-iter ship.
+7. **Whiteboard mode toggle** *(Cat 9, iter 35)* — strip syntax highlighting + autocomplete + run-button on L3. ~30 LOC; trains realistic-interview surface where tooling is absent.
+8. **60-second daily warm-up sprint** *(Cat 2, iter 36)* — first-load-of-day pure L1 sprint, gym-friendly. Mobile-native habit-former; single-iter ship using existing L1 corpus.
+
+**Deferred to a second pass (also strong, slightly heavier scope or dependency):**
+- Algorithmic mnemonics layer (Cat 3) — requires per-lesson curation; 2-iter ship.
+- AI-tutor export (Cat 6) — single-iter ship but novel surface; bench until shortlist is consumed.
+- Solution-shape library (Cat 1) — per-pattern curation of variant shapes; 3-iter epic.
+- Boss interview (Cat 9) — depends on existing mock-interview refactor; 2-iter ship.
+
+**Likely-overlapping candidates the next vision iter should consolidate:**
+- "L3 starter scaffold" (Cat 1, pre-iter-35) **vs** "L3 hint ladder" (Cat 1, iter 35) — same surface, different reveal granularity; merge into one entry.
+- "Cold open daily" (Cat 2, iter 35) **vs** "60s daily warm-up sprint" (Cat 2, iter 36) — opposite ends of friction spectrum; design choice question, not duplicates.
+- "Pattern Recognition Speed Drill" (Cat 2/8, BLOCKED iter 26) **vs** "Reverse problem-identification" (Cat 9, iter 35) — both go output→pattern; Reverse may unblock the BLOCKED entry by sidestepping the `problem`-field dependency.
+- "Crystal Ball" (Cat 1, iter 36) **vs** "Code-reading speed drill" (Cat 1, iter 36) — both code-reading direction, different question shape; keep both but plan as a 2-entry surface pair.
+
+**Maintenance note:** the catalog should not exceed ~150 parking-lot entries (current ~140). Future deep-thought iters should default to *promote-or-prune* mode unless the new idea is in a category with no existing close cousin. Iter 35-37 was a deliberate burst to reach this ceiling; iter 38+ defaults to consolidation.

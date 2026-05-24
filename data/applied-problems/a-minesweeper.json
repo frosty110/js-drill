@@ -37,24 +37,26 @@
         "answer": 1
       },
       {
-        "q": "Clicking a mine cell sets it to...",
+        "q": "Clicking a numbered cell (n>0 mine-neighbors) — does the flood-fill propagate past it?",
         "options": [
-          "'B'",
-          "'0'",
-          "'X'",
-          "Removes it"
+          "Yes — but only one neighbor in each direction",
+          "No — numbered cells are flood-fill stoppers; only zero-mine cells propagate",
+          "Yes — all reachable 'E' cells get revealed",
+          "No — and the cell itself stays 'E'"
         ],
-        "answer": 2
+        "answer": 1,
+        "explain": "Numbered cells reveal themselves (the digit) but don't push neighbors. Only 'B' (zero-mine) cells continue the flood."
       },
       {
-        "q": "How many neighbors does Minesweeper consider when counting mines?",
+        "q": "If you initialized `let n = 1` instead of `let n = 0` before the mine-count loop, what's the bug?",
         "options": [
-          "4 (orthogonal)",
-          "6",
-          "8 (orthogonal + diagonals)",
-          "9 (including itself)"
+          "Nothing — the count is computed correctly afterward",
+          "Every 'E' cell becomes a numbered cell (incl. zero-mine), so the flood NEVER propagates",
+          "The flood propagates correctly but cells are mis-labeled by 1",
+          "Infinite loop"
         ],
-        "answer": 2
+        "answer": 1,
+        "explain": "The `if (n > 0)` branch fires for every cell, so no cell ever takes the `else` branch that marks 'B' and pushes neighbors."
       }
     ]
   },
@@ -67,6 +69,15 @@
           { "answer": "\"X\"", "hint": "mine marker after click — string literal with quotes" }
         ],
         "expectedOutput": "[[\"E\",\"X\"],[\"E\",\"E\"]]"
+      },
+      {
+        "prompt": "Fill in the flood-fill core: the numbered-stop branch condition, and the mark-before-push sentinel.",
+        "template": "function reveal(board, click) {\n  const [r, c] = click;\n  const h = board.length, w = board[0].length;\n  if (board[r][c] === \"M\") { board[r][c] = \"X\"; return board; }\n  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];\n  const stack = [[r, c]];\n  while (stack.length) {\n    const [cr, cc] = stack.pop();\n    if (board[cr][cc] !== \"E\") continue;\n    let n = 0;\n    for (const [dr, dc] of dirs) {\n      const nr = cr + dr, nc = cc + dc;\n      if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === \"M\") n++;\n    }\n    if (n ___ 0) { board[cr][cc] = String(n); }\n    else {\n      board[cr][cc] = ___;\n      for (const [dr, dc] of dirs) {\n        const nr = cr + dr, nc = cc + dc;\n        if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === \"E\") stack.push([nr, nc]);\n      }\n    }\n  }\n  return board;\n}\nconst board = [\n  [\"E\",\"E\",\"E\",\"E\",\"E\"],\n  [\"E\",\"E\",\"M\",\"E\",\"E\"],\n  [\"E\",\"E\",\"E\",\"E\",\"E\"],\n  [\"E\",\"E\",\"E\",\"E\",\"E\"]\n];\nconsole.log(JSON.stringify(reveal(board, [3, 0])));",
+        "blanks": [
+          { "answer": ">", "hint": "numbered-cell stop condition — fires when at least one mine is adjacent" },
+          { "answer": "\"B\"", "hint": "mark BEFORE pushing neighbors — same cell could be reached via many paths" }
+        ],
+        "expectedOutput": "[[\"B\",\"1\",\"E\",\"1\",\"B\"],[\"B\",\"1\",\"M\",\"1\",\"B\"],[\"B\",\"1\",\"1\",\"1\",\"B\"],[\"B\",\"B\",\"B\",\"B\",\"B\"]]"
       }
     ]
   },

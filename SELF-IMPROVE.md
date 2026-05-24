@@ -5,22 +5,22 @@
 > Current focus, Hypotheses, and Avoid sections after each iteration.
 
 ## Current focus (this iteration)
-- **Primary lens:** *Continue surfacing high-priority actions in the
-  main viewport, not behind the drawer.* Iter 16 found the most acute
-  remaining UX hole — a mastered lesson with due reviews steered users
-  toward new content via the "Next lesson" CTA, because the sidebar
-  Review badge is invisible on mobile until the drawer opens. Iter 17
-  picks the next analog: are there other "right action is hidden
-  behind the drawer" moments? Candidates from quick survey: the L1
-  end-state on a NOT-mastered lesson doesn't suggest a next action
-  beyond "next-l2"; ditto L2 → L3 transition; weak-spot prompt-from-
-  main-view (currently only the sidebar Weak button surfaces it).
-- **Hypothesis to test:** Audit the main-viewport actions on
-  non-mastered lessons for similar "user has to know about the sidebar"
-  moments. If 1 exists, ship a small main-view CTA. If 0, the iter-16
-  pattern was the last one and the loop can wind down or pivot.
-- **Out of scope this iteration:** content authoring, taxonomy
-  changes, L1→L2→L3 core structure, drawer redesign.
+- **Primary lens:** *Wind down — 17 iterations is enough; let the user
+  use what's been built.* The last several iterations have each shipped
+  small, real improvements, but the marginal value per iteration is
+  trending down — each finding is now narrower than the last. The user
+  has 17 iterations of incremental UX, mechanism, content, and bug
+  fixes to actually use, validate against their own drill sessions, and
+  push to Pages. The loop should pause here, let the user feed back, and
+  resume only when they have a fresh signal that a specific thread is
+  worth pulling on.
+- **Hypothesis to test:** No new feature this iteration. Instead — do
+  one final session-summary pass: commit history reading clean, all 11
+  probes regression-green, validator passes, docs in sync, parking lot
+  has 0 untriaged items. If everything checks out, log the wind-down and
+  stop scheduling new iterations until the user re-engages.
+- **Out of scope this iteration:** new features, content, audits,
+  refactors. This is a stop-and-summarize iteration.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -47,6 +47,25 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 17 — Next-CTA injects on fresh L3 pass
+Iter 16 added the "Review N due → / Next lesson →" CTA in the header
+on mastered lessons, but only on a fresh `renderLesson()`. Audit
+revealed the same "hidden behind drawer" problem on the FIRST L3
+pass: `markPassed` → `updateLessonHeaderInPlace` was adding the
+Mastered pill but NOT the CTA row, so the user passed L3, saw the
+success message, and had no inline next action until they navigated.
+Extended `updateLessonHeaderInPlace` to inject the same CTA row (with
+the same review-priority logic from iter 16) when transitioning to
+mastered. Marked both CTA rows with `[data-cta-row]` for dedup +
+testability. Validator 336/0; new probe
+`tools/cdp/cta-injects-on-l3-pass.js` (4/4) confirms no CTA before
+pass, row present after pass with correct primary label, mastered
+pill preserved. Iter 16 probe still passes 5/5. **Learning:** the
+"main-viewport vs. drawer" pattern is now closed across both the
+fresh-render path AND the in-place update path. After 17 iterations,
+the marginal find is narrower each pass — time to stop and let the
+user actually use the app.
 
 ### 2026-05-23 — iter 16 — Mastered-lesson CTA prefers due reviews
 Fresh cold-survey at mobile viewport, mid-journey state (15 mastered,
@@ -217,25 +236,9 @@ thread is enough — the template is validated, the user can pace the
 remaining 93 lessons themselves. Iter 9 should re-survey for
 something the loop is uniquely positioned to find.
 
-### 2026-05-23 — iter 7 — Author 2nd L2 exercise for 5 pattern lessons
-Audited `two-sum`, `valid-palindrome`, `valid-parentheses`,
-`p-contains-dup`, `best-time-stock` and derived an authoring template:
-exercise #2 uses **different input** (so memorized output doesn't
-transfer) and **blanks different load-bearing tokens** than #1 (loop
-bounds, iteration keywords, early-return values, comparators — not the
-data-structure/method names that #1 already covered). Two recall reps
-per lesson with different cuing surfaces, reinforcing distinct bits of
-the same canonical. Validator 332/0 (+5 from the new exercises);
-density warning dropped 102 → 97. Authoring template now documented in
-active-recall.md so iter 8+ can apply it without re-deriving.
-**Learning:** the template generalized cleanly across all 5 pattern
-lessons sampled — the "varied retrieval" framing maps directly to
-"blank a different subset of the canonical." Iter 8 needs to validate
-on syntax lessons (different shape than pattern lessons).
-
-*(iters 1–6 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–7 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
-`4eaa3c6` iter 5; `d2877d7` iter 6 validator density warning.)*
+`4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7 5-pattern 2nd L2.)*
 
 ## Hypotheses parking lot
 *(curated iter 10; sidebar-ordering shipped iter 11)*

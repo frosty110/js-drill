@@ -571,6 +571,45 @@ function updateLessonHeaderInPlace() {
     m.textContent = '✓ Mastered';
     pillRow.appendChild(m);
   }
+  // Next-CTA row — when the lesson transitions to mastered we want the same
+  // "Review N due →" / "Next lesson →" affordance that renderLesson already
+  // injects on subsequent visits. Without this, the user passes L3 for the
+  // first time and is stranded in the main view (the right next action is
+  // only reachable via the sidebar drawer). Same logic as renderLesson's
+  // nextCta block; if a row is already present we leave it alone.
+  if (overall === 'mastered' && pillRow) {
+    const headerDiv = pillRow.closest('div.mb-6');
+    if (headerDiv && !headerDiv.querySelector('[data-cta-row]')) {
+      const nextId = nextLessonId(lesson.id);
+      const nextLessonObj = nextId ? findLesson(nextId) : null;
+      const due = dueReviewIds();
+      let ctaHtml = '';
+      if (due.length > 0) {
+        const secondary = nextLessonObj
+          ? `<button class="secondary" data-action="goto-next">Next: ${escapeHtml(nextLessonObj.title)}</button>`
+          : '';
+        ctaHtml = `<div class="mt-3 flex items-center gap-2 flex-wrap" data-cta-row>
+          <button class="primary" data-action="goto-due-review">🕒 Review ${due.length} due →</button>
+          ${secondary}
+          <button class="secondary" data-action="shuffle-here">🎲 Shuffle</button>
+        </div>`;
+      } else if (nextLessonObj) {
+        ctaHtml = `<div class="mt-3 flex items-center gap-2" data-cta-row>
+          <button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button>
+          <button class="secondary" data-action="shuffle-here">🎲 Shuffle review</button>
+        </div>`;
+      }
+      if (ctaHtml) {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = ctaHtml;
+        const ctaEl = wrap.firstElementChild;
+        headerDiv.appendChild(ctaEl);
+        ctaEl.querySelector('[data-action="goto-next"]')?.addEventListener('click', () => { if (nextId) selectLesson(nextId); });
+        ctaEl.querySelector('[data-action="goto-due-review"]')?.addEventListener('click', () => { document.getElementById('review-btn')?.click(); });
+        ctaEl.querySelector('[data-action="shuffle-here"]')?.addEventListener('click', () => { const r = pickShuffleReview(); if (r) selectLesson(r); });
+      }
+    }
+  }
 }
 function updateStreakUI() {
   const el = document.getElementById('streak-display');
@@ -1002,9 +1041,9 @@ function renderLesson() {
     const secondary = nextLessonObj
       ? `<button class="secondary" data-action="goto-next">Next: ${escapeHtml(nextLessonObj.title)}</button>`
       : '';
-    nextCta = `<div class="mt-3 flex items-center gap-2 flex-wrap"><button class="primary" data-action="goto-due-review">${reviewLabel}</button>${secondary}<button class="secondary" data-action="shuffle-here">🎲 Shuffle</button></div>`;
+    nextCta = `<div class="mt-3 flex items-center gap-2 flex-wrap" data-cta-row><button class="primary" data-action="goto-due-review">${reviewLabel}</button>${secondary}<button class="secondary" data-action="shuffle-here">🎲 Shuffle</button></div>`;
   } else if (overall === 'mastered' && nextLessonObj) {
-    nextCta = `<div class="mt-3 flex items-center gap-2"><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">🎲 Shuffle review</button></div>`;
+    nextCta = `<div class="mt-3 flex items-center gap-2" data-cta-row><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">🎲 Shuffle review</button></div>`;
   }
   header.innerHTML = `
     <div class="flex items-center justify-between gap-3 mb-1">

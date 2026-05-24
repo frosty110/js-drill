@@ -4,17 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>4-Day Interview Diagnostic</title>
+<!-- Shared design tokens + storage layer. Source of truth across pages. -->
+<link rel="stylesheet" href="tokens.css">
+<script src="js/storage.js"></script>
 <style>
   :root{
-    --bg:#0f172a; --panel:#1e293b; --panel2:#334155; --text:#e2e8f0;
-    --muted:#94a3b8; --accent:#38bdf8; --good:#22c55e; --bad:#ef4444;
-    --warn:#f59e0b;
+    /* Diagnostic-specific: keep --bg pointing at the elevated tone so the
+       diagnostic's full-bleed look (no separate cards) matches its original
+       design. Color palette tokens otherwise come from tokens.css. */
+    --bg: var(--bg-elevated);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
   body{min-height:100vh;display:flex;flex-direction:column}
-  header{padding:14px 20px;border-bottom:1px solid var(--panel2);
+  header{padding:14px 20px;border-bottom:1px solid var(--panel-2);
     display:flex;align-items:center;gap:16px;flex-wrap:wrap}
   header h1{margin:0;font-size:16px;font-weight:600}
   header .meta{font-size:13px;color:var(--muted)}
@@ -26,7 +30,7 @@
     padding:28px;box-shadow:0 4px 24px rgba(0,0,0,.2)}
   .tag{display:inline-block;font-size:11px;text-transform:uppercase;
     letter-spacing:.05em;padding:3px 8px;border-radius:4px;
-    background:var(--panel2);color:var(--muted);margin-right:6px}
+    background:var(--panel-2);color:var(--muted);margin-right:6px}
   .tag.diff-easy{background:#14532d;color:#bbf7d0}
   .tag.diff-medium{background:#713f12;color:#fde68a}
   .tag.diff-hard{background:#7f1d1d;color:#fecaca}
@@ -39,20 +43,20 @@
     margin:10px 0}
   .options{display:flex;flex-direction:column;gap:8px}
   .opt{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;
-    background:var(--panel2);border-radius:8px;cursor:pointer;
+    background:var(--panel-2);border-radius:8px;cursor:pointer;
     border:2px solid transparent;transition:all .15s}
   .opt:hover{background:#475569}
   .opt.selected{border-color:var(--accent);background:#1e3a5c}
   .opt-letter{font-weight:600;color:var(--accent);min-width:18px}
   .opt-body{flex:1}
-  textarea{width:100%;min-height:120px;background:var(--panel2);color:var(--text);
+  textarea{width:100%;min-height:120px;background:var(--panel-2);color:var(--text);
     border:1px solid #475569;border-radius:8px;padding:12px;font:14px/1.5 inherit;
     resize:vertical}
   textarea:focus{outline:none;border-color:var(--accent)}
-  .footer-bar{padding:14px 20px;border-top:1px solid var(--panel2);
+  .footer-bar{padding:14px 20px;border-top:1px solid var(--panel-2);
     display:flex;gap:10px;align-items:center;justify-content:space-between;
     flex-wrap:wrap}
-  .btn{background:var(--panel2);color:var(--text);border:none;padding:9px 16px;
+  .btn{background:var(--panel-2);color:var(--text);border:none;padding:9px 16px;
     border-radius:6px;font-size:14px;cursor:pointer;transition:background .15s}
   .btn:hover{background:#475569}
   .btn.primary{background:var(--accent);color:#0f172a;font-weight:600}
@@ -66,20 +70,20 @@
   .intro li{margin:6px 0}
   .pre-q{margin:18px 0}
   .pre-q label{display:block;font-weight:500;margin-bottom:6px}
-  .pre-q input,.pre-q select{width:100%;background:var(--panel2);color:var(--text);
+  .pre-q input,.pre-q select{width:100%;background:var(--panel-2);color:var(--text);
     border:1px solid #475569;border-radius:6px;padding:10px;font:14px inherit}
   .summary-table{width:100%;border-collapse:collapse;margin:14px 0}
   .summary-table th,.summary-table td{text-align:left;padding:8px 10px;
-    border-bottom:1px solid var(--panel2)}
+    border-bottom:1px solid var(--panel-2)}
   .summary-table th{font-weight:600;color:var(--muted);font-size:12px;
     text-transform:uppercase;letter-spacing:.04em}
   .pill{display:inline-block;padding:2px 8px;border-radius:10px;
-    font-size:12px;background:var(--panel2)}
+    font-size:12px;background:var(--panel-2)}
   .pill.good{background:#14532d;color:#bbf7d0}
   .pill.warn{background:#713f12;color:#fde68a}
   .pill.bad{background:#7f1d1d;color:#fecaca}
   .question-jumper{display:flex;flex-wrap:wrap;gap:4px;margin:14px 0}
-  .jump-btn{width:28px;height:28px;border-radius:4px;background:var(--panel2);
+  .jump-btn{width:28px;height:28px;border-radius:4px;background:var(--panel-2);
     color:var(--muted);border:1px solid transparent;cursor:pointer;font-size:11px;
     padding:0;display:flex;align-items:center;justify-content:center}
   .jump-btn.answered{background:#1e3a5c;color:var(--accent)}
@@ -530,7 +534,9 @@ const POST_QUESTIONS = [
 // ============================================================================
 // STATE
 // ============================================================================
-const STORAGE_KEY = 'jsdrill.diagnostic.v1';
+// Storage I/O delegates to window.DrillStorage (js/storage.js). Mirror the key
+// here so the reset button can fall back to direct removeItem if needed.
+const STORAGE_KEY = (window.DrillStorage && window.DrillStorage.DIAGNOSTIC_KEY) || 'jsdrill.diagnostic.v1';
 const TOTAL_STEPS = 1 /*intro*/ + 1 /*pre*/ + QUESTIONS.length + 1 /*post*/ + 1 /*done*/;
 const PRE_INDEX  = 1;
 const Q_START    = 2;
@@ -549,14 +555,13 @@ const state = load() || {
 let stepEnteredAt = Date.now();
 
 function save() {
+  if (window.DrillStorage) return window.DrillStorage.saveDiagnostic(state);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch (e) { console.warn('save failed', e); }
 }
 function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+  if (window.DrillStorage) return window.DrillStorage.loadDiagnostic();
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; }
 }
 function commitStepTime() {
   const elapsed = Math.round((Date.now() - stepEnteredAt) / 1000);

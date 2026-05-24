@@ -72,6 +72,23 @@ const out = process.argv[3] || '/tmp/jsdrill-prep-mobile';
   // Per-item checkboxes present on code shapes
   const codeChecks = await s.eval(`document.querySelectorAll('.shape [data-review-id]').length`);
   s.assert(codeChecks === 6, `expected 6 per-shape review checkboxes (got: ${codeChecks})`);
+
+  // No horizontal scrollbar on code blocks on mobile: long canonical lines
+  // (BFS queue, monotonic stack, etc.) must wrap, not push a horizontal scroller.
+  // Per CLAUDE.md / PROFILE.md, the phone is the 80% surface — a hidden
+  // horizontal scrollbar hides content behind a swipe users don't discover.
+  const codeOverflow = await s.eval(`(() => {
+    const pres = [...document.querySelectorAll('.cm-host pre, .shape pre')];
+    const offenders = pres
+      .map(p => ({ scroll: p.scrollWidth, client: p.clientWidth }))
+      .filter(d => d.scroll > d.client + 1);
+    return { total: pres.length, offenderCount: offenders.length, sample: offenders[0] || null };
+  })()`);
+  s.assert(codeOverflow.total >= 6,
+    `expected ≥6 code-block <pre> elements in Code tab (got: ${codeOverflow.total})`);
+  s.assert(codeOverflow.offenderCount === 0,
+    `code blocks must not overflow horizontally on mobile (offenders: ${codeOverflow.offenderCount}/${codeOverflow.total}, sample: ${JSON.stringify(codeOverflow.sample)})`);
+
   await s.snap('04-code-shapes');
 
   // --- Cheat tab (now uses behavior-card style rows + per-item checkboxes, no table) ---

@@ -90,9 +90,13 @@ based on what it learned — that's how the app keeps converging on the profile.
 
 | File / Dir | Role |
 |---|---|
-| `index.html` | Markup only — ~140 lines |
-| `app.css` | All app styles — ~280 lines |
-| `app.js` | All app logic — ~1,750 lines |
+| `index.html` | Main drill app markup — ~140 lines |
+| `app.css` | Main app styles — ~280 lines |
+| `app.js` | Main app logic — ~3,400 lines |
+| `prep.html` | 4-day interview prep dashboard (standalone page) |
+| `diagnostic.html` | 43-question self-diagnostic (standalone page) |
+| `tokens.css` | **Single source of truth** for design tokens across all 3 pages (colors, radii, type). See `.claude/skills/ui-consistency/`. |
+| `js/storage.js` | **Single source of truth** for localStorage I/O across all 3 pages. Exposes `window.DrillStorage`. See `.claude/skills/ui-consistency/`. |
 | `data/manifest.json` | Sidebar index — `{sections: [{name, slug, lessons: [{id,title,track,status}]}]}` |
 | `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
 | `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |
@@ -109,6 +113,27 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `docs/canonical-style.md` | **Authoring style guide** — which idiom (`for` vs `.map`/`.reduce` vs …) belongs in `reference.code` / `L3.canonical` for each problem shape. Read before writing a new lesson canonical. |
 | `docs/learning-strategies/` | Learning-science principles the app should encode. Co-evolves with features. |
 | `docs-archive/` | Older `claude.md`, `AGENTIC_*.md`, `ARCHITECTURE.md`, plus `old-scripts/` (broken pre-refactor helpers) — historical only |
+
+## Shared UI + storage contract (the three pages)
+
+The project ships **three** user-facing HTML pages — `index.html`, `prep.html`,
+`diagnostic.html`. They share an audience, a visual language, and a
+localStorage origin. To prevent drift (which bit us in iter-35):
+
+- **Colors / radii / type** → `tokens.css`. Don't redeclare tokens in a page's
+  `:root`. Don't hard-code hex in component styles. Add new tokens here.
+- **localStorage I/O** → `js/storage.js`, exposed as `window.DrillStorage`.
+  Don't call `localStorage.getItem/setItem` directly. Use `loadAppProgress`,
+  `savePrepState`, `loadDiagnostic`, the bridge helpers (`isLessonFullyDone`,
+  `setMainLastLessonId`), etc.
+- **Static code blocks** → CodeMirror `runMode` (Dracula theme). Same scripts
+  as `index.html` head. Use `renderCmInto(host, code)` (currently in
+  `prep.html`; hoist if a third caller appears).
+
+Before authoring a new page or adding a feature that touches state or styles,
+**run the `.claude/skills/ui-consistency/` skill** — it documents the
+contract, the "don't reinvent" checklist, and the iter-35 incident that made
+this enforcement necessary.
 
 ## How a lesson is structured (post-refactor)
 

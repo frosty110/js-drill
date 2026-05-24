@@ -14,20 +14,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/runmode/runmode.min.js"></script>
+<!-- Shared design tokens + storage layer. Source of truth across pages. -->
+<link rel="stylesheet" href="tokens.css">
+<script src="js/storage.js"></script>
 <style>
   :root{
-    --bg:#0f172a; --bg2:#1e293b; --panel:#334155; --panel2:#475569;
-    --text:#e2e8f0; --muted:#94a3b8; --dim:#64748b;
-    --accent:#38bdf8; --accent2:#7dd3fc;
-    --good:#22c55e; --warn:#f59e0b; --bad:#ef4444;
-    --rock:#f97316;
+    /* Prep-specific layout vars only — colors live in tokens.css. */
     --tabbar-h: 60px;
     --header-h: 56px;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-top: env(safe-area-inset-top, 0px);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+  html,body{margin:0;padding:0;background:var(--bg-elevated);color:var(--text);
     font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     overscroll-behavior-y:contain}
   body{min-height:100vh;min-height:100dvh;
@@ -37,17 +36,24 @@
     font:0.85em ui-monospace,SFMono-Regular,Menlo,monospace;color:#fde68a}
   pre{background:#0b1220;padding:14px;border-radius:8px;overflow-x:auto;
     font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#e2e8f0;
-    margin:10px 0;-webkit-overflow-scrolling:touch}
-  pre code{background:none;padding:0;color:inherit;font:inherit}
+    margin:10px 0;-webkit-overflow-scrolling:touch;
+    white-space:pre-wrap;word-break:break-word}
+  pre code{background:none;padding:0;color:inherit;font:inherit;
+    white-space:inherit;word-break:inherit}
+  /* Mobile: kill the horizontal scrollbar entirely. pre-wrap above wraps
+     long lines; this hides any residual scroll affordance for code blocks. */
+  @media (max-width:767px){
+    pre,.cm-host pre{overflow-x:hidden}
+  }
 
   /* HEADER */
   header{position:sticky;top:0;z-index:50;background:rgba(15,23,42,0.95);
     backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-    border-bottom:1px solid var(--panel);padding:10px 16px;
+    border-bottom:1px solid var(--panel-2);padding:10px 16px;
     height:var(--header-h);display:flex;align-items:center;gap:12px}
   .brand{font-size:14px;font-weight:600;flex-shrink:0;letter-spacing:-0.01em}
   .brand .accent{color:var(--accent)}
-  .hdr-progress{flex:1;height:6px;background:var(--bg2);border-radius:3px;
+  .hdr-progress{flex:1;height:6px;background:var(--panel);border-radius:3px;
     overflow:hidden;min-width:80px}
   .hdr-progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--good));
     width:0;transition:width .3s}
@@ -60,7 +66,7 @@
   /* TAB BAR */
   nav.tabbar{position:fixed;bottom:0;left:0;right:0;z-index:50;
     background:rgba(15,23,42,0.95);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-    border-top:1px solid var(--panel);
+    border-top:1px solid var(--panel-2);
     height:calc(var(--tabbar-h) + var(--safe-bottom));
     padding-bottom:var(--safe-bottom);
     display:flex;justify-content:space-around;align-items:stretch}
@@ -78,11 +84,11 @@
     margin:0 -14px 14px;padding-left:14px;padding-right:14px;
     -webkit-overflow-scrolling:touch;scrollbar-width:none}
   .day-strip::-webkit-scrollbar{display:none}
-  .day-chip{flex-shrink:0;background:var(--bg2);border:1.5px solid transparent;
+  .day-chip{flex-shrink:0;background:var(--panel);border:1.5px solid transparent;
     border-radius:10px;padding:10px 14px;min-width:88px;cursor:pointer;
     color:var(--muted);text-align:left;transition:all .15s;font-family:inherit}
-  .day-chip:hover{background:var(--panel)}
-  .day-chip.active{background:var(--panel);border-color:var(--accent);color:var(--text)}
+  .day-chip:hover{background:var(--panel-2)}
+  .day-chip.active{background:var(--panel-2);border-color:var(--accent);color:var(--text)}
   .day-chip.today{position:relative}
   .day-chip.today::after{content:'';position:absolute;top:6px;right:8px;
     width:6px;height:6px;border-radius:50%;background:var(--accent);
@@ -98,17 +104,17 @@
   .day-title{font-size:22px;font-weight:700;margin:8px 0 4px;letter-spacing:-0.02em}
   .day-subtitle{color:var(--muted);font-size:14px;margin-bottom:14px}
   .day-progress{display:flex;align-items:center;gap:10px;margin-bottom:18px}
-  .day-progress-bar{flex:1;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden}
+  .day-progress-bar{flex:1;height:8px;background:var(--panel);border-radius:4px;overflow:hidden}
   .day-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--good));
     transition:width .3s;border-radius:4px}
   .day-progress-text{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;
     min-width:60px;text-align:right}
 
   /* BLOCK */
-  .block{background:var(--bg2);border-radius:12px;margin-bottom:12px;overflow:hidden}
+  .block{background:var(--panel);border-radius:12px;margin-bottom:12px;overflow:hidden}
   .block-header{padding:14px 16px;cursor:pointer;display:flex;align-items:center;
     gap:10px;user-select:none;-webkit-user-select:none}
-  .block-header:hover{background:var(--panel)}
+  .block-header:hover{background:var(--panel-2)}
   .block-caret{font-size:14px;color:var(--muted);transition:transform .2s;
     width:16px;text-align:center;flex-shrink:0}
   .block.expanded .block-caret{transform:rotate(90deg)}
@@ -116,7 +122,7 @@
   .block-title{font-size:15px;font-weight:600;color:var(--text)}
   .block-meta{font-size:12px;color:var(--muted);margin-top:2px}
   .block-prog-pill{font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;
-    background:var(--panel2);color:var(--text);font-variant-numeric:tabular-nums;
+    background:var(--panel-3);color:var(--text);font-variant-numeric:tabular-nums;
     flex-shrink:0}
   .block-prog-pill.complete{background:var(--good);color:#0f172a}
   .block-body{display:none;padding:0 12px 12px}
@@ -124,10 +130,10 @@
 
   /* TASK */
   .task{display:flex;align-items:flex-start;gap:12px;padding:11px 12px;
-    border-radius:8px;background:var(--bg);margin-top:6px}
+    border-radius:8px;background:var(--bg-elevated);margin-top:6px}
   .task.done{opacity:0.55}
   .task-check{flex-shrink:0;width:24px;height:24px;border-radius:6px;
-    border:2px solid var(--panel2);background:transparent;cursor:pointer;
+    border:2px solid var(--panel-3);background:transparent;cursor:pointer;
     position:relative;transition:all .15s;margin-top:1px;
     appearance:none;-webkit-appearance:none;padding:0}
   .task-check:hover{border-color:var(--accent)}
@@ -141,17 +147,17 @@
   .task-meta{display:flex;gap:8px;align-items:center;margin-top:6px;
     flex-wrap:wrap}
   .task-mins{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
-  .task-lesson{font-size:11px;background:var(--panel);color:var(--muted);
+  .task-lesson{font-size:11px;background:var(--panel-2);color:var(--muted);
     padding:2px 7px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .task-open{font-size:11px;background:var(--accent);color:#0f172a;
     padding:4px 10px;border-radius:5px;border:none;font-weight:600;
     cursor:pointer;font-family:inherit;transition:background .15s}
-  .task-open:hover{background:var(--accent2)}
+  .task-open:hover{background:var(--accent-hover)}
   .task-applauto{font-size:10px;background:#14532d;color:#bbf7d0;padding:2px 6px;
     border-radius:4px;font-weight:500}
 
   /* CHECKPOINTS */
-  .checkpoints{background:var(--bg2);border-radius:12px;padding:14px 16px;
+  .checkpoints{background:var(--panel);border-radius:12px;padding:14px 16px;
     margin-top:16px;border-left:3px solid var(--good)}
   .checkpoints-title{font-size:12px;color:var(--good);text-transform:uppercase;
     letter-spacing:0.05em;font-weight:600;margin-bottom:8px}
@@ -172,42 +178,42 @@
   /* CHEATSHEET / GLOSSARY / CODE */
   .section-title{font-size:20px;font-weight:700;margin:14px 0 4px;letter-spacing:-0.02em}
   .section-sub{color:var(--muted);font-size:14px;margin-bottom:16px}
-  .shape{background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:14px}
+  .shape{background:var(--panel);border-radius:12px;padding:14px;margin-bottom:14px}
   .shape-head{display:flex;align-items:center;justify-content:space-between;
     margin-bottom:10px;gap:10px}
   .shape-title{font-size:15px;font-weight:600;color:var(--text)}
-  .copy-btn{background:var(--panel);color:var(--text);border:none;border-radius:5px;
+  .copy-btn{background:var(--panel-2);color:var(--text);border:none;border-radius:5px;
     padding:5px 10px;font:11px inherit;cursor:pointer;font-weight:500;transition:background .15s}
-  .copy-btn:hover{background:var(--panel2)}
+  .copy-btn:hover{background:var(--panel-3)}
   .copy-btn.copied{background:var(--good);color:#0f172a}
   .shape-note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5;
     padding:0 4px}
 
   /* GLOSSARY */
-  .gloss-search{width:100%;background:var(--bg2);color:var(--text);
-    border:1px solid var(--panel);border-radius:8px;padding:12px 14px;
+  .gloss-search{width:100%;background:var(--panel);color:var(--text);
+    border:1px solid var(--panel-2);border-radius:8px;padding:12px 14px;
     font:15px inherit;margin-bottom:14px;-webkit-appearance:none}
   .gloss-search:focus{outline:none;border-color:var(--accent)}
-  .gloss-card{background:var(--bg2);border-radius:10px;padding:14px;margin-bottom:10px}
+  .gloss-card{background:var(--panel);border-radius:10px;padding:14px;margin-bottom:10px}
   .gloss-term{font-size:15px;font-weight:600;color:var(--accent);margin-bottom:6px}
   .gloss-def{font-size:14px;color:var(--text);line-height:1.5;margin-bottom:8px}
   .gloss-where{font-size:12px;color:var(--muted);line-height:1.45;
-    padding-top:8px;border-top:1px solid var(--panel)}
+    padding-top:8px;border-top:1px solid var(--panel-2)}
   .gloss-where::before{content:'Where: ';font-weight:600;color:var(--dim)}
   .no-results{color:var(--muted);text-align:center;padding:30px;font-size:14px}
 
   /* CHEAT TABLE */
-  .cheat-table{width:100%;border-collapse:collapse;background:var(--bg2);
+  .cheat-table{width:100%;border-collapse:collapse;background:var(--panel);
     border-radius:10px;overflow:hidden}
   .cheat-table th,.cheat-table td{padding:10px 12px;text-align:left;
-    border-bottom:1px solid var(--panel);font-size:13px;vertical-align:top}
-  .cheat-table th{background:var(--panel);font-weight:600;font-size:12px;
+    border-bottom:1px solid var(--panel-2);font-size:13px;vertical-align:top}
+  .cheat-table th{background:var(--panel-2);font-weight:600;font-size:12px;
     text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)}
   .cheat-table tr:last-child td{border-bottom:none}
   .cheat-table td:first-child{color:var(--accent);font-weight:500}
 
   /* INTERVIEW BEHAVIOR */
-  .behavior-card{background:var(--bg2);border-radius:12px;padding:14px 16px;
+  .behavior-card{background:var(--panel);border-radius:12px;padding:14px 16px;
     margin-bottom:10px;border-left:3px solid var(--accent)}
   .behavior-num{font-size:11px;color:var(--accent);font-weight:700;
     letter-spacing:0.05em;margin-bottom:4px}
@@ -216,20 +222,20 @@
 
   /* SETTINGS */
   .settings-row{display:flex;justify-content:space-between;align-items:center;
-    padding:14px 16px;background:var(--bg2);border-radius:10px;margin-bottom:8px}
+    padding:14px 16px;background:var(--panel);border-radius:10px;margin-bottom:8px}
   .settings-label{font-size:14px}
   .settings-sub{font-size:12px;color:var(--muted);margin-top:2px}
-  .settings-btn{background:var(--panel);color:var(--text);border:none;
+  .settings-btn{background:var(--panel-2);color:var(--text);border:none;
     border-radius:6px;padding:8px 14px;font:13px inherit;cursor:pointer;
     font-weight:500;transition:background .15s}
-  .settings-btn:hover{background:var(--panel2)}
+  .settings-btn:hover{background:var(--panel-3)}
   .settings-btn.danger{background:#7f1d1d;color:#fecaca}
   .settings-btn.danger:hover{background:#991b1b}
 
   /* PER-ITEM REVIEW CHECKBOX */
   .item-row{display:flex;align-items:flex-start;gap:10px}
   .item-check{flex-shrink:0;width:22px;height:22px;border-radius:5px;
-    border:2px solid var(--panel2);background:transparent;cursor:pointer;
+    border:2px solid var(--panel-3);background:transparent;cursor:pointer;
     position:relative;transition:all .15s;margin-top:2px;
     appearance:none;-webkit-appearance:none;padding:0}
   .item-check:hover{border-color:var(--accent)}
@@ -239,7 +245,7 @@
     left:50%;top:50%;transform:translate(-50%,-50%)}
   .item-body{flex:1;min-width:0}
   .review-count{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;
-    margin-left:auto;background:var(--bg2);padding:3px 8px;border-radius:10px;
+    margin-left:auto;background:var(--panel);padding:3px 8px;border-radius:10px;
     flex-shrink:0}
   .section-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
     margin:14px 0 4px}
@@ -256,23 +262,23 @@
   .review-promo button{background:var(--accent);color:#0f172a;border:none;
     padding:10px 16px;border-radius:7px;font:13px inherit;font-weight:600;
     cursor:pointer;flex-shrink:0}
-  .review-promo button:hover{background:var(--accent2)}
+  .review-promo button:hover{background:var(--accent-hover)}
   .review-promo.empty{background:rgba(34,197,94,0.06);border-color:rgba(34,197,94,0.3)}
   .review-promo.empty .review-promo-title{color:var(--good)}
 
   /* DAILY REVIEW SESSION (full-view takeover) */
-  .review-session{background:var(--bg2);border-radius:12px;padding:18px;
+  .review-session{background:var(--panel);border-radius:12px;padding:18px;
     min-height:60vh;display:flex;flex-direction:column}
   .review-progress{display:flex;align-items:center;gap:10px;margin-bottom:18px}
-  .review-progress-bar{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+  .review-progress-bar{flex:1;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden}
   .review-progress-fill{height:100%;background:var(--accent);transition:width .25s}
   .review-progress-text{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
   .review-type-pill{display:inline-block;font-size:10px;text-transform:uppercase;
-    letter-spacing:0.05em;padding:3px 8px;border-radius:4px;background:var(--panel);
+    letter-spacing:0.05em;padding:3px 8px;border-radius:4px;background:var(--panel-2);
     color:var(--accent);font-weight:600;margin-bottom:10px}
   .review-prompt{font-size:18px;font-weight:600;line-height:1.4;margin-bottom:12px}
   .review-prompt-sub{font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5}
-  .review-answer{background:var(--bg);border-radius:8px;padding:14px;margin:12px 0;
+  .review-answer{background:var(--bg-elevated);border-radius:8px;padding:14px;margin:12px 0;
     border-left:3px solid var(--good);font-size:14px;line-height:1.55}
   .review-answer .label{font-size:11px;text-transform:uppercase;letter-spacing:0.05em;
     color:var(--good);font-weight:600;margin-bottom:6px;display:block}
@@ -281,8 +287,8 @@
     border:none;font:14px inherit;font-weight:600;cursor:pointer;
     transition:transform .1s, background .15s}
   .review-actions button:active{transform:scale(0.98)}
-  .review-peek{background:var(--panel);color:var(--text)}
-  .review-peek:hover{background:var(--panel2)}
+  .review-peek{background:var(--panel-2);color:var(--text)}
+  .review-peek:hover{background:var(--panel-3)}
   .review-fuzzy{background:#7f1d1d;color:#fecaca}
   .review-fuzzy:hover{background:#991b1b}
   .review-gotit{background:var(--good);color:#0f172a}
@@ -644,8 +650,10 @@ const INTERVIEW_BEHAVIOR = [
 // ============================================================================
 // STATE / STORAGE
 // ============================================================================
-const STORAGE_KEY = 'jsdrill.prep.v1';
-const MAIN_APP_KEY = 'jsdrill.progress.v1';
+// Storage I/O delegates to window.DrillStorage (js/storage.js). Constants are
+// mirrored from DrillStorage so a single change there cascades to every page.
+const STORAGE_KEY = (window.DrillStorage && window.DrillStorage.PREP_KEY) || 'jsdrill.prep.v1';
+const MAIN_APP_KEY = (window.DrillStorage && window.DrillStorage.MAIN_APP_KEY) || 'jsdrill.progress.v1';
 
 const state = load() || {
   completed: {},           // { taskId: true }
@@ -661,21 +669,15 @@ if (!state.reviewed) state.reviewed = {};
 if (state.review === undefined) state.review = null;
 
 function save() {
+  if (window.DrillStorage) return window.DrillStorage.savePrepState(state);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
 }
 function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+  if (window.DrillStorage) return window.DrillStorage.loadPrepState();
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; }
 }
 function loadMainAppProgress() {
-  try {
-    const raw = localStorage.getItem(MAIN_APP_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed.progress || {};
-  } catch { return {}; }
+  return window.DrillStorage ? window.DrillStorage.readMainProgressMap() : {};
 }
 
 // ----------------------------------------------------------------------------
@@ -761,16 +763,14 @@ function buildDailyReviewQueue() {
 }
 
 function isLessonDoneInMainApp(lessonId) {
-  const prog = loadMainAppProgress();
-  const l = prog[lessonId];
-  if (!l) return false;
-  return l.L1 === 'passed' && l.L2 === 'passed' && l.L3 === 'passed';
+  if (window.DrillStorage) return window.DrillStorage.isLessonFullyDone(lessonId);
+  const l = loadMainAppProgress()[lessonId];
+  return !!(l && l.L1 === 'passed' && l.L2 === 'passed' && l.L3 === 'passed');
 }
 function isLessonPartialInMainApp(lessonId) {
-  const prog = loadMainAppProgress();
-  const l = prog[lessonId];
-  if (!l) return false;
-  return l.L1 === 'passed' || l.L2 === 'passed' || l.L3 === 'passed';
+  if (window.DrillStorage) return window.DrillStorage.isLessonPartiallyDone(lessonId);
+  const l = loadMainAppProgress()[lessonId];
+  return !!(l && (l.L1 === 'passed' || l.L2 === 'passed' || l.L3 === 'passed'));
 }
 
 // ============================================================================
@@ -1128,9 +1128,13 @@ function renderCmInto(host, code) {
   host.innerHTML = '';
   const pre = document.createElement('pre');
   pre.className = 'CodeMirror cm-s-dracula';
-  pre.style.cssText = 'margin:0;padding:10px 12px;background:#282a36;color:#f8f8f2;font:inherit;overflow-x:auto;-webkit-overflow-scrolling:touch';
+  // Mobile-friendly: wrap long lines instead of horizontal-scrolling. Phone
+  // is the 80% usage surface — horizontal scroll on code blocks hides content
+  // behind a swipe that users don't discover.
+  const isMobile = window.matchMedia && window.matchMedia('(max-width:767px)').matches;
+  pre.style.cssText = `margin:0;padding:10px 12px;background:#282a36;color:#f8f8f2;font:inherit;-webkit-overflow-scrolling:touch;overflow-x:${isMobile ? 'hidden' : 'auto'}`;
   const codeEl = document.createElement('code');
-  codeEl.style.cssText = 'background:none;padding:0;color:inherit;font:inherit;display:block;white-space:pre';
+  codeEl.style.cssText = `background:none;padding:0;color:inherit;font:inherit;display:block;white-space:${isMobile ? 'pre-wrap' : 'pre'};word-break:${isMobile ? 'break-word' : 'normal'}`;
   pre.appendChild(codeEl);
   host.appendChild(pre);
   try {
@@ -1160,12 +1164,18 @@ function renderTaskHtml(t) {
 }
 
 function openLesson(lessonId) {
-  // Bridge to main app: write lastLessonId then navigate
+  // Bridge to main app: write lastLessonId then navigate.
+  // Uses DrillStorage when available (version-aware + defensive against schema
+  // drift) and falls back to direct localStorage if the shared layer didn't load.
   try {
-    const raw = localStorage.getItem(MAIN_APP_KEY);
-    const parsed = raw ? JSON.parse(raw) : { __v: 5 };
-    parsed.lastLessonId = lessonId;
-    localStorage.setItem(MAIN_APP_KEY, JSON.stringify(parsed));
+    if (window.DrillStorage) {
+      window.DrillStorage.setMainLastLessonId(lessonId);
+    } else {
+      const raw = localStorage.getItem(MAIN_APP_KEY);
+      const parsed = raw ? JSON.parse(raw) : { __v: 6 };
+      parsed.lastLessonId = lessonId;
+      localStorage.setItem(MAIN_APP_KEY, JSON.stringify(parsed));
+    }
   } catch (e) {
     console.warn('Could not set lastLessonId:', e);
   }

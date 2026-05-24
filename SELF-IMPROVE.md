@@ -1,29 +1,84 @@
 # Self-Improve Directive
 
 > Read alongside [PROFILE.md](PROFILE.md). Every change must trace back to
-> making that user more effective. This file evolves — the loop updates the
-> Current focus, Hypotheses, and Avoid sections after each iteration.
+> making that user more effective. This file evolves — the loop updates
+> § Next iteration, § Mode ledger, § Blind spots ledger, § Last-touched
+> index, § External references, § Current focus, § Iteration log, and
+> the parking lots after each pass.
 
-## Current focus (this iteration)
-- **Status: PAUSED** since iter 18 (2026-05-23). The loop shipped 17
-  improvement iterations + 1 wind-down audit. Marginal value per
-  iteration was trending down — each new finding was narrower than the
-  last. Stop now, let the user drill against what's been built, and
-  resume only with fresh signal from real usage.
-- **Re-engagement criteria** (any one of these resumes the loop):
-  1. User reports a specific friction during a real drill session
-     ("X is still painful on mobile", "Y doesn't surface when I expect
-     it", "Z feature crashes when…").
-  2. User reports a PROFILE.md success criterion isn't moving (mock
-     PBs flat over weeks, mastered lessons slipping past SR, friction
-     between "20 free minutes" and "drilling" feels non-zero).
-  3. User wants to attack a parking-lot item or revive an Avoid entry
-     with new evidence.
-  4. User asks the loop to expand into a new area (content, pedagogy,
-     infra) not currently scoped.
-- **When resuming:** replace this block with a fresh Primary lens +
-  Hypothesis to test, drawn from whatever the user surfaces. Don't
-  invent a focus — wait for signal.
+## Next iteration
+- **Suggested mode:** ship
+- **Signal pointing there:** iter 19 (frame) produced [iter-artifacts/iter-19-gap-list.md](iter-artifacts/iter-19-gap-list.md) — a ranked syllabus gap list synthesized from 3 fresh-eyes subagents (internal audit + external benchmark + meta-review). Cluster 1 Tier 1 (six Syntax/Algorithms boilerplate lessons: `s-matrix-neighbors`, `s-bfs-template`, `s-tree-traversals`, `s-ll-traversal`, `s-ll-fast-slow`, `s-heap-ops`) is scoped, atomic, and per Agent A covers ~70% of the boilerplate the rusty engineer currently re-derives every session.
+- **Veto condition:** skip ship if (a) user redirects to a different gap cluster before iter 20 fires, (b) the rolling-6-window already has 3 ships (force audit/coverage instead), or (c) user surfaces a higher-priority friction.
+
+## Current focus
+- **Status: RESUMING** from PAUSED state after iter 18, via user-directed iter 19. The loop is now equipped with mode rotation, fresh-eyes subagent steps, external research lens, and structural guardrails (≥3 ships per 6 iters, ≤1 frame per 10, forced frame every 10, artifact-to-ship deadline of 3 iters).
+- **Primary lens (active until iter 25 or BS-02 closes):** Syllabus completeness — close the Syntax/Algorithms boilerplate gap (Cluster 1 in the iter-19 gap list), then re-evaluate against the remaining cross-source consensus list and JS-specific cluster.
+
+## Mode ledger
+*(append-only; enforces the "no 3 consecutive ships" + "≥3 ships per rolling 6" rules mechanically)*
+
+| Iter | Mode | One-line outcome |
+|---|---|---|
+| 1–17 | ship | See § Iteration log + git history `262380c..2d6325d` |
+| 18 | audit | Wind-down audit; 12 probes regression-green, validator 336/0, loop paused |
+| 19 | frame | Redesigned SKILL.md (mode rotation + fresh-eyes subagent + research lens + nominate-next-mode), restructured SELF-IMPROVE.md (Next iteration, Mode ledger, Blind spots ledger, Last-touched index, External references), spawned 3 fresh-eyes subagents producing `iter-artifacts/iter-19-gap-list.md` |
+
+## Blind spots ledger
+*(things the loop has historically not questioned; promote to Current focus or Parking lot when actioned)*
+
+- **[BS-01] Syllabus completeness vs. external rubrics** — never benchmarked against canonical lists. Iter 19 measured: NeetCode 150 ~52% covered, Blind 75 ~80%, LC Top Interview 150 ~37%. *Seeded iter 19; iter 20 ship consumes the Cluster 2 portion of the gap list.*
+- **[BS-02] Boilerplate-as-syntax gap** — algorithmic scaffolding (matrix dirs, BFS queue, DFS template, tree traversal shapes, parallel LL walk, heap math, union-find) buried inside Patterns lessons; never extracted as standalone Syntax lessons. *Seeded iter 19; iter 20 ship consumes Cluster 1 Tier 1.*
+- **[BS-03] JS-specific concepts under-covered** — `structuredClone`, `AbortController`, `Promise.race/any/allSettled`, microtask vs macrotask ordering quizzes, hoisting/TDZ, `==` coercion, `WeakMap`/`WeakRef`. *Seeded iter 19; queue for coverage iter ~22.*
+- **[BS-04] Frontend utility lessons missing** — DOM traversal, event delegation, `classNames()`, retry-with-backoff, promise concurrency pool, AbortController-cancellable promise, deep equality. *Seeded iter 19; queue for coverage iter (Applied track expansion).*
+- **[BS-05] Modern syntax gaps** — rest params, computed/shorthand keys, logical assignment (`||=`, `??=`, `&&=`), ES2022+ array variants (`findLast`, `toSorted`, `toReversed`). *Seeded iter 19; queue for ship iter ~22.*
+- **[BS-06] L1→L2→L3 ladder treated as axiomatic** — no iter has questioned whether the ladder shape fits all topic types (system design likely needs a different shape; quick conceptual quizzes might want L1-only). *Seeded iter 19; revisit in a future frame iter (~iter 30).*
+- **[BS-07] PROFILE.md assumption decay** — "80% phone" was written at project start and never re-validated. Could be more/less phone now after months of actual use. *Seeded iter 19; revisit in a future frame iter (~iter 30) when usage data is available.*
+- **[BS-08] Content quality vs. content validity** — validator passes ≠ lessons are well-authored. No probe samples "is this explanation good? Are L1 distractors plausible? Is canonical idiomatic?" *Seeded iter 19; queue for audit iter.*
+- **[BS-09] Tooling debt in `tools/cdp/`** — 12+ probes accumulated; never audited for staleness, DRY violations, or coverage. Schema `__v` not bumped despite `mockHistory` field added iter 13. `_iter16-survey.js` left untracked across iters 16–19. *Seeded iter 19; queue for audit iter.*
+- **[BS-10] Storage backend (localStorage-only)** — cross-device sync would be a strong win for the 80%-phone profile if scoped tight (anonymous-first, opt-in login). User flagged iter 19 discussion; deferred for now to ship the syllabus work first. *Seeded iter 19; queue for a future frame iter to decide scope before any code.*
+
+## Last-touched index
+*(forces audit-mode selection to be data-driven; bumped at Step 6 of every iteration)*
+
+| Area | Iter last touched |
+|---|---|
+| Skill / SELF-IMPROVE structure | 19 |
+| L3 surface / CTA injection | 17 |
+| Cheatsheet | 15 |
+| Applied-track surfaces (pills, stats panel) | 14 |
+| Mock interview (history chip, crash fix) | 13 |
+| Mock interview probe | 12 |
+| Sidebar (path-order sort) | 11 |
+| Welcome banner | 10 |
+| Weak-spot visibility | 9 |
+| L2 content density (existing lessons) | 8 |
+| Validator (density warning) | 5 |
+| Spaced repetition (state surfacing, demote-on-reveal, hold-on-L2) | 6 |
+| **Matrix / grid syntax** | never |
+| **BFS / DFS / tree traversal syntax** | never |
+| **Linked list helpers (syntax)** | never |
+| **Heap (syntax)** | never |
+| **Async combinators / loops (syntax)** | never |
+| **Modern syntax (rest/computed/logical-assign/ES2022 arrays)** | never |
+| **Hash/Set idiom syntax (counter, group-by, set ops)** | never |
+| **Frontend utility lessons (DOM/event/concurrency)** | never |
+| **PROFILE.md assumptions** | 0 (never re-validated) |
+| **L1→L2→L3 ladder shape** | 0 (axiomatic) |
+| **tools/cdp/* health audit** | never |
+| **Storage backend** | never |
+
+## External references consulted
+*(appended by research-mode iters so the loop doesn't re-pull the same source)*
+
+- **2026-05-23 iter 19 (coverage subagent):**
+  - [NeetCode 150 (crackr.dev)](https://www.crackr.dev/neetcode150)
+  - [Blind 75 (neetcode.io)](https://neetcode.io/practice/practice/blind75)
+  - [LC Top Interview 150 — ChunhThanhDe mirror](https://github.com/ChunhThanhDe/Leetcode-Top-Interview)
+  - [Tech Interview Handbook](https://www.techinterviewhandbook.org/best-practice-questions/)
+  - [BFE.dev problem index](https://bigfrontend.dev/problem)
+  - [GreatFrontend top JS interview questions](https://github.com/greatfrontend/top-javascript-interview-questions)
+  - Findings folded into Blind spots ledger BS-01..BS-05 and `iter-artifacts/iter-19-gap-list.md`.
 
 ## Constraints (stable across iterations)
 - **Phone-first.** ~80% of usage is mobile (see PROFILE.md). Improvements that
@@ -39,7 +94,7 @@
   yet, document it. The app and the strategy docs evolve together.
 - No build step. No new deps. Vanilla JS + Tailwind / CodeMirror via CDN only.
 - `node tools/validate-data.js` must show **0 failures** after every change.
-- Atomic commits — one improvement per commit, clear message.
+- Atomic commits — one improvement per commit, clear message naming the mode.
 - Don't edit lesson content unless the directive explicitly makes lessons the
   focus this iteration.
 - Preserve backwards-compatible `localStorage` schema (`jsdrill.progress.v1`).
@@ -50,6 +105,35 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 19 — Frame mode: redesigned the loop to question itself
+User-directed frame iteration after observing the loop had been
+auto-defaulting to "ship feature inside the current surface" for 17
+iterations — it never asked "is the *syllabus* complete?" Spawned 3
+parallel fresh-eyes subagents (none read SELF-IMPROVE.md or the
+iteration log): (A) internal syllabus audit, (B) external benchmark
+via WebSearch across NeetCode 150 / Blind 75 / LC Top Interview 150 /
+BFE.dev / GreatFrontend, (C) meta-review of SKILL.md for cognitive
+biases. Agent C identified 3 structural biases — "atomically
+commitable" forecloses curriculum work, "set the *next* focus sharper
+than what you started with" only allows monotonic narrowing, the
+diagnose step is scoped by the prior frame so it can't reframe.
+Adopted C's recommendations wholesale: SKILL.md now has 5 modes
+(ship | audit | coverage | frame | research) with hard quotas (≥3
+ships per 6 iters, ≤1 frame per 10, forced frame every 10), a
+"Challenge the focus" preamble, a fresh-eyes subagent step for
+non-ship modes, an external-research step for coverage mode, and a
+nominate-next-mode handoff replacing the old "sharpen the focus"
+step. SELF-IMPROVE.md restructured with § Next iteration / § Mode
+ledger / § Blind spots ledger (10 entries seeded) / § Last-touched
+index / § External references. A+B findings synthesized into
+`iter-artifacts/iter-19-gap-list.md` — 6 clusters covering ~50
+candidate lessons, ranked by cross-source signal × profile fit.
+Validator 336/0 (no code changes). **Learning:** the loop's worst
+failure mode was invisible to itself — each individual iter was
+reasonable, but the structural prior toward "polish what exists"
+kept it from ever asking "is what exists complete?" The meta-fix is
+rate-limiting ships, not banning them.
 
 ### 2026-05-23 — iter 18 — Wind-down audit; loop paused
 Final stop-and-summarize pass per iter 17's directive — no new
@@ -224,28 +308,14 @@ the banner (dynamic count, no hardcoded "76", three tracks mentioned).
 periodic curation — explicit "Avoid" + "deprioritized" tags force the
 loop to either ship an item or admit why not.
 
-### 2026-05-23 — iter 9 — Weak-spot visibility (button count + plan ordering)
-Stress-surveyed under realistic-but-unhappy state (40 mastered, 15
-overdue reviews, 5 reveals, 3 weakness misses). Two findings, both
-about weak-spot legibility: (1) the `⚠️ Weak` sidebar button had no
-count while `🕒 Review (15)` did — inconsistent affordance; (2) the
-`dailyPlan` added the path BEFORE the weak entry, so a lesson that's
-both weak and on-path got labeled `next on path` instead of the more
-actionable `weak spot`. Fixed both: added a count span (parallel to
-review-btn); reordered dailyPlan so weak precedes path so dedup
-promotes the weak label. Validator 336/0; new probe
-`weak-spot-visibility.js` confirms 3 scenarios (count, hidden, weak-on-
-path labeling). **Learning:** stress-surveying under a seeded
-unhappy-path state surfaces UX inconsistencies that happy-path probes
-miss — worth keeping in the technique toolbox.
-
-*(iters 1–8 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–9 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
 `4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7; `dc41586` iter 8
-2nd L2 for 3 syntax + 1 applied, syntax track fully built at ≥2 L2.)*
+2nd L2 for 3 syntax + 1 applied, syntax track fully built at ≥2 L2;
+`b65df72` iter 9 weak-spot visibility — button count + dailyPlan reorder.)*
 
 ## Hypotheses parking lot
-*(curated iter 10; sidebar-ordering shipped iter 11)*
+*(re-audited every 5 iters; last curated: iter 10)*
 
 - **"Recall-without-prompt" mode** — show only the lesson title and ask
   the user to produce the canonical. Strips prompt scaffolding.
@@ -256,6 +326,7 @@ miss — worth keeping in the technique toolbox.
   recall.
 
 ## Avoid (learned dead-ends)
+*(re-audited every 5 iters; last curated: iter 10)*
 
 - **Bucket promotion gate keyed on personal-best time.** (Was in the
   parking lot through iter 9.) The idea was: L3 holds the bucket

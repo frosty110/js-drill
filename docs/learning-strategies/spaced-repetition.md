@@ -18,6 +18,20 @@ specifically toward lessons their memory is currently weakest on.
 
 - **1d → 3d → 7d → 14d → 30d interval ladder.** L3 pass on a mastered
   lesson advances one bucket; L3 pass at the top bucket holds at 30d.
+- **Hint-frequency trend tracking (iter 46).** Hint-button clicks and
+  🎯 critical-lines clicks now write `hint-tier-N` / `critical-lines-used`
+  events into `state.history` alongside the existing L1/L2/L3-pass and
+  L1-miss events. A windowed-attempt counter (`_countHintAttempts`)
+  derives "hints used on N of last K attempts" and surfaces it as a
+  colored pill near the L3 hint stack (green = 0/N independent, amber =
+  N/N still leaning, mid = in between). The pill is hidden until the
+  lesson has any hint history, so unhinted-from-scratch lessons stay
+  quiet. **The retention signal is the trend over SR intervals** — a
+  lesson at 14d that needed 3/3 hints when at 1d and now needs 0/3 is
+  the PROFILE line 65/66 mastery curve made visible. Closes iter-43
+  SR walkthrough gap #3 + retroactively reactivates the iter-37
+  Parking-lotted hints-used metric (both wanted the same
+  `state.history` schema extension).
 - **Path-aware review queue (iter 45).** When the Starter Path is on
   AND scoped to a single track (Syntax / Patterns / Applied — see iter
   39's per-track paths), the Review queue (`dueReviewIds()`) filters to

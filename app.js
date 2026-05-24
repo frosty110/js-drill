@@ -181,6 +181,39 @@ function appendHistory(lessonId, event) {
   }
 }
 
+// iter 46: counts L3 attempts (windowed to last K) where the user invoked
+// any hint tier OR the critical-lines scaffold. An "attempt" is bounded by
+// L3-pass events; events between two L3-passes (or after the last L3-pass)
+// count as one attempt. Used by renderL3 to surface a metacognitive
+// "you needed hints on N of last K attempts" badge — trending DOWN over
+// SR intervals is the PROFILE line 65/66 retention signal the iter-37
+// hints-used metric was designed to capture (Parking-lotted iter 45,
+// reactivated here as a side effect of iter-43 walkthrough gap #3).
+function _countHintAttempts(lessonId, lookbackAttempts = 5) {
+  const events = state.history?.[lessonId] || [];
+  if (events.length === 0) return { hinted: 0, total: 0 };
+  // Walk forward, group by attempt (terminated by L3-pass). Attempt = "all
+  // events up to and including the next L3-pass." Unfinished trailing
+  // attempts (no terminating L3-pass) count too.
+  const attempts = [];
+  let cur = { hinted: false };
+  for (const e of events) {
+    if (e.event && (e.event.startsWith('hint-tier-') || e.event === 'critical-lines-used')) {
+      cur.hinted = true;
+    }
+    if (e.event === 'L3-pass') {
+      attempts.push(cur);
+      cur = { hinted: false };
+    }
+  }
+  // Trailing in-progress attempt only counts if it has hint events (so an
+  // unhinted in-progress attempt doesn't deflate the ratio).
+  if (cur.hinted) attempts.push(cur);
+  const recent = attempts.slice(-lookbackAttempts);
+  const hinted = recent.filter(a => a.hinted).length;
+  return { hinted, total: recent.length };
+}
+
 // Per-track pill metadata — keep this in one place so the lesson header,
 // Today's plan modal, and any future track-aware surface stay in sync.
 // Without it, the header read "Pattern" for applied-track lessons (the
@@ -3025,6 +3058,7 @@ function renderL3(body, lesson, content) {
       <div class="feedback text-sm ml-2"></div>
     </div>
     ${isMock ? '' : '<div class="hint-stack mt-3 hidden" data-hint-stack></div>'}
+    ${isMock ? '' : '<div class="hint-trend mt-2 hidden" data-hint-trend></div>'}
     <div class="mt-4">
       <div class="text-xs text-slate-500 mb-1">Output:</div>
       <div class="output-box" data-output>(run your code…)</div>
@@ -3085,6 +3119,7 @@ function renderL3(body, lesson, content) {
   const outputBox = wrap.querySelector('[data-output]');
   const feedback = wrap.querySelector('.feedback');
   const hintStack = wrap.querySelector('[data-hint-stack]');
+  const hintTrendEl = wrap.querySelector('[data-hint-trend]');
   const ladder = _buildHintLadder(drill);
   let hintsUsed = 0;
   let attempts = 0;
@@ -3106,6 +3141,28 @@ function renderL3(body, lesson, content) {
     `).join('');
   }
 
+  // iter 46: hint-frequency trend badge. Surfaces "you needed scaffolding
+  // on N of last K attempts" so the user can see their own hint-dependency
+  // trending down over SR intervals (PROFILE line 65/66 retention signal).
+  // Hidden when there's no hint history for this lesson yet — no noise.
+  function renderHintTrend() {
+    if (!hintTrendEl) return;
+    const { hinted, total } = _countHintAttempts(lesson.id, 5);
+    if (total === 0) {
+      hintTrendEl.classList.add('hidden');
+      hintTrendEl.innerHTML = '';
+      return;
+    }
+    hintTrendEl.classList.remove('hidden');
+    // Color signal: 0/N = green (independent), N/N = amber (still leaning),
+    // mid = neutral. Trending down across SR intervals is the retention win.
+    const tone = hinted === 0 ? 'good' : hinted === total ? 'warn' : 'mid';
+    hintTrendEl.innerHTML = `<span class="hint-trend-pill hint-trend-${tone}">💡 Hints / scaffold used on <strong>${hinted}</strong> of last <strong>${total}</strong> attempt${total === 1 ? '' : 's'}</span>`;
+  }
+  // Show baseline on mount (so a lesson with prior hint history surfaces
+  // the badge even before the user re-clicks Hint).
+  renderHintTrend();
+
   wrap.querySelector('[data-action="run"]').addEventListener('click', run);
   // Hint / diff / reveal buttons are omitted in Mock Interview mode (isMock).
   // Each query must be null-guarded — without this guard, starting a mock
@@ -3116,7 +3173,14 @@ function renderL3(body, lesson, content) {
     hintBtn.addEventListener('click', () => {
       if (hintsUsed >= ladder.length) return;
       hintsUsed++;
+      // iter 46: record hint event into state.history so future SR-style
+      // mechanisms can surface lessons with high hint-frequency as weak
+      // spots. Also retroactively closes the iter-37 hints-used metric.
+      // See iter-43 SR walkthrough gap #3.
+      appendHistory(lesson.id, `hint-tier-${hintsUsed}`);
+      saveProgress();
       renderHintStack();
+      renderHintTrend();
       if (hintsUsed >= ladder.length) {
         hintBtn.textContent = '💡 No more hints';
         hintBtn.disabled = true;
@@ -3171,6 +3235,12 @@ function renderL3(body, lesson, content) {
         return line;
       }).join('\n');
       cm.setValue(blanked);
+      // iter 46: record critical-fill usage so future SR mechanisms can
+      // surface lessons where the user has been relying on the scaffold.
+      // See iter-43 SR walkthrough gap #3.
+      appendHistory(lesson.id, 'critical-lines-used');
+      saveProgress();
+      renderHintTrend();
       feedback.innerHTML = `<span class="text-amber-300">🎯 Fill the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'} marked <code>/* ___ FILL ___ */</code> — that's the insight of this pattern.</span>`;
     });
   }
@@ -3213,6 +3283,9 @@ function renderL3(body, lesson, content) {
     if (result.ok && outputsMatch(result.output, drill.expectedOutput)) {
       const wasMock = state.mock.active && state.mock.lessonId === lesson.id;
       markPassed(lesson.id, 'L3');
+      // iter 46: the L3-pass closed the current attempt; refresh hint trend
+      // so the new attempt's hint count is reflected immediately.
+      renderHintTrend();
       const tries = attempts === 1 ? 'first try' : `${attempts} tries`;
       const srBadge = srBadgeHtml(lesson.id, 'pass');
       if (wasMock) {

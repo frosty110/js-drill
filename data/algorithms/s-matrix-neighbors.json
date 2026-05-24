@@ -1,0 +1,108 @@
+{
+  "id": "s-matrix-neighbors",
+  "title": "4-directional neighbor iteration",
+  "section": "Algorithms",
+  "track": "syntax",
+  "status": "full",
+  "description": "The dirs-array idiom for iterating a cell's 4 orthogonal neighbors with a bounds check — the scaffold every grid DFS/BFS starts from.",
+  "reference": {
+    "code": "// 4 orthogonal directions: up, down, left, right.\n// Row delta first, column delta second.\nconst dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];\n\n// Standard dimensions — derive these ONCE at the top.\nconst rows = grid.length;\nconst cols = grid[0].length;\n\n// Canonical neighbor walk from cell (r, c):\nfor (const [dr, dc] of dirs) {\n  const nr = r + dr;\n  const nc = c + dc;\n  // Bounds check BEFORE indexing grid[nr][nc] — otherwise you crash on edges.\n  if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;\n  // visit (nr, nc) — recurse, enqueue, count, etc.\n}\n\n// Diagonal version (8-way) just adds the corners:\n//   [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]\n// Most interview problems are 4-directional unless they say \"king moves\".",
+    "notes": [
+      "Row first, column second — [dr, dc]. Mixing up the order is the #1 grid bug.",
+      "[-1, 0] is UP (row decreases), [1, 0] is DOWN — y-axis is flipped vs. math graphs.",
+      "Bounds check BEFORE indexing grid[nr][nc] — JS won't throw, it returns undefined and silently breaks comparisons.",
+      "Derive rows/cols once; grid[0].length assumes a rectangular grid (always true in interview problems)."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "In `const dirs = [[-1,0],[1,0],[0,-1],[0,1]]`, which entry moves UP one row?",
+        "options": [
+          "[1, 0]",
+          "[-1, 0]",
+          "[0, -1]",
+          "[0, 1]"
+        ],
+        "answer": 1,
+        "explain": "Row decreases as you move up the grid, so dr = -1."
+      },
+      {
+        "q": "Would `[1, 1]` (down + right) be visited by the standard 4-directional dirs array?",
+        "options": [
+          "Yes, it's a neighbor",
+          "No, that's a diagonal — 4-directional only covers up/down/left/right",
+          "Only if the grid is square",
+          "Only on the boundary"
+        ],
+        "answer": 1,
+        "explain": "4-directional means orthogonal (cardinal) neighbors only. Diagonals require the 8-way variant."
+      },
+      {
+        "q": "How are `rows` and `cols` standardly derived from a 2D `grid`?",
+        "options": [
+          "rows = grid.size, cols = grid[0].size",
+          "rows = grid.length, cols = grid[0].length",
+          "rows = grid.width, cols = grid.height",
+          "rows = grid.rows, cols = grid.cols"
+        ],
+        "answer": 1,
+        "explain": "JS arrays expose .length, and grid[0].length is the width of the first row."
+      },
+      {
+        "q": "Why must the bounds check happen BEFORE indexing `grid[nr][nc]`?",
+        "options": [
+          "Style only — JS throws on out-of-bounds anyway",
+          "JS returns undefined for out-of-bounds, which silently breaks comparisons and recursion",
+          "It's faster",
+          "Required by strict mode"
+        ],
+        "answer": 1,
+        "explain": "Unlike many languages, JS doesn't throw on array[oob] — it quietly returns undefined, leading to subtle bugs."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the dirs array (up, down, left, right) and the bounds check for a 4-directional neighbor walk.",
+        "template": "const grid = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];\nconst rows = grid.length, cols = grid[0].length;\nconst dirs = [[-1, 0], [1, 0], [0, -1], ___];\nconst r = 1, c = 1;\nconst neighbors = [];\nfor (const [dr, dc] of dirs) {\n  const nr = r + dr, nc = c + dc;\n  if (nr < 0 || nr >= rows || nc < 0 || nc >= ___) continue;\n  neighbors.push(grid[nr][nc]);\n}\nconsole.log(neighbors.join(\",\"));",
+        "blanks": [
+          {
+            "answer": "[0, 1]",
+            "hint": "right: row unchanged, column +1"
+          },
+          {
+            "answer": "cols",
+            "hint": "column upper bound"
+          }
+        ],
+        "expectedOutput": "2,8,4,6"
+      },
+      {
+        "prompt": "Use the dirs/bounds scaffold to count how many cells in the grid have at least one orthogonal neighbor equal to 0.",
+        "template": "function countAdjacentToZero(grid) {\n  const rows = grid.length, cols = grid[0].length;\n  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];\n  let count = 0;\n  for (let r = 0; r < rows; r++) {\n    for (let c = 0; c < cols; c++) {\n      for (const [dr, dc] of dirs) {\n        const nr = r + dr, nc = c + ___;\n        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) ___;\n        if (grid[nr][nc] === 0) { count++; break; }\n      }\n    }\n  }\n  return count;\n}\nconsole.log(countAdjacentToZero([[1, 0, 1], [1, 1, 1], [1, 1, 0]]));",
+        "blanks": [
+          {
+            "answer": "dc",
+            "hint": "column delta from the dirs pair"
+          },
+          {
+            "answer": "continue",
+            "hint": "skip out-of-bounds neighbors"
+          }
+        ],
+        "expectedOutput": "5"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `neighborSum(grid, r, c)` that returns the sum of the 4 orthogonal neighbors of (r, c). Treat out-of-bounds neighbors as 0. Log `neighborSum([[1,2,3],[4,5,6],[7,8,9]], 0, 0)` — only [1,0] (= 4) and [0,1] (= 2) are in-bounds, so the sum is 6.",
+    "expectedOutput": "6",
+    "canonical": "function neighborSum(grid, r, c) {\n  const rows = grid.length, cols = grid[0].length;\n  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];\n  let sum = 0;\n  for (const [dr, dc] of dirs) {\n    const nr = r + dr, nc = c + dc;\n    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;\n    sum += grid[nr][nc];\n  }\n  return sum;\n}\nconsole.log(neighborSum([[1, 2, 3], [4, 5, 6], [7, 8, 9]], 0, 0));",
+    "hints": [
+      "Derive rows = grid.length, cols = grid[0].length first.",
+      "for (const [dr, dc] of dirs) — bounds check, then add grid[nr][nc] to a running sum."
+    ]
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "id": "s-bfs-template",
+  "title": "BFS queue scaffold",
+  "section": "Algorithms",
+  "track": "syntax",
+  "status": "full",
+  "description": "The canonical breadth-first search shell — queue + seen set, plus the level-snapshot variant for level-order traversal.",
+  "reference": {
+    "code": "// ---------- Variant A: visit-all-reachable BFS ----------\n// Use when you just need to walk every node reachable from start.\nfunction bfs(start, graph) {\n  const q = [start];\n  const seen = new Set([start]);\n  const order = [];\n  while (q.length) {\n    const cur = q.shift();              // dequeue front (FIFO)\n    order.push(cur);\n    for (const n of graph[cur] || []) {\n      if (!seen.has(n)) {               // gate enqueue on seen\n        seen.add(n);                    // mark BEFORE enqueue — not when you pop\n        q.push(n);\n      }\n    }\n  }\n  return order;\n}\n\n// ---------- Variant B: level-order BFS ----------\n// Use when you need per-level groups, shortest path in unweighted graphs, etc.\nfunction bfsLevels(start, graph) {\n  const q = [start];\n  const seen = new Set([start]);\n  const levels = [];\n  while (q.length) {\n    const n = q.length;                 // SNAPSHOT — children pushed below are next level\n    const level = [];\n    for (let i = 0; i < n; i++) {\n      const cur = q.shift();\n      level.push(cur);\n      for (const nb of graph[cur] || []) {\n        if (!seen.has(nb)) { seen.add(nb); q.push(nb); }\n      }\n    }\n    levels.push(level);\n  }\n  return levels;\n}",
+    "notes": [
+      "Mark `seen` BEFORE enqueue, not after dequeue — otherwise a node can be enqueued multiple times before its first visit.",
+      "Array.shift is O(n); fine for interview-scale, but for huge queues use a head pointer or a real deque.",
+      "Level-order needs `const n = q.length` snapshotted BEFORE the inner loop — children pushed inside belong to the NEXT level.",
+      "Queue gives FIFO ⇒ BFS. Swap shift→pop and you've accidentally written DFS."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "What ordering does a BFS queue produce, and what data-structure operation gives it?",
+        "options": [
+          "LIFO — push + pop",
+          "FIFO — push + shift",
+          "Sorted — push + sort",
+          "Random — push + splice"
+        ],
+        "answer": 1,
+        "explain": "BFS visits nodes in arrival order: enqueue at the back (push), dequeue from the front (shift)."
+      },
+      {
+        "q": "Why mark a node in `seen` BEFORE enqueueing it (instead of when you dequeue)?",
+        "options": [
+          "Style preference only",
+          "Otherwise multiple neighbors can each enqueue the same node before any of them gets visited",
+          "It's faster to add to a Set early",
+          "Required by the Set API"
+        ],
+        "answer": 1,
+        "explain": "If you wait until pop to mark seen, a high-degree node can be pushed many times — blowing up the queue and re-doing work."
+      },
+      {
+        "q": "In the level-order BFS, why snapshot `const n = q.length` BEFORE the inner for-loop?",
+        "options": [
+          "Performance — caching .length is faster",
+          "Because children pushed during the inner loop belong to the NEXT level, not the current one",
+          "JavaScript requires the snapshot",
+          "Avoids a TypeError on empty queues"
+        ],
+        "answer": 1,
+        "explain": "Reading q.length live would grow as you push children, mixing the current level with the next."
+      },
+      {
+        "q": "What's the actual cost of `queue.shift()` on a JS array of length n, and why is it acceptable here?",
+        "options": [
+          "O(1) — same as pop",
+          "O(log n) — the array is a tree internally",
+          "O(n) — every remaining element re-indexes; fine for interview-scale, swap to a head pointer if huge",
+          "O(n^2) — both shift and rebuild are linear"
+        ],
+        "answer": 2,
+        "explain": "shift re-indexes every remaining element. At interview scale (≤10^4) it's fine; at production scale, use a head index or deque."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the queue init, the while-loop condition, and the seen-set update for visit-all BFS.",
+        "template": "function bfs(start, graph) {\n  const q = [___];\n  const seen = new Set([start]);\n  const order = [];\n  while (q.___) {\n    const cur = q.shift();\n    order.push(cur);\n    for (const n of graph[cur] || []) {\n      if (!seen.has(n)) {\n        seen.___(n);\n        q.push(n);\n      }\n    }\n  }\n  return order;\n}\nconst g = { a: [\"b\", \"c\"], b: [\"d\"], c: [\"d\"], d: [] };\nconsole.log(JSON.stringify(bfs(\"a\", g)));",
+        "blanks": [
+          {
+            "answer": "start",
+            "hint": "seed the queue with the start node"
+          },
+          {
+            "answer": "length",
+            "hint": "truthy while the queue is non-empty"
+          },
+          {
+            "answer": "add",
+            "hint": "mark the neighbor as seen BEFORE pushing"
+          }
+        ],
+        "expectedOutput": "[\"a\",\"b\",\"c\",\"d\"]"
+      },
+      {
+        "prompt": "Use the BFS scaffold with a level-snapshot to return the count of nodes at each level.",
+        "template": "function levelSizes(start, graph) {\n  const q = [start];\n  const seen = new Set([start]);\n  const sizes = [];\n  while (q.length) {\n    const n = q.___;\n    sizes.push(n);\n    for (let i = 0; i < n; i++) {\n      const cur = q.___();\n      for (const nb of graph[cur] || []) {\n        if (!seen.has(nb)) { seen.add(nb); q.push(nb); }\n      }\n    }\n  }\n  return sizes;\n}\nconst g = { a: [\"b\", \"c\"], b: [\"d\", \"e\"], c: [\"f\"], d: [], e: [], f: [] };\nconsole.log(JSON.stringify(levelSizes(\"a\", g)));",
+        "blanks": [
+          {
+            "answer": "length",
+            "hint": "snapshot — count only this level"
+          },
+          {
+            "answer": "shift",
+            "hint": "FIFO dequeue"
+          }
+        ],
+        "expectedOutput": "[1,2,3]"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `bfsOrder(graph, start)` that returns an array of node ids in BFS visit order. Use a queue + a seen set. Log `JSON.stringify(bfsOrder({A:[\"B\",\"C\"], B:[\"D\"], C:[\"D\"], D:[]}, \"A\"))`.",
+    "expectedOutput": "[\"A\",\"B\",\"C\",\"D\"]",
+    "canonical": "function bfsOrder(graph, start) {\n  const q = [start];\n  const seen = new Set([start]);\n  const order = [];\n  while (q.length) {\n    const cur = q.shift();\n    order.push(cur);\n    for (const n of graph[cur] || []) {\n      if (!seen.has(n)) {\n        seen.add(n);\n        q.push(n);\n      }\n    }\n  }\n  return order;\n}\nconsole.log(JSON.stringify(bfsOrder({ A: [\"B\", \"C\"], B: [\"D\"], C: [\"D\"], D: [] }, \"A\")));",
+    "hints": [
+      "Seed q with [start] and seen with new Set([start]).",
+      "While q.length, shift the front, push every unseen neighbor (mark seen first)."
+    ]
+  }
+}

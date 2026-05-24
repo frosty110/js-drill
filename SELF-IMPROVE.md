@@ -8,12 +8,13 @@
 
 ## Next iteration
 - **Suggested mode:** ship
-- **Signal pointing there:** iter 19 (frame) produced [iter-artifacts/iter-19-gap-list.md](iter-artifacts/iter-19-gap-list.md) — a ranked syllabus gap list synthesized from 3 fresh-eyes subagents (internal audit + external benchmark + meta-review). Cluster 1 Tier 1 (six Syntax/Algorithms boilerplate lessons: `s-matrix-neighbors`, `s-bfs-template`, `s-tree-traversals`, `s-ll-traversal`, `s-ll-fast-slow`, `s-heap-ops`) is scoped, atomic, and per Agent A covers ~70% of the boilerplate the rusty engineer currently re-derives every session.
-- **Veto condition:** skip ship if (a) user redirects to a different gap cluster before iter 20 fires, (b) the rolling-6-window already has 3 ships (force audit/coverage instead), or (c) user surfaces a higher-priority friction.
+- **Signal pointing there:** iter 19 (frame) produced [iter-artifacts/iter-19-gap-list.md](iter-artifacts/iter-19-gap-list.md). Iter 20 shipped **Cluster 1 Tier 1** (6 boilerplate-as-syntax lessons). **Cluster 1 Tier 2** is the natural next ship — 7 more lessons completing the cluster: `s-matrix-bounds`, `s-dfs-recursive-template`, `s-dfs-iter-template`, `s-ll-node-shape`, `s-binsearch-template`, `s-union-find`, `s-grid-init`. Same parallel-author pattern (3 agents × 2-3 lessons) should work cleanly now that the template is proven.
+- **Veto condition:** skip ship if (a) user redirects to Cluster 4 (Modern Syntax, 5 lessons) or Cluster 5 (Hash/Set ergonomics, 3 lessons) — both feasible alternative ship targets, (b) rolling-6-window already has 3 ships at iter 21 (would force audit/coverage; current count: iters 18=audit, 19=frame, 20=ship → only 1 ship in last 3, so iter 21 ship is well within quota), or (c) user surfaces a higher-priority friction during real drilling.
 
 ## Current focus
-- **Status: RESUMING** from PAUSED state after iter 18, via user-directed iter 19. The loop is now equipped with mode rotation, fresh-eyes subagent steps, external research lens, and structural guardrails (≥3 ships per 6 iters, ≤1 frame per 10, forced frame every 10, artifact-to-ship deadline of 3 iters).
-- **Primary lens (active until iter 25 or BS-02 closes):** Syllabus completeness — close the Syntax/Algorithms boilerplate gap (Cluster 1 in the iter-19 gap list), then re-evaluate against the remaining cross-source consensus list and JS-specific cluster.
+- **Status: ACTIVE** — syllabus completeness lens, Cluster 1 of the iter-19 gap list. Tier 1 shipped iter 20 (149 lessons, +19 exercises). Tier 2 queued for iter 21.
+- **Primary lens (active until iter 25 or BS-02 fully closes):** Syllabus completeness — keep closing the Syntax/Algorithms boilerplate gap, then re-evaluate against Clusters 3/4/5 (JS-specific + Modern + Hash idioms) before the cross-source Cluster 2 work.
+- **Follow-up noted iter 20:** the 6 new lessons are in the manifest + sidebar but NOT in `STARTER_PATH`. Decide in a future iter whether/where to insert them in the recommended sequence (probably grouped after `s-queue-pattern` since that's the closest topical neighbor). Not blocking — lessons are reachable via browse mode.
 
 ## Mode ledger
 *(append-only; enforces the "no 3 consecutive ships" + "≥3 ships per rolling 6" rules mechanically)*
@@ -23,12 +24,13 @@
 | 1–17 | ship | See § Iteration log + git history `262380c..2d6325d` |
 | 18 | audit | Wind-down audit; 12 probes regression-green, validator 336/0, loop paused |
 | 19 | frame | Redesigned SKILL.md (mode rotation + fresh-eyes subagent + research lens + nominate-next-mode), restructured SELF-IMPROVE.md (Next iteration, Mode ledger, Blind spots ledger, Last-touched index, External references), spawned 3 fresh-eyes subagents producing `iter-artifacts/iter-19-gap-list.md` |
+| 20 | ship | Cluster 1 Tier 1: 6 boilerplate-as-syntax lessons in Algorithms section via 3 parallel author agents (s-matrix-neighbors, s-bfs-template, s-tree-traversals, s-heap-ops, s-ll-traversal, s-ll-fast-slow). Validator 336→355 (+19 exercises, 0 fail). New durable probe `algorithms-section-expansion.js` (29/29). Regressions clean on welcome-banner-dynamic + sidebar-path-order. New helper `tools/validate-files.js` for in-isolation lesson validation |
 
 ## Blind spots ledger
 *(things the loop has historically not questioned; promote to Current focus or Parking lot when actioned)*
 
 - **[BS-01] Syllabus completeness vs. external rubrics** — never benchmarked against canonical lists. Iter 19 measured: NeetCode 150 ~52% covered, Blind 75 ~80%, LC Top Interview 150 ~37%. *Seeded iter 19; iter 20 ship consumes the Cluster 2 portion of the gap list.*
-- **[BS-02] Boilerplate-as-syntax gap** — algorithmic scaffolding (matrix dirs, BFS queue, DFS template, tree traversal shapes, parallel LL walk, heap math, union-find) buried inside Patterns lessons; never extracted as standalone Syntax lessons. *Seeded iter 19; iter 20 ship consumes Cluster 1 Tier 1.*
+- **[BS-02] Boilerplate-as-syntax gap** — algorithmic scaffolding buried inside Patterns lessons; never extracted as standalone Syntax lessons. *Partially closed iter 20: Tier 1 shipped (matrix-neighbors, bfs-template, tree-traversals, ll-traversal, ll-fast-slow, heap-ops). Tier 2 remaining for iter 21: matrix-bounds, dfs-recursive-template, dfs-iter-template, ll-node-shape, binsearch-template, union-find, grid-init.*
 - **[BS-03] JS-specific concepts under-covered** — `structuredClone`, `AbortController`, `Promise.race/any/allSettled`, microtask vs macrotask ordering quizzes, hoisting/TDZ, `==` coercion, `WeakMap`/`WeakRef`. *Seeded iter 19; queue for coverage iter ~22.*
 - **[BS-04] Frontend utility lessons missing** — DOM traversal, event delegation, `classNames()`, retry-with-backoff, promise concurrency pool, AbortController-cancellable promise, deep equality. *Seeded iter 19; queue for coverage iter (Applied track expansion).*
 - **[BS-05] Modern syntax gaps** — rest params, computed/shorthand keys, logical assignment (`||=`, `??=`, `&&=`), ES2022+ array variants (`findLast`, `toSorted`, `toReversed`). *Seeded iter 19; queue for ship iter ~22.*
@@ -44,6 +46,7 @@
 | Area | Iter last touched |
 |---|---|
 | Skill / SELF-IMPROVE structure | 19 |
+| Algorithms section (boilerplate-as-syntax expansion) | 20 |
 | L3 surface / CTA injection | 17 |
 | Cheatsheet | 15 |
 | Applied-track surfaces (pills, stats panel) | 14 |
@@ -55,10 +58,10 @@
 | L2 content density (existing lessons) | 8 |
 | Validator (density warning) | 5 |
 | Spaced repetition (state surfacing, demote-on-reveal, hold-on-L2) | 6 |
-| **Matrix / grid syntax** | never |
-| **BFS / DFS / tree traversal syntax** | never |
-| **Linked list helpers (syntax)** | never |
-| **Heap (syntax)** | never |
+| **Matrix / grid syntax** | 20 (matrix-neighbors; bounds + grid-init pending Tier 2) |
+| **BFS / DFS / tree traversal syntax** | 20 (bfs-template + tree-traversals; dfs templates pending Tier 2) |
+| **Linked list helpers (syntax)** | 20 (ll-traversal + ll-fast-slow; node-shape pending Tier 2) |
+| **Heap (syntax)** | 20 (heap-ops) |
 | **Async combinators / loops (syntax)** | never |
 | **Modern syntax (rest/computed/logical-assign/ES2022 arrays)** | never |
 | **Hash/Set idiom syntax (counter, group-by, set ops)** | never |
@@ -105,6 +108,37 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 20 — Ship mode: Cluster 1 Tier 1 — 6 boilerplate-as-syntax lessons
+First ship using the iter 19 framework. Mode-selected ship because §
+Next iteration nominated it with a concrete artifact ready
+(`iter-artifacts/iter-19-gap-list.md` Cluster 1 Tier 1), veto
+conditions not triggered. **Challenge-the-focus answers:** (1) loop
+hadn't touched matrix/BFS/DFS/tree/LL/heap *syntax* lessons (now
+addressed), storage backend (deferred), PROFILE assumption validity
+(deferred to a future frame iter); (2) "80% phone" still load-bearing
+— authoring choices favored short L2 blanks and tight L3 challenges;
+(3) new contributor would ask "why does Algorithms have 9 lessons
+now?" — the answer is on iter 19's blind-spots ledger; (4) yes,
+highest-leverage — closes BS-02 partially. **Authored** via 3
+parallel general-purpose agents (2 lessons each, fresh-context per
+CLAUDE.md sub-agent workflow): grid theme (matrix-neighbors,
+bfs-template), tree/heap theme (tree-traversals, heap-ops), LL theme
+(ll-traversal, ll-fast-slow). Each agent self-verified via new
+`tools/validate-files.js` helper (validates lesson JSON in isolation,
+bypassing the manifest/disk parity check that would block
+mid-authoring). Orchestrator integrated manifest, ran full validator
+(336 → 355 pass, +19 exercises, 0 fail), shipped new durable probe
+`algorithms-section-expansion.js` (29/29: manifest contains all 6,
+sidebar renders all 6, s-matrix-neighbors title + tabs + no horizontal
+overflow at iPhone viewport, other 5 load without error). Regression
+spot-check: welcome-banner-dynamic now reads "149 lessons" (143+6,
+dynamic count working), sidebar-path-order unchanged for syntax tab.
+**Learning:** the parallel-author + per-agent-validator + orchestrator-
+integrates pattern worked first-shot for all 3 agents — no iteration,
+no retry. The boilerplate-as-syntax framing carried cleanly across
+matrix, tree, heap, and LL themes, suggesting the same template will
+work for Tier 2 (DFS variants, binsearch, union-find, etc.).
 
 ### 2026-05-23 — iter 19 — Frame mode: redesigned the loop to question itself
 User-directed frame iteration after observing the loop had been
@@ -291,28 +325,11 @@ mode shows no step prefixes. All 5 prior probes still pass.
 and pay back across iterations — the probe was easy to write once
 selectors were stable.
 
-### 2026-05-23 — iter 10 — Welcome banner refresh + parking-lot curation
-The "76 lessons" banner staleness has been flagged since iter 1 but no
-iteration touched the welcome surface, so it kept rolling forward.
-Iter 10 audited the parking lot directly: shipped #2 (banner: dynamic
-count + three-track pitch — now reads "143 lessons across syntax,
-interview patterns, and applied problems"), marked #3 done implicitly
-(removed), moved #4 (bucket-promotion gate) and #5 (L3-timeout-as-
-failure) to **Avoid** with reasoning — both had clear leverage-vs-risk
-problems, leaving them in the lot was holding the loop hostage to
-items the analysis already disqualifies. Parking lot net: 6 → 2
-entries (sidebar ordering + recall-without-prompt). Validator 336/0;
-new probe `tools/cdp/welcome-banner-dynamic.js` asserts 6 facts about
-the banner (dynamic count, no hardcoded "76", three tracks mentioned).
-**Learning:** the parking lot drifts into a passive backlog without
-periodic curation — explicit "Avoid" + "deprioritized" tags force the
-loop to either ship an item or admit why not.
-
-*(iters 1–9 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–10 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
-`4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7; `dc41586` iter 8
-2nd L2 for 3 syntax + 1 applied, syntax track fully built at ≥2 L2;
-`b65df72` iter 9 weak-spot visibility — button count + dailyPlan reorder.)*
+`4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7; `dc41586` iter 8;
+`b65df72` iter 9; `7728e0c` iter 10 welcome banner refresh + parking-lot
+curation — dynamic count + 3-track pitch.)*
 
 ## Hypotheses parking lot
 *(re-audited every 5 iters; last curated: iter 10)*

@@ -1,0 +1,127 @@
+{
+  "id": "s-ll-traversal",
+  "title": "Linked-list walk idioms",
+  "section": "Algorithms",
+  "track": "syntax",
+  "status": "full",
+  "description": "The three boilerplate walks every LL problem uses: single walk, parallel walk, and dummy-head builder.",
+  "reference": {
+    "code": "// 1) SINGLE WALK — visit every node in one list\nlet curr = head;\nwhile (curr) {\n  // visit curr\n  curr = curr.next;\n}\n\n// 2) PARALLEL WALK — step two lists in lockstep (compare / merge)\nlet a = h1, b = h2;\nwhile (a && b) {\n  // compare a.val vs b.val\n  a = a.next;\n  b = b.next;\n}\n// one (or both) of a, b is null here — handle the remainder\n\n// 3) DUMMY-HEAD BUILDER — assemble a new list with no first-node special case\nconst dummy = { val: 0, next: null };\nlet tail = dummy;\nwhile (/* more to append */ false) {\n  tail.next = { val: 0, next: null }; // attach new node\n  tail = tail.next;                   // advance the tail\n}\nreturn dummy.next;                    // skip the sentinel",
+    "notes": [
+      "Single walk: while(curr) terminates safely on null — no need to test curr.next.",
+      "Parallel walk uses && so the loop stops the moment either list runs out; attach the remainder afterwards.",
+      "Dummy head is a sentinel — it eliminates the 'is this the first node?' branch and lets you always do tail.next = ....",
+      "Always advance tail = tail.next after attaching, or you'll overwrite the same slot next iteration."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Which loop condition safely walks a single linked list to the end?",
+        "options": [
+          "while (curr.next)",
+          "while (curr)",
+          "while (curr !== head)",
+          "while (curr.next !== null)"
+        ],
+        "answer": 1,
+        "explain": "while(curr) terminates cleanly when curr becomes null; while(curr.next) would skip the last node and throw if head is null."
+      },
+      {
+        "q": "What does a dummy-head sentinel buy you when building a new list?",
+        "options": [
+          "Lower memory usage",
+          "Removes the special case for inserting the first node",
+          "Makes the walk O(1) instead of O(n)",
+          "Lets you skip the null check"
+        ],
+        "answer": 1,
+        "explain": "With a sentinel you can always do tail.next = newNode without branching on 'is this the very first append?'."
+      },
+      {
+        "q": "When do you reach for the parallel walk `while (a && b)`?",
+        "options": [
+          "Reversing a single list in place",
+          "Comparing or merging two lists in lockstep",
+          "Detecting a cycle in one list",
+          "Counting nodes in one list"
+        ],
+        "answer": 1,
+        "explain": "Parallel walk is for two-list problems — merge, compare, intersection — where you advance both pointers each iteration."
+      },
+      {
+        "q": "After building a list with a dummy head, what do you return?",
+        "options": [
+          "dummy",
+          "tail",
+          "dummy.next",
+          "tail.next"
+        ],
+        "answer": 2,
+        "explain": "dummy is the sentinel; the real list starts at dummy.next."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fill in the single-walk loop that counts nodes in a list.",
+        "template": "function count(head) {\n  let n = 0;\n  let curr = head;\n  while (___) {\n    n++;\n    curr = curr.___;\n  }\n  return n;\n}\nconst h = { val: 1, next: { val: 2, next: { val: 3, next: null } } };\nconsole.log(count(h));",
+        "blanks": [
+          {
+            "answer": "curr",
+            "hint": "truthy until curr becomes null"
+          },
+          {
+            "answer": "next",
+            "hint": "hop to the next node"
+          }
+        ],
+        "expectedOutput": "3"
+      },
+      {
+        "prompt": "Fill in the dummy-head builder that copies values from an array into a new list.",
+        "template": "function build(arr) {\n  const dummy = { val: 0, next: null };\n  let tail = ___;\n  for (const v of arr) {\n    tail.next = { val: v, next: null };\n    tail = tail.___;\n  }\n  return dummy.___;\n}\nfunction toArr(h) { const o = []; while (h) { o.push(h.val); h = h.next; } return o; }\nconsole.log(JSON.stringify(toArr(build([7, 8, 9]))));",
+        "blanks": [
+          {
+            "answer": "dummy",
+            "hint": "tail starts at the sentinel"
+          },
+          {
+            "answer": "next",
+            "hint": "advance the tail after attaching"
+          },
+          {
+            "answer": "next",
+            "hint": "skip the sentinel when returning"
+          }
+        ],
+        "expectedOutput": "[7,8,9]"
+      },
+      {
+        "prompt": "Fill in the parallel walk that returns true only if every paired value is equal (stops the moment either list runs out).",
+        "template": "function eq(h1, h2) {\n  let a = h1, b = h2;\n  while (a ___ b) {\n    if (a.val !== b.val) return false;\n    a = a.next;\n    b = b.___;\n  }\n  return a === null && b === null;\n}\nconst x = { val: 1, next: { val: 2, next: null } };\nconst y = { val: 1, next: { val: 2, next: null } };\nconsole.log(eq(x, y));",
+        "blanks": [
+          {
+            "answer": "&&",
+            "hint": "loop only while BOTH are non-null"
+          },
+          {
+            "answer": "next",
+            "hint": "advance b in lockstep"
+          }
+        ],
+        "expectedOutput": "true"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `doubleList(head)` that returns a NEW list with each value doubled, using the dummy-head builder. Log `JSON.stringify(toArr(doubleList(toList([1, 2, 3]))))`.",
+    "expectedOutput": "[2,4,6]",
+    "canonical": "function doubleList(head) {\n  const dummy = { val: 0, next: null };\n  let tail = dummy;\n  let curr = head;\n  while (curr) {\n    tail.next = { val: curr.val * 2, next: null };\n    tail = tail.next;\n    curr = curr.next;\n  }\n  return dummy.next;\n}\nfunction toList(arr) { let d = { next: null }, c = d; for (const v of arr) { c.next = { val: v, next: null }; c = c.next; } return d.next; }\nfunction toArr(h) { const o = []; while (h) { o.push(h.val); h = h.next; } return o; }\nconsole.log(JSON.stringify(toArr(doubleList(toList([1, 2, 3])))));",
+    "hints": [
+      "Combine single walk (curr = curr.next) with the dummy-head builder.",
+      "Attach a brand-new node each step; return dummy.next, not dummy."
+    ]
+  }
+}

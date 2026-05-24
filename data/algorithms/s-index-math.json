@@ -1,0 +1,111 @@
+{
+  "id": "s-index-math",
+  "title": "Index arithmetic (interval length, midpoint, slice, wrap)",
+  "section": "Algorithms",
+  "track": "syntax",
+  "status": "full",
+  "description": "The +1 / -1 / midpoint / modulo idioms behind sliding windows, binary search, fixed-length slices, and circular indexing — the arithmetic you reach for before the algorithm.",
+  "reference": {
+    "code": "// ────────────────────────────────────────────────────────────\n// 1. INCLUSIVE INTERVAL LENGTH:  r - l + 1\n// ────────────────────────────────────────────────────────────\n//\n//   arr  =  [ a , b , c , d , e ]\n//   idx     0   1   2   3   4\n//               ↑       ↑\n//               l       r        l=1, r=3\n//               └───┬───┘\n//                  3 items       r - l + 1 = 3\n//\n//   Drop the +1 to get the GAP (steps from l to r):\n//                                 r - l     = 2\nconst inclusiveLen = (l, r) => r - l + 1;\nconst gap          = (l, r) => r - l;\n\n\n// ────────────────────────────────────────────────────────────\n// 2. MIDPOINT:  (lo + hi) >> 1     ← integer floor-divide\n// ────────────────────────────────────────────────────────────\n//\n//   lo                            hi\n//    ▼                            ▼\n//   [ _ , _ , _ , _ , _ , _ , _ , _ ]\n//     3   4   5   6   7   8   9   10\n//                  ▲\n//                 mid = (3 + 10) >> 1 = 6\n//\n//   `>> 1` is a faster `Math.floor((a+b)/2)` and the idiomatic\n//   write-up interviewers expect.\nconst mid = (lo, hi) => (lo + hi) >> 1;\n\n\n// ────────────────────────────────────────────────────────────\n// 3. FIXED-LENGTH SLICE:  arr.slice(start, start + n)\n//    slice's 2nd arg is EXCLUSIVE → start + n yields n items.\n// ────────────────────────────────────────────────────────────\n//\n//   [10, 20, 30, 40, 50].slice(1, 1 + 3)\n//          ┌──────────────┐\n//          │   take 3     │\n//          ▼              ▼\n//   [10,  20, 30, 40,  50 ]   →   [20, 30, 40]\n//\n//   Shorthand for last n:\n//   [10, 20, 30, 40, 50].slice(-2)   →   [40, 50]\n\n\n// ────────────────────────────────────────────────────────────\n// 4. SLIDING WINDOW OF SIZE k:   k = r - l + 1\n// ────────────────────────────────────────────────────────────\n//\n//   arr = [2, 1, 5, 1, 3, 2]   k=3\n//          0  1  2  3  4  5\n//\n//         [────────]                sum=8    (l=0, r=2)\n//            [────────]             sum=7    -arr[0] +arr[3]\n//               [────────]   ★      sum=9    -arr[1] +arr[4]\n//                  [────────]       sum=6    -arr[2] +arr[5]\n//\n//   When r advances and length > k, shrink:   l = r - k + 1\n//   Element LEAVING the window:               arr[r - k]\n\n\n// ────────────────────────────────────────────────────────────\n// 5. CIRCULAR INDEXING:  ((i % n) + n) % n\n//    JS arr[-1] is undefined — NOT the last element.\n// ────────────────────────────────────────────────────────────\n//\n//   arr = [a, b, c, d]   n=4\n//          0  1  2  3\n//\n//   i = -1  →  ((-1 % 4) + 4) % 4 = 3  →  'd'   ← wraps left\n//   i =  5  →  (( 5 % 4) + 4) % 4 = 1  →  'b'   ← wraps right\n//\n//   The double modulo handles negative i (JS `%` keeps the sign\n//   of the dividend, so -1 % 4 === -1, not 3).\nconst circ = (arr, i) => arr[((i % arr.length) + arr.length) % arr.length];\n\n\n// ────────────────────────────────────────────────────────────\n// 6. NTH FROM END:  arr[arr.length - n]   (or arr.at(-n))\n// ────────────────────────────────────────────────────────────\n//\n//   arr = [a, b, c, d, e]    length=5\n//                       ▲\n//                       n=1  →  arr[5-1] = 'e'   (last)\n//                    ▲\n//                    n=2  →  arr[5-2] = 'd'\n//\n//   Off-by-one trap: n must be ≥ 1.\n//   arr[arr.length - 0] = arr[5] = undefined.",
+    "notes": [
+      "Inclusive length needs +1 because subtraction undercounts the left endpoint.",
+      "`(lo + hi) >> 1` is the idiomatic floor-divide for midpoint — interviewers expect it over `Math.floor((lo+hi)/2)`.",
+      "`slice(start, start + n)` gives exactly n items because slice's end is EXCLUSIVE — a frequent off-by-one source.",
+      "JS `%` keeps the sign of the dividend, so wrapping a negative index needs `((i % n) + n) % n`, not just `i % n`."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "How many elements are between indices l=2 and r=6, INCLUSIVE of both endpoints?",
+        "options": [
+          "4 — that's r - l",
+          "5 — that's r - l + 1",
+          "6 — that's r - l + 2",
+          "7 — that's r + 1"
+        ],
+        "answer": 1,
+        "explain": "Inclusive length is r - l + 1. The +1 counts the left endpoint that the subtraction would otherwise drop."
+      },
+      {
+        "q": "Binary search: what is the midpoint of lo=3 and hi=10 using `(lo + hi) >> 1`?",
+        "options": [
+          "6",
+          "6.5",
+          "7",
+          "13"
+        ],
+        "answer": 0,
+        "explain": "(3 + 10) >> 1 = 13 >> 1 = 6. Right-shift by 1 is integer divide by 2 (floor)."
+      },
+      {
+        "q": "You want a sub-array of exactly 4 elements starting at index 2. Which call?",
+        "options": [
+          "arr.slice(2, 4)",
+          "arr.slice(2, 5)",
+          "arr.slice(2, 2 + 4)",
+          "arr.slice(2, 2 + 4 - 1)"
+        ],
+        "answer": 2,
+        "explain": "slice's 2nd arg is EXCLUSIVE, so end = start + n gives exactly n items. arr.slice(2, 4) returns only 2 elements."
+      },
+      {
+        "q": "What does `arr[-1]` return in JavaScript when arr = [10, 20, 30]?",
+        "options": [
+          "30 — the last element, like Python",
+          "10 — wraps to the first element",
+          "undefined — JS arrays don't support negative bracket indices",
+          "ReferenceError"
+        ],
+        "answer": 2,
+        "explain": "JS array bracket access with a negative index is just a missing property lookup → undefined. Use `arr.at(-1)` for the Python-style behavior."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Count elements between l=2 and r=7 INCLUSIVE — fill in the arithmetic.",
+        "template": "const l = 2, r = 7;\nconst count = r - l + ___;\nconsole.log(count);",
+        "blanks": [
+          {
+            "answer": "1",
+            "hint": "the inclusive +1"
+          }
+        ],
+        "expectedOutput": "6"
+      },
+      {
+        "prompt": "Take exactly 3 elements from index 1 using slice — fill in the second arg.",
+        "template": "const arr = [10, 20, 30, 40, 50];\nconst start = 1, n = 3;\nconsole.log(JSON.stringify(arr.slice(start, start + ___)));",
+        "blanks": [
+          {
+            "answer": "n",
+            "hint": "end is exclusive — add n to start"
+          }
+        ],
+        "expectedOutput": "[20,30,40]"
+      },
+      {
+        "prompt": "Wrap a possibly-negative index into a circular array — fill in the modulo dance.",
+        "template": "const arr = ['a', 'b', 'c', 'd'];\nconst n = arr.length;\nconst i = -1;\nconst safeIdx = ((i % n) + n) % ___;\nconsole.log(arr[safeIdx]);",
+        "blanks": [
+          {
+            "answer": "n",
+            "hint": "second modulo by n folds the result back into [0, n)"
+          }
+        ],
+        "expectedOutput": "d"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `maxWindowSum(arr, k)` that returns the maximum sum over any sliding window of size k, using r - l + 1 = k as the window-length invariant. Log `maxWindowSum([2, 1, 5, 1, 3, 2], 3)`.",
+    "expectedOutput": "9",
+    "canonical": "function maxWindowSum(arr, k) {\n  let sum = 0;\n  for (let i = 0; i < k; i++) sum += arr[i];\n  let best = sum;\n  // r is the new right edge; window covers [r - k + 1, r] inclusive,\n  // so the element dropping off the left is arr[r - k].\n  for (let r = k; r < arr.length; r++) {\n    sum += arr[r] - arr[r - k];\n    if (sum > best) best = sum;\n  }\n  return best;\n}\nconsole.log(maxWindowSum([2, 1, 5, 1, 3, 2], 3));",
+    "hints": [
+      "Seed `sum` with the first k elements, then slide.",
+      "When the right pointer advances to r, the element leaving the window is arr[r - k] (because window length k = r - l + 1 means l = r - k + 1)."
+    ]
+  }
+}

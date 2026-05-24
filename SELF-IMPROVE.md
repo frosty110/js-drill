@@ -8,8 +8,8 @@
 
 ## Next iteration
 - **Suggested mode:** ship
-- **Signal pointing there:** iter 21 was a user-redirect ship that paused Cluster 1 Tier 2. The queued artifact at [iter-artifacts/iter-19-gap-list.md](iter-artifacts/iter-19-gap-list.md) Cluster 1 Tier 2 (7 lessons: `s-matrix-bounds`, `s-dfs-recursive-template`, `s-dfs-iter-template`, `s-ll-node-shape`, `s-binsearch-template`, `s-union-find`, `s-grid-init`) is still the queued ship — same parallel-author pattern that worked first-shot in iter 20. Tier 2 closes BS-02 fully.
-- **Veto condition:** skip Tier 2 if (a) user surfaces another in-flight friction (BS-11 chip + BS-12 mechanics-modal merge are both candidate ships), (b) user redirects to Cluster 4 (Modern Syntax, 5 lessons) or Cluster 5 (Hash/Set ergonomics, 3 lessons), or (c) rolling-6-window would exceed ship quota (current count: iters 18=audit, 19=frame, 20=ship, 21=ship → 2 ships in last 4, well within ≥3-per-6 floor).
+- **Signal pointing there:** iter 22 was another user-redirect ship (s-index-math). Cluster 1 Tier 2 still queued (7 lessons: `s-matrix-bounds`, `s-dfs-recursive-template`, `s-dfs-iter-template`, `s-ll-node-shape`, `s-binsearch-template`, `s-union-find`, `s-grid-init`). Same parallel-author pattern that worked first-shot in iter 20. Tier 2 closes BS-02 fully.
+- **Veto condition:** skip Tier 2 if (a) user surfaces another in-flight friction (BS-11 strict-pass chip and BS-13 retro-add-ASCII-to-existing-lessons are both candidate ships), (b) user redirects to Cluster 4 (Modern Syntax, 5 lessons) or Cluster 5 (Hash/Set ergonomics, 3 lessons), or (c) rolling-6-window would exceed ship quota (current count: iters 18=audit, 19=frame, 20=ship, 21=ship, 22=ship → 3 ships in last 5, room for one more before forced non-ship at iter 24).
 
 ## Current focus
 - **Status: ACTIVE** — syllabus completeness lens, Cluster 1 of the iter-19 gap list. Tier 1 shipped iter 20 (149 lessons, +19 exercises). Tier 2 queued for iter 21.
@@ -26,6 +26,7 @@
 | 19 | frame | Redesigned SKILL.md (mode rotation + fresh-eyes subagent + research lens + nominate-next-mode), restructured SELF-IMPROVE.md (Next iteration, Mode ledger, Blind spots ledger, Last-touched index, External references), spawned 3 fresh-eyes subagents producing `iter-artifacts/iter-19-gap-list.md` |
 | 20 | ship | Cluster 1 Tier 1: 6 boilerplate-as-syntax lessons in Algorithms section via 3 parallel author agents (s-matrix-neighbors, s-bfs-template, s-tree-traversals, s-heap-ops, s-ll-traversal, s-ll-fast-slow). Validator 336→355 (+19 exercises, 0 fail). New durable probe `algorithms-section-expansion.js` (29/29). Regressions clean on welcome-banner-dynamic + sidebar-path-order. New helper `tools/validate-files.js` for in-isolation lesson validation |
 | 21 | ship | [product/fix] tab-switch state cache (BS-12 close): user-redirect from queued Tier 2 to fix in-flight friction — switching to Reference mid-attempt was wiping L1 picks / L2 fills / L3 typing. Added `inProgressCache` keyed on lessonId, cleared in selectLesson. L1 replays locked-state visuals; L2 desktop+mobile restore input values via input listeners + shared array refs; L3 syncs cm.on('change'). New durable probe `tab-switch-preserves-state.js` (10/10). Regressions clean on sr-l2-holds-bucket, sr-reveal-demotes-bucket, mock-interview-loads, cta-injects-on-l3-pass |
+| 22 | ship | [product/content] [engineering/docs] `s-index-math` lesson + dual-coding strategy doc: user-redirect — "I find r-l+1 indexing challenging" was unmet by any single existing lesson. New Syntax/Algorithms lesson covers 6 idioms (inclusive interval length, midpoint, fixed-length slice, sliding window, circular indexing, nth-from-end) with full ASCII diagrams embedded in Reference per user's visual-learner request. First lesson to systematically use dual coding — new `docs/learning-strategies/dual-coding.md` documents the principle and points to BS-13 for retro-adding diagrams to other high-traffic lessons. Validator 355→359 (+4 exercises, 0 fail). algorithms-section-expansion probe extended (now 33/33) |
 
 ## Blind spots ledger
 *(things the loop has historically not questioned; promote to Current focus or Parking lot when actioned)*
@@ -42,6 +43,7 @@
 - **[BS-10] Storage backend (localStorage-only)** — cross-device sync would be a strong win for the 80%-phone profile if scoped tight (anonymous-first, opt-in login). User flagged iter 19 discussion; deferred for now to ship the syllabus work first. *Seeded iter 19; queue for a future frame iter to decide scope before any code.*
 - **[BS-11] "I passed but nothing saved" UX gap** — user-reported 2026-05-23 after iter 20. Investigation via CDP probes confirmed localStorage save/load works correctly on both localhost and the live Pages URL. Actual cause: pass conditions are strict — L1 requires ALL questions correct in one session (any wrong click locks that question; user must hit Retry), L2 requires every exercise's every blank correct, L3 requires exact output match. Navigation state (lastLessonId, lastTab, sidebarTrack, welcomed) saves on nav so the user sees "something" persisted, but `progress` stays empty until a full pass fires `markPassed()`. The single feedback message "Some answers were off — hit Retry to start over" is the only signal, and it's easy to miss when individual questions show "✓ Correct" mid-session. *Candidate product/ux fixes: (a) persistent per-session score chip ("2/3 correct — Retry for full pass"); (b) post-attempt summary surface; (c) loosen strict-pass to ≥N% with a note that the SR bucket still requires full mastery; (d) different copy on the "✓ Correct" per-question feedback to make clear it's per-question, not the lesson pass. Queue for iter 22+ as a [product/ux] candidate — discuss with user before implementing since (c) touches the SR mechanism's core assumption.*
 - **[BS-12] Tab-switch wipes in-flight work** — user-reported 2026-05-23 mid-iter-21 investigation. Switching from L1/L2/L3 to Reference and back rebuilt the renderX DOM from scratch, losing any clicked L1 answers, typed L2 blanks, or L3 editor code. Root cause: each `renderX` initialized local state fresh (`localState = qs.map(...)`, `exerciseState = exercises.map(...)`, fresh CodeMirror instance) with no persistence layer between renders. *Closed iter 21 by adding `inProgressCache` keyed on `lesson.id`, cleared in `selectLesson` when lesson changes, restored on every renderX. Probe `tab-switch-preserves-state.js` 10/10 verifies all three tiers + cross-lesson cache clear.*
+- **[BS-13] Visual encoding under-exploited across existing lessons** — user-surfaced 2026-05-23 during iter 22 (visual-learner request). Most existing lessons rely on code-only references, but structural concepts (indexing, traversal, window-sliding, neighbor offsets, parent/child math, recursion order) memorize faster with ASCII diagrams alongside the formula. `s-index-math` (iter 22) is the proof-of-concept; new `docs/learning-strategies/dual-coding.md` formalizes the principle. *Candidate retro-add targets in priority order: binary-search, p-bfs (tree level-order trick), p-min-window (sliding window animation), p-islands (matrix DFS), p-merge-two-sorted (dummy-head shape), p-reverse-list (pointer hop), p-min-heap (sift-up/sift-down trace), s-iter-protocol (yield flow). Each is a 5-15 line diagram added to the lesson's `reference.code` string — atomically commitable. Queue as a [product/content] audit-and-add ship for iter 23+ once Cluster 1 Tier 2 lands, OR consume in parallel as a separate ship if user flags more friction.*
 
 ## Last-touched index
 *(forces audit-mode selection to be data-driven; bumped at Step 6 of every iteration)*
@@ -49,8 +51,9 @@
 | Area | Iter last touched |
 |---|---|
 | Skill / SELF-IMPROVE structure | 19 |
-| Algorithms section (boilerplate-as-syntax expansion) | 20 |
+| Algorithms section (boilerplate-as-syntax expansion) | 22 (s-index-math + ASCII diagrams) |
 | L1 / L2 / L3 render state cache (BS-12 fix) | 21 |
+| Learning-strategies docs (dual-coding) | 22 |
 | L3 surface / CTA injection | 17 |
 | Cheatsheet | 15 |
 | Applied-track surfaces (pills, stats panel) | 14 |
@@ -112,6 +115,35 @@
   short.
 
 ## Iteration log (newest first, keep last 10)
+
+### 2026-05-23 — iter 22 — Ship mode: s-index-math + dual-coding strategy doc
+User-redirect ship — "I find r-l+1 indexing challenging, is there a
+specific lesson?" exposed a gap unmet by any existing single lesson.
+Survey: s-arr-index (basic indexing) + binary-search (algorithm-
+specific midpoint math) + s-heap-ops (tree-specific parent/child) +
+s-matrix-neighbors (grid-specific offsets) collectively touched
+fragments, but the linear-interval arithmetic (r-l+1, midpoint,
+length-N slice, circular modulo) was never extracted as standalone
+syntax. Authored `s-index-math` in Algorithms covering 6 idioms with
+worked numeric examples. User followup mid-author: "Can you add ASCII
+images for visual learners?" — pivoted the Reference from comment-
+style to fully diagrammed (arrows, box-drawing chars, indexed
+sample arrays) with each idiom getting its own visual block. Per
+SKILL.md strategy-doc reciprocity, this is the first systematic use
+of dual coding in a lesson, so created `docs/learning-strategies/
+dual-coding.md` (Paivio 1971 + Mayer 2009 grounding) and promoted
+dual coding from the parking lot to active strategies in the README.
+Added BS-13 to track retro-adding ASCII to other structural lessons
+(binary-search, p-bfs, p-min-window, p-islands, p-merge-two-sorted,
+p-reverse-list, p-min-heap, s-iter-protocol). Single-author flow
+(no subagent — one lesson with bespoke ASCII calligraphy doesn't
+parallelize). Validator 355→359 (+4 exercises, 0 fail). Extended
+algorithms-section-expansion probe to 33/33. **Learning:** two
+back-to-back user-redirect ships (iter 21 BS-12, iter 22 BS-13)
+validates the SKILL.md veto clause as load-bearing — the queued
+artifact (Tier 2) is patient capital, but real-drilling friction
+trumps it every time. The directive should sharpen: when user
+ships pile up against artifact ships, lean into the friction signal.
 
 ### 2026-05-23 — iter 21 — Ship mode: tab-switch state cache closes BS-12
 User-redirect ship — paused queued Cluster 1 Tier 2 to fix user-
@@ -318,36 +350,12 @@ probes still pass. **Learning:** post-iter-12-crash-fix, mock-related
 iterations get cheap traction — the surface was broken so long that
 several small wins are still on the table without invention.
 
-### 2026-05-23 — iter 12 — Mock Interview was crashing (null-deref) — fixed
-Desktop survey discovered Mock Interview was completely broken: clicking
-the Mock button filled the lesson shell with "Could not load lesson:
-Cannot read properties of null (reading 'addEventListener')". Root
-cause: `renderL3` unconditionally wired the `[data-action="hint"]`
-button at line 1657, but the hint button is omitted from the markup
-when `isMock`. The adjacent diff and reveal buttons were properly
-null-guarded; hint was the one that slipped through. PROFILE.md success
-criterion #3 ("Mock interview personal-bests trend down") was literally
-untestable while this bug existed — and prior iterations missed it
-because no probe ever started a mock. Fix: match the diff/reveal guard
-pattern with a single `if (hintBtn) { ... }` wrapper. Bonus tooling
-fix: `tools/cdp/lib.js` reload() now passes `ignoreCache: true` —
-without this, the local server's no-cache-headers + Chrome's heuristic
-caching meant probes were testing stale app.js between runs. Validator
-336/0; new durable probe `tools/cdp/mock-interview-loads.js` (9/9)
-covers start (no crash, banner + end-mock + drill editor present,
-hint button absent), pass (bestTimes recorded, mock cleared), and
-cleanup (hint button reappears after end). All 6 prior probes still
-pass. **Learning:** the loop's value-add over the user is finding
-bugs in features the user might not exercise often. A "least-touched"
-lens (which PROFILE.md success criterion hasn't been improved?) is a
-good way to surface those.
-
-*(iters 1–11 trimmed to keep the log at 10 entries — see git history:
+*(iters 1–12 trimmed to keep the log at 10 entries — see git history:
 `1903c4e` iter 1; `c02b928` iter 2; `5e18e9a` iter 3; `0c3e61d` iter 4;
 `4eaa3c6` iter 5; `d2877d7` iter 6; `8465816` iter 7; `dc41586` iter 8;
 `b65df72` iter 9; `7728e0c` iter 10 welcome banner refresh + parking-lot
-curation — dynamic count + 3-track pitch; `56068c7` iter 11 sidebar
-sort by STARTER_PATH index in path mode + data-lesson-id affordances.)*
+curation; `56068c7` iter 11 sidebar sort by STARTER_PATH; `31ba22b`
+iter 12 Mock Interview null-deref fix + ignoreCache reload.)*
 
 ## Hypotheses parking lot
 *(re-audited every 5 iters; last curated: iter 10)*

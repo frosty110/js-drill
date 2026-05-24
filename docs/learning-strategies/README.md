@@ -63,12 +63,12 @@ Books, papers, or articles. Keep terse — we're not writing a literature review
 - [Spaced repetition](spaced-repetition.md) — the 1d→30d intervals
 - [Desirable difficulty](desirable-difficulty.md) — calibrating friction to device + recall stage
 - [Interleaving](interleaving.md) — mixing idioms across topics (Mechanics modal, Today's plan, Mock)
+- [Dual coding](dual-coding.md) — ASCII diagrams alongside code (seeded by `s-index-math`)
 
 ## Strategies to add when relevant
 *(parking lot — the loop should pick from here when a feature is a fit)*
 
 - Elaboration (the "why" of L1 explanations)
-- Dual coding (visual + verbal — could affect Reference layout)
 - Chunking (canonical-snippet sizing)
 - Generation effect (producing > recognizing)
 - Testing effect (the act of being tested cements memory)

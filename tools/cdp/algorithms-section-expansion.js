@@ -12,6 +12,7 @@ const NEW_LESSONS = [
   's-ll-traversal',
   's-ll-fast-slow',
   's-heap-ops',
+  's-index-math',
 ];
 
 const URL = process.argv[2] || 'http://localhost:8765/';

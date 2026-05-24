@@ -1245,12 +1245,34 @@ function renderSidebar() {
 
     const sections = [...new Set(lessons.map(l => l.section))];
     for (const section of sections) {
+      const sectionLessons = lessons.filter(l => l.section === section);
+      // iter 40: per-section mastery progress. Counts only full (non-stub)
+      // lessons in this section that are currently visible (respects path-
+      // mode + search + hide-mastered filters), so the bar reflects the
+      // user's view rather than the global section size. See
+      // ideas-by-category.md § Metacognition & Visibility → "Section-level
+      // progress bar in sidebar".
+      const fullCount = sectionLessons.filter(l => l.status === 'full').length;
+      const masteredCount = sectionLessons.filter(l =>
+        l.status === 'full' && lessonOverallStatus(l.id) === 'mastered'
+      ).length;
+      const pct = fullCount === 0 ? 0 : Math.round((masteredCount / fullCount) * 100);
+
       const secEl = document.createElement('div');
       secEl.className = 'section-header';
-      secEl.textContent = section;
+      if (fullCount > 0) {
+        secEl.innerHTML = `
+          <span class="section-title">${escapeHtml(section)}</span>
+          <span class="section-progress" title="${masteredCount} of ${fullCount} mastered (${pct}%)">
+            <span class="section-progress-bar"><span class="section-progress-fill" style="width:${pct}%"></span></span>
+            <span class="section-progress-count">${masteredCount}/${fullCount}</span>
+          </span>
+        `;
+      } else {
+        secEl.textContent = section;
+      }
       nav.appendChild(secEl);
 
-      const sectionLessons = lessons.filter(l => l.section === section);
       for (const lesson of sectionLessons) {
         visibleCount++;
         const link = document.createElement('div');

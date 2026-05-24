@@ -206,7 +206,7 @@ The convention:
 
 **Parking-lot ideas:**
 - **[iter 38 — USER-NAMED GAP] Dashboard / progress visibility (HIGH PRIORITY)** — user surfaced this iter 38 as one of three explicit gaps. Concrete candidates (pick one per ship; ordered argmax(impact)):
-  - **Section-level progress bar in sidebar** — show "3 of 9 mastered" per section in section headers, with a thin bar. Today the user has to count dots to know section completion. High visibility, motivation boost, mobile-friendly.
+  - **Section-level progress bar in sidebar** — **SHIPPED iter 40.** Each section header now shows a thin 40px × 4px emerald-fill bar + monospace "N/M" count badge. Counts reflect the user's CURRENT view (respects path-mode + search + hide-mastered filters), so the bar is contextual. Mobile-friendly (header row stays single-line via flex layout; bar shrinks gracefully). Mobile probe `tools/cdp/section-progress-bar.js` (4 assertions).
   - **Mastery progression graph** — over time, # of mastered lessons trending up; per-week / per-month. Closes PROFILE.md success criterion line 66 ("mastered lessons stay mastered") with a temporal view at the curriculum-grain (vs sparkline's lesson-grain).
   - **"Time invested" panel** — total drill time, time per section, time per track. Many users want to feel the accumulation; the current dashboard shows counts but not effort.
   - **Weak-spot dashboard** — surface all lessons in the weak-spot tracker as a single view with "drill this now" affordances. Today weak-spots are scattered across the sidebar; a dedicated view is faster on mobile.

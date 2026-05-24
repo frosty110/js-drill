@@ -696,6 +696,93 @@ function renderSparkline(lessonId) {
 }
 // Expose for E2E probes / DevTools toggling.
 window.__renderSparkline = renderSparkline;
+
+// iter 47: per-section retention aggregation for the Stats modal. Walks every
+// lesson's state.history events, bins by day across lookbackDays, returns
+// sorted rows (worst retention first → drives "what needs attention" UX).
+// Sections with zero activity in window are excluded. See ideas-by-category.md
+// § Metacognition & Visibility → Section-level retention sparkline.
+function _aggregateSectionRetention(lookbackDays = 14) {
+  const now = Date.now();
+  const dayMs = 86400000;
+  const cutoff = now - lookbackDays * dayMs;
+  // Group lessons by section.
+  const bySection = new Map();
+  for (const l of CURRICULUM) {
+    if (l.status !== 'full') continue;
+    if (!bySection.has(l.section)) bySection.set(l.section, []);
+    bySection.get(l.section).push(l);
+  }
+  const rows = [];
+  for (const [sectionName, lessons] of bySection) {
+    const byDay = Array.from({ length: lookbackDays }, () => ({ passes: 0, misses: 0 }));
+    let totalPass = 0, totalMiss = 0;
+    for (const lesson of lessons) {
+      const events = state.history?.[lesson.id] || [];
+      for (const e of events) {
+        if (e.at < cutoff) continue;
+        const daysAgo = Math.floor((now - e.at) / dayMs);
+        if (daysAgo >= lookbackDays || daysAgo < 0) continue;
+        const idx = lookbackDays - 1 - daysAgo;
+        if (e.event === 'L1-miss') { byDay[idx].misses++; totalMiss++; }
+        else if (e.event === 'L1-pass' || e.event === 'L2-pass' || e.event === 'L3-pass') {
+          byDay[idx].passes++; totalPass++;
+        }
+      }
+    }
+    if (totalPass === 0 && totalMiss === 0) continue;
+    rows.push({ section: sectionName, lessons, byDay, totalPass, totalMiss });
+  }
+  // Sort: worst retention (highest miss-ratio) first; tiebreak by most recent activity.
+  rows.sort((a, b) => {
+    const ra = a.totalMiss / Math.max(1, a.totalPass + a.totalMiss);
+    const rb = b.totalMiss / Math.max(1, b.totalPass + b.totalMiss);
+    if (ra !== rb) return rb - ra;
+    return (b.totalPass + b.totalMiss) - (a.totalPass + a.totalMiss);
+  });
+  return rows;
+}
+
+// Renders the section-retention block for the Stats modal. Returns HTML string
+// or '' when no qualifying sections (avoid empty-section noise in Stats).
+function _renderSectionRetentionBlock(lookbackDays = 14) {
+  const rows = _aggregateSectionRetention(lookbackDays);
+  if (rows.length === 0) return '';
+  const maxBin = Math.max(1, ...rows.flatMap(r => r.byDay.map(b => b.passes + b.misses)));
+  const rowHtml = rows.map(r => {
+    const bars = r.byDay.map((b, i) => {
+      const total = b.passes + b.misses;
+      const daysAgo = lookbackDays - 1 - i;
+      if (total === 0) {
+        return `<div class="sec-ret-bar sec-ret-bar-empty" title="${daysAgo}d ago: no activity"></div>`;
+      }
+      const pct = Math.max(15, Math.round((total / maxBin) * 100));
+      const tone = b.misses === 0 ? 'pass' : b.passes === 0 ? 'miss' : 'mixed';
+      return `<div class="sec-ret-bar sec-ret-bar-${tone}" style="height:${pct}%;" title="${daysAgo}d ago: ${b.passes} passes, ${b.misses} misses"></div>`;
+    }).join('');
+    const missRatio = r.totalMiss / Math.max(1, r.totalPass + r.totalMiss);
+    const ratioTone = missRatio === 0 ? 'good' : missRatio >= 0.3 ? 'warn' : 'mid';
+    return `
+      <div class="sec-ret-row">
+        <div class="sec-ret-name" title="${r.lessons.length} lessons in this section">${escapeHtml(r.section)}</div>
+        <div class="sec-ret-spark" title="Last ${lookbackDays} days — newest right">${bars}</div>
+        <div class="sec-ret-count sec-ret-count-${ratioTone}">${r.totalPass}<span class="sec-ret-sep">·</span>${r.totalMiss > 0 ? r.totalMiss + 'M' : '0M'}</div>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="sec-ret-block">
+      <div class="sec-ret-title">Section retention <span class="sec-ret-sub">last ${lookbackDays} days — weakest first</span></div>
+      ${rowHtml}
+      <div class="sec-ret-legend">
+        <span class="sec-ret-legend-item"><span class="sec-ret-swatch sec-ret-bar-pass"></span>all pass</span>
+        <span class="sec-ret-legend-item"><span class="sec-ret-swatch sec-ret-bar-mixed"></span>mixed</span>
+        <span class="sec-ret-legend-item"><span class="sec-ret-swatch sec-ret-bar-miss"></span>only miss</span>
+        <span class="sec-ret-legend-item"><span class="sec-ret-swatch sec-ret-bar-empty"></span>no activity</span>
+      </div>
+    </div>
+  `;
+}
 // ---------- Cheatsheet modal (in-app quick reference) ----------
 // Mirrors the Mechanics modal pattern: a scrollable overlay you open over
 // whatever lesson you're on, browse the canonical code for any lesson, then
@@ -3813,6 +3900,7 @@ async function init() {
           <div style="color: #fbcfe8; font-size: 18px; font-weight: 600;">${avgMockMs ? formatTime(avgMockMs) : '—'}</div>
         </div>
       </div>
+      ${_renderSectionRetentionBlock(14)}
       ${bestTimesEntries.length ? `
         <div style="margin-top: 18px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Mock interview personal bests</div>

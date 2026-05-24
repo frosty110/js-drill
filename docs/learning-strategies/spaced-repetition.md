@@ -18,6 +18,17 @@ specifically toward lessons their memory is currently weakest on.
 
 - **1d → 3d → 7d → 14d → 30d interval ladder.** L3 pass on a mastered
   lesson advances one bucket; L3 pass at the top bucket holds at 30d.
+- **Section retention block (iter 47).** Stats modal now aggregates the
+  per-lesson sparkline events (iter 32-33) into a per-section 14-day
+  view, sorted with weakest-retention (highest miss-ratio) first so the
+  user lands directly on "what needs attention." Each row shows the
+  section name + a compact 14-bar sparkline (1 bar per day, height =
+  total events that day, color = green all-pass / amber mixed / red
+  only-miss / dark empty) + a `Npass · Nmiss` count toned by miss-ratio
+  (green 0%, amber 0-30%, red ≥30%). Sections with zero activity in
+  window are excluded — keeps the view focused on actually-drilled
+  material. First per-section temporal surface; complements iter-40's
+  section progress bar (which shows mastery breadth, not retention).
 - **Hint-frequency trend tracking (iter 46).** Hint-button clicks and
   🎯 critical-lines clicks now write `hint-tier-N` / `critical-lines-used`
   events into `state.history` alongside the existing L1/L2/L3-pass and

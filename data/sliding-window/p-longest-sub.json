@@ -7,37 +7,43 @@
   "description": "Sliding window with a Set: expand the right edge, shrink the left while a duplicate sits in the window. O(n) time.",
   "mechanics": ["sliding-window", "set-dedup"],
   "conversation": {
-    "intro": "How an interview about this problem would actually play out. Each section is what you'd say (or ask) before writing the next chunk of code. Tap a section to expand.",
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
     "sections": [
       {
         "title": "1. Restate & clarify",
         "prompt": "Before touching code — pin down the inputs.",
-        "reveal": "I'd start by repeating the prompt back: \"Longest substring of `s` with no repeating characters — by substring you mean contiguous, right? (As opposed to subsequence.)\"\n\nThen the cheap clarifying questions:\n• Character set — ASCII only, or full Unicode? (Affects the space bound.)\n• Empty string — return 0?\n• Case sensitivity — is \"aA\" length 2 or 1?\n• What gets returned — the length, or the substring itself? (The function name says length, but worth confirming.)\n\nThese take 20 seconds and they signal that you don't just dive in."
+        "say": "\"Let me make sure I have this right: longest substring of `s` with no repeating characters — by substring you mean contiguous, right? (As opposed to subsequence.)\"\n\nThen a few quick clarifying questions:\n• Character set — ASCII only, or full Unicode?\n• Empty string — return 0?\n• Case sensitivity — is \"aA\" length 2 or 1?\n• Return value — just the length, or the substring itself?",
+        "why": "Takes 20 seconds and signals that you don't dive into code blind. The character-set question matters: it sets the space bound. The contiguous-vs-subsequence question matters even more: if you misread it as subsequence, you'd build a completely different (and harder) solution."
       },
       {
         "title": "2. Brute force first (out loud)",
         "prompt": "Name the obvious O(n²) solution before you discard it.",
-        "reveal": "\"The brute force is: for every starting index `i`, walk forward with `j` and track seen characters in a Set. The moment you hit a repeat, record `j - i` and move `i` forward. That's O(n²) time, O(n) space.\"\n\nWhy say this out loud? Two reasons:\n1. It proves you understand the problem before optimizing.\n2. It plants the seed for the real solution — the brute force is doing redundant work, restarting the Set on every `i`. The optimization is just: don't restart, slide instead."
+        "say": "\"The brute force is: for every starting index `i`, walk forward with `j` and track seen characters in a Set. The moment you hit a repeat, record `j - i` and move `i` forward. That's O(n²) time, O(n) space — let me see if we can do better.\"",
+        "why": "Two reasons to name it out loud. (1) It proves you understand the problem before optimizing — interviewers worry about candidates who pattern-match straight to the clever answer. (2) It plants the seed for the real solution: the brute force is restarting the Set on every `i`. The optimization is literally just \"don't restart — slide.\""
       },
       {
         "title": "3. Spot the pattern",
         "prompt": "What signal in the problem points to sliding window?",
-        "reveal": "\"Longest contiguous X satisfying a property\" is the canonical sliding-window trigger. Two more signals confirm it here:\n\n• The property (\"no repeats\") is monotone in window shrinkage — if `[l..r]` has a duplicate, removing chars from the left can only fix it, never break it. That means I never have to backtrack `r` once I move it forward.\n• I only need O(1) membership checks per char, which a hash set gives me.\n\nSo: one pass with `r`, a Set tracking what's in the window, and `l` advances only when forced. Each char enters and leaves the Set at most once → O(n)."
+        "say": "\"'Longest contiguous X with property Y' is the canonical sliding-window trigger. And here the property — no repeats — is monotone under shrinkage: if `[l..r]` has a duplicate, removing chars from the left can only fix it, never break it. So once I move `r` forward, I never have to back up. One pass with `r`, a Set tracking what's in the window, and `l` only advances when forced.\"",
+        "why": "Naming the pattern *and* the property that makes the pattern apply is the move. \"Sliding window\" alone is a guess; \"sliding window because the property is monotone in shrinkage\" is a derivation. Interviewers grade on the second."
       },
       {
         "title": "4. Walk a small example",
         "prompt": "Trace \"abcabcbb\" before writing the loop.",
-        "reveal": "I'd narrate this on the whiteboard:\n\n  r=0 'a' → seen={a},   window [0,0], best=1\n  r=1 'b' → seen={a,b}, window [0,1], best=2\n  r=2 'c' → seen={a,b,c}, window [0,2], best=3\n  r=3 'a' → duplicate! shrink: delete s[0]='a', l=1. seen={b,c}. add 'a'. window [1,3], best=3\n  r=4 'b' → duplicate! shrink: delete s[1]='b', l=2. seen={c,a}. add 'b'. window [2,4], best=3\n  r=5 'c' → duplicate! shrink: delete s[2]='c', l=3. seen={a,b}. add 'c'. window [3,5], best=3\n  r=6 'b' → duplicate! shrink twice: delete s[3]='a' then s[4]='b'. l=5. add 'b'. window [5,6], best=3\n  r=7 'b' → duplicate! shrink: delete s[5]='c'... wait, no — delete s[5]='c'? Let me check. Actually here l=5, s[5]='c'. Delete 'c', l=6. Still duplicate ('b' at s[6]). Delete s[6]='b', l=7. add 'b'. window [7,7], best=3.\n\nReturn 3. The trace also exposes the subtle bug: delete s[l] **before** l++, otherwise you delete the wrong char."
+        "say": "\"Let me trace through 'abcabcbb' to make sure my model is right:\"\n\n  r=0 'a' → seen={a},     window [0,0], best=1\n  r=1 'b' → seen={a,b},   window [0,1], best=2\n  r=2 'c' → seen={a,b,c}, window [0,2], best=3\n  r=3 'a' → duplicate! delete s[0]='a', l=1. seen={b,c}. add 'a'. window [1,3], best=3\n  r=4 'b' → duplicate! delete s[1]='b', l=2. seen={c,a}. add 'b'. window [2,4], best=3\n  r=5 'c' → duplicate! delete s[2]='c', l=3. seen={a,b}. add 'c'. window [3,5], best=3\n  r=6 'b' → duplicate! delete s[3]='a', l=4. still dup. delete s[4]='b', l=5. add 'b'. window [5,6], best=3\n  r=7 'b' → duplicate! delete s[5]='c', l=6. still dup. delete s[6]='b', l=7. add 'b'. window [7,7], best=3\n\n\"Return 3.\"",
+        "why": "Tracing exposes off-by-ones before they hit the code. It also surfaces the subtle bug — you have to delete `s[l]` *before* you increment `l`, otherwise you delete the wrong character. Catching that on the whiteboard is much cheaper than catching it after the interviewer points out failing tests."
       },
       {
         "title": "5. Edge cases to mention",
         "prompt": "What inputs would trip up a careless implementation?",
-        "reveal": "Before I declare it done, I'd call these out:\n\n• Empty string → loop doesn't execute, `best` stays 0. ✓\n• Single char → r=0, no duplicate, best=1. ✓\n• All same char (\"aaaa\") → each new `r` triggers a full shrink, but each char still enters/exits the set once → O(n). best=1.\n• All unique (\"abcdef\") → `l` never moves, best=n.\n• Unicode/surrogate pairs — if the input has emoji, indexing `s[r]` gives you UTF-16 code units, not codepoints. Worth flagging to the interviewer; the fix is `[...s]` to iterate by codepoint."
+        "say": "\"Before I declare it done, let me think about edges:\n• Empty string → loop doesn't execute, best=0. ✓\n• Single char → no duplicate, best=1. ✓\n• All same char (\"aaaa\") → each new `r` triggers a full shrink, but every char still enters and exits the set exactly once, so still O(n). best=1.\n• All unique (\"abcdef\") → `l` never moves, best=n.\n• Unicode/emoji — `s[r]` indexes UTF-16 code units, not codepoints, so a single emoji could read as two halves. Worth flagging; the fix is `[...s]` to iterate by codepoint.\"",
+        "why": "Edge-case enumeration is the difference between \"works on the example\" and \"production-ready\". The Unicode call-out in particular shows depth — most candidates never think about it, and the interviewer either nods (impressed) or says \"good catch but assume ASCII for now\". Either outcome is good."
       },
       {
         "title": "6. Complexity & wrap-up",
         "prompt": "How would you defend the complexity claim?",
-        "reveal": "**Time: O(n).** Each character is added to `seen` at most once and removed at most once. So even though there's a nested `while`, the total work across the whole outer loop is bounded by 2n.\n\n**Space: O(min(n, |alphabet|)).** The Set never holds more than the alphabet size — 128 for ASCII, much smaller in practice. For arbitrary Unicode it's bounded by `n`.\n\nIf asked to extend: \"At most K distinct chars\" → swap the Set for a count-Map and shrink while `map.size > K`. Same template, different shrink condition. That generalization is the reason we used `while` for the shrink instead of `if`."
+        "say": "\"Time is O(n) — even with the nested `while`, each character enters `seen` at most once and is removed at most once, so total work across the outer loop is bounded by 2n.\n\nSpace is O(min(n, |alphabet|)) — the Set never holds more than the alphabet size, which is 128 for ASCII, much smaller in practice.\n\nIf you wanted to extend to 'at most K distinct chars,' I'd swap the Set for a count-Map and shrink while `map.size > K`. Same template, different shrink condition.\"",
+        "why": "The amortized-analysis argument (\"each char enters/exits once\") is the right defense against an interviewer who pushes back with \"but you have a nested loop, isn't that O(n²)?\". The extension to 'at most K distinct' is unprompted bonus material that demonstrates you see the template, not just this one problem — that's how the same pattern shows up in Minimum Window Substring, Longest Substring with At Most K Distinct, etc."
       }
     ]
   },

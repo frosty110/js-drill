@@ -106,7 +106,10 @@ async function ensureMechanicIndex() {
 const LS_KEY = 'jsdrill.progress.v1';
 const state = {
   currentLessonId: null,
-  currentTab: 'reference',
+  // 'auto' = resolve to the first available tab once content loads
+  // (Conversation if the lesson has one, else Reference). selectLesson and
+  // boot both leave this as 'auto' unless lastTab from localStorage overrides.
+  currentTab: 'auto',
   progress: {},   // { lessonId: { L1: 'passed', L2: 'passed', L3: 'passed' } }
   searchQuery: '',
   streak: 0,      // consecutive lessons mastered in this run (resets on reload)
@@ -623,12 +626,13 @@ function updateLessonHeaderInPlace() {
   const lesson = findLesson(state.currentLessonId);
   if (!lesson) return;
   const overall = lessonOverallStatus(lesson.id);
-  // Tabs: each .tab-btn — append ✓ to the label if its level passed
+  // Tabs: each .tab-btn — append ✓ to the label if its level passed.
+  // Reads the level off data-level so the optional Conversation tab doesn't
+  // shift the index zip.
   const tabs = document.querySelectorAll('#lesson-shell .tab-btn');
-  const levels = ['reference', 'L1', 'L2', 'L3'];
-  tabs.forEach((btn, i) => {
-    const lv = levels[i];
-    if (lv === 'reference') return;
+  tabs.forEach(btn => {
+    const lv = btn.dataset.level;
+    if (lv !== 'L1' && lv !== 'L2' && lv !== 'L3') return;
     const passed = levelStatus(lesson.id, lv) === 'passed';
     const baseLabel = btn.textContent.replace(/\s*✓\s*$/, '').trim();
     btn.innerHTML = passed ? `${baseLabel} <span class="text-emerald-400 ml-1">✓</span>` : baseLabel;
@@ -1004,7 +1008,11 @@ function selectLesson(id) {
     _cacheClearLesson(state.currentLessonId);
   }
   state.currentLessonId = id;
-  state.currentTab = 'reference';
+  // Sentinel — renderLesson resolves this to the first available tab once
+  // content is loaded (Conversation if the lesson has one, otherwise
+  // Reference). Keeps the default-tab decision in one place even though
+  // content load is async.
+  state.currentTab = 'auto';
   // Keep the binder tab in sync — the chosen lesson may belong to the
   // other track (shuffle / mock / review-button paths can pick freely).
   syncBinderToLesson(id);
@@ -1155,16 +1163,34 @@ function renderLesson() {
 
   // tabs
   const tabs = document.createElement('div');
-  tabs.className = 'flex border-b border-slate-800 mb-6';
-  const tabDefs = [
+  // overflow-x-auto so the 5-tab row (Conversation + Ref + L1 + L2 + L3)
+  // stays reachable on a phone — last tab scrolls into view instead of
+  // getting cropped behind the viewport edge.
+  tabs.className = 'flex border-b border-slate-800 mb-6 overflow-x-auto';
+  const tabDefs = [];
+  // Conversation tab is opt-in per lesson — only Patterns/Applied lessons that
+  // ship an `conversation` block (the interview walk-through) get it. Sits
+  // first so the user starts in "how would I diagnose this" mode before
+  // looking at the canonical solution.
+  if (content.conversation) {
+    tabDefs.push({ id: 'conversation', label: 'Conversation', status: null });
+  }
+  tabDefs.push(
     { id: 'reference', label: 'Reference',     status: null },
     { id: 'L1',        label: 'L1 — Concept',  status: levelStatus(lesson.id, 'L1') },
     { id: 'L2',        label: 'L2 — Fill-in',  status: levelStatus(lesson.id, 'L2') },
     { id: 'L3',        label: 'L3 — Drill',    status: levelStatus(lesson.id, 'L3') }
-  ];
+  );
+  // If the current tab isn't one this lesson exposes (e.g. came from a lesson
+  // that had Conversation, landed on one that doesn't), fall back to the
+  // first available tab so we don't render a blank body.
+  if (!tabDefs.some(t => t.id === state.currentTab)) {
+    state.currentTab = tabDefs[0].id;
+  }
   for (const t of tabDefs) {
     const btn = document.createElement('button');
     btn.className = 'tab-btn';
+    btn.dataset.level = t.id;
     if (state.currentTab === t.id) btn.classList.add('active');
     btn.innerHTML = `${t.label}${t.status === 'passed' ? ' <span class="text-emerald-400 ml-1">✓</span>' : ''}`;
     btn.addEventListener('click', () => selectTab(t.id));
@@ -1177,6 +1203,7 @@ function renderLesson() {
   body.className = 'fade-in';
   shell.appendChild(body);
 
+  if (state.currentTab === 'conversation') renderConversation(body, content);
   if (state.currentTab === 'reference') renderReference(body, content);
   if (state.currentTab === 'L1') renderL1(body, lesson, content);
   if (state.currentTab === 'L2') renderL2(body, lesson, content);
@@ -1215,6 +1242,71 @@ function colorizeInto(target, code, mode = 'javascript') {
   } else {
     target.textContent = code;
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  CONVERSATION TAB — interview walk-through for Patterns/Applied lessons
+// ──────────────────────────────────────────────────────────────────────────
+// Each section is collapsed by default. The title + prompt stay visible
+// (skim-able on mobile), and tapping expands the body. Uses native <details>
+// so there's no JS state to manage and accessibility / keyboard nav is free.
+function renderConversation(body, content) {
+  const conv = content.conversation;
+  const section = document.createElement('div');
+  const intro = conv.intro
+    ? `<div class="conv-intro">${escapeHtml(conv.intro)}</div>`
+    : '';
+  // Multi-paragraph text → escaped <p> blocks. No markdown rendering — keep
+  // authoring constraints simple (just \n\n for paragraph breaks, single \n
+  // for soft breaks).
+  const paragraphsOf = (text) => (text || '')
+    .split(/\n\s*\n/)
+    .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  const sectionsHtml = conv.sections.map((s) => {
+    const promptHtml = s.prompt
+      ? `<div class="conv-prompt">${escapeHtml(s.prompt)}</div>`
+      : '';
+    // Two-color body: SAY (what you'd verbalize — script voice) and WHY
+    // (rationale / what it signals to the interviewer — meta voice).
+    // Either field is optional; legacy `reveal` is still supported as a
+    // single unified block so older content doesn't break.
+    const blocks = [];
+    if (s.say) {
+      blocks.push(`<div class="conv-block conv-say">
+        <div class="conv-block-label">What I'd say</div>
+        <div class="conv-block-body">${paragraphsOf(s.say)}</div>
+      </div>`);
+    }
+    if (s.why) {
+      blocks.push(`<div class="conv-block conv-why">
+        <div class="conv-block-label">Why this matters</div>
+        <div class="conv-block-body">${paragraphsOf(s.why)}</div>
+      </div>`);
+    }
+    if (!s.say && !s.why && s.reveal) {
+      blocks.push(`<div class="conv-block conv-legacy"><div class="conv-block-body">${paragraphsOf(s.reveal)}</div></div>`);
+    }
+    return `
+      <details class="conv-section">
+        <summary class="conv-summary">
+          <span class="conv-title">${escapeHtml(s.title)}</span>
+          ${promptHtml}
+          <span class="conv-toggle" aria-hidden="true">▸</span>
+        </summary>
+        <div class="conv-body">${blocks.join('')}</div>
+      </details>`;
+  }).join('');
+  section.innerHTML = `
+    <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Interview walk-through</div>
+    ${intro}
+    <div class="conv-list">${sectionsHtml}</div>
+    <div class="mt-8 flex justify-end gap-2">
+      <button class="secondary" data-action="conv-to-reference">See the solution →</button>
+    </div>
+  `;
+  body.appendChild(section);
+  section.querySelector('[data-action="conv-to-reference"]').addEventListener('click', () => selectTab('reference'));
 }
 
 function renderReference(body, content) {
@@ -2241,7 +2333,7 @@ async function init() {
     const last = findLesson(state.lastLessonId);
     if (last && last.status === 'full') {
       state.currentLessonId = state.lastLessonId;
-      if (state.lastTab && ['reference','L1','L2','L3'].includes(state.lastTab)) {
+      if (state.lastTab && ['conversation','reference','L1','L2','L3'].includes(state.lastTab)) {
         state.currentTab = state.lastTab;
       }
       resumed = true;
@@ -2384,6 +2476,12 @@ async function init() {
     else if (e.key === '2') { selectTab('L1'); }
     else if (e.key === '3') { selectTab('L2'); }
     else if (e.key === '4') { selectTab('L3'); }
+    else if (e.key === 'c') {
+      // Conversation is opt-in per lesson; ignore the shortcut on lessons
+      // that don't expose it.
+      const c = CONTENT[state.currentLessonId];
+      if (c && c.conversation) selectTab('conversation');
+    }
     else if (e.key === 's' && (e.metaKey === false && e.ctrlKey === false)) {
       const id = pickShuffleReview();
       if (id) { e.preventDefault(); selectLesson(id); }

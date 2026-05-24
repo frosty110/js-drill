@@ -21,8 +21,8 @@
 A **JavaScript syntax + interview-pattern memorization web app**. No build step —
 open `index.html` in a browser (or serve `python3 -m http.server`). Uses Tailwind
 CSS and CodeMirror via CDN. Progress persists in `localStorage` under
-`jsdrill.progress.v1` (schema `__v: 4`, backwards-compat to v1). Live on GitHub
-Pages: https://frosty110.github.io/js-drill/
+`jsdrill.progress.v1` (current schema `__v: 5`, load accepts v2/3/4/5; see § State
+persistence). Live on GitHub Pages: https://frosty110.github.io/js-drill/
 
 ## Features shipped (so future iterations don't re-add them)
 
@@ -189,6 +189,90 @@ So `console.log([1, 2])` produces `"[1,2]"`, and `console.log("hi")` produces `"
   Real `setTimeout` delays may exceed the runner's single-macrotask drain.
 - **Don't edit `CONTENT` / `CURRICULUM` inline in `index.html` anymore** — those
   globals are now populated from `data/`. Edit the JSON files instead.
+
+## State persistence
+
+All user state lives in a single `localStorage` entry under key
+`jsdrill.progress.v1`. There is no server, no cookies, no IndexedDB.
+
+### Scope (important — surprises users)
+
+`localStorage` is **per-origin, per-browser, per-device**:
+- Drilling on your laptop in Chrome and on your phone in Safari → **two
+  entirely separate progress stores**. Nothing syncs between them.
+- Same browser, different origins (`file://`, `http://localhost:8765`,
+  `https://frosty110.github.io`) → also separate stores.
+- Incognito / private windows → ephemeral; cleared when the last private
+  tab closes.
+- "Clear site data" / "Clear history" in browser settings → wipes the entry.
+
+Cross-device sync is a known want (BS-10 in `SELF-IMPROVE.md`). Until
+that ships, the laptop and phone are independent drill journeys.
+
+### Schema
+
+Current save version is `__v: 5`. The load handler accepts `__v` 2, 3, 4,
+or 5 — older shapes are backfilled (e.g. v<4 lessons with `L1+L2+L3=passed`
+get seeded with the first SR interval so spaced-rep works for legacy
+users). The save (`saveProgress` in `app.js`) writes:
+
+```js
+{
+  __v: 5,
+  progress: { [lessonId]: { L1?: 'passed', L2?: 'passed', L3?: 'passed' } },
+  bestTimes: { [lessonId]: ms },                      // mock-interview best time
+  mockHistory: { [lessonId]: [ms, ms, …] },           // last 5 mock attempts
+  revealed: { [lessonId]: { [level]: true } },        // reveal-tracking dot variant
+  lastLessonId, lastTab,                              // session resume
+  starterPath: bool,                                  // path-mode toggle
+  welcomed: bool,                                     // first-time banner dismissed
+  hideMastered: bool,                                 // sidebar filter
+  reviews: { [lessonId]: { lastPassedAt, interval, dueAt } },  // SR schedule
+  weakness: { [lessonId]: bool },                     // L1-miss tracker
+  sidebarTrack: 'syntax' | 'patterns' | 'applied'     // last-selected track tab
+}
+```
+
+Add-a-field is forward-compatible (load reads missing keys as undefined →
+defaults). A schema *removal* or *rename* requires bumping `__v` and
+adding a migration branch.
+
+### When saves fire
+
+`saveProgress()` is called after every meaningful state change — 24+ call
+sites in `app.js`. Examples: L1 answer click, L2 fill submit, L3 pass,
+reveal click, lesson nav, tab change, modal toggles, starter-path toggle,
+hide-mastered toggle, mock-interview start/end, progress restore.
+
+You should never need to call it explicitly from new code — the existing
+write paths already cover the actions a user takes. If a *new* state
+field is added, mirror it in both `loadProgress` and `saveProgress`.
+
+### Debugging a "data isn't persisting" report
+
+Run this in the browser DevTools console on the same origin the user is
+on, before and after the suspect action:
+
+```js
+JSON.parse(localStorage.getItem('jsdrill.progress.v1'))
+```
+
+If the value changes between the before/after, persistence is fine —
+the bug is in the read/render path (e.g. UI not refreshing from state).
+If the value does NOT change, save isn't firing — grep for the action's
+handler in `app.js` and check whether it calls `saveProgress()`.
+
+Common false-alarm causes a user might report:
+- **Different origin between sessions** — they tested on
+  `http://127.0.0.1:8765` once and `http://localhost:8765` next time;
+  those are separate `localStorage` stores even though the file is the same.
+- **Private/incognito mode** — clears on tab close.
+- **Browser site-data cleanup** — Safari ITP, "Delete cookies on close",
+  privacy extensions.
+- **Different device** — see § Scope above.
+- **Hard refresh expectation** — refresh does NOT reset localStorage; if
+  they think it should, they're confusing it with sessionStorage. Reload
+  preserves data.
 
 ## Local dev + deploy
 

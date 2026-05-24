@@ -69,6 +69,16 @@ specifically toward lessons their memory is currently weakest on.
   `next on path`.
 - **Mastered-with-reveal dot variant** — a softer "mastered" state that
   schedules slightly tighter SR intervals than a clean mastery.
+- **Per-lesson event history (`state.history`, iter-32 scaffold)** — every
+  L1 pass / L1 miss / L2 pass / L3 pass is timestamped and stored per-lesson
+  (capped at 50 events ≈ 6 weeks). Until now the app remembered *current
+  state* per lesson but discarded *history* on every save — meaning PROFILE
+  success criterion line 66 ("mastered lessons stay mastered across SR
+  intervals 1d → 30d") was un-instrumented from the user's perspective.
+  The sparkline render that consumes this data is flag-gated behind
+  `window.__sparklineEnabled` until iter-33 ship iter; the data layer is
+  collecting from iter-32 forward so iter-33's first real render has at
+  least one iter's worth of events for early adopters to see a pattern.
 
 ## Under-exploited / candidate features
 

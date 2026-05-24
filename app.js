@@ -124,7 +124,11 @@ const state = {
   hideMastered: false, // sidebar filter: when true, drop fully-mastered lessons
   reviews: {},        // { lessonId: { lastPassedAt: ms, interval: ms, dueAt: ms } }
   weakness: {},       // { lessonId: wrongL1Count } — tracks recurring L1 misses
-  sidebarTrack: 'syntax' // 'syntax' | 'patterns' — which binder tab is active
+  sidebarTrack: 'syntax', // 'syntax' | 'patterns' — which binder tab is active
+  // iter-32 scaffold: per-lesson event history for the sparkline (roadmap entry
+  // iter-31 #6). Append-only (capped at HISTORY_MAX per lesson). Flag-gated
+  // surface via window.__sparklineEnabled; render is no-op until iter-33 ship.
+  history: {}         // { lessonId: [{ at: ms, event: 'L1-pass'|'L1-miss'|'L2-pass'|'L3-pass' }] }
 };
 // Expose script-scope state on window for E2E probes (tools/cdp/*).
 // Production-safe: it's the same object the runtime uses; readers only.
@@ -157,6 +161,19 @@ window.__jsdrillCache = inProgressCache;
 // Mock interview attempts kept per lesson — enough to see a trend
 // (improving / plateaued / regressing) without bloating localStorage.
 const MOCK_HISTORY_MAX = 5;
+
+// iter-32 scaffold: per-lesson event history capped at 50 entries (~6 weeks
+// at 1 event/day). Larger caps would bloat localStorage; smaller would lose
+// the 30-day window the sparkline targets per roadmap entry iter-31 #6.
+const HISTORY_MAX = 50;
+function appendHistory(lessonId, event) {
+  if (!lessonId) return;
+  if (!state.history[lessonId]) state.history[lessonId] = [];
+  state.history[lessonId].push({ at: Date.now(), event });
+  if (state.history[lessonId].length > HISTORY_MAX) {
+    state.history[lessonId] = state.history[lessonId].slice(-HISTORY_MAX);
+  }
+}
 
 // Per-track pill metadata — keep this in one place so the lesson header,
 // Today's plan modal, and any future track-aware surface stay in sync.
@@ -247,8 +264,9 @@ function loadProgress() {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Support old shape ({lessonId: {...}}), v2 (progress + bestTimes), v3 (+ lastLesson, +revealed)
-      if (parsed && (parsed.__v === 2 || parsed.__v === 3 || parsed.__v === 4 || parsed.__v === 5)) {
+      // Support old shape ({lessonId: {...}}), v2 (progress + bestTimes), v3 (+ lastLesson, +revealed),
+      // v6 adds per-lesson event history for the sparkline scaffold (iter-32 / roadmap entry iter-31 #6).
+      if (parsed && (parsed.__v === 2 || parsed.__v === 3 || parsed.__v === 4 || parsed.__v === 5 || parsed.__v === 6)) {
         state.progress = parsed.progress || {};
         state.bestTimes = parsed.bestTimes || {};
         state.mockHistory = parsed.mockHistory || {};
@@ -260,6 +278,7 @@ function loadProgress() {
         state.hideMastered = !!parsed.hideMastered;
         state.reviews = parsed.reviews || {};
         state.weakness = parsed.weakness || {};
+        state.history = parsed.history || {};
         if (parsed.sidebarTrack === 'syntax' || parsed.sidebarTrack === 'patterns' || parsed.sidebarTrack === 'applied') {
           state.sidebarTrack = parsed.sidebarTrack;
         }
@@ -295,13 +314,13 @@ function loadProgress() {
       }
     }
   } catch (e) {
-    state.progress = {}; state.bestTimes = {}; state.revealed = {}; state.mockHistory = {};
+    state.progress = {}; state.bestTimes = {}; state.revealed = {}; state.mockHistory = {}; state.history = {};
   }
 }
 function saveProgress() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
-      __v: 5,
+      __v: 6,
       progress: state.progress,
       bestTimes: state.bestTimes,
       mockHistory: state.mockHistory,
@@ -313,7 +332,8 @@ function saveProgress() {
       hideMastered: state.hideMastered,
       reviews: state.reviews,
       weakness: state.weakness,
-      sidebarTrack: state.sidebarTrack
+      sidebarTrack: state.sidebarTrack,
+      history: state.history
     }));
   } catch (e) {}
 }
@@ -420,6 +440,7 @@ function wasRevealed(lessonId, level) {
 }
 function recordWrong(lessonId) {
   state.weakness[lessonId] = (state.weakness[lessonId] || 0) + 1;
+  appendHistory(lessonId, 'L1-miss');
   saveProgress();
 }
 function clearWeakness(lessonId) {
@@ -437,6 +458,38 @@ function topWeakLessonId() {
     .sort((a, b) => b[1] - a[1]);
   return entries.length ? entries[0][0] : null;
 }
+// iter-32 scaffold for roadmap entry iter-31 #6 (per-lesson sparkline).
+// Returns '' when window.__sparklineEnabled is falsy — so the surface is
+// off by default. Iter-33 ship iter flips the default + adds mobile probe.
+// Until then the function is exercised only via `window.__sparklineEnabled =
+// true; renderLesson()` in DevTools.
+function renderSparkline(lessonId) {
+  if (!window.__sparklineEnabled) return '';
+  const events = state.history[lessonId] || [];
+  if (!events.length) {
+    return '<span class="sparkline-empty text-xs text-slate-600">no history yet</span>';
+  }
+  const now = Date.now();
+  const cutoff = now - 30 * 24 * 60 * 60 * 1000;
+  const recent = events.filter(e => e.at >= cutoff);
+  if (!recent.length) {
+    return '<span class="sparkline-empty text-xs text-slate-600">no recent events</span>';
+  }
+  const colorMap = {
+    'L1-pass': '#34d399', // emerald — concept correct
+    'L1-miss': '#f87171', // rose — concept miss
+    'L2-pass': '#34d399', // emerald — fill correct
+    'L3-pass': '#60a5fa'  // sky — full implementation
+  };
+  const ticks = recent.map(e => {
+    const color = colorMap[e.event] || '#64748b';
+    const day = new Date(e.at).toISOString().slice(0, 10);
+    return `<span class="sparkline-tick" style="display:inline-block;width:3px;height:10px;margin:0 1px;background:${color}" title="${day} ${e.event}"></span>`;
+  }).join('');
+  return `<div class="sparkline" title="Last 30 days of L1/L2/L3 events">${ticks}</div>`;
+}
+// Expose for E2E probes / DevTools toggling.
+window.__renderSparkline = renderSparkline;
 async function generateCheatsheet() {
   await ensureAllContentLoaded();
   const fullLessons = CURRICULUM.filter(l => l.status === 'full');
@@ -591,6 +644,7 @@ function markPassed(lessonId, level) {
   } else if (level === 'L2' && state.reviews[lessonId] && isDueForReview(lessonId)) {
     scheduleReview(lessonId, { advance: false });
   }
+  appendHistory(lessonId, `${level}-pass`);
   saveProgress();
   if (!wasMastered && lessonOverallStatus(lessonId) === 'mastered') {
     state.streak += 1;
@@ -1175,6 +1229,13 @@ function renderLesson() {
   if (content.conversation) {
     tabDefs.push({ id: 'conversation', label: 'Conversation', status: null });
   }
+  // Walkthrough — interactive line-by-line stepper (Jupyter-style). Sits
+  // between Conversation and Reference: you diagnose (Conversation), then
+  // watch the canonical execute (Walkthrough), then study the polished form
+  // (Reference), then drill (L1/L2/L3).
+  if (content.walkthrough) {
+    tabDefs.push({ id: 'walkthrough', label: 'Walkthrough', status: null });
+  }
   tabDefs.push(
     { id: 'reference', label: 'Reference',     status: null },
     { id: 'L1',        label: 'L1 — Concept',  status: levelStatus(lesson.id, 'L1') },
@@ -1204,6 +1265,7 @@ function renderLesson() {
   shell.appendChild(body);
 
   if (state.currentTab === 'conversation') renderConversation(body, content);
+  if (state.currentTab === 'walkthrough') renderWalkthrough(body, lesson, content);
   if (state.currentTab === 'reference') renderReference(body, content);
   if (state.currentTab === 'L1') renderL1(body, lesson, content);
   if (state.currentTab === 'L2') renderL2(body, lesson, content);
@@ -1271,11 +1333,35 @@ function renderConversation(body, content) {
     // (rationale / what it signals to the interviewer — meta voice).
     // Either field is optional; legacy `reveal` is still supported as a
     // single unified block so older content doesn't break.
+    // `examples` is an optional structured trace surface — when present,
+    // each entry renders as a nested <details> with input → output header
+    // and a pre-formatted monospace trace body.
     const blocks = [];
+    if (s.intro) {
+      blocks.push(`<div class="conv-intro-inline">${paragraphsOf(s.intro)}</div>`);
+    }
     if (s.say) {
       blocks.push(`<div class="conv-block conv-say">
         <div class="conv-block-label">What I'd say</div>
         <div class="conv-block-body">${paragraphsOf(s.say)}</div>
+      </div>`);
+    }
+    if (Array.isArray(s.examples) && s.examples.length) {
+      const exHtml = s.examples.map((ex) => {
+        const header = `${escapeHtml(ex.input || '')}${ex.output != null ? ` <span class="conv-ex-arrow">→</span> <span class="conv-ex-out">${escapeHtml(String(ex.output))}</span>` : ''}`;
+        const noteHtml = ex.note ? `<div class="conv-ex-note">${escapeHtml(ex.note)}</div>` : '';
+        const traceHtml = ex.trace ? `<pre class="conv-ex-trace">${escapeHtml(ex.trace)}</pre>` : '';
+        return `<details class="conv-example">
+          <summary class="conv-ex-summary">
+            <span class="conv-ex-header">${header}</span>
+            <span class="conv-toggle" aria-hidden="true">▸</span>
+          </summary>
+          <div class="conv-ex-body">${noteHtml}${traceHtml}</div>
+        </details>`;
+      }).join('');
+      blocks.push(`<div class="conv-block conv-examples-block">
+        <div class="conv-block-label">Worked examples</div>
+        <div class="conv-examples-list">${exHtml}</div>
       </div>`);
     }
     if (s.why) {
@@ -1284,7 +1370,7 @@ function renderConversation(body, content) {
         <div class="conv-block-body">${paragraphsOf(s.why)}</div>
       </div>`);
     }
-    if (!s.say && !s.why && s.reveal) {
+    if (!s.say && !s.why && !s.examples && s.reveal) {
       blocks.push(`<div class="conv-block conv-legacy"><div class="conv-block-body">${paragraphsOf(s.reveal)}</div></div>`);
     }
     return `
@@ -1307,6 +1393,200 @@ function renderConversation(body, content) {
   `;
   body.appendChild(section);
   section.querySelector('[data-action="conv-to-reference"]').addEventListener('click', () => selectTab('reference'));
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  WALKTHROUGH TAB — interactive line-by-line stepper (Jupyter-style)
+// ──────────────────────────────────────────────────────────────────────────
+// The lesson's `walkthrough` block defines (a) a list of example inputs and
+// (b) a trace function (stored as a string of JS source — an array of lines
+// joined with \n at load) that yields {line, label, state} per step. We
+// `new Function`-evaluate the source, drain the generator into an array per
+// example, cache it, and render: canonical code with current line highlighted
+// + a state panel + prev/next/reset controls.
+//
+// Eval safety: lesson JSON is same-origin trusted content; we already eval
+// user-typed L3 code via `new Function`. The trace function has no DOM
+// access and runs purely on its `input` argument.
+
+// Cache compiled trace functions + per-example step arrays across renders
+// so re-clicking the tab doesn't re-evaluate source. Keyed by lesson id.
+const _walkthroughCache = {};
+
+function _compileWalkthrough(lessonId, walkthrough) {
+  if (_walkthroughCache[lessonId]) return _walkthroughCache[lessonId];
+  const src = Array.isArray(walkthrough.trace)
+    ? walkthrough.trace.join('\n')
+    : String(walkthrough.trace || '');
+  let fn;
+  try {
+    fn = new Function('input', '"use strict";\n' + src + '\nreturn trace(input);');
+  } catch (e) {
+    return _walkthroughCache[lessonId] = { error: 'Failed to compile trace: ' + e.message };
+  }
+  const byExample = walkthrough.examples.map(ex => {
+    try {
+      const steps = [...fn(ex.input)];
+      return { example: ex, steps, error: null };
+    } catch (e) {
+      return { example: ex, steps: [], error: 'Trace runtime error: ' + e.message };
+    }
+  });
+  return _walkthroughCache[lessonId] = { byExample, error: null };
+}
+
+// Format a state value for the panel. Sets→[…], arrays→JSON, primitives→String.
+function _formatStateVal(v) {
+  if (v === null) return 'null';
+  if (v === undefined) return 'undefined';
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return '[' + v.map(_formatStateVal).join(', ') + ']';
+  if (v && typeof v === 'object') {
+    try { return JSON.stringify(v); } catch (_) { return String(v); }
+  }
+  return String(v);
+}
+
+function renderWalkthrough(body, lesson, content) {
+  const w = content.walkthrough;
+  const compiled = _compileWalkthrough(lesson.id, w);
+  if (compiled.error) {
+    body.innerHTML = `<div class="p-6 text-red-300 text-sm">${escapeHtml(compiled.error)}</div>`;
+    return;
+  }
+
+  // Per-session UI state for this tab — example index + step index.
+  // Kept on the global state cache so switching tabs and coming back
+  // restores where you were (consistent with the L1/L2/L3 cache pattern).
+  let uiState = _cacheGet(lesson.id, 'walkthrough');
+  if (!uiState || typeof uiState.exampleIdx !== 'number') {
+    uiState = { exampleIdx: 0, stepIdx: 0 };
+    _cacheSet(lesson.id, 'walkthrough', uiState);
+  }
+
+  // Build static shell once
+  const codeLines = (content.reference && content.reference.code || '').split('\n');
+  const introHtml = w.intro ? `<div class="walk-intro">${escapeHtml(w.intro)}</div>` : '';
+  const exOptions = w.examples.map((ex, i) =>
+    `<option value="${i}" ${i === uiState.exampleIdx ? 'selected' : ''}>${escapeHtml(ex.label)}</option>`
+  ).join('');
+
+  body.innerHTML = `
+    <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Interactive walkthrough</div>
+    ${introHtml}
+    <div class="walk-controls">
+      <label class="walk-example-label">Example
+        <select class="walk-example" data-walk-example>${exOptions}</select>
+      </label>
+      <div class="walk-step-controls">
+        <button class="walk-btn" data-walk-prev aria-label="Previous step">◀ Prev</button>
+        <span class="walk-step-counter" data-walk-counter>Step 1 of N</span>
+        <button class="walk-btn walk-btn-primary" data-walk-next aria-label="Next step">Next ▶</button>
+        <button class="walk-btn walk-btn-ghost" data-walk-reset>Reset</button>
+      </div>
+    </div>
+    <div class="walk-label-bar" data-walk-label>—</div>
+    <div class="walk-grid">
+      <div class="walk-code-pane">
+        <pre class="walk-code cm-s-dracula" data-walk-code></pre>
+      </div>
+      <div class="walk-state-pane">
+        <div class="walk-state-header">State after this step</div>
+        <div class="walk-state-table" data-walk-state></div>
+      </div>
+    </div>
+  `;
+
+  const codeEl = body.querySelector('[data-walk-code]');
+  const stateEl = body.querySelector('[data-walk-state]');
+  const labelEl = body.querySelector('[data-walk-label]');
+  const counterEl = body.querySelector('[data-walk-counter]');
+  const prevBtn = body.querySelector('[data-walk-prev]');
+  const nextBtn = body.querySelector('[data-walk-next]');
+  const resetBtn = body.querySelector('[data-walk-reset]');
+  const exampleSelect = body.querySelector('[data-walk-example]');
+
+  // Render the code block once with line wrappers — highlight on update.
+  // Each line gets a row wrapper with a line-number gutter and a syntax-
+  // highlighted body. Re-uses CodeMirror's runMode for tokenization.
+  codeLines.forEach((line, idx) => {
+    const lineNum = idx + 1;
+    const row = document.createElement('div');
+    row.className = 'walk-line';
+    row.dataset.lineNo = lineNum;
+    const gutter = document.createElement('span');
+    gutter.className = 'walk-line-no';
+    gutter.textContent = String(lineNum);
+    const codeSpan = document.createElement('span');
+    codeSpan.className = 'walk-line-code';
+    if (window.CodeMirror && CodeMirror.runMode) {
+      CodeMirror.runMode(line || ' ', 'javascript', codeSpan);
+    } else {
+      codeSpan.textContent = line || ' ';
+    }
+    row.appendChild(gutter);
+    row.appendChild(codeSpan);
+    codeEl.appendChild(row);
+  });
+
+  function currentSteps() {
+    return compiled.byExample[uiState.exampleIdx]?.steps || [];
+  }
+
+  function render() {
+    const steps = currentSteps();
+    if (steps.length === 0) {
+      labelEl.textContent = 'No steps for this example.';
+      counterEl.textContent = 'Step 0 of 0';
+      stateEl.innerHTML = '';
+      return;
+    }
+    // Clamp stepIdx into range (e.g. switching to a shorter example)
+    if (uiState.stepIdx >= steps.length) uiState.stepIdx = steps.length - 1;
+    if (uiState.stepIdx < 0) uiState.stepIdx = 0;
+    const step = steps[uiState.stepIdx];
+    counterEl.textContent = `Step ${uiState.stepIdx + 1} of ${steps.length}`;
+    labelEl.textContent = step.label || '';
+    // Highlight current line
+    codeEl.querySelectorAll('.walk-line.active').forEach(el => el.classList.remove('active'));
+    const target = codeEl.querySelector(`.walk-line[data-line-no="${step.line}"]`);
+    if (target) {
+      target.classList.add('active');
+      // Scroll into view inside the code pane (only the pane scrolls, not the page)
+      target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    }
+    // Render state panel
+    const entries = step.state ? Object.entries(step.state) : [];
+    stateEl.innerHTML = entries.length === 0
+      ? '<div class="walk-state-empty">— no state at this step —</div>'
+      : entries.map(([k, v]) =>
+          `<div class="walk-state-row"><span class="walk-state-key">${escapeHtml(k)}</span><span class="walk-state-val">${escapeHtml(_formatStateVal(v))}</span></div>`
+        ).join('');
+    // Disable prev at step 0, next at last step
+    prevBtn.disabled = uiState.stepIdx === 0;
+    nextBtn.disabled = uiState.stepIdx >= steps.length - 1;
+  }
+
+  prevBtn.addEventListener('click', () => {
+    if (uiState.stepIdx > 0) { uiState.stepIdx--; render(); }
+  });
+  nextBtn.addEventListener('click', () => {
+    const steps = currentSteps();
+    if (uiState.stepIdx < steps.length - 1) { uiState.stepIdx++; render(); }
+  });
+  resetBtn.addEventListener('click', () => {
+    uiState.stepIdx = 0;
+    render();
+  });
+  exampleSelect.addEventListener('change', (e) => {
+    uiState.exampleIdx = Number(e.target.value);
+    uiState.stepIdx = 0;
+    render();
+  });
+
+  // Initial paint
+  render();
 }
 
 function renderReference(body, content) {
@@ -2333,7 +2613,7 @@ async function init() {
     const last = findLesson(state.lastLessonId);
     if (last && last.status === 'full') {
       state.currentLessonId = state.lastLessonId;
-      if (state.lastTab && ['conversation','reference','L1','L2','L3'].includes(state.lastTab)) {
+      if (state.lastTab && ['conversation','walkthrough','reference','L1','L2','L3'].includes(state.lastTab)) {
         state.currentTab = state.lastTab;
       }
       resumed = true;

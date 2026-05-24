@@ -8,6 +8,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Eve Prep">
 <title>Eve AI Prep — 4-Day Plan</title>
+<!-- CodeMirror runMode for syntax-highlighted static code blocks. Same versions as main app. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/runmode/runmode.min.js"></script>
 <style>
   :root{
     --bg:#0f172a; --bg2:#1e293b; --panel:#334155; --panel2:#475569;
@@ -220,6 +226,87 @@
   .settings-btn.danger{background:#7f1d1d;color:#fecaca}
   .settings-btn.danger:hover{background:#991b1b}
 
+  /* PER-ITEM REVIEW CHECKBOX */
+  .item-row{display:flex;align-items:flex-start;gap:10px}
+  .item-check{flex-shrink:0;width:22px;height:22px;border-radius:5px;
+    border:2px solid var(--panel2);background:transparent;cursor:pointer;
+    position:relative;transition:all .15s;margin-top:2px;
+    appearance:none;-webkit-appearance:none;padding:0}
+  .item-check:hover{border-color:var(--accent)}
+  .item-check:checked{background:var(--good);border-color:var(--good)}
+  .item-check:checked::after{content:'✓';position:absolute;color:#0f172a;
+    font-weight:bold;font-size:15px;line-height:18px;
+    left:50%;top:50%;transform:translate(-50%,-50%)}
+  .item-body{flex:1;min-width:0}
+  .review-count{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;
+    margin-left:auto;background:var(--bg2);padding:3px 8px;border-radius:10px;
+    flex-shrink:0}
+  .section-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    margin:14px 0 4px}
+  .section-title-row .section-title{margin:0;flex:1;min-width:0}
+
+  /* DAILY REVIEW CARD (on Today tab) */
+  .review-promo{background:linear-gradient(135deg,rgba(56,189,248,0.14),rgba(34,197,94,0.06));
+    border:1px solid rgba(56,189,248,0.35);border-radius:12px;padding:16px;
+    margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .review-promo-icon{font-size:24px;flex-shrink:0}
+  .review-promo-body{flex:1;min-width:140px}
+  .review-promo-title{font-size:14px;font-weight:700;color:var(--accent)}
+  .review-promo-sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .review-promo button{background:var(--accent);color:#0f172a;border:none;
+    padding:10px 16px;border-radius:7px;font:13px inherit;font-weight:600;
+    cursor:pointer;flex-shrink:0}
+  .review-promo button:hover{background:var(--accent2)}
+  .review-promo.empty{background:rgba(34,197,94,0.06);border-color:rgba(34,197,94,0.3)}
+  .review-promo.empty .review-promo-title{color:var(--good)}
+
+  /* DAILY REVIEW SESSION (full-view takeover) */
+  .review-session{background:var(--bg2);border-radius:12px;padding:18px;
+    min-height:60vh;display:flex;flex-direction:column}
+  .review-progress{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+  .review-progress-bar{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+  .review-progress-fill{height:100%;background:var(--accent);transition:width .25s}
+  .review-progress-text{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .review-type-pill{display:inline-block;font-size:10px;text-transform:uppercase;
+    letter-spacing:0.05em;padding:3px 8px;border-radius:4px;background:var(--panel);
+    color:var(--accent);font-weight:600;margin-bottom:10px}
+  .review-prompt{font-size:18px;font-weight:600;line-height:1.4;margin-bottom:12px}
+  .review-prompt-sub{font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+  .review-answer{background:var(--bg);border-radius:8px;padding:14px;margin:12px 0;
+    border-left:3px solid var(--good);font-size:14px;line-height:1.55}
+  .review-answer .label{font-size:11px;text-transform:uppercase;letter-spacing:0.05em;
+    color:var(--good);font-weight:600;margin-bottom:6px;display:block}
+  .review-actions{margin-top:auto;padding-top:20px;display:flex;gap:10px;flex-wrap:wrap}
+  .review-actions button{flex:1;min-width:120px;padding:14px;border-radius:8px;
+    border:none;font:14px inherit;font-weight:600;cursor:pointer;
+    transition:transform .1s, background .15s}
+  .review-actions button:active{transform:scale(0.98)}
+  .review-peek{background:var(--panel);color:var(--text)}
+  .review-peek:hover{background:var(--panel2)}
+  .review-fuzzy{background:#7f1d1d;color:#fecaca}
+  .review-fuzzy:hover{background:#991b1b}
+  .review-gotit{background:var(--good);color:#0f172a}
+  .review-gotit:hover{background:#4ade80}
+  .review-exit{background:none;color:var(--muted);border:none;cursor:pointer;
+    font:13px inherit;padding:6px;align-self:flex-start;margin-bottom:6px}
+  .review-summary{text-align:center;padding:30px 12px}
+  .review-summary-pct{font-size:48px;font-weight:700;color:var(--good);
+    font-variant-numeric:tabular-nums;line-height:1}
+  .review-summary-label{color:var(--muted);font-size:14px;margin-top:6px}
+  .review-summary-stats{display:flex;justify-content:center;gap:18px;margin:18px 0}
+  .review-summary-stat{text-align:center}
+  .review-summary-stat .num{font-size:22px;font-weight:600}
+  .review-summary-stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+
+  /* CodeMirror inside prep page — match main app's dracula theme + mobile readability */
+  .cm-host{margin:10px 0;border-radius:8px;overflow:hidden}
+  .cm-host .CodeMirror{height:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+    padding:6px 0;background:#282a36}
+  .cm-host .CodeMirror-scroll{min-height:0;max-width:100%;-webkit-overflow-scrolling:touch}
+  @media (min-width:768px){
+    .cm-host .CodeMirror{font-size:14px}
+  }
+
   /* DESKTOP TWEAKS */
   @media (min-width:768px){
     :root{--header-h:64px}
@@ -423,6 +510,7 @@ const GLOSSARY = [
   { term: 'subsequence', def: 'An ordered selection of characters, NOT necessarily contiguous. "ace" is a subsequence of "abcde".', where: 'Longest common subsequence (DP). Longest increasing subsequence.' },
   { term: 'prefix sum', def: 'An array where prefix[i] = arr[0] + ... + arr[i]. Lets you compute the sum of any range in O(1).', where: 'Range-sum queries. Sliding window over arrays that may contain negatives.' },
   { term: 'deque (double-ended queue)', def: 'A queue you can push/pop from BOTH ends in O(1). In JS, fake one with an array + index pointers, or use array carefully.', where: 'Rate limiter (evict front, push back). Sliding window maximum (monotonic deque).' },
+  { term: 'time / space complexity', def: 'Big-O cost of an algorithm. TIME: how many operations as input N grows. SPACE: what is the maximum additional memory the algorithm might hold at once? Not the average. Not the typical. The worst-case simultaneous storage. The input itself doesn\'t count — only auxiliary storage you allocate.', where: 'Every interview problem ends with "what\'s the complexity?" Always state BOTH. "O(N) time, O(N) space." Recursion counts toward space (call stack depth). A hash set that grows with input is O(N). Two pointers over an array is O(1) space.' },
 ];
 
 const CHEATSHEET = [
@@ -564,7 +652,12 @@ const state = load() || {
   currentTab: null,        // 'today' | 'days' | 'cheat' | 'glossary' | 'code' | 'settings'
   currentDayId: null,      // set on render
   glossSearch: '',
+  reviewed: {},            // { itemId: { familiarity: 0-3, lastReviewedAt: ms } }
+  review: null,            // active review session: { queue: [ids], index, revealed, gotIt, fuzzy }
 };
+// Migrate older snapshots that lacked these keys
+if (!state.reviewed) state.reviewed = {};
+if (state.review === undefined) state.review = null;
 
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
@@ -582,6 +675,88 @@ function loadMainAppProgress() {
     const parsed = JSON.parse(raw);
     return parsed.progress || {};
   } catch { return {}; }
+}
+
+// ----------------------------------------------------------------------------
+// REVIEW / SRS
+// ----------------------------------------------------------------------------
+// Item ids:
+//   g:<term>   glossary
+//   c:<idx>    code shape
+//   p:<idx>    cheat pattern
+//   b:<idx>    interview behavior step
+//   r:<idx>    big rock
+// Familiarity tiers → resurface intervals (days). Tier 0 = unseen, always due.
+const SRS_INTERVAL_DAYS = [0, 1, 2, 4];
+const REVIEW_SAMPLE = { glossary: 5, code: 3, pattern: 4, behavior: 2, rock: 1 };
+
+function getReview(id) { return state.reviewed[id] || { familiarity: 0, lastReviewedAt: 0 }; }
+function setReview(id, patch) {
+  state.reviewed[id] = { ...getReview(id), ...patch };
+  save();
+}
+function isReviewed(id) { return getReview(id).familiarity >= 1; }
+function markReviewedOnce(id) {
+  const r = getReview(id);
+  setReview(id, { familiarity: Math.max(1, r.familiarity), lastReviewedAt: Date.now() });
+}
+function unmarkReviewed(id) { setReview(id, { familiarity: 0, lastReviewedAt: 0 }); }
+function gradeReview(id, gotIt) {
+  const r = getReview(id);
+  const nextFam = gotIt ? Math.min(3, r.familiarity + 1) : 0;
+  setReview(id, { familiarity: nextFam, lastReviewedAt: Date.now() });
+}
+function reviewedCount(prefix) {
+  return Object.keys(state.reviewed).filter(k => k.startsWith(prefix + ':') && state.reviewed[k].familiarity >= 1).length;
+}
+
+function reviewableItems() {
+  const out = [];
+  for (const g of GLOSSARY) {
+    out.push({ id: `g:${g.term}`, type: 'glossary', prompt: g.term,
+      answer: g.def, where: g.where });
+  }
+  for (let i = 0; i < CODE_SHAPES.length; i++) {
+    const s = CODE_SHAPES[i];
+    out.push({ id: `c:${i}`, type: 'code', prompt: s.title,
+      answer: s.code, where: s.note, isCode: true });
+  }
+  for (let i = 0; i < CHEATSHEET.length; i++) {
+    const [trig, pat] = CHEATSHEET[i];
+    out.push({ id: `p:${i}`, type: 'pattern', prompt: trig, answer: pat });
+  }
+  for (let i = 0; i < INTERVIEW_BEHAVIOR.length; i++) {
+    const b = INTERVIEW_BEHAVIOR[i];
+    out.push({ id: `b:${i}`, type: 'behavior', prompt: b.title, answer: b.body,
+      where: b.num });
+  }
+  for (let i = 0; i < BIG_ROCKS.length; i++) {
+    const r = BIG_ROCKS[i];
+    out.push({ id: `r:${i}`, type: 'rock', prompt: r.rock, answer: r.detail });
+  }
+  return out;
+}
+
+function dueItems() {
+  const now = Date.now();
+  return reviewableItems().filter(it => {
+    const r = getReview(it.id);
+    const intervalMs = SRS_INTERVAL_DAYS[Math.min(r.familiarity, 3)] * 86400000;
+    return (now - r.lastReviewedAt) >= intervalMs;
+  });
+}
+
+function buildDailyReviewQueue() {
+  // Bucket due items by type, shuffle each, take up to the sample size, weave together.
+  const due = dueItems();
+  const buckets = { glossary: [], code: [], pattern: [], behavior: [], rock: [] };
+  for (const it of due) buckets[it.type].push(it);
+  for (const t in buckets) buckets[t].sort(() => Math.random() - 0.5);
+  const picked = [];
+  for (const t in buckets) picked.push(...buckets[t].slice(0, REVIEW_SAMPLE[t] || 0));
+  // weave so we don't get 5 glossary in a row
+  picked.sort(() => Math.random() - 0.5);
+  return picked;
 }
 
 function isLessonDoneInMainApp(lessonId) {
@@ -701,6 +876,10 @@ function render() {
 
 // -------------------- TODAY / DAY --------------------
 function renderToday() {
+  if (state.review && state.review.queue && state.review.queue.length) {
+    renderReviewSession();
+    return;
+  }
   if (!state.currentDayId) state.currentDayId = todayDayId();
   renderDay(state.currentDayId, /*withStrip*/ true);
 }
@@ -732,6 +911,27 @@ function renderDay(dayId, withStrip) {
         <div class="day-prog">${dp.done}/${dp.total} · ${dpct}%</div>
       </button>`;
     }).join('')}</div>`;
+  }
+
+  // Daily Review promo — always shown at top of Today; counts due items.
+  const due = dueItems();
+  if (due.length > 0) {
+    html += `<div class="review-promo">
+      <div class="review-promo-icon">🔁</div>
+      <div class="review-promo-body">
+        <div class="review-promo-title">Daily Review · ${due.length} items due</div>
+        <div class="review-promo-sub">Spaced-rep refresher · glossary, code, cheats, gotchas · ~15–20 min</div>
+      </div>
+      <button data-action="start-review">Start review</button>
+    </div>`;
+  } else {
+    html += `<div class="review-promo empty">
+      <div class="review-promo-icon">✓</div>
+      <div class="review-promo-body">
+        <div class="review-promo-title">All caught up on review</div>
+        <div class="review-promo-sub">Items will resurface as their interval lapses.</div>
+      </div>
+    </div>`;
   }
 
   // Big rocks banner (only on Day 1 today)
@@ -808,6 +1008,135 @@ function renderDay(dayId, withStrip) {
       openLesson(btn.dataset.openLesson);
     };
   });
+  const startBtn = $view.querySelector('[data-action="start-review"]');
+  if (startBtn) startBtn.onclick = startReview;
+}
+
+// -------------------- DAILY REVIEW SESSION --------------------
+function startReview() {
+  const queue = buildDailyReviewQueue();
+  if (!queue.length) return;
+  state.review = { queue, index: 0, revealed: false, gotIt: 0, fuzzy: 0,
+    queueIds: queue.map(i => i.id) };
+  save();
+  render();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function exitReview() {
+  state.review = null;
+  save();
+  render();
+}
+
+function renderReviewSession() {
+  const r = state.review;
+  const items = r.queue;
+  const total = items.length;
+
+  // Done screen
+  if (r.index >= total) {
+    const total2 = r.gotIt + r.fuzzy;
+    const pct = total2 ? Math.round(100 * r.gotIt / total2) : 0;
+    $view.innerHTML = `<div class="review-session">
+      <div class="review-summary">
+        <div class="review-summary-pct">${pct}%</div>
+        <div class="review-summary-label">recalled</div>
+        <div class="review-summary-stats">
+          <div class="review-summary-stat"><div class="num" style="color:var(--good)">${r.gotIt}</div><div class="lbl">got it</div></div>
+          <div class="review-summary-stat"><div class="num" style="color:var(--bad)">${r.fuzzy}</div><div class="lbl">fuzzy</div></div>
+          <div class="review-summary-stat"><div class="num">${total}</div><div class="lbl">total</div></div>
+        </div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.55;max-width:380px;margin:18px auto">
+          Fuzzy items resurface tomorrow. Got-it items advance one tier and resurface later
+          (1 → 2 → 4 days). Mastered items go quiet.
+        </p>
+        <button class="btn primary" id="reviewDoneBtn" style="background:var(--accent);color:#0f172a;border:none;padding:12px 24px;border-radius:8px;font:14px inherit;font-weight:600;cursor:pointer;margin-top:8px">Back to Today</button>
+      </div>
+    </div>`;
+    document.getElementById('reviewDoneBtn').onclick = exitReview;
+    return;
+  }
+
+  const it = items[r.index];
+  const pct = Math.round(100 * r.index / total);
+
+  let answerHtml = '';
+  if (r.revealed) {
+    if (it.isCode) {
+      answerHtml = `<div class="review-answer">
+        <span class="label">Answer</span>
+        <div class="cm-host" data-cm-code="${escapeAttr(it.answer)}"></div>
+        ${it.where ? `<div style="font-size:12px;color:var(--muted);margin-top:10px">${escapeHtml(it.where)}</div>` : ''}
+      </div>`;
+    } else {
+      answerHtml = `<div class="review-answer">
+        <span class="label">Answer</span>
+        ${escapeHtml(it.answer)}
+        ${it.where ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">${escapeHtml(it.where)}</div>` : ''}
+      </div>`;
+    }
+  }
+
+  const typeLabel = ({ glossary: 'Glossary', code: 'Code shape', pattern: 'Pattern trigger',
+    behavior: 'Interview behavior', rock: 'Big rock' })[it.type] || it.type;
+  const fam = getReview(it.id).familiarity;
+  const tier = fam === 0 ? 'new' : `tier ${fam}`;
+
+  $view.innerHTML = `<div class="review-session">
+    <button class="review-exit" id="reviewExitBtn">← Exit review (progress saved)</button>
+    <div class="review-progress">
+      <div class="review-progress-bar"><div class="review-progress-fill" style="width:${pct}%"></div></div>
+      <div class="review-progress-text">${r.index + 1} / ${total}</div>
+    </div>
+    <div class="review-type-pill">${escapeHtml(typeLabel)} · ${escapeHtml(tier)}</div>
+    <div class="review-prompt">${escapeHtml(it.prompt)}</div>
+    ${it.type === 'pattern' ? '<div class="review-prompt-sub">Q: What\'s the first pattern you\'d reach for?</div>' : ''}
+    ${it.type === 'code' ? '<div class="review-prompt-sub">Q: Can you write this from memory? (Imagine the code in your head before peeking.)</div>' : ''}
+    ${it.type === 'glossary' ? '<div class="review-prompt-sub">Q: Define this term in 1 sentence + name one place it shows up.</div>' : ''}
+    ${it.type === 'behavior' ? '<div class="review-prompt-sub">Q: Why does this step matter in an interview?</div>' : ''}
+    ${it.type === 'rock' ? '<div class="review-prompt-sub">Q: Why is this one of YOUR top 5 gaps?</div>' : ''}
+    ${answerHtml}
+    <div class="review-actions">
+      ${!r.revealed
+        ? `<button class="review-peek" id="reviewPeekBtn">Peek 👀</button>`
+        : `<button class="review-fuzzy" id="reviewFuzzyBtn">Fuzzy ✗</button>
+           <button class="review-gotit" id="reviewGotitBtn">Got it ✓</button>`}
+    </div>
+  </div>`;
+
+  // Render CodeMirror block if needed
+  if (r.revealed && it.isCode) {
+    const host = $view.querySelector('[data-cm-code]');
+    if (host && window.CodeMirror && window.CodeMirror.runMode) {
+      renderCmInto(host, it.answer);
+    }
+  }
+
+  document.getElementById('reviewExitBtn').onclick = exitReview;
+  const peek = document.getElementById('reviewPeekBtn');
+  if (peek) peek.onclick = () => { state.review.revealed = true; save(); render(); };
+  const fuzzy = document.getElementById('reviewFuzzyBtn');
+  if (fuzzy) fuzzy.onclick = () => { gradeReview(it.id, false); state.review.fuzzy++; state.review.index++; state.review.revealed = false; save(); render(); };
+  const got = document.getElementById('reviewGotitBtn');
+  if (got) got.onclick = () => { gradeReview(it.id, true); state.review.gotIt++; state.review.index++; state.review.revealed = false; save(); render(); };
+}
+
+// -------------------- CODEMIRROR HELPER --------------------
+function renderCmInto(host, code) {
+  host.innerHTML = '';
+  const pre = document.createElement('pre');
+  pre.className = 'CodeMirror cm-s-dracula';
+  pre.style.cssText = 'margin:0;padding:10px 12px;background:#282a36;color:#f8f8f2;font:inherit;overflow-x:auto;-webkit-overflow-scrolling:touch';
+  const codeEl = document.createElement('code');
+  codeEl.style.cssText = 'background:none;padding:0;color:inherit;font:inherit;display:block;white-space:pre';
+  pre.appendChild(codeEl);
+  host.appendChild(pre);
+  try {
+    window.CodeMirror.runMode(code, 'javascript', codeEl);
+  } catch (e) {
+    codeEl.textContent = code;
+  }
 }
 
 function renderTaskHtml(t) {
@@ -873,18 +1202,55 @@ function renderAllDays() {
 
 // -------------------- CHEAT --------------------
 function renderCheat() {
+  const pReviewed = reviewedCount('p');
+  const bReviewed = reviewedCount('b');
   let html = `<div class="section-title">Cheatsheet</div>
-    <div class="section-sub">Pattern triggers + interview-day behavior. Re-read morning of the interview.</div>
-    <div class="section-title" style="font-size:16px;margin-top:18px">Which pattern when?</div>
-    <table class="cheat-table"><thead><tr><th>Problem says…</th><th>First thing to try</th></tr></thead>
-      <tbody>${CHEATSHEET.map(([trig, pat]) => `<tr><td>${escapeHtml(trig)}</td><td>${escapeHtml(pat)}</td></tr>`).join('')}</tbody></table>
-    <div class="section-title" style="font-size:16px;margin-top:24px">Interview-day behavior</div>`;
-  html += INTERVIEW_BEHAVIOR.map(b => `<div class="behavior-card">
-    <div class="behavior-num">${escapeHtml(b.num)}</div>
-    <div class="behavior-title">${escapeHtml(b.title)}</div>
-    <div class="behavior-body">${escapeHtml(b.body)}</div>
-  </div>`).join('');
+    <div class="section-sub">Pattern triggers + interview-day behavior. Check off each line as you internalize it; Daily Review will resurface unchecked items first.</div>
+
+    <div class="section-title-row">
+      <div class="section-title" style="font-size:16px">Which pattern when?</div>
+      <div class="review-count">${pReviewed}/${CHEATSHEET.length} reviewed</div>
+    </div>`;
+  html += CHEATSHEET.map(([trig, pat], i) => {
+    const id = `p:${i}`;
+    return `<div class="behavior-card item-row" style="border-left-color:var(--accent);align-items:center">
+      <input type="checkbox" class="item-check" data-review-id="${escapeAttr(id)}" ${isReviewed(id) ? 'checked' : ''} />
+      <div class="item-body">
+        <div style="font-size:13px;color:var(--accent);font-weight:500">${escapeHtml(trig)}</div>
+        <div style="font-size:13px;color:var(--text);margin-top:4px">${escapeHtml(pat)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  html += `<div class="section-title-row" style="margin-top:24px">
+    <div class="section-title" style="font-size:16px">Interview-day behavior</div>
+    <div class="review-count">${bReviewed}/${INTERVIEW_BEHAVIOR.length} reviewed</div>
+  </div>`;
+  html += INTERVIEW_BEHAVIOR.map((b, i) => {
+    const id = `b:${i}`;
+    return `<div class="behavior-card item-row">
+      <input type="checkbox" class="item-check" data-review-id="${escapeAttr(id)}" ${isReviewed(id) ? 'checked' : ''} />
+      <div class="item-body">
+        <div class="behavior-num">${escapeHtml(b.num)}</div>
+        <div class="behavior-title">${escapeHtml(b.title)}</div>
+        <div class="behavior-body">${escapeHtml(b.body)}</div>
+      </div>
+    </div>`;
+  }).join('');
   $view.innerHTML = html;
+  wireItemChecks();
+}
+
+function wireItemChecks() {
+  $view.querySelectorAll('[data-review-id]').forEach(cb => {
+    cb.onclick = (e) => {
+      e.stopPropagation();
+      const id = cb.dataset.reviewId;
+      if (cb.checked) markReviewedOnce(id);
+      else unmarkReviewed(id);
+      render();
+    };
+  });
 }
 
 // -------------------- GLOSSARY --------------------
@@ -897,38 +1263,64 @@ function renderGlossary() {
         g.where.toLowerCase().includes(q))
     : GLOSSARY;
 
-  let html = `<div class="section-title">Glossary</div>
-    <div class="section-sub">Terms that blocked you in the diagnostic. Memorize before Day 2.</div>
+  const gReviewed = reviewedCount('g');
+  let html = `<div class="section-title-row">
+      <div class="section-title">Glossary</div>
+      <div class="review-count">${gReviewed}/${GLOSSARY.length} reviewed</div>
+    </div>
+    <div class="section-sub">Terms that blocked you in the diagnostic. Check off each term as you internalize it.</div>
     <input class="gloss-search" id="glossSearch" type="search" placeholder="Search terms or definitions…" value="${escapeAttr(state.glossSearch)}" />`;
   if (!matched.length) {
     html += '<div class="no-results">No matches for that search.</div>';
   } else {
-    html += matched.map(g => `<div class="gloss-card">
-      <div class="gloss-term">${escapeHtml(g.term)}</div>
-      <div class="gloss-def">${escapeHtml(g.def)}</div>
-      <div class="gloss-where">${escapeHtml(g.where)}</div>
-    </div>`).join('');
+    html += matched.map(g => {
+      const id = `g:${g.term}`;
+      return `<div class="gloss-card item-row">
+        <input type="checkbox" class="item-check" data-review-id="${escapeAttr(id)}" ${isReviewed(id) ? 'checked' : ''} />
+        <div class="item-body">
+          <div class="gloss-term">${escapeHtml(g.term)}</div>
+          <div class="gloss-def">${escapeHtml(g.def)}</div>
+          <div class="gloss-where">${escapeHtml(g.where)}</div>
+        </div>
+      </div>`;
+    }).join('');
   }
   $view.innerHTML = html;
   const inp = document.getElementById('glossSearch');
   inp.oninput = () => { state.glossSearch = inp.value; save(); renderGlossary(); };
   // re-focus after re-render to preserve typing
   if (q) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  wireItemChecks();
 }
 
 // -------------------- CODE SHAPES --------------------
 function renderCode() {
-  let html = `<div class="section-title">Must-know code shapes</div>
-    <div class="section-sub">Drill these until you can write all 6 in <2 min each, blind. By Day 3.</div>`;
-  html += CODE_SHAPES.map((s, i) => `<div class="shape">
-    <div class="shape-head">
-      <div class="shape-title">${escapeHtml(s.title)}</div>
-      <button class="copy-btn" data-copy="${i}">Copy</button>
+  const cReviewed = reviewedCount('c');
+  let html = `<div class="section-title-row">
+      <div class="section-title">Must-know code shapes</div>
+      <div class="review-count">${cReviewed}/${CODE_SHAPES.length} reviewed</div>
     </div>
-    <pre><code>${escapeHtml(s.code)}</code></pre>
-    <div class="shape-note">${escapeHtml(s.note)}</div>
-  </div>`).join('');
+    <div class="section-sub">Drill these until you can write all 6 in &lt;2 min each, blind. By Day 3. Check each off when you can write it from memory.</div>`;
+  html += CODE_SHAPES.map((s, i) => {
+    const id = `c:${i}`;
+    return `<div class="shape">
+      <div class="shape-head">
+        <div class="item-row" style="flex:1;align-items:center">
+          <input type="checkbox" class="item-check" data-review-id="${escapeAttr(id)}" ${isReviewed(id) ? 'checked' : ''} />
+          <div class="shape-title">${escapeHtml(s.title)}</div>
+        </div>
+        <button class="copy-btn" data-copy="${i}">Copy</button>
+      </div>
+      <div class="cm-host" data-cm-idx="${i}"></div>
+      <div class="shape-note">${escapeHtml(s.note)}</div>
+    </div>`;
+  }).join('');
   $view.innerHTML = html;
+  // Render syntax-highlighted code into each host (uses CodeMirror runMode like main app)
+  CODE_SHAPES.forEach((s, i) => {
+    const host = $view.querySelector(`[data-cm-idx="${i}"]`);
+    if (host) renderCmInto(host, s.code);
+  });
   $view.querySelectorAll('[data-copy]').forEach(btn => {
     btn.onclick = async () => {
       const i = parseInt(btn.dataset.copy, 10);
@@ -942,6 +1334,7 @@ function renderCode() {
       }
     };
   });
+  wireItemChecks();
 }
 
 // -------------------- SETTINGS --------------------

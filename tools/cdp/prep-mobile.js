@@ -61,20 +61,26 @@ const out = process.argv[3] || '/tmp/jsdrill-prep-mobile';
 
   // --- Code tab ---
   await s.eval(`document.querySelector('.tab[data-tab="code"]').click()`);
-  await new Promise(r => setTimeout(r, 300));
+  await new Promise(r => setTimeout(r, 600)); // let CodeMirror runMode paint
   const shapes = await s.eval(`document.querySelectorAll('.shape').length`);
   s.assert(shapes === 6, `expected 6 code shapes (got: ${shapes})`);
   const copyBtns = await s.eval(`document.querySelectorAll('.copy-btn').length`);
   s.assert(copyBtns === 6, `expected 6 copy buttons (got: ${copyBtns})`);
+  // CodeMirror syntax highlighting present
+  const cmTokens = await s.eval(`document.querySelectorAll('.cm-host .cm-keyword, .cm-host .cm-def, .cm-host .cm-variable').length`);
+  s.assert(cmTokens > 10, `expected CodeMirror tokens in code shapes (got: ${cmTokens})`);
+  // Per-item checkboxes present on code shapes
+  const codeChecks = await s.eval(`document.querySelectorAll('.shape [data-review-id]').length`);
+  s.assert(codeChecks === 6, `expected 6 per-shape review checkboxes (got: ${codeChecks})`);
   await s.snap('04-code-shapes');
 
-  // --- Cheat tab ---
+  // --- Cheat tab (now uses behavior-card style rows + per-item checkboxes, no table) ---
   await s.eval(`document.querySelector('.tab[data-tab="cheat"]').click()`);
   await new Promise(r => setTimeout(r, 300));
-  const cheatRows = await s.eval(`document.querySelectorAll('.cheat-table tbody tr').length`);
-  s.assert(cheatRows >= 14, `expected ≥14 cheatsheet rows (got: ${cheatRows})`);
   const behaviorCards = await s.eval(`document.querySelectorAll('.behavior-card').length`);
-  s.assert(behaviorCards >= 7, `expected ≥7 interview-behavior cards (got: ${behaviorCards})`);
+  s.assert(behaviorCards >= 22, `expected ≥22 cheat cards (15 patterns + 8 behaviors) (got: ${behaviorCards})`);
+  const cheatChecks = await s.eval(`document.querySelectorAll('.behavior-card [data-review-id]').length`);
+  s.assert(cheatChecks >= 22, `expected ≥22 per-row review checkboxes (got: ${cheatChecks})`);
   await s.snap('05-cheat');
 
   // --- Back to Today, check off a task ---
@@ -134,6 +140,53 @@ const out = process.argv[3] || '/tmp/jsdrill-prep-mobile';
   })()`);
   const openParsed = JSON.parse(openRes || '{}');
   s.assert(openParsed.ok, `open-lesson bridge should succeed (reason: ${openParsed.reason || 'ok'})`);
+
+  // --- Per-item glossary checkbox writes review state ---
+  await s.eval(`document.querySelector('.tab[data-tab="glossary"]').click()`);
+  await new Promise(r => setTimeout(r, 300));
+  // Clear glossary search filter that was set earlier
+  await s.eval(`(() => {
+    const inp = document.getElementById('glossSearch');
+    if (inp && inp.value) { inp.value = ''; inp.dispatchEvent(new Event('input')); }
+  })()`);
+  await new Promise(r => setTimeout(r, 200));
+  const glossChecksBefore = await s.eval(`document.querySelectorAll('.gloss-card [data-review-id]').length`);
+  s.assert(glossChecksBefore >= 14, `expected ≥14 glossary review checkboxes (got: ${glossChecksBefore})`);
+  // Click first glossary item check
+  await s.eval(`document.querySelector('.gloss-card [data-review-id]').click()`);
+  await new Promise(r => setTimeout(r, 200));
+  const reviewedAfter = await s.eval(`JSON.stringify(Object.keys(JSON.parse(localStorage.getItem('jsdrill.prep.v1') || '{}').reviewed || {}))`);
+  const reviewedKeys = JSON.parse(reviewedAfter);
+  s.assert(reviewedKeys.some(k => k.startsWith('g:')), `expected a glossary item (g:*) in reviewed state (got: ${reviewedKeys.join(',') || 'empty'})`);
+
+  // --- Daily Review flow ---
+  await s.eval(`document.querySelector('.tab[data-tab="today"]').click()`);
+  await new Promise(r => setTimeout(r, 300));
+  // Re-expand first block if collapsed (doesn't matter for review test, but keeps page state sane)
+  const promoExists = await s.eval(`document.querySelector('.review-promo button[data-action="start-review"]') ? 1 : 0`);
+  s.assert(promoExists === 1, `Daily Review promo button should be visible on Today tab`);
+  await s.eval(`document.querySelector('.review-promo button[data-action="start-review"]').click()`);
+  await new Promise(r => setTimeout(r, 400));
+  const inSession = await s.eval(`document.querySelector('.review-session') ? 1 : 0`);
+  s.assert(inSession === 1, `clicking Start review should open the review session`);
+  // Peek and grade one item
+  const peekBtn = await s.eval(`document.getElementById('reviewPeekBtn') ? 1 : 0`);
+  s.assert(peekBtn === 1, `Peek button present on first review card`);
+  await s.eval(`document.getElementById('reviewPeekBtn').click()`);
+  await new Promise(r => setTimeout(r, 200));
+  const answerShown = await s.eval(`document.querySelector('.review-answer') ? 1 : 0`);
+  s.assert(answerShown === 1, `Peek reveals .review-answer block`);
+  await s.snap('08-review-card');
+  // Grade "Got it"
+  await s.eval(`document.getElementById('reviewGotitBtn').click()`);
+  await new Promise(r => setTimeout(r, 250));
+  const gotitCount = await s.eval(`JSON.parse(localStorage.getItem('jsdrill.prep.v1') || '{}').review?.gotIt || 0`);
+  s.assert(gotitCount === 1, `Got-it grade should increment review.gotIt (got: ${gotitCount})`);
+  // Exit review
+  await s.eval(`document.getElementById('reviewExitBtn').click()`);
+  await new Promise(r => setTimeout(r, 300));
+  const exited = await s.eval(`document.querySelector('.review-session') ? 0 : 1`);
+  s.assert(exited === 1, `Exit review returns to Today view`);
 
   // --- Settings tab ---
   await s.eval(`document.querySelector('.tab[data-tab="settings"]').click()`);

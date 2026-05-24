@@ -99,6 +99,41 @@ if (missingFromDisk.length || missingFromManifest.length) {
   process.exit(1);
 }
 
+// ── Banned-syntax check ───────────────────────────────────────────────────
+// Per docs/canonical-style.md, a small set of JS constructs is rare-or-never
+// in modern code and shouldn't take up canonical real estate. The check
+// scans reference.code, every L2.exercises[*].template, and L3.canonical.
+// Lessons specifically *about* a banned construct (e.g. a `var` hoisting
+// lesson) go in BANNED_SYNTAX_EXEMPTIONS with a one-line reason.
+const BANNED_SYNTAX_EXEMPTIONS = new Set([
+  's-variables', // lesson is about let/const/var — `var` is part of the curriculum
+  's-loops',     // lesson teaches while AND do-while as the two while-family forms
+  's-closures',  // demonstrates the classic var-vs-let captured-binding loop bug
+]);
+const BANNED_PATTERNS = [
+  { name: 'do...while loop',          re: /\bdo\s*\{/ },
+  { name: '`with` statement',         re: /\bwith\s*\(/ },
+  { name: '`var` declaration',        re: /\bvar\s+[A-Za-z_$]/ },
+  { name: 'labeled break/continue',   re: /\b(?:break|continue)\s+[A-Za-z_$][\w$]*\s*;/ },
+  { name: '`void` operator',          re: /\bvoid\s+[^\s;]/ },
+];
+function stripCommentsAndStrings(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+    .replace(/`(?:\\.|[^`\\])*`/g, '""')
+    .replace(/'(?:\\.|[^'\\])*'/g, '""')
+    .replace(/"(?:\\.|[^"\\])*"/g, '""');
+}
+function scanBanned(src) {
+  const clean = stripCommentsAndStrings(src);
+  const hits = [];
+  for (const p of BANNED_PATTERNS) {
+    if (p.re.test(clean)) hits.push(p.name);
+  }
+  return hits;
+}
+
 // ── L2 + L3 verification ──────────────────────────────────────────────────
 // Density thresholds — PROFILE.md says ≥3 L1 questions and ≥2 L2 exercises
 // per lesson so the mobile drill loop has enough surface area. Tracked here
@@ -107,6 +142,7 @@ if (missingFromDisk.length || missingFromManifest.length) {
 const L1_MIN = 3;
 const L2_MIN = 2;
 const STRICT_DENSITY = process.argv.includes('--strict-density');
+const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
 
 (async () => {
   let pass = 0, fail = 0;
@@ -115,6 +151,7 @@ const STRICT_DENSITY = process.argv.includes('--strict-density');
   const underL2 = [];
   const untaggedMechanics = [];
   const usedMechanicIds = new Set();
+  const bannedHits = [];
   for (const [id, info] of manifestEntries) {
     const lesson = JSON.parse(fs.readFileSync(info.file, 'utf8'));
     if (lesson.status !== 'full') continue;
@@ -124,6 +161,22 @@ const STRICT_DENSITY = process.argv.includes('--strict-density');
     const l2n = lesson.L2?.exercises?.length || 0;
     if (l1n < L1_MIN) underL1.push({ id, section: info.slug, n: l1n });
     if (l2n < L2_MIN) underL2.push({ id, section: info.slug, n: l2n });
+
+    // Banned-syntax scan — covers reference.code, every L2 template, L3 canonical.
+    if (!SKIP_BANNED && !BANNED_SYNTAX_EXEMPTIONS.has(id)) {
+      const sources = [];
+      if (lesson.reference?.code) sources.push({ where: 'reference.code', code: lesson.reference.code });
+      if (lesson.L2?.exercises) {
+        lesson.L2.exercises.forEach((ex, i) => sources.push({ where: `L2#${i}.template`, code: ex.template || '' }));
+      }
+      if (lesson.L3?.canonical) sources.push({ where: 'L3.canonical', code: lesson.L3.canonical });
+      for (const s of sources) {
+        const hits = scanBanned(s.code);
+        for (const name of hits) {
+          bannedHits.push({ id, section: info.slug, where: s.where, name });
+        }
+      }
+    }
 
     // Mechanics field — when registry is present, every referenced id must
     // exist; missing field is a non-fatal warning so tagging can roll out
@@ -185,6 +238,18 @@ const STRICT_DENSITY = process.argv.includes('--strict-density');
   if (fail) {
     for (const f of failures.slice(0, 20)) console.log('  - ' + f);
     if (failures.length > 20) console.log(`  …and ${failures.length - 20} more`);
+    process.exit(1);
+  }
+
+  // Banned-syntax check — hard failure unless --skip-banned-syntax.
+  if (bannedHits.length) {
+    console.log('');
+    console.log(`✗ Banned syntax — ${bannedHits.length} hit${bannedHits.length === 1 ? '' : 's'} across ${new Set(bannedHits.map(h => h.id)).size} lesson${new Set(bannedHits.map(h => h.id)).size === 1 ? '' : 's'} (see docs/canonical-style.md):`);
+    for (const h of bannedHits.slice(0, 30)) {
+      console.log(`  - ${h.section}/${h.id} :: ${h.where} — ${h.name}`);
+    }
+    if (bannedHits.length > 30) console.log(`  …and ${bannedHits.length - 30} more`);
+    console.log('\nFix the canonical to use the allowed idiom, OR add the lesson id to BANNED_SYNTAX_EXEMPTIONS in tools/validate-data.js with a one-line reason if the lesson is genuinely about the banned construct.');
     process.exit(1);
   }
 

@@ -7,7 +7,7 @@
   "description": "Recursively clone plain objects and arrays so mutating the clone never touches the original — the canonical recursion + WeakMap-for-cycles pattern.",
   "mechanics": [],
   "reference": {
-    "code": "function deepClone(value, seen = new WeakMap()) {\n  if (value === null || typeof value !== 'object') return value;  // primitives copy by value\n  if (seen.has(value)) return seen.get(value);                    // cycle: return prior clone\n  const out = Array.isArray(value) ? [] : {};\n  seen.set(value, out);                                           // register BEFORE recursing\n  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);\n  return out;\n}",
+    "code": "function deepClone(value, seen = new WeakMap()) {\n  // Primitives (incl. null which is typeof 'object') are immutable — return as-is.\n  if (value === null || typeof value !== 'object') return value;\n  // Cycle guard: a child pointing back to value finds the in-progress clone.\n  if (seen.has(value)) return seen.get(value);\n  const out = Array.isArray(value) ? [] : {};\n  // Register BEFORE recursing so cyclic graphs don't recurse forever.\n  seen.set(value, out);\n  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);\n  return out;\n}",
     "notes": [
       "Primitives (number, string, boolean, null, undefined) are immutable — return as-is, no copy needed.",
       "Register the new object in the WeakMap before recursing into children, or cyclic graphs recurse forever.",
@@ -75,7 +75,7 @@
   "L3": {
     "prompt": "Implement deepClone(value) with cycle detection. Clone a nested object, mutate the clone, log original.nested.x and clone.nested.x to prove independence, then clone a cyclic object and confirm cycle.self === cycle.",
     "expectedOutput": "1\n99\ntrue\ntrue",
-    "canonical": "function deepClone(value, seen = new WeakMap()) {\n  if (value === null || typeof value !== 'object') return value;\n  if (seen.has(value)) return seen.get(value);\n  const out = Array.isArray(value) ? [] : {};\n  seen.set(value, out);\n  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);\n  return out;\n}\nconst a = { nested: { x: 1 }, list: [1, 2, 3] };\nconst b = deepClone(a);\nb.nested.x = 99;\nconsole.log(a.nested.x);\nconsole.log(b.nested.x);\nconsole.log(a.list !== b.list);\nconst cyc = { name: 'root' };\ncyc.self = cyc;\nconst cycClone = deepClone(cyc);\nconsole.log(cycClone.self === cycClone);",
+    "canonical": "function deepClone(value, seen = new WeakMap()) {\n  // Primitives (incl. null which is typeof 'object') are immutable — return as-is.\n  if (value === null || typeof value !== 'object') return value;\n  // Cycle guard: a child pointing back to value finds the in-progress clone.\n  if (seen.has(value)) return seen.get(value);\n  const out = Array.isArray(value) ? [] : {};\n  // Register BEFORE recursing so cyclic graphs don't recurse forever.\n  seen.set(value, out);\n  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);\n  return out;\n}\nconst a = { nested: { x: 1 }, list: [1, 2, 3] };\nconst b = deepClone(a);\nb.nested.x = 99;\nconsole.log(a.nested.x);\nconsole.log(b.nested.x);\nconsole.log(a.list !== b.list);\nconst cyc = { name: 'root' };\ncyc.self = cyc;\nconst cycClone = deepClone(cyc);\nconsole.log(cycClone.self === cycClone);",
     "hints": [
       "Guard with `typeof value !== 'object' || value === null` — null is typeof 'object'.",
       "Set the WeakMap entry BEFORE the recursion loop so cyclic children find the in-progress clone.",

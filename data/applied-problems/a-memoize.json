@@ -7,7 +7,7 @@
   "description": "Cache a pure function's results by argument key — repeated calls with the same input return the stored value without re-running the body. The optional keyFn lets callers serialize complex args.",
   "mechanics": ["closure-state"],
   "reference": {
-    "code": "function memoize(fn, keyFn) {\n  const cache = new Map();\n  const toKey = keyFn || ((...args) => JSON.stringify(args));   // default key: stringify all args\n  return function (...args) {\n    const k = toKey(...args);\n    if (cache.has(k)) return cache.get(k);                      // cache hit\n    const v = fn(...args);                                      // miss: compute, store, return\n    cache.set(k, v);\n    return v;\n  };\n}",
+    "code": "function memoize(fn, keyFn) {\n  // Map (not plain object) — avoids __proto__ collisions and handles any string key.\n  const cache = new Map();\n  // Default key stringifies all args; callers can inject a custom keyFn.\n  const toKey = keyFn || ((...args) => JSON.stringify(args));\n  return function (...args) {\n    const k = toKey(...args);\n    // Hit: skip the body entirely — the whole point of memoization.\n    if (cache.has(k)) return cache.get(k);\n    const v = fn(...args);\n    cache.set(k, v);\n    return v;\n  };\n}",
     "notes": [
       "Default key is JSON.stringify(args) — fast and good enough for primitives + plain objects, but won't distinguish two objects with identical content from one passed twice.",
       "Memoization only works for pure fns. A fn that reads `Date.now()` or mutates globals will return stale results on cache hits.",
@@ -69,7 +69,7 @@
   "L3": {
     "prompt": "Implement memoize(fn, keyFn?). Call a counter-tracking slow fn with two repeated and one unique arg; show results and that the underlying fn ran only twice.",
     "expectedOutput": "9\n9\n16\ncalls=2",
-    "canonical": "function memoize(fn, keyFn) {\n  const cache = new Map();\n  const toKey = keyFn || ((...args) => JSON.stringify(args));\n  return function (...args) {\n    const k = toKey(...args);\n    if (cache.has(k)) return cache.get(k);\n    const v = fn(...args);\n    cache.set(k, v);\n    return v;\n  };\n}\nlet calls = 0;\nconst square = (n) => { calls++; return n * n; };\nconst m = memoize(square);\nconsole.log(m(3));\nconsole.log(m(3));\nconsole.log(m(4));\nconsole.log('calls=' + calls);",
+    "canonical": "function memoize(fn, keyFn) {\n  // Map (not plain object) — avoids __proto__ collisions and handles any string key.\n  const cache = new Map();\n  // Default key stringifies all args; callers can inject a custom keyFn.\n  const toKey = keyFn || ((...args) => JSON.stringify(args));\n  return function (...args) {\n    const k = toKey(...args);\n    // Hit: skip the body entirely — the whole point of memoization.\n    if (cache.has(k)) return cache.get(k);\n    const v = fn(...args);\n    cache.set(k, v);\n    return v;\n  };\n}\nlet calls = 0;\nconst square = (n) => { calls++; return n * n; };\nconst m = memoize(square);\nconsole.log(m(3));\nconsole.log(m(3));\nconsole.log(m(4));\nconsole.log('calls=' + calls);",
     "hints": [
       "Use a Map keyed by JSON.stringify(args) when no keyFn is provided.",
       "Check cache.has(k) before computing — the whole point is to skip fn() on hits.",

@@ -27,6 +27,18 @@
 
 ---
 
+## Meta-finding (iter 55 vision — fresh-eyes priming ceiling)
+
+**The shipped-feature blindness problem.** Iter 55 spawned 2 vision subagents (A pure-fresh-eyes, B constraint-aware) per the iter-31/iter-48 successful pattern. **Both subagents independently reproposed Pattern Recognition Speed Drill** (A#1 + B#4) — a feature SHIPPED iter 49 as 🔎 Recognize. Subagent A additionally reproposed: Audio Mode (already iter-26 BLOCKED), Concept-tag Mistake Ledger (already iter-48 #3 queued), and Mechanics Map progress view (already in shipped Mechanics modal as "mastered/total badge"). Net: 4 of 5 A-proposals and 2 of 5 B-proposals were duplicates of already-shipped or already-queued features.
+
+**Root cause:** the fresh-eyes prompt template instructs "read PROFILE.md + README.md + manifest.json (titles only); do NOT read SELF-IMPROVE.md / iteration log / .claude/skills/" to avoid priming bias. But it also forbids reading `index.html` / `app.js`, so subagents can't see which UI surfaces already exist. README.md mentions some features but not all (no Recognize mention; no Mechanics modal mention by name).
+
+**Mitigation for future vision iters:** the subagent prompt should include a `## Already-shipped surfaces (do not repropose)` section listing the sidebar control-row buttons + main-viewport modes by emoji + one-line description. This costs ~15 lines of prompt budget and eliminates the 60-80% duplicate-proposal waste rate. Do NOT include the SELF-IMPROVE.md history — that's still bias. Just the user-visible inventory.
+
+**Independent confirmation value:** the duplicates aren't pure waste — they confirm shipped features were independently designable from PROFILE.md + manifest titles, which validates the design fits the rusty-engineer profile. The Recognize convergence (A#1 + B#4) is the second time two independent fresh-eyes hit it (iter-26 + iter-48 also had A+B convergence on Pattern Recognition). High signal-to-noise that Recognize is genuinely load-bearing, which the user-driven iter 51 Stats lifetime-tile follow-up reinforces.
+
+---
+
 ## Meta-finding (iter 31 vision)
 
 **The 3-pivot streak diagnosis.** Iters 28, 29, 30 all PIVOTED per adversary — pivot-rate 3/4 = 75%. The cross-iter pattern (surfaced independently by iter-31 vision subagent B): **the loop is over-indexing on "ambitious new modality" features when the shippable gradient is "recombine existing 143-lesson × 3-level × 327-exercise data into one new mobile-first surface per iter."**
@@ -43,6 +55,51 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 ---
 
 ## Queued
+
+### 2026-05-24 iter 55 — Distractor Drill ("Spot the lie" — wrong-options-as-corpus)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md § State they're in — "syntax degraded … forget exact method names, argument order, the small ceremonies." The app's ~800 carefully-authored L1 *wrong* options are themselves a hand-curated catalog of "plausible JS syntax that almost looks right." They are currently rendered exactly once per lesson then never recombined; the rusty engineer never trains the inverse skill of *spotting* the syntactic look-alike.
+**Mechanic:** A new mobile-native session — show 4 plausibly-looking code snippets / options drawn from L1 distractor pools across lessons in the active track; user taps the *one that is actually a correct answer somewhere in the corpus*. Or the inverse: present 4 options, tap the one that is NEVER a correct answer (the trap). 60-sec session with 10-15 cards; score = correct taps; misses route the source lesson into `state.weakness`.
+**Success criterion:** Within 14 days for users with ≥3 sessions, median L1 first-attempt accuracy on the lessons whose distractors appeared in their Distractor sessions rises measurably vs. their non-distractor-lesson baseline.
+**Estimated scope:** single-iter ship (~150 LOC JS + ~50 LOC CSS; mirrors Rapid-Fire's session shell from iter 54).
+**Data dependency:** none — recombines existing `L1.questions[i].options[]` + `L1.questions[i].answer` across all 143 lessons. New helper builds two indices (correct-answer set + distractor set, both grouped by track); deck draws 3 distractors + 1 known-correct (or 4 distractors with no known-correct = trap card). Schema-additive `state.distractor = {attempts, correct}`.
+**PROFILE.md amendment proposed?** No — sits inside need #1 (syntax re-memorization).
+**Why this is a "new bucket" not "better cell":** First surface that uses the **distractor pool** as the primary input. Every existing L1 surface treats wrong options as ephemera; this surface treats them as the *content*. Pure interleaving on a dimension no other surface uses.
+**Cross-subagent source:** B#3 only (subagent A did not propose this — constraint-aware preamble unlocked it by forcing "what existing data dimension is wasted?"). Independent confirmation that under the iter-31 meta-finding constraint, this is a "recombine existing 143-lesson corpus into a new mobile-first surface" candidate.
+
+---
+
+### 2026-05-24 iter 55 — Reveal Replay (clear the integrity-flagged mastery)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md success-criteria line ("friction between '20 free minutes' and 'I'm drilling' is near zero") combined with PROFILE.md § State they're in (the rusty engineer wants to know which lessons they *actually* know vs. faked). The existing `revealed[lessonId][level]` map and ringed-green dot variant know exactly which lessons the user faked, but there is no path that takes the user from "I cheated" back to "I really know it" without manual hunting. The data exists; the verb doesn't.
+**Mechanic:** A top-of-sidebar banner appears when `Object.keys(state.revealed).length > 0`: "N lessons mastered-with-reveal — drill them clean." Tap → ordered queue routes user only through the L-level they revealed on (e.g., L2 if they hit Reveal on L2); passing without re-reveal clears the flag and demotes the dot from ringed-green to plain green.
+**Success criterion:** Among users with ≥3 revealed entries, ≥50% clear at least one reveal flag in week 1 of shipping (delta on `Object.keys(state.revealed).length`).
+**Estimated scope:** single-iter ship (~80 LOC JS + ~25 LOC CSS; banner + ordered queue + clear-flag-on-clean-pass hook into existing render path).
+**Data dependency:** none — uses `revealed`, `progress`, `currentLessonId` localStorage entries. All already populated.
+**PROFILE.md amendment proposed?** No — sits inside PROFILE.md success criterion line about retention-integrity ("mastered stays mastered").
+**Why this is a "new bucket" not "better cell":** First surface that surfaces the *integrity-of-mastery* dimension. Today the ringed-green dot is a passive scarlet letter; Reveal Replay makes it actionable. The verb side of a noun that already existed.
+**Cross-subagent source:** B#5 only. Subagent A did not propose this — surfacing the existing `revealed` map required knowing what state fields already exist, which the constraint-aware preamble made the agent investigate.
+
+---
+
+### 2026-05-24 iter 55 — 3-Card Warmup swipe-stack (mobile micro-session UI)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md "~80% phone" + the success-criterion line on near-zero entry friction. Today's Plan already serves the right *content* (1 due + 1 path + 1 weak) but requires multi-tap navigation into each lesson. A 3-tap surface beats a 6-tap surface on every commute; this is purely an entry-point compression for the existing query.
+**Mechanic:** A new "⚡ 3-Card Warmup" button in the sidebar control row (next to ⚡ Rapid). Tap → full-screen swipe-card stack: card 1 = next due L1, card 2 = next-on-path L1, card 3 = top-weak L1. Swipe-right to mark answered (auto-grades the L1 pick), swipe-left to skip; 60-90 sec total; finishes with a CTA into normal lesson view.
+**Success criterion:** Among users who tap the button ≥1 time, the median sessions-per-active-day metric rises from current baseline by ≥30% over 14 days (measurable as count of `lastTab` reassignments per active day in localStorage).
+**Estimated scope:** single-iter ship (~150 LOC JS + ~70 LOC CSS for swipe-card animation via CSS transform + Pointer Events).
+**Data dependency:** none — recombines existing `dueReviewIds()`, `starterPathNextId()`, `topWeakLessonId()` helpers into a 3-card array. Per-card L1 question pulled from already-loaded CONTENT cache. No new schema.
+**PROFILE.md amendment proposed?** No — sits inside PROFILE.md success-criteria.
+**Why this is a "new bucket" not "better cell":** First mobile micro-session UI (swipe-card stack); every existing surface is click-into-lesson + scroll. The bucket = sub-2-minute thumb-only entry shape. The PWA-install scope from A#4's proposal is explicitly NOT in this entry — that's a separate ship that can land later without blocking this one.
+**Cross-subagent source:** A#4 only (re-scoped). A's full proposal included PWA install + home-screen icon; the constraint-aware reduction is to ship the SWIPE-CARD-SURFACE alone (data recombination), defer PWA-install + Media Session API to a future entry (those are new-modality, depend on browser-API testing matrix, and would over-fit a single iter).
+
+---
 
 ### 2026-05-24 iter 48 — Pattern Recognition Speed Drill (UNBLOCKED reframe)
 

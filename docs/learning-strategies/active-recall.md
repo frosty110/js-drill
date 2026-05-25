@@ -16,6 +16,19 @@ app's existence.
 
 ## How the app encodes it today
 
+- **🎰 Gotcha Roulette (iter 83).** Standalone recall stream over the
+  `reference.notes[]` corpus (2–5 strings × 143 lessons ≈ 400 cards).
+  Sidebar button → 8-card session; each card shows ONE note string with
+  the source lesson title hidden (rendered as `Basics · ???`); user
+  2-taps "✓ Knew it" or "✗ Didn't"; reveal then shows the actual
+  lesson title + section + a "Drill this lesson →" deep-link CTA + a
+  "Next card" button. Misses flag the lesson in `state.weakness` so
+  the rusty engineer's half-remembered traps feed back into normal SR
+  + weak-spot rotation. First surface that treats `reference.notes[]`
+  strings as the atomic recall unit — every existing surface treated
+  notes as ornamentation around code, never as the drilled artifact
+  itself. Gym-friendly, phone-friendly: a one-line trap appears, you
+  decide know-or-not in one tap.
 - **📐 Smell-Test Complexity-Claim (iter 79).** Loads a small curated
   map (`data/complexity-claims.json`) of `{lessonId: {actual,
   distractor, note}}` for high-traffic patterns. Each card shows the

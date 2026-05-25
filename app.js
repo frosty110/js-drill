@@ -129,6 +129,7 @@ const state = {
   bugHunt: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 73: 🪲 Bug-Hunt — §9B code-evaluation skill drill (additive, no `__v` bump)
   crystal: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 77: 🔮 Predict — mental-execution drill (additive, no `__v` bump)
   claim: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 79: 📐 Smell-Test Complexity-Claim drill (additive, no `__v` bump)
+  gotcha: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 83: 🎰 Gotcha Roulette — reference.notes recall stream (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -522,6 +523,15 @@ function loadProgress() {
           lastRunAt: +parsed.claim.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 83: 🎰 Gotcha Roulette lifetime stats. Legacy users get zeros.
+    state.gotcha = parsed.gotcha && typeof parsed.gotcha === 'object'
+      ? {
+          attempts: +parsed.gotcha.attempts || 0,
+          correct: +parsed.gotcha.correct || 0,
+          sessions: +parsed.gotcha.sessions || 0,
+          lastRunAt: +parsed.gotcha.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -588,6 +598,7 @@ function saveProgress() {
     bugHunt: state.bugHunt,
     crystal: state.crystal,
     claim: state.claim,
+    gotcha: state.gotcha,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1119,6 +1130,136 @@ async function startBigOSession() {
   // skips Rapid-Fire's full-corpus preload (heavier) and shorter session
   // length matches the denser concentration of complexity Qs.
   return _runRapidFireWithDeck(deck, { label: '⏱ Big-O', emoji: '⏱' });
+}
+
+// iter 83: 🎰 Gotcha Roulette — standalone recall stream over reference.notes[].
+// The `notes[]` corpus (2-5 strings × 143 lessons = ~400 cards) has been
+// on-disk since project start and is read by ~zero surfaces — every existing
+// surface treats notes as ornamentation around code. This surface treats them
+// as the atomic recall unit: one note per card, lesson title hidden; user
+// 2-taps "knew it" / "didn't"; reveal shows lesson + deep-link CTA. Trains
+// surfacing the half-remembered traps (off-by-one, mutation footguns,
+// coercion edges) without the navigation cost of opening each lesson.
+// From `ideas-by-category.md § 1 → Gotcha Roulette` (iter-82 vision top pick).
+const GOTCHA_DECK_LEN = 8;
+async function _gotchaBuildDeck() {
+  // Preload a broad sample across all tracks so the pool has variety.
+  const sample = CURRICULUM.filter(l => l.status === 'full').slice(0, 60);
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+      if (Object.keys(CONTENT).length >= 30) break;
+    }
+  }
+  // Flatten all notes across all loaded lessons.
+  const pool = [];
+  for (const lesson of CURRICULUM) {
+    const c = CONTENT[lesson.id];
+    if (!c || !c.reference || !Array.isArray(c.reference.notes)) continue;
+    for (let ni = 0; ni < c.reference.notes.length; ni++) {
+      const note = c.reference.notes[ni];
+      if (typeof note !== 'string' || note.length < 20) continue; // skip thin ornament
+      pool.push({
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        sectionName: lesson.section,
+        note
+      });
+    }
+  }
+  if (pool.length < 4) return null;
+  // Fisher-Yates shuffle.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, GOTCHA_DECK_LEN);
+}
+
+async function startGotchaSession() {
+  const deck = await _gotchaBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('Gotcha needs more loaded lessons. Click around a few first, then try again.');
+    return;
+  }
+  state.gotcha.sessions++;
+  state.gotcha.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, knew = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell gotcha-shell">
+        <div class="recognize-header">
+          <span>🎰 Gotcha · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-gotcha">✕ Exit</button>
+        </div>
+        <div class="gotcha-tag">${escapeHtml(card.sectionName)} · ??? </div>
+        <div class="gotcha-note">${escapeHtml(card.note)}</div>
+        <div class="gotcha-options">
+          <button class="recognize-opt gotcha-opt" data-pick="knew">✓ Knew it</button>
+          <button class="recognize-opt gotcha-opt" data-pick="didnt">✗ Didn't</button>
+        </div>
+        <div class="recognize-feedback" data-gotcha-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-gotcha"]').addEventListener('click', () => renderLesson());
+    const opts = shell.querySelectorAll('.gotcha-opt');
+    let answered = false;
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const wasKnew = btn.dataset.pick === 'knew';
+        if (wasKnew) knew++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.gotcha.attempts++;
+        if (wasKnew) state.gotcha.correct++;
+        saveProgress();
+        opts.forEach(b => b.disabled = true);
+        btn.classList.add(wasKnew ? 'recognize-opt-correct' : 'recognize-opt-wrong');
+        const fb = shell.querySelector('[data-gotcha-feedback]');
+        if (fb) {
+          fb.innerHTML = `
+            <div class="gotcha-reveal">
+              <div class="gotcha-reveal-title">${escapeHtml(card.lessonTitle)}</div>
+              <div class="gotcha-reveal-section">${escapeHtml(card.sectionName)}</div>
+              <button class="gotcha-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="gotcha-next" data-action="gotcha-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="gotcha-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((knew / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell gotcha-shell">
+        <div class="recognize-header"><span>🎰 Gotcha · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${knew} of ${deck.length} traps recognized · ${deck.length - knew} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.gotcha.correct} / ${state.gotcha.attempts} (${state.gotcha.attempts > 0 ? Math.round(state.gotcha.correct / state.gotcha.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="gotcha-again">🎰 Another spin</button>
+            <button class="secondary" data-action="gotcha-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="gotcha-again"]').addEventListener('click', () => startGotchaSession());
+    shell.querySelector('[data-action="gotcha-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
 }
 
 // iter 79: 📐 Smell-Test Complexity-Claim drill — §9B Code Evaluation Skills.
@@ -6079,6 +6220,12 @@ async function init() {
   // drill that trains "does the stated complexity match the code?" reflex.
   document.getElementById('claim-btn').addEventListener('click', () => {
     startClaimSession();
+  });
+
+  // iter 83: 🎰 Gotcha Roulette — reference.notes recall stream. Surfaces
+  // the half-remembered traps without the cost of opening each lesson.
+  document.getElementById('gotcha-btn').addEventListener('click', () => {
+    startGotchaSession();
   });
 
   // iter 54: ⚡ Rapid-Fire L1 stream — cross-lesson interleaved tap surface.

@@ -27,6 +27,22 @@
 
 ---
 
+## Meta-finding (iter 59 vision — shipped-surfaces inventory worked)
+
+**The iter-55 mitigation landed cleanly.** Iter 55 surfaced a 60-80% duplicate-proposal rate caused by the fresh-eyes prompt forbidding reads of SELF-IMPROVE / iteration log / app.js. Mitigation = add a `## Already-shipped surfaces (do not repropose)` inventory to the subagent prompt (sidebar buttons + per-lesson tab surfaces + Stats tiles + BLOCKED entries). Iter 59 was the first vision iter to use the mitigation.
+
+**Result:** subagent A (pure-fresh-eyes) and B (constraint-aware) BOTH proposed ZERO duplicates of shipped surfaces — a clean drop from 60-80% → ~0% across both subagents. The inventory cost ~25 lines of prompt budget per subagent and saved every subagent slot for novel proposals.
+
+**Asymmetric subagent pattern reproduced (fifth time after iters 26/31/48/55):** A went ambitious (audio rehearsal with SpeechRecognition, peer-paired WebRTC, content-authoring-heavy proposals) and B stayed strictly inside the constraint regime. A produced 5 high-engineering-cost ideas with PROFILE Amendment dependencies; B produced 5 single-iter-ship pure-data-recombination ideas. The two subagents do NOT converge on the same proposals under this regime — the constraint preamble is doing the work. **A's value is now in the "what would the loop never reach" function:** Talk-Track Recorder + Friend-Mode + Idiom Glossary + Live Variant-Generator are all worth their own future vision iters under different constraint regimes (e.g., after PROFILE Amendment ratification, or after a content-authoring iter).
+
+**Subagent B's framing tool — "what previously-untapped dimension of existing data does this surface?":** All 5 B proposals named their dimension explicitly (calendar density, track×tag transfer, within-lesson temporal, risk intersection, forward projection). This is a sharper "new bucket" test than the original constraint preamble's "prefer recombination over modality" framing. Worth folding into future vision-iter prompts.
+
+**4th promotion candidate not taken this iter:** B#2 Mechanics Heatmap (Track × Tag Matrix) — joins `lesson.mechanics[]` (73% coverage across 151 lessons, 38 unique tags per iter-59 corpus scan) × `lesson.track` × `state.progress`. Would surface transfer gaps like "mastered sliding-window in syntax, failed it in patterns." Held back from top-3 only because the existing Mechanics modal partially serves the lesson-grouping use case; the Heatmap's matrix view is differentiated but lower-priority than the 3 promoted entries. Re-promote in a future vision iter if the top-3 ship cleanly.
+
+**5th promotion candidate not taken this iter:** B#5 Section Velocity Pacer (forward-projection ETA chip per section) — the "forward-projection" dimension is novel and B made a clean case, but ETA predictions need ≥14 days of `lastPassedAt` history to be non-noisy, which means the surface stays empty for new users. Lower priority than the 3 promoted entries which all work from day 1.
+
+---
+
 ## Meta-finding (iter 55 vision — fresh-eyes priming ceiling)
 
 **The shipped-feature blindness problem.** Iter 55 spawned 2 vision subagents (A pure-fresh-eyes, B constraint-aware) per the iter-31/iter-48 successful pattern. **Both subagents independently reproposed Pattern Recognition Speed Drill** (A#1 + B#4) — a feature SHIPPED iter 49 as 🔎 Recognize. Subagent A additionally reproposed: Audio Mode (already iter-26 BLOCKED), Concept-tag Mistake Ledger (already iter-48 #3 queued), and Mechanics Map progress view (already in shipped Mechanics modal as "mastered/total badge"). Net: 4 of 5 A-proposals and 2 of 5 B-proposals were duplicates of already-shipped or already-queued features.
@@ -55,6 +71,51 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 ---
 
 ## Queued
+
+### 2026-05-24 iter 59 — Weak-Spot Decay Radar (intersection of weakness + due + reveal)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md success criterion line ("Mastered lessons stay mastered across SR intervals 1d→30d") + the daily-decision-fatigue gap. Today the user must mentally cross-reference Review badge (due lessons), Weak Spots button (lessons with L1 misses), and Reveal Replay (lessons mastered-with-reveal) to figure out the *highest-leverage* drill of the day. Those three signals exist independently but are never joined — and the union of "wobbly + about to slip + cheated last time" is the actual top-priority list. The forward-facing version of "what should I drill right now."
+**Mechanic:** A new sidebar pill `📡 At Risk` opens a vertical list (mobile-native, ≤7 rows) sorted by `dueAt - now` ascending, filtered to lessons that are in `state.weakness` OR have `state.revealed[id]` set. Each row: title + days-til-due chip + miss-count badge + reveal-flag indicator. Tap → jump to lesson.
+**Success criterion:** Within 14 days for users with ≥1 At Risk row, first-try L1 pass rate on lessons opened via At Risk exceeds first-try pass rate on lessons opened via Weak Spots alone by ≥10pp (controlling for difficulty via the iter-23 lesson-audit score).
+**Estimated scope:** single-iter ship (~80-120 LOC JS + ~30 LOC CSS).
+**Data dependency:** none — `state.weakness`, `state.reviews`, `state.revealed` all populated since iters 9 / 32 / earlier.
+**PROFILE.md amendment proposed?** No — sits inside need #4 (spaced reinforcement) + need #5 (memorization tooling).
+**Why this is a "new bucket" not "better cell":** First surface that INTERSECTS three independent signals. The bucket = "highest-priority drill list of the day" — until now the user had to be the join engine.
+**Subagent source:** iter-59 B#4 (constraint-aware). A did not propose this — A went ambitious (audio, voice, content authoring). The constraint preamble surfaced an obvious intersection nobody had named.
+
+---
+
+### 2026-05-24 iter 59 — Mock Replay Reel (within-lesson temporal trajectory)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md success criterion line on "Mock interview personal-bests trend down over weeks" — but today the app only shows the floor (best time), not the trajectory. The user can't see whether their times are improving, plateauing, or regressing on any given lesson. The data IS already collected (`state.mockHistory[id]` stores up to 5 attempt times) but the only consumer is `Math.min()` for the personal-best display. The temporal-within-lesson dimension is data-on-disk that the UI throws away.
+**Mechanic:** On the per-lesson sparkline area (above the tabs), add a `⌚ Reel` toggle that renders 5 dots oldest→newest, labeled with ms each. Tap a dot → tile pops up showing delta vs best ("3rd attempt: 4:12, +18s from best") plus a trend arrow (↓ improving / → flat / ↑ regressing) based on linear-fit across the 5 points.
+**Success criterion:** For lessons with ≥3 mock attempts, ≥50% of users who see the Reel show a monotonically-decreasing slope within 30 days; mock-start rate on Reel-visible lessons exceeds baseline by ≥15%.
+**Estimated scope:** single-iter ship (~80 LOC JS + ~25 LOC CSS).
+**Data dependency:** none — `mockHistory[id]=[ms,...]` cap-5 already written (see app.js state schema). Zero new fields.
+**PROFILE.md amendment proposed?** No — directly maps to the existing PROFILE success criterion about mock-best trends.
+**Why this is a "new bucket" not "better cell":** Activates already-stored throwaway data. The within-lesson temporal dimension (5 attempts over time on a SINGLE lesson) is orthogonal to both the existing per-lesson sparkline (which shows L1/L2/L3 pass events across days, not mock times) and the Stats personal-bests list (which shows the floor across all lessons). New axis.
+**Subagent source:** iter-59 B#3 (constraint-aware). The "data already on disk; UI throws it away" framing is the unlock.
+
+---
+
+### 2026-05-24 iter 59 — Streak Map (60-day calendar density heatmap)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md "Friction between '20 free minutes' and 'I'm drilling' is near zero" + the variable-reward / habit-formation principle. Today the app has no surface showing the *calendar shape* of the user's practice — only the forward-facing SR queue and the per-lesson 30-day sparkline. A GitHub-style 60-day heatmap activates the streak-visibility loop that drives daily return rates in Duolingo / GitHub / Wordle without copying their gamification anti-patterns (PROFILE.md L75).
+**Mechanic:** A new sidebar pill `📅 Streak` opens a 60-cell grid (10×6) colored by # of pass events (L1/L2/L3) that day. Tap a cell → filter sidebar to lessons touched that day. Toggle off to clear filter. No streak counts shown above the cells (avoids the "broke my streak, can't recover" anti-pattern); just the density pattern.
+**Success criterion:** Within 14 days of exposure, ≥30% of users open the Streak modal ≥1 time per session; 7-day median consecutive-day rate increases vs the prior 14-day baseline (computed from `reviews[].lastPassedAt` history).
+**Estimated scope:** single-iter ship (~100-150 LOC JS + ~50 LOC CSS).
+**Data dependency:** none — derived from `state.reviews[id].lastPassedAt` (already a timestamp) bucketed by `toDateString()`. Optionally enriched by `state.history` events (iter-32 schema) for finer-grained density.
+**PROFILE.md amendment proposed?** No — sits inside need #4 + the near-zero-friction success criterion.
+**Why this is a "new bucket" not "better cell":** The app's existing temporal surfaces all look at the past in one direction (per-lesson sparkline) or the future (SR due dates). The backward calendar shape is a new view — the *pattern* of practice across time rather than the events themselves.
+**Subagent source:** iter-59 B#1 (constraint-aware). The "habit visualization without gamification" framing is what threads the PROFILE.md anti-pattern needle.
+
+---
 
 ### 2026-05-24 iter 55 — Distractor Drill ("Spot the lie" — wrong-options-as-corpus)
 
@@ -180,7 +241,7 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ### 2026-05-24 iter 31 — Lesson-history sparkline (per-lesson temporal retention signal)
 
-**Status:** queued
+**Status:** SHIPPED iter 33 (scaffold) + iter 34 (mobile probe). Status row was never updated when the iter completed — caught and fixed by iter 59 vision-iter Step 1A roadmap audit. Implementation: 30-day per-lesson sparkline above the tabs, fed by `state.history = {lessonId: [{at, event}]}` schema field added in iter 32 (`__v: 6` bump). Events emitted on L1/L2/L3 pass + L1-miss. Tick colors: emerald (pass), rose (L1-miss), sky (L3-pass), dark (empty). Mobile probe `tools/cdp/sparkline-renders.js` (4 assertions). `window.__sparklineEnabled = true` confirmed in app.js line 793.
 
 **Value claim:** PROFILE.md success criterion line 66 says verbatim "Mastered lessons stay mastered across SR intervals (1d → 30d)" — but the app currently has NO per-lesson view of how the user has been doing over time. Just a current-state dot. The rusty engineer can't see "I keep re-failing L1 on this lesson every 14 days" — which is the exact signal needed to decide whether SR is working for them. Closes the measurement gap on PROFILE.md's stated success criterion.
 **Mechanic:** In each lesson's header (above the tabs), a tiny 30-day sparkline shows passes/misses per day for that lesson: green tick per L1 pass, red tick per L1 miss, blue tick per L3 pass. Built from a new lightweight `history: { lessonId: [{at, event}] }` localStorage field appended on every level-pass/miss. First per-lesson temporal view in the app.

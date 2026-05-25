@@ -6670,6 +6670,28 @@ async function init() {
           </div>
         </div>
       ` : ''}
+      ${(state.crystal?.attempts || 0) > 0 ? `
+        <div style="margin-top: 8px;">
+          <div style="background: rgba(168,85,247,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(168,85,247,0.25); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #94a3b8; font-size: 12px;">🔮 Predict lifetime <span style="color: #64748b; font-weight: 400;">(mental-execution)</span></div>
+              <div style="color: #d8b4fe; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.crystal.correct} / ${state.crystal.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.crystal.correct / state.crystal.attempts * 100)}%)</span></div>
+            </div>
+            <button data-action="open-crystal-from-stats" style="background: rgba(168,85,247,0.16); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Predict →</button>
+          </div>
+        </div>
+      ` : ''}
+      ${(state.bugHunt?.attempts || 0) > 0 ? `
+        <div style="margin-top: 8px;">
+          <div style="background: rgba(103,232,249,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(103,232,249,0.25); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #94a3b8; font-size: 12px;">🪲 Bug-Hunt lifetime <span style="color: #64748b; font-weight: 400;">(spot the operator flip)</span></div>
+              <div style="color: #67e8f9; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.bugHunt.correct} / ${state.bugHunt.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.bugHunt.correct / state.bugHunt.attempts * 100)}%)</span></div>
+            </div>
+            <button data-action="open-bughunt-from-stats" style="background: rgba(103,232,249,0.16); color: #67e8f9; border: 1px solid rgba(103,232,249,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Hunt →</button>
+          </div>
+        </div>
+      ` : ''}
       ${(() => {
         // iter 58: Mistake Tagging top-5 tile. Only renders when the user
         // has tagged ≥1 miss — keeps Stats quiet for users who never opt in.
@@ -6716,6 +6738,15 @@ async function init() {
     document.getElementById('stats-body').querySelector('[data-action="open-claim-from-stats"]')?.addEventListener('click', () => {
       statsModal.style.display = 'none';
       startClaimSession();
+    });
+    // iter 85: Crystal + Bug-Hunt Drill-from-Stats buttons. Same pattern.
+    document.getElementById('stats-body').querySelector('[data-action="open-crystal-from-stats"]')?.addEventListener('click', () => {
+      statsModal.style.display = 'none';
+      startCrystalSession();
+    });
+    document.getElementById('stats-body').querySelector('[data-action="open-bughunt-from-stats"]')?.addEventListener('click', () => {
+      statsModal.style.display = 'none';
+      startBugHuntSession();
     });
     statsModal.style.display = 'block';
   }

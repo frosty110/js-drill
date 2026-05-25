@@ -25,6 +25,21 @@ app's existence.
 - **Reveal tracking** — if the user reveals the answer, the lesson is marked
   with a different dot variant. Revealing isn't active recall; the app refuses
   to lie about it.
+- **🃏 Reveal Replay (iter 56)** closes the integrity loop on reveal-tracking.
+  Until iter 56 the ringed-green "mastered-with-reveal" dot was a passive
+  scarlet letter — the app knew the user had peeked, but offered no path
+  back to honest mastery without manual hunting. Reveal Replay surfaces a
+  sidebar button (🃏 + count) when `state.revealed` is non-empty and routes
+  the user to the next revealed lesson at the level they revealed. A
+  `markPassed` invariant then fires the clean-pass clear: if the user
+  passes a previously-revealed level **without re-clicking reveal in the
+  current attempt** (tracked by an in-memory `_revealedInCurrentAttempt`
+  map that resets in `selectLesson`), the revealed flag is deleted and the
+  dot demotes from ringed-green to plain green. A 2.2-second toast confirms
+  the demotion. The invariant works generally — clean passes also clear
+  flags when the user finds revealed lessons via normal navigation; the
+  button is just the surface that guides the queue. This is active recall
+  enforced as an integrity invariant rather than just a measurement.
 - **No "show solution then quiz"** pattern — Reference is a separate tab the
   user must explicitly leave to drill.
 - **Pattern Recognition Speed Drill (iter 49)** turns RECOGNITION — the

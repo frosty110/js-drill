@@ -625,9 +625,17 @@ function formatDueRelative(lessonId) {
   if (hours >= 1) return `in ${hours}h`;
   return 'in <1h';
 }
+// iter 56: in-memory tracker so we can tell a "clean pass" (passed without
+// re-revealing in this attempt) from a "pass after reveal" (revealed flag
+// stays set). Keyed by lessonId; cleared in selectLesson when the user
+// switches lessons. Not persisted — every fresh page load starts clean
+// and the existing revealed flag is what survives.
+const _revealedInCurrentAttempt = {};
 function markRevealed(lessonId, level) {
   state.revealed[lessonId] = state.revealed[lessonId] || {};
   state.revealed[lessonId][level] = true;
+  _revealedInCurrentAttempt[lessonId] = _revealedInCurrentAttempt[lessonId] || {};
+  _revealedInCurrentAttempt[lessonId][level] = true;
   // Loss-side SR gradient: revealing the answer on a due lesson means the
   // user couldn't produce it from memory. Demote the bucket so the
   // schedule reflects actual recall strength rather than ratcheting up.
@@ -656,6 +664,44 @@ function demoteReview(lessonId) {
 }
 function wasRevealed(lessonId, level) {
   return !!(state.revealed && state.revealed[lessonId] && state.revealed[lessonId][level]);
+}
+// iter 56: Reveal Replay queue. Walk state.revealed and return an ordered
+// list of {lessonId, lessonTitle, level} entries for lessons that still
+// exist in CURRICULUM. Sort: L2 entries before L3 entries (L2 is cued recall
+// — easier to clean first), then by section order in CURRICULUM (groups
+// related drills). Closes iter-55 roadmap #2 (Reveal Replay). Sourced from
+// vision iter-55 subagent B#5 (constraint-aware).
+function _revealedQueue() {
+  const queue = [];
+  for (const lessonId of Object.keys(state.revealed || {})) {
+    const levels = state.revealed[lessonId];
+    if (!levels || typeof levels !== 'object') continue;
+    const lesson = findLesson(lessonId);
+    if (!lesson || lesson.status !== 'full') continue;
+    for (const level of ['L2', 'L3']) {  // L2 first per sort policy
+      if (levels[level]) queue.push({ lessonId, lessonTitle: lesson.title, level });
+    }
+  }
+  return queue;
+}
+// iter 56: ephemeral toast — surfaces a 2-second confirmation when a clean
+// pass clears a reveal flag. Auto-removes; no state. Mirrors existing toast
+// pattern (e.g., L3 mastery banner) but simpler — pure overlay, no actions.
+function _showRevealClearedToast(lessonId, level) {
+  const lesson = findLesson(lessonId);
+  if (!lesson) return;
+  const existing = document.querySelector('.reveal-cleared-toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'reveal-cleared-toast';
+  toast.innerHTML = `🃏 ✨ ${escapeHtml(level)} drilled clean — reveal flag cleared on <strong>${escapeHtml(lesson.title)}</strong>`;
+  document.body.appendChild(toast);
+  // Slide-in via CSS class; remove after 2.2s.
+  requestAnimationFrame(() => toast.classList.add('reveal-cleared-toast-show'));
+  setTimeout(() => {
+    toast.classList.remove('reveal-cleared-toast-show');
+    setTimeout(() => toast.remove(), 250);
+  }, 2200);
 }
 function recordWrong(lessonId) {
   state.weakness[lessonId] = (state.weakness[lessonId] || 0) + 1;
@@ -1427,6 +1473,24 @@ function starterPathNextId() {
 function markPassed(lessonId, level) {
   state.progress[lessonId] = state.progress[lessonId] || {};
   const wasMastered = lessonOverallStatus(lessonId) === 'mastered';
+  // iter 56: Reveal Replay clean-pass invariant. If the user is passing a
+  // level they had previously revealed AND they didn't click reveal during
+  // THIS attempt, treat it as a "drilled it clean" — clear the revealed
+  // flag so the ringed-green dot demotes to plain green. The dot variant
+  // earned its ring because the user faked it; passing without faking it
+  // again is the verb that revokes the scarlet letter.
+  let clearedRevealFlag = false;
+  if (
+    (level === 'L2' || level === 'L3') &&
+    wasRevealed(lessonId, level) &&
+    !(_revealedInCurrentAttempt[lessonId] && _revealedInCurrentAttempt[lessonId][level])
+  ) {
+    delete state.revealed[lessonId][level];
+    if (state.revealed[lessonId] && Object.keys(state.revealed[lessonId]).length === 0) {
+      delete state.revealed[lessonId];
+    }
+    clearedRevealFlag = true;
+  }
   state.progress[lessonId][level] = 'passed';
   // L3 advances the SR bucket. L2 on a due lesson holds the bucket but
   // resets dueAt — gives mobile users a way to keep the due list moving
@@ -1446,6 +1510,10 @@ function markPassed(lessonId, level) {
   renderSidebar();
   if (lessonId === state.currentLessonId) updateLessonHeaderInPlace();
   updateReviewBadge();
+  // iter 56: surface a transient toast when the reveal flag was cleared on
+  // this clean pass, so the user understands the dot just demoted from
+  // ringed-green to plain green.
+  if (clearedRevealFlag) _showRevealClearedToast(lessonId, level);
 }
 function updateReviewBadge() {
   const btn = document.getElementById('review-btn');
@@ -1480,6 +1548,15 @@ function updateReviewBadge() {
     const n = Object.keys(state.weakness || {}).length;
     weakBtn.classList.toggle('hidden', n === 0);
     if (weakCnt) weakCnt.textContent = n;
+  }
+  // iter 56: Reveal Replay button visibility + count. Mirrors the weak-btn
+  // pattern — auto-hides when the queue is empty (clean state stays quiet).
+  const replayBtn = document.getElementById('reveal-replay-btn');
+  const replayCnt = document.getElementById('reveal-replay-count');
+  if (replayBtn) {
+    const q = _revealedQueue();
+    replayBtn.classList.toggle('hidden', q.length === 0);
+    if (replayCnt) replayCnt.textContent = q.length;
   }
 }
 function updateLessonHeaderInPlace() {
@@ -2027,6 +2104,9 @@ function selectLesson(id) {
   // start makes sense. See BS-12 + inProgressCache.
   if (state.currentLessonId && state.currentLessonId !== id) {
     _cacheClearLesson(state.currentLessonId);
+    // iter 56: also drop the leaving lesson's reveal-this-attempt tracker so
+    // the next visit starts a fresh attempt window for clean-pass detection.
+    delete _revealedInCurrentAttempt[state.currentLessonId];
   }
   state.currentLessonId = id;
   // Sentinel — renderLesson resolves this to the first available tab once
@@ -4173,6 +4253,32 @@ async function init() {
       saveProgress();
       renderSidebar();
       renderLesson();
+    }
+  });
+
+  // iter 56: 🃏 Reveal Replay — route to the next revealed lesson + level.
+  // Closes iter-55 roadmap #2 (constraint-aware reframe from vision iter 55).
+  // The queue is just the surface that GUIDES the user; the clean-pass
+  // clear-flag invariant in markPassed works generally so clears also fire
+  // when the user finds a revealed lesson via normal navigation.
+  document.getElementById('reveal-replay-btn').addEventListener('click', () => {
+    const queue = _revealedQueue();
+    if (!queue.length) return;
+    // Drop the current lesson's reveal tracker BEFORE routing so the user
+    // gets a clean attempt window on arrival (lets the clean-pass invariant
+    // fire even if they were just on this lesson).
+    if (state.currentLessonId) delete _revealedInCurrentAttempt[state.currentLessonId];
+    const next = queue[0];
+    state.currentLessonId = next.lessonId;
+    state.currentTab = next.level;
+    delete _revealedInCurrentAttempt[next.lessonId];
+    syncBinderToLesson(next.lessonId);
+    saveProgress();
+    renderSidebar();
+    renderLesson();
+    _updateHash();
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      document.body.classList.remove('sidebar-open');
     }
   });
 

@@ -6641,10 +6641,32 @@ async function init() {
         <div style="margin-top: 8px;">
           <div style="background: rgba(251,191,36,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(251,191,36,0.2); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #94a3b8; font-size: 12px;">🔎 Recognize lifetime</div>
+              <div style="color: #94a3b8; font-size: 12px;">🔎 Recognize lifetime <span style="color: #64748b; font-weight: 400;">(incl. 🎯 Reverse)</span></div>
               <div style="color: #fcd34d; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.recognize.correct} / ${state.recognize.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.recognize.correct / state.recognize.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-recognize-from-stats" style="background: rgba(251,191,36,0.16); color: #fcd34d; border: 1px solid rgba(251,191,36,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Drill →</button>
+          </div>
+        </div>
+      ` : ''}
+      ${(state.gotcha?.attempts || 0) > 0 ? `
+        <div style="margin-top: 8px;">
+          <div style="background: rgba(244,114,182,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(244,114,182,0.25); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #94a3b8; font-size: 12px;">🎰 Gotcha lifetime <span style="color: #64748b; font-weight: 400;">(reference.notes recall)</span></div>
+              <div style="color: #fbcfe8; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.gotcha.correct} / ${state.gotcha.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.gotcha.correct / state.gotcha.attempts * 100)}%)</span></div>
+            </div>
+            <button data-action="open-gotcha-from-stats" style="background: rgba(244,114,182,0.16); color: #fbcfe8; border: 1px solid rgba(244,114,182,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Spin →</button>
+          </div>
+        </div>
+      ` : ''}
+      ${(state.claim?.attempts || 0) > 0 ? `
+        <div style="margin-top: 8px;">
+          <div style="background: rgba(20,184,166,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(20,184,166,0.25); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #94a3b8; font-size: 12px;">📐 Claim lifetime <span style="color: #64748b; font-weight: 400;">(smell-test complexity)</span></div>
+              <div style="color: #5eead4; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.claim.correct} / ${state.claim.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.claim.correct / state.claim.attempts * 100)}%)</span></div>
+            </div>
+            <button data-action="open-claim-from-stats" style="background: rgba(20,184,166,0.16); color: #5eead4; border: 1px solid rgba(20,184,166,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Spin →</button>
           </div>
         </div>
       ` : ''}
@@ -6685,6 +6707,15 @@ async function init() {
     document.getElementById('stats-body').querySelector('[data-action="open-recognize-from-stats"]')?.addEventListener('click', () => {
       statsModal.style.display = 'none';
       startRecognizeSession();
+    });
+    // iter 84: wire the Gotcha + Claim Drill-from-Stats buttons (only present when lifetime > 0).
+    document.getElementById('stats-body').querySelector('[data-action="open-gotcha-from-stats"]')?.addEventListener('click', () => {
+      statsModal.style.display = 'none';
+      startGotchaSession();
+    });
+    document.getElementById('stats-body').querySelector('[data-action="open-claim-from-stats"]')?.addEventListener('click', () => {
+      statsModal.style.display = 'none';
+      startClaimSession();
     });
     statsModal.style.display = 'block';
   }

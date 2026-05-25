@@ -93,7 +93,7 @@ The convention:
 - **Daily problem (Wordle-style, no leaderboards)** — one shared problem per day, derived deterministically from `Math.floor(Date.now() / 86400000) % lessonCount` (every user gets the same lesson on the same calendar day, no server needed). User attempts; on pass, sees "1,247 days drilled by everyone today" *only as a coincidence count* — no leaderboard, no streak comparisons, no usernames. Bridges TWO documented cross-cutting gaps simultaneously: (1) the *community / shared-experience* surface (zero existing — every prior entry is solo-mode), and (2) *external-rhythm habit formation* (Cold open daily is internal rhythm; this is calendar-anchored external rhythm — same shape as Wordle/NYT Spelling Bee/Daily Crossword). Threads PROFILE.md's anti-gamification warning by deliberately omitting competitive elements — the surface is "today we all drilled this together" coincidence, not contest.
 
 **Cross-cutting concerns:**
-- Weak-spot tracker operates only at lesson grain (not concept grain) — see [`roadmap.md` iter-26 entry #2 (Error Post-Mortem)](roadmap.md).
+- Weak-spot tracker operates only at lesson grain (not concept grain) — see [`roadmap.md` iter-26 entry #2 (Error Post-Mortem)](roadmap.md). **Partially closed iter 58** by 🏷 Mistake Tagging Postmortem (concept-grain user-tagged misses; see § Metacognition → Active ideas).
 
 ---
 
@@ -204,7 +204,8 @@ The convention:
 **Review trigger:** If `Lesson-history sparkline`, `Per-lesson event tracking`, OR `Audit theme tracking` rows have not been bumped in 10+ iters, this category is stale. (New category as of iter 32 — sparkline is the first surface in it.)
 
 **Active ideas:**
-- **Error Post-Mortem with Miss Classification** — see [`roadmap.md` iter-26 entry #2](roadmap.md). BLOCKED (Amendment B). The concept-grain weak-spot tracker.
+- **Error Post-Mortem with Miss Classification** — see [`roadmap.md` iter-26 entry #2](roadmap.md). BLOCKED (Amendment B). The concept-grain weak-spot tracker. **Note:** iter-48 reframe SHIPPED iter 58 as 🏷 Mistake Tagging Postmortem (below) — sidesteps Amendment B via "opt-in user-authored tagging as a USER affordance" framing.
+- **🏷 Mistake Tagging Postmortem** — see [`roadmap.md` iter-48 entry #3](roadmap.md). **SHIPPED iter 58.** Opt-in chip strip on L1 miss with 6 fixed tags (off-by-one / wrong method / edge case / semantics / misread / syntax); tap saves to `state.misses[lessonId][]`. New "Top miss patterns" tile in Stats modal aggregates top-5 tags across all lessons (hidden when empty). First concept-grain miss-tracking surface; closes the cross-cutting concern noted in § Paths & Sessions ("weak-spot tracker operates only at lesson grain, not concept grain").
 
 **Parking-lot ideas:**
 - **[iter 38 — USER-NAMED GAP] Dashboard / progress visibility (HIGH PRIORITY)** — user surfaced this iter 38 as one of three explicit gaps. Concrete candidates (pick one per ship; ordered argmax(impact)):

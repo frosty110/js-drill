@@ -125,6 +125,7 @@ const state = {
   recognize: { attempts: 0, correct: 0 }, // iter 49: Pattern Recognition Speed Drill lifetime stats (additive)
   rapidFire: { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 }, // iter 54: cross-lesson L1 interleaving stream (additive)
   warmup: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 57: 3-card daily-plan swipe-stack micro-session (additive)
+  misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
@@ -480,6 +481,10 @@ function loadProgress() {
           lastRunAt: +parsed.warmup.lastRunAt || 0
         }
       : { sessions: 0, completions: 0, lastRunAt: 0 };
+    // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
+    // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
+    // users with no entries get an empty object.
+    state.misses = parsed.misses && typeof parsed.misses === 'object' ? parsed.misses : {};
     // Subscribed study plan. Legacy users (no field) default to 'starter' = existing behavior.
     // Validate against the registry so a stale/removed path id falls back gracefully.
     state.subscribedPathId = (typeof PATHS !== 'undefined' && PATHS.some(p => p.id === parsed.subscribedPathId))
@@ -538,6 +543,7 @@ function saveProgress() {
     recognize: state.recognize,
     rapidFire: state.rapidFire,
     warmup: state.warmup,
+    misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
@@ -717,6 +723,50 @@ function recordWrong(lessonId) {
   state.weakness[lessonId] = (state.weakness[lessonId] || 0) + 1;
   appendHistory(lessonId, 'L1-miss');
   saveProgress();
+}
+// iter 58: Mistake Tagging Postmortem (iter-48 roadmap #3). Opt-in concept-
+// level metacognition layer. Closes the gap noted in ideas-by-category.md
+// § Paths & Sessions → Cross-cutting concerns: weak-spot tracker is lesson-
+// grain, not concept-grain. After an L1 miss, an unobtrusive chip strip
+// asks "what tripped you?"; tap a chip stores `{at, level, tag}` against
+// the lesson id; aggregated view in Stats modal surfaces top miss tags.
+// PROFILE-grounded: need #5 (memorization tooling exploits active recall +
+// elaboration); the iter-48 reframe sidesteps the iter-26 Amendment B
+// governance dependency by framing the surface as a pure USER affordance
+// (no claim that metacognitive ownership is a stated need).
+const MISTAKE_TAGS = [
+  { id: 'off-by-one', label: 'off-by-one' },
+  { id: 'wrong-method', label: 'wrong method' },
+  { id: 'edge-case', label: 'edge case' },
+  { id: 'semantics', label: 'semantics' },
+  { id: 'misread', label: 'misread' },
+  { id: 'syntax', label: 'syntax' }
+];
+function recordMiss(lessonId, level, tagId) {
+  if (!MISTAKE_TAGS.some(t => t.id === tagId)) return;  // ignore unknown tags
+  state.misses[lessonId] = state.misses[lessonId] || [];
+  state.misses[lessonId].push({ at: Date.now(), level, tag: tagId });
+  // Bound the per-lesson log so a hyperactive tagger doesn't bloat localStorage.
+  if (state.misses[lessonId].length > 50) {
+    state.misses[lessonId] = state.misses[lessonId].slice(-50);
+  }
+  saveProgress();
+}
+// Aggregate top-N miss tags across all lessons. Returns sorted [{tag, count}].
+function _aggregateMissTags(topN = 5) {
+  const counts = {};
+  for (const lessonId of Object.keys(state.misses || {})) {
+    const log = state.misses[lessonId];
+    if (!Array.isArray(log)) continue;
+    for (const entry of log) {
+      if (!entry || !entry.tag) continue;
+      counts[entry.tag] = (counts[entry.tag] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .map(([tag, count]) => ({ tag, count, label: MISTAKE_TAGS.find(t => t.id === tag)?.label || tag }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, topN);
 }
 function clearWeakness(lessonId) {
   if (state.weakness[lessonId]) {
@@ -3079,6 +3129,44 @@ function renderL1(body, lesson, content) {
         ex.classList.remove('hidden');
         const isRight = oi === q.answer;
         ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${q.explain ? ' ' + escapeHtml(q.explain) : ''}`;
+        // iter 58: Mistake Tagging chip strip — opt-in concept-tagging UI
+        // shown only after a miss. Renders below the explain text inside
+        // this same question card so the user can tag without losing
+        // context. Dismissible via the X; tap a chip → save + fade strip.
+        if (!isRight && !card.querySelector('[data-mistake-strip]')) {
+          const strip = document.createElement('div');
+          strip.className = 'mistake-strip';
+          strip.dataset.mistakeStrip = '1';
+          strip.innerHTML = `
+            <div class="mistake-strip-header">
+              <span class="mistake-strip-prompt">🏷 What tripped you?</span>
+              <button class="mistake-strip-dismiss" data-action="dismiss-mistake" aria-label="Dismiss">✕</button>
+            </div>
+            <div class="mistake-strip-chips">
+              ${MISTAKE_TAGS.map(t => `<button class="mistake-chip" data-mistake-tag="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`).join('')}
+            </div>
+          `;
+          card.appendChild(strip);
+          strip.querySelector('[data-action="dismiss-mistake"]').addEventListener('click', () => {
+            strip.classList.add('mistake-strip-fade');
+            setTimeout(() => strip.remove(), 220);
+          });
+          strip.querySelectorAll('.mistake-chip').forEach(chipBtn => {
+            chipBtn.addEventListener('click', () => {
+              const tag = chipBtn.dataset.mistakeTag;
+              recordMiss(lesson.id, 'L1', tag);
+              chipBtn.classList.add('mistake-chip-picked');
+              // Replace strip with a confirmation line + auto-fade.
+              setTimeout(() => {
+                strip.innerHTML = `<div class="mistake-strip-confirm">✓ Tagged as "${escapeHtml(MISTAKE_TAGS.find(t => t.id === tag).label)}"</div>`;
+                setTimeout(() => {
+                  strip.classList.add('mistake-strip-fade');
+                  setTimeout(() => strip.remove(), 220);
+                }, 1200);
+              }, 200);
+            });
+          });
+        }
         maybePassL1();
       });
       optsContainer.appendChild(optEl);
@@ -4528,6 +4616,23 @@ async function init() {
           </div>
         </div>
       ` : ''}
+      ${(() => {
+        // iter 58: Mistake Tagging top-5 tile. Only renders when the user
+        // has tagged ≥1 miss — keeps Stats quiet for users who never opt in.
+        const top = _aggregateMissTags(5);
+        if (!top.length) return '';
+        const total = top.reduce((s, r) => s + r.count, 0);
+        return `
+        <div style="margin-top: 8px;">
+          <div style="background: rgba(192,132,252,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(192,132,252,0.2);">
+            <div style="color: #94a3b8; font-size: 12px; margin-bottom: 6px;">🏷 Top miss patterns <span style="color: #64748b; font-weight: 400;">(${total} tagged)</span></div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              ${top.map(row => `<span style="background: rgba(192,132,252,0.15); color: #e9d5ff; border: 1px solid rgba(192,132,252,0.3); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 500;">${escapeHtml(row.label)} <span style="color: #a78bfa; margin-left: 2px;">×${row.count}</span></span>`).join('')}
+            </div>
+          </div>
+        </div>
+        `;
+      })()}
       ${_renderSectionRetentionBlock(14)}
       ${bestTimesEntries.length ? `
         <div style="margin-top: 18px;">

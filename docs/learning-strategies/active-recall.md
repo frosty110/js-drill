@@ -25,6 +25,17 @@ app's existence.
 - **Reveal tracking** — if the user reveals the answer, the lesson is marked
   with a different dot variant. Revealing isn't active recall; the app refuses
   to lie about it.
+- **🏷 Mistake Tagging Postmortem (iter 58)** asks the user to *name* the
+  category of a miss the moment it happens: an opt-in chip strip under the
+  L1 explain text offers 6 tags ("off-by-one / wrong method / edge case /
+  semantics / misread / syntax") + a dismiss X. Tapping a chip stores the
+  tag in `state.misses[lessonId][]` and aggregates into a "Top miss
+  patterns" tile in Stats. This sits at the edge of active recall and
+  elaboration: forcing concept-level NAMING of one's own mistake encodes
+  the gap with a richer mental tag than the binary lesson-grain weak-spot
+  tracker can. A future docs-iter should author `metacognition.md` and
+  `elaboration.md` to give this surface its proper home — flagged in
+  SELF-IMPROVE.md § Blind spots ledger.
 - **🌅 3-Card Warmup (iter 57)** ships the L1 interaction shell directly inside
   a 3-card mobile micro-session over the existing Today's Plan curated 3-way
   mix (due + path + weak). Today's Plan picks the WHAT in a modal of 3 rows;

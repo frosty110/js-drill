@@ -126,6 +126,7 @@ const state = {
   rapidFire: { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 }, // iter 54: cross-lesson L1 interleaving stream (additive)
   warmup: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 57: 3-card daily-plan swipe-stack micro-session (additive)
   speedrun: { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 }, // iter 71: 🏁 Section Speedrun — per-section first mobile timed-pressure surface; bests keyed by section slug (additive, no `__v` bump)
+  bugHunt: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 73: 🪲 Bug-Hunt — §9B code-evaluation skill drill (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -492,6 +493,15 @@ function loadProgress() {
           lastRunAt: +parsed.speedrun.lastRunAt || 0
         }
       : { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 };
+    // iter 73: Bug-Hunt lifetime stats. Legacy users get zeroed defaults.
+    state.bugHunt = parsed.bugHunt && typeof parsed.bugHunt === 'object'
+      ? {
+          attempts: +parsed.bugHunt.attempts || 0,
+          correct: +parsed.bugHunt.correct || 0,
+          sessions: +parsed.bugHunt.sessions || 0,
+          lastRunAt: +parsed.bugHunt.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -555,6 +565,7 @@ function saveProgress() {
     rapidFire: state.rapidFire,
     warmup: state.warmup,
     speedrun: state.speedrun,
+    bugHunt: state.bugHunt,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1625,6 +1636,210 @@ function _streakMapBuckets(lookbackDays = 60) {
   }
   return buckets;
 }
+// iter 73: 🪲 Code Bug-Hunt — first §9B (Code Evaluation Skills) surface,
+// closing the 37-iter gap flagged by iter-36's catalog cross-cutting note.
+// Auto-mutator picks a random patterns-track canonical, applies ONE simple
+// operator/boundary mutation at ONE random site, verifies via runCode() that
+// the mutation actually breaks the lesson's expectedOutput, and surfaces the
+// buggy code with line numbers. User taps the line they think is wrong —
+// trains code-review / debug-localization, the reflex interviewers explicitly
+// grade. Pure data recombination — no per-lesson authoring needed.
+const BUG_HUNT_DECK_LEN = 5;
+const BUG_HUNT_MUTATORS = [
+  // Order matters only for tie-breaking; mutator selection is randomized.
+  // Lookaheads keep `<<`, `>>`, `<=`, `>=`, `==` from being mis-matched.
+  { name: '< → <=',   from: /<(?!=|<)/g,  to: '<=' },
+  { name: '<= → <',   from: /<=/g,         to: '<'  },
+  { name: '> → >=',   from: />(?!=|>)/g,   to: '>=' },
+  { name: '>= → >',   from: />=/g,         to: '>'  },
+  { name: '++ → --',  from: /\+\+/g,       to: '--' },
+  { name: '-- → ++',  from: /--/g,         to: '++' },
+  { name: '=== → !==', from: /===/g,       to: '!==' },
+  { name: '!== → ===', from: /!==/g,       to: '===' },
+  { name: '&& → ||',  from: /&&/g,         to: '||' },
+  { name: '|| → &&',  from: /\|\|/g,       to: '&&' }
+];
+
+function _bugHuntCollectMatches(code, regex) {
+  const re = new RegExp(regex.source, regex.flags);
+  const out = [];
+  let m;
+  while ((m = re.exec(code)) !== null) {
+    out.push({ start: m.index, end: m.index + m[0].length, matched: m[0] });
+    if (m.index === re.lastIndex) re.lastIndex++; // safety against zero-width
+  }
+  return out;
+}
+
+function _bugHuntLineOf(code, offset) {
+  // 1-indexed line number of `offset` within `code`.
+  let line = 1;
+  for (let i = 0; i < offset && i < code.length; i++) {
+    if (code.charCodeAt(i) === 10) line++;
+  }
+  return line;
+}
+
+function _bugHuntShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+async function _bugHuntFindBreakingMutation(canonical, expected) {
+  // Try mutators in random order; for each, try matches in random order until
+  // one yields a runCode output that doesn't match expected. Returns null if
+  // no breaking mutation found (caller skips the lesson).
+  const expectedLines = normalizeLines(expected);
+  for (const mut of _bugHuntShuffle(BUG_HUNT_MUTATORS)) {
+    const matches = _bugHuntCollectMatches(canonical, mut.from);
+    if (!matches.length) continue;
+    for (const pick of _bugHuntShuffle(matches).slice(0, 4)) {
+      const mutated = canonical.slice(0, pick.start) + mut.to + canonical.slice(pick.end);
+      let res;
+      try {
+        res = await runCode(mutated);
+      } catch (_) { continue; }
+      // Treat any of these as "breaks": runtime error, output differs, or
+      // (subsequence semantics) any expected line missing from actual.
+      const actualLines = normalizeLines(res.output || '');
+      let broken = false;
+      if (!res.ok) {
+        broken = true;
+      } else if (actualLines.join('\n') !== expectedLines.join('\n')) {
+        // Strict line-equality is the safer signal for the user-facing card —
+        // subsequence semantics would mark "extra debug output is fine" as
+        // not-broken, but for bug hunt we want any visible diff to count.
+        broken = true;
+      }
+      if (broken) {
+        return {
+          mutator: mut.name,
+          line: _bugHuntLineOf(canonical, pick.start),
+          mutatedCode: mutated,
+          originalCode: canonical
+        };
+      }
+    }
+  }
+  return null;
+}
+
+async function _bugHuntBuildDeck() {
+  // Sample patterns-track full lessons (avoid syntax — boundary mutations are
+  // less interview-realistic on simple syntax demos). Cap candidate pool so
+  // we don't burn time hunting mutations for trivial canonicals.
+  const candidates = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full');
+  const shuffled = _bugHuntShuffle(candidates).slice(0, 16);
+  for (const l of shuffled) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    }
+  }
+  const deck = [];
+  for (const l of shuffled) {
+    if (deck.length >= BUG_HUNT_DECK_LEN) break;
+    const c = CONTENT[l.id];
+    if (!c || !c.L3 || !c.L3.canonical || !c.L3.expectedOutput) continue;
+    const breaking = await _bugHuntFindBreakingMutation(c.L3.canonical, c.L3.expectedOutput);
+    if (!breaking) continue;
+    deck.push({
+      lessonId: l.id,
+      lessonTitle: l.title,
+      sectionName: l.section,
+      buggyCode: breaking.mutatedCode,
+      buggyLine: breaking.line,
+      mutator: breaking.mutator,
+      originalCode: breaking.originalCode
+    });
+  }
+  return deck;
+}
+
+async function startBugHuntSession() {
+  state.bugHunt.sessions++;
+  state.bugHunt.lastRunAt = Date.now();
+  saveProgress();
+  const shell = document.getElementById('lesson-shell');
+  shell.innerHTML = `<div class="bug-shell"><div class="bug-loading">🪲 Hunting bugs…</div></div>`;
+  const deck = await _bugHuntBuildDeck();
+  if (!deck.length) {
+    shell.innerHTML = `<div class="bug-shell"><div class="bug-loading">No breakable canonicals found in this round — try again.</div><div class="bug-summary-actions"><button class="secondary" data-action="bug-back">Back</button></div></div>`;
+    shell.querySelector('[data-action="bug-back"]').addEventListener('click', () => renderLesson());
+    return;
+  }
+  let idx = 0, correct = 0;
+
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    const lines = card.buggyCode.split('\n');
+    shell.innerHTML = `
+      <div class="bug-shell">
+        <div class="bug-header">
+          <span>🪲 Bug-Hunt · ${idx + 1} of ${deck.length}</span>
+          <button class="bug-exit" data-action="exit-bug">✕ Exit</button>
+        </div>
+        <div class="bug-meta">${escapeHtml(card.sectionName)} · <span class="bug-lesson">${escapeHtml(card.lessonTitle)}</span></div>
+        <div class="bug-prompt">One operator was flipped. Tap the buggy line.</div>
+        <div class="bug-code">
+          ${lines.map((ln, i) => `<button class="bug-line" data-line-idx="${i + 1}"><span class="bug-line-num">${i + 1}</span><span class="bug-line-text">${escapeHtml(ln || ' ')}</span></button>`).join('')}
+        </div>
+        <div class="bug-feedback" data-bug-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-bug"]').addEventListener('click', () => renderLesson());
+    const lineBtns = shell.querySelectorAll('.bug-line');
+    let answered = false;
+    const grade = (pickedLineNum) => {
+      if (answered) return;
+      answered = true;
+      const wasCorrect = pickedLineNum === card.buggyLine;
+      if (wasCorrect) correct++;
+      state.bugHunt.attempts++;
+      if (wasCorrect) state.bugHunt.correct++; else state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+      saveProgress();
+      lineBtns.forEach(btn => {
+        btn.disabled = true;
+        const ln = +btn.dataset.lineIdx;
+        if (ln === card.buggyLine) btn.classList.add('bug-line-correct');
+        else if (ln === pickedLineNum) btn.classList.add('bug-line-wrong');
+      });
+      const fb = shell.querySelector('[data-bug-feedback]');
+      if (fb) fb.innerHTML = wasCorrect
+        ? `<span class="bug-good">✓ Line ${card.buggyLine} · ${escapeHtml(card.mutator)}</span>`
+        : `<span class="bug-bad">✗ Actually line ${card.buggyLine} (${escapeHtml(card.mutator)})</span>`;
+      setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 900 : 1700);
+    };
+    lineBtns.forEach(btn => btn.addEventListener('click', () => grade(+btn.dataset.lineIdx)));
+  }
+
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="bug-shell">
+        <div class="bug-header"><span>🪲 Bug-Hunt · done</span></div>
+        <div class="bug-summary">
+          <div class="bug-summary-pct">${pct}%</div>
+          <div class="bug-summary-line">${correct} of ${deck.length} bugs found</div>
+          <div class="bug-summary-lifetime">Lifetime: ${state.bugHunt.correct} / ${state.bugHunt.attempts} (${state.bugHunt.attempts > 0 ? Math.round(state.bugHunt.correct / state.bugHunt.attempts * 100) : 0}%)</div>
+          <div class="bug-summary-actions">
+            <button class="primary" data-action="bug-again">🪲 Another hunt</button>
+            <button class="secondary" data-action="bug-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="bug-again"]').addEventListener('click', () => startBugHuntSession());
+    shell.querySelector('[data-action="bug-done"]').addEventListener('click', () => renderLesson());
+  }
+
+  renderCard();
+}
+
 // iter 47: per-section retention aggregation for the Stats modal. Walks every
 // lesson's state.history events, bins by day across lookbackDays, returns
 // sorted rows (worst retention first → drives "what needs attention" UX).
@@ -5132,6 +5347,13 @@ async function init() {
   // not direct session-start; users see all sections + their PBs first.
   document.getElementById('speedrun-btn').addEventListener('click', () => {
     startSpeedrunPicker();
+  });
+
+  // iter 73: 🪲 Bug-Hunt — §9B code-evaluation drill. Auto-mutator picks
+  // a breaking mutation on a real patterns canonical; user taps the buggy
+  // line. First §9B surface — closes the iter-36 cross-cutting gap.
+  document.getElementById('bug-hunt-btn').addEventListener('click', () => {
+    startBugHuntSession();
   });
 
   // Review-Due button — jump to the most-overdue lesson.

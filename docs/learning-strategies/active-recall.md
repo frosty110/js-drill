@@ -16,6 +16,26 @@ app's existence.
 
 ## How the app encodes it today
 
+- **🔀 Swap-Bench (iter 86).** Pairwise idiom-equivalence drill — the
+  first surface that exercises *relational* retrieval rather than
+  *categorical* pick-one. Sidebar button → 6-card session reading a
+  curated `data/idiom-pairs.json` registry (12 hand-authored pairs at
+  MVP, expandable by appending). Each card stacks two JS snippets
+  vertically (mobile-first per PROFILE 80%-phone; ≤8 lines per snippet)
+  and asks "Same observable behavior?"; user 2-taps "Same behavior" or
+  "Different behavior"; reveal shows the verdict + a one-line `explain`
+  + an optional "Drill source lesson →" deep-link when `sourceLessonId`
+  is set on the pair. Misses route to `state.weakness[sourceLessonId]`
+  via the existing path. Schema-additive `state.swapBench`; no `__v`
+  bump. Distinct from every existing surface in the app — L1 trains
+  "pick THE right one of 4 distractors", L2/L3 train "produce the right
+  code", and the diagnose-direction drills (Recognize / Reverse /
+  Crystal / Bug-Hunt / Claim / Gotcha) train "identify the property
+  of THIS one artifact". Swap-Bench trains "do these TWO artifacts
+  match?" — a different cognitive operation, useful for the transfer
+  question the rusty engineer hits in interviews when the interviewer
+  riffs on a known pattern with a slight syntactic variation.
+
 - **🎰 Gotcha Roulette (iter 83).** Standalone recall stream over the
   `reference.notes[]` corpus (2–5 strings × 143 lessons ≈ 400 cards).
   Sidebar button → 8-card session; each card shows ONE note string with

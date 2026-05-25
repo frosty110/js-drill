@@ -130,6 +130,7 @@ const state = {
   crystal: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 77: 🔮 Predict — mental-execution drill (additive, no `__v` bump)
   claim: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 79: 📐 Smell-Test Complexity-Claim drill (additive, no `__v` bump)
   gotcha: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 83: 🎰 Gotcha Roulette — reference.notes recall stream (additive, no `__v` bump)
+  swapBench: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -532,6 +533,15 @@ function loadProgress() {
           lastRunAt: +parsed.gotcha.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 86: 🔀 Swap-Bench lifetime stats. Legacy users get zeros.
+    state.swapBench = parsed.swapBench && typeof parsed.swapBench === 'object'
+      ? {
+          attempts: +parsed.swapBench.attempts || 0,
+          correct: +parsed.swapBench.correct || 0,
+          sessions: +parsed.swapBench.sessions || 0,
+          lastRunAt: +parsed.swapBench.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -599,6 +609,7 @@ function saveProgress() {
     crystal: state.crystal,
     claim: state.claim,
     gotcha: state.gotcha,
+    swapBench: state.swapBench,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1258,6 +1269,151 @@ async function startGotchaSession() {
     `;
     shell.querySelector('[data-action="gotcha-again"]').addEventListener('click', () => startGotchaSession());
     shell.querySelector('[data-action="gotcha-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill. Loads a curated
+// data/idiom-pairs.json of {a, b, sameBehavior, explain, sourceLessonId?}.
+// Each card stacks two snippets vertically (mobile-first; PROFILE.md 80%-phone)
+// and asks "Same behavior?". Forces transfer-of-mental-model — the rusty
+// engineer recognizes that two different idioms reach the same result, or
+// that two near-identical-looking idioms diverge. From `roadmap.md iter 82
+// entry #3 (Idiom Swap-Bench)`. Single-iter MVP; expandable by appending to
+// the JSON file (same pattern as Claim iter 79→80).
+const SWAP_DECK_LEN = 6;
+let SWAP_PAIRS = null; // [{id, title, a, b, sameBehavior, explain, sourceLessonId?}]
+let _swapPairsLoaded = false;
+async function _loadSwapPairsRegistry() {
+  if (_swapPairsLoaded) return;
+  try {
+    const res = await fetch('data/idiom-pairs.json', { cache: 'no-cache' });
+    if (!res.ok) return;
+    const reg = await res.json();
+    SWAP_PAIRS = Array.isArray(reg && reg.pairs) ? reg.pairs : [];
+    _swapPairsLoaded = true;
+  } catch (_) { /* fail soft — button stays but session won't open */ }
+}
+
+function _swapBuildDeck() {
+  if (!SWAP_PAIRS || SWAP_PAIRS.length < 3) return null;
+  // Fisher-Yates shuffle a copy.
+  const pool = SWAP_PAIRS.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(SWAP_DECK_LEN, pool.length));
+}
+
+async function startSwapBenchSession() {
+  await _loadSwapPairsRegistry();
+  const deck = _swapBuildDeck();
+  if (!deck || deck.length < 3) {
+    alert('Idiom-pair registry could not load.');
+    return;
+  }
+  state.swapBench.sessions++;
+  state.swapBench.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell swap-shell">
+        <div class="recognize-header">
+          <span>🔀 Swap-Bench · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-swap">✕ Exit</button>
+        </div>
+        <div class="swap-title">${escapeHtml(card.title || '')}</div>
+        <div class="swap-pair">
+          <div class="swap-snippet">
+            <div class="swap-label">A</div>
+            <pre class="swap-code cm-s-dracula" data-swap-a></pre>
+          </div>
+          <div class="swap-divider">↕ same behavior? ↕</div>
+          <div class="swap-snippet">
+            <div class="swap-label">B</div>
+            <pre class="swap-code cm-s-dracula" data-swap-b></pre>
+          </div>
+        </div>
+        <div class="swap-options">
+          <button class="recognize-opt swap-opt" data-pick="same">✓ Same behavior</button>
+          <button class="recognize-opt swap-opt" data-pick="diff">✗ Different behavior</button>
+        </div>
+        <div class="recognize-feedback" data-swap-feedback></div>
+      </div>
+    `;
+    const aEl = shell.querySelector('[data-swap-a]');
+    const bEl = shell.querySelector('[data-swap-b]');
+    if (aEl && typeof colorizeInto === 'function') colorizeInto(aEl, card.a);
+    if (bEl && typeof colorizeInto === 'function') colorizeInto(bEl, card.b);
+    shell.querySelector('[data-action="exit-swap"]').addEventListener('click', () => renderLesson());
+    const opts = shell.querySelectorAll('.swap-opt');
+    let answered = false;
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const saidSame = btn.dataset.pick === 'same';
+        const wasRight = saidSame === !!card.sameBehavior;
+        if (wasRight) correct++;
+        else if (card.sourceLessonId && findLesson(card.sourceLessonId)) {
+          state.weakness[card.sourceLessonId] = (state.weakness[card.sourceLessonId] || 0) + 1;
+          appendHistory(card.sourceLessonId, 'L1-miss');
+        }
+        state.swapBench.attempts++;
+        if (wasRight) state.swapBench.correct++;
+        saveProgress();
+        opts.forEach(b => {
+          b.disabled = true;
+          const isCorrectChoice = (b.dataset.pick === 'same') === !!card.sameBehavior;
+          if (isCorrectChoice) b.classList.add('recognize-opt-correct');
+          else if (b === btn) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-swap-feedback]');
+        if (fb) {
+          const verdict = card.sameBehavior ? 'Same behavior ✓' : 'Different behavior ✗';
+          fb.innerHTML = `
+            <div class="swap-reveal ${wasRight ? 'swap-reveal-good' : 'swap-reveal-bad'}">
+              <div class="swap-verdict">${verdict}</div>
+              <div class="swap-explain">${escapeHtml(card.explain || '')}</div>
+              ${card.sourceLessonId && findLesson(card.sourceLessonId)
+                ? `<button class="gotcha-drill" data-drill="${escapeHtml(card.sourceLessonId)}">Drill source lesson →</button>`
+                : ''}
+              <button class="gotcha-next" data-action="swap-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="swap-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell swap-shell">
+        <div class="recognize-header"><span>🔀 Swap-Bench · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} idiom pairs judged correctly</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.swapBench.correct} / ${state.swapBench.attempts} (${state.swapBench.attempts > 0 ? Math.round(state.swapBench.correct / state.swapBench.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="swap-again">🔀 Another bench</button>
+            <button class="secondary" data-action="swap-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="swap-again"]').addEventListener('click', () => startSwapBenchSession());
+    shell.querySelector('[data-action="swap-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -6226,6 +6382,13 @@ async function init() {
   // the half-remembered traps without the cost of opening each lesson.
   document.getElementById('gotcha-btn').addEventListener('click', () => {
     startGotchaSession();
+  });
+
+  // iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill. Two snippets
+  // stacked vertically; user judges "same behavior?".
+  const swapBtn = document.getElementById('swap-btn');
+  if (swapBtn) swapBtn.addEventListener('click', () => {
+    startSwapBenchSession();
   });
 
   // iter 54: ⚡ Rapid-Fire L1 stream — cross-lesson interleaved tap surface.

@@ -16,6 +16,21 @@ specifically toward lessons their memory is currently weakest on.
 
 ## How the app encodes it today
 
+- **📡 At Risk decay radar (iter 60).** Joins three previously-independent
+  signals — `state.weakness` (lesson-grain L1-miss count),
+  `state.reviews[id].dueAt` (SR schedule), and `state.revealed[id]`
+  (mastered-with-reveal integrity flag) — into a single ranked surface that
+  answers "what should I drill RIGHT NOW?" Sidebar button (📡, auto-hides
+  when the union of weakness ∪ revealed is empty) opens a modal listing up
+  to 7 lessons sorted by urgency: due-now lessons first, then by smallest
+  `dueAt - now` diff, then by weakness count descending, then by
+  revealed-flag presence. Each row shows lesson title + due chip ("DUE NOW"
+  red, "in Nd" amber, "no SR" grey) + miss-count badge + reveal marker;
+  tap routes to the lesson and closes the modal. The SR ladder (above)
+  tells the user WHEN lessons come due; At Risk tells the user WHICH due
+  lessons are also wobbly — the intersection is the highest-leverage drill
+  of the day. Closes iter-59 roadmap entry #1 (constraint-aware subagent
+  B#4 — "risk intersection" dimension).
 - **1d → 3d → 7d → 14d → 30d interval ladder.** L3 pass on a mastered
   lesson advances one bucket; L3 pass at the top bucket holds at 30d.
 - **Section retention block (iter 47).** Stats modal now aggregates the

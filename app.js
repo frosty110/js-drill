@@ -700,6 +700,64 @@ function _revealedQueue() {
   }
   return queue;
 }
+// iter 60: 📡 Weak-Spot Decay Radar. Returns up to N lesson rows that join
+// THREE previously-independent signals: state.weakness (L1-miss count),
+// state.reviews[id].dueAt (SR schedule), state.revealed[id] (mastered-with-
+// reveal integrity flag). Today the user must mentally cross-reference
+// Review badge + Weak Spots button + Reveal Replay to figure out the
+// highest-priority drill of the day. The union of "wobbly + about to slip
+// + cheated last time" IS that list, and no current surface joins it.
+// Closes iter-59 roadmap entry #1 (B#4 — risk intersection dimension).
+// Sort policy: due-now lessons first (dueAt < now); then by smallest
+// dueAt-now diff; then by weakness count desc; then by revealed-flag.
+function _atRiskRows(limit = 7) {
+  const now = Date.now();
+  // Union: any lesson in weakness OR with at least one revealed level.
+  // We don't include due-only lessons because the existing Review badge
+  // already surfaces those — At Risk is for lessons WHERE the user has a
+  // measured-pain signal (miss or reveal) on top of any SR data.
+  const ids = new Set();
+  for (const id of Object.keys(state.weakness || {})) {
+    if ((state.weakness[id] || 0) > 0) ids.add(id);
+  }
+  for (const id of Object.keys(state.revealed || {})) {
+    const levels = state.revealed[id];
+    if (levels && Object.keys(levels).length > 0) ids.add(id);
+  }
+  const rows = [];
+  for (const id of ids) {
+    const lesson = findLesson(id);
+    if (!lesson || lesson.status !== 'full') continue;
+    const review = state.reviews[id];
+    const weaknessCount = state.weakness[id] || 0;
+    const revealedLevels = state.revealed[id]
+      ? Object.keys(state.revealed[id]).filter(k => state.revealed[id][k])
+      : [];
+    const dueAt = review && lessonOverallStatus(id) === 'mastered' ? review.dueAt : null;
+    const daysTilDue = dueAt !== null ? Math.round((dueAt - now) / 86400000) : null;
+    rows.push({
+      lessonId: id,
+      title: lesson.title,
+      section: lesson.section,
+      track: lesson.track,
+      daysTilDue,
+      isDue: dueAt !== null && dueAt <= now,
+      weaknessCount,
+      revealedLevels  // ['L2'] or ['L3'] or both
+    });
+  }
+  // Sort: due-now (dueAt elapsed) → soonest-due → highest-weakness → revealed-flag-presence
+  rows.sort((a, b) => {
+    if (a.isDue !== b.isDue) return a.isDue ? -1 : 1;
+    if (a.daysTilDue !== null && b.daysTilDue !== null) {
+      if (a.daysTilDue !== b.daysTilDue) return a.daysTilDue - b.daysTilDue;
+    } else if (a.daysTilDue !== null) return -1;
+    else if (b.daysTilDue !== null) return 1;
+    if (a.weaknessCount !== b.weaknessCount) return b.weaknessCount - a.weaknessCount;
+    return b.revealedLevels.length - a.revealedLevels.length;
+  });
+  return rows.slice(0, limit);
+}
 // iter 56: ephemeral toast — surfaces a 2-second confirmation when a clean
 // pass clears a reveal flag. Auto-removes; no state. Mirrors existing toast
 // pattern (e.g., L3 mastery banner) but simpler — pure overlay, no actions.
@@ -1775,6 +1833,17 @@ function updateReviewBadge() {
     const q = _revealedQueue();
     replayBtn.classList.toggle('hidden', q.length === 0);
     if (replayCnt) replayCnt.textContent = q.length;
+  }
+  // iter 60: 📡 At Risk button visibility + count. Joins weakness ∪ revealed
+  // sets (the surface includes due lessons via the row data but the button-
+  // visibility gate uses the same union, since pure-due lessons are already
+  // surfaced by the existing 🕒 Review badge).
+  const atRiskBtn = document.getElementById('at-risk-btn');
+  const atRiskCnt = document.getElementById('at-risk-count');
+  if (atRiskBtn) {
+    const rows = _atRiskRows(7);
+    atRiskBtn.classList.toggle('hidden', rows.length === 0);
+    if (atRiskCnt) atRiskCnt.textContent = rows.length;
   }
 }
 function updateLessonHeaderInPlace() {
@@ -3075,6 +3144,71 @@ function renderReference(body, content) {
 // ──────────────────────────────────────────────────────────────────────────
 //  L1 — MULTIPLE CHOICE
 // ──────────────────────────────────────────────────────────────────────────
+// Build a markdown prompt summarising an L1 session for paste-into-AI
+// tutoring. Includes every question, the user's choice, the correct
+// answer, and any in-app explanation. Marks unanswered questions clearly
+// so the AI knows what's actually a miss vs unattempted.
+function buildL1AiPrompt(lesson, content, localState) {
+  const qs = content.L1.questions;
+  const sectionLabel = lesson.section ? `${lesson.section} (${lesson.track || ''})`.trim() : (lesson.track || '');
+  const lines = [];
+  lines.push(`I'm studying "${lesson.title}"${sectionLabel ? ` — ${sectionLabel}` : ''} in a JavaScript interview-prep drill app. I just took the L1 concept quiz. Help me understand what I missed and deepen my grasp of the load-bearing ideas.`);
+  lines.push('');
+  if (content.reference && content.reference.code) {
+    lines.push('## Canonical code I\'m drilling');
+    lines.push('```js');
+    lines.push(content.reference.code);
+    lines.push('```');
+    lines.push('');
+  }
+  qs.forEach((q, qi) => {
+    const s = (localState && localState[qi]) || {};
+    lines.push(`## Question ${qi + 1}`);
+    lines.push(q.q);
+    lines.push('');
+    q.options.forEach((opt, oi) => {
+      const letter = String.fromCharCode(65 + oi);
+      const tags = [];
+      if (s.locked && s.selected === oi) tags.push(oi === q.answer ? 'my answer ✓' : 'my answer ✗');
+      if (q.answer === oi && !(s.locked && s.selected === oi)) tags.push('correct');
+      const tagStr = tags.length ? `   ← ${tags.join(', ')}` : '';
+      lines.push(`- ${letter}. ${opt}${tagStr}`);
+    });
+    if (!s.locked) lines.push(`(unanswered)`);
+    if (q.explain) {
+      lines.push('');
+      lines.push(`> App's explanation: ${q.explain}`);
+    }
+    lines.push('');
+  });
+  lines.push('Please:');
+  lines.push('1. For each question I got wrong, explain the underlying concept I\'m missing in plain language.');
+  lines.push('2. Give one short additional example or analogy per concept I missed.');
+  lines.push('3. List 2–3 follow-up multiple-choice questions I should be able to answer next to confirm I\'ve internalised it.');
+  return lines.join('\n');
+}
+
+// Async clipboard with a textarea-based fallback for older browsers / file://
+// contexts where navigator.clipboard isn't available. Returns true on success.
+async function copyTextToClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch { return false; }
+}
+
 function renderL1(body, lesson, content) {
   const qs = content.L1.questions;
   // Use cached in-flight state if present (and shape-compatible) so a tab
@@ -3176,10 +3310,11 @@ function renderL1(body, lesson, content) {
   });
 
   const status = document.createElement('div');
-  status.className = 'mt-2 mb-2 flex items-center justify-between';
+  status.className = 'mt-2 mb-2 flex items-center justify-between flex-wrap gap-2';
   status.innerHTML = `
     <div class="text-sm text-slate-400" id="l1-status">Answer all to pass.</div>
-    <div class="flex gap-2">
+    <div class="flex gap-2 flex-wrap">
+      <button class="secondary" data-action="export-l1" title="Copy a prompt with your answers + the right answers to paste into ChatGPT/Claude for tutoring">📋 Ask AI to teach me</button>
       <button class="secondary" data-action="retry-l1">Retry</button>
       <button class="primary hidden" data-action="next-l2">L2 Fill-in →</button>
     </div>
@@ -3209,6 +3344,21 @@ function renderL1(body, lesson, content) {
     renderLesson();
   });
   status.querySelector('[data-action="next-l2"]').addEventListener('click', () => selectTab('L2'));
+
+  // Export-to-AI: copy a markdown-formatted prompt containing the lesson
+  // context, every question, the user's chosen answer, the correct answer,
+  // and the app's explanation. Designed to be pasted into ChatGPT/Claude
+  // for tutoring help on what the user missed (or to deepen on what they
+  // got right).
+  const exportBtn = status.querySelector('[data-action="export-l1"]');
+  exportBtn.addEventListener('click', async () => {
+    const prompt = buildL1AiPrompt(lesson, content, localState);
+    const ok = await copyTextToClipboard(prompt);
+    const original = exportBtn.innerHTML;
+    exportBtn.innerHTML = ok ? '✓ Copied — paste into AI' : '✗ Copy failed';
+    exportBtn.disabled = true;
+    setTimeout(() => { exportBtn.innerHTML = original; exportBtn.disabled = false; }, 1800);
+  });
 
   function maybePassL1() {
     const allLocked = localState.every(s => s.locked);
@@ -4469,7 +4619,7 @@ async function init() {
     }
     if (e.key === 'Escape') {
       // Close any open modal on Escape
-      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal'];
+      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);
         if (m && m.style.display === 'block') { m.style.display = 'none'; e.preventDefault(); return; }
@@ -4525,6 +4675,56 @@ async function init() {
   // The queue is just the surface that GUIDES the user; the clean-pass
   // clear-flag invariant in markPassed works generally so clears also fire
   // when the user finds a revealed lesson via normal navigation.
+  // iter 60: 📡 At Risk — opens decay-radar modal with union-of-3-signals
+  // list. Closes iter-59 roadmap entry #1. The modal lists up to 7 rows;
+  // each row is tap-to-jump to that lesson at the appropriate tab.
+  const atRiskModal = document.getElementById('at-risk-modal');
+  function openAtRisk() {
+    const rows = _atRiskRows(7);
+    const body = document.getElementById('at-risk-body');
+    if (!rows.length) {
+      body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">All clear — no wobbly or revealed lessons! 🎉</div>`;
+    } else {
+      body.innerHTML = rows.map(r => {
+        const dueChip = r.isDue
+          ? `<span style="color:#fca5a5; font-size:11px; background:rgba(248,113,113,0.12); border:1px solid rgba(248,113,113,0.3); border-radius:999px; padding:2px 8px; font-weight:600;">DUE NOW</span>`
+          : r.daysTilDue !== null
+            ? `<span style="color:#fdba74; font-size:11px; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3); border-radius:999px; padding:2px 8px;">in ${r.daysTilDue}d</span>`
+            : `<span style="color:#64748b; font-size:11px;">no SR</span>`;
+        const missBadge = r.weaknessCount > 0
+          ? `<span style="color:#fdba74; font-size:11px;">⚠ ${r.weaknessCount}×</span>`
+          : '';
+        const revealDot = r.revealedLevels.length > 0
+          ? `<span style="color:#e9d5ff; font-size:11px; background:rgba(192,132,252,0.12); border:1px solid rgba(192,132,252,0.3); border-radius:999px; padding:2px 8px;" title="Mastered with reveal — drill clean to clear">🃏 ${escapeHtml(r.revealedLevels.join('+'))}</span>`
+          : '';
+        return `<button data-lesson-id="${escapeHtml(r.lessonId)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:pointer; display:flex; flex-direction:column; gap:6px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <span style="font-size:14px; font-weight:500; color:#e2e8f0;">${escapeHtml(r.title)}</span>
+            ${dueChip}
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; font-size:11px; color:#94a3b8;">
+            <span>${escapeHtml(r.section)}</span>
+            ${missBadge ? `<span style="color:#475569;">·</span>${missBadge}` : ''}
+            ${revealDot ? `<span style="color:#475569;">·</span>${revealDot}` : ''}
+          </div>
+        </button>`;
+      }).join('');
+      body.querySelectorAll('[data-lesson-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-lesson-id');
+          atRiskModal.style.display = 'none';
+          selectLesson(id);
+        });
+      });
+    }
+    atRiskModal.style.display = 'block';
+  }
+  document.getElementById('at-risk-btn').addEventListener('click', openAtRisk);
+  document.getElementById('at-risk-close').addEventListener('click', () => atRiskModal.style.display = 'none');
+  atRiskModal.addEventListener('click', (e) => {
+    if (e.target === atRiskModal) atRiskModal.style.display = 'none';
+  });
+
   document.getElementById('reveal-replay-btn').addEventListener('click', () => {
     const queue = _revealedQueue();
     if (!queue.length) return;

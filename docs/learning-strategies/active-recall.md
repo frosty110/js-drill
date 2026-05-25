@@ -16,6 +16,18 @@ app's existence.
 
 ## How the app encodes it today
 
+- **🪲 Walkthrough Bug-Hunt (iter 78).** A third mode on the per-lesson
+  Walkthrough tab (alongside the existing prev/next stepper and 🔮 Quiz).
+  Tap 🪲 Bug → the lesson's trace runs in full, ONE step gets one of its
+  state-field values mutated (numbers ±1, booleans flipped, strings/arrays
+  with first-two-elements swapped), and all steps render as a scrollable
+  list of tap targets. User picks the corrupted row; reveal explains
+  what was mutated (e.g. "Step 4 · `i` was `2`, shown as `3` (num±1)").
+  Inverts the existing trace generators from "watch the correct execution"
+  → "spot the corruption" — the debug-direction the L1/L2/L3 ladder
+  never drills. Zero new content authoring: every Patterns/Applied lesson
+  with a walkthrough (99/99 per OOB-2026-05-24) inherits the surface for
+  free. Skips lessons where no state field is mutable.
 - **🔮 Predict-the-Output (iter 77).** Crystal Ball mental-execution
   drill. Show a real patterns canonical + 4 output options (1 correct
   + 3 same-type distractors drawn from other lessons' L3

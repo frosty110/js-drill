@@ -3876,6 +3876,7 @@ function renderWalkthrough(body, lesson, content) {
         <button class="walk-btn walk-btn-primary" data-walk-next aria-label="Next step">Next ▶</button>
         <button class="walk-btn walk-btn-ghost" data-walk-reset>Reset</button>
         <button class="walk-btn walk-btn-ghost" data-walk-quiz title="Predict the next step (active-recall mode)">🔮 Quiz</button>
+        <button class="walk-btn walk-btn-ghost" data-walk-bug title="One step's state is wrong — find the bug (debug-direction drill)">🪲 Bug</button>
       </div>
     </div>
     <div class="walk-label-bar" data-walk-label>—</div>
@@ -3895,6 +3896,13 @@ function renderWalkthrough(body, lesson, content) {
         <button class="walk-btn walk-btn-ghost" data-walk-quiz-close>✕ Close quiz</button>
       </div>
     </div>
+    <div class="walk-bug hidden" data-walk-bug-panel>
+      <div class="walk-bug-q">One step's state is corrupted. Tap the buggy step.</div>
+      <div class="walk-bug-list" data-walk-bug-list></div>
+      <div class="walk-bug-actions">
+        <button class="walk-btn walk-btn-ghost" data-walk-bug-close>✕ Close bug-hunt</button>
+      </div>
+    </div>
   `;
 
   const codeEl = body.querySelector('[data-walk-code]');
@@ -3908,8 +3916,13 @@ function renderWalkthrough(body, lesson, content) {
   const quizPanel = body.querySelector('[data-walk-quiz-panel]');
   const quizOptsEl = body.querySelector('[data-walk-quiz-opts]');
   const quizCloseBtn = body.querySelector('[data-walk-quiz-close]');
+  const bugBtn = body.querySelector('[data-walk-bug]');
+  const bugPanel = body.querySelector('[data-walk-bug-panel]');
+  const bugListEl = body.querySelector('[data-walk-bug-list]');
+  const bugCloseBtn = body.querySelector('[data-walk-bug-close]');
   const exampleSelect = body.querySelector('[data-walk-example]');
   let quizActive = false;
+  let bugActive = false;
 
   // Render the code block once with line wrappers — highlight on update.
   // Each line gets a row wrapper with a line-number gutter and a syntax-
@@ -3967,11 +3980,11 @@ function renderWalkthrough(body, lesson, content) {
       : entries.map(([k, v]) =>
           `<div class="walk-state-row"><span class="walk-state-key">${escapeHtml(k)}</span><span class="walk-state-val">${escapeHtml(_formatStateVal(v))}</span></div>`
         ).join('');
-    // Disable prev/next at boundaries OR when quiz is active (quiz holds K).
-    prevBtn.disabled = quizActive || uiState.stepIdx === 0;
-    nextBtn.disabled = quizActive || uiState.stepIdx >= steps.length - 1;
-    resetBtn.disabled = quizActive;
-    exampleSelect.disabled = quizActive;
+    // Disable prev/next at boundaries OR when quiz/bug is active.
+    prevBtn.disabled = quizActive || bugActive || uiState.stepIdx === 0;
+    nextBtn.disabled = quizActive || bugActive || uiState.stepIdx >= steps.length - 1;
+    resetBtn.disabled = quizActive || bugActive;
+    exampleSelect.disabled = quizActive || bugActive;
   }
 
   function exitQuiz() {
@@ -4044,8 +4057,125 @@ function renderWalkthrough(body, lesson, content) {
     else startQuiz();
   });
   quizCloseBtn.addEventListener('click', exitQuiz);
+
+  // iter 78: 🪲 Bug-Hunt mode — invert the trace from "watch correct" →
+  // "find the corrupted step". Picks a random step, mutates one state-field
+  // value (numbers ±1, booleans flipped, strings/arrays first-char swapped),
+  // renders the full step list as tappable rows. User picks the buggy row.
+  // Reuses the .walk-quiz-* styling family with .walk-bug-* overrides.
+  function _bugMutateValue(v) {
+    if (typeof v === 'number') return { val: v + (v >= 0 ? 1 : -1), kind: 'num±1' };
+    if (typeof v === 'boolean') return { val: !v, kind: 'bool-flip' };
+    if (typeof v === 'string' && v.length >= 2) {
+      return { val: v[1] + v[0] + v.slice(2), kind: 'str-swap' };
+    }
+    if (Array.isArray(v) && v.length >= 2) {
+      const out = v.slice(); [out[0], out[1]] = [out[1], out[0]];
+      return { val: out, kind: 'arr-swap' };
+    }
+    if (typeof v === 'string' && v.length === 1) {
+      // Single char: flip case / increment by 1
+      const c = v.charCodeAt(0);
+      return { val: String.fromCharCode(c + 1), kind: 'char+1' };
+    }
+    return null; // unmutatable
+  }
+  function _pickBugMutation(steps) {
+    // Need ≥3 steps so the buggy row is non-trivial to spot.
+    if (!steps || steps.length < 3) return null;
+    // Try random (step, key) pairs until one yields a mutable value.
+    const order = steps.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    for (const bugIdx of order) {
+      const state = steps[bugIdx].state;
+      if (!state) continue;
+      const keys = Object.keys(state);
+      const shuffledKeys = keys.slice();
+      for (let i = shuffledKeys.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledKeys[i], shuffledKeys[j]] = [shuffledKeys[j], shuffledKeys[i]];
+      }
+      for (const key of shuffledKeys) {
+        const mut = _bugMutateValue(state[key]);
+        if (!mut) continue;
+        // Build a mutated steps array (deep-ish copy: only the bug step's state).
+        const mutated = steps.map((s, i) =>
+          i === bugIdx ? { ...s, state: { ...s.state, [key]: mut.val } } : s
+        );
+        return { bugIdx, key, originalVal: state[key], mutatedVal: mut.val, kind: mut.kind, mutated };
+      }
+    }
+    return null;
+  }
+  function exitBugMode() {
+    bugActive = false;
+    bugPanel.classList.add('hidden');
+    bugListEl.innerHTML = '';
+    bugBtn.classList.remove('active');
+    bugBtn.textContent = '🪲 Bug';
+    render();
+  }
+  function startBugMode() {
+    if (quizActive) exitQuiz();
+    const steps = currentSteps();
+    const bug = _pickBugMutation(steps);
+    if (!bug) {
+      alert('This walkthrough is too short or has no mutable state for bug-hunt.');
+      return;
+    }
+    bugActive = true;
+    bugPanel.classList.remove('hidden');
+    bugBtn.classList.add('active');
+    bugBtn.textContent = '🪲 Bug on';
+    render(); // disables controls
+    bugListEl.innerHTML = '';
+    let picked = false;
+    bug.mutated.forEach((step, i) => {
+      const card = document.createElement('button');
+      card.className = 'walk-bug-row';
+      card.type = 'button';
+      const stateSnippet = step.state
+        ? Object.entries(step.state).slice(0, 4)
+            .map(([k, v]) => `${escapeHtml(k)}=${escapeHtml(_formatStateVal(v))}`).join(', ')
+        : '— no state —';
+      card.innerHTML = `
+        <span class="walk-bug-row-idx">${i + 1}</span>
+        <span class="walk-bug-row-body">
+          <span class="walk-bug-row-line">Line ${step.line} · ${escapeHtml(step.label || '—')}</span>
+          <span class="walk-bug-row-state">${stateSnippet}</span>
+        </span>
+      `;
+      card.addEventListener('click', () => {
+        if (picked) return;
+        picked = true;
+        const wasCorrect = i === bug.bugIdx;
+        card.classList.add(wasCorrect ? 'correct' : 'incorrect');
+        // Always reveal the actual bug step.
+        if (!wasCorrect) {
+          [...bugListEl.children][bug.bugIdx]?.classList.add('correct');
+        }
+        // Lock all rows
+        [...bugListEl.children].forEach(el => el.classList.add('locked'));
+        // Append a reveal line at the bottom showing original vs mutated value.
+        const reveal = document.createElement('div');
+        reveal.className = 'walk-bug-reveal';
+        reveal.innerHTML = `Step ${bug.bugIdx + 1} · <code>${escapeHtml(bug.key)}</code> was <code>${escapeHtml(_formatStateVal(bug.originalVal))}</code>, shown as <code>${escapeHtml(_formatStateVal(bug.mutatedVal))}</code> (<em>${escapeHtml(bug.kind)}</em>)`;
+        bugListEl.appendChild(reveal);
+      });
+      bugListEl.appendChild(card);
+    });
+  }
+  bugBtn.addEventListener('click', () => {
+    if (bugActive) exitBugMode();
+    else startBugMode();
+  });
+  bugCloseBtn.addEventListener('click', exitBugMode);
   exampleSelect.addEventListener('change', (e) => {
     if (quizActive) exitQuiz();
+    if (bugActive) exitBugMode();
     uiState.exampleIdx = Number(e.target.value);
     uiState.stepIdx = 0;
     render();

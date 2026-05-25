@@ -1,57 +1,82 @@
 # JS Drill — Memorize JavaScript Syntax & Interview Patterns
 
-A single-file web app for drilling JavaScript syntax, canonical interview-pattern solutions, and applied implementation problems. Built for coding-interview prep where speed of recall matters more than novel problem-solving.
+A no-build web app for drilling JavaScript syntax, canonical interview-pattern solutions, and applied implementation problems. Built for coding-interview prep where speed of recall matters more than novel problem-solving.
+
+**Live:** https://frosty110.github.io/js-drill/
 
 ## Quick start
 
 ```bash
-open index.html   # macOS
-# or just double-click index.html in any file browser
+python3 -m http.server 8765
+# open http://127.0.0.1:8765/
 ```
 
-No install, no build, no Node required. Tailwind and CodeMirror load via CDN. Progress saves to `localStorage`.
+`file://` won't work — the app fetches lesson JSON over HTTP. No install, no build, no Node required to use it. Tailwind and CodeMirror load via CDN. Progress saves to `localStorage`.
 
 ## How it works
 
-Each lesson has four tabs:
+Each lesson has up to 6 tabs:
 
-| Tab | What it does |
-|---|---|
-| **Reference** | The canonical code + 3 short "gotcha" notes — what you're memorizing |
-| **L1 Concept** | Multiple-choice on the load-bearing ideas. Pass = all correct in one session. |
-| **L2 Fill-in** | Partial code with blanks; check button runs your version and compares output |
-| **L3 Drill** | Blank CodeMirror editor — type the canonical solution from memory and Run |
+| Tab | Where | What it does |
+|---|---|---|
+| **Conversation** | Patterns / Applied | 6 collapsible sections simulating what you'd say in an interview — say/why color split |
+| **Walkthrough** | Patterns / Applied | Jupyter-style stepper. Pick an example, scrub line-by-line with a live state panel |
+| **Reference** | All | The canonical code + short "gotcha" notes — what you're memorizing |
+| **L1 Concept** | All | Multiple-choice (A/B/C/D) on the load-bearing ideas |
+| **L2 Fill-in** | All | Partial code with blanks; the runner compares output exactly |
+| **L3 Drill** | All | Blank CodeMirror editor — type from memory and Run |
 
-Pass all three levels → the lesson dot turns green in the sidebar.
+Pass L1 + L2 + L3 → the lesson dot turns green and enters spaced-repetition rotation.
 
-## Two tracks
+## Three tracks (152 lessons across 28 sections)
 
-- **Track A — Syntax Fundamentals** (~30 lessons): variables, arrays, objects, destructuring, async/await, classes, closures, etc.
-- **Track B — Canonical Patterns** (~22 lessons): Two Sum, Two Pointers, Sliding Window, Stack, Binary Search, Linked List, Trees, Tries, Heap, Graphs, etc.
+- **Syntax** — Basics · Arrays · Hash Structures · Modern Syntax · Iterators & Generators · JS Toolbox · Algorithms · Classes · Async · Advanced JS
+- **Patterns** — Arrays & Hashing · Two Pointers · Sliding Window · Stack · Binary Search · Linked List · Trees · Tries · Heap · Graphs · Greedy · DP · Backtracking · Intervals · Matrix · Bit Manipulation · System Design
+- **Applied** — Implementation problems (decks, games, hash maps, throttle/debounce, undo-redo, …)
+
+## Companion pages
+
+- `index.html` — the main drill app
+- `prep.html` — 4-day interview prep dashboard (curated path through the drills)
+- `diagnostic.html` — 43-question self-diagnostic to find your weak sections
+
+All three share the same `tokens.css` design tokens and `js/storage.js` localStorage layer.
 
 ## Features
 
-- 🔍 **Search** — focus with `/`, filter the sidebar by title/section/id
-- ⌨️ **Keyboard nav** — `j`/`k` for prev/next, `1`-`4` for tabs, `s` to shuffle, `/` to search
-- 🎯 **Mock Interview mode** — random pattern + L3 + timer + no hints. Tracks your personal best per pattern.
-- 🧭 **Starter Path** — toggleable linear track of recommended lessons, numbered in order
-- 🎲 **Shuffle review** — random mastered lesson for retention drills
-- 🔥 **Streak counter** — consecutive lessons mastered this session
-- 💾 **Auto-resume** — your last lesson + tab come back on reload
+- **Spaced repetition** — 1d → 30d intervals after a clean pass
+- **Today's plan** — curated session of due reviews + path steps + weak spots
+- **Starter Path** — toggleable linear recommended sequence (60+ steps)
+- **Mock Interview** — random pattern, timer, no hints, personal-best tracking
+- **Weak-spot tracker** — L1 misses resurface until you nail them
+- **Stats dashboard** — section retention, streaks, progress over time
+- **Diff view** — compare your L3 attempt to the canonical
+- **Cheatsheet export** — markdown dump of every lesson's reference code
+- **Progress backup/restore** — JSON export/import (no server sync)
+- **Session resume** — last lesson + tab persisted across reloads
+- **Mobile responsive** — drawer nav + sticky L3 action bar, line-wrapped editor
+- **Multi-tab sync** — progress changes propagate across open tabs
+- **Search & keyboard nav** — `/` to search, `j`/`k` prev/next, `1`-`4` tabs, `c` cheatsheet, `s` shuffle, `?` help
 
 ## Status indicators
 
 | Dot | Meaning |
 |---|---|
-| ○ empty | Not started |
-| ◐ amber | At least one level passed |
-| ● green | All three levels passed |
-| ● ringed green | Mastered with a reveal — retry from scratch to clear |
-| ◯ faint | Stubbed (coming soon) |
+| empty ○ | Not started |
+| amber ◐ | At least one level passed |
+| green ● | All three levels passed |
+| ringed green | Mastered with a reveal — retry from scratch to clear |
+| faint ◯ | Stubbed (placeholder) |
 
-## Customizing or extending
+## Adding lessons / contributing
 
-The two top-level constants in `index.html` are `CURRICULUM` (sidebar manifest) and `CONTENT` (lesson data). To add a lesson, see `CLAUDE.md` for the schema and verification workflow.
+Lesson content lives in `data/<section-slug>/<lesson-id>.json`, indexed by `data/manifest.json`. See [`CLAUDE.md`](CLAUDE.md) for the JSON schema, runner semantics, and authoring workflow. Validate any change with:
+
+```bash
+node tools/validate-data.js
+```
+
+This runs every L2 fill and L3 canonical against the same runner the app uses, checks manifest/disk parity, and (for Patterns/Applied) executes every walkthrough trace.
 
 ## License
 

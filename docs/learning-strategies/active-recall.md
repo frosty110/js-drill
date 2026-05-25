@@ -16,6 +16,17 @@ app's existence.
 
 ## How the app encodes it today
 
+- **📐 Smell-Test Complexity-Claim (iter 79).** Loads a small curated
+  map (`data/complexity-claims.json`) of `{lessonId: {actual,
+  distractor, note}}` for high-traffic patterns. Each card shows the
+  canonical + a randomly-chosen complexity claim (50/50 actual vs
+  distractor); user 2-taps "✓ Correct" or "✗ Wrong"; reveal shows the
+  actual complexity + a one-sentence note. Trains the interview reflex
+  "does the stated complexity match the code?" — interviewers grade
+  this heavily ("walk me through your time complexity"; "can you do
+  better than O(n²)?") but no other surface drills it as a *claim-vs-
+  reality* decision. Starts at 10 curated lessons; expandable via
+  appending to the JSON registry.
 - **🪲 Walkthrough Bug-Hunt (iter 78).** A third mode on the per-lesson
   Walkthrough tab (alongside the existing prev/next stepper and 🔮 Quiz).
   Tap 🪲 Bug → the lesson's trace runs in full, ONE step gets one of its

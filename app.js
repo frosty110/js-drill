@@ -128,6 +128,7 @@ const state = {
   speedrun: { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 }, // iter 71: 🏁 Section Speedrun — per-section first mobile timed-pressure surface; bests keyed by section slug (additive, no `__v` bump)
   bugHunt: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 73: 🪲 Bug-Hunt — §9B code-evaluation skill drill (additive, no `__v` bump)
   crystal: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 77: 🔮 Predict — mental-execution drill (additive, no `__v` bump)
+  claim: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 79: 📐 Smell-Test Complexity-Claim drill (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -512,6 +513,15 @@ function loadProgress() {
           lastRunAt: +parsed.crystal.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 79: Smell-Test Complexity-Claim lifetime stats. Legacy users get zeros.
+    state.claim = parsed.claim && typeof parsed.claim === 'object'
+      ? {
+          attempts: +parsed.claim.attempts || 0,
+          correct: +parsed.claim.correct || 0,
+          sessions: +parsed.claim.sessions || 0,
+          lastRunAt: +parsed.claim.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -577,6 +587,7 @@ function saveProgress() {
     speedrun: state.speedrun,
     bugHunt: state.bugHunt,
     crystal: state.crystal,
+    claim: state.claim,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1108,6 +1119,148 @@ async function startBigOSession() {
   // skips Rapid-Fire's full-corpus preload (heavier) and shorter session
   // length matches the denser concentration of complexity Qs.
   return _runRapidFireWithDeck(deck, { label: '⏱ Big-O', emoji: '⏱' });
+}
+
+// iter 79: 📐 Smell-Test Complexity-Claim drill — §9B Code Evaluation Skills.
+// Loads a small curated map (data/complexity-claims.json) of {lessonId: {actual,
+// distractor}}; each card shows the canonical + a randomly-chosen claim (50/50
+// actual vs distractor); user 2-taps "correct" or "wrong"; reveal shows the
+// actual + a one-line note. Trains the interview reflex "does the stated
+// complexity match the code?" — heavily graded in interviews but never drilled.
+// From `ideas-by-category.md § 9B → Smell-test complexity-claim drill`.
+const CLAIM_DECK_LEN = 5;
+let CLAIMS = null; // {lessonId: {actual, distractor, note}}
+let _claimsLoaded = false;
+async function _loadClaimsRegistry() {
+  if (_claimsLoaded) return;
+  try {
+    const res = await fetch('data/complexity-claims.json', { cache: 'no-cache' });
+    if (!res.ok) return;
+    const reg = await res.json();
+    CLAIMS = (reg && reg.claims) || {};
+    _claimsLoaded = true;
+  } catch (_) { /* fail soft — surface stays hidden */ }
+}
+
+async function _claimBuildDeck() {
+  if (!CLAIMS) return null;
+  const lessonIds = Object.keys(CLAIMS).filter(id => findLesson(id));
+  for (const id of lessonIds) {
+    if (!CONTENT[id]) {
+      try { await loadLessonContent(id); } catch (_) { /* skip */ }
+    }
+  }
+  const usable = lessonIds.filter(id => {
+    const c = CONTENT[id];
+    return c && c.L3 && c.L3.canonical;
+  });
+  if (usable.length < 3) return null;
+  // Shuffle then take CLAIM_DECK_LEN.
+  const shuffled = usable.slice().sort(() => Math.random() - 0.5).slice(0, CLAIM_DECK_LEN);
+  return shuffled.map(id => {
+    const cl = CLAIMS[id];
+    const lesson = findLesson(id);
+    const showActual = Math.random() < 0.5;
+    const claim = showActual ? cl.actual : cl.distractor;
+    return {
+      lessonId: id,
+      lessonTitle: lesson.title,
+      sectionName: lesson.section,
+      canonical: CONTENT[id].L3.canonical,
+      claim,
+      isCorrect: showActual, // user should tap "correct" iff showActual
+      actual: cl.actual,
+      note: cl.note || ''
+    };
+  });
+}
+
+async function startClaimSession() {
+  await _loadClaimsRegistry();
+  if (!CLAIMS) {
+    alert('Complexity-claim registry could not load.');
+    return;
+  }
+  const deck = await _claimBuildDeck();
+  if (!deck || deck.length < 3) {
+    alert('Not enough complexity-claim entries loaded.');
+    return;
+  }
+  state.claim.sessions++;
+  state.claim.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell claim-shell">
+        <div class="recognize-header">
+          <span>📐 Claim · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-claim">✕ Exit</button>
+        </div>
+        <div class="claim-meta">${escapeHtml(card.sectionName)} · <span class="claim-lesson">${escapeHtml(card.lessonTitle)}</span></div>
+        <pre class="crystal-code cm-s-dracula" data-claim-code></pre>
+        <div class="claim-stated">Claimed time complexity: <code class="claim-stated-val">${escapeHtml(card.claim)}</code></div>
+        <div class="claim-options">
+          <button class="recognize-opt claim-opt" data-pick="correct">✓ Correct</button>
+          <button class="recognize-opt claim-opt" data-pick="wrong">✗ Wrong</button>
+        </div>
+        <div class="recognize-feedback" data-claim-feedback></div>
+      </div>
+    `;
+    const codeEl = shell.querySelector('[data-claim-code]');
+    if (codeEl && typeof colorizeInto === 'function') colorizeInto(codeEl, card.canonical);
+    shell.querySelector('[data-action="exit-claim"]').addEventListener('click', () => renderLesson());
+    const opts = shell.querySelectorAll('.claim-opt');
+    let answered = false;
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const said = btn.dataset.pick === 'correct'; // user's claim
+        const wasRight = said === card.isCorrect;
+        if (wasRight) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.claim.attempts++;
+        if (wasRight) state.claim.correct++;
+        saveProgress();
+        opts.forEach(b => {
+          b.disabled = true;
+          const isCorrectChoice = (b.dataset.pick === 'correct') === card.isCorrect;
+          if (isCorrectChoice) b.classList.add('recognize-opt-correct');
+          else if (b === btn) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-claim-feedback]');
+        if (fb) {
+          const verdict = card.isCorrect ? `Actually <code>${escapeHtml(card.actual)}</code> ✓ (claim was correct)` : `Actually <code>${escapeHtml(card.actual)}</code> ≠ claim`;
+          fb.innerHTML = `<div class="claim-reveal ${wasRight ? 'claim-reveal-good' : 'claim-reveal-bad'}">${verdict}${card.note ? `<div class="claim-note">${escapeHtml(card.note)}</div>` : ''}</div>`;
+        }
+        setTimeout(() => { idx++; renderCard(); }, 2400);
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell claim-shell">
+        <div class="recognize-header"><span>📐 Claim · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} complexity claims judged correctly</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.claim.correct} / ${state.claim.attempts} (${state.claim.attempts > 0 ? Math.round(state.claim.correct / state.claim.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="claim-again">📐 Another session</button>
+            <button class="secondary" data-action="claim-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="claim-again"]').addEventListener('click', () => startClaimSession());
+    shell.querySelector('[data-action="claim-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
 }
 
 // iter 77: 🔮 Predict-the-Output — Crystal Ball mental-execution drill. Show
@@ -5897,6 +6050,12 @@ async function init() {
   // drill mental simulation.
   document.getElementById('crystal-btn').addEventListener('click', () => {
     startCrystalSession();
+  });
+
+  // iter 79: 📐 Claim — Smell-test complexity claim. §9B code-evaluation
+  // drill that trains "does the stated complexity match the code?" reflex.
+  document.getElementById('claim-btn').addEventListener('click', () => {
+    startClaimSession();
   });
 
   // iter 54: ⚡ Rapid-Fire L1 stream — cross-lesson interleaved tap surface.

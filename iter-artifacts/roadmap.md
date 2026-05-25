@@ -27,6 +27,39 @@
 
 ---
 
+## Meta-finding (iter 64 vision — premise-validation pattern reproduced for 5th time)
+
+**Sixth vision iter (after 26/31/48/55/59).** Second vision iter to use the iter-55 shipped-surfaces-inventory mitigation; second iter to use the iter-59 "name the previously-untapped data dimension" criterion in subagent B's prompt. Both patterns produced clean outputs again — **0% duplicate-proposal rate** across both subagents.
+
+**Subagent A (pure-fresh-eyes) returned 5 ambitious / content-authoring-heavy proposals:**
+1. Whiteboard Mode (voice transcript + rubric tagging) — voice-recognition class, BLOCKED territory.
+2. Variant Generator (3-5 parametric L3 variants per lesson) — content-authoring at per-lesson grain.
+3. Live Cohort Race (Supabase leaderboard) — backend + PROFILE L75 anti-gamification concern.
+4. Spec-to-Code L0 tier (function signature + invariants + edge case fields) — content-authoring per lesson.
+5. Personal Cheatsheet Builder (pin + reorder + PDF) — partially recombination but mostly UX over redundant-with-existing-cheatsheet.
+
+**Subagent B (constraint-aware) returned 5 ship-feasible proposals, each naming the data dimension:**
+1. Section Speedrun (section as a timed unit). PROMOTED.
+2. Mechanic Drilldown (in-context lateral transfer from Reference tab — verified by grep that Reference has no mechanic chips today). HELD — clean candidate for next vision iter or direct-promotion.
+3. Resurrect Queue (decay magnitude on temporal axis). PROMOTED (top by impact — closes a real PROFILE measurement gap).
+4. Streak-Risk Tile (prospective time on history axis — "you're about to break your streak"). HELD with concern — the framing brushes PROFILE L75 anti-gamification ("can't recover from broken streak" trap); needs careful design or might not ship at all.
+5. Track Balance Compass (allocation balance across track axis). PROMOTED.
+
+**Promoted top 3 by impact:** Resurrect Queue → Section Speedrun → Track Balance Compass. All single-iter ships in ≤140 LOC; pure data recombination; no PROFILE amendments; no per-lesson authoring; no new state schema. § Next iteration nominates Resurrect Queue ship.
+
+**Held for follow-up:**
+- **Mechanic Drilldown** — verified differentiated (Reference tab has no inline mechanic chips today), candidate for direct-promotion in a future ship iter (iter-59 Mechanics Heatmap precedent — direct-promote saves vision-iter subagent budget).
+- **Streak-Risk Tile** — anti-gamification framing risk. Either ship with very careful copy ("1 lesson would land an event today" not "you're about to break your streak") or skip entirely.
+
+**Subagent A's proposals retained for future amendment-iter / content-authoring iters:**
+- Whiteboard Mode → re-attempt after PROFILE Amendment C ratifies (currently audio-class blocked, 5x).
+- Variant Generator → requires per-lesson content authoring; could be one large content-authoring iter or a per-lesson opt-in field.
+- Live Cohort Race → BLOCKED by PROFILE L75 anti-gamification + requires Supabase backend (user has shipped sync infra out-of-band; race surface would build on it).
+- Spec-to-Code L0 → requires per-lesson contract authoring; framed as an "L0 tier" of the ladder which would need PROFILE update.
+- Personal Cheatsheet Builder (pinning + reorder) — partially constraint-feasible if scoped to just `state.pinned[]` + reorder, dropping PDF export.
+
+---
+
 ## Meta-finding (iter 59 vision — shipped-surfaces inventory worked)
 
 **The iter-55 mitigation landed cleanly.** Iter 55 surfaced a 60-80% duplicate-proposal rate caused by the fresh-eyes prompt forbidding reads of SELF-IMPROVE / iteration log / app.js. Mitigation = add a `## Already-shipped surfaces (do not repropose)` inventory to the subagent prompt (sidebar buttons + per-lesson tab surfaces + Stats tiles + BLOCKED entries). Iter 59 was the first vision iter to use the mitigation.
@@ -71,6 +104,51 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 ---
 
 ## Queued
+
+### 2026-05-25 iter 64 — Resurrect Queue (staleness gradient on the SR axis)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md success criterion — "Mastered lessons stay mastered across SR intervals (1d → 30d)." The existing 🕒 Review badge treats "due tomorrow" and "due 60 days ago" the same; long-overdue lessons silently rot. No surface differentiates by staleness magnitude. The rusty engineer's biggest fear is silent regression.
+**Mechanic:** New sidebar pill `💀 Resurrect (N)` showing lessons where `now - dueAt > 2 * interval` (overdue by more than one full bucket interval). Tap → jump straight to L1 of the most-overdue. Sort: most-overdue first.
+**Success criterion:** Within 21 days of ship, ≥60% of "resurrected" lessons re-enter clean-pass state (vs. baseline regression rate measured pre-ship).
+**Estimated scope:** single-iter ship (~60-80 LOC JS + 0 dedicated CSS).
+**Data dependency:** none — pure derivation from `state.reviews[id].{dueAt, interval}` (both already populated since iter 32+). No new fields.
+**PROFILE.md amendment proposed?** No — directly closes the "mastered stays mastered" success-criterion measurement gap.
+**Why this is a "new bucket" not "better cell":** Surfaces *decay magnitude on the temporal axis* — a dimension of `reviews` that's been stored but never read. The Review badge knows due-or-not; this surface knows *how* overdue.
+**Subagent source:** iter-64 B#3 (constraint-aware).
+
+---
+
+### 2026-05-25 iter 64 — Section Speedrun (section as a timed unit)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md §Usage context — Mock Interview is desktop-only ("don't try to mobilify it"). The rusty engineer has no *mobile* timed-pressure surface, so timed conditioning never compounds in the 80%-phone slice. PROFILE pattern-fluency line — recruiters probe at the section grain ("walk me through hashing"), not single-lesson grain.
+**Mechanic:** Pick a section chip from the sidebar header → modal opens a stopwatch + section-scoped L1 stream (every full lesson's first L1 in section order). Time stamps on completion; per-section best time saved as new key in existing `bestTimes` scalar store (`speedrun:<sectionSlug>` namespace).
+**Success criterion:** ≥30% of weekly active users start ≥1 Section Speedrun within 14 days of ship; median completion time on a section improves between first and third attempt.
+**Estimated scope:** single-iter ship (~100-140 LOC JS + ~40 LOC CSS; reuses Rapid-Fire / Warmup session-shell pattern with section-filtered deck).
+**Data dependency:** none — manifest sections + `lesson.L1.questions` per lesson + `state.bestTimes` (existing scalar store, new key namespace `speedrun:*`). No schema migration.
+**PROFILE.md amendment proposed?** No — sits inside PROFILE.md need #3 (interview-format proficiency) + the 80%-phone success criterion.
+**Why this is a "new bucket" not "better cell":** First surface that stopwatches a *section as a unit* — the grain recruiters actually probe. Mock Interview times one lesson; sparkline tracks one lesson over days; Speedrun times one whole topic right now.
+**Subagent source:** iter-64 B#1 (constraint-aware).
+
+---
+
+### 2026-05-25 iter 64 — Track Balance Compass (allocation visibility across the track axis)
+
+**Status:** queued
+
+**Value claim:** PROFILE.md §What they need spans 3 tracks (syntax, patterns, applied). The rusty engineer over-grinds whichever track they touched first and discovers the imbalance at the worst moment (an interview). No surface answers "am I drilling the right mix?" The existing per-section progress bar (iter 40) tells per-section breadth but not cross-track allocation.
+**Mechanic:** A compact 3-bar widget on the Stats modal header showing % mastered per track + a one-line nudge ("Patterns: 18/79 — least covered"). Tap a bar → sidebar filters to that track's lowest-passing section.
+**Success criterion:** Track-mastery variance (stddev of % mastered across the 3 tracks) decreases by ≥20% across active users over 30 days post-ship vs. the 30 days prior.
+**Estimated scope:** single-iter ship (~50-80 LOC JS + ~20 LOC CSS for the bar widget).
+**Data dependency:** none — `state.progress[lessonId]` + `lesson.track` from manifest. Pure tally; zero new state.
+**PROFILE.md amendment proposed?** No.
+**Why this is a "new bucket" not "better cell":** First surface that joins `progress × track` to surface lopsided allocation. Stats today reports overall counts and per-section retention; nobody has ever asked "is your investment lopsided across tracks?"
+**Subagent source:** iter-64 B#5 (constraint-aware).
+
+---
 
 ### 2026-05-24 iter 59 — Weak-Spot Decay Radar (intersection of weakness + due + reveal)
 

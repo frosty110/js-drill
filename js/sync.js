@@ -1,4 +1,7 @@
-// Cross-device sync for jsdrill.progress.v1.
+// Cross-device sync for the three localStorage blobs:
+//   - jsdrill.progress.v1   (main drill app)
+//   - jsdrill.prep.v1       (prep dashboard)
+//   - jsdrill.diagnostic.v1 (4-day diagnostic)
 //
 // Architecture (per CLAUDE.md "shared UI + storage contract"):
 //   - js/storage.js  → single source of truth for localStorage I/O
@@ -9,29 +12,52 @@
 // DrillStorage. Sync is purely additive.
 //
 // Sync model:
-//   - One Postgres row per user, holding the WHOLE jsdrill.progress.v1
-//     blob as a single JSONB column (see supabase/migrations/001_user_progress.sql).
-//   - On sign-in:    pull cloud → merge per-field with local → save merged
-//                    locally → push merged to cloud.
-//   - On local save: debounced 500ms push of the latest local blob.
+//   - One Postgres row per user, holding all three blobs bundled into a
+//     single JSONB column shaped as { progress, prep, diagnostic }. See
+//     supabase/migrations/001_user_progress.sql.
+//   - On sign-in:    pull cloud → merge per-field per-blob with local →
+//                    save each merged blob locally → push merged bundle to cloud.
+//   - On local save (any of the three blobs): debounced 500ms push of the
+//                    whole bundle.
 //   - On focus / every 30s: pull cloud → if cloud.updated_at advanced since
 //                    last pull, merge with local and save locally.
 //
-// Conflict policy (per-field merge, no last-write-wins on the whole blob):
-//   - progress[id][L1|L2|L3]:        OR of 'passed'      (any pass on any device wins)
-//   - bestTimes[id]:                  MIN                 (faster time wins)
-//   - mockHistory[id]:                concat + sort desc + cap to last 5
-//   - revealed[id][level]:            OR                  (once revealed, always revealed)
-//   - reviews[id]:                    one with greater lastPassedAt wins
-//   - weakness[id]:                   OR                  (flagged on any device → flagged)
-//   - welcomed:                       OR                  (welcomed once → welcomed forever)
-//   - lastLessonId / lastTab / starterPath / hideMastered / sidebarTrack:
-//                                     prefer LOCAL        (active device wins device-state)
-//   - __v:                            max
+// Backward-compat read: an earlier shipped version stored the main blob
+// directly in `data`. doPull() detects that (top-level __v) and wraps it
+// as { progress: oldData } so the user's first row keeps working.
+//
+// Conflict policy (per-field merge per blob, no last-write-wins on the whole row):
+//
+//   progress (jsdrill.progress.v1):
+//     progress[id][L1|L2|L3]: OR of 'passed'      (any pass on any device wins)
+//     bestTimes[id]:           MIN                 (faster time wins)
+//     mockHistory[id]:         concat + sort desc + cap to last 5
+//     revealed[id][level]:     OR                  (once revealed, always revealed)
+//     reviews[id]:             greater lastPassedAt wins
+//     weakness[id]:            OR                  (flagged on any device → flagged)
+//     welcomed:                OR
+//     lastLessonId / lastTab / starterPath / hideMastered / sidebarTrack:
+//                              prefer LOCAL        (active device wins device-state)
+//
+//   prep (jsdrill.prep.v1):
+//     completed[taskId]:       OR
+//     expanded[blockId]:       OR
+//     reviewed[itemId]:        greater lastReviewedAt wins (and max familiarity)
+//     currentTab / currentDayId / glossSearch / review:
+//                              prefer LOCAL        (UI/session state)
+//
+//   diagnostic (jsdrill.diagnostic.v1):
+//     answers[qid]:            greater lastAnsweredAt wins
+//     pre[k] / post[k]:        prefer non-empty; if both, prefer LOCAL
+//     timeOnStep[step]:        MAX                 (cumulative time)
+//     startedAt:               MIN                 (earliest start wins)
+//     currentStep:             prefer LOCAL
+//
+//   __v on every blob: max
 //
 // This merge is order-independent for set-additive fields and intentionally
-// asymmetric for device-state scalars — opening the app on the phone after
-// a laptop session shouldn't snap the phone back to the laptop's last lesson.
+// asymmetric for device-state scalars — opening prep on the phone after a
+// laptop session shouldn't snap the phone back to the laptop's tab.
 
 (function (root) {
   'use strict';
@@ -130,8 +156,10 @@
       if (wasSignedIn && !session) onSignedOut();
     });
 
-    // Push debounced on every local DrillStorage write.
-    root.addEventListener('drill:progress-written', () => {
+    // Push debounced on every local DrillStorage write (progress, prep, or diagnostic).
+    // Suppressed during a pull's own writes — see suppressNextPush below.
+    root.addEventListener('drill:storage-written', () => {
+      if (suppressNextPush) return;
       if (session) schedulePush();
     });
 
@@ -186,13 +214,38 @@
     }, PUSH_DEBOUNCE_MS);
   }
 
+  function loadLocalBundle() {
+    return {
+      progress:   root.DrillStorage.loadAppProgress(),
+      prep:       root.DrillStorage.loadPrepState(),
+      diagnostic: root.DrillStorage.loadDiagnostic()
+    };
+  }
+
+  // Forward-compat reader: an earlier release stored just the main blob
+  // directly in `data` (top-level __v + progress, bestTimes, etc.). Detect
+  // that legacy shape and wrap it into the new bundle envelope.
+  function normalizeCloudBundle(raw) {
+    if (!raw || typeof raw !== 'object') return { progress: null, prep: null, diagnostic: null };
+    if (typeof raw.__v === 'number') {
+      // Legacy shape — the whole row IS the main-app blob.
+      return { progress: raw, prep: null, diagnostic: null };
+    }
+    return {
+      progress:   raw.progress   || null,
+      prep:       raw.prep       || null,
+      diagnostic: raw.diagnostic || null
+    };
+  }
+
   async function doPush() {
     if (!session || !supa) return;
-    const local = root.DrillStorage.loadAppProgress();
-    if (!local) return; // Nothing to push yet.
+    const bundle = loadLocalBundle();
+    // Nothing to push at all? Skip.
+    if (!bundle.progress && !bundle.prep && !bundle.diagnostic) return;
     const { data, error } = await supa
       .from(TABLE)
-      .upsert({ user_id: session.user.id, data: local }, { onConflict: 'user_id' })
+      .upsert({ user_id: session.user.id, data: bundle }, { onConflict: 'user_id' })
       .select('updated_at')
       .single();
     if (error) throw error;
@@ -218,38 +271,49 @@
       return null;
     }
 
-    // If we've already seen this row version and no merge requested, skip.
     if (!mergeAndPush && lastSeenUpdatedAt && data.updated_at === lastSeenUpdatedAt) {
       return null;
     }
 
-    const local = root.DrillStorage.loadAppProgress();
-    const cloud = data.data || null;
-    const merged = mergeProgress(local, cloud);
+    const local = loadLocalBundle();
+    const cloud = normalizeCloudBundle(data.data);
+    const merged = {
+      progress:   mergeProgress(local.progress, cloud.progress),
+      prep:       mergePrep(local.prep, cloud.prep),
+      diagnostic: mergeDiagnostic(local.diagnostic, cloud.diagnostic)
+    };
 
-    if (merged) {
-      // Save merged locally. This will fire the write event → push.
-      // To avoid an immediate ping-pong, suppress the next push briefly.
-      suppressNextPush = true;
-      root.DrillStorage.saveAppProgress(merged);
-      lastSeenUpdatedAt = data.updated_at;
-
-      // Notify the app to re-render from the new local state.
-      root.dispatchEvent(new CustomEvent('drill:sync-pulled', { detail: { merged } }));
+    // Save each merged sub-blob locally. Event dispatch is synchronous, so
+    // wrapping the saves with the suppress flag short-circuits the push
+    // listener for exactly these writes and nothing else.
+    suppressNextPush = true;
+    try {
+      if (merged.progress)   root.DrillStorage.saveAppProgress(merged.progress);
+      if (merged.prep)       root.DrillStorage.savePrepState(stripVersion(merged.prep));
+      if (merged.diagnostic) root.DrillStorage.saveDiagnostic(stripVersion(merged.diagnostic));
+    } finally {
+      suppressNextPush = false;
     }
+    lastSeenUpdatedAt = data.updated_at;
+
+    root.dispatchEvent(new CustomEvent('drill:sync-pulled', { detail: { merged } }));
 
     if (mergeAndPush) await doPush();
     return merged;
   }
 
-  // Tiny race-condition guard: when a pull writes to local, we'll get a
-  // write event. We don't want to immediately push that back (it's just
-  // what we already pulled). One-shot suppression flag, cleared on next save.
+  // savePrepState / saveDiagnostic re-stamp __v on the way in, so strip it
+  // from merged input to avoid double-versioning.
+  function stripVersion(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const { __v, ...rest } = obj;
+    return rest;
+  }
+
+  // Race guard: when doPull writes to local, the push listener above
+  // would otherwise immediately echo what we just pulled. We toggle this
+  // flag synchronously around the saves in doPull.
   let suppressNextPush = false;
-  root.addEventListener('drill:progress-written', () => {
-    if (suppressNextPush) { suppressNextPush = false; return; }
-    // Otherwise normal push path runs (already wired in init()).
-  }, true); // capture phase so this runs before the user-facing handler
 
   // ============================================================================
   // INTERNAL — merge
@@ -340,6 +404,104 @@
       const v = local[key] !== undefined ? local[key] : cloud[key];
       if (v !== undefined) merged[key] = v;
     }
+
+    return merged;
+  }
+
+  function mergePrep(local, cloud) {
+    if (!local && !cloud) return null;
+    if (!local) return cloud;
+    if (!cloud) return local;
+
+    const merged = {};
+    merged.__v = Math.max(local.__v || 0, cloud.__v || 0, 1);
+
+    // completed[taskId]: OR
+    merged.completed = {};
+    for (const id of unionKeys(local.completed, cloud.completed)) {
+      if ((local.completed && local.completed[id]) || (cloud.completed && cloud.completed[id])) {
+        merged.completed[id] = true;
+      }
+    }
+
+    // expanded[blockId]: OR
+    merged.expanded = {};
+    for (const id of unionKeys(local.expanded, cloud.expanded)) {
+      if ((local.expanded && local.expanded[id]) || (cloud.expanded && cloud.expanded[id])) {
+        merged.expanded[id] = true;
+      }
+    }
+
+    // reviewed[itemId]: greater lastReviewedAt wins (mirrors main app's reviews merge).
+    // A more recent review reflects the user's current confidence — even if it's a miss
+    // that knocked familiarity back to 0, that's the truth right now.
+    merged.reviewed = {};
+    for (const id of unionKeys(local.reviewed, cloud.reviewed)) {
+      const a = local.reviewed && local.reviewed[id];
+      const b = cloud.reviewed && cloud.reviewed[id];
+      if (!a) merged.reviewed[id] = b;
+      else if (!b) merged.reviewed[id] = a;
+      else merged.reviewed[id] = (a.lastReviewedAt || 0) >= (b.lastReviewedAt || 0) ? a : b;
+    }
+
+    // Device/UI state: prefer LOCAL
+    for (const key of ['currentTab', 'currentDayId', 'glossSearch', 'review']) {
+      const v = local[key] !== undefined ? local[key] : cloud[key];
+      if (v !== undefined) merged[key] = v;
+    }
+
+    return merged;
+  }
+
+  function mergeDiagnostic(local, cloud) {
+    if (!local && !cloud) return null;
+    if (!local) return cloud;
+    if (!cloud) return local;
+
+    const merged = {};
+    merged.__v = Math.max(local.__v || 0, cloud.__v || 0, 1);
+
+    // startedAt: MIN (earliest start across devices)
+    if (local.startedAt && cloud.startedAt) {
+      merged.startedAt = local.startedAt < cloud.startedAt ? local.startedAt : cloud.startedAt;
+    } else {
+      merged.startedAt = local.startedAt || cloud.startedAt;
+    }
+
+    // answers[qid]: greater lastAnsweredAt wins (most recent answer is the truth)
+    merged.answers = {};
+    for (const qid of unionKeys(local.answers, cloud.answers)) {
+      const a = local.answers && local.answers[qid];
+      const b = cloud.answers && cloud.answers[qid];
+      if (!a) merged.answers[qid] = b;
+      else if (!b) merged.answers[qid] = a;
+      else merged.answers[qid] = (a.lastAnsweredAt || 0) >= (b.lastAnsweredAt || 0) ? a : b;
+    }
+
+    // pre / post: per-key, prefer non-empty; if both have a value, prefer LOCAL
+    for (const block of ['pre', 'post']) {
+      merged[block] = {};
+      const lblock = local[block] || {};
+      const cblock = cloud[block] || {};
+      for (const k of unionKeys(lblock, cblock)) {
+        const lv = lblock[k];
+        const cv = cblock[k];
+        const v = (lv !== undefined && lv !== '') ? lv : cv;
+        if (v !== undefined && v !== '') merged[block][k] = v;
+      }
+    }
+
+    // timeOnStep[step]: MAX (cumulative time across devices is undefined; pick the larger)
+    merged.timeOnStep = {};
+    for (const step of unionKeys(local.timeOnStep, cloud.timeOnStep)) {
+      const a = (local.timeOnStep && local.timeOnStep[step]) || 0;
+      const b = (cloud.timeOnStep && cloud.timeOnStep[step]) || 0;
+      merged.timeOnStep[step] = Math.max(a, b);
+    }
+
+    // currentStep: prefer LOCAL (active device's position)
+    if (local.currentStep !== undefined) merged.currentStep = local.currentStep;
+    else if (cloud.currentStep !== undefined) merged.currentStep = cloud.currentStep;
 
     return merged;
   }
@@ -584,6 +746,12 @@
   // ============================================================================
   // EXPOSURE + AUTO-INIT
   // ============================================================================
+  // Internal pure functions exposed for unit testing only. Not part of the
+  // public API; treat as private. See tools/cdp/sync-merge.js.
+  Sync._testInternals = {
+    mergeProgress, mergePrep, mergeDiagnostic, normalizeCloudBundle
+  };
+
   root.DrillSync = Sync;
 
   if (document.readyState === 'loading') {

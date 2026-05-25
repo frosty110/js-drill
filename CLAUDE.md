@@ -134,14 +134,18 @@ localStorage origin. To prevent drift (which bit us in iter-35):
   as `index.html` head. Use `renderCmInto(host, code)` (currently in
   `prep.html`; hoist if a third caller appears).
 - **Cross-device sync** → `js/sync.js`, exposed as `window.DrillSync`. Optional
-  layer that mirrors `jsdrill.progress.v1` to Supabase when the user signs in
-  (email OTP). Every page that already includes `js/storage.js` should also
-  include the four sync scripts in this order: `@supabase/supabase-js` (CDN) →
+  layer that mirrors all three localStorage blobs (`jsdrill.progress.v1`,
+  `jsdrill.prep.v1`, `jsdrill.diagnostic.v1`) to Supabase when the user signs in
+  (email OTP). One Postgres row per user holding `{ progress, prep, diagnostic }`
+  as JSONB. Every page that already includes `js/storage.js` should also include
+  the four sync scripts in this order: `@supabase/supabase-js` (CDN) →
   `js/supabase-config.js` → `js/supabase-client.js` → `js/sync.js`. The script
   auto-mounts a fixed top-right "Sync" chip. App behavior is unchanged when the
   user is signed out or `SUPABASE_CONFIG` is empty — sync is purely additive.
-  Merge policy lives in the header comment of `js/sync.js` (set-additive fields
-  union per-lesson; device-state scalars prefer local).
+  Per-blob, per-field merge policies live in the header comment of `js/sync.js`
+  (set-additive fields union per-id; device-state scalars prefer local). When
+  you add a new sub-blob or change a merge rule, update both `js/sync.js`'s
+  header docs and `tools/cdp/sync-merge.js` (unit tests for every rule).
 
 Before authoring a new page or adding a feature that touches state or styles,
 **run the `.claude/skills/ui-consistency/` skill** — it documents the

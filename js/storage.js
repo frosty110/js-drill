@@ -47,11 +47,7 @@
 
   Storage.saveAppProgress = function (state) {
     _safeSave(Storage.MAIN_APP_KEY, state);
-    // Fire an event so optional layers (js/sync.js) can react without
-    // creating a circular dependency. Local-only mode is unaffected.
-    if (typeof root.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
-      try { root.dispatchEvent(new CustomEvent('drill:progress-written')); } catch (e) { /* ignore */ }
-    }
+    _fireWriteEvent('progress');
   };
 
   // ============================================================================
@@ -75,6 +71,7 @@
     // Stamp the version on the way out so future migrations have something to switch on.
     const stamped = Object.assign({ __v: Storage.PREP_VERSION }, state);
     _safeSave(Storage.PREP_KEY, stamped);
+    _fireWriteEvent('prep');
   };
 
   // ============================================================================
@@ -95,6 +92,7 @@
   Storage.saveDiagnostic = function (state) {
     const stamped = Object.assign({ __v: Storage.DIAGNOSTIC_VERSION }, state);
     _safeSave(Storage.DIAGNOSTIC_KEY, stamped);
+    _fireWriteEvent('diagnostic');
   };
 
   // ============================================================================
@@ -176,6 +174,17 @@
       // the app, but log loudly.
       console.warn('storage write failed for', key, e);
     }
+  }
+
+  // Optional layers (js/sync.js) listen for this without creating a
+  // circular dependency. `detail.key` is 'progress' | 'prep' | 'diagnostic'
+  // so consumers can be selective if they want — sync.js debounce-pushes
+  // the whole bundle on any write.
+  function _fireWriteEvent(key) {
+    if (typeof root.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
+    try {
+      root.dispatchEvent(new CustomEvent('drill:storage-written', { detail: { key } }));
+    } catch (e) { /* ignore */ }
   }
 
   // ============================================================================

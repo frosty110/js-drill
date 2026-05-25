@@ -107,7 +107,7 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ### 2026-05-25 iter 64 — Resurrect Queue (staleness gradient on the SR axis)
 
-**Status:** queued
+**Status:** SHIPPED iter 65. 💀 Resurrect (N) sidebar pill listing mastered lessons where `now - dueAt > 2 * interval`. Tap routes to most-overdue at L2 (touch) or L3 (fine-pointer). Auto-hides when N=0. ~40 LOC JS via `resurrectIds()` helper + updateReviewBadge integration. 4-assertion mobile probe. spaced-repetition.md updated.
 
 **Value claim:** PROFILE.md success criterion — "Mastered lessons stay mastered across SR intervals (1d → 30d)." The existing 🕒 Review badge treats "due tomorrow" and "due 60 days ago" the same; long-overdue lessons silently rot. No surface differentiates by staleness magnitude. The rusty engineer's biggest fear is silent regression.
 **Mechanic:** New sidebar pill `💀 Resurrect (N)` showing lessons where `now - dueAt > 2 * interval` (overdue by more than one full bucket interval). Tap → jump straight to L1 of the most-overdue. Sort: most-overdue first.

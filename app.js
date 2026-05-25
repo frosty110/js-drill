@@ -594,6 +594,25 @@ function dueReviewIds() {
     .sort((a, b) => state.reviews[a.id].dueAt - state.reviews[b.id].dueAt)
     .map(l => l.id);
 }
+// iter 65: Resurrect Queue — lessons that are not just due but *long*-overdue
+// (`now - dueAt > 2 * interval`). Closes iter-64 roadmap #1. The existing 🕒
+// Review badge surfaces ALL due lessons without differentiating staleness;
+// this helper isolates the decay-magnitude tail — lessons that have rotted
+// past one full bucket interval and silently regressed. Pure derivation
+// from existing `state.reviews[id].{dueAt, interval}`; no new schema.
+function resurrectIds() {
+  const now = Date.now();
+  return CURRICULUM
+    .filter(l => l.status === 'full')
+    .filter(l => {
+      const r = state.reviews[l.id];
+      if (!r || !r.interval) return false;
+      if (lessonOverallStatus(l.id) !== 'mastered') return false;
+      return (now - r.dueAt) > (2 * r.interval);
+    })
+    .sort((a, b) => (now - state.reviews[b.id].dueAt) - (now - state.reviews[a.id].dueAt))
+    .map(l => l.id);
+}
 // Iter 45 — true global due count, ignoring path-scope. Used by the Review
 // button's scope-aware label so the user can see "3 due in scope (12 total)"
 // instead of having the broader pool silently hidden.
@@ -1890,6 +1909,15 @@ function updateReviewBadge() {
     const rows = _atRiskRows(7);
     atRiskBtn.classList.toggle('hidden', rows.length === 0);
     if (atRiskCnt) atRiskCnt.textContent = rows.length;
+  }
+  // iter 65: 💀 Resurrect button visibility + count. Auto-hides when no
+  // lesson is past 2× its SR interval.
+  const resBtn = document.getElementById('resurrect-btn');
+  const resCnt = document.getElementById('resurrect-count');
+  if (resBtn) {
+    const ids = resurrectIds();
+    resBtn.classList.toggle('hidden', ids.length === 0);
+    if (resCnt) resCnt.textContent = ids.length;
   }
 }
 function updateLessonHeaderInPlace() {
@@ -4949,6 +4977,25 @@ async function init() {
     }
     atRiskModal.style.display = 'block';
   }
+  // iter 65: 💀 Resurrect — jump to most-overdue mastered lesson at L1.
+  // On touch devices land on L2 (mirror Review-button pattern); on fine
+  // pointer land on L3 — same recall calibration the SR ladder uses.
+  document.getElementById('resurrect-btn').addEventListener('click', () => {
+    const ids = resurrectIds();
+    if (!ids.length) return;
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    state.currentLessonId = ids[0];
+    state.currentTab = coarse ? 'L2' : 'L3';
+    syncBinderToLesson(ids[0]);
+    saveProgress();
+    renderSidebar();
+    renderLesson();
+    _updateHash();
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      document.body.classList.remove('sidebar-open');
+    }
+  });
+
   document.getElementById('at-risk-btn').addEventListener('click', openAtRisk);
   document.getElementById('at-risk-close').addEventListener('click', () => atRiskModal.style.display = 'none');
   atRiskModal.addEventListener('click', (e) => {

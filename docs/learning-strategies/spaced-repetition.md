@@ -16,6 +16,16 @@ specifically toward lessons their memory is currently weakest on.
 
 ## How the app encodes it today
 
+- **💀 Resurrect Queue (iter 65).** Lessons whose `now - dueAt > 2 * interval`
+  (overdue past one full bucket) get a dedicated sidebar pill `💀 Resurrect (N)`
+  separate from the standard 🕒 Review badge. Closes a measurement gap on the
+  "mastered stays mastered" success criterion: the Review badge knows
+  due-or-not but never differentiated "due tomorrow" from "due 60 days ago,"
+  so long-overdue lessons silently regressed without a dedicated re-entry
+  ramp. Tap → routes to the most-overdue lesson at L2 (touch) or L3 (fine-
+  pointer), matching the existing Review-button device-calibration. Auto-
+  hides when N=0. Closes iter-64 roadmap #1 (constraint-aware B#3 — decay
+  magnitude on the SR temporal axis).
 - **📅 Streak Map (iter 62).** 60-day calendar density heatmap built from
   `state.history` events bucketed by day. Sidebar button opens a 9-column
   grid of 60 day-cells (oldest top-left → today bottom-right); cell color

@@ -38,6 +38,18 @@ recall friction with much less typing.
 
 ## How the app encodes it today
 
+- **🏁 Section Speedrun (iter 71).** First MOBILE timed-pressure surface.
+  Mock Interview's stopwatch is desktop-only (per PROFILE §usage-context)
+  and times one lesson; Speedrun times a whole SECTION as a unit — the
+  grain recruiters actually probe ("walk me through hashing"). Pick a
+  section (≥3 full lessons), then race the first L1 of every lesson in
+  manifest order against a continuous stopwatch. Per-section best time
+  is saved in `state.speedrun.bests[<sectionSlug>]` and shown as a ★ chip
+  on the picker. The desirable-difficulty payoff: under-pressure recall
+  on a topic the user just drilled coldly reveals the gap between
+  "I know this lesson" and "I can produce this lesson FAST in interview
+  conditions"; the picker's PB chip then gives the next session a target
+  to beat — calibrated effort by the user's own past performance.
 - **The L1 → L2 → L3 ladder** is itself a desirable-difficulty ramp — each
   step strips a layer of scaffolding (options → blanks → blank editor).
 - **⌚ Mock Replay Reel (iter 61).** The L3 mock-interview header strip already

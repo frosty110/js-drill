@@ -125,6 +125,7 @@ const state = {
   recognize: { attempts: 0, correct: 0 }, // iter 49: Pattern Recognition Speed Drill lifetime stats (additive)
   rapidFire: { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 }, // iter 54: cross-lesson L1 interleaving stream (additive)
   warmup: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 57: 3-card daily-plan swipe-stack micro-session (additive)
+  speedrun: { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 }, // iter 71: 🏁 Section Speedrun — per-section first mobile timed-pressure surface; bests keyed by section slug (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -481,6 +482,16 @@ function loadProgress() {
           lastRunAt: +parsed.warmup.lastRunAt || 0
         }
       : { sessions: 0, completions: 0, lastRunAt: 0 };
+    // iter 71: Section Speedrun stats + per-section best times. Legacy users
+    // get an empty bests map; bests[sectionSlug] = ms (lower=better).
+    state.speedrun = parsed.speedrun && typeof parsed.speedrun === 'object'
+      ? {
+          bests: parsed.speedrun.bests && typeof parsed.speedrun.bests === 'object' ? parsed.speedrun.bests : {},
+          sessions: +parsed.speedrun.sessions || 0,
+          completions: +parsed.speedrun.completions || 0,
+          lastRunAt: +parsed.speedrun.lastRunAt || 0
+        }
+      : { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -543,6 +554,7 @@ function saveProgress() {
     recognize: state.recognize,
     rapidFire: state.rapidFire,
     warmup: state.warmup,
+    speedrun: state.speedrun,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1357,6 +1369,216 @@ async function startWarmupSession() {
   renderStack();
 }
 
+// iter 71: 🏁 Section Speedrun — first MOBILE timed-pressure surface.
+// Mock Interview is desktop-only (per PROFILE §usage-context); recruiters
+// probe at the SECTION grain ("walk me through hashing") not single-lesson
+// grain, but no surface stopwatches a whole topic. Speedrun picks a section,
+// streams the first L1 of every full lesson in manifest order, runs a
+// stopwatch, and saves per-section best to state.speedrun.bests[<slug>].
+// Closes iter-64 roadmap entry #2.
+const SPEEDRUN_MIN_LESSONS = 3; // sections with <3 full lessons are trivial
+
+function _speedrunSectionsGrouped() {
+  // CURRICULUM is appended in section-order by loadManifest, so grouping by
+  // section name preserves manifest order. SECTION_SLUGS maps name→slug.
+  const order = [];
+  const groups = new Map();
+  for (const l of CURRICULUM) {
+    if (!groups.has(l.section)) { groups.set(l.section, []); order.push(l.section); }
+    groups.get(l.section).push(l);
+  }
+  return order.map(name => ({ name, slug: SECTION_SLUGS[name] || '', lessons: groups.get(name) }));
+}
+
+function _speedrunPickableSections() {
+  // Filter to sections with ≥SPEEDRUN_MIN_LESSONS full lessons (classes,
+  // tries, system-design get gated out — speedrun would be ≤2 cards).
+  const rows = [];
+  for (const sec of _speedrunSectionsGrouped()) {
+    const fullLessons = sec.lessons.filter(l => l.status === 'full');
+    if (fullLessons.length < SPEEDRUN_MIN_LESSONS) continue;
+    rows.push({
+      slug: sec.slug,
+      name: sec.name,
+      track: fullLessons[0]?.track || '',
+      fullCount: fullLessons.length,
+      bestMs: state.speedrun?.bests?.[sec.slug] || 0
+    });
+  }
+  return rows;
+}
+
+async function _speedrunBuildDeck(sectionSlug) {
+  const sec = _speedrunSectionsGrouped().find(s => s.slug === sectionSlug);
+  if (!sec) return null;
+  const fullLessons = sec.lessons.filter(l => l.status === 'full');
+  // Preload content for every lesson in the section (sections cap at ~20).
+  for (const l of fullLessons) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    }
+  }
+  const deck = [];
+  for (const l of fullLessons) {
+    const content = CONTENT[l.id];
+    if (!content || !content.L1 || !Array.isArray(content.L1.questions) || !content.L1.questions.length) continue;
+    const q = content.L1.questions[0];
+    if (!q || !Array.isArray(q.options) || typeof q.answer !== 'number') continue;
+    deck.push({
+      lessonId: l.id,
+      lessonTitle: l.title,
+      sectionName: sec.name,
+      q: q.q,
+      options: q.options,
+      answerIdx: q.answer,
+      explain: q.explain || ''
+    });
+  }
+  return deck.length >= SPEEDRUN_MIN_LESSONS ? deck : null;
+}
+
+function _formatSpeedrunMs(ms) {
+  if (!ms || ms <= 0) return '—';
+  const totalSec = ms / 1000;
+  const min = Math.floor(totalSec / 60);
+  const sec = (totalSec - min * 60);
+  return min > 0
+    ? `${min}:${sec.toFixed(1).padStart(4, '0')}`
+    : `${sec.toFixed(1)}s`;
+}
+
+function startSpeedrunPicker() {
+  const sections = _speedrunPickableSections();
+  if (!sections.length) {
+    alert('No speedrun-eligible sections yet (need ≥3 full lessons each).');
+    return;
+  }
+  const shell = document.getElementById('lesson-shell');
+  shell.innerHTML = `
+    <div class="speedrun-shell speedrun-picker">
+      <div class="speedrun-header">
+        <span>🏁 Section Speedrun · pick a topic</span>
+        <button class="speedrun-exit" data-action="exit-speedrun">✕ Exit</button>
+      </div>
+      <div class="speedrun-picker-hint">Run all L1 questions in one section against the clock. Best time per section is saved.</div>
+      <div class="speedrun-picker-list">
+        ${sections.map(s => `
+          <button class="speedrun-pick-row" data-slug="${escapeHtml(s.slug)}">
+            <span class="speedrun-pick-name">${escapeHtml(s.name)}</span>
+            <span class="speedrun-pick-count">${s.fullCount} lessons</span>
+            <span class="speedrun-pick-best" data-best>${s.bestMs ? `★ ${_formatSpeedrunMs(s.bestMs)}` : ''}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  shell.querySelector('[data-action="exit-speedrun"]').addEventListener('click', () => renderLesson());
+  shell.querySelectorAll('.speedrun-pick-row').forEach(btn => {
+    btn.addEventListener('click', () => startSpeedrunSession(btn.dataset.slug));
+  });
+}
+
+async function startSpeedrunSession(sectionSlug) {
+  const deck = await _speedrunBuildDeck(sectionSlug);
+  if (!deck || !deck.length) {
+    alert('Speedrun deck is empty for this section.');
+    return;
+  }
+  state.speedrun.sessions++;
+  state.speedrun.lastRunAt = Date.now();
+  saveProgress();
+
+  let idx = 0, correct = 0, misses = 0;
+  const startedAt = Date.now();
+  const shell = document.getElementById('lesson-shell');
+  let stopwatchHandle = null;
+
+  function clearStopwatch() {
+    if (stopwatchHandle) { clearInterval(stopwatchHandle); stopwatchHandle = null; }
+  }
+
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="speedrun-shell">
+        <div class="speedrun-header">
+          <span>🏁 ${escapeHtml(card.sectionName)} · ${idx + 1} of ${deck.length}</span>
+          <button class="speedrun-exit" data-action="exit-speedrun">✕ Exit</button>
+        </div>
+        <div class="speedrun-stopwatch" data-speedrun-clock>0.0s</div>
+        <div class="speedrun-meta"><span class="speedrun-lesson">${escapeHtml(card.lessonTitle)}</span></div>
+        <div class="speedrun-question">${escapeHtml(card.q)}</div>
+        <div class="speedrun-options">
+          ${card.options.map((opt, i) => `<button class="speedrun-opt" data-opt-idx="${i}"><span class="speedrun-letter">${String.fromCharCode(65 + i)}</span>${escapeHtml(opt)}</button>`).join('')}
+        </div>
+        <div class="speedrun-feedback" data-speedrun-feedback></div>
+      </div>
+    `;
+    const clockEl = shell.querySelector('[data-speedrun-clock]');
+    stopwatchHandle = setInterval(() => {
+      if (clockEl) clockEl.textContent = _formatSpeedrunMs(Date.now() - startedAt);
+    }, 100);
+    shell.querySelector('[data-action="exit-speedrun"]').addEventListener('click', () => {
+      clearStopwatch();
+      renderLesson();
+    });
+    const opts = shell.querySelectorAll('.speedrun-opt');
+    let answered = false;
+    const grade = (pickedIdx) => {
+      if (answered) return;
+      answered = true;
+      const wasCorrect = pickedIdx === card.answerIdx;
+      if (wasCorrect) correct++; else { misses++; state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); saveProgress(); }
+      opts.forEach((b, i) => {
+        b.disabled = true;
+        if (i === card.answerIdx) b.classList.add('speedrun-opt-correct');
+        else if (i === pickedIdx) b.classList.add('speedrun-opt-wrong');
+      });
+      const fb = shell.querySelector('[data-speedrun-feedback]');
+      if (fb) fb.innerHTML = wasCorrect ? `<span class="speedrun-good">✓</span>` : `<span class="speedrun-bad">✗ ${card.explain ? escapeHtml(card.explain) : ''}</span>`;
+      setTimeout(() => { idx++; clearStopwatch(); renderCard(); }, wasCorrect ? 350 : 1100);
+    };
+    opts.forEach(btn => btn.addEventListener('click', () => grade(+btn.dataset.optIdx)));
+  }
+
+  function renderSummary() {
+    clearStopwatch();
+    const totalMs = Date.now() - startedAt;
+    const prevBest = state.speedrun.bests[sectionSlug] || 0;
+    const isNewBest = !prevBest || totalMs < prevBest;
+    // Save best time regardless of misses — Speedrun is speed-first; misses
+    // already feed state.weakness. Avoids the "I got 1 wrong, no best for me"
+    // anti-pattern that would discourage retries.
+    if (isNewBest) state.speedrun.bests[sectionSlug] = totalMs;
+    state.speedrun.completions++;
+    saveProgress();
+    const deltaMs = prevBest ? prevBest - totalMs : 0;
+    shell.innerHTML = `
+      <div class="speedrun-shell">
+        <div class="speedrun-header"><span>🏁 Speedrun · done</span></div>
+        <div class="speedrun-summary">
+          <div class="speedrun-summary-time">${_formatSpeedrunMs(totalMs)}</div>
+          ${isNewBest && prevBest ? `<div class="speedrun-summary-pb">★ New personal best (−${_formatSpeedrunMs(deltaMs)})</div>` : ''}
+          ${isNewBest && !prevBest ? `<div class="speedrun-summary-pb">★ First completion — that's your best</div>` : ''}
+          ${!isNewBest ? `<div class="speedrun-summary-pb speedrun-summary-pb-off">Best: ${_formatSpeedrunMs(prevBest)} (+${_formatSpeedrunMs(totalMs - prevBest)} this run)</div>` : ''}
+          <div class="speedrun-summary-line">${correct} of ${deck.length} correct${misses ? ` · ${misses} miss${misses === 1 ? '' : 'es'} flagged as weak spot` : ''}</div>
+          <div class="speedrun-summary-actions">
+            <button class="primary" data-action="speedrun-again">🏁 Re-run</button>
+            <button class="secondary" data-action="speedrun-pick">Pick another</button>
+            <button class="secondary" data-action="speedrun-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="speedrun-again"]').addEventListener('click', () => startSpeedrunSession(sectionSlug));
+    shell.querySelector('[data-action="speedrun-pick"]').addEventListener('click', () => startSpeedrunPicker());
+    shell.querySelector('[data-action="speedrun-done"]').addEventListener('click', () => renderLesson());
+  }
+
+  renderCard();
+}
+
 // iter 62: 📅 Streak Map — 60-day calendar density heatmap. Aggregates
 // state.history events across ALL lessons by day, returning a 60-element
 // array (oldest first → newest last) so the renderer can paint a fixed
@@ -2066,10 +2288,18 @@ function formatArg(a) {
 }
 async function runCode(code) {
   const logs = [];
+  // Debug logs (console.debug / console.info) are captured separately and
+  // NEVER fed into the grader. This gives the user an escape hatch: any
+  // `console.log` they add for debugging counts toward the graded output
+  // (and may break the subsequence match if it lands between expected
+  // lines), but `console.debug` is free — it just shows up in the dev pane.
+  const debugLogs = [];
   const fakeConsole = {
     log: (...args) => logs.push(args.map(formatArg).join(' ')),
     error: (...args) => logs.push('[error] ' + args.map(formatArg).join(' ')),
-    warn:  (...args) => logs.push('[warn] '  + args.map(formatArg).join(' '))
+    warn:  (...args) => logs.push('[warn] '  + args.map(formatArg).join(' ')),
+    debug: (...args) => debugLogs.push(args.map(formatArg).join(' ')),
+    info:  (...args) => debugLogs.push(args.map(formatArg).join(' '))
   };
   // Capture unhandled async rejections inside the user code — async IIFEs
   // whose returned Promise isn't surfaced to us would otherwise hit the
@@ -2097,11 +2327,11 @@ async function runCode(code) {
       await new Promise(r => setTimeout(r, 0));
     }
     if (unhandled) {
-      return { ok: false, output: (unhandled && unhandled.message) || String(unhandled) };
+      return { ok: false, output: (unhandled && unhandled.message) || String(unhandled), debug: debugLogs.join('\n') };
     }
-    return { ok: true, output: logs.join('\n') };
+    return { ok: true, output: logs.join('\n'), debug: debugLogs.join('\n') };
   } catch (e) {
-    return { ok: false, output: (e && e.message) || String(e) };
+    return { ok: false, output: (e && e.message) || String(e), debug: debugLogs.join('\n') };
   } finally {
     if (hasWindow) window.removeEventListener('unhandledrejection', rejectionHandler);
   }
@@ -4050,8 +4280,18 @@ function renderL3(body, lesson, content) {
     ${isMock ? '' : '<div class="hint-stack mt-3 hidden" data-hint-stack></div>'}
     ${isMock ? '' : '<div class="hint-trend mt-2 hidden" data-hint-trend></div>'}
     <div class="mt-4">
-      <div class="text-xs text-slate-500 mb-1">Output:</div>
+      <div class="text-xs text-slate-500 mb-1 flex items-center justify-between">
+        <span>Output:</span>
+        <span class="text-slate-600" title="Subsequence match: expected lines must appear in order. Extra debug logs between expected lines will break the match — use console.debug() instead to log without grading.">match: subsequence · use <code class="mono text-slate-400">console.debug()</code> to log without grading</span>
+      </div>
       <div class="output-box" data-output>(run your code…)</div>
+    </div>
+    <div data-debug-panel class="mt-3 hidden">
+      <div class="text-xs text-slate-500 mb-1 flex items-center gap-2">
+        <span style="color:#fde68a">🐛 Debug output</span>
+        <span class="text-slate-600">(from <code class="mono">console.debug</code> / <code class="mono">console.info</code> — not graded)</span>
+      </div>
+      <div class="output-box" data-debug-box style="background:#1a1330;color:#fde68a;border-color:#3b2a52"></div>
     </div>
     <div data-diff-panel class="mt-4 hidden">
       <div class="text-xs text-slate-500 mb-1">Diff vs canonical (comments stripped):</div>
@@ -4306,6 +4546,16 @@ function renderL3(body, lesson, content) {
     running = false;
     outputBox.classList.toggle('error', !result.ok);
     outputBox.textContent = result.output || '(no output)';
+    // Surface debug output (console.debug / console.info) in its own pane —
+    // visible only when there's something to show. Pane is never graded.
+    const debugPanel = wrap.querySelector('[data-debug-panel]');
+    const debugBox = wrap.querySelector('[data-debug-box]');
+    if (result.debug && result.debug.length) {
+      debugBox.textContent = result.debug;
+      debugPanel.classList.remove('hidden');
+    } else {
+      debugPanel.classList.add('hidden');
+    }
     if (result.ok && outputsMatch(result.output, drill.expectedOutput)) {
       const wasMock = state.mock.active && state.mock.lessonId === lesson.id;
       markPassed(lesson.id, 'L3');
@@ -4325,7 +4575,16 @@ function renderL3(body, lesson, content) {
     } else if (!result.ok) {
       feedback.innerHTML = '<span class="text-rose-400">Runtime error — read the output box.</span>';
     } else {
-      feedback.innerHTML = '<span class="text-rose-400">Output doesn’t match expected. Try again.</span>';
+      // Heuristic hint: did the user likely break their own grade with a
+      // debug `console.log`? If the expected output appears in actual but
+      // grading still failed, point at debug-log interleaving as the cause.
+      const expNorm = normalize(drill.expectedOutput);
+      const actNorm = normalize(result.output);
+      const containsExpected = expNorm.length > 0 && actNorm.includes(expNorm.split('\n').pop());
+      const hint = containsExpected
+        ? ' <span class="text-slate-500 text-xs">Your output contains the expected lines but they\'re interleaved with extras — replace stray <code class="mono">console.log</code>s with <code class="mono">console.debug</code> so they don\'t break the match.</span>'
+        : '';
+      feedback.innerHTML = '<span class="text-rose-400">Output doesn\'t match expected. Try again.</span>' + hint;
     }
   }
 }
@@ -4797,6 +5056,13 @@ async function init() {
   // ~3 taps vs Today's Plan's ~6+ nav-into-lesson flow.
   document.getElementById('warmup-btn').addEventListener('click', () => {
     startWarmupSession();
+  });
+
+  // iter 71: 🏁 Section Speedrun — pick a section, race its L1 stream.
+  // Closes iter-64 roadmap entry #2. Routes through picker (section list)
+  // not direct session-start; users see all sections + their PBs first.
+  document.getElementById('speedrun-btn').addEventListener('click', () => {
+    startSpeedrunPicker();
   });
 
   // Review-Due button — jump to the most-overdue lesson.

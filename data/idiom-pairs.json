@@ -1,5 +1,5 @@
 {
-  "_meta": "iter 86: curated idiom pairs for 🔀 Swap-Bench drill. Each entry pairs two JS snippets and asks 'same observable behavior?'. Forces transfer-of-mental-model — recognizing that two different syntactic idioms reach the same result (or that two near-identical-looking idioms diverge). MVP starts at 12 pairs; the file is expandable by appending entries (same pattern as complexity-claims.json iter 79→80 expansion). Each snippet capped at 8 lines for mobile-stacked readability. Mix of same/different roughly 50/50.",
+  "_meta": "iter 86 → iter 87: curated idiom pairs for 🔀 Swap-Bench drill. Each entry pairs two JS snippets and asks 'same observable behavior?'. Forces transfer-of-mental-model — recognizing that two different syntactic idioms reach the same result (or that two near-identical-looking idioms diverge). Iter 86 shipped at 12 pairs; iter 87 expanded to 18 (Map vs object, parseInt radix trap, sort in-place vs immutable, `==` vs `===`, async/await vs .then chaining, JSON parse depth). Each snippet capped at 8 lines for mobile-stacked readability. Mix of same/different roughly 50/50.",
   "pairs": [
     {
       "id": "map-vs-for-mutates",
@@ -100,6 +100,54 @@
       "b": "function sum(i, acc = 0) {\n  if (i > n) return acc;\n  return sum(i + 1, acc + i);\n}\nreturn sum(1);",
       "sameBehavior": true,
       "explain": "Both return the same total. The recursive version eats stack frames (no TCO in JS engines) — same result, different cost profile."
+    },
+    {
+      "id": "map-vs-object-key-types",
+      "title": "Use a number as a lookup key",
+      "a": "const m = new Map();\nm.set(1, 'a');\nreturn m.get(1);",
+      "b": "const o = {};\no[1] = 'a';\nreturn o[1];",
+      "sameBehavior": true,
+      "explain": "Both return 'a' here — but only because `1` survives the object's string-key coercion (`o['1']`). Map preserves the original key TYPE (so `m.get('1')` would return undefined); plain object stringifies all keys."
+    },
+    {
+      "id": "parseint-vs-number",
+      "title": "Convert '08' to a number",
+      "a": "const out = parseInt('08');",
+      "b": "const out = Number('08');",
+      "sameBehavior": true,
+      "explain": "Both return 8. Modern engines no longer treat leading-0 as octal in parseInt (ES5+). The classic trap was '08' → 0 in older engines; today both forms agree. Different on '08px' though — parseInt returns 8, Number returns NaN."
+    },
+    {
+      "id": "sort-in-place-vs-tosorted",
+      "title": "Sort an array ascending",
+      "a": "arr.sort((a, b) => a - b);\nreturn arr;",
+      "b": "return arr.toSorted((a, b) => a - b);",
+      "sameBehavior": false,
+      "explain": "sort() MUTATES `arr` in place and returns the same reference. toSorted() (ES2023) returns a NEW array, leaving `arr` untouched. Different observable effect on `arr` between calls."
+    },
+    {
+      "id": "double-eq-vs-triple-eq",
+      "title": "Compare 0 to false",
+      "a": "const out = 0 == false;",
+      "b": "const out = 0 === false;",
+      "sameBehavior": false,
+      "explain": "`==` performs type coercion: `false` becomes `0`, so `0 == false` is true. `===` requires same type AND value: number vs boolean → false. Classic interview trap."
+    },
+    {
+      "id": "async-await-vs-then-chain",
+      "title": "Read then transform",
+      "a": "async function get() {\n  const data = await fetch(url);\n  return data.json();\n}",
+      "b": "function get() {\n  return fetch(url).then(d => d.json());\n}",
+      "sameBehavior": true,
+      "explain": "Both return a Promise that resolves to the parsed JSON. The async version is syntactic sugar — `await` unwraps the promise, then the return value is auto-wrapped. Identical observable result and error-propagation behavior."
+    },
+    {
+      "id": "json-parse-shallow-vs-deep",
+      "title": "Clone a deeply-nested object",
+      "a": "const out = { ...obj };",
+      "b": "const out = JSON.parse(JSON.stringify(obj));",
+      "sameBehavior": false,
+      "explain": "Spread is SHALLOW — nested objects share references. JSON.parse(JSON.stringify(...)) is DEEP for plain data (loses functions, undefined, Symbols, Dates → strings, but recurses through nested objects). After mutating obj.nested.x, only the spread clone reflects the change."
     }
   ]
 }

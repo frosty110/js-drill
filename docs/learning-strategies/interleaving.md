@@ -31,6 +31,20 @@ surfaced as a competing access pattern.
 
 ## How the app encodes it today
 
+- **🧩 Mechanic Drilldown (iter 72).** Inline mechanic chips on the
+  Reference tab — every lesson with one or more `content.mechanics` ids
+  now renders a fuchsia-bordered chip row directly below the canonical
+  code (e.g. on `two-sum`: `🧩 idioms used: Hash complement lookup`).
+  Tap a chip → the Mechanics modal opens directly to that mechanic's
+  detail view, listing every other lesson where the same idiom appears
+  (with progress dots + due / weak markers per row). Lateral-transfer in
+  context: the user lands on `two-sum`, sees that `hash-complement` is
+  the load-bearing idiom, and can jump from "I just read the canonical
+  here" to "let me drill this idiom on a Hash-track lesson and on a
+  Heap-track lesson and on an Applied lesson" without leaving the
+  recall flow. The Mechanics modal already existed; what this ships is
+  the surface that pulls the cross-cutting view INTO the lesson the
+  user is already in.
 - **Today's plan** mixes a due review + the next path step + a weak spot
   in one session ([app.js dailyPlan](../../app.js)). Three different
   retrieval cues, not three repetitions of one.

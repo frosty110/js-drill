@@ -3420,6 +3420,7 @@ function renderReference(body, content) {
       <button class="flash-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">🃏 Flash</button>
     </div>
     <pre class="code-block cm-s-dracula" data-ref-code></pre>
+    <div class="mt-4" data-ref-mechanics></div>
     <div class="mt-6">
       <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Notes</div>
       <ul class="space-y-2">
@@ -3443,6 +3444,47 @@ function renderReference(body, content) {
     else colorizeInto(codeEl, ref.code);
   });
   section.querySelector('[data-action="start-l1"]').addEventListener('click', () => selectTab('L1'));
+
+  // iter 72: 🧩 Mechanic Drilldown — inline mechanic chips on the Reference
+  // tab. Surfaces this lesson's `content.mechanics` ids as tappable pills
+  // that open the Mechanics modal directly to the detail view (every other
+  // lesson where the idiom appears). Closes iter-64 held candidate B#2
+  // (direct-promoted per iter-63 Mechanics × Track matrix precedent).
+  // Lateral-transfer payoff: from canonical → "same idiom, different
+  // shape" across track without leaving the recall flow.
+  _renderReferenceMechanics(section.querySelector('[data-ref-mechanics]'), content.mechanics);
+}
+
+function _renderReferenceMechanics(host, mechanicIds) {
+  if (!host) return;
+  // Hide quietly when lesson has no mechanic tags (~27% of corpus per
+  // iter-59 inventory) or registry hasn't loaded yet. The chip row is
+  // additive — its absence on a Reference render is not a regression.
+  if (!Array.isArray(mechanicIds) || !mechanicIds.length) return;
+  if (!MECHANICS.length) {
+    // Registry not loaded yet — kick it off and re-render this host when
+    // it arrives. Subsequent tab switches will find MECHANICS populated.
+    loadMechanicsRegistry().then(() => {
+      if (host.isConnected) _renderReferenceMechanics(host, mechanicIds);
+    });
+    return;
+  }
+  const labels = mechanicIds
+    .map(id => ({ id, m: MECHANICS.find(x => x.id === id) }))
+    .filter(x => x.m);
+  if (!labels.length) return;
+  host.innerHTML = `
+    <div class="ref-mechanics-row">
+      <span class="ref-mechanics-prefix">🧩 idioms used:</span>
+      ${labels.map(({ id, m }) => `<button class="ref-mech-chip" data-mech-chip-id="${escapeHtml(id)}" title="${escapeHtml(m.blurb || m.label)} — tap to see every lesson where this idiom appears">${escapeHtml(m.label)}</button>`).join('')}
+    </div>
+  `;
+  host.querySelectorAll('[data-mech-chip-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mid = btn.getAttribute('data-mech-chip-id');
+      openMechanicsDetail(mid);
+    });
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -4683,6 +4725,33 @@ async function openMechanicsModal() {
   if (body) body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Loading mechanics…</div>`;
   modal.style.display = 'block';
   await ensureMechanicIndex();
+  renderMechanicsModal();
+}
+
+// iter 72: open the mechanics modal directly to the detail view for a given
+// mechanic id. Used by Reference-tab mechanic-chips for lateral-transfer
+// drilling — tap a chip → see every other lesson where that idiom appears.
+// Back button returns to the list view (consistent with detail-from-list).
+async function openMechanicsDetail(mechId) {
+  const modal = document.getElementById('mechanics-modal');
+  if (!modal) return;
+  const body = document.getElementById('mechanics-body');
+  if (body) body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Loading mechanic…</div>`;
+  modal.style.display = 'block';
+  await ensureMechanicIndex();
+  const m = MECHANICS.find(x => x.id === mechId);
+  if (!m) {
+    // Mechanic id not in registry — fall through to list view rather than
+    // showing an empty detail. Defensive: this can happen if a lesson's
+    // content.mechanics references a stale id.
+    _mechanicsView = 'list';
+    _mechanicsPrevView = 'list';
+    _mechanicsSelectedId = null;
+  } else {
+    _mechanicsSelectedId = mechId;
+    _mechanicsPrevView = 'list';
+    _mechanicsView = 'detail';
+  }
   renderMechanicsModal();
 }
 

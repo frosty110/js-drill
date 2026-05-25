@@ -16,6 +16,19 @@ app's existence.
 
 ## How the app encodes it today
 
+- **🎯 Reverse Problem-ID (iter 76).** Inverse of 🔎 Recognize:
+  Recognize shows a problem prompt → user picks the matching section
+  (problem→pattern direction); Reverse shows an input/output trace from
+  a real canonical → user picks the matching problem from 4 prompts
+  (output→problem direction). Function names are masked in both the
+  invocation and the candidate prompts (`twoSum(...)` → `f(...)`) so
+  the user must reason about the *behavior* shown, not pattern-match a
+  name. Forward-from-output reasoning — a common interview unblock
+  pattern when a candidate is stuck on a problem but knows what shape
+  of output is expected. Reuses the Recognize shell + lifetime stats
+  (`state.recognize`) — same diagnostic-direction modality, different
+  cue. First §9B surface that uses the L3 expectedOutput as the
+  primary stimulus instead of the prompt.
 - **The L1 → L2 → L3 ladder** is an active-recall ramp:
   - L1 forces choice between similar concepts (recognition recall).
   - L2 forces production of specific tokens (cued recall, low-cost).

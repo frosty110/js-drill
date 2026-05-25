@@ -1099,6 +1099,186 @@ async function startBigOSession() {
   return _runRapidFireWithDeck(deck, { label: '⏱ Big-O', emoji: '⏱' });
 }
 
+// iter 76: 🎯 Reverse Problem-ID — §9B code-evaluation surface (sibling to
+// Recognize but inverted: Recognize shows prompt → pick section; Reverse
+// shows input/output trace → pick problem). Forward-from-output reasoning
+// — a common interview unblock pattern. Closes iter-75 § Next iter pick.
+// From `ideas-by-category.md § 9B → Reverse problem-identification`.
+// Lifetime stats reuse `state.recognize` (same diagnostic-direction modality;
+// no new schema field).
+const REVERSE_DECK_LEN = 6;
+// Built-in identifiers that should NOT be masked (they're not user-function
+// names; masking them would lose the "Math.floor" / "JSON.stringify" signal).
+const _REVERSE_BUILTINS = new Set([
+  'console','log','JSON','Math','Array','String','Number','Object','Map','Set',
+  'parseInt','parseFloat','isNaN','isFinite','stringify','parse','min','max',
+  'floor','ceil','round','abs','sqrt','from','of','keys','values','entries',
+  'length','push','pop','shift','unshift','slice','splice','sort','reverse',
+  'join','split','indexOf','includes','filter','map','reduce','forEach','find',
+  'every','some','flat','flatMap','undefined','null','true','false','new'
+]);
+
+function _reverseMaskName(text) {
+  // Replace lowercase-camelCase identifiers with `f` (user-function names);
+  // leave built-ins, capitalized identifiers (constructors/classes), and
+  // string-literal contents alone. Splits on quote-delimited regions so the
+  // masker doesn't mangle string args like "hello" → "f" (which would erase
+  // the signal the user reasons about).
+  const parts = text.split(/("[^"]*"|'[^']*')/);
+  return parts.map((part, i) => {
+    if (i % 2 === 1) return part; // odd index = quote-delimited literal
+    return part.replace(/\b[a-z][a-zA-Z0-9]*\b/g, (id) =>
+      _REVERSE_BUILTINS.has(id) ? id : 'f'
+    );
+  }).join('');
+}
+
+function _reverseExtractInvocation(canonical) {
+  // Find the LAST console.log(...) line in the canonical and pull what's
+  // inside the outermost parens. Returns null if no parseable invocation.
+  const lines = canonical.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(/console\.log\((.+)\);?\s*$/);
+    if (m) return m[1].trim();
+  }
+  return null;
+}
+
+function _reverseBuildDeck() {
+  const candidates = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full');
+  // Shuffle then take the first N parseable lessons.
+  const shuffled = candidates.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const cards = [];
+  // Build a pool of all loaded patterns lessons with parseable invocations,
+  // so we can draw distractors from it without re-checking each.
+  const pool = [];
+  for (const l of shuffled) {
+    const c = CONTENT[l.id];
+    if (!c || !c.L3 || !c.L3.canonical || !c.L3.expectedOutput || !c.L3.prompt) continue;
+    const inv = _reverseExtractInvocation(c.L3.canonical);
+    if (!inv) continue;
+    pool.push({
+      lessonId: l.id,
+      invocation: _reverseMaskName(inv),
+      output: c.L3.expectedOutput,
+      promptMasked: _reverseMaskName(c.L3.prompt)
+    });
+  }
+  if (pool.length < 4) return null;
+  // First REVERSE_DECK_LEN entries become correct cards; each picks 3 random
+  // distractors from the rest of the pool.
+  const targets = pool.slice(0, Math.min(REVERSE_DECK_LEN, pool.length));
+  for (const t of targets) {
+    const distractors = pool
+      .filter(p => p.lessonId !== t.lessonId)
+      .slice()
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3)
+      .map(p => p.promptMasked);
+    const options = [t.promptMasked, ...distractors];
+    // Shuffle the 4-option array.
+    for (let i = options.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [options[i], options[j]] = [options[j], options[i]];
+    }
+    cards.push({
+      lessonId: t.lessonId,
+      invocation: t.invocation,
+      output: t.output,
+      options,
+      correct: t.promptMasked
+    });
+  }
+  return cards.length >= 3 ? cards : null;
+}
+
+async function startReverseSession() {
+  // Preload broad sample of patterns lessons so the pool has variety.
+  const patternsLessons = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full').slice(0, 30);
+  for (const l of patternsLessons) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+      if (Object.keys(CONTENT).length >= 18) break;
+    }
+  }
+  const deck = _reverseBuildDeck();
+  if (!deck || deck.length < 3) {
+    alert('Reverse needs more loaded patterns lessons. Click around a few patterns first, then try again.');
+    return;
+  }
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell reverse-shell">
+        <div class="recognize-header">
+          <span>🎯 Reverse · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-reverse">✕ Exit</button>
+        </div>
+        <div class="reverse-trace">
+          <div class="reverse-trace-line"><span class="reverse-trace-label">in</span><code class="reverse-trace-code">${escapeHtml(card.invocation)}</code></div>
+          <div class="reverse-trace-line"><span class="reverse-trace-label">out</span><code class="reverse-trace-code">${escapeHtml(card.output)}</code></div>
+        </div>
+        <div class="reverse-hint">Pick the problem this trace solves:</div>
+        <div class="recognize-options">
+          ${card.options.map(opt => `<button class="recognize-opt reverse-opt" data-opt="${escapeHtml(opt)}">${escapeHtml(opt)}</button>`).join('')}
+        </div>
+        <div class="recognize-feedback" data-reverse-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-reverse"]').addEventListener('click', () => renderLesson());
+    const opts = shell.querySelectorAll('.recognize-opt');
+    let answered = false;
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const picked = btn.dataset.opt;
+        const wasCorrect = picked === card.correct;
+        if (wasCorrect) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.recognize.attempts++;
+        if (wasCorrect) state.recognize.correct++;
+        saveProgress();
+        opts.forEach(b => {
+          b.disabled = true;
+          if (b.dataset.opt === card.correct) b.classList.add('recognize-opt-correct');
+          else if (b === btn) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-reverse-feedback]');
+        if (fb) fb.innerHTML = wasCorrect ? `<span class="recognize-good">✓</span>` : `<span class="recognize-bad">✗ Correct shown above</span>`;
+        setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 700 : 1500);
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell reverse-shell">
+        <div class="recognize-header"><span>🎯 Reverse · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} correct</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Diagnose lifetime (incl. 🔎 Recognize): ${state.recognize.correct} / ${state.recognize.attempts} (${state.recognize.attempts > 0 ? Math.round(state.recognize.correct / state.recognize.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="reverse-again">🎯 Another session</button>
+            <button class="secondary" data-action="reverse-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="reverse-again"]').addEventListener('click', () => startReverseSession());
+    shell.querySelector('[data-action="reverse-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
 // iter 54: L1 Rapid-Fire Drill. Cross-lesson interleaved L1 tap-stream — the
 // pure mobile-throughput surface PROFILE.md L31 names as the highest-density
 // recall modality. Reuses existing L1.questions across all 143 lessons (no
@@ -5397,6 +5577,12 @@ async function init() {
   // iter-30 data-contamination concern. See roadmap.md iter-48.
   document.getElementById('recognize-btn').addEventListener('click', () => {
     startRecognizeSession();
+  });
+
+  // iter 76: 🎯 Reverse — output→problem direction. Sibling to Recognize
+  // (problem→pattern direction). §9B code-evaluation surface.
+  document.getElementById('reverse-btn').addEventListener('click', () => {
+    startReverseSession();
   });
 
   // iter 54: ⚡ Rapid-Fire L1 stream — cross-lesson interleaved tap surface.

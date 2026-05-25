@@ -105,6 +105,51 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+### 2026-05-25 iter 82 — Gotcha Roulette (notes-only recall stream)
+
+**Status:** queued (vision iter 82 — top promoted entry)
+
+**Value claim:** PROFILE.md § State they're in — "forget exact method names, argument order, the small ceremonies" + line 31 mobile L1/L2 throughput. The rusty engineer half-remembers traps (`splice` mutates, `==` coerces, `for-in` on arrays is wrong) but the existing surfaces all bury those one-liners inside the full lesson. A standalone stream over `reference.notes[]` strings lets the user surface and drill the traps without the navigation cost of opening each lesson — gym-friendly, phone-friendly.
+**Mechanic:** Sidebar pill `🎰 Gotcha` opens a card stack like 3-Card Warmup. Each card shows ONE `reference.notes[i]` string with the source lesson title blurred. Tap reveals the lesson + a "drill this" CTA that deep-links to L1 of the source. Swipe-left = "knew it", swipe-right = "didn't" → writes to `state.weakness[lessonId]` on right-swipe.
+**Success criterion:** ≥40% of Gotcha Roulette right-swipes convert to an L1 attempt on the source lesson within the same session (tracked via `state.history` event sequence on the deep-linked lesson).
+**Estimated scope:** single-iter ship (~120 LOC JS + ~30 LOC CSS; flatten all `reference.notes[]` once on first session start, card stack, swipe handler, weakness write — reuses 3-Card Warmup primitives + Reveal Replay's tap-to-route pattern).
+**Data dependency:** none — every full lesson has 2-5 `notes[]` strings = ~400+ free cards across the 143-lesson corpus. No per-lesson authoring.
+**PROFILE.md amendment proposed?** No.
+**Why this is a "new bucket" not "better cell":** Standalone `reference.notes[]` strings as the atomic recall unit — every existing surface treats notes as ornamentation around code, never as the drilled artifact itself. The notes corpus has been on-disk since project start and read by ~zero surfaces.
+**Subagent source:** iter-82 vision iter (single fresh-eyes subagent, constraint-aware preamble) — top of 3 proposals by leverage-per-effort.
+
+---
+
+### 2026-05-25 iter 82 — Distractor Mine (interleaved L1 from your own miss-options)
+
+**Status:** queued (vision iter 82 — second promoted entry; needs richer miss-history first)
+
+**Value claim:** PROFILE.md § What they need — "memorization tooling beyond L1→L2→L3 … elaboration" + the BS-08 audit's recurring-miss-types finding. The rusty engineer drills *the exact wrong answers their brain reaches for*, not the right ones they already know. Today miss-options are ephemera (shown once, never re-surfaced); this surface treats them as the primary corpus.
+**Mechanic:** Sidebar pill opens a 15-card stream where each card is an L1 question reconstructed from `content.L1.questions[i]` but the correct option is replaced with a *distractor that the user previously selected on a different lesson* (option text matched by token overlap across `questions[].options[]`); user must spot that none of the four are correct and tap "none" — or if a real correct option survives, tap it.
+**Success criterion:** Users who run Distractor Mine ≥3 sessions cut their repeat-L1-miss rate (same lesson, same question index, missed twice within 14 days in `state.history`) by ≥25% vs. baseline.
+**Estimated scope:** 2-iter scaffold+ship — iter 1: extend miss-tracking to record `{lessonId, questionIdx, pickedOptionText}` per L1 miss (needs schema field); iter 2: stream builder + UI.
+**Data dependency:** Today's `state.weakness[id]` is just a counter; need a NEW field `state.missLog[]` tracking which OPTION was picked per miss. Schema-additive scaffold required first.
+**PROFILE.md amendment proposed?** No.
+**Why this is a "new bucket" not "better cell":** Cross-lesson `questions[].options[]` text similarity — no existing surface treats wrong-option strings as a first-class corpus.
+**Subagent source:** iter-82 vision iter — second proposal.
+
+---
+
+### 2026-05-25 iter 82 — Idiom Swap-Bench (side-by-side recombination drill)
+
+**Status:** queued (vision iter 82 — third promoted entry; needs ~30-pair curated idiom map)
+
+**Value claim:** Forces the engineer to recognize that "the loop body is the same, the container choice is what changes" — collapses three syntax lessons into one transferable mental model. Closes the gap between syntax-track lessons and pattern-track usage of the same idiom.
+**Mechanic:** Sidebar button picks a random `reference.code` from one Patterns lesson and shows it side-by-side with the SAME logic re-expressed using a *different* idiom auto-extracted from a Syntax lesson's `reference.code` in `Algorithms`/`Arrays` (e.g. `for-of` ↔ `.reduce`, `Map` ↔ plain object, `while` queue ↔ recursion); two-button tap: "same behavior" / "different behavior", then reveal.
+**Success criterion:** Users who complete ≥10 Swap-Bench cards show a ≥15-point lift in L1 pass rate on the `Modern Syntax` + `JS Toolbox` sections in their next 7 days (per `state.progress[].L1`).
+**Estimated scope:** single-iter ship if the idiom-pair table is hand-curated up front (~30 pairs, one-time authoring). ~250 LOC JS for the picker + side-by-side renderer + tap-grade.
+**Data dependency:** New `data/idiom-pairs.json` curated map (~30 entries: `{a: 'for-of', b: '.reduce', same: true, snippet_a, snippet_b}`). Existing canonicals provide the source material.
+**PROFILE.md amendment proposed?** No.
+**Why this is a "new bucket" not "better cell":** Pairwise comparison of two lessons' `reference.code` strings — every existing surface drills one lesson at a time. Cross-lesson code-shape comparison is a new dimension.
+**Subagent source:** iter-82 vision iter — third proposal.
+
+---
+
 ### 2026-05-25 iter 64 — Resurrect Queue (staleness gradient on the SR axis)
 
 **Status:** SHIPPED iter 65. 💀 Resurrect (N) sidebar pill listing mastered lessons where `now - dueAt > 2 * interval`. Tap routes to most-overdue at L2 (touch) or L3 (fine-pointer). Auto-hides when N=0. ~40 LOC JS via `resurrectIds()` helper + updateReviewBadge integration. 4-assertion mobile probe. spaced-repetition.md updated.

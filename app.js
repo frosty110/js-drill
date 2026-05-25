@@ -3916,22 +3916,46 @@ function renderL3(body, lesson, content) {
   // new PB on this one. The most recent attempt is rightmost; if it equals
   // the PB it gets a star. Hidden when fewer than 2 attempts exist (no
   // trend yet to show).
+  //
+  // iter 61: Mock Replay Reel — cells are now individually tap-targets that
+  // reveal a per-attempt tile (attempt index + delta-vs-best). Adds a slope
+  // badge alongside computing first-vs-last comparison: improving (↓)
+  // flat (→) regressing (↑). Closes iter-59 roadmap #2; honest-scope adjust
+  // from the entry's "activates dead data" framing (data was already shown
+  // in the text trend chip) to "adds slope label + tap-for-detail" — the
+  // PROFILE personal-bests-trend-down measurement gap.
   const history = state.mockHistory[lesson.id] || [];
   const trendBadge = history.length >= 2
     ? (() => {
-        const cells = history.map(ms =>
-          (bestMs && ms === bestMs ? `★${formatTime(ms)}` : formatTime(ms))
-        );
-        return `<span class="pill mono" title="Last ${history.length} mock attempts — most recent rightmost" style="background:rgba(244,114,182,0.08);color:#fbcfe8;letter-spacing:0.02em">${cells.join(' · ')}</span>`;
+        const cells = history.map((ms, i) => {
+          const isPB = bestMs && ms === bestMs;
+          const label = isPB ? `★${formatTime(ms)}` : formatTime(ms);
+          // data-attempt indexes the cell into history; the tap handler
+          // pulls the {ms, attemptIdx} pair to render the detail tile.
+          return `<button class="mock-reel-cell" data-mock-attempt="${i}" type="button" title="Attempt ${i + 1} of ${history.length}">${label}</button>`;
+        });
+        return `<span class="pill mono mock-reel" data-mock-reel title="Tap a cell for attempt detail. Most recent rightmost." style="background:rgba(244,114,182,0.08);color:#fbcfe8;letter-spacing:0.02em;display:inline-flex;align-items:center;gap:6px;padding-top:1px;padding-bottom:1px">${cells.join('<span style="color:#475569">·</span>')}</span>`;
       })()
     : '';
+  const slopeBadge = (() => {
+    if (history.length < 2) return '';
+    const first = history[0], last = history[history.length - 1];
+    const delta = first - last; // positive = faster on last attempt = improving
+    const pct = Math.abs(delta) / first;
+    let arrow, tone, label;
+    if (pct < 0.05) { arrow = '→'; tone = '#94a3b8'; label = 'holding'; }
+    else if (delta > 0) { arrow = '↓'; tone = '#34d399'; label = `${formatTime(Math.abs(delta))} faster vs first`; }
+    else { arrow = '↑'; tone = '#fbbf24'; label = `${formatTime(Math.abs(delta))} slower vs first`; }
+    return `<span class="pill mono" title="${escapeHtml(history.length)}-attempt trend (last vs first)" style="background:rgba(${tone === '#34d399' ? '52,211,153' : tone === '#fbbf24' ? '251,191,36' : '148,163,184'},0.10);color:${tone};letter-spacing:0.02em">${arrow} ${escapeHtml(label)}</span>`;
+  })();
 
   wrap.innerHTML = `
     ${mockBanner}
     <div class="mb-4 text-sm text-slate-400 flex items-center justify-between flex-wrap gap-2">
       <span>Blank editor. Type the canonical solution from memory, then Run. Pass when output matches.</span>
-      <div class="flex items-center gap-2 flex-wrap">${bestBadge}${trendBadge}</div>
+      <div class="flex items-center gap-2 flex-wrap">${bestBadge}${slopeBadge}${trendBadge}</div>
     </div>
+    <div class="mock-reel-tile hidden" data-mock-reel-tile></div>
     <div class="p-4 rounded-lg bg-slate-900 border border-slate-800 mb-4">
       <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Prompt</div>
       <div class="text-white">${escapeHtml(drill.prompt)}</div>
@@ -3967,6 +3991,42 @@ function renderL3(body, lesson, content) {
       endMockInterview(false);
     });
   }
+
+  // iter 61: Mock Replay Reel — wire per-cell tap-for-detail. Renders a
+  // small tile below the header strip with attempt index + delta-vs-best.
+  // Tile is exclusive: tapping a second cell replaces the tile body; tapping
+  // the same cell twice toggles it off.
+  const reelTile = wrap.querySelector('[data-mock-reel-tile]');
+  let lastReelOpenIdx = -1;
+  wrap.querySelectorAll('[data-mock-attempt]').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const idx = +cell.dataset.mockAttempt;
+      if (idx === lastReelOpenIdx) {
+        reelTile.classList.add('hidden');
+        lastReelOpenIdx = -1;
+        wrap.querySelectorAll('.mock-reel-cell-active').forEach(c => c.classList.remove('mock-reel-cell-active'));
+        return;
+      }
+      lastReelOpenIdx = idx;
+      const ms = history[idx];
+      const deltaVsBest = bestMs ? ms - bestMs : 0;
+      const deltaLabel = deltaVsBest === 0
+        ? `★ Personal best`
+        : `+${formatTime(deltaVsBest)} from best`;
+      const attemptLabel = `Attempt ${idx + 1} of ${history.length}`;
+      const timeStr = formatTime(ms);
+      const pct = bestMs && bestMs > 0 ? Math.round(deltaVsBest / bestMs * 100) : 0;
+      const pctStr = deltaVsBest === 0 ? '' : ` (+${pct}%)`;
+      reelTile.innerHTML = `
+        <span class="mock-reel-tile-attempt">${escapeHtml(attemptLabel)}</span>
+        <span class="mock-reel-tile-time mono">${escapeHtml(timeStr)}</span>
+        <span class="mock-reel-tile-delta">${escapeHtml(deltaLabel)}${pctStr}</span>
+      `;
+      reelTile.classList.remove('hidden');
+      wrap.querySelectorAll('.mock-reel-cell-active').forEach(c => c.classList.remove('mock-reel-cell-active'));
+      cell.classList.add('mock-reel-cell-active');
+    });
+  });
 
   const isTouchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
   const cm = CodeMirror.fromTextArea(document.getElementById('drill-editor'), {

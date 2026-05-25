@@ -40,6 +40,19 @@ recall friction with much less typing.
 
 - **The L1 → L2 → L3 ladder** is itself a desirable-difficulty ramp — each
   step strips a layer of scaffolding (options → blanks → blank editor).
+- **⌚ Mock Replay Reel (iter 61).** The L3 mock-interview header strip already
+  showed the rolling chronological times (e.g. `5:00 · 4:30 · ★4:00 · 4:10`)
+  but never *computed* the slope. Iter 61 adds a slope badge alongside —
+  `↓ 50s faster vs first` / `→ holding` / `↑ 12s slower vs first` —
+  surfacing whether the user is genuinely improving across attempts vs.
+  plateauing or regressing. The cells themselves become tap targets that
+  open a per-attempt detail tile (attempt index + time + delta-vs-best with
+  percentage). The desirable-difficulty payoff: when the user can SEE a
+  regression at a glance instead of squinting at numbers, they can
+  recalibrate effort — push harder on the next attempt or stop and read
+  the canonical. Closes the PROFILE.md success-criterion measurement gap
+  ("personal-bests trend down over weeks"); the ladder showed the data,
+  iter-61 makes the *trend* legible.
 - **Review CTA tab routing is device-calibrated.** The 🕒 Review button in
   the sidebar opens the most-overdue lesson on **L2** when the device matches
   `(pointer: coarse)` and **L3** otherwise. Same SR loop, different friction

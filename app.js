@@ -4779,6 +4779,123 @@ async function copyTextToClipboard(text) {
   } catch { return false; }
 }
 
+// iter 88: 🤖 AI Coach Export — Markdown blob of weak-spots + revealed +
+// overdue lessons sized for an LLM context window. The drilling user often
+// has Claude/ChatGPT open already on phone; this surface skips the manual
+// "describe my weak spots" reconstruction step by exporting curated context
+// (lesson title + section + L1 question + correct answer + first ~25 lines
+// of canonical) for the AI to tutor against. From `ideas-by-category.md
+// § 6 Persistence → AI-tutor export (BYOK bridge)`. Pure clipboard export —
+// no API integration, no creds, no schema change.
+const AI_COACH_MAX_CHARS = 8000; // ~2000 tokens — leaves room for user prompt
+const AI_COACH_MAX_LESSONS = 12;
+
+function _aiCoachBuildExport() {
+  const now = Date.now();
+  const lines = [];
+  lines.push('# JavaScript Drill — Weak Spots Snapshot');
+  lines.push('');
+  lines.push('I\'m studying for JS coding interviews using a spaced-repetition drill app. Below are the lessons I keep missing or had to reveal the answer for. **Please act as my tutor**: pick ONE lesson from this list and quiz me on it (Socratic style — don\'t just give the answer). After I respond, give feedback and move to the next. Focus on the WHY, not memorization.');
+  lines.push('');
+
+  // Gather weak / revealed / overdue lessons.
+  const weakIds = Object.keys(state.weakness || {}).filter(id => (state.weakness[id] || 0) > 0);
+  const revealedIds = Object.keys(state.revealed || {}).filter(id => state.revealed[id] && Object.keys(state.revealed[id]).length > 0);
+  const overdueIds = [];
+  for (const id of Object.keys(state.reviews || {})) {
+    const r = state.reviews[id];
+    if (!r || !r.dueAt || !r.interval) continue;
+    if (now - r.dueAt > r.interval) overdueIds.push(id);
+  }
+
+  // Dedupe + rank: weakness count desc, then revealed, then overdue depth.
+  const seen = new Set();
+  const rank = (id) => (state.weakness[id] || 0) * 100
+                       + (state.revealed[id] ? 10 : 0)
+                       + (state.reviews[id] && now > (state.reviews[id].dueAt || 0) ? 1 : 0);
+  const candidates = [...weakIds, ...revealedIds, ...overdueIds]
+    .filter(id => { if (seen.has(id)) return false; seen.add(id); return true; })
+    .filter(id => findLesson(id) && CONTENT[id])
+    .sort((a, b) => rank(b) - rank(a))
+    .slice(0, AI_COACH_MAX_LESSONS);
+
+  if (candidates.length === 0) {
+    lines.push('## No weak spots yet');
+    lines.push('');
+    lines.push('I haven\'t logged enough misses or reveals for the app to surface specific weak spots. Quiz me on any JavaScript pattern you think a rusty mid-career engineer should know cold (hash maps, sliding window, binary search variants, common array idioms).');
+    return lines.join('\n');
+  }
+
+  lines.push(`## ${candidates.length} lesson${candidates.length === 1 ? '' : 's'} I'm wobbly on`);
+  lines.push('');
+
+  for (const id of candidates) {
+    const lesson = findLesson(id);
+    const content = CONTENT[id];
+    if (!lesson || !content) continue;
+    const wkCount = state.weakness[id] || 0;
+    const revLevels = state.revealed[id] ? Object.keys(state.revealed[id]).filter(k => state.revealed[id][k]) : [];
+    const r = state.reviews[id];
+    const overdueDays = r && r.dueAt && now > r.dueAt ? Math.round((now - r.dueAt) / 86400000) : 0;
+
+    const flags = [];
+    if (wkCount > 0) flags.push(`missed L1 ${wkCount}×`);
+    if (revLevels.length > 0) flags.push(`revealed ${revLevels.join('+')}`);
+    if (overdueDays > 0) flags.push(`${overdueDays}d overdue`);
+
+    lines.push(`### ${lesson.title}`);
+    lines.push(`*${lesson.section} · ${flags.join(' · ')}*`);
+
+    // Include the most-missed L1 question if available.
+    if (wkCount > 0 && content.L1 && Array.isArray(content.L1.questions) && content.L1.questions.length > 0) {
+      const q = content.L1.questions[0];
+      lines.push('');
+      lines.push(`**Concept question:** ${q.q}`);
+      lines.push(`- Correct: ${q.options[q.answer]}`);
+      if (q.explain) lines.push(`- *Why:* ${q.explain}`);
+    }
+
+    // Include canonical (truncated to ~25 lines for context budget).
+    if (content.L3 && content.L3.canonical) {
+      const code = content.L3.canonical.split('\n').slice(0, 25).join('\n');
+      lines.push('');
+      lines.push('**Canonical:**');
+      lines.push('```js');
+      lines.push(code);
+      lines.push('```');
+    }
+    lines.push('');
+
+    // Bail if we're approaching the char budget — better to ship a focused
+    // export than a truncated mess.
+    if (lines.join('\n').length > AI_COACH_MAX_CHARS) {
+      lines.push('*(snapshot truncated for LLM context budget — re-run after working through these)*');
+      break;
+    }
+  }
+
+  return lines.join('\n');
+}
+
+async function startAiCoachExport() {
+  const text = _aiCoachBuildExport();
+  const ok = await copyTextToClipboard(text);
+  // Reuse the reveal-cleared-toast styling family for the confirmation.
+  const existing = document.querySelector('.reveal-cleared-toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'reveal-cleared-toast ai-coach-toast';
+  toast.innerHTML = ok
+    ? `🤖 Copied ${text.length.toLocaleString()} chars — paste into Claude/ChatGPT to be tutored on your weak spots`
+    : `⚠️ Clipboard blocked — open DevTools console and run <code>_aiCoachBuildExport()</code> to print the blob`;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('reveal-cleared-toast-show'));
+  setTimeout(() => {
+    toast.classList.remove('reveal-cleared-toast-show');
+    setTimeout(() => toast.remove(), 250);
+  }, 3200);
+}
+
 function renderL1(body, lesson, content) {
   const qs = content.L1.questions;
   // Use cached in-flight state if present (and shape-compatible) so a tab
@@ -6389,6 +6506,13 @@ async function init() {
   const swapBtn = document.getElementById('swap-btn');
   if (swapBtn) swapBtn.addEventListener('click', () => {
     startSwapBenchSession();
+  });
+
+  // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed
+  // + overdue lessons for paste-into-LLM tutoring. Pure clipboard, no API.
+  const aiCoachBtn = document.getElementById('ai-coach-btn');
+  if (aiCoachBtn) aiCoachBtn.addEventListener('click', () => {
+    startAiCoachExport();
   });
 
   // iter 54: ⚡ Rapid-Fire L1 stream — cross-lesson interleaved tap surface.

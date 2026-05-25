@@ -192,7 +192,7 @@ The convention:
 - IndexedDB migration path (when localStorage hits 5MB — distant).
 - "Reset just this section" instead of full progress wipe.
 - Cloud backup via gist URL (deferred from iter-26 vision subagent A entry #5).
-- **AI-tutor export (BYOK bridge)** — single button "Export weak-spots for AI tutoring" generates a structured JSON blob (failed L1 questions + their context + your recent miss timestamps + canonical excerpts) sized for an LLM context window; user pastes it into their preferred Claude/ChatGPT/etc. chat for personalized tutoring on weaknesses. **No API integration needed** — purely a clipboard export. Unlocks the AI-coach idea (deferred iter 26 — "AI Interview Coach") without the BYOK-creds onboarding friction; user already has their LLM session open. Massive leverage from ~50 LOC.
+- **AI-tutor export (BYOK bridge)** — **SHIPPED iter 88** as 🤖 AI Coach Export. Sidebar 🤖 button builds a Markdown blob of weak-spots + revealed + overdue lessons (capped 12 lessons / ~8KB to leave LLM context room); each lesson row includes flags (missed L1 N×, revealed L2, Nd overdue), most-missed L1 question + correct answer + explain, and canonical truncated to 25 lines in fenced ```js block. Pure clipboard via existing `copyTextToClipboard()` (no API integration, no creds). Emerald-accented toast confirms with char count + paste-into-Claude/ChatGPT instructions; fallback toast for clipboard-blocked contexts. Empty-state fallback for users with no weak spots. ~115 LOC JS + ~14 LOC CSS. Unlocks the AI-coach idea (deferred iter 26) without the BYOK-creds onboarding friction; user already has their LLM session open.
 
 **Cross-cutting concerns:**
 - Current schema `__v: 6` (bumped iter 32 for `history` field). Load accepts 2-6 for legacy users.

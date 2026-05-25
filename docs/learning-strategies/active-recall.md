@@ -16,6 +16,25 @@ app's existence.
 
 ## How the app encodes it today
 
+- **🤖 AI Coach Export (iter 88).** Workflow bridge to external active-recall
+  tutoring. Sidebar 🤖 button builds a curated Markdown snapshot of the
+  user's weak-spots + revealed + overdue lessons (capped 12 lessons /
+  ~8KB to fit an LLM context window) — each lesson row includes
+  flag-text (missed L1 N×, revealed L2, Nd overdue), the most-missed
+  L1 question + correct answer + explain, and the canonical truncated
+  to 25 lines in a fenced ```js block. The export is shaped as a tutor
+  prompt: "Please act as my tutor: pick ONE lesson from this list and
+  quiz me on it (Socratic style — don't just give the answer)." Pure
+  clipboard via the existing `copyTextToClipboard()` helper; user
+  pastes into Claude/ChatGPT/etc. for personalized Socratic tutoring
+  on the EXACT lessons they've been missing. Distinct from every
+  in-app surface: rather than encoding active recall directly, this
+  surface OFFLOADS the recall loop to an LLM with curated context the
+  user couldn't reconstruct from memory. The 80%-phone profile means
+  the user often has their LLM session already open on the same
+  device — paste-into-AI is a phone-native workflow. **First
+  persistence-category surface since iter-38** (BS-10 sync work-stream).
+
 - **🔀 Swap-Bench (iter 86).** Pairwise idiom-equivalence drill — the
   first surface that exercises *relational* retrieval rather than
   *categorical* pick-one. Sidebar button → 6-card session reading a

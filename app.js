@@ -122,6 +122,7 @@ const state = {
   mock: { active: false, startTime: 0, lessonId: null, tickHandle: null },
   starterPath: false, // when true, sidebar shows only the linear starter path
   starterPathTrack: 'all', // 'all' | 'syntax' | 'patterns' | 'applied' — track-scope filter for the path (iter 39)
+  recognize: { attempts: 0, correct: 0 }, // iter 49: Pattern Recognition Speed Drill lifetime stats (additive)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
@@ -456,6 +457,10 @@ function loadProgress() {
     state.starterPath = !!parsed.starterPath;
     // iter 39: track-scoped path. Legacy users (no field) default to 'all' = existing behavior.
     state.starterPathTrack = ['all','syntax','patterns','applied'].includes(parsed.starterPathTrack) ? parsed.starterPathTrack : 'all';
+    // iter 49: Recognize lifetime stats. Legacy users get 0/0.
+    state.recognize = parsed.recognize && typeof parsed.recognize === 'object'
+      ? { attempts: +parsed.recognize.attempts || 0, correct: +parsed.recognize.correct || 0 }
+      : { attempts: 0, correct: 0 };
     // Subscribed study plan. Legacy users (no field) default to 'starter' = existing behavior.
     // Validate against the registry so a stale/removed path id falls back gracefully.
     state.subscribedPathId = (typeof PATHS !== 'undefined' && PATHS.some(p => p.id === parsed.subscribedPathId))
@@ -511,6 +516,7 @@ function saveProgress() {
     lastTab: state.currentTab,
     starterPath: state.starterPath,
     starterPathTrack: state.starterPathTrack,
+    recognize: state.recognize,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
@@ -696,6 +702,123 @@ function renderSparkline(lessonId) {
 }
 // Expose for E2E probes / DevTools toggling.
 window.__renderSparkline = renderSparkline;
+
+// iter 49: Pattern Recognition Speed Drill. Diagnose-the-pattern session.
+// Shows random patterns-lesson `L3.prompt` (no title, no section badge)
+// with 4 SECTION-name buttons — correct + 3 sibling sections. Tap to grade
+// + auto-advance. 10 cards per session, summary at end. Reuses existing
+// `L3.prompt` strings (no authoring) + 17-section pool (no per-lesson
+// distractor leak — sidesteps iter-30 adversary's data-contamination
+// concern). See roadmap.md iter-48 entry (top of queue).
+const RECOGNIZE_SESSION_LEN = 10;
+function _recognizeBuildDeck() {
+  // Only patterns-track full lessons with a valid prompt.
+  const pool = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full');
+  // Section names with ≥2 lessons (need siblings for distractor pool).
+  const sectionCounts = {};
+  for (const l of pool) sectionCounts[l.section] = (sectionCounts[l.section] || 0) + 1;
+  const eligibleSections = Object.keys(sectionCounts).filter(s => sectionCounts[s] >= 1);
+  if (eligibleSections.length < 4) return null;  // need at least 4 sections for 4-option MC
+  const shuffled = pool.slice().sort(() => Math.random() - 0.5);
+  const cards = [];
+  for (const lesson of shuffled) {
+    if (cards.length >= RECOGNIZE_SESSION_LEN) break;
+    const content = CONTENT[lesson.id];
+    const prompt = content?.L3?.prompt;
+    if (!prompt) continue;  // skip lessons not yet loaded; we'll backfill
+    const correct = lesson.section;
+    const others = eligibleSections.filter(s => s !== correct).sort(() => Math.random() - 0.5).slice(0, 3);
+    const options = [correct, ...others].sort(() => Math.random() - 0.5);
+    cards.push({ lessonId: lesson.id, prompt, correct, options });
+  }
+  return cards.length >= 3 ? cards : null;
+}
+
+async function startRecognizeSession() {
+  // Backfill: load content for the first N patterns lessons so the deck builder
+  // has prompts to work with (most are stub-loaded). Limit to avoid mass fetch.
+  const patternsLessons = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full').slice(0, 30);
+  for (const l of patternsLessons) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+      if (Object.keys(CONTENT).length >= 12) break;  // enough variety
+    }
+  }
+  const deck = _recognizeBuildDeck();
+  if (!deck || deck.length < 3) {
+    alert('Recognize needs more loaded patterns lessons. Click around a few patterns first, then try again.');
+    return;
+  }
+  let idx = 0, correct = 0, startedAt = Date.now(), times = [];
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    const cardStarted = Date.now();
+    shell.innerHTML = `
+      <div class="recognize-shell">
+        <div class="recognize-header">
+          <span>🔎 Recognize · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-recognize">✕ Exit</button>
+        </div>
+        <div class="recognize-prompt">${escapeHtml(card.prompt)}</div>
+        <div class="recognize-options">
+          ${card.options.map(opt => `<button class="recognize-opt" data-opt="${escapeHtml(opt)}">${escapeHtml(opt)}</button>`).join('')}
+        </div>
+        <div class="recognize-feedback" data-recognize-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-recognize"]').addEventListener('click', () => { renderLesson(); });
+    const opts = shell.querySelectorAll('.recognize-opt');
+    let answered = false;
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const picked = btn.dataset.opt;
+        const wasCorrect = picked === card.correct;
+        if (wasCorrect) correct++;
+        times.push(Date.now() - cardStarted);
+        state.recognize.attempts++;
+        if (wasCorrect) state.recognize.correct++;
+        saveProgress();
+        opts.forEach(b => {
+          b.disabled = true;
+          if (b.dataset.opt === card.correct) b.classList.add('recognize-opt-correct');
+          else if (b === btn) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-recognize-feedback]');
+        fb.innerHTML = wasCorrect
+          ? `<span class="recognize-good">✓ ${escapeHtml(card.correct)}</span>`
+          : `<span class="recognize-bad">✗ Was: ${escapeHtml(card.correct)}</span>`;
+        setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 700 : 1400);
+      });
+    });
+  }
+  function renderSummary() {
+    const total = Date.now() - startedAt;
+    const median = times.slice().sort((a, b) => a - b)[Math.floor(times.length / 2)] || 0;
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell">
+        <div class="recognize-header"><span>🔎 Recognize · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} correct</div>
+          <div class="recognize-summary-line">Median time per card: ${(median / 1000).toFixed(1)}s</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.recognize.correct} / ${state.recognize.attempts} (${state.recognize.attempts > 0 ? Math.round(state.recognize.correct / state.recognize.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="recognize-again">🔎 Another session</button>
+            <button class="secondary" data-action="recognize-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="recognize-again"]').addEventListener('click', () => startRecognizeSession());
+    shell.querySelector('[data-action="recognize-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
 
 // iter 47: per-section retention aggregation for the Stats modal. Walks every
 // lesson's state.history events, bins by day across lookbackDays, returns
@@ -3710,6 +3833,14 @@ async function init() {
   // Mock interview button
   document.getElementById('mock-btn').addEventListener('click', () => {
     startRandomMockInterview();
+  });
+
+  // iter 49: Pattern Recognition Speed Drill — diagnose-the-pattern session.
+  // Reframe of iter-26 entry #1 (BLOCKED) using SECTION-name distractors
+  // (17 cross-cutting buckets) instead of per-lesson distractors — sidesteps
+  // iter-30 data-contamination concern. See roadmap.md iter-48.
+  document.getElementById('recognize-btn').addEventListener('click', () => {
+    startRecognizeSession();
   });
 
   // Review-Due button — jump to the most-overdue lesson.

@@ -137,7 +137,7 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ### 2026-05-25 iter 64 — Track Balance Compass (allocation visibility across the track axis)
 
-**Status:** queued
+**Status:** SHIPPED iter 66. 🧭 Track Balance widget rendered in Stats modal above the existing tile grid; 3 bars (Syntax cyan / Pattern violet / Applied pink) showing % mastered + per-track count + 1-line "Least covered: X" nudge. Pure tally over `progress × manifest.track`. ~55 LOC inline-style widget. 4-assertion mobile probe.
 
 **Value claim:** PROFILE.md §What they need spans 3 tracks (syntax, patterns, applied). The rusty engineer over-grinds whichever track they touched first and discovers the imbalance at the worst moment (an interview). No surface answers "am I drilling the right mix?" The existing per-section progress bar (iter 40) tells per-section breadth but not cross-track allocation.
 **Mechanic:** A compact 3-bar widget on the Stats modal header showing % mastered per track + a one-line nudge ("Patterns: 18/79 — least covered"). Tap a bar → sidebar filters to that track's lowest-passing section.

@@ -5102,7 +5102,36 @@ async function init() {
     const patternsStats = tally('patterns');
     const appliedStats  = tally('applied');
 
-    document.getElementById('stats-body').innerHTML = `
+    // iter 66: Track Balance Compass — 3-bar widget showing % mastered per
+    // track + a one-line nudge naming the least-covered. Closes iter-64
+    // roadmap #3 (constraint-aware B#5 — allocation balance across track
+    // axis). Pure tally over progress × manifest.track; zero new state.
+    const compassRows = [
+      { id: 'syntax',   label: 'Syntax',   color: '#67e8f9', ...syntaxStats },
+      { id: 'patterns', label: 'Pattern',  color: '#a78bfa', ...patternsStats },
+      { id: 'applied',  label: 'Applied',  color: '#fbcfe8', ...appliedStats }
+    ].map(r => ({ ...r, pct: r.total > 0 ? Math.round((r.mastered / r.total) * 100) : 0 }));
+    const leastCovered = compassRows.filter(r => r.total > 0).sort((a, b) => a.pct - b.pct)[0];
+    const compassNudge = leastCovered
+      ? `<div style="font-size:11px; color:#94a3b8; margin-top:6px;">Least covered: <strong style="color:${leastCovered.color};">${escapeHtml(leastCovered.label)}</strong> · ${leastCovered.mastered}/${leastCovered.total} (${leastCovered.pct}%)</div>`
+      : '';
+    const compassHtml = `
+      <div style="margin-bottom: 14px; padding: 12px 14px; background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;">
+        <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">🧭 Track Balance</div>
+        ${compassRows.map(r => `
+          <div style="display:grid; grid-template-columns: 70px 1fr 70px; gap:8px; align-items:center; padding:3px 0;">
+            <span style="font-size:12px; color:${r.color}; font-weight:600;">${escapeHtml(r.label)}</span>
+            <div style="height:8px; background:#1e293b; border-radius:4px; overflow:hidden;">
+              <div style="width:${r.pct}%; height:100%; background:${r.color};"></div>
+            </div>
+            <span style="font-size:11px; color:#94a3b8; font-variant-numeric:tabular-nums; text-align:right;">${r.mastered}/${r.total} · ${r.pct}%</span>
+          </div>
+        `).join('')}
+        ${compassNudge}
+      </div>
+    `;
+
+    document.getElementById('stats-body').innerHTML = `${compassHtml}
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Mastered</div>

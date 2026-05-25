@@ -1037,6 +1037,68 @@ async function startRecognizeSession() {
   renderCard();
 }
 
+// iter 75: ⏱ Big-O Speed Drill — concentrates the iter-27 audit theme #4
+// ("complexity-question fatigue distributed across normal lessons") into a
+// trainable surface. Pure recombination of existing L1 questions filtered to
+// complexity-flavored q-text (matches /complex|O\(|big.?o/i). Routes through
+// startRapidFireSession by passing a pre-built filtered deck so the entire
+// shell — letter chips, 7-sec timer, streak counter, summary — is reused
+// with zero new render code. From `ideas-by-category.md § 9C Adaptation`.
+const BIG_O_SESSION_LEN = 12; // shorter than Rapid (20) — complexity Qs are denser
+const BIG_O_FILTER_RE = /\b(complex|O\(|big[\s-]?o|amortized|asymptotic)\b/i;
+function _bigOBuildDeck() {
+  const pool = [];
+  for (const lesson of CURRICULUM) {
+    if (lesson.status !== 'full') continue;
+    const content = CONTENT[lesson.id];
+    if (!content || !content.L1 || !Array.isArray(content.L1.questions)) continue;
+    for (const q of content.L1.questions) {
+      if (!q || !BIG_O_FILTER_RE.test(q.q || '')) continue;
+      if (!Array.isArray(q.options) || q.options.length < 2) continue;
+      if (typeof q.answer !== 'number') continue;
+      pool.push({
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        sectionName: lesson.section,
+        q: q.q,
+        options: q.options,
+        answerIdx: q.answer,
+        explain: q.explain || ''
+      });
+    }
+  }
+  if (pool.length < 5) return null;
+  // Fisher-Yates shuffle then slice.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, BIG_O_SESSION_LEN);
+}
+
+async function startBigOSession() {
+  // Preload patterns + algorithms (where complexity Qs concentrate) so the
+  // deck has variety beyond just the few lessons the user has clicked.
+  const sample = CURRICULUM.filter(l =>
+    l.status === 'full' && (l.track === 'patterns' || l.section === 'Algorithms')
+  ).slice(0, 24);
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    }
+  }
+  const deck = _bigOBuildDeck();
+  if (!deck || deck.length < 5) {
+    alert('Big-O drill needs more loaded lessons. Click around a few patterns lessons first, then try again.');
+    return;
+  }
+  // Reuse Rapid-Fire's session shell directly — same deck shape, same
+  // letter-chip + 7-sec-timer + streak mechanics. Passing the prebuilt deck
+  // skips Rapid-Fire's full-corpus preload (heavier) and shorter session
+  // length matches the denser concentration of complexity Qs.
+  return _runRapidFireWithDeck(deck, { label: '⏱ Big-O', emoji: '⏱' });
+}
+
 // iter 54: L1 Rapid-Fire Drill. Cross-lesson interleaved L1 tap-stream — the
 // pure mobile-throughput surface PROFILE.md L31 names as the highest-density
 // recall modality. Reuses existing L1.questions across all 143 lessons (no
@@ -1097,6 +1159,17 @@ async function startRapidFireSession() {
     alert('Rapid-Fire needs more loaded lessons. Click around a few lessons first, then try again.');
     return;
   }
+  return _runRapidFireWithDeck(deck, { label: '⚡ Rapid', againFn: startRapidFireSession });
+}
+
+// iter 75: deck-driven Rapid-Fire shell — extracted so other §9B/§9C surfaces
+// (Big-O drill, future Trap-recognition, etc.) can reuse the letter-chip +
+// 7-sec timer + streak + slowest-3 mechanics without duplicating render code.
+// opts: { label, againFn } — label sets header text; againFn is called when
+// user clicks "Another session" on the summary.
+function _runRapidFireWithDeck(deck, opts = {}) {
+  const label = opts.label || '⚡ Rapid';
+  const againFn = opts.againFn || startRapidFireSession;
   let idx = 0, correct = 0, streak = 0, bestStreak = 0;
   const times = [];
   const slowest = []; // { lessonId, lessonTitle, ms }
@@ -1117,7 +1190,7 @@ async function startRapidFireSession() {
     shell.innerHTML = `
       <div class="rapid-shell">
         <div class="rapid-header">
-          <span>⚡ Rapid · ${idx + 1} of ${deck.length} · 🔥 ${streak}</span>
+          <span>${label} · ${idx + 1} of ${deck.length} · 🔥 ${streak}</span>
           <button class="rapid-exit" data-action="exit-rapid">✕ Exit</button>
         </div>
         <div class="rapid-timer-track"><div class="rapid-timer-bar" data-rapid-timer></div></div>
@@ -1201,7 +1274,7 @@ async function startRapidFireSession() {
     saveProgress();
     shell.innerHTML = `
       <div class="rapid-shell">
-        <div class="rapid-header"><span>⚡ Rapid · Session done</span></div>
+        <div class="rapid-header"><span>${label} · Session done</span></div>
         <div class="rapid-summary">
           <div class="rapid-summary-pct">${pct}%</div>
           <div class="rapid-summary-line">${correct} of ${deck.length} correct · 🔥 best streak ${bestStreak}</div>
@@ -1209,13 +1282,13 @@ async function startRapidFireSession() {
           ${slowestTop.length ? `<div class="rapid-summary-slowest"><div class="rapid-summary-slowest-title">Slowest lessons (drill these next):</div>${slowestTop.map(s => `<div class="rapid-summary-slowest-row"><span>${escapeHtml(s.lessonTitle)}</span><span class="rapid-summary-slowest-ms">${(s.ms / 1000).toFixed(1)}s</span></div>`).join('')}</div>` : ''}
           <div class="rapid-summary-line rapid-summary-lifetime">Lifetime: ${state.rapidFire.correct} / ${state.rapidFire.attempts} (${state.rapidFire.attempts > 0 ? Math.round(state.rapidFire.correct / state.rapidFire.attempts * 100) : 0}%) · best 🔥 ${state.rapidFire.bestStreak}</div>
           <div class="rapid-summary-actions">
-            <button class="primary" data-action="rapid-again">⚡ Another session</button>
+            <button class="primary" data-action="rapid-again">${label} · Another session</button>
             <button class="secondary" data-action="rapid-done">Done</button>
           </div>
         </div>
       </div>
     `;
-    shell.querySelector('[data-action="rapid-again"]').addEventListener('click', () => startRapidFireSession());
+    shell.querySelector('[data-action="rapid-again"]').addEventListener('click', () => againFn());
     shell.querySelector('[data-action="rapid-done"]').addEventListener('click', () => renderLesson());
   }
 
@@ -5332,6 +5405,14 @@ async function init() {
   // on misses so the high-throughput stream feeds normal SR/weakness rotation.
   document.getElementById('rapid-fire-btn').addEventListener('click', () => {
     startRapidFireSession();
+  });
+
+  // iter 75: ⏱ Big-O — complexity-filtered L1 stream. Reuses Rapid-Fire's
+  // shell with a deck filtered to complexity-flavored q-text. Closes audit
+  // theme #4 (complexity-Q fatigue) by concentrating those Qs into a
+  // trainable surface instead of diluting them across normal lessons.
+  document.getElementById('big-o-btn').addEventListener('click', () => {
+    startBigOSession();
   });
 
   // iter 57: 🌅 Warmup — 3-card micro-session over Today's Plan's curated

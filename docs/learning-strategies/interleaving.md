@@ -71,6 +71,18 @@ surfaced as a competing access pattern.
   problems?" — the load-bearing transfer question for interview-format
   readiness. Closes iter-59 vision iter's held candidate B#2 (track × tag
   transfer axis).
+- **⏱ Big-O Speed Drill (iter 75).** A filtered Rapid-Fire — 12 L1 questions
+  drawn ONLY from the complexity-question subset across all patterns +
+  Algorithms lessons (matches q-text against `/complex|O\(|big.?o|amortized|asymptotic/i`).
+  Closes the iter-27 audit theme #4 ("complexity-question fatigue distributes
+  across normal lessons") by concentrating those questions into a trainable
+  surface where the user drills complexity-reasoning in isolation. Reuses the
+  full Rapid-Fire shell (letter chips, 7-sec timer, streak, shared lifetime
+  stats in `state.rapidFire`) via a new `_runRapidFireWithDeck(deck, opts)`
+  helper extracted from `startRapidFireSession` — same modality with a
+  different deck filter is the cleanest §9C/§9B-adjacent ship pattern.
+  Misses route to `state.weakness` like normal Rapid-Fire so the focused
+  practice still feeds the SR rotation.
 - **⚡ Rapid-Fire L1 stream** (iter 54) is the explicit interleaving surface
   on the highest-throughput mobile modality. 20 L1 questions sampled across
   every full lesson in every track + every section, shuffled by

@@ -97,6 +97,10 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `diagnostic.html` | 43-question self-diagnostic (standalone page) |
 | `tokens.css` | **Single source of truth** for design tokens across all 3 pages (colors, radii, type). See `.claude/skills/ui-consistency/`. |
 | `js/storage.js` | **Single source of truth** for localStorage I/O across all 3 pages. Exposes `window.DrillStorage`. See `.claude/skills/ui-consistency/`. |
+| `js/supabase-config.js` | Supabase project URL + anon key. Anon key is public-by-design; RLS protects data. |
+| `js/supabase-client.js` | Initializes `@supabase/supabase-js` v2 client. Exposes `window.SupabaseClient`. No-op if config missing. |
+| `js/sync.js` | Optional cross-device sync. Exposes `window.DrillSync` (auth + push/pull/per-field merge) + a fixed top-right Sync chip. Skipped at runtime if sync is unavailable. |
+| `supabase/migrations/` | SQL migrations (run via Supabase Dashboard → SQL Editor). |
 | `data/manifest.json` | Sidebar index — `{sections: [{name, slug, lessons: [{id,title,track,status}]}]}` |
 | `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
 | `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |
@@ -129,6 +133,15 @@ localStorage origin. To prevent drift (which bit us in iter-35):
 - **Static code blocks** → CodeMirror `runMode` (Dracula theme). Same scripts
   as `index.html` head. Use `renderCmInto(host, code)` (currently in
   `prep.html`; hoist if a third caller appears).
+- **Cross-device sync** → `js/sync.js`, exposed as `window.DrillSync`. Optional
+  layer that mirrors `jsdrill.progress.v1` to Supabase when the user signs in
+  (email OTP). Every page that already includes `js/storage.js` should also
+  include the four sync scripts in this order: `@supabase/supabase-js` (CDN) →
+  `js/supabase-config.js` → `js/supabase-client.js` → `js/sync.js`. The script
+  auto-mounts a fixed top-right "Sync" chip. App behavior is unchanged when the
+  user is signed out or `SUPABASE_CONFIG` is empty — sync is purely additive.
+  Merge policy lives in the header comment of `js/sync.js` (set-additive fields
+  union per-lesson; device-state scalars prefer local).
 
 Before authoring a new page or adding a feature that touches state or styles,
 **run the `.claude/skills/ui-consistency/` skill** — it documents the

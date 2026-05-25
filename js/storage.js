@@ -47,6 +47,11 @@
 
   Storage.saveAppProgress = function (state) {
     _safeSave(Storage.MAIN_APP_KEY, state);
+    // Fire an event so optional layers (js/sync.js) can react without
+    // creating a circular dependency. Local-only mode is unaffected.
+    if (typeof root.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      try { root.dispatchEvent(new CustomEvent('drill:progress-written')); } catch (e) { /* ignore */ }
+    }
   };
 
   // ============================================================================

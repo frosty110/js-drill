@@ -25,6 +25,18 @@ app's existence.
 - **Reveal tracking** — if the user reveals the answer, the lesson is marked
   with a different dot variant. Revealing isn't active recall; the app refuses
   to lie about it.
+- **🌅 3-Card Warmup (iter 57)** ships the L1 interaction shell directly inside
+  a 3-card mobile micro-session over the existing Today's Plan curated 3-way
+  mix (due + path + weak). Today's Plan picks the WHAT in a modal of 3 rows;
+  Warmup ships the L1 question itself inside each card so the user goes from
+  idle to answering in ~3 taps vs Today's Plan's ~6+ nav-into-lesson flow.
+  Tap-to-grade slides the active card off-screen (right=correct, left=wrong);
+  next card slides up from the visual stack. The closer the entry surface is
+  to the actual recall act, the more recall reps the rusty engineer
+  accumulates per session of free phone time. PROFILE L69 (friction near
+  zero) targets exactly this gap; the recall principle stays intact because
+  the user still produces the answer (recognition recall on L1's MC shape),
+  just with one less nav-frame between intention and retrieval.
 - **🃏 Reveal Replay (iter 56)** closes the integrity loop on reveal-tracking.
   Until iter 56 the ringed-green "mastered-with-reveal" dot was a passive
   scarlet letter — the app knew the user had peeked, but offered no path

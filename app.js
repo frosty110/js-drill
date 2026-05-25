@@ -124,6 +124,7 @@ const state = {
   starterPathTrack: 'all', // 'all' | 'syntax' | 'patterns' | 'applied' — track-scope filter for the path (iter 39)
   recognize: { attempts: 0, correct: 0 }, // iter 49: Pattern Recognition Speed Drill lifetime stats (additive)
   rapidFire: { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 }, // iter 54: cross-lesson L1 interleaving stream (additive)
+  warmup: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 57: 3-card daily-plan swipe-stack micro-session (additive)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
@@ -471,6 +472,14 @@ function loadProgress() {
           lastRunAt: +parsed.rapidFire.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 };
+    // iter 57: 3-Card Warmup lifetime stats. Legacy users get zeroed defaults.
+    state.warmup = parsed.warmup && typeof parsed.warmup === 'object'
+      ? {
+          sessions: +parsed.warmup.sessions || 0,
+          completions: +parsed.warmup.completions || 0,
+          lastRunAt: +parsed.warmup.lastRunAt || 0
+        }
+      : { sessions: 0, completions: 0, lastRunAt: 0 };
     // Subscribed study plan. Legacy users (no field) default to 'starter' = existing behavior.
     // Validate against the registry so a stale/removed path id falls back gracefully.
     state.subscribedPathId = (typeof PATHS !== 'undefined' && PATHS.some(p => p.id === parsed.subscribedPathId))
@@ -528,6 +537,7 @@ function saveProgress() {
     starterPathTrack: state.starterPathTrack,
     recognize: state.recognize,
     rapidFire: state.rapidFire,
+    warmup: state.warmup,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
@@ -1060,6 +1070,164 @@ async function startRapidFireSession() {
   }
 
   renderCard();
+}
+
+// iter 57: 🌅 3-Card Warmup — ultra-short mobile micro-session over the
+// existing Today's Plan curated 3-way mix (due + path + weak). Stack of 3
+// L1 question cards in the main viewport with slide-off-on-grade animation;
+// auto-advances; summary CTAs to keep going. PROFILE L69 "friction between
+// '20 free minutes' and 'I'm drilling' is near zero" — Today's Plan picks
+// the WHAT but still requires open-modal-then-nav-into-lesson; Warmup
+// serves the L1 interaction shell directly in 3-tap shape. Closes iter-55
+// roadmap #3 (constraint-aware reframe of A#4 with PWA-install scope
+// deferred). Schema-additive state.warmup, no `__v` bump.
+const WARMUP_DECK_LEN = 3;
+async function _warmupBuildDeck() {
+  const plan = dailyPlan().slice(0, WARMUP_DECK_LEN);
+  if (!plan.length) return null;
+  // Preload content for any plan-lessons that aren't in CONTENT yet.
+  for (const { id } of plan) {
+    if (!CONTENT[id]) {
+      try { await loadLessonContent(id); } catch (_) { /* skip */ }
+    }
+  }
+  const deck = [];
+  for (const { id, why } of plan) {
+    const content = CONTENT[id];
+    if (!content || !content.L1 || !Array.isArray(content.L1.questions) || !content.L1.questions.length) continue;
+    const lesson = findLesson(id);
+    if (!lesson) continue;
+    // Pick the FIRST L1 question per lesson (deterministic — same warmup is
+    // the same card stack for the rest of the day; mock-interview-style
+    // surprise lives in Rapid-Fire).
+    const q = content.L1.questions[0];
+    if (!q || !Array.isArray(q.options) || typeof q.answer !== 'number') continue;
+    deck.push({
+      lessonId: id,
+      lessonTitle: lesson.title,
+      sectionName: lesson.section,
+      why,  // 'review due' | 'weak spot' | 'next on path'
+      q: q.q,
+      options: q.options,
+      answerIdx: q.answer,
+      explain: q.explain || ''
+    });
+  }
+  return deck.length ? deck : null;
+}
+
+async function startWarmupSession() {
+  const deck = await _warmupBuildDeck();
+  if (!deck || !deck.length) {
+    alert('No warmup queued — you are caught up! Tap Today\\u2019s Plan or Rapid-Fire to keep going.');
+    return;
+  }
+  state.warmup.sessions++;
+  state.warmup.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  const colors = { 'review due': '#67e8f9', 'weak spot': '#fdba74', 'next on path': '#93c5fd' };
+
+  function renderStack() {
+    if (idx >= deck.length) {
+      state.warmup.completions++;
+      saveProgress();
+      return renderSummary();
+    }
+    // Render the current card + visual ghost cards beneath (offset + scaled).
+    const remaining = deck.length - idx;
+    const ghostCount = Math.min(remaining - 1, 2);
+    const ghosts = Array.from({ length: ghostCount }, (_, i) => {
+      const depth = i + 1;
+      return `<div class="warmup-ghost" style="transform: translateY(${depth * 6}px) scale(${1 - depth * 0.03}); opacity: ${1 - depth * 0.35}; z-index: ${10 - depth};"></div>`;
+    }).join('');
+
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="warmup-shell">
+        <div class="warmup-header">
+          <span>🌅 Warmup · Card ${idx + 1} of ${deck.length}</span>
+          <button class="warmup-exit" data-action="exit-warmup">✕ Exit</button>
+        </div>
+        <div class="warmup-stack">
+          ${ghosts}
+          <div class="warmup-card" data-warmup-card style="z-index: 11;">
+            <div class="warmup-card-tag" style="color: ${colors[card.why] || '#94a3b8'};">${escapeHtml(card.why)}</div>
+            <div class="warmup-card-meta">${escapeHtml(card.sectionName)} · <span class="warmup-card-lesson">${escapeHtml(card.lessonTitle)}</span></div>
+            <div class="warmup-card-question">${escapeHtml(card.q)}</div>
+            <div class="warmup-card-options">
+              ${card.options.map((opt, i) => `<button class="warmup-opt" data-opt-idx="${i}"><span class="warmup-letter">${String.fromCharCode(65 + i)}</span>${escapeHtml(opt)}</button>`).join('')}
+            </div>
+            <div class="warmup-card-feedback" data-warmup-feedback></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    shell.querySelector('[data-action="exit-warmup"]').addEventListener('click', () => renderLesson());
+    const opts = shell.querySelectorAll('.warmup-opt');
+    const cardEl = shell.querySelector('[data-warmup-card]');
+    let answered = false;
+
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const picked = +btn.dataset.optIdx;
+        const wasCorrect = picked === card.answerIdx;
+        if (wasCorrect) {
+          correct++;
+        } else {
+          // Misses route to the existing weak-spot tracker — same path as
+          // missing an in-lesson L1.
+          state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+          appendHistory(card.lessonId, 'L1-miss');
+        }
+        saveProgress();
+        opts.forEach((b, i) => {
+          b.disabled = true;
+          if (i === card.answerIdx) b.classList.add('warmup-opt-correct');
+          else if (i === picked) b.classList.add('warmup-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-warmup-feedback]');
+        fb.innerHTML = wasCorrect
+          ? `<span class="warmup-good">✓ Got it</span>`
+          : `<span class="warmup-bad">✗ ${card.explain ? escapeHtml(card.explain) : 'Routed to weak spots'}</span>`;
+        // Slide-off animation, then advance.
+        cardEl.classList.add(wasCorrect ? 'warmup-card-slide-right' : 'warmup-card-slide-left');
+        setTimeout(() => { idx++; renderStack(); }, wasCorrect ? 600 : 1100);
+      });
+    });
+  }
+
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="warmup-shell">
+        <div class="warmup-header"><span>🌅 Warmup · Session done</span></div>
+        <div class="warmup-summary">
+          <div class="warmup-summary-pct">${pct}%</div>
+          <div class="warmup-summary-line">${correct} of ${deck.length} correct</div>
+          <div class="warmup-summary-line warmup-summary-lifetime">Lifetime: ${state.warmup.completions} session${state.warmup.completions === 1 ? '' : 's'} completed</div>
+          <div class="warmup-summary-cta">→ Keep going:</div>
+          <div class="warmup-summary-actions">
+            <button class="primary" data-action="warmup-rapid">⚡ Rapid-Fire</button>
+            <button class="secondary" data-action="warmup-today">📅 Today's Plan</button>
+            <button class="secondary" data-action="warmup-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="warmup-rapid"]').addEventListener('click', () => startRapidFireSession());
+    shell.querySelector('[data-action="warmup-today"]').addEventListener('click', () => {
+      renderLesson();
+      document.getElementById('today-btn')?.click();
+    });
+    shell.querySelector('[data-action="warmup-done"]').addEventListener('click', () => renderLesson());
+  }
+
+  renderStack();
 }
 
 // iter 47: per-section retention aggregation for the Stats modal. Walks every
@@ -4125,6 +4293,14 @@ async function init() {
   // on misses so the high-throughput stream feeds normal SR/weakness rotation.
   document.getElementById('rapid-fire-btn').addEventListener('click', () => {
     startRapidFireSession();
+  });
+
+  // iter 57: 🌅 Warmup — 3-card micro-session over Today's Plan's curated
+  // mix (due + path + weak). Closes iter-55 roadmap #3. The L1 interaction
+  // shell ships INSIDE the card so the user goes from idle to answering in
+  // ~3 taps vs Today's Plan's ~6+ nav-into-lesson flow.
+  document.getElementById('warmup-btn').addEventListener('click', () => {
+    startWarmupSession();
   });
 
   // Review-Due button — jump to the most-overdue lesson.

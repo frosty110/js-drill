@@ -61,7 +61,9 @@ The convention:
 **Review trigger:** If `Mock interview`, `Mock interview probe`, `Sidebar (path-order sort)`, `Weak-spot visibility`, or `Welcome banner` rows have not been bumped in 12+ iters, this category is stale.
 
 **Active ideas:**
-- **Pattern Recognition Speed Drill** — see [`roadmap.md` iter-26 entry #1](roadmap.md). BLOCKED (depends on PROFILE Amendment A + BS-15 `problem` field). Concrete→abstract pattern-naming drill — the only surface that runs in interview-direction.
+- **Pattern Recognition Speed Drill** — see [`roadmap.md` iter-26 entry #1](roadmap.md). BLOCKED (depends on PROFILE Amendment A + BS-15 `problem` field). Concrete→abstract pattern-naming drill — the only surface that runs in interview-direction. **Note:** iter-48 reframe SHIPPED iter 49 as 🔎 Recognize using SECTION-name distractors instead — sidesteps both blockers.
+- **L1 Rapid-Fire Drill (cross-lesson MCQ stream)** — see [`roadmap.md` iter-31 entry #4](roadmap.md). **SHIPPED iter 54.** ⚡ Rapid sidebar button → 20-question Fisher-Yates-shuffled session across all tracks; 7-sec soft timer; streak counter; miss feeds existing state.weakness.
+- **🌅 3-Card Warmup** — see [`roadmap.md` iter-55 entry #3](roadmap.md). **SHIPPED iter 57.** Mobile micro-session over Today's Plan's curated 3-way mix (due + path + weak); 3-card stack with tap-to-grade + slide-off animation; bypasses Today's Plan's nav-into-lesson flow by shipping the L1 interaction shell directly inside each card.
 - **Commute Audio Mode** — see [`roadmap.md` iter-26 entry #3](roadmap.md). BLOCKED (Amendment C + Page Visibility instrumentation).
 
 **Parking-lot ideas:**

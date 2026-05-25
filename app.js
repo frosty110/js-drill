@@ -5236,6 +5236,22 @@ function renderL3(body, lesson, content) {
         <span class="mono text-slate-300 ml-1">${escapeHtml(drill.expectedOutput)}</span>
       </div>
     </div>
+    ${isMock ? '' : `
+    <!-- iter 81: 🛡 Edge case pre-enumeration chip strip. Trains the
+         clarifying-questions ritual interviewers grade — "before you code,
+         what edges would you ask about?". Pure UX nudge (no scoring, no
+         per-lesson curation); tap-toggles each chip's "considered" state.
+         Hidden during Mock Interview (mock is no-scaffolding by design). -->
+    <div class="edge-strip" data-edge-strip>
+      <span class="edge-strip-label">🛡 Consider edges:</span>
+      <button type="button" class="edge-chip" data-edge="empty">empty</button>
+      <button type="button" class="edge-chip" data-edge="single">single element</button>
+      <button type="button" class="edge-chip" data-edge="dupes">duplicates</button>
+      <button type="button" class="edge-chip" data-edge="max">max size</button>
+      <button type="button" class="edge-chip" data-edge="negative">negative</button>
+      <button type="button" class="edge-chip" data-edge="none">no solution</button>
+    </div>
+    `}
     <textarea id="drill-editor"></textarea>
     <div class="l3-actions mt-3 flex items-center gap-2 flex-wrap">
       <button class="primary" data-action="run">Run <span class="text-blue-200">(⌘↵)</span></button>
@@ -5274,6 +5290,13 @@ function renderL3(body, lesson, content) {
       endMockInterview(false);
     });
   }
+
+  // iter 81: Edge-case chip toggles. Pure visual state — no persistence,
+  // no scoring, no per-lesson curation. Trains the clarifying-questions
+  // ritual before coding. Hidden during Mock (see edge-strip render gate).
+  wrap.querySelectorAll('.edge-chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('edge-chip-considered'));
+  });
 
   // iter 61: Mock Replay Reel — wire per-cell tap-for-detail. Renders a
   // small tile below the header strip with attempt index + delta-vs-best.

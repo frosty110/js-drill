@@ -46,21 +46,19 @@ const OUT = process.argv[3] || '/tmp/jsdrill-cheatsheet';
   }))()`);
   s.assert(open.display === 'block', `[A] modal display=block (got: ${open.display})`);
 
-  // ── B: structure check — tabs + sections + highlighted code ──────────
+  // ── B: structure check — tabs + sections + lessons collapsed by default ──
   const structure = await s.eval(`(() => {
     const tabs = document.querySelectorAll('#cheatsheet-tabs [data-cs-track]');
     const sections = document.querySelectorAll('#cheatsheet-body [data-cs-section]');
     const lessons = document.querySelectorAll('#cheatsheet-body [data-cs-lesson]');
+    const openLessons = document.querySelectorAll('#cheatsheet-body [data-cs-lesson][open]');
     const code = document.querySelectorAll('#cheatsheet-body [data-cs-code]');
-    // A highlighted code block should have CodeMirror token spans inside.
-    const first = code[0];
-    const hasTokens = !!(first && first.querySelector('span'));
     return {
       tabCount: tabs.length,
       sectionCount: sections.length,
       lessonCount: lessons.length,
+      openLessonCount: openLessons.length,
       codeCount: code.length,
-      hasHighlighting: hasTokens,
     };
   })()`);
   s.assert(structure.tabCount === 3, `[B] 3 track tabs (got: ${structure.tabCount})`);
@@ -68,8 +66,49 @@ const OUT = process.argv[3] || '/tmp/jsdrill-cheatsheet';
   s.assert(structure.lessonCount >= 5, `[B] ≥5 lessons rendered (got: ${structure.lessonCount})`);
   s.assert(structure.codeCount === structure.lessonCount,
     `[B] each lesson has a code block (lessons:${structure.lessonCount}, code:${structure.codeCount})`);
-  s.assert(structure.hasHighlighting,
-    `[B] code blocks are syntax-highlighted (CodeMirror token spans present)`);
+  // Two-tier collapse: most lessons should be collapsed by default. At most 1
+  // lesson (the current one) should be open without a search filter.
+  s.assert(structure.openLessonCount <= 1,
+    `[B] lessons collapsed by default (open: ${structure.openLessonCount}/${structure.lessonCount})`);
+
+  // ── B2: click a collapsed lesson title → it expands and code colorizes ──
+  const expandResult = await s.eval(`(() => {
+    const lesson = [...document.querySelectorAll('#cheatsheet-body [data-cs-lesson]')]
+      .find(d => !d.open);
+    if (!lesson) return { found: false };
+    const id = lesson.getAttribute('data-cs-lesson');
+    lesson.querySelector('summary').click();
+    return { found: true, id, openAfter: lesson.open };
+  })()`);
+  await s.sleep(150);
+  const expandedAfter = await s.eval(`(() => {
+    const lesson = document.querySelector('[data-cs-lesson="${expandResult.id}"]');
+    const pre = lesson?.querySelector('[data-cs-code]');
+    const hasTokens = !!(pre && pre.querySelector('span'));
+    return { open: lesson?.open, hasTokens };
+  })()`);
+  s.assert(expandResult.found && expandedAfter.open,
+    `[B2] tapping a collapsed lesson summary expands it (id: ${expandResult.id})`);
+  s.assert(expandedAfter.hasTokens,
+    `[B2] code colorizes lazily on expand (CodeMirror tokens present)`);
+
+  // ── B3: Expand all button opens every <details> ──────────────────────
+  await s.click('#cheatsheet-expand-all');
+  await s.sleep(100);
+  const afterExpandAll = await s.eval(`(() => {
+    const all = document.querySelectorAll('#cheatsheet-body details');
+    const closed = [...all].filter(d => !d.open).length;
+    const label = document.getElementById('cheatsheet-expand-all').textContent.trim();
+    return { total: all.length, closed, label };
+  })()`);
+  await s.snap('B3-expand-all');
+  s.assert(afterExpandAll.closed === 0,
+    `[B3] Expand all opens every details (closed: ${afterExpandAll.closed}/${afterExpandAll.total})`);
+  s.assert(afterExpandAll.label === 'Collapse all',
+    `[B3] button label flips to Collapse all (got: ${afterExpandAll.label})`);
+  // Toggle back so the rest of the test uses the default state.
+  await s.click('#cheatsheet-expand-all');
+  await s.sleep(100);
 
   // ── C: switching track tab swaps content ─────────────────────────────
   // Default opens on the current lesson's track (s-variables → syntax).
@@ -121,8 +160,19 @@ const OUT = process.argv[3] || '/tmp/jsdrill-cheatsheet';
   })()`);
   await s.sleep(100);
 
-  // ── E: click lesson title → close + navigate ────────────────────────
-  const targetId = await s.eval(`document.querySelector('#cheatsheet-body [data-cs-goto]').getAttribute('data-cs-goto')`);
+  // ── E: expand a non-default lesson, click "Open lesson →" → modal closes + navigates ──
+  const targetId = await s.eval(`(() => {
+    // Pick the first collapsed lesson so we exercise the expand-then-jump flow,
+    // not the default-open current-lesson shortcut.
+    const lesson = [...document.querySelectorAll('#cheatsheet-body [data-cs-lesson]')]
+      .find(d => !d.open);
+    if (lesson) {
+      lesson.querySelector('summary').click();
+      return lesson.getAttribute('data-cs-lesson');
+    }
+    return document.querySelector('#cheatsheet-body [data-cs-goto]')?.getAttribute('data-cs-goto');
+  })()`);
+  await s.sleep(150);
   await s.click(`[data-cs-goto="${targetId}"]`);
   await s.sleep(700);
   await s.snap('E-navigated');
@@ -131,7 +181,7 @@ const OUT = process.argv[3] || '/tmp/jsdrill-cheatsheet';
     currentLesson: window.__jsdrillState.currentLessonId,
   }))()`);
   s.assert(landed.modalDisplay === 'none',
-    `[E] modal closed after lesson click (got: ${landed.modalDisplay})`);
+    `[E] modal closed after Open lesson click (got: ${landed.modalDisplay})`);
   s.assert(landed.currentLesson === targetId,
     `[E] navigated to clicked lesson (expected ${targetId}, got: ${landed.currentLesson})`);
 

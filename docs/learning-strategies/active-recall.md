@@ -16,6 +16,18 @@ app's existence.
 
 ## How the app encodes it today
 
+- **🔮 Predict-the-Output (iter 77).** Crystal Ball mental-execution
+  drill. Show a real patterns canonical + 4 output options (1 correct
+  + 3 same-type distractors drawn from other lessons' L3
+  `expectedOutput` strings); user reads the code and predicts what it
+  prints — WITHOUT running it. First surface that trains mental
+  simulation, the foundational interview reflex the L1/L2/L3 ladder
+  never drills (the ladder is all *produce code*; this is *execute
+  code in your head*). Distractor pool prefers same-output-type (array
+  → array, number → number) to avoid type-mismatch giveaways. Skips
+  canonicals >30 lines for mobile readability. Misses route to
+  `state.weakness`. From `ideas-by-category.md § 1 Drilling Surfaces
+  → Crystal Ball mental-execution drill`.
 - **🎯 Reverse Problem-ID (iter 76).** Inverse of 🔎 Recognize:
   Recognize shows a problem prompt → user picks the matching section
   (problem→pattern direction); Reverse shows an input/output trace from

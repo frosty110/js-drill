@@ -127,6 +127,7 @@ const state = {
   warmup: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 57: 3-card daily-plan swipe-stack micro-session (additive)
   speedrun: { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 }, // iter 71: 🏁 Section Speedrun — per-section first mobile timed-pressure surface; bests keyed by section slug (additive, no `__v` bump)
   bugHunt: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 73: 🪲 Bug-Hunt — §9B code-evaluation skill drill (additive, no `__v` bump)
+  crystal: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 77: 🔮 Predict — mental-execution drill (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -502,6 +503,15 @@ function loadProgress() {
           lastRunAt: +parsed.bugHunt.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 77: 🔮 Predict mental-execution lifetime stats. Legacy users get zeros.
+    state.crystal = parsed.crystal && typeof parsed.crystal === 'object'
+      ? {
+          attempts: +parsed.crystal.attempts || 0,
+          correct: +parsed.crystal.correct || 0,
+          sessions: +parsed.crystal.sessions || 0,
+          lastRunAt: +parsed.crystal.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -566,6 +576,7 @@ function saveProgress() {
     warmup: state.warmup,
     speedrun: state.speedrun,
     bugHunt: state.bugHunt,
+    crystal: state.crystal,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1097,6 +1108,171 @@ async function startBigOSession() {
   // skips Rapid-Fire's full-corpus preload (heavier) and shorter session
   // length matches the denser concentration of complexity Qs.
   return _runRapidFireWithDeck(deck, { label: '⏱ Big-O', emoji: '⏱' });
+}
+
+// iter 77: 🔮 Predict-the-Output — Crystal Ball mental-execution drill. Show
+// a patterns canonical + 4 expected-output options (correct + 3 same-type
+// distractors from other lessons' L3.expectedOutput); user picks which the
+// code produces WITHOUT running it. Trains mental simulation — the
+// foundational interview skill the L1/L2/L3 ladder never drills (everything
+// today is "produce code"; this drills "execute code in your head"). Pure
+// recombination; no per-lesson authoring. From `ideas-by-category.md § 1
+// Drilling Surfaces → Crystal Ball mental-execution drill`.
+const CRYSTAL_DECK_LEN = 5;
+
+function _crystalOutputType(s) {
+  // Coarse type-tag so distractors share shape with the correct answer
+  // (array→array, number→number, etc.); falls back to 'string'.
+  const trimmed = (s || '').trim();
+  if (!trimmed) return 'string';
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) return 'array';
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) return 'object';
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return 'number';
+  if (trimmed === 'true' || trimmed === 'false') return 'boolean';
+  return 'string';
+}
+
+function _crystalBuildDeck() {
+  const candidates = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full');
+  const pool = [];
+  for (const l of candidates) {
+    const c = CONTENT[l.id];
+    if (!c || !c.L3 || !c.L3.canonical || !c.L3.expectedOutput) continue;
+    // Skip overly long canonicals — mobile readability + mental-sim feasibility.
+    if (c.L3.canonical.split('\n').length > 30) continue;
+    pool.push({
+      lessonId: l.id,
+      lessonTitle: l.title,
+      sectionName: l.section,
+      canonical: c.L3.canonical,
+      output: c.L3.expectedOutput,
+      type: _crystalOutputType(c.L3.expectedOutput)
+    });
+  }
+  if (pool.length < 4) return null;
+  // Group outputs by type for distractor selection (prefer same-type so the
+  // correct answer isn't trivially obvious via type mismatch).
+  const byType = {};
+  for (const p of pool) {
+    (byType[p.type] = byType[p.type] || []).push(p);
+  }
+  // Shuffle pool, pick deck-len cards.
+  const shuffled = pool.slice().sort(() => Math.random() - 0.5);
+  const cards = [];
+  for (const target of shuffled.slice(0, CRYSTAL_DECK_LEN * 2)) {
+    if (cards.length >= CRYSTAL_DECK_LEN) break;
+    // Distractor pool: same-type outputs from other lessons, excluding the
+    // target's own output (defensive: identical outputs across lessons exist).
+    const sameType = (byType[target.type] || []).filter(p =>
+      p.lessonId !== target.lessonId && p.output !== target.output
+    );
+    if (sameType.length < 3) continue; // need ≥3 distractors
+    const distractors = sameType.sort(() => Math.random() - 0.5).slice(0, 3).map(p => p.output);
+    const options = [target.output, ...distractors];
+    // Shuffle option order.
+    for (let i = options.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [options[i], options[j]] = [options[j], options[i]];
+    }
+    cards.push({
+      lessonId: target.lessonId,
+      lessonTitle: target.lessonTitle,
+      sectionName: target.sectionName,
+      canonical: target.canonical,
+      options,
+      correct: target.output
+    });
+  }
+  return cards.length >= 3 ? cards : null;
+}
+
+async function startCrystalSession() {
+  // Preload patterns lessons so the pool has variety.
+  const patternsLessons = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full').slice(0, 30);
+  for (const l of patternsLessons) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+      if (Object.keys(CONTENT).length >= 20) break;
+    }
+  }
+  const deck = _crystalBuildDeck();
+  if (!deck || deck.length < 3) {
+    alert('Predict needs more loaded patterns lessons. Click around a few patterns first, then try again.');
+    return;
+  }
+  state.crystal.sessions++;
+  state.crystal.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell crystal-shell">
+        <div class="recognize-header">
+          <span>🔮 Predict · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-crystal">✕ Exit</button>
+        </div>
+        <div class="crystal-meta">${escapeHtml(card.sectionName)} · <span class="crystal-lesson">${escapeHtml(card.lessonTitle)}</span></div>
+        <div class="crystal-hint">Read the code. Don't run it. Pick the output.</div>
+        <pre class="crystal-code cm-s-dracula" data-crystal-code></pre>
+        <div class="recognize-options crystal-options">
+          ${card.options.map(opt => `<button class="recognize-opt crystal-opt" data-opt="${escapeHtml(opt)}"><code>${escapeHtml(opt)}</code></button>`).join('')}
+        </div>
+        <div class="recognize-feedback" data-crystal-feedback></div>
+      </div>
+    `;
+    // Syntax-highlight the canonical via the existing CodeMirror runMode path.
+    const codeEl = shell.querySelector('[data-crystal-code]');
+    if (codeEl && typeof colorizeInto === 'function') colorizeInto(codeEl, card.canonical);
+    shell.querySelector('[data-action="exit-crystal"]').addEventListener('click', () => renderLesson());
+    const opts = shell.querySelectorAll('.recognize-opt');
+    let answered = false;
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const picked = btn.dataset.opt;
+        const wasCorrect = picked === card.correct;
+        if (wasCorrect) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.crystal.attempts++;
+        if (wasCorrect) state.crystal.correct++;
+        saveProgress();
+        opts.forEach(b => {
+          b.disabled = true;
+          if (b.dataset.opt === card.correct) b.classList.add('recognize-opt-correct');
+          else if (b === btn) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-crystal-feedback]');
+        if (fb) fb.innerHTML = wasCorrect
+          ? `<span class="recognize-good">✓</span>`
+          : `<span class="recognize-bad">✗ Was ${escapeHtml(card.correct)}</span>`;
+        setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 800 : 1700);
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell crystal-shell">
+        <div class="recognize-header"><span>🔮 Predict · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} outputs predicted correctly</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Mental-sim lifetime: ${state.crystal.correct} / ${state.crystal.attempts} (${state.crystal.attempts > 0 ? Math.round(state.crystal.correct / state.crystal.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="crystal-again">🔮 Another session</button>
+            <button class="secondary" data-action="crystal-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="crystal-again"]').addEventListener('click', () => startCrystalSession());
+    shell.querySelector('[data-action="crystal-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
 }
 
 // iter 76: 🎯 Reverse Problem-ID — §9B code-evaluation surface (sibling to
@@ -5583,6 +5759,14 @@ async function init() {
   // (problem→pattern direction). §9B code-evaluation surface.
   document.getElementById('reverse-btn').addEventListener('click', () => {
     startReverseSession();
+  });
+
+  // iter 77: 🔮 Predict — mental-execution drill. Read code, predict output
+  // from 4 same-type distractors without running. Trains the foundational
+  // interview reflex "execute this code in your head" — first surface to
+  // drill mental simulation.
+  document.getElementById('crystal-btn').addEventListener('click', () => {
+    startCrystalSession();
   });
 
   // iter 54: ⚡ Rapid-Fire L1 stream — cross-lesson interleaved tap surface.

@@ -46,6 +46,17 @@ surfaced as a competing access pattern.
   varied surface forms.
 - **Spaced repetition** by definition interleaves — when reviews come due
   they don't arrive grouped by section.
+- **⚡ Rapid-Fire L1 stream** (iter 54) is the explicit interleaving surface
+  on the highest-throughput mobile modality. 20 L1 questions sampled across
+  every full lesson in every track + every section, shuffled by
+  Fisher-Yates, served with a 7-sec soft timer. There is no "block" — each
+  card's section is unrelated to the previous one's. Misses route into the
+  existing `state.weakness` tracker so the rapid stream feeds back into the
+  user's normal SR + weak-spot rotation; the session summary surfaces the
+  three slowest lessons as a per-session weak-spot diagnostic. Closes the
+  gap that previously made interleaving available only via Today's Plan
+  (curated 3-way mix) and Mock Interview (single-lesson) — Rapid is the
+  first **continuous** interleaved stream.
 
 ## Under-exploited / candidate features
 

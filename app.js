@@ -123,6 +123,7 @@ const state = {
   starterPath: false, // when true, sidebar shows only the linear starter path
   starterPathTrack: 'all', // 'all' | 'syntax' | 'patterns' | 'applied' — track-scope filter for the path (iter 39)
   recognize: { attempts: 0, correct: 0 }, // iter 49: Pattern Recognition Speed Drill lifetime stats (additive)
+  rapidFire: { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 }, // iter 54: cross-lesson L1 interleaving stream (additive)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
@@ -461,6 +462,15 @@ function loadProgress() {
     state.recognize = parsed.recognize && typeof parsed.recognize === 'object'
       ? { attempts: +parsed.recognize.attempts || 0, correct: +parsed.recognize.correct || 0 }
       : { attempts: 0, correct: 0 };
+    // iter 54: Rapid-Fire lifetime stats. Legacy users get zeroed defaults.
+    state.rapidFire = parsed.rapidFire && typeof parsed.rapidFire === 'object'
+      ? {
+          attempts: +parsed.rapidFire.attempts || 0,
+          correct: +parsed.rapidFire.correct || 0,
+          bestStreak: +parsed.rapidFire.bestStreak || 0,
+          lastRunAt: +parsed.rapidFire.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 };
     // Subscribed study plan. Legacy users (no field) default to 'starter' = existing behavior.
     // Validate against the registry so a stale/removed path id falls back gracefully.
     state.subscribedPathId = (typeof PATHS !== 'undefined' && PATHS.some(p => p.id === parsed.subscribedPathId))
@@ -517,6 +527,7 @@ function saveProgress() {
     starterPath: state.starterPath,
     starterPathTrack: state.starterPathTrack,
     recognize: state.recognize,
+    rapidFire: state.rapidFire,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
@@ -817,6 +828,191 @@ async function startRecognizeSession() {
     shell.querySelector('[data-action="recognize-again"]').addEventListener('click', () => startRecognizeSession());
     shell.querySelector('[data-action="recognize-done"]').addEventListener('click', () => renderLesson());
   }
+  renderCard();
+}
+
+// iter 54: L1 Rapid-Fire Drill. Cross-lesson interleaved L1 tap-stream — the
+// pure mobile-throughput surface PROFILE.md L31 names as the highest-density
+// recall modality. Reuses existing L1.questions across all 143 lessons (no
+// new authoring). 7-sec soft-timer; tap to grade + auto-advance; streak resets
+// on miss or timer-exhaust; missed lessons flip state.weakness (existing weak-
+// spot tracker) so the rapid stream feeds back into normal SR. Sourced from
+// iter-31 roadmap entry #4 (unblocked). See ideas-by-category.md § Paths &
+// Sessions → Rapid-Fire (was the entry's queued source).
+const RAPID_FIRE_SESSION_LEN = 20;
+const RAPID_FIRE_TIMER_MS = 7000;
+function _rapidFireBuildDeck() {
+  // Walk all loaded lessons with full status + at least one L1 question.
+  // Mirrors Recognize's CONTENT-lookup pattern but spans every track, not just patterns.
+  const pool = [];
+  for (const lesson of CURRICULUM) {
+    if (lesson.status !== 'full') continue;
+    const content = CONTENT[lesson.id];
+    if (!content || !content.L1 || !Array.isArray(content.L1.questions)) continue;
+    for (let qi = 0; qi < content.L1.questions.length; qi++) {
+      const q = content.L1.questions[qi];
+      if (!q || !Array.isArray(q.options) || q.options.length < 2) continue;
+      if (typeof q.answer !== 'number') continue;
+      pool.push({
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        sectionName: lesson.section,
+        q: q.q,
+        options: q.options,
+        answerIdx: q.answer,
+        explain: q.explain || ''
+      });
+    }
+  }
+  if (pool.length < 5) return null;
+  // Fisher-Yates shuffle then slice.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, RAPID_FIRE_SESSION_LEN);
+}
+
+async function startRapidFireSession() {
+  // Backfill: preload lesson content broadly across tracks so the deck has
+  // variety. We aim for ~30 lessons spanning syntax + patterns + applied.
+  const sample = [];
+  for (const track of ['syntax', 'patterns', 'applied']) {
+    const trackLessons = CURRICULUM.filter(l => l.track === track && l.status === 'full').slice(0, 12);
+    sample.push(...trackLessons);
+  }
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    }
+  }
+  const deck = _rapidFireBuildDeck();
+  if (!deck || deck.length < 5) {
+    alert('Rapid-Fire needs more loaded lessons. Click around a few lessons first, then try again.');
+    return;
+  }
+  let idx = 0, correct = 0, streak = 0, bestStreak = 0;
+  const times = [];
+  const slowest = []; // { lessonId, lessonTitle, ms }
+  const shell = document.getElementById('lesson-shell');
+  let cardStartedAt = 0;
+  let timerHandle = null;
+  let timerStartedAt = 0;
+
+  function clearTimer() {
+    if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+  }
+
+  function renderCard() {
+    clearTimer();
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    cardStartedAt = Date.now();
+    shell.innerHTML = `
+      <div class="rapid-shell">
+        <div class="rapid-header">
+          <span>⚡ Rapid · ${idx + 1} of ${deck.length} · 🔥 ${streak}</span>
+          <button class="rapid-exit" data-action="exit-rapid">✕ Exit</button>
+        </div>
+        <div class="rapid-timer-track"><div class="rapid-timer-bar" data-rapid-timer></div></div>
+        <div class="rapid-meta">${escapeHtml(card.sectionName)} · <span class="rapid-lesson">${escapeHtml(card.lessonTitle)}</span></div>
+        <div class="rapid-question">${escapeHtml(card.q)}</div>
+        <div class="rapid-options">
+          ${card.options.map((opt, i) => `<button class="rapid-opt" data-opt-idx="${i}"><span class="rapid-letter">${String.fromCharCode(65 + i)}</span>${escapeHtml(opt)}</button>`).join('')}
+        </div>
+        <div class="rapid-feedback" data-rapid-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-rapid"]').addEventListener('click', () => {
+      clearTimer();
+      renderLesson();
+    });
+    const opts = shell.querySelectorAll('.rapid-opt');
+    let answered = false;
+
+    const grade = (pickedIdx) => {
+      if (answered) return;
+      answered = true;
+      clearTimer();
+      const elapsed = Date.now() - cardStartedAt;
+      times.push(elapsed);
+      const wasCorrect = pickedIdx === card.answerIdx;
+      if (wasCorrect) {
+        correct++;
+        streak++;
+        if (streak > bestStreak) bestStreak = streak;
+      } else {
+        streak = 0;
+        // Feed weak-spot tracker (existing field; same semantics as in-lesson L1 miss).
+        state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+        appendHistory(card.lessonId, 'L1-miss');
+      }
+      state.rapidFire.attempts++;
+      if (wasCorrect) state.rapidFire.correct++;
+      // Slowest-lesson tracking (weak-spot variant).
+      slowest.push({ lessonId: card.lessonId, lessonTitle: card.lessonTitle, ms: elapsed });
+      saveProgress();
+      opts.forEach((b, i) => {
+        b.disabled = true;
+        if (i === card.answerIdx) b.classList.add('rapid-opt-correct');
+        else if (i === pickedIdx) b.classList.add('rapid-opt-wrong');
+      });
+      const fb = shell.querySelector('[data-rapid-feedback]');
+      fb.innerHTML = wasCorrect
+        ? `<span class="rapid-good">✓ +1 streak</span>`
+        : `<span class="rapid-bad">✗ ${card.explain ? escapeHtml(card.explain) : 'Streak reset'}</span>`;
+      setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 600 : 1300);
+    };
+
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => grade(+btn.dataset.optIdx));
+    });
+
+    // 7-sec soft timer. On exhaust: treat as miss, reset streak, reveal answer, auto-advance.
+    timerStartedAt = Date.now();
+    const bar = shell.querySelector('[data-rapid-timer]');
+    timerHandle = setInterval(() => {
+      const remaining = RAPID_FIRE_TIMER_MS - (Date.now() - timerStartedAt);
+      if (remaining <= 0) {
+        clearTimer();
+        if (!answered) grade(-1); // -1 = no pick; never equals card.answerIdx → miss
+      } else if (bar) {
+        bar.style.width = `${(remaining / RAPID_FIRE_TIMER_MS) * 100}%`;
+        bar.classList.toggle('rapid-timer-hot', remaining < 2000);
+      }
+    }, 80);
+  }
+
+  function renderSummary() {
+    clearTimer();
+    const totalMs = times.reduce((a, b) => a + b, 0);
+    const median = times.slice().sort((a, b) => a - b)[Math.floor(times.length / 2)] || 0;
+    const pct = Math.round((correct / deck.length) * 100);
+    // Slowest 3 lessons (weak-spot diagnostic per iter-31 roadmap).
+    const slowestTop = slowest.slice().sort((a, b) => b.ms - a.ms).slice(0, 3);
+    if (bestStreak > state.rapidFire.bestStreak) state.rapidFire.bestStreak = bestStreak;
+    state.rapidFire.lastRunAt = Date.now();
+    saveProgress();
+    shell.innerHTML = `
+      <div class="rapid-shell">
+        <div class="rapid-header"><span>⚡ Rapid · Session done</span></div>
+        <div class="rapid-summary">
+          <div class="rapid-summary-pct">${pct}%</div>
+          <div class="rapid-summary-line">${correct} of ${deck.length} correct · 🔥 best streak ${bestStreak}</div>
+          <div class="rapid-summary-line">Median ${(median / 1000).toFixed(1)}s · Throughput ${totalMs > 0 ? ((deck.length / (totalMs / 60000)) | 0) : 0}/min</div>
+          ${slowestTop.length ? `<div class="rapid-summary-slowest"><div class="rapid-summary-slowest-title">Slowest lessons (drill these next):</div>${slowestTop.map(s => `<div class="rapid-summary-slowest-row"><span>${escapeHtml(s.lessonTitle)}</span><span class="rapid-summary-slowest-ms">${(s.ms / 1000).toFixed(1)}s</span></div>`).join('')}</div>` : ''}
+          <div class="rapid-summary-line rapid-summary-lifetime">Lifetime: ${state.rapidFire.correct} / ${state.rapidFire.attempts} (${state.rapidFire.attempts > 0 ? Math.round(state.rapidFire.correct / state.rapidFire.attempts * 100) : 0}%) · best 🔥 ${state.rapidFire.bestStreak}</div>
+          <div class="rapid-summary-actions">
+            <button class="primary" data-action="rapid-again">⚡ Another session</button>
+            <button class="secondary" data-action="rapid-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="rapid-again"]').addEventListener('click', () => startRapidFireSession());
+    shell.querySelector('[data-action="rapid-done"]').addEventListener('click', () => renderLesson());
+  }
+
   renderCard();
 }
 
@@ -3841,6 +4037,14 @@ async function init() {
   // iter-30 data-contamination concern. See roadmap.md iter-48.
   document.getElementById('recognize-btn').addEventListener('click', () => {
     startRecognizeSession();
+  });
+
+  // iter 54: ⚡ Rapid-Fire L1 stream — cross-lesson interleaved tap surface.
+  // Closes iter-31 roadmap entry #4 (L1 Rapid-Fire Drill, unblocked). Uses
+  // existing L1 corpus across all tracks; integrates with weak-spot tracker
+  // on misses so the high-throughput stream feeds normal SR/weakness rotation.
+  document.getElementById('rapid-fire-btn').addEventListener('click', () => {
+    startRapidFireSession();
   });
 
   // Review-Due button — jump to the most-overdue lesson.

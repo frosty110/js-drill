@@ -30,7 +30,7 @@ The convention:
 
 **Active ideas:**
 - **Reference-Card Flash Mode (cloze-deletion on canonical)** — see [`roadmap.md` iter-31 entry #5](roadmap.md). **SHIPPED iter 35.** Fills the "read+recall-no-input" cell in the modality matrix.
-- **L1 Rapid-Fire Drill (cross-lesson MCQ stream)** — see [`roadmap.md` iter-31 entry #1](roadmap.md). Queued. Cross-lesson interleaving on the highest-throughput mobile surface.
+- **L1 Rapid-Fire Drill (cross-lesson MCQ stream)** — see [`roadmap.md` iter-31 entry #4](roadmap.md). **SHIPPED iter 54.** Cross-lesson interleaving on the highest-throughput mobile surface. ⚡ Rapid sidebar button; 20-question Fisher-Yates-shuffled session across all tracks; 7-sec soft timer; streak + slowest-3 weak-spot diagnostic; miss feeds existing state.weakness.
 
 **Parking-lot ideas** *(not yet promoted to roadmap.md; lighter weight)*:
 - L1 "explain why each distractor is wrong" reveal — currently L1 explanations are tied to the correct answer only.

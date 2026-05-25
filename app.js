@@ -1338,6 +1338,52 @@ async function startWarmupSession() {
   renderStack();
 }
 
+// iter 62: 📅 Streak Map — 60-day calendar density heatmap. Aggregates
+// state.history events across ALL lessons by day, returning a 60-element
+// array (oldest first → newest last) so the renderer can paint a fixed
+// grid. Closes iter-59 roadmap entry #3. Carefully avoids PROFILE.md L75
+// gamification anti-pattern by NOT exposing streak counts or shame
+// chips — just the calendar shape so the user sees the rhythm without
+// the "broke my streak, can't recover" trap.
+function _streakMapBuckets(lookbackDays = 60) {
+  const now = Date.now();
+  // Start of today (midnight) so each cell aligns to a calendar day.
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const dayMs = 86400000;
+  // Build an empty bucket array [oldest, ..., today]
+  const buckets = Array.from({ length: lookbackDays }, (_, i) => {
+    const dayStart = startOfToday.getTime() - (lookbackDays - 1 - i) * dayMs;
+    const d = new Date(dayStart);
+    return {
+      dateMs: dayStart,
+      dateLabel: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      isoDate: d.toISOString().slice(0, 10),
+      total: 0,
+      passes: 0,
+      misses: 0
+    };
+  });
+  const startMs = buckets[0].dateMs;
+  // Walk every lesson's history; bucket events into days.
+  for (const lessonId of Object.keys(state.history || {})) {
+    const events = state.history[lessonId];
+    if (!Array.isArray(events)) continue;
+    for (const e of events) {
+      if (!e || typeof e.at !== 'number' || !e.event) continue;
+      if (e.at < startMs) continue;
+      const dayIdx = Math.floor((e.at - startMs) / dayMs);
+      if (dayIdx < 0 || dayIdx >= lookbackDays) continue;
+      const bucket = buckets[dayIdx];
+      bucket.total++;
+      if (e.event === 'L1-miss') bucket.misses++;
+      else if (e.event === 'L1-pass' || e.event === 'L2-pass' || e.event === 'L3-pass') bucket.passes++;
+      // Other events (e.g. hint-tier-N, critical-lines-used) are counted in
+      // `total` but not classified — they're activity, not pass/miss signal.
+    }
+  }
+  return buckets;
+}
 // iter 47: per-section retention aggregation for the Stats modal. Walks every
 // lesson's state.history events, bins by day across lookbackDays, returns
 // sorted rows (worst retention first → drives "what needs attention" UX).
@@ -4679,7 +4725,7 @@ async function init() {
     }
     if (e.key === 'Escape') {
       // Close any open modal on Escape
-      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal'];
+      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal', 'streak-map-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);
         if (m && m.style.display === 'block') { m.style.display = 'none'; e.preventDefault(); return; }
@@ -4783,6 +4829,65 @@ async function init() {
   document.getElementById('at-risk-close').addEventListener('click', () => atRiskModal.style.display = 'none');
   atRiskModal.addEventListener('click', (e) => {
     if (e.target === atRiskModal) atRiskModal.style.display = 'none';
+  });
+
+  // iter 62: 📅 Streak Map — 60-day calendar density heatmap. Closes iter-59
+  // roadmap entry #3. The modal renders a 9-column grid of 60 day-cells
+  // (oldest top-left → today bottom-right with empty padding cells where
+  // 60 doesn't fill a 9-col row evenly). Cell color depth reflects events
+  // that day; tooltip below the grid shows date + breakdown on hover/tap.
+  // Read-only v1 — no day-tap filter (deferred to a future iter if useful).
+  const streakMapModal = document.getElementById('streak-map-modal');
+  function openStreakMap() {
+    const buckets = _streakMapBuckets(60);
+    const max = buckets.reduce((m, b) => Math.max(m, b.total), 0);
+    const grid = document.getElementById('streak-map-grid');
+    const tooltip = document.getElementById('streak-map-tooltip');
+    const legend = document.getElementById('streak-map-legend');
+    // 5-tier color scale based on relative density (no absolute thresholds —
+    // a user with 50 events/day max gets a different scale than one with 5).
+    const tier = (count) => {
+      if (count === 0) return 0;
+      if (max <= 1) return count > 0 ? 4 : 0;
+      const pct = count / max;
+      if (pct < 0.25) return 1;
+      if (pct < 0.5) return 2;
+      if (pct < 0.75) return 3;
+      return 4;
+    };
+    const tierColors = ['#1e293b', '#064e3b', '#065f46', '#10b981', '#34d399'];
+    const tierTitles = ['none', 'light', 'medium', 'heavy', 'peak'];
+    grid.innerHTML = buckets.map((b, idx) => {
+      const t = tier(b.total);
+      return `<button class="streak-cell" data-streak-idx="${idx}" type="button" title="${escapeHtml(b.dateLabel)} · ${b.total} event${b.total === 1 ? '' : 's'}" aria-label="${escapeHtml(b.dateLabel)}: ${b.total} events" style="aspect-ratio: 1; background: ${tierColors[t]}; border: 1px solid #0f172a; border-radius: 3px; cursor: ${b.total > 0 ? 'pointer' : 'default'}; padding: 0;"></button>`;
+    }).join('');
+    // Legend swatches.
+    legend.innerHTML = `<span>Less</span>` + tierColors.map((c, i) => `<span style="display:inline-block; width:12px; height:12px; background:${c}; border:1px solid #0f172a; border-radius:3px;" title="${tierTitles[i]}"></span>`).join('') + `<span>More</span>`;
+    // Default tooltip: total events this window.
+    const totalAll = buckets.reduce((s, b) => s + b.total, 0);
+    const activeDays = buckets.filter(b => b.total > 0).length;
+    tooltip.innerHTML = totalAll > 0
+      ? `<strong style="color:#cbd5e1;">${totalAll}</strong> events across <strong style="color:#cbd5e1;">${activeDays}</strong> of 60 days. Hover a cell for that day's detail.`
+      : `<span style="color:#475569;">No history yet — drill anything to start the map.</span>`;
+    // Per-cell hover/tap: replace the tooltip with that day's detail.
+    grid.querySelectorAll('[data-streak-idx]').forEach(cell => {
+      const detail = (e) => {
+        const b = buckets[+cell.dataset.streakIdx];
+        if (b.total === 0) {
+          tooltip.innerHTML = `<span style="color:#475569;">${escapeHtml(b.dateLabel)} — no activity</span>`;
+        } else {
+          tooltip.innerHTML = `<strong style="color:#cbd5e1;">${escapeHtml(b.dateLabel)}</strong> · ${b.total} event${b.total === 1 ? '' : 's'} · <span style="color:#34d399;">${b.passes} pass</span>${b.misses > 0 ? ` · <span style="color:#f87171;">${b.misses} miss</span>` : ''}`;
+        }
+      };
+      cell.addEventListener('mouseenter', detail);
+      cell.addEventListener('click', detail);
+    });
+    streakMapModal.style.display = 'block';
+  }
+  document.getElementById('streak-map-btn').addEventListener('click', openStreakMap);
+  document.getElementById('streak-map-close').addEventListener('click', () => streakMapModal.style.display = 'none');
+  streakMapModal.addEventListener('click', (e) => {
+    if (e.target === streakMapModal) streakMapModal.style.display = 'none';
   });
 
   document.getElementById('reveal-replay-btn').addEventListener('click', () => {

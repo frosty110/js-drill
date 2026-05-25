@@ -16,6 +16,22 @@ specifically toward lessons their memory is currently weakest on.
 
 ## How the app encodes it today
 
+- **📅 Streak Map (iter 62).** 60-day calendar density heatmap built from
+  `state.history` events bucketed by day. Sidebar button opens a 9-column
+  grid of 60 day-cells (oldest top-left → today bottom-right); cell color
+  depth scales to the day's event count relative to the user's peak day in
+  the window (5-tier gradient, no absolute thresholds). Hover or tap shows
+  date + pass/miss breakdown. Carefully avoids PROFILE.md L75 gamification
+  anti-pattern: NO streak counts, NO shame chips, NO "longest streak"
+  vanity metric — just the calendar shape. The intuition: spaced repetition
+  works only when the user actually returns to drill on the day reviews
+  are due; visualizing the pattern of return surfaces *whether the SR
+  schedule is being honored* without the "broke my streak, can't recover"
+  trap that gamified streak counters reproduce. The ladder tells WHEN
+  reviews come due; At Risk tells WHICH due lessons are also wobbly;
+  Streak Map tells WHETHER the user is showing up on the days SR depends
+  on. Closes iter-59 roadmap entry #3 (constraint-aware B#1 — calendar
+  density dimension).
 - **📡 At Risk decay radar (iter 60).** Joins three previously-independent
   signals — `state.weakness` (lesson-grain L1-miss count),
   `state.reviews[id].dueAt` (SR schedule), and `state.revealed[id]`

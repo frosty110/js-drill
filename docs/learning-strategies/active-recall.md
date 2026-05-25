@@ -27,6 +27,20 @@ app's existence.
   to lie about it.
 - **No "show solution then quiz"** pattern — Reference is a separate tab the
   user must explicitly leave to drill.
+- **Pattern Recognition Speed Drill (iter 49)** turns RECOGNITION — the
+  concrete→abstract direction — into its own drill surface. Every other
+  drill tier (L1/L2/L3/Mock/Walkthrough/Flash) is implementation- or
+  recall-direction; they start with the pattern already named in the
+  lesson title. Recognize inverts that: shows a problem prompt (no
+  title, no section badge) and asks the user to tap WHICH section
+  family it belongs to. 10 cards per session, drawn randomly from the
+  79 patterns-track `L3.prompt` strings; distractors come from the
+  17-section patterns pool (cross-cutting buckets, not per-lesson
+  function-name leaks). The drill is metacognitive recall — it asks
+  the user to retrieve their mental TAXONOMY of patterns rather than
+  the implementation of any single one. Closes the iter-26 BLOCKED
+  Pattern Recognition entry via the iter-48 section-name-distractor
+  reframe. Lifetime stats live in `state.recognize = {attempts, correct}`.
 - **L3 "Critical lines" pre-fill (iter 41)** turns the L3 blank-editor
   into a targeted retrieval drill. The 🎯 button (visible only on
   lessons that have authored `L3.criticalLines`) pre-fills the canonical

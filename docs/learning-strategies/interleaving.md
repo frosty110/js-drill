@@ -46,6 +46,17 @@ surfaced as a competing access pattern.
   varied surface forms.
 - **Spaced repetition** by definition interleaves — when reviews come due
   they don't arrive grouped by section.
+- **🧩 Mechanics × Track matrix (iter 63).** The Mechanics modal gained a
+  List ↔ Matrix view toggle. Matrix mode renders the existing
+  `lesson.mechanics[]` tag set as rows × the three tracks (Syntax / Pattern
+  / Applied) as columns, with mastered/total per cell. Transfer-gap rows
+  (mechanic mastered in one track but unmastered in another) float to the
+  top with a ⚠ marker. The existing List view answers "which mechanics
+  have I drilled at all?" — the Matrix answers "where does my fluency
+  BREAK as the surface form changes from syntax-style to pattern-style
+  problems?" — the load-bearing transfer question for interview-format
+  readiness. Closes iter-59 vision iter's held candidate B#2 (track × tag
+  transfer axis).
 - **⚡ Rapid-Fire L1 stream** (iter 54) is the explicit interleaving surface
   on the highest-throughput mobile modality. 20 L1 questions sampled across
   every full lesson in every track + every section, shuffled by

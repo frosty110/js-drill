@@ -103,7 +103,8 @@ The convention:
 **Review trigger:** If `Spaced repetition`, `L3 surface / CTA injection`, `Mechanics modal`, or `Validator (density warning)` rows have not been bumped in 12+ iters, this category is stale.
 
 **Active ideas:**
-- **Error Post-Mortem with Miss Classification** — see [`roadmap.md` iter-26 entry #2](roadmap.md). BLOCKED (Amendment B).
+- **Error Post-Mortem with Miss Classification** — see [`roadmap.md` iter-26 entry #2](roadmap.md). BLOCKED (Amendment B). **Note:** SHIPPED iter 58 as 🏷 Mistake Tagging Postmortem (see § Metacognition).
+- **🧩 Mechanics × Track matrix view** — direct-promoted from iter-59 vision iter's held candidate B#2 (see iter-59 meta-finding in `roadmap.md`). **SHIPPED iter 63.** Mechanics modal gained List ↔ Matrix view toggle; matrix renders mechanic × track grid showing mastered/total per cell with transfer-gap rows highlighted. Tap cell → detail view filtered to mechanic; back returns to matrix.
 - **BS-11 "I passed but nothing saved" UX gap** — see SELF-IMPROVE.md BS-11. Strict pass conditions are correct but invisible; candidates: persistent per-session score chip, post-attempt summary, loosen-strict toggle.
 
 **Parking-lot ideas:**

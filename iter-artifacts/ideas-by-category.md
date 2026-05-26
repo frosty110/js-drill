@@ -79,7 +79,6 @@ The convention:
 - **Daily 1-pattern-deep ritual** — opt-in: for today's chosen pattern, complete ALL surfaces (Reference → L1 → L2 → L3 → Conversation → Walkthrough) before any other lesson unlocks. Depth-first day vs. interleaved breadth.
 - **60-second daily warm-up sprint** — first-load-of-the-day pure L1 sprint (8-12 questions across mastered lessons in 60s, tap-only). Gym-friendly, phone-friendly. Distinct from Cold open daily (which lands on L3); this is the *low-friction* anti-cold-open.
 - **1-minute panic recovery drill (mock variant)** — within mock interview, when 1 min remains and L3 isn't passing, app forces a 2-tap decision: (a) "submit partial + leave a comment explaining what's missing" or (b) "try one more thing — 60s on the clock". Trains decision-under-pressure.
-- **"Slot machine" lesson roulette** — single-tap "shuffle" on the sidebar header pulls a random not-yet-mastered lesson straight into view. Decision-fatigue antidote for the user who opens the app and freezes on "what should I drill?". ~5 LOC ship.
 - **Time-budget allocator on mock** — before mock starts, user pre-allocates the 45-min budget across phases (e.g., 5 clarify / 10 approach / 25 code / 5 test). App tracks adherence and surfaces "you overspent on approach by 8 min" post-mock. Trains time-discipline.
 - **Auto-difficulty selector ("too easy / right / too hard")** — 3-tap rating after each lesson pass; next surfaced lesson is one tier in that direction. Adaptive difficulty without a rating system; closes the "what next?" decision-fatigue gap.
 - **Pre-interview week ramp planner** — user enters a target date ("interview on 2026-06-04"); app generates a calendar-aware ramp plan from today to target: easy lessons first 3 days, mock interviews in last 3 days, weak-spot focus mid-ramp, complete rest day before. Date-aware variant of Today's Plan; ships independently of any cloud sync.
@@ -90,7 +89,7 @@ The convention:
 **Cross-cutting concerns:**
 - Weak-spot tracker originally operated only at lesson grain (not concept grain) — see [`roadmap.md` iter-26 entry #2 (Error Post-Mortem)](roadmap.md). **Partially closed iter 58** by 🏷 Mistake Tagging Postmortem (concept-grain user-tagged misses).
 
-**Shipped from this category:** Per-track Starter Paths (iter 39) · 🔎 Recognize (iter 49) · L1 Rapid-Fire (iter 54) · 🌅 3-Card Warmup (iter 57) → see [`shipped-by-category.md` § 2](shipped-by-category.md#2-paths--sessions).
+**Shipped from this category:** Per-track Starter Paths (iter 39) · 🔎 Recognize (iter 49) · L1 Rapid-Fire (iter 54) · 🌅 3-Card Warmup (iter 57) · 🍀 Lucky roulette (iter 108) → see [`shipped-by-category.md` § 2](shipped-by-category.md#2-paths--sessions).
 
 ---
 
@@ -348,13 +347,14 @@ The trigger check is bounded: 9 categories × ~3 rows each = ~27 freshness looku
 
 **Shortlist (highest leverage first):**
 
-1. **"Slot machine" lesson roulette** *(Cat 2)* — ~5 LOC ship; single-tap sidebar shuffle pulls a random not-yet-mastered lesson into view. Highest leverage-per-LOC in the entire catalog. Decision-fatigue antidote — directly addresses the "user opens the app and freezes" failure mode.
-2. **Pattern-family heatmap** *(Cat 7)* — per-section mastery grid; tap red → drill weakest. Visual one-tap answer to "where do I need to study tonight?". Single-iter; uses existing `progress` field; mobile-native.
-3. **L3 "calculator-style" keyboard chips** *(Cat 5)* — one-tap insertion chips for the 20 most-typed JS tokens on mobile L3. Directly attacks the PROFILE 80%-phone mobile-L3 cost barrier without making L3 "the main mobile surface."
-4. **Code-from-bullet-points** *(Cat 1)* — Reference tab toggle hides canonical, shows `reference.notes` as bullets; user types canonical. Fills the documented L2-to-L3 cell gap ("see concept, recall code"). Cat 1 active list is empty; this restores it.
-5. **Whiteboard mode toggle** *(Cat 9 §9A)* — ~30 LOC; strip syntax highlighting + autocomplete + run-button on L3. Trains the realistic-interview surface where tooling is absent. First §9A ship — Cat 9's §9B-only ship history is unbalanced.
-6. **Algorithm name ↔ description matcher** *(Cat 8)* — bidirectional drill: name → 1-sentence description; reverse direction also drilled. The retrieval-direction the app never trains. Cat 8 has zero ships; this would establish the modality.
-7. **PWA install + offline drilling** *(Cat 5)* — `manifest.json` + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter. Bigger scope than #1-6 but the leverage is enormous given PROFILE 80%-phone.
+1. **Pattern-family heatmap** *(Cat 7)* — per-section mastery grid; tap red → drill weakest. Visual one-tap answer to "where do I need to study tonight?". Single-iter; uses existing `progress` field; mobile-native.
+2. **L3 "calculator-style" keyboard chips** *(Cat 5)* — one-tap insertion chips for the 20 most-typed JS tokens on mobile L3. Directly attacks the PROFILE 80%-phone mobile-L3 cost barrier without making L3 "the main mobile surface."
+3. **Code-from-bullet-points** *(Cat 1)* — Reference tab toggle hides canonical, shows `reference.notes` as bullets; user types canonical. Fills the documented L2-to-L3 cell gap ("see concept, recall code"). Cat 1 active list is empty; this restores it.
+4. **Whiteboard mode toggle** *(Cat 9 §9A)* — ~30 LOC; strip syntax highlighting + autocomplete + run-button on L3. Trains the realistic-interview surface where tooling is absent. First §9A ship — Cat 9's §9B-only ship history is unbalanced.
+5. **Algorithm name ↔ description matcher** *(Cat 8)* — bidirectional drill: name → 1-sentence description; reverse direction also drilled. The retrieval-direction the app never trains. Cat 8 has zero ships; this would establish the modality.
+6. **PWA install + offline drilling** *(Cat 5)* — `manifest.json` + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter. Bigger scope than #1-5 but the leverage is enormous given PROFILE 80%-phone.
+
+*(Shortlist #1 was 🍀 Lucky roulette → SHIPPED iter 108 — see [`shipped-by-category.md` § 2](shipped-by-category.md#2-paths--sessions).)*
 
 **Deferred to a second pass (strong but heavier scope OR awaits earlier ship):**
 - **Audio mini-explainers per high-leverage lesson** *(Cat 8)* — TTS-only, no input loop; ships independently of BLOCKED Audio Mode. 2-iter (top-20 lessons curation + ship).

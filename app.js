@@ -1028,6 +1028,22 @@ function _showBridgeToast(candidate) {
     setTimeout(() => toast.remove(), 250);
   }, 2200);
 }
+// iter 108: 🍀 Lucky — arrival toast prefacing the random pick so the user
+// understands why they landed on this lesson. 1.8-sec green accent reusing the
+// .reveal-cleared-toast slide-in mechanics.
+function _showLuckyToast(lessonTitle) {
+  const existing = document.querySelector('.reveal-cleared-toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'reveal-cleared-toast lucky-toast';
+  toast.innerHTML = `🍀 Lucky pick: <strong>${escapeHtml(lessonTitle)}</strong>`;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('reveal-cleared-toast-show'));
+  setTimeout(() => {
+    toast.classList.remove('reveal-cleared-toast-show');
+    setTimeout(() => toast.remove(), 250);
+  }, 1800);
+}
 // Track whether updateReviewBadge has fired the mechanic-index lazy load
 // already. The badge stays hidden on first paint (MECHANIC_INDEX empty);
 // once the registry + content load finish, the second updateReviewBadge
@@ -4914,6 +4930,18 @@ function pickShuffleReview() {
   if (!pool.length) return null;
   return pool[Math.floor(Math.random() * pool.length)].id;
 }
+// iter 108: 🍀 Lucky — random not-yet-fully-mastered authored lesson.
+// Decision-fatigue antidote for the open-app-and-freeze moment; pool is the
+// complement of pickShuffleReview's (unmastered, not mastered). Falls back to
+// any authored lesson when 0 unmastered exist (mastered everything — rare).
+function pickLuckyUnmastered() {
+  const unmastered = CURRICULUM.filter(l =>
+    l.status === 'full' && lessonOverallStatus(l.id) !== 'mastered'
+  );
+  const pool = unmastered.length ? unmastered : CURRICULUM.filter(l => l.status === 'full');
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)].id;
+}
 function levelStatus(lessonId, level) {
   return state.progress?.[lessonId]?.[level] || 'not_started';
 }
@@ -7855,6 +7883,23 @@ async function init() {
   document.getElementById('shuffle-btn').addEventListener('click', () => {
     const id = pickShuffleReview();
     if (id) selectLesson(id);
+  });
+
+  // iter 108: 🍀 Lucky — random not-yet-mastered lesson dropped at the first
+  // incomplete level so the user is drilling, not reading. Land on L1 by
+  // default; skip to L2/L3 if those earlier levels are already passed.
+  document.getElementById('lucky-btn').addEventListener('click', () => {
+    const id = pickLuckyUnmastered();
+    if (!id) return;
+    const lesson = findLesson(id);
+    let tab = 'L1';
+    if (levelStatus(id, 'L1') === 'passed') tab = 'L2';
+    if (levelStatus(id, 'L2') === 'passed') tab = 'L3';
+    selectLesson(id);
+    // selectLesson set currentTab='auto' (Conversation/Reference) — override
+    // to land on the drill tab; renderLesson handles cache-miss re-render.
+    selectTab(tab);
+    if (lesson) _showLuckyToast(lesson.title);
   });
 
   // Mock interview button

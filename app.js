@@ -150,6 +150,7 @@ const state = {
   reverseWalk: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over walkthrough.examples (additive, no `__v` bump)
   notesLocate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 102: 🗂 Notes→Lesson Reverse Lookup — cross-corpus localization (additive, no `__v` bump)
   match: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 109: 🔖 Match — bidirectional title ↔ description matcher (additive, no `__v` bump)
+  offlinePack: { lessonCount: 0, totalCount: 0, lastCheckedAt: 0 }, // iter 113: 📦 Offline Drill Pack — last-known SW cache stats for sidebar chip (additive, no `__v` bump)
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
@@ -822,6 +823,17 @@ function loadProgress() {
           lastRunAt: +parsed.match.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 113: 📦 Offline Drill Pack — last-known cache stats for the
+    // sidebar chip. Polled from the service worker on init/focus; stored
+    // so the chip can paint immediately on cold-start without waiting for
+    // the SW message round-trip.
+    state.offlinePack = parsed.offlinePack && typeof parsed.offlinePack === 'object'
+      ? {
+          lessonCount: +parsed.offlinePack.lessonCount || 0,
+          totalCount: +parsed.offlinePack.totalCount || 0,
+          lastCheckedAt: +parsed.offlinePack.lastCheckedAt || 0
+        }
+      : { lessonCount: 0, totalCount: 0, lastCheckedAt: 0 };
     // iter 104: 🗺 Command Palette use-counter. Legacy users get empty map.
     state.commandUsage = parsed.commandUsage && typeof parsed.commandUsage === 'object' && !Array.isArray(parsed.commandUsage)
       ? parsed.commandUsage : {};
@@ -900,6 +912,7 @@ function saveProgress() {
     reverseWalk: state.reverseWalk,
     notesLocate: state.notesLocate,
     match: state.match,
+    offlinePack: state.offlinePack,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -9379,5 +9392,55 @@ async function init() {
       lastDueCount = dueNow;
     }
   }, 60 * 1000);
+  // iter 113: 📦 Offline Drill Pack — paint chip from last-known stats
+  // immediately so cold-start has no blank flash, then ask the SW for fresh
+  // stats (round-trip is sub-second once SW is active).
+  updateOfflinePackChip();
+  pollOfflinePackStats();
+  window.addEventListener('focus', pollOfflinePackStats);
+  if (navigator.serviceWorker) {
+    // The first install on a fresh visit takes a few seconds while
+    // ~143 lesson JSONs precache. Repoll a couple times to catch the
+    // populated state without busy-waiting.
+    navigator.serviceWorker.addEventListener('controllerchange', pollOfflinePackStats);
+    setTimeout(pollOfflinePackStats, 3000);
+    setTimeout(pollOfflinePackStats, 8000);
+  }
+}
+function updateOfflinePackChip() {
+  // Paint the sidebar chip from state.offlinePack (last-known SW cache stats).
+  // Hidden when 0 lessons cached (e.g., SW unsupported, first-load before
+  // install completes, opted out) so first-time users don't see a confusing
+  // "0 lessons" affordance.
+  const btn = document.getElementById('offline-pack-btn');
+  const cnt = document.getElementById('offline-pack-count');
+  if (!btn || !cnt) return;
+  const n = state.offlinePack?.lessonCount || 0;
+  btn.classList.toggle('hidden', n === 0);
+  cnt.textContent = String(n);
+}
+function pollOfflinePackStats() {
+  // Send a postMessage to the active service worker; on reply, update
+  // state.offlinePack + the chip. No-op if the SW isn't yet controlling
+  // the page (first-visit-pre-install OR unsupported browser).
+  if (!navigator.serviceWorker || !navigator.serviceWorker.controller) return;
+  const channel = new MessageChannel();
+  channel.port1.onmessage = (event) => {
+    const d = event.data || {};
+    if (d.type !== 'cache-stats-result') return;
+    const next = {
+      lessonCount: +d.lessonCount || 0,
+      totalCount: +d.totalCount || 0,
+      lastCheckedAt: Date.now()
+    };
+    const changed = next.lessonCount !== state.offlinePack.lessonCount
+      || next.totalCount !== state.offlinePack.totalCount;
+    state.offlinePack = next;
+    if (changed) saveProgress();
+    updateOfflinePackChip();
+  };
+  try {
+    navigator.serviceWorker.controller.postMessage({ type: 'cache-stats' }, [channel.port2]);
+  } catch (_) { /* SW gone between check and post — ignore */ }
 }
 init().catch(err => console.error(err));

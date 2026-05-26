@@ -10977,11 +10977,26 @@ function initTopbarDropdowns() {
     // the selected category's content; aria-expanded on the mobile-menu
     // button stays true. Checked first because `.topbar-item-mobile-cat`
     // doesn't have data-btn-id (the synth-click branch below would no-op).
+    // iter 133: prepend a `‹ Categories` back button so mobile users
+    // can return to the category picker without re-tapping the 📂 Browse
+    // button (1-tap instead of 2-tap).
     const catRow = e.target.closest('.topbar-item-mobile-cat');
     if (catRow) {
       e.stopPropagation();
       const key = catRow.dataset.mobileCat;
-      if (key) body.innerHTML = renderTopbarMenuContents(key);
+      if (key) {
+        body.innerHTML = `
+          <button class="topbar-cat-back" data-cat-back type="button">‹ Categories</button>
+          ${renderTopbarMenuContents(key)}
+        `;
+      }
+      return;
+    }
+    // iter 133: back-to-categories button reopens the mobile-browse picker.
+    const backBtn = e.target.closest('[data-cat-back]');
+    if (backBtn) {
+      e.stopPropagation();
+      body.innerHTML = renderTopbarMenuContents('mobile-browse');
       return;
     }
     const item = e.target.closest('.topbar-item');

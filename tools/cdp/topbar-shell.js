@@ -391,6 +391,33 @@ const OUT = process.argv[3] || '/tmp/jsdrill-topbar-shell';
   s.assert(drilled.itemIds.includes('gauntlet-btn'), 'Phase 5: Train drill-in includes gauntlet-btn (verified by iter-125 ship)');
   s.assert(drilled.ariaStillExpanded === 'true', 'Phase 5: Browse button stays aria-expanded="true" during drill-in (single open transaction)');
 
+  // iter 133: back-to-categories button is present in drilled-in view +
+  // tapping it returns to the 4-category picker without closing the dropdown.
+  const backInDrillIn = await s.evalAwait(`(() => ({
+    backBtnPresent: !!document.querySelector('[data-cat-back]'),
+    backBtnLabel: document.querySelector('[data-cat-back]')?.textContent.trim() || ''
+  }))()`);
+  s.assert(backInDrillIn.backBtnPresent, 'iter 133: "‹ Categories" back button rendered in drilled-in category view');
+  s.assert(/Categories/.test(backInDrillIn.backBtnLabel), `iter 133: back button label contains "Categories" (got "${backInDrillIn.backBtnLabel}")`);
+  // Tap back → returns to 4-category picker (no dropdown close).
+  await s.evalAwait(`document.querySelector('[data-cat-back]').click()`);
+  await s.sleep(250);
+  const afterBack = await s.evalAwait(`(() => {
+    const rows = Array.from(document.querySelectorAll('.topbar-item-mobile-cat'));
+    return {
+      stillOpen: !document.getElementById('topbar-dropdown').classList.contains('hidden'),
+      catRowCount: rows.length,
+      backBtnGone: !document.querySelector('[data-cat-back]')
+    };
+  })()`);
+  s.assert(afterBack.stillOpen, 'iter 133: dropdown stays open after back-to-categories tap');
+  s.assert(afterBack.catRowCount === 4, `iter 133: 4 category rows re-rendered after back tap (got ${afterBack.catRowCount})`);
+  s.assert(afterBack.backBtnGone, 'iter 133: back button is GONE in category-picker view (no back from picker)');
+  await s.snap('10-after-back-to-categories');
+  // Drill back into Train to set up the next phase's "tap item" assertion.
+  await s.evalAwait(`document.querySelector('.topbar-item-mobile-cat[data-mobile-cat="train"]').click()`);
+  await s.sleep(250);
+
   // Tap one item → synth-clicks the sidebar button + closes dropdown
   // (delegated handler covers both .topbar-item-mobile-cat AND .topbar-item).
   await s.evalAwait(`document.querySelector('.topbar-item[data-btn-id="gauntlet-btn"]').click()`);

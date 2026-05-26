@@ -86,6 +86,17 @@ recall friction with much less typing.
   canonical reveal" (which demotes SR). Hint tiers do NOT demote;
   only the explicit Reveal canonical does. See
   `iter-artifacts/ideas-by-category.md § Drilling Surfaces`.
+- **🎯 Hint-cost ribbon + Self-rescue rate (iter 101)** — completes the
+  iter-37 metric by making hint cost VISIBLE per attempt. The existing
+  trend-pill counted "hinted vs not"; the ribbon adds per-attempt density
+  (0 hints = green ✓ / 1-2 = amber chip / 3+ = red chip), and the
+  Stats-modal "Self-rescue rate" tile aggregates zero-hint L3 passes
+  across all lessons. Closes the deferred quality-of-pass measurement:
+  binary pass-fail conceals whether the user crawled through with
+  scaffolding or self-rescued cleanly. With cost visible per-attempt,
+  the user can deliberately re-drill lessons they passed-but-leaned-on
+  — pure desirable-difficulty signal (the moments the ladder caught
+  the user are the moments retention is weakest).
 - **SR advancement is graded by difficulty (both sides).** L3 pass on a due
   lesson advances the interval bucket (1d → 3d → 7d → 14d → 30d). L2 pass
   HOLDS the bucket but resets `dueAt`. Reveal on a due lesson DEMOTES the

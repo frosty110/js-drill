@@ -225,7 +225,7 @@ The convention:
 **Cross-cutting concerns:**
 - Sparkline (iter 33) established this category. Per-lesson temporal data is now load-bearing for Streak Map, Decay Radar, Mock Replay Reel.
 
-**Shipped from this category:** Section-level progress bar (iter 40) · Reveal Replay (iter 56) · 🏷 Mistake Tagging (iter 58) · 📡 Decay Radar (iter 60) · ⌚ Mock Replay Reel (iter 61) · 📅 Streak Map (iter 62) · 💀 Resurrect Queue (iter 65) · 🧭 Track Balance Compass (iter 66) → see [`shipped-by-category.md` § 7](shipped-by-category.md#7-metacognition--visibility).
+**Shipped from this category:** Section-level progress bar (iter 40) · Reveal Replay (iter 56) · 🏷 Mistake Tagging (iter 58) · 📡 Decay Radar (iter 60) · ⌚ Mock Replay Reel (iter 61) · 📅 Streak Map (iter 62) · 💀 Resurrect Queue (iter 65) · 🧭 Track Balance Compass (iter 66) · 🎯 Hint-Cost Ladder Stats (iter 101) → see [`shipped-by-category.md` § 7](shipped-by-category.md#7-metacognition--visibility).
 
 ---
 

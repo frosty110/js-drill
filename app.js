@@ -229,6 +229,64 @@ function _countHintAttempts(lessonId, lookbackAttempts = 5) {
   return { hinted, total: recent.length };
 }
 
+// iter 101: 📐 Per-attempt hint-cost ribbon helper. Walks `state.history` for
+// one lesson and returns per-attempt buckets (most recent last). Each item:
+// `{ hintCount, passed }`. `hintCount` is the unique-tier count of `hint-tier-*`
+// + `critical-lines-used` events within an attempt window (bounded by L3-pass).
+// Powers the L3 trend-chip ribbon (0 hints = green ✓ / 1-2 = amber / 3+ = red).
+// Trailing in-progress attempt (no terminating L3-pass) is dropped from the
+// ribbon — only completed passes are visualized.
+function _perAttemptHintCounts(lessonId, lookbackAttempts = 5) {
+  const events = state.history?.[lessonId] || [];
+  if (events.length === 0) return [];
+  const attempts = [];
+  let curTiers = new Set();
+  for (const e of events) {
+    if (!e.event) continue;
+    if (e.event.startsWith('hint-tier-') || e.event === 'critical-lines-used') {
+      curTiers.add(e.event);
+    } else if (e.event === 'L3-pass') {
+      attempts.push({ hintCount: curTiers.size, passed: true });
+      curTiers = new Set();
+    }
+  }
+  return attempts.slice(-lookbackAttempts);
+}
+
+// iter 101: 🎯 Self-rescue rate — global aggregator across ALL lessons in
+// `state.history`. Walks every lesson, groups events into L3-pass-bounded
+// attempts, counts attempts that completed with ZERO hints (i.e., the user
+// self-rescued through the L3 drill without leaning on a scaffold). Returns
+// `{ zeroHint, total, rate }` where rate is 0-100 integer. Used by the
+// Stats-modal Self-rescue tile. Quality-of-pass measurement — closes
+// the iter-37 deferred metric ("hints-used-per-attempt"). Pre-iter-32
+// passes have no `hint-tier-*` events and are silently excluded — the
+// tile renders with "since you started tracking" framing.
+function _selfRescueRateGlobal() {
+  let zeroHint = 0;
+  let total = 0;
+  const hist = state.history || {};
+  for (const lessonId of Object.keys(hist)) {
+    const events = hist[lessonId] || [];
+    let curTiers = new Set();
+    for (const e of events) {
+      if (!e.event) continue;
+      if (e.event.startsWith('hint-tier-') || e.event === 'critical-lines-used') {
+        curTiers.add(e.event);
+      } else if (e.event === 'L3-pass') {
+        total++;
+        if (curTiers.size === 0) zeroHint++;
+        curTiers = new Set();
+      }
+    }
+  }
+  return {
+    zeroHint,
+    total,
+    rate: total > 0 ? Math.round((zeroHint / total) * 100) : 0
+  };
+}
+
 // Per-track pill metadata — keep this in one place so the lesson header,
 // Today's plan modal, and any future track-aware surface stay in sync.
 // Without it, the header read "Pattern" for applied-track lessons (the
@@ -7007,7 +7065,21 @@ function renderL3(body, lesson, content) {
     // Color signal: 0/N = green (independent), N/N = amber (still leaning),
     // mid = neutral. Trending down across SR intervals is the retention win.
     const tone = hinted === 0 ? 'good' : hinted === total ? 'warn' : 'mid';
-    hintTrendEl.innerHTML = `<span class="hint-trend-pill hint-trend-${tone}">💡 Hints / scaffold used on <strong>${hinted}</strong> of last <strong>${total}</strong> attempt${total === 1 ? '' : 's'}</span>`;
+    // iter 101: per-attempt cost ribbon below the trend pill. Each attempt
+    // is a colored chip (0 hints = green ✓ / 1-2 = amber / 3+ = red).
+    // Quality-of-pass made visible per-attempt — the existing pill counts
+    // hinted-vs-not, ribbon adds the hint-DENSITY axis.
+    const perAttempt = _perAttemptHintCounts(lesson.id, 5);
+    const ribbon = perAttempt.length > 0
+      ? `<span class="hint-cost-ribbon" aria-label="Hint cost per recent attempt">${
+          perAttempt.map(a => {
+            const cls = a.hintCount === 0 ? 'hint-cost-chip-good' : a.hintCount <= 2 ? 'hint-cost-chip-mid' : 'hint-cost-chip-warn';
+            const glyph = a.hintCount === 0 ? '✓' : a.hintCount <= 2 ? String(a.hintCount) : `${a.hintCount}+`;
+            return `<span class="hint-cost-chip ${cls}" title="Attempt used ${a.hintCount} hint tier${a.hintCount === 1 ? '' : 's'}">${glyph}</span>`;
+          }).join('')
+        }</span>`
+      : '';
+    hintTrendEl.innerHTML = `<span class="hint-trend-pill hint-trend-${tone}">💡 Hints / scaffold used on <strong>${hinted}</strong> of last <strong>${total}</strong> attempt${total === 1 ? '' : 's'}</span>${ribbon}`;
   }
   // Show baseline on mount (so a lesson with prior hint history surfaces
   // the badge even before the user re-clicks Hint).
@@ -8224,6 +8296,31 @@ async function init() {
           </div>
         </div>
       ` : ''}
+      ${(() => {
+        // iter 101: 🎯 Self-rescue rate tile. Aggregates L3-pass events across
+        // all lessons, counts ones that completed with zero hints used. First
+        // surface that measures QUALITY-OF-PASS (not pass/fail). Closes the
+        // iter-37 deferred metric. Hidden when no L3-pass history yet so the
+        // tile stays quiet for users new to L3.
+        const sr = _selfRescueRateGlobal();
+        if (sr.total === 0) return '';
+        const tone = sr.rate >= 70 ? '#86efac' : sr.rate >= 40 ? '#fcd34d' : '#fdba74';
+        const borderTone = sr.rate >= 70 ? 'rgba(134,239,172,0.3)' : sr.rate >= 40 ? 'rgba(252,211,77,0.3)' : 'rgba(253,186,116,0.3)';
+        const bgTone = sr.rate >= 70 ? 'rgba(134,239,172,0.08)' : sr.rate >= 40 ? 'rgba(252,211,77,0.08)' : 'rgba(253,186,116,0.08)';
+        return `
+        <div style="margin-top: 8px;">
+          <div style="background: ${bgTone}; padding: 10px; border-radius: 6px; border: 1px solid ${borderTone};">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="color: #94a3b8; font-size: 12px;">🎯 Self-rescue rate <span style="color: #64748b; font-weight: 400;">(zero-hint L3 passes)</span></div>
+                <div style="color: ${tone}; font-size: 16px; font-weight: 600; margin-top: 2px;">${sr.zeroHint} / ${sr.total} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${sr.rate}%)</span></div>
+              </div>
+            </div>
+            <div style="color: #64748b; font-size: 10px; margin-top: 4px;">since you started L3 drilling — hint events captured per attempt</div>
+          </div>
+        </div>
+        `;
+      })()}
       ${(() => {
         // iter 58: Mistake Tagging top-5 tile. Only renders when the user
         // has tagged ≥1 miss — keeps Stats quiet for users who never opt in.

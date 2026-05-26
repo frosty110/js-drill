@@ -702,6 +702,80 @@ function resurrectIds() {
     .sort((a, b) => (now - state.reviews[b.id].dueAt) - (now - state.reviews[a.id].dueAt))
     .map(l => l.id);
 }
+// iter 94: 🧠 Mechanic-Bridge — cross-track transfer routing. Closes iter-90
+// roadmap #3 (last entry from the iter-90 vision queue). The existing 🧩
+// Mechanics × Track Matrix (iter 63) *shows* transfer gaps with a ⚠ marker
+// but never *closes* them — the user sees the gap and does nothing. Bridge
+// converts the diagnostic into a 1-tap routing action: for each mechanic
+// mastered in one track but unmastered in another, surface a candidate
+// {sourceLesson, targetLesson} pair so the user can ride the transfer.
+// Pure derivation from MECHANIC_INDEX × state.progress × manifest.track.
+// Empty when MECHANIC_INDEX hasn't been built yet (kick off async load in
+// updateReviewBadge; subsequent saves see it populated).
+function _bridgeCandidates() {
+  if (!MECHANIC_INDEX || MECHANIC_INDEX.size === 0) return [];
+  const candidates = [];
+  for (const [mechId, lessonSet] of MECHANIC_INDEX) {
+    if (lessonSet.size < 2) continue;
+    const mech = MECHANICS.find(m => m.id === mechId);
+    if (!mech) continue;
+    // Bucket by track — first mastered per track, first unmastered per track.
+    const mastered = { syntax: null, patterns: null, applied: null };
+    const unmastered = { syntax: null, patterns: null, applied: null };
+    for (const lid of lessonSet) {
+      const lesson = findLesson(lid);
+      if (!lesson || lesson.status !== 'full') continue;
+      const t = lesson.track;
+      if (!(t in mastered)) continue;
+      const s = lessonOverallStatus(lid);
+      if (s === 'mastered' && !mastered[t]) mastered[t] = lesson;
+      else if ((s === 'not_started' || s === 'in_progress') && !unmastered[t]) unmastered[t] = lesson;
+    }
+    // Find a cross-track pair. One candidate per mechanic.
+    let emitted = false;
+    for (const tA of Object.keys(mastered)) {
+      if (!mastered[tA] || emitted) continue;
+      for (const tB of Object.keys(unmastered)) {
+        if (tA === tB || !unmastered[tB]) continue;
+        candidates.push({
+          mechId,
+          mechLabel: mech.label,
+          sourceLessonId: mastered[tA].id,
+          sourceLessonTitle: mastered[tA].title,
+          sourceTrack: tA,
+          targetLessonId: unmastered[tB].id,
+          targetLessonTitle: unmastered[tB].title,
+          targetTrack: tB
+        });
+        emitted = true;
+        break;
+      }
+    }
+  }
+  return candidates;
+}
+// Toast shown on arrival at the bridged-to lesson. 2.2-sec fuchsia accent —
+// reuses .reveal-cleared-toast styling family (iter-56 precedent) with a
+// .bridge-toast variant. No actions; pure preface.
+function _showBridgeToast(candidate) {
+  const existing = document.querySelector('.reveal-cleared-toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'reveal-cleared-toast bridge-toast';
+  toast.innerHTML = `🧠 You know <strong>${escapeHtml(candidate.mechLabel)}</strong> from <strong>${escapeHtml(candidate.sourceLessonTitle)}</strong> — try it here.`;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('reveal-cleared-toast-show'));
+  setTimeout(() => {
+    toast.classList.remove('reveal-cleared-toast-show');
+    setTimeout(() => toast.remove(), 250);
+  }, 2200);
+}
+// Track whether updateReviewBadge has fired the mechanic-index lazy load
+// already. The badge stays hidden on first paint (MECHANIC_INDEX empty);
+// once the registry + content load finish, the second updateReviewBadge
+// call paints the count.
+let _bridgeIndexKick = false;
+
 // Iter 45 — true global due count, ignoring path-scope. Used by the Review
 // button's scope-aware label so the user can see "3 due in scope (12 total)"
 // instead of having the broader pool silently hidden.
@@ -3653,6 +3727,24 @@ function updateReviewBadge() {
     const ids = resurrectIds();
     resBtn.classList.toggle('hidden', ids.length === 0);
     if (resCnt) resCnt.textContent = ids.length;
+  }
+  // iter 94: 🧠 Bridge button visibility + count. Auto-hides when MECHANIC_INDEX
+  // hasn't been built yet (first paint) OR no cross-track transfer gaps exist.
+  // Lazy-kicks the index build on first call so subsequent updateReviewBadge
+  // calls paint the populated count.
+  const bridgeBtn = document.getElementById('bridge-btn');
+  const bridgeCnt = document.getElementById('bridge-count');
+  if (bridgeBtn) {
+    const candidates = _bridgeCandidates();
+    bridgeBtn.classList.toggle('hidden', candidates.length === 0);
+    if (bridgeCnt) bridgeCnt.textContent = candidates.length;
+    if (!_bridgeIndexKick && (!MECHANIC_INDEX || MECHANIC_INDEX.size === 0)) {
+      _bridgeIndexKick = true;
+      ensureMechanicIndex().then(() => {
+        // Re-run after index is populated so the badge appears without a save.
+        if (typeof updateReviewBadge === 'function') updateReviewBadge();
+      });
+    }
   }
 }
 function updateLessonHeaderInPlace() {
@@ -7184,6 +7276,29 @@ async function init() {
     if (window.matchMedia('(max-width: 767px)').matches) {
       document.body.classList.remove('sidebar-open');
     }
+  });
+
+  // iter 94: 🧠 Bridge — route to a cross-track transfer-gap lesson. Picks
+  // the first candidate from `_bridgeCandidates()` (one per gap-mechanic,
+  // deterministic by MECHANIC_INDEX iteration order). Lands on L1 with a
+  // 2.2-sec fuchsia toast prefacing the transfer context. Closes iter-90
+  // roadmap #3 (the last queued entry).
+  const bridgeBtnEl = document.getElementById('bridge-btn');
+  if (bridgeBtnEl) bridgeBtnEl.addEventListener('click', () => {
+    const candidates = _bridgeCandidates();
+    if (!candidates.length) return;
+    const pick = candidates[0];
+    state.currentLessonId = pick.targetLessonId;
+    state.currentTab = 'L1';
+    syncBinderToLesson(pick.targetLessonId);
+    saveProgress();
+    renderSidebar();
+    renderLesson();
+    _updateHash();
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      document.body.classList.remove('sidebar-open');
+    }
+    _showBridgeToast(pick);
   });
 
   document.getElementById('at-risk-btn').addEventListener('click', openAtRisk);

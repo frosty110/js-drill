@@ -115,7 +115,7 @@ The convention:
 
 **Avoid (learned dead-ends):** Bucket promotion gated on personal-best time; L3 timeout-as-failure. See SELF-IMPROVE.md § Avoid.
 
-**Shipped from this category:** 🏷 Mistake Tagging Postmortem (iter 58, primary listing in Cat 7) · 🧩 Mechanics × Track matrix view (iter 63) · 🧠 Mechanic-Bridge (iter 94) · 🪐 Mechanic Constellation (iter 98) → see [`shipped-by-category.md` § 3](shipped-by-category.md#3-mechanics).
+**Shipped from this category:** 🏷 Mistake Tagging Postmortem (iter 58, primary listing in Cat 7) · 🧩 Mechanics × Track matrix view (iter 63) · 🧠 Mechanic-Bridge (iter 94) · 🪐 Mechanic Constellation (iter 98) · ⏱ Time-to-Solve Calibration v1 MVP (iter 119, first Cat 3 SR-mechanics ship since iter 58 — 61-iter drought broken; v2 Stats tile deferred) → see [`shipped-by-category.md` § 3](shipped-by-category.md#3-mechanics).
 
 ---
 

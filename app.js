@@ -156,6 +156,8 @@ const state = {
   clarify: { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 }, // iter 117: 🎤 Clarify-First Ritual — lifetime stats (attempts = total chip-taps; correct = right chips tapped; completed = full rituals passed)
   hotseatOn: false, // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle surfaces a post-L3-pass tap-card with a mechanic-tag-derived follow-up + 3 distractors (default OFF — user must opt in)
   hotseat: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 118: 🔥 Hot-Seat Follow-Up — lifetime stats (attempts = chip-taps; correct = right chips on first try; sessions = cards shown)
+  calibrateOn: false, // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
+  timeCalibration: { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } }, // iter 119: byMechanic[id] = { predictions: [{bucket, actualMs, errorSec}], median errorSec computed on read }. meta tracks engagement separately (estimates = bucket taps; skips = skip taps; passes = passes-with-estimate)
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
@@ -864,6 +866,18 @@ function loadProgress() {
           lastRunAt: +parsed.hotseat.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle (default OFF).
+    state.calibrateOn = !!parsed.calibrateOn;
+    state.timeCalibration = parsed.timeCalibration && typeof parsed.timeCalibration === 'object'
+      ? {
+          byMechanic: (parsed.timeCalibration.byMechanic && typeof parsed.timeCalibration.byMechanic === 'object') ? parsed.timeCalibration.byMechanic : {},
+          meta: {
+            estimates: +(parsed.timeCalibration.meta?.estimates) || 0,
+            skips: +(parsed.timeCalibration.meta?.skips) || 0,
+            passes: +(parsed.timeCalibration.meta?.passes) || 0
+          }
+        }
+      : { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } };
     // iter 104: 🗺 Command Palette use-counter. Legacy users get empty map.
     state.commandUsage = parsed.commandUsage && typeof parsed.commandUsage === 'object' && !Array.isArray(parsed.commandUsage)
       ? parsed.commandUsage : {};
@@ -948,6 +962,8 @@ function saveProgress() {
     clarify: state.clarify,
     hotseatOn: state.hotseatOn,
     hotseat: state.hotseat,
+    calibrateOn: state.calibrateOn,
+    timeCalibration: state.timeCalibration,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -5112,6 +5128,10 @@ function markPassed(lessonId, level) {
   // interviewer follow-up. _maybeShowHotseat() guards all conditions
   // (toggle on, Patterns/Applied track, content loaded, mock bypass).
   if (level === 'L3' && typeof _maybeShowHotseat === 'function') _maybeShowHotseat(lessonId);
+  // iter 119: ⏱ Time-to-Solve Calibration — if an estimate was made for
+  // this lesson this session, record the delta against the bucket midpoint
+  // per `lesson.mechanics[]` tag. _calibrationRecordPass() handles guards.
+  if (level === 'L3' && typeof _calibrationRecordPass === 'function') _calibrationRecordPass(lessonId);
 }
 function updateReviewBadge() {
   const btn = document.getElementById('review-btn');
@@ -7412,6 +7432,8 @@ function renderL3(body, lesson, content) {
   ) {
     return _renderClarifyRitual(body, lesson, content);
   }
+  // iter 119: ⏱ Time-to-Solve Calibration — strip injected after L3 body
+  // renders (see end of this function via setTimeout(0)).
   const drill = content.L3;
   const isMock = state.mock.active && state.mock.lessonId === lesson.id;
   const bestMs = state.bestTimes[lesson.id];
@@ -7529,6 +7551,12 @@ function renderL3(body, lesson, content) {
     </div>
   `;
   body.appendChild(wrap);
+
+  // iter 119: ⏱ Time-to-Solve Calibration — inject estimate strip at TOP of
+  // L3 wrap when toggle on + Patterns/Applied + not Mock + not yet estimated/
+  // skipped for this lesson this session. _calibrationMaybeInject() handles
+  // all gates internally.
+  if (typeof _calibrationMaybeInject === 'function') _calibrationMaybeInject(lesson, wrap);
 
   if (isMock) {
     wrap.querySelector('[data-action="end-mock"]').addEventListener('click', () => {
@@ -8502,6 +8530,26 @@ async function init() {
       hotseatBtn.classList.toggle('text-rose-200', state.hotseatOn);
       hotseatBtn.classList.toggle('text-slate-500', !state.hotseatOn);
       saveProgress();
+    });
+  }
+
+  // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle (default OFF).
+  // Amber-200 hover when ON. Flipping clears in-memory session-state
+  // tracking so the next L3 visit can re-engage the strip.
+  const calibBtn = document.getElementById('calibrate-btn');
+  if (calibBtn) {
+    if (state.calibrateOn) {
+      calibBtn.classList.add('text-amber-200');
+      calibBtn.classList.remove('text-slate-500');
+    }
+    calibBtn.addEventListener('click', () => {
+      state.calibrateOn = !state.calibrateOn;
+      calibBtn.classList.toggle('text-amber-200', state.calibrateOn);
+      calibBtn.classList.toggle('text-slate-500', !state.calibrateOn);
+      _calibrationEstimated.clear();
+      _calibrationSkipped.clear();
+      saveProgress();
+      if (state.currentLessonId && state.currentTab === 'L3') renderLesson();
     });
   }
 
@@ -9885,6 +9933,83 @@ function _showHotseatModal(lesson, card) {
       saveProgress();
     });
   });
+}
+// iter 119: ⏱ Time-to-Solve Calibration — opt-in pre-L3 estimate strip.
+// When toggle on + Patterns/Applied + not Mock + not yet estimated/skipped
+// for this lesson this session: render a 4-bucket tap strip at TOP of L3
+// wrap. Tap → record bucket + start timer; user proceeds to drill. On L3
+// pass with active estimate → compute delta + store per lesson.mechanics[]
+// tag in state.timeCalibration.byMechanic[id].predictions[].
+// Stats tile DEFERRED to v2 — data captured this iter for soak window.
+const _calibrationEstimated = new Set();  // lessonIds estimated this session
+const _calibrationSkipped = new Set();     // lessonIds explicitly skipped this session
+const _calibrationActive = {};              // lessonId → { bucket, startedAt }
+const CALIBRATION_BUCKET_MIDPOINT_SEC = {
+  // Midpoints used for absError computation against actual seconds.
+  'lt2': 90, '2to5': 210, '5to10': 450, 'gt10': 900
+};
+function _calibrationMaybeInject(lesson, wrap) {
+  if (!state.calibrateOn) return;
+  if (state.mock.active && state.mock.lessonId === lesson.id) return;
+  if (lesson.track !== 'patterns' && lesson.track !== 'applied') return;
+  if (_calibrationEstimated.has(lesson.id) || _calibrationSkipped.has(lesson.id)) return;
+  const strip = document.createElement('div');
+  strip.className = 'calib-strip';
+  strip.innerHTML = `
+    <div class="calib-prompt">⏱ Quick estimate — how long until L3 passes?</div>
+    <div class="calib-buckets">
+      <button class="calib-bucket" data-bucket="lt2" type="button">&lt; 2 min</button>
+      <button class="calib-bucket" data-bucket="2to5" type="button">2–5 min</button>
+      <button class="calib-bucket" data-bucket="5to10" type="button">5–10 min</button>
+      <button class="calib-bucket" data-bucket="gt10" type="button">10+ min</button>
+      <button class="calib-skip" data-action="calib-skip" type="button">Skip</button>
+    </div>
+  `;
+  wrap.insertBefore(strip, wrap.firstChild);
+  strip.querySelectorAll('.calib-bucket').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const bucket = btn.dataset.bucket;
+      _calibrationEstimated.add(lesson.id);
+      _calibrationActive[lesson.id] = { bucket, startedAt: Date.now() };
+      state.timeCalibration.meta.estimates++;
+      saveProgress();
+      strip.remove();
+    });
+  });
+  strip.querySelector('[data-action="calib-skip"]').addEventListener('click', () => {
+    _calibrationSkipped.add(lesson.id);
+    state.timeCalibration.meta.skips++;
+    saveProgress();
+    strip.remove();
+  });
+}
+function _calibrationRecordPass(lessonId) {
+  const entry = _calibrationActive[lessonId];
+  if (!entry) return;
+  delete _calibrationActive[lessonId];
+  const lesson = findLesson(lessonId);
+  const content = CONTENT[lessonId];
+  if (!lesson || !content) return;
+  const mechs = Array.isArray(content.mechanics) ? content.mechanics : [];
+  if (mechs.length === 0) return;
+  const actualSec = Math.round((Date.now() - entry.startedAt) / 1000);
+  const midpoint = CALIBRATION_BUCKET_MIDPOINT_SEC[entry.bucket] || 300;
+  const errorSec = Math.abs(actualSec - midpoint);
+  for (const m of mechs) {
+    const id = typeof m === 'string' ? m : (m.id || m.label);
+    if (!id) continue;
+    if (!state.timeCalibration.byMechanic[id]) {
+      state.timeCalibration.byMechanic[id] = { predictions: [] };
+    }
+    state.timeCalibration.byMechanic[id].predictions.push({
+      bucket: entry.bucket, actualSec, errorSec, at: Date.now()
+    });
+    // Cap to last 50 per mechanic to bound storage growth.
+    const preds = state.timeCalibration.byMechanic[id].predictions;
+    if (preds.length > 50) state.timeCalibration.byMechanic[id].predictions = preds.slice(-50);
+  }
+  state.timeCalibration.meta.passes++;
+  saveProgress();
 }
 function pollOfflinePackStats() {
   // Send a postMessage to the active service worker; on reply, update

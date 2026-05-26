@@ -298,7 +298,7 @@ The convention:
 - **[iter 36 → resolved iter 73-81]** § 9B "code-reading vs code-writing" direction balance — was tracked here as an unmet gap; **closed** by 🪲 Bug-Hunt (73), 🎯 Reverse (76), 📐 Smell test (79), 🛡 Edge-case chips (81). The category now ships in both directions.
 - **[iter 38]** Interview-life integration gap — the catalog and the app today treat interview prep as a *solo, decontextualized activity*. Pre-interview ramp (Cat 2), post-interview gap log (Cat 7), STAR generator (§ 9A), "I'm stuck" simulator (§ 9A), mock-kickoff ritual (Cat 2) collectively introduce *event-embedded* prep. Track whether the loop ships any of these in the next 6 iters; persistent zero would indicate the app is structurally biased toward perpetual-prep over scheduled-prep.
 
-**Shipped from this category:** 🪲 Bug-Hunt (iter 73) · 🎯 Reverse problem-identification (iter 76) · 📐 Smell test complexity-claim (iter 79) · 🛡 Edge case pre-enumeration (iter 81) · 🎤 Clarify-First Ritual (iter 117, **first §9A ship ever** — 34-iter drought broken) → see [`shipped-by-category.md` § 9](shipped-by-category.md#9-interview-conditioning).
+**Shipped from this category:** 🪲 Bug-Hunt (iter 73) · 🎯 Reverse problem-identification (iter 76) · 📐 Smell test complexity-claim (iter 79) · 🛡 Edge case pre-enumeration (iter 81) · 🎤 Clarify-First Ritual (iter 117, **first §9A ship ever** — 34-iter drought broken) · 🔥 Hot-Seat Follow-Up (iter 118, second §9A ship — pairs with Clarify-First to cover both ENDS of interview interaction) → see [`shipped-by-category.md` § 9](shipped-by-category.md#9-interview-conditioning).
 
 ---
 

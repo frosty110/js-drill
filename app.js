@@ -154,6 +154,8 @@ const state = {
   syncHintShown: false, // iter 114: ☁️ Sync Onboarding — one-time hint-banner-dismissed flag (additive, no `__v` bump)
   clarifyRitualOn: false, // iter 117: 🎤 Clarify-First Ritual — opt-in toggle gates Patterns/Applied L3 behind clarifier chip drill (default OFF — user must opt in)
   clarify: { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 }, // iter 117: 🎤 Clarify-First Ritual — lifetime stats (attempts = total chip-taps; correct = right chips tapped; completed = full rituals passed)
+  hotseatOn: false, // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle surfaces a post-L3-pass tap-card with a mechanic-tag-derived follow-up + 3 distractors (default OFF — user must opt in)
+  hotseat: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 118: 🔥 Hot-Seat Follow-Up — lifetime stats (attempts = chip-taps; correct = right chips on first try; sessions = cards shown)
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
@@ -852,6 +854,16 @@ function loadProgress() {
           lastRunAt: +parsed.clarify.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 };
+    // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle (default OFF).
+    state.hotseatOn = !!parsed.hotseatOn;
+    state.hotseat = parsed.hotseat && typeof parsed.hotseat === 'object'
+      ? {
+          attempts: +parsed.hotseat.attempts || 0,
+          correct: +parsed.hotseat.correct || 0,
+          sessions: +parsed.hotseat.sessions || 0,
+          lastRunAt: +parsed.hotseat.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 104: 🗺 Command Palette use-counter. Legacy users get empty map.
     state.commandUsage = parsed.commandUsage && typeof parsed.commandUsage === 'object' && !Array.isArray(parsed.commandUsage)
       ? parsed.commandUsage : {};
@@ -934,6 +946,8 @@ function saveProgress() {
     syncHintShown: state.syncHintShown,
     clarifyRitualOn: state.clarifyRitualOn,
     clarify: state.clarify,
+    hotseatOn: state.hotseatOn,
+    hotseat: state.hotseat,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -5094,6 +5108,10 @@ function markPassed(lessonId, level) {
   // Sync chip. _maybeShowSyncHint() guards all conditions internally so
   // calling unconditionally on every L3 pass is safe.
   if (level === 'L3' && typeof _maybeShowSyncHint === 'function') _maybeShowSyncHint();
+  // iter 118: 🔥 Hot-Seat Follow-Up — opt-in post-L3-pass modal with an
+  // interviewer follow-up. _maybeShowHotseat() guards all conditions
+  // (toggle on, Patterns/Applied track, content loaded, mock bypass).
+  if (level === 'L3' && typeof _maybeShowHotseat === 'function') _maybeShowHotseat(lessonId);
 }
 function updateReviewBadge() {
   const btn = document.getElementById('review-btn');
@@ -8470,6 +8488,23 @@ async function init() {
     });
   }
 
+  // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle (default OFF).
+  // Rose-200 hover when ON. No re-render needed on flip — only affects
+  // the next L3-pass moment.
+  const hotseatBtn = document.getElementById('hotseat-btn');
+  if (hotseatBtn) {
+    if (state.hotseatOn) {
+      hotseatBtn.classList.add('text-rose-200');
+      hotseatBtn.classList.remove('text-slate-500');
+    }
+    hotseatBtn.addEventListener('click', () => {
+      state.hotseatOn = !state.hotseatOn;
+      hotseatBtn.classList.toggle('text-rose-200', state.hotseatOn);
+      hotseatBtn.classList.toggle('text-slate-500', !state.hotseatOn);
+      saveProgress();
+    });
+  }
+
   // Path View toggle — filters the sidebar to the subscribed path's lessons.
   document.getElementById('path-btn').addEventListener('click', () => {
     // No-op when the subscribed path has no drill-lesson sequence (button is
@@ -9685,6 +9720,169 @@ function _renderClarifyRitual(body, lesson, content) {
           saveProgress();
         }
       });
+    });
+  });
+}
+// iter 118: 🔥 Hot-Seat Follow-Up — opt-in post-L3-pass tap-card. When the
+// user flips `state.hotseatOn` on, every L3 pass on a Patterns/Applied lesson
+// surfaces a centered modal with one mechanic-tag-derived follow-up (mined
+// from `data/hotseat-followups.json` byMechanic map) + 3 distractors picked
+// from OTHER mechanics' follow-ups (interviewer-shaped but clearly wrong for
+// THIS problem). User picks the right answer; correct increments
+// state.hotseat.correct; wrong increments state.hotseat.attempts and shows
+// red marker but doesn't block. Continue button closes; Skip available always.
+// Bypassed during Mock Interview (no scaffolding by design). Pairs with
+// iter-117 Clarify-First to cover both ENDS of the interview interaction.
+let _HOTSEAT_REGISTRY = null;
+async function _hotseatLoadRegistry() {
+  if (_HOTSEAT_REGISTRY) return _HOTSEAT_REGISTRY;
+  try {
+    const res = await fetch('data/hotseat-followups.json', { cache: 'no-cache' });
+    const body = await res.json();
+    _HOTSEAT_REGISTRY = {
+      byMechanic: body.byMechanic && typeof body.byMechanic === 'object' ? body.byMechanic : {},
+      default: typeof body.default === 'string' ? body.default : 'Now optimize for space — can you do it with less extra memory?'
+    };
+  } catch (_) {
+    _HOTSEAT_REGISTRY = { byMechanic: {}, default: 'Now describe one edge case the canonical might still miss.' };
+  }
+  return _HOTSEAT_REGISTRY;
+}
+function _hotseatLessonMechanicIds(lesson, content) {
+  // Mechanics may live on the lesson stub (manifest) OR inside the loaded content.
+  const raw = (content && Array.isArray(content.mechanics) && content.mechanics.length > 0)
+    ? content.mechanics
+    : (Array.isArray(lesson?.mechanics) ? lesson.mechanics : []);
+  const ids = [];
+  for (const m of raw) {
+    if (typeof m === 'string') ids.push(m);
+    else if (m && typeof m === 'object') {
+      if (m.id) ids.push(m.id);
+      else if (m.label) ids.push(m.label);
+    }
+  }
+  return ids;
+}
+function _hotseatShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function _hotseatBuildCard(lesson, content, registry) {
+  const lessonIds = _hotseatLessonMechanicIds(lesson, content);
+  let correctText = null;
+  let matchedMechanicId = null;
+  for (const id of lessonIds) {
+    if (registry.byMechanic[id]) {
+      correctText = registry.byMechanic[id];
+      matchedMechanicId = id;
+      break;
+    }
+  }
+  if (!correctText) {
+    correctText = registry.default;
+  }
+  // Distractor pool = all registry follow-ups whose mechanic is NOT in this
+  // lesson's mechanics[] (so they sound interviewer-shaped but are clearly
+  // wrong for THIS problem).
+  const lessonSet = new Set(lessonIds);
+  const distractorPool = Object.entries(registry.byMechanic)
+    .filter(([mid, text]) => !lessonSet.has(mid) && text !== correctText)
+    .map(([_, text]) => text);
+  const distractors = _hotseatShuffle(distractorPool).slice(0, 3);
+  if (distractors.length < 3) return null;
+  const options = _hotseatShuffle([
+    { text: correctText, isCorrect: true },
+    ...distractors.map(text => ({ text, isCorrect: false }))
+  ]);
+  return { options, matchedMechanicId };
+}
+function _maybeShowHotseat(lessonId) {
+  if (!state.hotseatOn) return;
+  // Bypass during Mock Interview (no scaffolding by design).
+  if (state.mock.active && state.mock.lessonId === lessonId) return;
+  const lesson = findLesson(lessonId);
+  if (!lesson || (lesson.track !== 'patterns' && lesson.track !== 'applied')) return;
+  const content = CONTENT[lessonId];
+  if (!content) return;
+  _hotseatLoadRegistry().then(registry => {
+    const card = _hotseatBuildCard(lesson, content, registry);
+    if (!card) return;
+    _showHotseatModal(lesson, card);
+  });
+}
+function _showHotseatModal(lesson, card) {
+  if (document.getElementById('hotseat-modal')) return;
+  state.hotseat.sessions++;
+  state.hotseat.lastRunAt = Date.now();
+  saveProgress();
+  let resolved = false;
+  let firstTapWasCorrect = false;
+  const modal = document.createElement('div');
+  modal.id = 'hotseat-modal';
+  modal.innerHTML = `
+    <div class="hotseat-scrim" data-action="hotseat-skip"></div>
+    <div class="hotseat-card" role="dialog" aria-labelledby="hotseat-title">
+      <div class="hotseat-header">
+        <span class="hotseat-tag">🔥 Hot-Seat · interviewer follow-up</span>
+        <button class="hotseat-skip" data-action="hotseat-skip" type="button" aria-label="Skip">✕</button>
+      </div>
+      <div class="hotseat-prompt" id="hotseat-title">
+        You passed <strong>${escapeHtml(lesson.title)}</strong>. The interviewer leans in:
+      </div>
+      <div class="hotseat-options">
+        ${card.options.map((o, i) => `
+          <button class="hotseat-option" data-opt="${i}" data-correct="${o.isCorrect ? '1' : '0'}" type="button">
+            ${escapeHtml(o.text)}
+          </button>
+        `).join('')}
+      </div>
+      <div class="hotseat-feedback" data-hotseat-feedback></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  const close = () => {
+    modal.remove();
+  };
+  // Skip via scrim click + skip button + Esc.
+  modal.querySelectorAll('[data-action="hotseat-skip"]').forEach(el => el.addEventListener('click', close));
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      close();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+  const optBtns = modal.querySelectorAll('.hotseat-option');
+  optBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('hotseat-option-correct') || btn.classList.contains('hotseat-option-wrong')) return;
+      const isCorrect = btn.dataset.correct === '1';
+      state.hotseat.attempts++;
+      if (isCorrect) {
+        if (!resolved) firstTapWasCorrect = true;
+        state.hotseat.correct++;
+        btn.classList.add('hotseat-option-correct');
+        optBtns.forEach(b => { if (b !== btn) b.disabled = true; });
+        resolved = true;
+        const fb = modal.querySelector('[data-hotseat-feedback]');
+        if (fb) {
+          fb.innerHTML = `
+            <div class="hotseat-resolved">
+              <div class="hotseat-resolved-text">${firstTapWasCorrect ? '✓ First-try correct.' : '✓ Got it.'} That's the follow-up an interviewer would push.</div>
+              <button class="hotseat-continue" data-action="hotseat-continue" type="button">Continue →</button>
+            </div>
+          `;
+          fb.querySelector('[data-action="hotseat-continue"]').addEventListener('click', close);
+        }
+      } else {
+        btn.classList.add('hotseat-option-wrong');
+        btn.disabled = true;
+      }
+      saveProgress();
     });
   });
 }

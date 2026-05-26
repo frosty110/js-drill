@@ -301,6 +301,53 @@ function _selfRescueRateGlobal() {
   };
 }
 
+// iter 106: 📈 Mastery Half-Life — per-lesson longitudinal SR signal.
+// Walks `state.history` for each lesson, extracts L3-pass timestamps, and
+// computes the median gap between consecutive passes (= cycle interval the
+// user has been holding the lesson at). Buckets each lesson by half-life:
+//   Sticky   — median gap >14 days   (holding well)
+//   Normal   — median gap 3-14 days  (active rotation)
+//   Slippery — median gap <3 days    (slipping; comes back fast)
+// Lessons with <2 L3-pass events are silently excluded (need at least one
+// gap to compute) — empty bucket counts let the tile auto-hide gracefully.
+// Returns `{ sticky, normal, slippery, slipperyList }` where slipperyList
+// is the top-N (default 5) slippery lessons sorted by *shortest* median
+// gap first — those are the most urgent to re-route into. Closes the
+// PROFILE.md L67 measurement gap ("Mastered lessons stay mastered across
+// SR intervals") — neither Decay Radar (right-now risk) nor Resurrect
+// Queue (overdue) captures the longitudinal personality of a lesson.
+const HALF_LIFE_STICKY_DAYS = 14;
+const HALF_LIFE_NORMAL_DAYS = 3;
+const HALF_LIFE_DAY_MS = 86400000;
+function _masteryHalfLife(slipperyTopN = 5) {
+  const hist = state.history || {};
+  const out = { sticky: 0, normal: 0, slippery: 0, slipperyList: [] };
+  const slippery = [];  // [{lessonId, medianGapMs, passCount}]
+  for (const lessonId of Object.keys(hist)) {
+    const events = hist[lessonId] || [];
+    const passTimes = [];
+    for (const e of events) {
+      if (e.event === 'L3-pass' && typeof e.at === 'number') passTimes.push(e.at);
+    }
+    if (passTimes.length < 2) continue;
+    passTimes.sort((a, b) => a - b);
+    const gaps = [];
+    for (let i = 1; i < passTimes.length; i++) gaps.push(passTimes[i] - passTimes[i - 1]);
+    gaps.sort((a, b) => a - b);
+    const mid = Math.floor(gaps.length / 2);
+    const medianGapMs = gaps.length % 2 === 0
+      ? (gaps[mid - 1] + gaps[mid]) / 2
+      : gaps[mid];
+    const days = medianGapMs / HALF_LIFE_DAY_MS;
+    if (days > HALF_LIFE_STICKY_DAYS) out.sticky++;
+    else if (days >= HALF_LIFE_NORMAL_DAYS) out.normal++;
+    else { out.slippery++; slippery.push({ lessonId, medianGapMs, passCount: passTimes.length }); }
+  }
+  slippery.sort((a, b) => a.medianGapMs - b.medianGapMs);
+  out.slipperyList = slippery.slice(0, slipperyTopN);
+  return out;
+}
+
 // Per-track pill metadata — keep this in one place so the lesson header,
 // Today's plan modal, and any future track-aware surface stay in sync.
 // Without it, the header read "Pattern" for applied-track lessons (the
@@ -8536,6 +8583,45 @@ async function init() {
         </div>
         `;
       })()}
+      ${(() => {
+        // iter 106: 📈 Mastery Half-Life tile. Per-lesson longitudinal SR
+        // signal — buckets each lesson's median L3-pass gap into Sticky /
+        // Normal / Slippery. Tap-routed top-5 slippery lessons list lets
+        // the user jump straight to "what's slipping." Hidden when no
+        // lesson has ≥2 L3-passes yet (graceful empty state).
+        const hl = _masteryHalfLife(5);
+        const total = hl.sticky + hl.normal + hl.slippery;
+        if (total === 0) return '';
+        const fmtGap = (ms) => {
+          const days = ms / HALF_LIFE_DAY_MS;
+          if (days < 1) return `${Math.round(days * 24)}h`;
+          if (days < 14) return `${days.toFixed(1)}d`;
+          return `${Math.round(days)}d`;
+        };
+        return `
+        <div style="margin-top: 8px;">
+          <div style="background: rgba(125,211,252,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(125,211,252,0.2);">
+            <div style="color: #94a3b8; font-size: 12px; margin-bottom: 6px;">📈 Mastery Half-Life <span style="color: #64748b; font-weight: 400;">(${total} lesson${total === 1 ? '' : 's'} with ≥2 L3 passes)</span></div>
+            <div class="half-life-buckets">
+              <div class="half-life-bucket"><span class="half-life-dot sticky"></span><span class="half-life-label">Sticky</span><span class="half-life-count">${hl.sticky}</span><span class="half-life-range">&gt;${HALF_LIFE_STICKY_DAYS}d</span></div>
+              <div class="half-life-bucket"><span class="half-life-dot normal"></span><span class="half-life-label">Normal</span><span class="half-life-count">${hl.normal}</span><span class="half-life-range">${HALF_LIFE_NORMAL_DAYS}-${HALF_LIFE_STICKY_DAYS}d</span></div>
+              <div class="half-life-bucket"><span class="half-life-dot slippery"></span><span class="half-life-label">Slippery</span><span class="half-life-count">${hl.slippery}</span><span class="half-life-range">&lt;${HALF_LIFE_NORMAL_DAYS}d</span></div>
+            </div>
+            ${hl.slipperyList.length ? `
+              <div class="half-life-list">
+                <div class="half-life-list-header">Top slippery — tap to drill</div>
+                ${hl.slipperyList.map(row => {
+                  const lesson = findLesson(row.lessonId);
+                  if (!lesson) return '';
+                  return `<div class="half-life-row" data-action="open-slippery" data-lesson-id="${escapeHtml(row.lessonId)}"><span class="half-life-row-title">${escapeHtml(lesson.title)}</span><span class="half-life-row-gap">${fmtGap(row.medianGapMs)}</span></div>`;
+                }).join('')}
+              </div>
+            ` : ''}
+            <div style="color: #64748b; font-size: 10px; margin-top: 6px;">since you started L3 drilling — median gap between consecutive passes</div>
+          </div>
+        </div>
+        `;
+      })()}
       ${_renderSectionRetentionBlock(14)}
       ${bestTimesEntries.length ? `
         <div style="margin-top: 18px;">
@@ -8574,6 +8660,18 @@ async function init() {
     document.getElementById('stats-body').querySelector('[data-action="open-bughunt-from-stats"]')?.addEventListener('click', () => {
       statsModal.style.display = 'none';
       startBugHuntSession();
+    });
+    // iter 106: 📈 Mastery Half-Life — wire each slippery-list row to deep-link
+    // to its lesson. Each row carries data-lesson-id; selectLesson handles the
+    // rest (default tab = Reference, so the user lands on the canonical they
+    // need to re-encode before re-attempting L3).
+    document.getElementById('stats-body').querySelectorAll('[data-action="open-slippery"]').forEach(row => {
+      row.addEventListener('click', () => {
+        const id = row.getAttribute('data-lesson-id');
+        if (!id) return;
+        statsModal.style.display = 'none';
+        selectLesson(id);
+      });
     });
     statsModal.style.display = 'block';
   }

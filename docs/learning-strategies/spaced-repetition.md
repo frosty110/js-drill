@@ -57,6 +57,23 @@ specifically toward lessons their memory is currently weakest on.
   lessons are also wobbly — the intersection is the highest-leverage drill
   of the day. Closes iter-59 roadmap entry #1 (constraint-aware subagent
   B#4 — "risk intersection" dimension).
+- **📈 Mastery Half-Life Stats tile (iter 106).** Per-lesson longitudinal SR
+  signal. For each lesson with ≥2 L3-pass events in `state.history`, computes
+  the median gap between consecutive passes (= cycle interval the user is
+  actually holding the lesson at) and buckets each lesson into Sticky
+  (median gap >14d), Normal (3-14d), or Slippery (<3d). Stats tile shows
+  the 3 bucket counts + a tap-routed top-5 slippery-lessons list ordered
+  by *shortest* median gap first. Auto-hides until at least one lesson
+  has 2+ L3-passes — graceful empty state for new users. Closes the
+  PROFILE.md L67 success-criterion measurement gap ("Mastered lessons stay
+  mastered across SR intervals") at *lesson grain* — the user previously
+  had no surface naming WHICH lessons slip vs which stick. Distinct
+  cognitive operation from the existing surfaces: At Risk asks "what's at
+  risk RIGHT NOW," Resurrect asks "what's overdue past one bucket," and
+  Half-Life asks "what is this lesson's personality across cycles." Three
+  different time horizons; three different drilling decisions. Pure
+  derivation over already-captured `state.history` L3-pass timestamps —
+  zero new state field, zero `__v` bump.
 - **1d → 3d → 7d → 14d → 30d interval ladder.** L3 pass on a mastered
   lesson advances one bucket; L3 pass at the top bucket holds at 30d.
 - **Section retention block (iter 47).** Stats modal now aggregates the

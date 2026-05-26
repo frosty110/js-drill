@@ -132,6 +132,7 @@ const state = {
   gotcha: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 83: 🎰 Gotcha Roulette — reference.notes recall stream (additive, no `__v` bump)
   swapBench: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill (additive, no `__v` bump)
   convDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 91: 🎬 Conversation Drill — 6-section interview-arc classifier over conversation.sections[] (additive, no `__v` bump)
+  traceHop: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 93: 🧬 Trace-Hop — pick-the-middle-state mobile quiz over walkthrough.trace yields (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -552,6 +553,15 @@ function loadProgress() {
           lastRunAt: +parsed.convDrill.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 93: 🧬 Trace-Hop lifetime stats. Legacy users get zeros.
+    state.traceHop = parsed.traceHop && typeof parsed.traceHop === 'object'
+      ? {
+          attempts: +parsed.traceHop.attempts || 0,
+          correct: +parsed.traceHop.correct || 0,
+          sessions: +parsed.traceHop.sessions || 0,
+          lastRunAt: +parsed.traceHop.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -621,6 +631,7 @@ function saveProgress() {
     gotcha: state.gotcha,
     swapBench: state.swapBench,
     convDrill: state.convDrill,
+    traceHop: state.traceHop,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1450,6 +1461,233 @@ async function startConvDrillSession() {
     `;
     shell.querySelector('[data-action="conv-again"]').addEventListener('click', () => startConvDrillSession());
     shell.querySelector('[data-action="conv-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 93: 🧬 Trace-Hop — pick-the-middle-state mobile quiz over
+// `walkthrough.trace` yields. Each card shows 3 CONSECUTIVE trace frames
+// (K-1, K, K+1) with the MIDDLE frame's `state` panel BLANKED; user taps
+// which of 4 state-objects fits there. Distractors are sampled from OTHER
+// frames of the SAME trace (not other lessons) so the user reasons about
+// "which step belongs here" rather than type-matching. Distinct from
+// 🪲 Walkthrough Bug-Hunt (which mutates a state value and asks "which row
+// is corrupted") — Trace-Hop tests positional state recall, the mental
+// model the rusty engineer needs to WRITE the code from scratch.
+// From roadmap.md iter-90 #2 (vision iter — 2nd promoted entry). Reuses
+// the Walkthrough engine's compiled trace + step-key dedup logic from
+// _pickQuizOptions (iter 36) + .recognize-* shell base.
+const TRACE_HOP_DECK_LEN = 8;
+function _traceHopStepKey(s) {
+  try { return JSON.stringify({ line: s.line, label: s.label, state: s.state }); }
+  catch (_) { return Math.random().toString(); }
+}
+function _traceHopBuildCard(lesson, content) {
+  // Compile the lesson's walkthrough. Returns { byExample, error }.
+  const compiled = _compileWalkthrough(lesson.id, content.walkthrough);
+  if (compiled.error || !Array.isArray(compiled.byExample)) return null;
+  // Pick a random example with enough steps.
+  const usable = compiled.byExample.filter(b => !b.error && Array.isArray(b.steps) && b.steps.length >= 5);
+  if (!usable.length) return null;
+  const block = usable[Math.floor(Math.random() * usable.length)];
+  const steps = block.steps;
+  // Pick a middle frame K such that K-1 and K+1 both exist.
+  const candidatesK = [];
+  for (let K = 1; K < steps.length - 1; K++) {
+    // Only K's with at least one state key (so the blanked panel isn't empty).
+    if (steps[K].state && typeof steps[K].state === 'object' && Object.keys(steps[K].state).length > 0) {
+      candidatesK.push(K);
+    }
+  }
+  if (!candidatesK.length) return null;
+  const K = candidatesK[Math.floor(Math.random() * candidatesK.length)];
+  const correct = steps[K];
+  // Distractor pool: other frames of THE SAME TRACE excluding K-1, K, K+1
+  // (K-1 and K+1 are visible in the card → would be trivially-wrong giveaways).
+  const seen = new Set([_traceHopStepKey(correct), _traceHopStepKey(steps[K - 1]), _traceHopStepKey(steps[K + 1])]);
+  const distractorPool = [];
+  for (let i = 0; i < steps.length; i++) {
+    if (i === K - 1 || i === K || i === K + 1) continue;
+    const s = steps[i];
+    if (!s || !s.state || typeof s.state !== 'object') continue;
+    const k = _traceHopStepKey(s);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    distractorPool.push({ step: s, idx: i });
+  }
+  if (distractorPool.length < 3) return null;
+  // Fisher-Yates shuffle the pool; take first 3.
+  for (let i = distractorPool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [distractorPool[i], distractorPool[j]] = [distractorPool[j], distractorPool[i]];
+  }
+  const distractors = distractorPool.slice(0, 3);
+  const options = [
+    { step: correct, idx: K, isCorrect: true },
+    ...distractors.map(d => ({ step: d.step, idx: d.idx, isCorrect: false }))
+  ];
+  // Shuffle option positions so correct isn't always first.
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return {
+    lessonId: lesson.id,
+    lessonTitle: lesson.title,
+    sectionName: lesson.section,
+    exampleLabel: block.example && block.example.label ? block.example.label : '',
+    framePrev: steps[K - 1],
+    frameNext: steps[K + 1],
+    correctIdx: K,
+    options
+  };
+}
+async function _traceHopBuildDeck() {
+  // Preload Patterns/Applied lessons — only those with walkthrough blocks.
+  const candidates = CURRICULUM.filter(l =>
+    l.status === 'full' && (l.track === 'patterns' || l.track === 'applied')
+  );
+  // Fisher-Yates shuffle so each session pulls a different sample.
+  const shuffled = candidates.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  // Try lessons one by one until we've built enough cards.
+  const deck = [];
+  for (const lesson of shuffled) {
+    if (deck.length >= TRACE_HOP_DECK_LEN) break;
+    if (!CONTENT[lesson.id]) {
+      try { await loadLessonContent(lesson.id); } catch (_) { continue; }
+    }
+    const c = CONTENT[lesson.id];
+    if (!c || !c.walkthrough || !Array.isArray(c.walkthrough.examples)) continue;
+    const card = _traceHopBuildCard(lesson, c);
+    if (card) deck.push(card);
+  }
+  if (deck.length < 4) return null;
+  return deck;
+}
+
+function _traceHopFormatState(stateObj) {
+  if (!stateObj || typeof stateObj !== 'object') return '<span class="trace-hop-state-empty">(no state)</span>';
+  const rows = Object.entries(stateObj).map(([k, v]) =>
+    `<div class="trace-hop-state-row"><span class="trace-hop-state-key">${escapeHtml(k)}</span><span class="trace-hop-state-val">${escapeHtml(_formatStateVal(v))}</span></div>`
+  );
+  return rows.join('');
+}
+
+async function startTraceHopSession() {
+  const deck = await _traceHopBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('Trace-Hop needs more lessons with walkthroughs. Click around a few Patterns lessons first, then try again.');
+    return;
+  }
+  state.traceHop.sessions++;
+  state.traceHop.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    const exampleLine = card.exampleLabel
+      ? `<div class="trace-hop-meta">Example: <span class="trace-hop-meta-em">${escapeHtml(card.exampleLabel)}</span></div>`
+      : '';
+    shell.innerHTML = `
+      <div class="recognize-shell trace-hop-shell">
+        <div class="recognize-header">
+          <span>🧬 Trace-Hop · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-trace-hop">✕ Exit</button>
+        </div>
+        ${exampleLine}
+        <div class="trace-hop-tag">Which state fits the middle frame?</div>
+        <div class="trace-hop-frames">
+          <div class="trace-hop-frame trace-hop-frame-side">
+            <div class="trace-hop-frame-head"><span class="trace-hop-frame-pos">Step ${card.correctIdx}</span><span class="trace-hop-frame-line">line ${escapeHtml(String(card.framePrev.line))}</span></div>
+            <div class="trace-hop-frame-label">${escapeHtml(card.framePrev.label || '')}</div>
+            <div class="trace-hop-frame-state">${_traceHopFormatState(card.framePrev.state)}</div>
+          </div>
+          <div class="trace-hop-frame trace-hop-frame-middle">
+            <div class="trace-hop-frame-head"><span class="trace-hop-frame-pos">Step ${card.correctIdx + 1}</span><span class="trace-hop-frame-line">line ${escapeHtml(String(card.options[0].step.line))}</span></div>
+            <div class="trace-hop-frame-label">${escapeHtml(card.options.find(o => o.isCorrect).step.label || '')}</div>
+            <div class="trace-hop-frame-state trace-hop-frame-state-blank">?  ?  ?</div>
+          </div>
+          <div class="trace-hop-frame trace-hop-frame-side">
+            <div class="trace-hop-frame-head"><span class="trace-hop-frame-pos">Step ${card.correctIdx + 2}</span><span class="trace-hop-frame-line">line ${escapeHtml(String(card.frameNext.line))}</span></div>
+            <div class="trace-hop-frame-label">${escapeHtml(card.frameNext.label || '')}</div>
+            <div class="trace-hop-frame-state">${_traceHopFormatState(card.frameNext.state)}</div>
+          </div>
+        </div>
+        <div class="trace-hop-options">
+          ${card.options.map((o, i) => `
+            <button class="recognize-opt trace-hop-opt" data-opt="${i}">
+              <span class="trace-hop-opt-letter">${String.fromCharCode(65 + i)}</span>
+              <span class="trace-hop-opt-state">${_traceHopFormatState(o.step.state)}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-trace-hop-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-trace-hop"]').addEventListener('click', () => renderLesson());
+    const optBtns = shell.querySelectorAll('.trace-hop-opt');
+    let answered = false;
+    optBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const optIdx = +btn.dataset.opt;
+        const picked = card.options[optIdx];
+        const wasRight = !!picked.isCorrect;
+        if (wasRight) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.traceHop.attempts++;
+        if (wasRight) state.traceHop.correct++;
+        saveProgress();
+        optBtns.forEach((b, i) => {
+          b.disabled = true;
+          if (card.options[i].isCorrect) b.classList.add('recognize-opt-correct');
+          else if (i === optIdx) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-trace-hop-feedback]');
+        if (fb) {
+          fb.innerHTML = `
+            <div class="trace-hop-reveal">
+              <div class="trace-hop-reveal-title">${wasRight ? '✓ Got it' : '✗ The middle state was option ' + String.fromCharCode(65 + card.options.findIndex(o => o.isCorrect))}</div>
+              <div class="trace-hop-reveal-lesson">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
+              <button class="trace-hop-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="trace-hop-next" data-action="trace-hop-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="trace-hop-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell trace-hop-shell">
+        <div class="recognize-header"><span>🧬 Trace-Hop · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} states identified · ${deck.length - correct} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.traceHop.correct} / ${state.traceHop.attempts} (${state.traceHop.attempts > 0 ? Math.round(state.traceHop.correct / state.traceHop.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="trace-hop-again">🧬 Another session</button>
+            <button class="secondary" data-action="trace-hop-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="trace-hop-again"]').addEventListener('click', () => startTraceHopSession());
+    shell.querySelector('[data-action="trace-hop-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -6695,6 +6933,15 @@ async function init() {
   const convDrillBtn = document.getElementById('conv-drill-btn');
   if (convDrillBtn) convDrillBtn.addEventListener('click', () => {
     startConvDrillSession();
+  });
+
+  // iter 93: 🧬 Trace-Hop — middle-state recall over walkthrough.trace yields.
+  // Three consecutive frames with the middle state blanked; user picks
+  // which of 4 same-trace states fits. First surface drilling positional
+  // state recall (the mental model needed to write canonical from scratch).
+  const traceHopBtn = document.getElementById('trace-hop-btn');
+  if (traceHopBtn) traceHopBtn.addEventListener('click', () => {
+    startTraceHopSession();
   });
 
   // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed

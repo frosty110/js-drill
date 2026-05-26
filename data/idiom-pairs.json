@@ -148,6 +148,54 @@
       "b": "const out = JSON.parse(JSON.stringify(obj));",
       "sameBehavior": false,
       "explain": "Spread is SHALLOW — nested objects share references. JSON.parse(JSON.stringify(...)) is DEEP for plain data (loses functions, undefined, Symbols, Dates → strings, but recurses through nested objects). After mutating obj.nested.x, only the spread clone reflects the change."
+    },
+    {
+      "id": "optional-chain-vs-and-guard",
+      "title": "Safe property access",
+      "a": "const v = obj?.prop;",
+      "b": "const v = obj && obj.prop;",
+      "sameBehavior": false,
+      "explain": "Almost-twins, but they DIVERGE on falsy-non-nullish receivers. If obj is 0 or '' or false: `obj?.prop` is undefined (only null/undefined short-circuit); `obj && obj.prop` returns the falsy obj itself. Subtle interview gotcha — optional chaining is strictly nullish-aware; `&&` is broadly falsy-aware."
+    },
+    {
+      "id": "default-param-vs-nullish-coalesce",
+      "title": "Provide a default value",
+      "a": "function f(x = 1) { return x; }",
+      "b": "function f(x) { x = x ?? 1; return x; }",
+      "sameBehavior": false,
+      "explain": "Default parameters fire ONLY when the argument is `undefined`. Nullish coalescing fires for BOTH `undefined` and `null`. So `f(null)` returns null with default-param (null is a real value the param accepts), but returns 1 with `??` (null gets replaced). Classic source of bugs when null sneaks in from JSON."
+    },
+    {
+      "id": "typeof-object-vs-array-isarray",
+      "title": "Check if value is an array",
+      "a": "if (typeof x === 'object' && x !== null) {\n  // ...\n}",
+      "b": "if (Array.isArray(x)) {\n  // ...\n}",
+      "sameBehavior": false,
+      "explain": "ALL arrays are also objects — `typeof []` is 'object'. The typeof check passes for arrays AND plain objects AND Map/Set/Date/etc. Array.isArray is the only reliable check; `typeof x === 'object'` is the classic 'I thought this was just objects' trap."
+    },
+    {
+      "id": "isnan-global-vs-number-isnan",
+      "title": "Check if a value is NaN",
+      "a": "if (isNaN(x)) {\n  // ...\n}",
+      "b": "if (Number.isNaN(x)) {\n  // ...\n}",
+      "sameBehavior": false,
+      "explain": "Global isNaN COERCES its argument to a number first — `isNaN('abc')` is true because 'abc' coerces to NaN. Number.isNaN is STRICT — it returns true only if the argument is literally the NaN value. `Number.isNaN('abc')` is false. The strict version is almost always what you want; the coercing version is a long-known footgun."
+    },
+    {
+      "id": "object-entries-map-vs-keys-map",
+      "title": "Transform every (key, value) pair",
+      "a": "Object.entries(o).map(([k, v]) =>\n  [k, fn(k, v)]\n);",
+      "b": "Object.keys(o).map(k =>\n  [k, fn(k, o[k])]\n);",
+      "sameBehavior": true,
+      "explain": "Both produce an array of [key, transformed-value] tuples in the same iteration order. entries() destructures once; keys() needs a lookup per iteration. Identical observable output for plain objects — pick by clarity of the destructure."
+    },
+    {
+      "id": "array-from-vs-spread-set",
+      "title": "Convert a Set into an array",
+      "a": "const arr = Array.from(set);",
+      "b": "const arr = [...set];",
+      "sameBehavior": true,
+      "explain": "Both consume the Set's iterator and produce a new array in insertion order. Array.from accepts a mapping function as 2nd arg (a small extra power), but for plain conversion the two are interchangeable. Same observable result."
     }
   ]
 }

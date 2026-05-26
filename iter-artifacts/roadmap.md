@@ -105,6 +105,97 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 103 vision — tenth vision iter; iter-100 queue fully drained, Cat 5/7 push)
+
+**Tenth vision iter (after 26/31/48/55/59/64/82/90/95/100).** Iter-100 queue (Hint-Cost iter 101 + Notes Locate iter 102) fully shipped in 2 iters. Iter 103 fires vision per SKILL.md Step 1B with explicit Cat 5 UI/UX + Cat 7 Metacognition steering per iter-100's "the recombine-existing-corpus gradient is mining out" meta-finding.
+
+**Single constraint-aware subagent** (cost-conservative precedent). Per the iter-95 "name 1 implementation risk per proposal" instruction, subagent self-flagged 4/5 risks pre-orchestrator review. **Orchestrator cross-check rejected 1 additional:**
+- 🧮 **Concept-Tag Drill-Through** (subagent rank #3) — orchestrator-rejected on **schema blocker**: subagent assumed `state.misses[]` captures per-question `questionIdx`, but per iter-58 schema it's per-lesson grain only (`{lessonId: [{at, level, tag}]}`). **SAME BLOCKER as iter-95 Calibrated L1** — both require extending `state.misses` to capture questionIdx. HELD with explicit re-promote condition.
+
+**Promoted top 3 (subagent's 1+2 + orchestrator-elevated 3):**
+1. 🗺 **Sidebar Command Palette (Cmd-K)** — closes the **33-button sidebar discoverability decay** that the recent ship-spree caused. UI/UX gradient. First surface that REORGANIZES across existing buttons (orthogonal-not-additive). ~120 LOC. New lightweight `state.commandUsage` counter additive to existing handlers.
+2. 📈 **Mastery Half-Life** — per-lesson longitudinal SR signal. Cluster lessons by avg interval-before-regression (Sticky / Normal / Slippery). Closes a PROFILE.md L67 success criterion (mastered lessons stay mastered) that's currently unmeasured at lesson grain. Derivation from `state.history` L3-pass timestamps; ~140 LOC.
+3. ⏱ **Session Heatstrip** — 4px strip at sidebar top showing last 30 min of activity per-minute (color = event grain). Subagent self-held over "needs evidence of mobile-session-length problem"; orchestrator-promoted with mitigation pre-decided (informational-density framing, not progress-thermometer — explicit anti-gamification per PROFILE L75). Rendering pass over state.history tail; ~110 LOC.
+
+**Held with explicit re-promote conditions:**
+- 🔖 **Pin-Top Recent Lessons** (subagent held) — conditional on 🗺 Command Palette shipping first; if palette's recency-rank solves the "re-find recent lesson" job, Recent Lessons is redundant. Re-promote condition: post-palette feedback shows recent-lesson re-find still ranks as a top friction.
+- 🧮 **Concept-Tag Drill-Through** (orchestrator-held on schema) — same blocker as iter-95 Calibrated L1. Re-promote condition: a frame iter ratifies schema extension to add `questionIdx` to `state.misses[]` entries. Both Calibrated L1 and this entry would unblock together.
+
+**Meta-learning (iter 103):** subagent self-flagging caught 4/5 risks; orchestrator caught 1 additional (the schema blocker subagent missed). Combined yield: 1 of 5 ORCHESTRATOR-rejected, 1 of 5 PROMOTED over subagent's hold, 3/5 promoted clean (subagent #1, #2 + orchestrator-elevated #3). **The Cat 5/7 push worked** — every proposal landed in those categories per the explicit prompt steering. Validates iter-100's meta-finding that the recall-direction gradient was mining out; UI/UX + Metacognition gradients have fresh space. **Also surfaced:** the schema-extension dependency (Calibrated L1 + Concept-Tag Drill both blocked on the same schema field) is now a 2-entry pattern — worth a small frame iter to ratify the schema bump when a 3rd entry blocks on it.
+
+§ Next nominates 🗺 Sidebar Command Palette ship for iter 104+ (post-`/clear` STRONGLY recommended — 8 ships past empirical cap this session).
+
+---
+
+### 2026-05-25 iter 103 — 🗺 Sidebar Command Palette (Cmd-K)
+
+**Status:** queued (vision iter 103 — top promoted entry; closes 33-button sidebar discoverability decay)
+
+**Value claim:** PROFILE.md L26-28 ("20 free minutes, drilling friction near zero") + L42 (sustained typing deprioritized vs tap-and-recall). The 33-button sidebar that the recent ship-spree produced has linearly degraded discoverability — the rusty engineer can't recall which mode they wanted without scrolling/scanning. Mean keystrokes-to-mode-launch has crept up; this is the first iter the loop has noticed it.
+**Mechanic:** Press `k` keyboard shortcut (or tap a new top-bar 🔍 icon for mobile) → overlay listing all 33 modes + 152 lesson titles + 28 sections. Fuzzy match on input; results ranked by recent-use frequency from a new `state.commandUsage` counter incremented in each existing sidebar handler (one-line hook each). Type 2-3 letters → enter to launch. Esc closes.
+**Success criterion:** Mean keystrokes from "want to start Recognize" drops from 4+ scrolls to ≤3 keystrokes; >40% of mode launches go through the palette within 1 week of live.
+**Estimated scope:** single-iter ship (~120 LOC JS + ~30 CSS). Schema-additive `state.commandUsage = { [id]: count }`. Mobile-friendly via top-bar 🔍 affordance.
+**Data dependency:** none — manifest + sidebar handlers already exist; `state.commandUsage` is one-line additive.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged):** mobile keyboard summoning conflicts with the existing `/` search and `?` help shortcuts — keybinding collision needs careful conditional (allow `k` only when no input has focus; mobile users tap the icon instead).
+**Why this is a "new bucket" not "better cell":** every shipped sidebar item ADDED a button. This is the first surface that REORGANIZES across them — orthogonal to "yet another button." Closes a meta-decay the loop's own shipping pattern caused.
+**Subagent source:** iter-103 vision iter — top by leverage-per-effort (highest impact-per-LOC; addresses the most visible UX drift this month).
+
+---
+
+### 2026-05-25 iter 103 — 📈 Mastery Half-Life
+
+**Status:** queued (vision iter 103 — second promoted entry; per-lesson longitudinal SR signal)
+
+**Value claim:** PROFILE.md L67 ("Mastered lessons stay mastered across SR intervals") is currently unmeasured at lesson grain. User has no surface telling them WHICH lessons slip vs which stick — only that some come back due. Closes a stated success criterion measurement gap.
+**Mechanic:** New Stats tile "Sticky vs Slippery." For each lesson with ≥2 L3-pass events in `state.history`, compute median gap between consecutive passes (= cycle interval before re-drilling). Cluster into 3 buckets: Sticky (gap >14d), Normal (3-14d), Slippery (<3d). Tile shows aggregate counts + tap-routed top-5 slippery lessons list.
+**Success criterion:** ≥30% of users who open the tile route to a slippery lesson within 2 weeks; longitudinal slippery-list median half-life trends UP month-over-month.
+**Estimated scope:** single-iter ship (~140 LOC JS + ~25 CSS). Pure derivation over `state.history` — zero new state field. Reuses Stats-tile pattern from iter-84/85/101.
+**Data dependency:** `state.history[lessonId]` L3-pass events with timestamps (iter-32 schema). Lessons with <2 L3-pass events get skipped from the bucket — graceful empty-state for new users ("drill more L3 passes to unlock this view").
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged):** users with <2 cycles get empty tile — needs graceful "drill more to unlock" copy that doesn't feel gamified or paywalled.
+**Why this is a "new bucket" not "better cell":** Decay Radar shows "at risk RIGHT NOW." Resurrect Queue shows "overdue." Half-Life shows the lesson's PERSONALITY across cycles — a longitudinal time-scale signal neither captures. Different time horizon = different cognitive operation.
+**Subagent source:** iter-103 vision iter — second by leverage-per-effort (directly serves a PROFILE.md success criterion; pure derivation = no risk; mobile-friendly Stats-tile pattern).
+
+---
+
+### 2026-05-25 iter 103 — ⏱ Session Heatstrip (sidebar header)
+
+**Status:** queued (vision iter 103 — third promoted entry; orchestrator-elevated over subagent's HOLD)
+
+**Value claim:** PROFILE.md L69 (20-min mobile bursts) — the rusty engineer has no inline visibility into THIS session's depth, only post-hoc Stats. Builds metacognitive ownership of momentum: "I've been drilling 12 min, 7 lessons touched, 3 passes — keep going one more minute?"
+**Mechanic:** Thin (4px) strip across the very top of the sidebar showing the current session as a horizontal timeline of last 30 min. Each minute is a cell colored by activity grain (green=L1 pass, amber=L2 pass, blue=L3 pass, red=miss, gray=idle). Tap → modal with "this session: X min active, Y lessons touched, Z passes." Resets on >10-min idle gap (new session).
+**Success criterion:** Bounce-rate (session length <2 min) drops 15% measurably via session-length distribution shift in `state.history` event-timestamps.
+**Estimated scope:** single-iter ship (~110 LOC JS + ~25 CSS). Rendering pass over `state.history` tail — no new capture.
+**Data dependency:** `state.history` events already exist with timestamps (iter-32 schema). 30-min lookback is computed at render time.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (orchestrator-validated, subagent-flagged):** could read as gamification (PROFILE.md L75 anti-pattern) if colored like an XP bar. **Mitigation pre-decided:** stay informational-density (event-grain colors, not progress thermometer); use desaturated palette; copy framing is "what just happened" not "how close to goal." Tap modal shows facts, not scores.
+**Why this is a "new bucket" not "better cell":** Streak Map is 60-DAY scale. Mock Replay Reel is per-lesson. Heatstrip is THIS-SESSION minute-grain — answers "should I keep going?" right now. Time-scale none of the shipped Metacognition surfaces cover.
+**Subagent source:** iter-103 vision iter — subagent self-held over evidence-of-problem concern; orchestrator-elevated with the gamification mitigation pre-decided.
+
+---
+
+### 2026-05-25 iter 103 — HELD: 🔖 Pin-Top Recent Lessons (Command-Palette-dependency)
+
+**Status:** HELD — conditional on 🗺 Sidebar Command Palette (iter-103 #1) shipping first.
+
+**Value claim:** Sidebar has 152 lessons across 28 collapsed sections. Re-finding the lesson drilled 5 min ago is ~3 expand-clicks on mobile.
+**Mechanic:** A "Recent" pseudo-section pinned ABOVE all real sections, showing last 5 distinct lessons accessed via extended `state.recentLessonIds: string[5]` ring buffer.
+**Why held:** if Command Palette ships with recent-use ranking, the "re-find recent lesson" job is mostly solved (palette top-ranks recent lessons). Re-promote condition: post-palette feedback shows recent-lesson re-find still ranks as a top friction (e.g., users still scroll the sidebar to re-find a 5-min-ago lesson after the palette has been live for 2+ weeks).
+
+---
+
+### 2026-05-25 iter 103 — HELD: 🧮 Concept-Tag Drill-Through (schema blocker — SAME as iter-95 Calibrated L1)
+
+**Status:** HELD — needs schema extension; same blocker as iter-95 Calibrated L1.
+
+**Value claim:** Closes the Mistake Tagging "capture-but-no-action" loop — re-drill ONLY the L1 questions previously mistagged with a chosen label.
+**Mechanic:** Stats "Top miss patterns" tile tag rows become tappable → opens 10-question session pulling only the specific `L1.questions[i]` items the user mistagged with that label.
+**Why blocked:** subagent assumed `state.misses[]` captures per-question `questionIdx`, but per iter-58 schema it's per-lesson grain only (`{lessonId: [{at, level, tag}]}`). **Same blocker as iter-95 Calibrated L1.** Both proposals require extending `state.misses[]` entries to include `questionIdx` (and possibly `wrongOption` for fully-replaying the mistake).
+**Re-promote condition:** a frame iter ratifies schema extension `state.misses[lessonId][i] = { at, level, tag, questionIdx, wrongOption? }`. Both Calibrated L1 AND Concept-Tag Drill-Through would unblock together. **Worth a small frame iter when a 3rd proposal also blocks on this schema field** — pattern is now load-bearing.
+
+---
+
 ## Meta-finding (iter 100 vision — ninth vision iter; iter-95 queue fully drained)
 
 **Ninth vision iter (after 26/31/48/55/59/64/82/90/95).** Iter-95 queue (Notes Cloze iter 97 + Mechanic Constellation iter 98 + Reverse-Walkthrough iter 99) fully shipped in 3 iters — matching the iter-90 queue's drain speed (Conv Drill → Trace-Hop → Mechanic-Bridge). Iter 100 fires vision per SKILL.md Step 1B ("shipping is genuinely blocked when Step 1A surfaces nothing").

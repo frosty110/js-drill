@@ -133,6 +133,7 @@ const state = {
   swapBench: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill (additive, no `__v` bump)
   convDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 91: 🎬 Conversation Drill — 6-section interview-arc classifier over conversation.sections[] (additive, no `__v` bump)
   traceHop: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 93: 🧬 Trace-Hop — pick-the-middle-state mobile quiz over walkthrough.trace yields (additive, no `__v` bump)
+  notesDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 97: 📝 Notes Cloze Tap-Drill — cloze-MC over reference.notes[] keywords (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -562,6 +563,15 @@ function loadProgress() {
           lastRunAt: +parsed.traceHop.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 97: 📝 Notes Cloze Tap-Drill lifetime stats. Legacy users get zeros.
+    state.notesDrill = parsed.notesDrill && typeof parsed.notesDrill === 'object'
+      ? {
+          attempts: +parsed.notesDrill.attempts || 0,
+          correct: +parsed.notesDrill.correct || 0,
+          sessions: +parsed.notesDrill.sessions || 0,
+          lastRunAt: +parsed.notesDrill.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -632,6 +642,7 @@ function saveProgress() {
     swapBench: state.swapBench,
     convDrill: state.convDrill,
     traceHop: state.traceHop,
+    notesDrill: state.notesDrill,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1762,6 +1773,256 @@ async function startTraceHopSession() {
     `;
     shell.querySelector('[data-action="trace-hop-again"]').addEventListener('click', () => startTraceHopSession());
     shell.querySelector('[data-action="trace-hop-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 97: 📝 Notes Cloze Tap-Drill — cloze-MC over `reference.notes[]` text.
+// Each card shows ONE note string with one keyword blanked + 4 tap options.
+// Distractors sampled from notes in OTHER lessons (preferring same section
+// for plausibility). Third recall direction over the notes corpus —
+// distinct from 🎰 Gotcha (whole-note yes/no recognition) and 🃏 Flash
+// (canonical-code cloze). Forces actual keyword recall (not just affirm
+// familiarity), which is closer to interview pressure. From roadmap.md
+// iter-95 #1 (vision iter top promoted entry).
+const NOTES_DRILL_DECK_LEN = 12;
+const NOTES_DRILL_STOP_WORDS = new Set([
+  'the','a','an','and','or','but','if','then','else','when','that','this',
+  'these','those','it','its','is','are','was','were','be','been','being',
+  'have','has','had','do','does','did','will','would','could','should',
+  'may','might','must','can','to','of','in','on','at','by','for','from',
+  'with','as','into','about','over','under','than','so','not','no','yes',
+  'you','your','they','their','we','our','my','his','her','one','two',
+  'any','all','some','each','every','same','only','other','many','also',
+  'use','used','uses','make','makes','take','takes','give','gives','get',
+  'gets','put','puts','set','sets','because','while','since','until',
+  'where','what','which','who','how','very','much','more','most','less'
+]);
+// Strip leading + trailing non-alphanumeric/underscore characters (so
+// "reduce)." → "reduce", "__v" → "__v"). Internal `.` and `-` survive
+// (so "Array.from" and "freq-map" stay intact when surrounded by letters
+// because the regex anchors only at start/end).
+function _notesStripPunct(token) {
+  return token.replace(/^[^a-zA-Z0-9_]+|[^a-zA-Z0-9_]+$/g, '');
+}
+function _notesIsEligibleWord(token) {
+  const stripped = _notesStripPunct(token);
+  if (stripped.length < 4) return false;
+  if (NOTES_DRILL_STOP_WORDS.has(stripped.toLowerCase())) return false;
+  // Require at least one letter (skip pure numbers / pure punctuation).
+  if (!/[a-zA-Z]/.test(stripped)) return false;
+  return true;
+}
+// Pick a keyword to blank in a note. Strategy: walk tokens in reverse —
+// the LAST eligible distinctive word is usually the load-bearing term
+// in a one-line gotcha (e.g., "splice mutates the array" → "array",
+// or better "mutates"; tested on real corpus iter-97). Returns null
+// when no eligible word found (caller skips the note).
+function _notesPickBlank(noteText) {
+  if (typeof noteText !== 'string') return null;
+  const tokens = noteText.split(/(\s+)/); // keep whitespace tokens for re-join
+  // Walk in reverse over non-whitespace tokens.
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const t = tokens[i];
+    if (!t || /^\s+$/.test(t)) continue;
+    if (!_notesIsEligibleWord(t)) continue;
+    const stripped = _notesStripPunct(t);
+    // Find the exact position of `stripped` inside the original token
+    // (token may have surrounding punctuation we want to keep).
+    const startInTok = t.indexOf(stripped);
+    if (startInTok < 0) continue;
+    // Reconstruct: leading-tokens + leading-punct + ___ + trailing-punct + trailing-tokens
+    const lead = tokens.slice(0, i).join('');
+    const trail = tokens.slice(i + 1).join('');
+    const tokPrefix = t.slice(0, startInTok);
+    const tokSuffix = t.slice(startInTok + stripped.length);
+    return {
+      blankWord: stripped,
+      prefix: lead + tokPrefix,
+      suffix: tokSuffix + trail
+    };
+  }
+  return null;
+}
+// Distractor pool — eligible words from OTHER lessons' notes. Prefer same
+// section first; fall back to any track if pool too small.
+function _notesCollectDistractors(sourceLessonId, sourceSection, blankWord) {
+  const blankLower = blankWord.toLowerCase();
+  const same = new Set();
+  const other = new Set();
+  for (const lesson of CURRICULUM) {
+    if (lesson.id === sourceLessonId) continue;
+    const c = CONTENT[lesson.id];
+    if (!c || !c.reference || !Array.isArray(c.reference.notes)) continue;
+    for (const note of c.reference.notes) {
+      if (typeof note !== 'string') continue;
+      const tokens = note.split(/\s+/);
+      for (const t of tokens) {
+        if (!_notesIsEligibleWord(t)) continue;
+        const stripped = _notesStripPunct(t);
+        if (stripped.toLowerCase() === blankLower) continue;
+        (lesson.section === sourceSection ? same : other).add(stripped);
+      }
+    }
+  }
+  const sameArr = Array.from(same);
+  const otherArr = Array.from(other);
+  // Fisher-Yates shuffle each.
+  for (const arr of [sameArr, otherArr]) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+  // Take from same first; top up from other.
+  const pool = sameArr.concat(otherArr);
+  return pool.slice(0, 3);
+}
+async function _notesDrillBuildDeck() {
+  // Preload a broad sample so the pool is large enough for distractors.
+  const sample = CURRICULUM.filter(l => l.status === 'full').slice(0, 80);
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+      if (Object.keys(CONTENT).length >= 40) break;
+    }
+  }
+  // Flatten eligible notes across loaded lessons.
+  const pool = [];
+  for (const lesson of CURRICULUM) {
+    const c = CONTENT[lesson.id];
+    if (!c || !c.reference || !Array.isArray(c.reference.notes)) continue;
+    for (const note of c.reference.notes) {
+      if (typeof note !== 'string' || note.length < 25) continue;
+      const picked = _notesPickBlank(note);
+      if (!picked) continue;
+      pool.push({
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        sectionName: lesson.section,
+        note,
+        blankWord: picked.blankWord,
+        prefix: picked.prefix,
+        suffix: picked.suffix
+      });
+    }
+  }
+  if (pool.length < 4) return null;
+  // Fisher-Yates shuffle.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  // Build cards with distractors. Skip any card with <3 distractors.
+  const deck = [];
+  for (const item of pool) {
+    if (deck.length >= NOTES_DRILL_DECK_LEN) break;
+    const distractors = _notesCollectDistractors(item.lessonId, item.sectionName, item.blankWord);
+    if (distractors.length < 3) continue;
+    const options = [
+      { word: item.blankWord, isCorrect: true },
+      ...distractors.map(w => ({ word: w, isCorrect: false }))
+    ];
+    // Shuffle option order.
+    for (let i = options.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [options[i], options[j]] = [options[j], options[i]];
+    }
+    deck.push({ ...item, options });
+  }
+  return deck.length >= 4 ? deck : null;
+}
+async function startNotesDrillSession() {
+  const deck = await _notesDrillBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('Notes Drill needs more loaded lessons. Click around a few first, then try again.');
+    return;
+  }
+  state.notesDrill.sessions++;
+  state.notesDrill.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell notes-drill-shell">
+        <div class="recognize-header">
+          <span>📝 Notes · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-notes">✕ Exit</button>
+        </div>
+        <div class="notes-drill-tag">Which word fits the blank?</div>
+        <div class="notes-drill-note">${escapeHtml(card.prefix)}<span class="notes-drill-blank">___</span>${escapeHtml(card.suffix)}</div>
+        <div class="notes-drill-options">
+          ${card.options.map((o, i) => `
+            <button class="recognize-opt notes-drill-opt" data-opt="${i}">
+              <span class="notes-drill-opt-letter">${String.fromCharCode(65 + i)}</span>
+              <span class="notes-drill-opt-word">${escapeHtml(o.word)}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-notes-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-notes"]').addEventListener('click', () => renderLesson());
+    const optBtns = shell.querySelectorAll('.notes-drill-opt');
+    let answered = false;
+    optBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const optIdx = +btn.dataset.opt;
+        const picked = card.options[optIdx];
+        const wasRight = !!picked.isCorrect;
+        if (wasRight) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.notesDrill.attempts++;
+        if (wasRight) state.notesDrill.correct++;
+        saveProgress();
+        optBtns.forEach((b, i) => {
+          b.disabled = true;
+          if (card.options[i].isCorrect) b.classList.add('recognize-opt-correct');
+          else if (i === optIdx) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-notes-feedback]');
+        if (fb) {
+          fb.innerHTML = `
+            <div class="notes-drill-reveal">
+              <div class="notes-drill-reveal-full"><strong>${escapeHtml(card.blankWord)}</strong> — ${escapeHtml(card.note)}</div>
+              <div class="notes-drill-reveal-lesson">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
+              <button class="notes-drill-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="notes-drill-next" data-action="notes-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="notes-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell notes-drill-shell">
+        <div class="recognize-header"><span>📝 Notes · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} keywords recalled · ${deck.length - correct} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.notesDrill.correct} / ${state.notesDrill.attempts} (${state.notesDrill.attempts > 0 ? Math.round(state.notesDrill.correct / state.notesDrill.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="notes-again">📝 Another session</button>
+            <button class="secondary" data-action="notes-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="notes-again"]').addEventListener('click', () => startNotesDrillSession());
+    shell.querySelector('[data-action="notes-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -7034,6 +7295,15 @@ async function init() {
   const traceHopBtn = document.getElementById('trace-hop-btn');
   if (traceHopBtn) traceHopBtn.addEventListener('click', () => {
     startTraceHopSession();
+  });
+
+  // iter 97: 📝 Notes Cloze — keyword-blank recall over reference.notes[].
+  // Third recall direction over the notes corpus: Gotcha tests whole-note
+  // recognition; Flash tests code-token cloze; Notes Cloze tests note-
+  // keyword cloze with MC distractors.
+  const notesDrillBtn = document.getElementById('notes-drill-btn');
+  if (notesDrillBtn) notesDrillBtn.addEventListener('click', () => {
+    startNotesDrillSession();
   });
 
   // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed

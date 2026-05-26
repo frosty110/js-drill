@@ -131,6 +131,7 @@ const state = {
   claim: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 79: 📐 Smell-Test Complexity-Claim drill (additive, no `__v` bump)
   gotcha: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 83: 🎰 Gotcha Roulette — reference.notes recall stream (additive, no `__v` bump)
   swapBench: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill (additive, no `__v` bump)
+  convDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 91: 🎬 Conversation Drill — 6-section interview-arc classifier over conversation.sections[] (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -542,6 +543,15 @@ function loadProgress() {
           lastRunAt: +parsed.swapBench.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 91: 🎬 Conversation Drill lifetime stats. Legacy users get zeros.
+    state.convDrill = parsed.convDrill && typeof parsed.convDrill === 'object'
+      ? {
+          attempts: +parsed.convDrill.attempts || 0,
+          correct: +parsed.convDrill.correct || 0,
+          sessions: +parsed.convDrill.sessions || 0,
+          lastRunAt: +parsed.convDrill.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -610,6 +620,7 @@ function saveProgress() {
     claim: state.claim,
     gotcha: state.gotcha,
     swapBench: state.swapBench,
+    convDrill: state.convDrill,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -1269,6 +1280,176 @@ async function startGotchaSession() {
     `;
     shell.querySelector('[data-action="gotcha-again"]').addEventListener('click', () => startGotchaSession());
     shell.querySelector('[data-action="gotcha-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 91: 🎬 Conversation Drill — interview-arc classifier over the 99 Patterns
+// + Applied lessons' `conversation.sections[]` corpus. Each card shows ONE
+// .say paragraph with the section title HIDDEN; user taps which of the 6
+// fixed interview-phase types it is (Restate / Brute force / Spot pattern /
+// Trace / Edges / Complexity). Reveal shows actual title + source lesson +
+// "Drill this lesson →" deep-link. Misses route to state.weakness via existing
+// path. First surface to test the interview-arc skill — recruiters grade the
+// arc, not just the code, and 495 authored paragraphs across 99 lessons have
+// never been used as a recall corpus. From roadmap.md iter-90 #1 (vision iter
+// top promoted entry). Reuses .recognize-* shell base + Gotcha card structure.
+const CONV_DRILL_DECK_LEN = 10;
+const CONV_DRILL_MIN_SAY_LEN = 100;
+const CONV_DRILL_PHASES = [
+  { idx: 1, label: '🎯 Restate', hint: 'Clarify the problem' },
+  { idx: 2, label: '🧱 Brute force', hint: 'Naive solution first' },
+  { idx: 3, label: '💡 Spot pattern', hint: 'Identify the technique' },
+  { idx: 4, label: '🔍 Trace', hint: 'Walk through an example' },
+  { idx: 5, label: '⚠️ Edge cases', hint: 'Boundary conditions' },
+  { idx: 6, label: '📏 Complexity', hint: 'Big-O & wrap-up' }
+];
+function _convDrillPhaseIdx(title) {
+  // Titles like "1. Restate & clarify" / "3. Spot the pattern — API shape…".
+  // Extract the leading digit to bucket. Returns 1..6 or 0 if unparseable.
+  if (typeof title !== 'string') return 0;
+  const m = title.match(/^\s*([1-6])\b/);
+  return m ? +m[1] : 0;
+}
+async function _convDrillBuildDeck() {
+  // Preload Patterns/Applied lessons broadly — these are the only tracks with
+  // conversation blocks (99/99 per OOB-2026-05-24).
+  const candidates = CURRICULUM.filter(l =>
+    l.status === 'full' && (l.track === 'patterns' || l.track === 'applied')
+  );
+  // Fisher-Yates shuffle candidates so the preload sample varies per session.
+  const shuffled = candidates.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  // Cap preloads at 40 to keep session startup fast on first-run.
+  const sample = shuffled.slice(0, 40);
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    }
+  }
+  // Flatten all eligible sections across loaded lessons.
+  const pool = [];
+  for (const lesson of CURRICULUM) {
+    if (lesson.track !== 'patterns' && lesson.track !== 'applied') continue;
+    const c = CONTENT[lesson.id];
+    if (!c || !c.conversation || !Array.isArray(c.conversation.sections)) continue;
+    for (const s of c.conversation.sections) {
+      const say = (s && typeof s.say === 'string') ? s.say : '';
+      if (say.length < CONV_DRILL_MIN_SAY_LEN) continue; // skip empty/thin sections
+      const idx = _convDrillPhaseIdx(s.title);
+      if (idx < 1 || idx > 6) continue;
+      pool.push({
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        sectionName: lesson.section,
+        sectionTitle: s.title,
+        say,
+        phaseIdx: idx
+      });
+    }
+  }
+  if (pool.length < 4) return null;
+  // Fisher-Yates shuffle the pool.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(CONV_DRILL_DECK_LEN, pool.length));
+}
+
+async function startConvDrillSession() {
+  const deck = await _convDrillBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('Conversation Drill needs more loaded lessons. Click around a few Patterns lessons first, then try again.');
+    return;
+  }
+  state.convDrill.sessions++;
+  state.convDrill.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell conv-drill-shell">
+        <div class="recognize-header">
+          <span>🎬 Conv · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-conv">✕ Exit</button>
+        </div>
+        <div class="conv-drill-tag">Which phase of the interview is this?</div>
+        <div class="conv-drill-say">${escapeHtml(card.say)}</div>
+        <div class="conv-drill-options">
+          ${CONV_DRILL_PHASES.map(p => `
+            <button class="recognize-opt conv-drill-opt" data-phase="${p.idx}" title="${escapeHtml(p.hint)}">
+              ${escapeHtml(p.label)}
+            </button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-conv-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-conv"]').addEventListener('click', () => renderLesson());
+    const opts = shell.querySelectorAll('.conv-drill-opt');
+    let answered = false;
+    opts.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const picked = +btn.dataset.phase;
+        const wasRight = picked === card.phaseIdx;
+        if (wasRight) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.convDrill.attempts++;
+        if (wasRight) state.convDrill.correct++;
+        saveProgress();
+        opts.forEach(b => {
+          b.disabled = true;
+          const pIdx = +b.dataset.phase;
+          if (pIdx === card.phaseIdx) b.classList.add('recognize-opt-correct');
+          else if (b === btn) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-conv-feedback]');
+        if (fb) {
+          fb.innerHTML = `
+            <div class="conv-drill-reveal">
+              <div class="conv-drill-reveal-title">${escapeHtml(card.sectionTitle)}</div>
+              <div class="conv-drill-reveal-lesson">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
+              <button class="conv-drill-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="conv-drill-next" data-action="conv-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="conv-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell conv-drill-shell">
+        <div class="recognize-header"><span>🎬 Conv · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} phases identified · ${deck.length - correct} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.convDrill.correct} / ${state.convDrill.attempts} (${state.convDrill.attempts > 0 ? Math.round(state.convDrill.correct / state.convDrill.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="conv-again">🎬 Another session</button>
+            <button class="secondary" data-action="conv-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="conv-again"]').addEventListener('click', () => startConvDrillSession());
+    shell.querySelector('[data-action="conv-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -6506,6 +6687,14 @@ async function init() {
   const swapBtn = document.getElementById('swap-btn');
   if (swapBtn) swapBtn.addEventListener('click', () => {
     startSwapBenchSession();
+  });
+
+  // iter 91: 🎬 Conversation Drill — interview-arc classifier over
+  // conversation.sections[]. First surface to test the 6-section interview
+  // arc on Patterns/Applied lessons. Reuses Gotcha card stack.
+  const convDrillBtn = document.getElementById('conv-drill-btn');
+  if (convDrillBtn) convDrillBtn.addEventListener('click', () => {
+    startConvDrillSession();
   });
 
   // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed

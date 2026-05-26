@@ -137,6 +137,7 @@ const state = {
   mechConstellation: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 98: 🪐 Mechanic Constellation — multi-select recall over mechanics[] tag (additive, no `__v` bump)
   reverseWalk: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over walkthrough.examples (additive, no `__v` bump)
   notesLocate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 102: 🗂 Notes→Lesson Reverse Lookup — cross-corpus localization (additive, no `__v` bump)
+  commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -660,6 +661,9 @@ function loadProgress() {
           lastRunAt: +parsed.notesLocate.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 104: 🗺 Command Palette use-counter. Legacy users get empty map.
+    state.commandUsage = parsed.commandUsage && typeof parsed.commandUsage === 'object' && !Array.isArray(parsed.commandUsage)
+      ? parsed.commandUsage : {};
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -734,6 +738,7 @@ function saveProgress() {
     mechConstellation: state.mechConstellation,
     reverseWalk: state.reverseWalk,
     notesLocate: state.notesLocate,
+    commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -8098,6 +8103,184 @@ async function init() {
     if (state.currentLessonId) renderLesson();
   });
 
+  // iter 104: 🗺 Command Palette — Cmd-K / Ctrl-K opens overlay with fuzzy
+  // search across sidebar buttons + lessons + sections. Closes the 33-button
+  // discoverability decay the recent ship-spree caused. First REORGANIZE-not-
+  // ADD surface. Results ranked by recent-use frequency from state.commandUsage.
+  const paletteOverlay = document.getElementById('palette-overlay');
+  const paletteInput = document.getElementById('palette-input');
+  const paletteResults = document.getElementById('palette-results');
+  const paletteTrigger = document.getElementById('palette-trigger');
+  let _paletteItems = []; // [{ id, label, kind, hint?, action }]
+  let _paletteFiltered = [];
+  let _paletteCursor = 0;
+  function _paletteBuildIndex() {
+    const items = [];
+    // (1) Sidebar buttons — synthetic click invokes existing handlers.
+    document.querySelectorAll('aside button[id], #sidebar-main-buttons button[id]').forEach(btn => {
+      const id = btn.id;
+      if (!id || id === 'palette-trigger' || id === 'hamburger') return;
+      const text = (btn.textContent || '').trim().replace(/\s+/g, ' ');
+      if (!text || text.length > 60) return;
+      const hint = btn.title || '';
+      items.push({
+        id: 'btn:' + id,
+        label: text,
+        kind: 'mode',
+        hint: hint.length > 80 ? hint.slice(0, 78) + '…' : hint,
+        action: () => btn.click()
+      });
+    });
+    // (2) Lessons — direct selectLesson.
+    for (const lesson of CURRICULUM) {
+      if (lesson.status !== 'full') continue;
+      items.push({
+        id: 'lesson:' + lesson.id,
+        label: lesson.title,
+        kind: 'lesson',
+        hint: lesson.section,
+        action: () => { if (typeof selectLesson === 'function') selectLesson(lesson.id); }
+      });
+    }
+    // (3) Sections — collect from manifest + jump-to-first-lesson-in-section.
+    const seenSections = new Set();
+    for (const lesson of CURRICULUM) {
+      if (seenSections.has(lesson.section)) continue;
+      seenSections.add(lesson.section);
+      const firstId = lesson.id;
+      items.push({
+        id: 'section:' + lesson.section,
+        label: lesson.section,
+        kind: 'section',
+        hint: 'jump to first lesson in section',
+        action: () => { if (typeof selectLesson === 'function') selectLesson(firstId); }
+      });
+    }
+    return items;
+  }
+  function _paletteScore(item, q) {
+    // Substring + use-count blend. Use-count breaks ties. Matches against
+    // BOTH the visible label AND the underlying id (so users who know
+    // lesson ids like "two-sum" can search by id). Treats hyphen / space /
+    // dot / underscore as word separators for normalization.
+    const usage = +(state.commandUsage[item.id] || 0);
+    if (!q) return usage; // empty query: rank purely by recent use
+    const norm = s => s.toLowerCase().replace(/[\s\-_.·:]+/g, ' ');
+    const label = norm(item.label);
+    const idStr = item.id ? norm(item.id) : '';
+    const qNorm = norm(q);
+    if (label.startsWith(qNorm)) return 1000 + usage;
+    if (idStr && idStr.includes(qNorm)) return 950 + usage;
+    if (label.includes(qNorm)) return 500 + usage;
+    // Match by token initials (e.g., "rwk" matches "Reverse-Walk")
+    const tokens = label.split(' ').filter(Boolean);
+    const initials = tokens.map(t => t[0] || '').join('');
+    if (initials.startsWith(qNorm.replace(/\s/g, ''))) return 200 + usage;
+    return 0;
+  }
+  function _paletteRender() {
+    const q = paletteInput.value.toLowerCase().trim();
+    if (!q) {
+      // Empty-query default: interleave kinds so the user sees a representative
+      // mix of modes + lessons + sections rather than 24 mode rows in a row.
+      // Within each kind, sort by recent-use (state.commandUsage). Caps: 12
+      // modes / 8 lessons / 4 sections = 24 total.
+      const byKind = { mode: [], lesson: [], section: [] };
+      for (const item of _paletteItems) {
+        if (byKind[item.kind]) byKind[item.kind].push(item);
+      }
+      const byUse = (a, b) => (+(state.commandUsage[b.id] || 0)) - (+(state.commandUsage[a.id] || 0));
+      _paletteFiltered = [
+        ...byKind.mode.sort(byUse).slice(0, 12),
+        ...byKind.lesson.sort(byUse).slice(0, 8),
+        ...byKind.section.sort(byUse).slice(0, 4)
+      ];
+      // Re-sort the combined 24 by score (use-count) so the most-recently-used
+      // items float to top regardless of kind.
+      _paletteFiltered.sort(byUse);
+    } else {
+      const scored = _paletteItems.map(item => ({ item, score: _paletteScore(item, q) }))
+        .filter(s => s.score > 0)
+        .sort((a, b) => b.score - a.score);
+      _paletteFiltered = scored.slice(0, 24).map(s => s.item);
+    }
+    if (_paletteCursor >= _paletteFiltered.length) _paletteCursor = 0;
+    paletteResults.innerHTML = _paletteFiltered.map((item, i) => `
+      <div class="palette-result ${i === _paletteCursor ? 'palette-result-active' : ''}" data-idx="${i}" role="option">
+        <span class="palette-result-kind palette-result-kind-${item.kind}">${item.kind}</span>
+        <span class="palette-result-label">${escapeHtml(item.label)}</span>
+        ${item.hint ? `<span class="palette-result-hint">${escapeHtml(item.hint)}</span>` : ''}
+      </div>
+    `).join('') || '<div class="palette-empty">No matches.</div>';
+    paletteResults.querySelectorAll('.palette-result').forEach(el => {
+      el.addEventListener('click', () => {
+        const i = +el.dataset.idx;
+        _paletteSelect(i);
+      });
+      el.addEventListener('mouseenter', () => {
+        _paletteCursor = +el.dataset.idx;
+        paletteResults.querySelectorAll('.palette-result').forEach((n, j) =>
+          n.classList.toggle('palette-result-active', j === _paletteCursor));
+      });
+    });
+  }
+  function _paletteSelect(i) {
+    const item = _paletteFiltered[i];
+    if (!item) return;
+    state.commandUsage[item.id] = (state.commandUsage[item.id] || 0) + 1;
+    saveProgress();
+    _paletteClose();
+    setTimeout(() => { try { item.action(); } catch (_) {} }, 0);
+  }
+  function _paletteOpen() {
+    _paletteItems = _paletteBuildIndex();
+    paletteInput.value = '';
+    _paletteCursor = 0;
+    paletteOverlay.classList.remove('hidden');
+    _paletteRender();
+    setTimeout(() => paletteInput.focus(), 0);
+  }
+  function _paletteClose() {
+    paletteOverlay.classList.add('hidden');
+    paletteInput.value = '';
+    _paletteFiltered = [];
+  }
+  if (paletteInput) {
+    paletteInput.addEventListener('input', _paletteRender);
+    paletteInput.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        _paletteCursor = Math.min(_paletteFiltered.length - 1, _paletteCursor + 1);
+        _paletteRender();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        _paletteCursor = Math.max(0, _paletteCursor - 1);
+        _paletteRender();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        _paletteSelect(_paletteCursor);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        _paletteClose();
+      }
+    });
+  }
+  if (paletteOverlay) {
+    paletteOverlay.addEventListener('click', (e) => {
+      if (e.target === paletteOverlay) _paletteClose();
+    });
+  }
+  if (paletteTrigger) {
+    paletteTrigger.addEventListener('click', _paletteOpen);
+  }
+  // Cmd-K / Ctrl-K binding — modifier-required so bare `k` lesson-nav is preserved.
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      _paletteOpen();
+    }
+  });
+
   // Keyboard nav (global)
   document.addEventListener('keydown', (e) => {
     // All in-app shortcuts are bare keys. If a modifier is held, defer to the
@@ -8126,6 +8309,12 @@ async function init() {
     }
     if (e.key === 'Escape') {
       // Close any open modal on Escape
+      const palette = document.getElementById('palette-overlay');
+      if (palette && !palette.classList.contains('hidden')) {
+        _paletteClose();
+        e.preventDefault();
+        return;
+      }
       const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal', 'streak-map-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);

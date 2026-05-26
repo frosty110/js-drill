@@ -170,7 +170,7 @@ The convention:
 **Cross-cutting concerns:**
 - Mobile probe is mandatory for any UI change (PROFILE.md 80%-phone). See SKILL.md Step 5.
 
-**Shipped from this category:** Lesson-history sparkline (iter 33) · URL deep-linking (iter 38) → see [`shipped-by-category.md` § 5](shipped-by-category.md#5-uiux-experience).
+**Shipped from this category:** Lesson-history sparkline (iter 33) · URL deep-linking (iter 38) · 🗺 Sidebar Command Palette (iter 104) → see [`shipped-by-category.md` § 5](shipped-by-category.md#5-uiux-experience).
 
 ---
 

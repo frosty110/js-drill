@@ -47,6 +47,7 @@
 
 - **Lesson-history sparkline** *(iter 33; mobile probe iter 34)* — first per-lesson temporal surface. Established Metacognition category.
 - **URL deep-linking** *(iter 38)* — Hash format `#/<lesson-id>/<tab>` (e.g. `#/two-sum/L1`). `history.replaceState` updates URL on lesson/tab change so URLs stay shareable without polluting history; `hashchange` listener handles back/forward and pasted URLs. Invalid lesson IDs fall back gracefully. Cross-device URL sharing closes part of the BS-10 sync gap for read-only navigation. Mobile probe `tools/cdp/url-deep-link.js` (5 assertions).
+- **🗺 Sidebar Command Palette (Cmd-K)** *(iter 104)* — top-right 🔍 trigger + Cmd-K/Ctrl-K shortcut → overlay with fuzzy search across 33 modes + 152 lessons + 28 sections. Empty-query default interleaves kinds (12 modes + 8 lessons + 4 sections by recent-use); typed query scores via substring + use-count blend, matches BOTH label AND id (so `two-sum` works), normalizes `[\s\-_.·:]+` for hyphen-agnostic search. `state.commandUsage` records selections for recency ranking. **First REORGANIZE-not-ADD ship in the loop's history** — closes the 33-button sidebar discoverability decay the recent ship-spree caused. ~205 LOC JS + 75 CSS. Mobile probe `tools/cdp/command-palette.js` (5 assertions across 5 phases including kind-mix verification + id-search verification + recency-bump verification).
 
 ---
 

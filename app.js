@@ -211,6 +211,30 @@ const MOCK_HISTORY_MAX = 5;
 // at 1 event/day). Larger caps would bloat localStorage; smaller would lose
 // the 30-day window the sparkline targets per roadmap entry iter-31 #6.
 const HISTORY_MAX = 50;
+
+// iter 123: 🎹 L3 keyboard chips — one-tap insertion for high-cost JS tokens.
+// Selection criteria: tokens where (typing cost on phone keyboard) × (frequency
+// in canonical solutions) is high — paren/symbol/modifier-heavy beats short
+// keywords. Order groups related chips: declarations, control flow, operators,
+// collections, then property access. 12 chips wrap to 2 rows on iPhone-mini
+// (390px). Insert strings include trailing spaces / parens where the next
+// keystroke is almost always after — so `const ` not `const`. Bypassed during
+// Mock Interview (no scaffolding by design). PROFILE 80%-phone L3-typing cost
+// mitigation. Source: `ideas-by-category.md` § Cat 5 promotion shortlist #1.
+const L3_CHIP_TOKENS = [
+  { label: 'const', insert: 'const ' },
+  { label: 'let', insert: 'let ' },
+  { label: 'return', insert: 'return ' },
+  { label: 'if (', insert: 'if (' },
+  { label: 'for (', insert: 'for (' },
+  { label: '=>', insert: ' => ' },
+  { label: '===', insert: ' === ' },
+  { label: '&&', insert: ' && ' },
+  { label: '||', insert: ' || ' },
+  { label: '[]', insert: '[]' },
+  { label: '{}', insert: '{}' },
+  { label: '.length', insert: '.length' }
+];
 function appendHistory(lessonId, event) {
   if (!lessonId) return;
   if (!state.history[lessonId]) state.history[lessonId] = [];
@@ -7834,6 +7858,18 @@ function renderL3(body, lesson, content) {
       <button type="button" class="edge-chip" data-edge="none">no solution</button>
     </div>
     `}
+    ${isMock ? '' : `
+    <!-- iter 123: 🎹 L3 keyboard chips — one-tap insertion for the 12
+         high-cost JS tokens (paren/symbol/modifier-key heavy). PROFILE
+         80%-phone L3-typing cost mitigation; rusty engineer's mobile L3
+         drilling barrier is the keyboard, not the recall. Bypassed during
+         Mock Interview (no scaffolding by design — mirrors iter-81 Edge
+         case chips bypass). Source: ideas-by-category.md § Cat 5 promotion
+         shortlist #1 (iter 93 curated, iter 123 SHIPPED). -->
+    <div class="l3-chips" data-l3-chips>
+      ${L3_CHIP_TOKENS.map(t => `<button type="button" class="l3-chip" data-chip-insert="${escapeHtml(t.insert)}" title="Insert ${escapeHtml(t.label)} at cursor">${escapeHtml(t.label)}</button>`).join('')}
+    </div>
+    `}
     <textarea id="drill-editor"></textarea>
     <div class="l3-actions mt-3 flex items-center gap-2 flex-wrap">
       <button class="primary" data-action="run">Run <span class="text-blue-200">(⌘↵)</span></button>
@@ -7947,6 +7983,28 @@ function renderL3(body, lesson, content) {
     }
   });
   cm.setSize('100%', null);
+
+  // iter 123: 🎹 L3 keyboard chips — wire one-tap insertion. Renders only
+  // when not in Mock (chip-strip HTML is gated above) and the wrap contains
+  // the [data-l3-chips] container. CodeMirror's replaceSelection inserts at
+  // the active cursor or replaces the current selection — works for both
+  // empty editor (insert at start) and mid-edit. focus() keeps the soft
+  // keyboard visible on mobile so users don't lose context between taps.
+  if (!isMock) {
+    wrap.querySelectorAll('[data-l3-chips] .l3-chip').forEach(chip => {
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        const token = chip.dataset.chipInsert || '';
+        if (!token) return;
+        cm.replaceSelection(token);
+        cm.focus();
+      });
+      // mousedown preventDefault keeps the editor's contenteditable focus
+      // instead of grabbing it onto the chip button — critical for iOS Safari
+      // where the soft keyboard would otherwise dismiss between every tap.
+      chip.addEventListener('mousedown', (e) => e.preventDefault());
+    });
+  }
 
   // Restore cached editor text from a prior tab visit. Skip during a mock
   // interview — mock should always start from a blank editor.

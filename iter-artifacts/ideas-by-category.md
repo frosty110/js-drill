@@ -246,9 +246,8 @@ The convention:
 - **Audio mini-explainers per high-leverage lesson** — 30-60s TTS clip on Reference tab explaining *why this canonical over alternatives* (e.g., "we use a Set not Map here because we never need values"). Ships independently of BLOCKED Audio Mode: TTS only, no input loop, no Page Visibility, no Amendment C. Curate top-20 high-traffic lessons first.
 - **Touch-sketch approach pad** — mobile-only canvas (Pointer Events) where user sketches boxes-and-arrows of their data-structure approach before L3 starts; saved per-lesson, reviewable. Trains the "draw it first" interview habit currently impossible on phone.
 - **Vocabulary spaced-rep** — short MC drills on interview-specific vocabulary (amortized, monotonic, dynamic, memoization, idempotent, monomorphic). Currently absent entirely from the curriculum; trains the *language* of interview discussion.
-- **Algorithm name ↔ description matcher** — bidirectional drill: given algorithm name, pick the 1-sentence description ("Kadane's" → "find max subarray sum"); reverse direction also drilled. The retrieval-direction the app never trains (everything today is "name your concept" or "type your code"; this drills *name-to-concept* lookup which is what interviewers test when they say "have you heard of...").
 
-**Shipped from this category:** *(none — modality ships have come via other categories so far.)*
+**Shipped from this category:** 🔖 Match (iter 109, first Cat 8 ship — establishes the modality) → see [`shipped-by-category.md` § 8](shipped-by-category.md#8-modalities).
 
 ---
 
@@ -351,10 +350,9 @@ The trigger check is bounded: 9 categories × ~3 rows each = ~27 freshness looku
 2. **L3 "calculator-style" keyboard chips** *(Cat 5)* — one-tap insertion chips for the 20 most-typed JS tokens on mobile L3. Directly attacks the PROFILE 80%-phone mobile-L3 cost barrier without making L3 "the main mobile surface."
 3. **Code-from-bullet-points** *(Cat 1)* — Reference tab toggle hides canonical, shows `reference.notes` as bullets; user types canonical. Fills the documented L2-to-L3 cell gap ("see concept, recall code"). Cat 1 active list is empty; this restores it.
 4. **Whiteboard mode toggle** *(Cat 9 §9A)* — ~30 LOC; strip syntax highlighting + autocomplete + run-button on L3. Trains the realistic-interview surface where tooling is absent. First §9A ship — Cat 9's §9B-only ship history is unbalanced.
-5. **Algorithm name ↔ description matcher** *(Cat 8)* — bidirectional drill: name → 1-sentence description; reverse direction also drilled. The retrieval-direction the app never trains. Cat 8 has zero ships; this would establish the modality.
-6. **PWA install + offline drilling** *(Cat 5)* — `manifest.json` + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter. Bigger scope than #1-5 but the leverage is enormous given PROFILE 80%-phone.
+5. **PWA install + offline drilling** *(Cat 5)* — `manifest.json` + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter. Bigger scope than #1-4 but the leverage is enormous given PROFILE 80%-phone.
 
-*(Shortlist #1 was 🍀 Lucky roulette → SHIPPED iter 108 — see [`shipped-by-category.md` § 2](shipped-by-category.md#2-paths--sessions).)*
+*(Shortlist #1 → 🍀 Lucky roulette SHIPPED iter 108; shortlist #5 (Algorithm matcher) → 🔖 Match SHIPPED iter 109 — see [`shipped-by-category.md` § 2 + § 8](shipped-by-category.md).)*
 
 **Deferred to a second pass (strong but heavier scope OR awaits earlier ship):**
 - **Audio mini-explainers per high-leverage lesson** *(Cat 8)* — TTS-only, no input loop; ships independently of BLOCKED Audio Mode. 2-iter (top-20 lessons curation + ship).

@@ -16,6 +16,23 @@ app's existence.
 
 ## How the app encodes it today
 
+- **🔖 Match (iter 109).** Bidirectional title ↔ description matcher —
+  the first surface drilling the **name-to-concept retrieval direction**
+  the L1→L2→L3 ladder doesn't cover. L1 tests concepts; L2/L3 test code
+  production; the diagnose-direction drills (Recognize / Reverse / Crystal
+  / Bug-Hunt) test "identify what THIS artifact does." Nothing in the
+  prior app tested "given the name, do you know what it does?" or its
+  reverse "given the behavior, can you name the technique?" — the exact
+  question an interviewer asks with "have you heard of X?" or "what
+  technique is this?". Sidebar 🔖 Match button → 10-card mobile session
+  pairing each `title` against its `description`, coin-flipping direction
+  per card. 4 same-section MC distractors (cross-section fallback). Pure
+  recombination over existing fields, no per-lesson authoring. Establishes
+  Cat 8 § Modalities as a ship-from category for the first time. The
+  retrieval-direction *variety* (covered surfaces multiply when the
+  underlying recall direction differs, even if the data substrate is
+  identical) is what makes this distinct from every prior surface.
+
 - **🤖 AI Coach Export (iter 88).** Workflow bridge to external active-recall
   tutoring. Sidebar 🤖 button builds a curated Markdown snapshot of the
   user's weak-spots + revealed + overdue lessons (capped 12 lessons /

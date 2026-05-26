@@ -149,6 +149,7 @@ const state = {
   mechConstellation: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 98: 🪐 Mechanic Constellation — multi-select recall over mechanics[] tag (additive, no `__v` bump)
   reverseWalk: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over walkthrough.examples (additive, no `__v` bump)
   notesLocate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 102: 🗂 Notes→Lesson Reverse Lookup — cross-corpus localization (additive, no `__v` bump)
+  match: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 109: 🔖 Match — bidirectional title ↔ description matcher (additive, no `__v` bump)
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
@@ -812,6 +813,15 @@ function loadProgress() {
           lastRunAt: +parsed.notesLocate.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 109: 🔖 Match — bidirectional title ↔ description matcher lifetime stats.
+    state.match = parsed.match && typeof parsed.match === 'object'
+      ? {
+          attempts: +parsed.match.attempts || 0,
+          correct: +parsed.match.correct || 0,
+          sessions: +parsed.match.sessions || 0,
+          lastRunAt: +parsed.match.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 104: 🗺 Command Palette use-counter. Legacy users get empty map.
     state.commandUsage = parsed.commandUsage && typeof parsed.commandUsage === 'object' && !Array.isArray(parsed.commandUsage)
       ? parsed.commandUsage : {};
@@ -889,6 +899,7 @@ function saveProgress() {
     mechConstellation: state.mechConstellation,
     reverseWalk: state.reverseWalk,
     notesLocate: state.notesLocate,
+    match: state.match,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -2852,6 +2863,197 @@ async function startNotesLocateSession() {
     `;
     shell.querySelector('[data-action="notes-locate-again"]').addEventListener('click', () => startNotesLocateSession());
     shell.querySelector('[data-action="notes-locate-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 109: 🔖 Match — bidirectional title ↔ description matcher (Cat 8 first
+// ship; algorithm name ↔ description). Drills the name-to-concept retrieval
+// direction the L1→L2→L3 ladder doesn't cover: "you've heard of Kadane's —
+// what does it do?" and the reverse. Pure recombination over already-loaded
+// `title` (manifest) + `description` (per-lesson JSON). 10-card mobile session;
+// direction (title-prompt vs description-prompt) coin-flipped per card.
+// Sourced from ideas-by-category.md Promotion shortlist #5 (Cat 8 § Modalities).
+const MATCH_DECK_LEN = 10;
+const MATCH_OPTIONS = 4;
+function _matchBuildCard(lesson, direction, allEligible) {
+  // Same-section distractors preferred; cross-section fallback. allEligible is
+  // the patterns+applied authored set (with CONTENT loaded — i.e. description
+  // available). direction ∈ {'title-to-desc', 'desc-to-title'}.
+  const correctContent = CONTENT[lesson.id];
+  if (!correctContent || !correctContent.description) return null;
+  const same = [];
+  const other = [];
+  for (const l of allEligible) {
+    if (l.id === lesson.id) continue;
+    const c = CONTENT[l.id];
+    if (!c || !c.description) continue;
+    if (l.section === lesson.section) same.push(l);
+    else other.push(l);
+  }
+  for (const arr of [same, other]) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+  const distractors = same.concat(other).slice(0, MATCH_OPTIONS - 1);
+  if (distractors.length < MATCH_OPTIONS - 1) return null;
+  const buildOpt = (l, isCorrect) => ({
+    lesson: l,
+    description: (CONTENT[l.id] && CONTENT[l.id].description) || '',
+    isCorrect
+  });
+  const options = [buildOpt(lesson, true), ...distractors.map(l => buildOpt(l, false))];
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return {
+    lessonId: lesson.id,
+    sectionName: lesson.section,
+    title: lesson.title,
+    description: correctContent.description,
+    direction,
+    options
+  };
+}
+async function _matchBuildDeck() {
+  // Patterns + Applied lessons (descriptions are richest there — Syntax titles
+  // double as descriptors already). Preload a sample so CONTENT has enough
+  // descriptions for distractor pools.
+  const eligible = CURRICULUM.filter(l =>
+    l.status === 'full' && (l.track === 'patterns' || l.track === 'applied')
+  );
+  const sample = eligible.slice(0, 80);
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+      if (Object.keys(CONTENT).length >= 40) break;
+    }
+  }
+  const eligibleLoaded = eligible.filter(l => CONTENT[l.id] && CONTENT[l.id].description);
+  if (eligibleLoaded.length < MATCH_OPTIONS) return null;
+  // Shuffle + slice for the deck. Direction coin-flipped per card so a session
+  // mixes both retrieval directions (title→desc and desc→title).
+  const shuffled = eligibleLoaded.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const deck = [];
+  for (const lesson of shuffled) {
+    if (deck.length >= MATCH_DECK_LEN) break;
+    const direction = Math.random() < 0.5 ? 'title-to-desc' : 'desc-to-title';
+    const card = _matchBuildCard(lesson, direction, eligibleLoaded);
+    if (card) deck.push(card);
+  }
+  return deck.length >= 4 ? deck : null;
+}
+async function startMatchSession() {
+  const deck = await _matchBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('Match needs more loaded lessons. Click around a few first, then try again.');
+    return;
+  }
+  state.match.sessions++;
+  state.match.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    const isTitleToDesc = card.direction === 'title-to-desc';
+    const promptLabel = isTitleToDesc
+      ? 'Which description matches this lesson?'
+      : 'Which lesson does this describe?';
+    const promptBody = isTitleToDesc
+      ? `<div class="match-title">${escapeHtml(card.title)}</div>
+         <div class="match-section">${escapeHtml(card.sectionName)}</div>`
+      : `<div class="match-desc">${escapeHtml(card.description)}</div>`;
+    const optBody = isTitleToDesc
+      ? (o, i) => `<span class="match-opt-letter">${String.fromCharCode(65 + i)}</span>
+                   <span class="match-opt-body match-opt-desc">${escapeHtml(o.description)}</span>`
+      : (o, i) => `<span class="match-opt-letter">${String.fromCharCode(65 + i)}</span>
+                   <span class="match-opt-body">
+                     <span class="match-opt-title">${escapeHtml(o.lesson.title)}</span>
+                     <span class="match-opt-section">${escapeHtml(o.lesson.section)}</span>
+                   </span>`;
+    shell.innerHTML = `
+      <div class="recognize-shell match-shell" data-direction="${card.direction}">
+        <div class="recognize-header">
+          <span>🔖 Match · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-match">✕ Exit</button>
+        </div>
+        <div class="match-tag">${escapeHtml(promptLabel)}</div>
+        <div class="match-prompt">${promptBody}</div>
+        <div class="match-options">
+          ${card.options.map((o, i) => `
+            <button class="recognize-opt match-opt" data-opt="${i}">${optBody(o, i)}</button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-match-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-match"]').addEventListener('click', () => renderLesson());
+    const optBtns = shell.querySelectorAll('.match-opt');
+    let answered = false;
+    optBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const optIdx = +btn.dataset.opt;
+        const picked = card.options[optIdx];
+        const wasRight = !!picked.isCorrect;
+        if (wasRight) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.match.attempts++;
+        if (wasRight) state.match.correct++;
+        saveProgress();
+        optBtns.forEach((b, i) => {
+          b.disabled = true;
+          if (card.options[i].isCorrect) b.classList.add('recognize-opt-correct');
+          else if (i === optIdx) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-match-feedback]');
+        if (fb) {
+          fb.innerHTML = `
+            <div class="match-reveal">
+              <div class="match-reveal-title">${wasRight ? '✓ Got it' : '✗ Correct match'}: <strong>${escapeHtml(card.title)}</strong></div>
+              <div class="match-reveal-section">${escapeHtml(card.sectionName)}</div>
+              <button class="match-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="match-next" data-action="match-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="match-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell match-shell">
+        <div class="recognize-header"><span>🔖 Match · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} matched · ${deck.length - correct} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.match.correct} / ${state.match.attempts} (${state.match.attempts > 0 ? Math.round(state.match.correct / state.match.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="match-again">🔖 Another session</button>
+            <button class="secondary" data-action="match-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="match-again"]').addEventListener('click', () => startMatchSession());
+    shell.querySelector('[data-action="match-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -7998,6 +8200,14 @@ async function init() {
   const notesLocateBtn = document.getElementById('notes-locate-btn');
   if (notesLocateBtn) notesLocateBtn.addEventListener('click', () => {
     startNotesLocateSession();
+  });
+
+  // iter 109: 🔖 Match — bidirectional title ↔ description matcher.
+  // Cat 8 § Modalities first ship; trains the name-to-concept retrieval
+  // direction the L1/L2/L3 ladder doesn't cover.
+  const matchBtn = document.getElementById('match-btn');
+  if (matchBtn) matchBtn.addEventListener('click', () => {
+    startMatchSession();
   });
 
   // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed

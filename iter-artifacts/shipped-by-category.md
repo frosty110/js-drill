@@ -72,6 +72,12 @@
 
 ---
 
+## 8. Modalities
+
+- **🔖 Match (bidirectional title ↔ description matcher)** *(iter 109)* — Cat 8 first ship; establishes the modality. Sidebar 🔖 Match button (lime hover, always-visible) → 10-card mobile session over the 99 patterns+applied lessons' `title` + per-lesson `description` fields. Each card coin-flips its direction: `title-to-desc` shows the title+section and asks for the matching description from 4 MC options; `desc-to-title` shows the description and asks for the matching title+section. Same-section distractors preferred with cross-section fallback (mirrors iter-102 Notes Locate pattern). Tap → green ✓ on correct + red ✗ on wrong + correct revealed + `state.match.attempts/correct` increment + miss → `state.weakness[lessonId]++ + appendHistory(lessonId, 'L1-miss')`. Drill-this-lesson deep-link routes to the lesson. Schema-additive `state.match = { attempts, correct, sessions, lastRunAt }` — no `__v` bump. ~190 LOC JS + 75 CSS. **First surface drilling the name-to-concept retrieval direction the L1→L2→L3 ladder doesn't cover** — closes the catalog's "have you heard of X" / "what does Y do?" interviewer-probe gap. Mobile probe `tools/cdp/match-drill.js` (11 assertions across 5 phases: button-present, shell renders after async deck-build, 4 distinct options, direction attribute set, state increments on tap, correct-marker rendered, reveal block, options-locked, Next advances, sessions counter).
+
+---
+
 ## 9. Interview Conditioning
 
 ### §9B Code evaluation skills

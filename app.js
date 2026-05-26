@@ -6479,7 +6479,10 @@ function renderReference(body, content) {
   section.innerHTML = `
     <div class="flex items-center justify-between mb-2">
       <div class="text-xs text-slate-500 uppercase tracking-wider">The thing to memorize</div>
-      <button class="flash-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">🃏 Flash</button>
+      <div class="flex items-center gap-2">
+        <button class="flash-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">🃏 Flash</button>
+        <button class="cinema-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="cinema-toggle" title="Read+predict-then-verify — every line starts blurred, tap each to reveal in order">🎬 Cinema</button>
+      </div>
     </div>
     <pre class="code-block cm-s-dracula" data-ref-code></pre>
     <div class="mt-4" data-ref-mechanics></div>
@@ -6497,12 +6500,36 @@ function renderReference(body, content) {
   const codeEl = section.querySelector('[data-ref-code]');
   colorizeInto(codeEl, ref.code);
   let flashOn = false;
+  let cinemaOn = false;
   const flashBtn = section.querySelector('[data-action="flash-toggle"]');
+  const cinemaBtn = section.querySelector('[data-action="cinema-toggle"]');
+  function restoreCanonical() {
+    flashOn = false;
+    cinemaOn = false;
+    flashBtn.classList.remove('active');
+    flashBtn.textContent = '🃏 Flash';
+    cinemaBtn.classList.remove('active');
+    cinemaBtn.textContent = '🎬 Cinema';
+    colorizeInto(codeEl, ref.code);
+  }
   flashBtn.addEventListener('click', () => {
+    if (cinemaOn) restoreCanonical();
     flashOn = !flashOn;
     flashBtn.classList.toggle('active', flashOn);
     flashBtn.textContent = flashOn ? '🃏 Reveal all' : '🃏 Flash';
     if (flashOn) renderFlash(codeEl, ref.code);
+    else colorizeInto(codeEl, ref.code);
+  });
+  // iter 121: 🎬 Reference Cinema — every line starts blurred; tap to reveal.
+  // Read+predict-then-verify retrieval direction (distinct from Flash's
+  // token-cloze). Toggling Cinema off restores syntax-highlighted view;
+  // toggling Flash on while Cinema is active resets to canonical first.
+  cinemaBtn.addEventListener('click', () => {
+    if (flashOn) restoreCanonical();
+    cinemaOn = !cinemaOn;
+    cinemaBtn.classList.toggle('active', cinemaOn);
+    cinemaBtn.textContent = cinemaOn ? '🎬 Reveal all' : '🎬 Cinema';
+    if (cinemaOn) _renderCinema(codeEl, ref.code);
     else colorizeInto(codeEl, ref.code);
   });
   section.querySelector('[data-action="start-l1"]').addEventListener('click', () => selectTab('L1'));
@@ -6515,6 +6542,33 @@ function renderReference(body, content) {
   // Lateral-transfer payoff: from canonical → "same idiom, different
   // shape" across track without leaving the recall flow.
   _renderReferenceMechanics(section.querySelector('[data-ref-mechanics]'), content.mechanics);
+}
+
+// iter 121: 🎬 Reference Cinema — render reference.code as line-by-line
+// blurred buttons inside the existing <pre data-ref-code> element. Tap a
+// line to reveal it (toggle .cine-revealed class). Bypasses CodeMirror
+// runMode entirely — Cinema mode is about line-grain prediction, not
+// syntax highlighting. Restoring canonical via colorizeInto() handles
+// the return path when the toggle flips off. First Cat 1 Drilling
+// Surfaces enhancement since iter 92 (Flash mode); drills read+predict-
+// then-verify retrieval direction distinct from Flash's token cloze.
+function _renderCinema(codeEl, code) {
+  if (!codeEl) return;
+  codeEl.innerHTML = '';
+  const lines = code.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const lineEl = document.createElement('button');
+    lineEl.type = 'button';
+    lineEl.className = 'cine-line';
+    lineEl.dataset.lineIdx = String(i);
+    // Empty lines need a non-zero height so the user sees them as a tap
+    // target; render a non-breaking space so the blur filter has content.
+    lineEl.textContent = lines[i].length > 0 ? lines[i] : ' ';
+    lineEl.addEventListener('click', () => {
+      lineEl.classList.toggle('cine-revealed');
+    });
+    codeEl.appendChild(lineEl);
+  }
 }
 
 function _renderReferenceMechanics(host, mechanicIds) {

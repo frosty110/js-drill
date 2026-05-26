@@ -105,6 +105,93 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 120 vision — fourteenth vision iter; iter-116 queue fully drained, Cat 1 + §9C push HEEDS subagent blind-spots warning)
+
+**Fourteenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112/116).** iter-116 roadmap queue fully shipped across iter 117/118/119 (Clarify-First + Hot-Seat + Time-to-Solve Calibration). Step 1B fires vision. Steering per iter-119: Cat 1 Drilling Surfaces (active list empty 28+ iters since iter-92), Cat 8 Modalities (only 1 ship at iter 109), Cat 9 §9C Adaptation/transfer (0 ships ever).
+
+**ONE constraint-aware subagent** with explicit Cat 1 + Cat 8 + §9C steering. Returned 5 proposals AND a sharp blind-spots audit. **Critical blind-spots flag (item 4):** subagent self-noted that "§9C bias may itself be overcorrecting — three §9C proposals; shipping 3 in a row repeats iter-112's framing-error pattern. One §9C ship + measurement before stacking more." **Orchestrator HEEDED this** — promoted 2 (not the typical 3) and held 3 of 5 with explicit conditions.
+
+**Promoted 2 (heedfully constrained per subagent's own warning):**
+1. 🎬 **Reference Cinema** (Cat 1 — first Cat 1 surface enhancement since iter 92). Reference tab gains a "▶ Cinema" toggle: code starts blurred; tap reveals lines one at a time. Pure-tap retrieval-direction (read+predict-then-verify) distinct from Flash mode (token cloze) or Walkthrough Quiz (next-state pick). Near-zero per-lesson authoring — uses existing `reference.code` + optional `reference.notes` annotations. Subagent flagged "trivial lines feel empty" risk; orchestrator mitigation: v1 ships simple tap-to-advance (no auto-advance, no compress-trivial heuristic) — let users surface the friction before authoring per-lesson cinema.beats.
+2. 🧪 **What-If Output Predictor** (Cat 1 + §9C hybrid). Per-lesson tap card: shown the (already-memorized) canonical + a fresh input → user picks output from 4 options (1 correct + 3 plausible off-by-one/edge wrongs). 30-sec soft timer. Misses route to weakness. Inverts the L1/L2/L3 ladder (given code, predict output for a NEW input). Subagent flagged "distractor authoring is hard"; orchestrator mitigation: v1 derives distractors from existing L1 wrong-options + bucket-shift on runCode output (off-by-one in numeric outputs / swap order in array outputs) — postpones the per-pattern distractor library to v2.
+
+**Held with explicit re-promote conditions:**
+- 🎚 **Constraint Shift** (§9C — third §9C proposal) — HELD heeding subagent's "§9C may overcorrect" blind-spot. Re-promote condition: iter-117/118 §9A surfaces (Clarify + Hot-Seat) demonstrate measurable engagement after 4-iter soak window. If §9A toggles see <10% adoption, §9C is likely low-leverage by extension and Constraint Shift stays held longer.
+- 🔀 **Variant Generator** (§9C) — HELD on authoring fuzziness (subagent-flagged "blank may not be load-bearing for transfer"). Re-promote condition: Constraint Shift ships AND establishes a per-pattern-family rubric that Variant Generator can reuse.
+- 🎧 **Eyes-Free Audio** (Cat 8) — HELD on PROFILE Amendment C blocker (4th time held — iter-26 + iter-95 + iter-112 + iter-120). Subagent re-flagged "audio assumes eyes-free time" — Amendment C instrumentation should ship as a small probe BEFORE the full audio build. Re-promote condition unchanged: Amendment C ratified + Page Visibility instrumentation confirms non-trivial eyes-free session population.
+
+**Meta-learning (iter 120):** **fresh-eyes subagent self-flagged its own steering bias** — a higher-order blind-spots audit than the previous 3 instances (which caught load-bearing assumptions about shipped infrastructure). This is the **4th validation** of the blind-spots-audit pattern (iter-112 BS-10 + iter-115 sync sub-blob + iter-116 §9A content corpus + iter-120 §9C-bias-self-flag). The pattern is now load-bearing: **vision-iter subagent prompt should explicitly ask for a self-audit of its OWN biases, not just the orchestrator's blind-spots ledger.** Worth folding into SKILL.md vision-mode template.
+
+Also: **promoting 2 instead of 3** is a new vision-iter shape — first time. Honest read of fresh-eyes warning > rote 3-promote convention. Worth recording: when subagent blind-spots audit explicitly flags overcorrection in N proposals, promote ≤(N-2) from that category.
+
+§ Next nominates 🎬 Reference Cinema ship for iter 121.
+
+---
+
+### 2026-05-26 iter 120 — 🎬 Reference Cinema
+
+**Status:** QUEUED.
+
+**Value claim:** Cat 1 Drilling Surfaces has been quiet for 20+ iters; the Reference tab specifically hasn't been enhanced since Flash mode (iter 35). PROFILE.md L13-15 ("concepts intact, syntax/pattern degraded") means a rusty engineer doesn't need to *read* the canonical — they need to *predict* it line-by-line, then verify. Reference Cinema is the retrieval-direction the existing surfaces don't cover: read+predict-then-verify (distinct from Flash mode's token cloze + Walkthrough Quiz's next-state pick).
+**Mechanic:** Reference tab gains a "▶ Cinema" toggle. When ON, canonical starts fully blurred; each tap reveals one line (with its inline note if present). Mobile-native, zero typing.
+**Success criterion:** ≥25% of Reference-tab sessions toggle Cinema within 30 days of ship; lessons revisited via Cinema correlate with lower next-SR-interval miss rate.
+**Estimated scope:** single-iter ship (~120 LOC JS + ~30 CSS + schema-additive in-memory state). Reuses Flash-mode infrastructure (already blurs Reference content).
+**Data dependency:** none — uses existing `reference.code` line-split.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged):** trivial lines (`}`, blank lines, comment-only) feel empty on tap-reveal. **Orchestrator mitigation:** v1 ships simple tap-to-advance (no auto-advance, no compress-trivial); let users surface the friction before authoring per-lesson `cinema.beats` annotations in v2.
+**Why this is a "new bucket" not "better cell":** distinct retrieval direction from Flash (token cloze) and Walkthrough Quiz (next-state pick). Read+predict-then-verify is the *interview-prep* angle — match how the rusty engineer mentally previews each line as they read.
+**Subagent source:** iter-120 vision iter — ranked #2 by subagent; orchestrator promoted as #1 (highest leverage given Cat 1's 20+ iter quietness + lowest authoring cost of all 5 proposals).
+
+---
+
+### 2026-05-26 iter 120 — 🧪 What-If Output Predictor
+
+**Status:** QUEUED.
+
+**Value claim:** Inverts the L1/L2/L3 ladder — given the canonical (memorized), predict the output for a *new* input. Targets the "trace mentally under interview pressure" skill (PROFILE L22-24) which no current surface drills as pure prediction (Crystal Ball iter 77 is read-code → predict, but uses canonical's OWN inputs; What-If uses NEW inputs).
+**Mechanic:** Per-lesson tap card: shown canonical + a fresh input → user picks output from 4 options (1 correct + 3 plausible off-by-one/edge wrongs). 30-sec soft timer. Misses route to weakness.
+**Success criterion:** Among lessons where users complete ≥3 What-If cards, repeat-miss rate on the canonical's L3 drops by ≥20% vs baseline (proves mental-trace transfers back to recall).
+**Estimated scope:** single-iter ship (~160 LOC JS + ~35 CSS + new `state.whatif = {attempts, correct, sessions, lastRunAt}`).
+**Data dependency:** existing `L3.canonical` (executable via runCode) + existing `L1.questions[].options` (for distractor mining).
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged):** plausible distractor generation is hard — naive random outputs don't teach edge-case sensitivity. **Orchestrator mitigation:** v1 derives distractors from (a) existing L1 wrong-options text + (b) algorithmic shift on runCode actual output (off-by-one for numerics; swap-order for arrays; toggle-edge-case for booleans). Postpones per-pattern distractor library to v2.
+**Why this is a "new bucket" not "better cell":** Cat 1 + §9C hybrid. Crystal Ball predicts canonical-own-input output; What-If predicts NEW-input output — different cognitive operation (trace transfer vs trace recall). Pairs with iter-77 Crystal Ball to cover both directions.
+**Subagent source:** iter-120 vision iter — ranked #4 by subagent (flagged "distractor authoring hard"); orchestrator promoted as #2 with the distractor-derivation mitigation — strong Cat 1 + §9C hybrid value at acceptable cost.
+
+---
+
+### 2026-05-26 iter 120 — HELD: 🎚 Constraint Shift (§9C overcorrection concern)
+
+**Status:** HELD — heeds the subagent's "§9C bias may overcorrect" blind-spots audit (item 4 of 4 in iter-120 vision-iter blind-spots flag).
+
+**Value claim:** Drills the interviewer follow-up "what if N is huge / streaming / k changes?" via mid-drill tap-cards.
+**Mechanic:** After passing L1 on any patterns/applied lesson, tap-card stack: "Original assumed X. Now Y. Which line/data-structure changes?" 3-4 MC options. ~per-lesson authoring OR mechanic-tag-derived (Hot-Seat iter-118 precedent).
+**Why held:** subagent self-flagged that 3 §9C proposals risk repeating iter-112's framing-error pattern. iter-117/118 §9A ships (Clarify-First + Hot-Seat) need a 4-iter soak window before validating that §9C is genuinely high-leverage; if §9A toggles see <10% adoption, §9C is likely low-leverage by extension.
+**Re-promote condition:** iter-117/118 §9A surfaces demonstrate measurable engagement after 4-iter soak. OR a coverage/audit iter explicitly grounds the §9C value claim.
+
+---
+
+### 2026-05-26 iter 120 — HELD: 🔀 Variant Generator (§9C — authoring fuzziness)
+
+**Status:** HELD — authoring contract is fuzzier than fill-in.
+
+**Value claim:** Forces user to *produce* a related-but-different problem from a canonical (highest-fidelity transfer test).
+**Mechanic:** Reference tab L2-style fill with strategic blanks tied to problem variation (input shape, return type, edge-case constraint) — not implementation.
+**Why held:** subagent-flagged risk that the blank may not be load-bearing for pattern transfer; needs a per-pattern-family rubric. Re-promote condition: Constraint Shift ships AND establishes the per-pattern rubric that Variant Generator can reuse.
+
+---
+
+### 2026-05-26 iter 120 — HELD: 🎧 Eyes-Free Audio Drill (4th time held)
+
+**Status:** HELD — same blocker as iter-26 + iter-95 + iter-112 + iter-120 (4-instance).
+
+**Value claim:** Unlocks the unaddressed slice of 80%-phone time (commute walking, gym, dishes — eyes-free cognitive bandwidth).
+**Mechanic:** TTS-driven L1 stream; user taps to advance/answer or uses Web Speech voice-in (degraded MVP = single-tap-cycle through options + tap-and-hold confirm).
+**Why held:** PROFILE Amendment C (Commute Audio Mode) unratified; subagent + 3 prior vision iters all flagged the same dependency. Subagent additionally flagged Amendment C should ship as Page Visibility instrumentation FIRST (1-day probe) to confirm eyes-free time exists.
+**Re-promote condition:** Amendment C ratified + Page Visibility instrumentation pilot ships AND confirms non-trivial eyes-free session population. Pattern: 4-time held = strong candidate for a frame iter to either ratify Amendment C OR formally retire the entry.
+
+---
+
 ## Meta-finding (iter 116 vision — thirteenth vision iter; iter-112 queue fully drained, Cat 3/9§9A push)
 
 **Thirteenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112).** iter-112 roadmap queue fully shipped across iter 113/114/115 (Offline Pack + Sync Onboarding + JS Traps MVP) at the fastest 3-iter cadence yet. Step 1B fires vision per iter-115's nomination — § Next explicitly steered toward Cat 3 Mechanics (last touched iter 58 via 🏷 Mistake Tagging; SR mechanics work-stream stale ≥50 iters) and Cat 9 §9A In-the-room behaviors (last touched iter 81 via 🛡 Edge case chips; §9A has ZERO ships ever despite §9B having 4).

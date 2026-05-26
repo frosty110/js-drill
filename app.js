@@ -135,6 +135,7 @@ const state = {
   traceHop: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 93: 🧬 Trace-Hop — pick-the-middle-state mobile quiz over walkthrough.trace yields (additive, no `__v` bump)
   notesDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 97: 📝 Notes Cloze Tap-Drill — cloze-MC over reference.notes[] keywords (additive, no `__v` bump)
   mechConstellation: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 98: 🪐 Mechanic Constellation — multi-select recall over mechanics[] tag (additive, no `__v` bump)
+  reverseWalk: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over walkthrough.examples (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -582,6 +583,15 @@ function loadProgress() {
           lastRunAt: +parsed.mechConstellation.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 99: ⏪ Reverse-Walkthrough lifetime stats. Legacy users get zeros.
+    state.reverseWalk = parsed.reverseWalk && typeof parsed.reverseWalk === 'object'
+      ? {
+          attempts: +parsed.reverseWalk.attempts || 0,
+          correct: +parsed.reverseWalk.correct || 0,
+          sessions: +parsed.reverseWalk.sessions || 0,
+          lastRunAt: +parsed.reverseWalk.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -654,6 +664,7 @@ function saveProgress() {
     traceHop: state.traceHop,
     notesDrill: state.notesDrill,
     mechConstellation: state.mechConstellation,
+    reverseWalk: state.reverseWalk,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -2242,6 +2253,182 @@ async function startConstellationSession() {
     `;
     shell.querySelector('[data-action="constellation-again"]').addEventListener('click', () => startConstellationSession());
     shell.querySelector('[data-action="constellation-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over walkthrough
+// trace data. Each card shows the FINAL `{state, returns}` of one walkthrough
+// example + 3 input options (all 3 examples from the SAME lesson); user taps
+// which input produced this final state. **Adapted spec** from iter-95
+// roadmap entry: the roadmap assumed lessons might have 4+ examples; empirical
+// scan (iter-99 feasibility check) found ALL 99 Patterns/Applied lessons have
+// EXACTLY 3 walkthrough examples. So distractors are 3-option MC from the
+// same lesson — pure cognitive operation, no cross-lesson shape-mismatch
+// concerns. Baseline guess rate is 33% but discriminating between 3 examples
+// of the same algorithm requires actual trace-execution mental simulation.
+// Distinct from Walkthrough (forward stepper) and Trace-Hop (mid-state recall).
+const REVERSE_WALK_DECK_LEN = 8;
+function _reverseWalkBuildCard(lesson, content) {
+  const compiled = _compileWalkthrough(lesson.id, content.walkthrough);
+  if (compiled.error || !Array.isArray(compiled.byExample)) return null;
+  const usable = compiled.byExample.filter(b => !b.error && Array.isArray(b.steps) && b.steps.length >= 2);
+  if (usable.length < 3) return null;
+  // Pick a random example as the "correct" one.
+  const correctIdx = Math.floor(Math.random() * usable.length);
+  const correctBlock = usable[correctIdx];
+  const finalStep = correctBlock.steps[correctBlock.steps.length - 1];
+  // Build 3 input options (all 3 examples, shuffled).
+  const options = usable.map((b, i) => ({
+    inputLabel: b.example.label || `Example ${i + 1}`,
+    inputJson: _formatStateVal(b.example.input),
+    isCorrect: i === correctIdx
+  }));
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return {
+    lessonId: lesson.id,
+    lessonTitle: lesson.title,
+    sectionName: lesson.section,
+    finalState: finalStep.state,
+    finalReturns: 'returns' in finalStep ? finalStep.returns : undefined,
+    correctLabel: correctBlock.example.label || `Example ${correctIdx + 1}`,
+    options
+  };
+}
+async function _reverseWalkBuildDeck() {
+  const candidates = CURRICULUM.filter(l =>
+    l.status === 'full' && (l.track === 'patterns' || l.track === 'applied')
+  );
+  const shuffled = candidates.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const sample = shuffled.slice(0, 40);
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { continue; }
+    }
+  }
+  const deck = [];
+  for (const lesson of shuffled) {
+    if (deck.length >= REVERSE_WALK_DECK_LEN) break;
+    const c = CONTENT[lesson.id];
+    if (!c || !c.walkthrough || !Array.isArray(c.walkthrough.examples)) continue;
+    const card = _reverseWalkBuildCard(lesson, c);
+    if (card) deck.push(card);
+  }
+  return deck.length >= 4 ? deck : null;
+}
+function _reverseWalkRenderFinalState(state) {
+  if (!state || typeof state !== 'object') return '<span class="reverse-walk-state-empty">(no state)</span>';
+  const rows = Object.entries(state).map(([k, v]) =>
+    `<div class="reverse-walk-state-row"><span class="reverse-walk-state-key">${escapeHtml(k)}</span><span class="reverse-walk-state-val">${escapeHtml(_formatStateVal(v))}</span></div>`
+  );
+  return rows.join('');
+}
+async function startReverseWalkSession() {
+  const deck = await _reverseWalkBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('Reverse-Walkthrough needs more lessons with walkthroughs. Click around a few Patterns lessons first, then try again.');
+    return;
+  }
+  state.reverseWalk.sessions++;
+  state.reverseWalk.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    const returnsLine = card.finalReturns !== undefined
+      ? `<div class="reverse-walk-returns"><span class="reverse-walk-returns-label">returns</span> <span class="reverse-walk-returns-val">${escapeHtml(_formatStateVal(card.finalReturns))}</span></div>`
+      : '';
+    shell.innerHTML = `
+      <div class="recognize-shell reverse-walk-shell">
+        <div class="recognize-header">
+          <span>⏪ Reverse · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-reverse-walk">✕ Exit</button>
+        </div>
+        <div class="reverse-walk-lesson-tag">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
+        <div class="reverse-walk-tag">Which input produced this final state?</div>
+        <div class="reverse-walk-final">
+          <div class="reverse-walk-final-head">FINAL STATE</div>
+          <div class="reverse-walk-state">${_reverseWalkRenderFinalState(card.finalState)}</div>
+          ${returnsLine}
+        </div>
+        <div class="reverse-walk-options">
+          ${card.options.map((o, i) => `
+            <button class="recognize-opt reverse-walk-opt" data-opt="${i}">
+              <span class="reverse-walk-opt-letter">${String.fromCharCode(65 + i)}</span>
+              <span class="reverse-walk-opt-input">${escapeHtml(o.inputJson)}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-reverse-walk-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-reverse-walk"]').addEventListener('click', () => renderLesson());
+    const optBtns = shell.querySelectorAll('.reverse-walk-opt');
+    let answered = false;
+    optBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const optIdx = +btn.dataset.opt;
+        const picked = card.options[optIdx];
+        const wasRight = !!picked.isCorrect;
+        if (wasRight) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.reverseWalk.attempts++;
+        if (wasRight) state.reverseWalk.correct++;
+        saveProgress();
+        optBtns.forEach((b, i) => {
+          b.disabled = true;
+          if (card.options[i].isCorrect) b.classList.add('recognize-opt-correct');
+          else if (i === optIdx) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-reverse-walk-feedback]');
+        if (fb) {
+          fb.innerHTML = `
+            <div class="reverse-walk-reveal">
+              <div class="reverse-walk-reveal-title">${wasRight ? '✓ Got it' : '✗ The correct input was the highlighted one'}</div>
+              <div class="reverse-walk-reveal-label">${escapeHtml(card.correctLabel)}</div>
+              <button class="reverse-walk-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="reverse-walk-next" data-action="reverse-walk-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="reverse-walk-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell reverse-walk-shell">
+        <div class="recognize-header"><span>⏪ Reverse · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} inputs matched · ${deck.length - correct} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.reverseWalk.correct} / ${state.reverseWalk.attempts} (${state.reverseWalk.attempts > 0 ? Math.round(state.reverseWalk.correct / state.reverseWalk.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="reverse-walk-again">⏪ Another session</button>
+            <button class="secondary" data-action="reverse-walk-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="reverse-walk-again"]').addEventListener('click', () => startReverseWalkSession());
+    shell.querySelector('[data-action="reverse-walk-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -7532,6 +7719,15 @@ async function init() {
   const constellationBtn = document.getElementById('constellation-btn');
   if (constellationBtn) constellationBtn.addEventListener('click', () => {
     startConstellationSession();
+  });
+
+  // iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over
+  // walkthrough.examples. Shown final state, pick which of 3 inputs from
+  // the SAME lesson produced it. Complements Walkthrough (forward stepper)
+  // and Trace-Hop (mid-state recall).
+  const reverseWalkBtn = document.getElementById('reverse-walk-btn');
+  if (reverseWalkBtn) reverseWalkBtn.addEventListener('click', () => {
+    startReverseWalkSession();
   });
 
   // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed

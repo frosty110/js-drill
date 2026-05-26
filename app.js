@@ -134,6 +134,7 @@ const state = {
   convDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 91: 🎬 Conversation Drill — 6-section interview-arc classifier over conversation.sections[] (additive, no `__v` bump)
   traceHop: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 93: 🧬 Trace-Hop — pick-the-middle-state mobile quiz over walkthrough.trace yields (additive, no `__v` bump)
   notesDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 97: 📝 Notes Cloze Tap-Drill — cloze-MC over reference.notes[] keywords (additive, no `__v` bump)
+  mechConstellation: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 98: 🪐 Mechanic Constellation — multi-select recall over mechanics[] tag (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -572,6 +573,15 @@ function loadProgress() {
           lastRunAt: +parsed.notesDrill.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 98: 🪐 Mechanic Constellation lifetime stats. Legacy users get zeros.
+    state.mechConstellation = parsed.mechConstellation && typeof parsed.mechConstellation === 'object'
+      ? {
+          attempts: +parsed.mechConstellation.attempts || 0,
+          correct: +parsed.mechConstellation.correct || 0,
+          sessions: +parsed.mechConstellation.sessions || 0,
+          lastRunAt: +parsed.mechConstellation.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -643,6 +653,7 @@ function saveProgress() {
     convDrill: state.convDrill,
     traceHop: state.traceHop,
     notesDrill: state.notesDrill,
+    mechConstellation: state.mechConstellation,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -2023,6 +2034,214 @@ async function startNotesDrillSession() {
     `;
     shell.querySelector('[data-action="notes-again"]').addEventListener('click', () => startNotesDrillSession());
     shell.querySelector('[data-action="notes-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 98: 🪐 Mechanic Constellation — multi-select recall over the
+// `mechanics[]` tag. Each card shows ONE mechanic name + 6 lesson titles
+// (3 tagged with the mechanic, 3 not); user picks 3 they think are
+// tagged. Per-tap immediate-feedback (mirrors iter-93/97 pattern):
+// correct → green ✓; wrong → red ✗ + state.weakness[lessonId]++.
+// Card ends after 3 taps; reveal shows all 6 marked + drill CTAs.
+// First surface drilling mechanics as a recall TARGET (vs Bridge/Matrix/
+// modal which all USE mechanics as input). From roadmap.md iter-95 #2.
+const CONSTELLATION_DECK_LEN = 10;
+const CONSTELLATION_PICKS_PER_CARD = 3;
+const CONSTELLATION_OPTIONS_PER_CARD = 6;
+function _constellationBuildCard(mechId, mech) {
+  const taggedSet = MECHANIC_INDEX.get(mechId);
+  if (!taggedSet || taggedSet.size < 3) return null;
+  // Pick 3 RANDOM tagged lessons. Filter to full status.
+  const tagged = Array.from(taggedSet)
+    .map(id => findLesson(id))
+    .filter(l => l && l.status === 'full');
+  if (tagged.length < 3) return null;
+  // Fisher-Yates a copy then take 3.
+  for (let i = tagged.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [tagged[i], tagged[j]] = [tagged[j], tagged[i]];
+  }
+  const correct = tagged.slice(0, 3);
+  // Build distractor pool: full lessons NOT tagged with this mechanic.
+  // Prefer same-section as one of the correct lessons for plausibility.
+  const correctIds = new Set(correct.map(l => l.id));
+  const correctSections = new Set(correct.map(l => l.section));
+  const sameSection = [];
+  const otherSection = [];
+  for (const lesson of CURRICULUM) {
+    if (lesson.status !== 'full') continue;
+    if (correctIds.has(lesson.id)) continue;
+    if (taggedSet.has(lesson.id)) continue; // skip lessons that ARE tagged
+    if (correctSections.has(lesson.section)) sameSection.push(lesson);
+    else otherSection.push(lesson);
+  }
+  // Shuffle each, then concat (same-section first).
+  for (const arr of [sameSection, otherSection]) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+  const distractors = sameSection.concat(otherSection).slice(0, 3);
+  if (distractors.length < 3) return null;
+  // Combine + shuffle option order.
+  const options = [
+    ...correct.map(l => ({ lesson: l, isCorrect: true })),
+    ...distractors.map(l => ({ lesson: l, isCorrect: false }))
+  ];
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return {
+    mechId,
+    mechLabel: mech.label,
+    mechBlurb: mech.blurb || '',
+    options
+  };
+}
+async function _constellationBuildDeck() {
+  // Lazy-load MECHANIC_INDEX (mirrors iter-94 Bridge pattern).
+  await ensureMechanicIndex();
+  if (!MECHANIC_INDEX || MECHANIC_INDEX.size === 0) return null;
+  // Filter to mechanics with ≥3 tagged lessons.
+  const eligible = [];
+  for (const [mechId, lessonSet] of MECHANIC_INDEX) {
+    if (lessonSet.size < 3) continue;
+    const mech = MECHANICS.find(m => m.id === mechId);
+    if (!mech) continue;
+    eligible.push({ mechId, mech });
+  }
+  if (eligible.length < 4) return null;
+  // Shuffle.
+  for (let i = eligible.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [eligible[i], eligible[j]] = [eligible[j], eligible[i]];
+  }
+  // Build cards.
+  const deck = [];
+  for (const { mechId, mech } of eligible) {
+    if (deck.length >= CONSTELLATION_DECK_LEN) break;
+    const card = _constellationBuildCard(mechId, mech);
+    if (card) deck.push(card);
+  }
+  return deck.length >= 4 ? deck : null;
+}
+async function startConstellationSession() {
+  const deck = await _constellationBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('Constellation needs more loaded lessons + a populated mechanics registry. Try again in a moment.');
+    return;
+  }
+  state.mechConstellation.sessions++;
+  state.mechConstellation.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, cardsCompleted = 0, perCardCorrect = [];
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    let picks = 0, cardCorrect = 0;
+    const optStates = card.options.map(() => 'unpicked'); // unpicked | correct | wrong
+    shell.innerHTML = `
+      <div class="recognize-shell constellation-shell">
+        <div class="recognize-header">
+          <span>🪐 Constellation · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-constellation">✕ Exit</button>
+        </div>
+        <div class="constellation-tag">Pick the 3 lessons that use this idiom:</div>
+        <div class="constellation-mech">
+          <div class="constellation-mech-label">${escapeHtml(card.mechLabel)}</div>
+          ${card.mechBlurb ? `<div class="constellation-mech-blurb">${escapeHtml(card.mechBlurb)}</div>` : ''}
+        </div>
+        <div class="constellation-counter">Picks: <span data-picks>0</span> / 3</div>
+        <div class="constellation-options">
+          ${card.options.map((o, i) => `
+            <button class="recognize-opt constellation-opt" data-opt="${i}">
+              <span class="constellation-opt-mark" data-mark="${i}"></span>
+              <span class="constellation-opt-title">${escapeHtml(o.lesson.title)}</span>
+              <span class="constellation-opt-section">${escapeHtml(o.lesson.section)}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-constellation-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-constellation"]').addEventListener('click', () => renderLesson());
+    const optBtns = shell.querySelectorAll('.constellation-opt');
+    const counterEl = shell.querySelector('[data-picks]');
+    optBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (picks >= CONSTELLATION_PICKS_PER_CARD) return;
+        const optIdx = +btn.dataset.opt;
+        if (optStates[optIdx] !== 'unpicked') return;
+        const picked = card.options[optIdx];
+        const wasRight = !!picked.isCorrect;
+        optStates[optIdx] = wasRight ? 'correct' : 'wrong';
+        picks++;
+        if (wasRight) cardCorrect++;
+        else { state.weakness[picked.lesson.id] = (state.weakness[picked.lesson.id] || 0) + 1; appendHistory(picked.lesson.id, 'L1-miss'); }
+        state.mechConstellation.attempts++;
+        if (wasRight) state.mechConstellation.correct++;
+        saveProgress();
+        btn.disabled = true;
+        btn.classList.add(wasRight ? 'recognize-opt-correct' : 'recognize-opt-wrong');
+        const mark = shell.querySelector(`[data-mark="${optIdx}"]`);
+        if (mark) mark.textContent = wasRight ? '✓' : '✗';
+        if (counterEl) counterEl.textContent = String(picks);
+        if (picks >= CONSTELLATION_PICKS_PER_CARD) {
+          // Reveal phase: mark the remaining untagged-as-wrong + missed-correct.
+          cardsCompleted++;
+          perCardCorrect.push(cardCorrect);
+          optBtns.forEach((b, i) => {
+            b.disabled = true;
+            if (optStates[i] === 'unpicked') {
+              // If correct was missed, mark it "missed-correct"
+              if (card.options[i].isCorrect) {
+                b.classList.add('constellation-opt-missed');
+                const mark = shell.querySelector(`[data-mark="${i}"]`);
+                if (mark) mark.textContent = '⊙';
+              }
+              // Distractor that was NOT picked — keep neutral (no marker).
+            }
+          });
+          const fb = shell.querySelector('[data-constellation-feedback]');
+          if (fb) {
+            fb.innerHTML = `
+              <div class="constellation-reveal">
+                <div class="constellation-reveal-score">${cardCorrect} of 3 correct</div>
+                <div class="constellation-reveal-hint">⊙ marks the tagged lesson you didn't pick</div>
+                <button class="constellation-next" data-action="constellation-next">Next card</button>
+              </div>
+            `;
+            fb.querySelector('[data-action="constellation-next"]').addEventListener('click', () => { idx++; renderCard(); });
+          }
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const totalCorrect = perCardCorrect.reduce((s, n) => s + n, 0);
+    const totalPossible = deck.length * 3;
+    const pct = Math.round((totalCorrect / totalPossible) * 100);
+    const perfectCards = perCardCorrect.filter(n => n === 3).length;
+    shell.innerHTML = `
+      <div class="recognize-shell constellation-shell">
+        <div class="recognize-header"><span>🪐 Constellation · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${totalCorrect} of ${totalPossible} correct picks · ${perfectCards} of ${deck.length} cards perfect (all 3)</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.mechConstellation.correct} / ${state.mechConstellation.attempts} (${state.mechConstellation.attempts > 0 ? Math.round(state.mechConstellation.correct / state.mechConstellation.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="constellation-again">🪐 Another session</button>
+            <button class="secondary" data-action="constellation-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="constellation-again"]').addEventListener('click', () => startConstellationSession());
+    shell.querySelector('[data-action="constellation-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -7304,6 +7523,15 @@ async function init() {
   const notesDrillBtn = document.getElementById('notes-drill-btn');
   if (notesDrillBtn) notesDrillBtn.addEventListener('click', () => {
     startNotesDrillSession();
+  });
+
+  // iter 98: 🪐 Mechanic Constellation — multi-select recall over mechanics[]
+  // tag. First surface drilling mechanics as a recall TARGET (vs Bridge/Matrix/
+  // modal which all USE mechanics as input). Pick the 3 lessons (of 6) tagged
+  // with the given mechanic.
+  const constellationBtn = document.getElementById('constellation-btn');
+  if (constellationBtn) constellationBtn.addEventListener('click', () => {
+    startConstellationSession();
   });
 
   // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed

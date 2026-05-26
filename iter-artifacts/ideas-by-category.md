@@ -164,8 +164,8 @@ The convention:
 - Search result preview (show matching Reference line, not just title).
 - Pinned lessons row at sidebar top.
 - Tab-row mobile gesture (swipe between Reference/L1/L2/L3 instead of tap).
-- **PWA install + offline drilling** — `manifest.json` + service-worker pre-cache of `data/*.json` + app shell lets the rusty engineer drill in subway tunnels and on planes. Massive mobile-leverage given the PROFILE 80%-phone usage; one-time engineering for permanent reach. Push API is the natural follow-on.
-- **L3 "calculator-style" keyboard chips** — for mobile L3, a row of one-tap insertion chips for the 20 most-typed tokens (`const`, `let`, `for (`, `=>`, `===`, `Math.floor`, `.length`, etc.). Lowers the mobile L3 cost barrier without making it "the main mobile surface" (still desk-tier).
+- **PWA install + offline drilling** — `manifest.json` + service-worker pre-cache of `data/*.json` + app shell lets the rusty engineer drill in subway tunnels and on planes. Massive mobile-leverage given the PROFILE 80%-phone usage; one-time engineering for permanent reach. Push API is the natural follow-on. **Partially shipped:** iter 113 Offline Drill Pack landed the SW pre-cache half (`service-worker.js` + sidebar chip + state.offlinePack); remaining scope is the PWA `manifest.json` web-app metadata + install-prompt UX trigger.
+- ~~**L3 "calculator-style" keyboard chips**~~ → SHIPPED iter 123 (🎹 L3 keyboard chips).
 
 **Cross-cutting concerns:**
 - Mobile probe is mandatory for any UI change (PROFILE.md 80%-phone). See SKILL.md Step 5.
@@ -347,12 +347,12 @@ The trigger check is bounded: 9 categories × ~3 rows each = ~27 freshness looku
 
 **Shortlist (highest leverage first):**
 
-1. **L3 "calculator-style" keyboard chips** *(Cat 5)* — one-tap insertion chips for the 20 most-typed JS tokens on mobile L3. Directly attacks the PROFILE 80%-phone mobile-L3 cost barrier without making L3 "the main mobile surface."
-2. **Code-from-bullet-points** *(Cat 1)* — Reference tab toggle hides canonical, shows `reference.notes` as bullets; user types canonical. Fills the documented L2-to-L3 cell gap ("see concept, recall code"). Cat 1 active list is empty; this restores it.
-3. **Whiteboard mode toggle** *(Cat 9 §9A)* — ~30 LOC; strip syntax highlighting + autocomplete + run-button on L3. Trains the realistic-interview surface where tooling is absent. First §9A ship — Cat 9's §9B-only ship history is unbalanced.
-4. **PWA install + offline drilling** *(Cat 5)* — `manifest.json` + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter. Bigger scope than #1-3 but the leverage is enormous given PROFILE 80%-phone.
+1. **L3 "calculator-style" keyboard chips** *(Cat 5)* — → SHIPPED iter 123 as 🎹 L3 keyboard chips (see [`shipped-by-category.md` § 5](shipped-by-category.md#5-uiux-experience) for ship details). First Cat 5 ship since iter 104 Command Palette; first explicit Review-trigger-driven shortlist consumption.
+2. **Code-from-bullet-points** *(Cat 1)* — Reference tab toggle hides canonical, shows `reference.notes` as bullets; user types canonical. Fills the documented L2-to-L3 cell gap ("see concept, recall code"). Cat 1 active list is empty; this restores it. **Currently CATEGORY-SATURATED** — iter-121 Cinema + iter-122 What-If are 2 fresh Cat 1 ships; promote after 4-iter Cat 1 soak.
+3. **Whiteboard mode toggle** *(Cat 9 §9A)* — ~30 LOC; strip syntax highlighting + autocomplete + run-button on L3. Trains the realistic-interview surface where tooling is absent. First §9A ship — Cat 9's §9B-only ship history is unbalanced. **Note: iter 117 Clarify-First + iter 118 Hot-Seat are now the first §9A ships — this entry's "first §9A ship" claim is stale; reframe as third §9A ship if promoted.**
+4. **PWA install + offline drilling** *(Cat 5)* — `manifest.json` + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter. **Note: iter 113 Offline Drill Pack already shipped the SW pre-cache half of this entry; remaining scope is the PWA `manifest.json` + install-prompt UX. Smaller than originally framed.**
 
-*(Shortlist consumed: iter-93 #1 → 🍀 Lucky roulette SHIPPED iter 108; iter-93 #5 (Algorithm matcher) → 🔖 Match SHIPPED iter 109; iter-93 #2 (Pattern-family heatmap) → 🌈 Sections SHIPPED iter 111. 3 of 7 original shortlist items consumed in 4 iters; remaining 4 are heavier-scope or non-mobile-L1/L2 — vision iter recommended before next shortlist consumption.)*
+*(Shortlist consumed: iter-93 #1 → 🍀 Lucky roulette SHIPPED iter 108; iter-93 #5 (Algorithm matcher) → 🔖 Match SHIPPED iter 109; iter-93 #2 (Pattern-family heatmap) → 🌈 Sections SHIPPED iter 111; iter-93 #1 above (L3 keyboard chips) → 🎹 L3 keyboard chips SHIPPED iter 123. 4 of 7 original shortlist items consumed in 15 iters; remaining 3 have category-saturation OR scope-reduction blockers (Code-from-bullet Cat 1 saturated; Whiteboard claim stale; PWA partly already shipped). Vision iter is the right next-step before another shortlist consumption.)*
 
 **Deferred to a second pass (strong but heavier scope OR awaits earlier ship):**
 - **Audio mini-explainers per high-leverage lesson** *(Cat 8)* — TTS-only, no input loop; ships independently of BLOCKED Audio Mode. 2-iter (top-20 lessons curation + ship).

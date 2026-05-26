@@ -5403,6 +5403,178 @@ async function generateCheatsheet() {
   return md;
 }
 
+// iter 126: 📦 Cheatsheet → Printable PDF / Native-Phone Save (iter-124
+// roadmap #2 SHIPPED). Differentiator vs iter-113 Offline Drill Pack: Pack
+// keeps the corpus drillable INSIDE the app offline; this surface gets the
+// corpus OUT of the app entirely into a user-owned native-OS PDF — readable
+// in Apple Books / Files / Android Downloads on a plane with the app closed.
+// PROFILE 80%-phone amplifies the leverage (subway / plane / kitchen counter).
+// No state changes. Returns a complete <html>…</html> string with embedded
+// print stylesheet. Code blocks are plain monospace (no syntax highlighting)
+// — the goal is offline READING, not interactive drilling, and plain text
+// PDFs are smaller + render identically across Apple Books / Adobe / etc.
+function _buildPrintableCheatsheetHtml() {
+  const fullLessons = CURRICULUM.filter(l => l.status === 'full');
+  const date = new Date().toISOString().slice(0, 10);
+  const total = fullLessons.length;
+  const tracks = [
+    { id: 'syntax',   label: 'Track A — Syntax Fundamentals' },
+    { id: 'patterns', label: 'Track B — Canonical Patterns' },
+    { id: 'applied',  label: 'Track C — Applied Problems' }
+  ];
+
+  const css = `
+    @page { margin: 18mm 14mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Georgia, "Times New Roman", serif;
+      font-size: 11pt; line-height: 1.45; color: #111; background: #fff;
+      padding: 24px;
+    }
+    h1.cover { font-size: 28pt; margin: 0 0 4px 0; }
+    .cover-sub { color: #555; font-size: 11pt; margin-bottom: 12px; }
+    .toc { font-size: 10pt; color: #333; }
+    .toc h2 { font-size: 14pt; margin: 18px 0 6px 0; }
+    .toc ul { margin: 4px 0 0 0; padding-left: 18px; }
+    .toc li { margin: 1px 0; }
+    h1.track { font-size: 22pt; margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 2px solid #333; }
+    h2.section { font-size: 15pt; margin: 18px 0 6px 0; color: #222; }
+    h3.lesson { font-size: 12pt; margin: 12px 0 2px 0; color: #111; }
+    .desc { font-size: 10pt; color: #444; margin: 2px 0 4px 0; font-style: italic; }
+    pre.code {
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 8.5pt; line-height: 1.35;
+      background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px;
+      padding: 8px 10px; margin: 4px 0 6px 0; overflow: hidden;
+      white-space: pre-wrap; word-break: break-word;
+      page-break-inside: avoid;
+    }
+    ul.notes { margin: 4px 0 8px 0; padding-left: 18px; font-size: 10pt; }
+    ul.notes li { margin: 1px 0; color: #333; }
+    hr.div { border: 0; border-top: 1px dashed #ccc; margin: 12px 0; }
+    /* Page breaks: each Track starts a new page; section never split from its
+       first lesson; long code blocks stay together when feasible. */
+    .track-wrap { page-break-before: always; }
+    .track-wrap.first { page-break-before: avoid; }
+    h2.section { page-break-after: avoid; }
+    h3.lesson { page-break-after: avoid; }
+    .toolbar {
+      position: sticky; top: 0; background: #fffae6; border: 1px solid #e6c200;
+      padding: 8px 12px; margin: -24px -24px 16px -24px; font-size: 10pt;
+      color: #5a4a00;
+    }
+    .toolbar b { color: #2a2200; }
+    @media print { .toolbar { display: none; } }
+  `;
+
+  const escape = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  let toc = `<div class="toc"><h2>Contents</h2>`;
+  for (const track of tracks) {
+    const tl = fullLessons.filter(l => l.track === track.id);
+    toc += `<h2>${escape(track.label)} <span style="color:#888;font-weight:400;font-size:10pt;">· ${tl.length} lessons</span></h2><ul>`;
+    const sections = [...new Set(tl.map(l => l.section))];
+    for (const sec of sections) {
+      const lessons = tl.filter(l => l.section === sec);
+      toc += `<li><b>${escape(sec)}</b> — ${lessons.map(l => escape(l.title)).join(' · ')}</li>`;
+    }
+    toc += `</ul>`;
+  }
+  toc += `</div>`;
+
+  let body = '';
+  let isFirst = true;
+  for (const track of tracks) {
+    const tl = fullLessons.filter(l => l.track === track.id);
+    body += `<div class="track-wrap${isFirst ? ' first' : ''}"><h1 class="track">${escape(track.label)}</h1>`;
+    isFirst = false;
+    const sections = [...new Set(tl.map(l => l.section))];
+    for (const sec of sections) {
+      body += `<h2 class="section">${escape(sec)}</h2>`;
+      const lessons = tl.filter(l => l.section === sec);
+      for (const lesson of lessons) {
+        const c = CONTENT[lesson.id];
+        if (!c) continue;
+        body += `<h3 class="lesson">${escape(lesson.title)}</h3>`;
+        if (c.description) body += `<div class="desc">${escape(c.description)}</div>`;
+        const code = (c.reference && c.reference.code) || '';
+        body += `<pre class="code">${escape(code)}</pre>`;
+        if (c.reference && c.reference.notes && c.reference.notes.length) {
+          body += `<ul class="notes">`;
+          for (const n of c.reference.notes) body += `<li>${escape(n)}</li>`;
+          body += `</ul>`;
+        }
+      }
+    }
+    body += `</div>`;
+  }
+
+  // Toolbar (visible on screen, hidden on print) tells the user what to do next.
+  // The print dialog is auto-triggered by the opener; the toolbar is a fallback
+  // for users who dismiss the dialog and want to re-trigger it.
+  const toolbar = `<div class="toolbar">
+    <b>To save to your phone:</b> use your browser's Share / Print menu, then
+    pick <b>Save to Files</b>, <b>Save as PDF</b>, or <b>Books</b>.
+    Or press <b>⌘P / Ctrl-P</b>. (This bar is hidden in the saved PDF.)
+  </div>`;
+
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS Drill Cheatsheet — ${total} lessons · ${date}</title>
+<style>${css}</style>
+</head><body>
+${toolbar}
+<h1 class="cover">JS Interview Cheatsheet</h1>
+<div class="cover-sub">${total} lessons across syntax fundamentals, canonical interview patterns, and applied problems. Generated ${date} from the JS Drill app.</div>
+${toc}
+${body}
+</body></html>`;
+}
+
+// Opens a new window with the printable cheatsheet HTML and auto-triggers the
+// native print dialog. CRITICAL: window.open MUST be called synchronously in
+// the click handler before any await — iOS Safari (and most popup blockers)
+// require a direct user-gesture-origin for window.open. `_buildPrintable...`
+// reads from already-loaded CURRICULUM + CONTENT so it's synchronous even
+// though the cheatsheet modal preloads via `ensureAllContentLoaded()`.
+function exportCheatsheetToPdf() {
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('Allow popups to save the cheatsheet as a PDF.\n\nOr: copy the cheatsheet markdown via Cheatsheet → … (manual workaround).');
+    return;
+  }
+  // Quick placeholder so iOS doesn't show a blank tab during HTML build.
+  try {
+    win.document.write('<!doctype html><meta charset="utf-8"><title>JS Drill Cheatsheet</title><body style="font-family:sans-serif;padding:24px;color:#333"><p>Generating cheatsheet PDF… <small>(takes a second)</small></p></body>');
+  } catch (_) { /* ignore — some browsers buffer this */ }
+
+  // Build the real HTML. CURRICULUM/CONTENT are already loaded because the
+  // cheatsheet modal preloaded them; if not, lessons without content simply
+  // skip in the iterator (graceful degradation).
+  const html = _buildPrintableCheatsheetHtml();
+
+  try {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  } catch (e) {
+    console.error('Cheatsheet PDF write failed:', e);
+    return;
+  }
+
+  // Give the new window a beat to lay out, then fire print().
+  // 600ms is conservative — content is ~150 lessons, mostly text + small <pre>.
+  // Wrapped in try/catch because some browsers throw if the window is closed
+  // before print fires.
+  setTimeout(() => {
+    try {
+      win.focus();
+      win.print();
+    } catch (_) { /* user closed the tab or popup blocked print */ }
+  }, 600);
+}
+
 function dailyPlan() {
   // Returns an ordered, deduped list of lesson IDs to tackle next:
   //   1. Up to 3 due-for-review (retention beats new content)
@@ -10019,6 +10191,9 @@ async function init() {
     renderCheatsheetBody();
   });
   document.getElementById('cheatsheet-expand-all').addEventListener('click', toggleCheatsheetExpandAll);
+  // iter 126: 📱 Save — printable PDF export. window.open() must fire synchronously
+  // from this click handler (no await before it) to preserve iOS Safari popup-allow.
+  document.getElementById('cheatsheet-save-pdf').addEventListener('click', exportCheatsheetToPdf);
 
   updateStreakUI();
   updateReviewBadge();

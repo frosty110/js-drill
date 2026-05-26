@@ -193,7 +193,7 @@ The convention:
 **Cross-cutting concerns:**
 - Current schema `__v: 6` (bumped iter 32 for `history` field). Load accepts 2-6 for legacy users.
 
-**Shipped from this category:** 🤖 AI Coach Export (iter 88) · ☁️ Cross-device sync infrastructure (iter ~88 via `js/sync.js`) · 📦 Offline Drill Pack v1 (iter 113) · ☁️ Sync Onboarding banner (iter 114, completes the sync UX surface) → see [`shipped-by-category.md` § 6](shipped-by-category.md#6-persistence--sync).
+**Shipped from this category:** 🤖 AI Coach Export (iter 88) · ☁️ Cross-device sync infrastructure (iter ~88 via `js/sync.js`) · 📦 Offline Drill Pack v1 (iter 113) · ☁️ Sync Onboarding banner (iter 114, completes the sync UX surface) · 📦 Cheatsheet → Printable PDF (iter 126, **first Cat 6 surface that produces a user-owned native-OS file** — leaves the app entirely for plane / subway reading) → see [`shipped-by-category.md` § 6](shipped-by-category.md#6-persistence--sync).
 
 ---
 

@@ -105,6 +105,120 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 124 vision — fifteenth vision iter; iter-120 queue drained iter 121/122, Cat 2/3/4/6 push HEEDED subagent's Cat-2-over-concentration warning)
+
+**Fifteenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112/116/120).** iter-120 roadmap queue fully shipped across iter 121 Cinema + iter 122 What-If. Step 1B fires vision per iter-123's nomination — `ideas-by-category.md` Promotion shortlist #1 (L3 keyboard chips) shipped iter 123; remaining shortlist items all have category-saturation / claim-stale / scope-reduction blockers; roadmap Queued empty.
+
+**ONE constraint-aware subagent** (iter-100/103/108/112/116/120 cost-conservative precedent) with explicit Cat 2 + Cat 3 + Cat 4 + Cat 6 steering and an explicit AVOID list (Cat 1 — 2 fresh ships iter 121/122; Cat 5 — fresh ship iter 123; Cat 9 §9A — 2 fresh ships iter 117/118; Cat 7 — 4 ships in last 12 iters per recombination-gradient-mined-out signal). Subagent prompt also asked for a steering self-audit (iter-120 pattern, 5th use).
+
+**Subagent returned 5 proposals + load-bearing self-audit:**
+- 3 of 5 proposals landed in Cat 2 (Gauntlet / Mock Warmup Ramp / Track Filter Pills). Subagent self-flagged this as over-concentration AND self-flagged Track Filter as borderline-Cat-5 polish disguised as Cat 2.
+- Subagent honestly bailed on Cat 4 (orchestrator pushed there but no good fit without per-lesson authoring — "rather than reach for 'add 6 lessons on iterators' filler").
+- Subagent surfaced a **non-feature meta-finding** the orchestrator promotes to load-bearing observation: the codebase has an unnamed **"sidecar curation" pattern** — `data/complexity-claims.json` (iter 79) + `data/idiom-pairs.json` (iter 86-87) + `data/clarify-distractor-bank.json` (iter 117) + `data/hotseat-followups.json` (iter 118) are cross-lesson data files growing independently of lesson count. **This is the cheapest Cat 4 content-growth mechanism in the codebase** and is the bridge from Cat 4 (corpus growth) to Cat 3 (mechanic-driven recombination). Future vision iters should explicitly steer "append-only sidecar bank" candidates when Cat 4 saturation comes up.
+
+**Heeded the self-audit (iter-120 precedent for "promote ≤(N-2) when subagent flags overcorrection in N proposals"). Promoted 2 (not 3):**
+
+1. 🎯 **Pattern-Family Gauntlet** (Cat 2 — Paths & Sessions, last touched iter 45; 78+ iters stale). Strongest of the 3 Cat 2 proposals; no per-lesson authoring; mobile-friendly tap-stream chained across a section's lessons. The other 2 Cat 2 proposals held.
+2. 📦 **Cheatsheet → Printable PDF / Native-Phone Save** (Cat 6 — Persistence, last touched iter 114 Sync Onboarding; 9 iters fresh but a different surface within Cat 6 — export-to-native-Files vs cloud-sync). Closes a PROFILE 80%-phone offline-study gap that the iter-113 Offline Pack only half-solved (Offline Pack keeps you IN the app; Save-to-PDF lets you READ in Apple Books / Files on a plane).
+
+**Held with explicit re-promote conditions:**
+
+- 🔥 **Pre-Mock Warmup Ramp** (Cat 2) — HELD on PROFILE Mock-aspirational risk. PROFILE 80%-phone-first deprioritizes Mock Interview as desktop-tier; a 90-sec warmup that wraps Mock's launcher benefits only the (probably small) Mock-usage population. Re-promote condition: instrument and confirm `state.mockHistory` shows Mock is used ≥3 times by ≥20% of returning users — currently unknown.
+- 🎚 **Per-Track Sidebar Filter Pills** (Cat 2) — HELD as weak/Cat-5-disguised. Subagent self-flagged it as borderline UI/UX polish; orchestrator agrees. Re-promote condition: a user-reported friction explicitly names sidebar dot-noise during track-focused sessions, OR a Cat 5 trigger fires after Cat 5 staleness ages back.
+- 🧠 **Mechanics SR Queue** (Cat 3) — HELD on dual-SR-loop conflict + schema bump. Adds a second SR layer on top of the lesson SR; subagent self-flagged that the two loops might create noisy "due" badges contradicting lesson dot color. Also requires `__v: 7` schema bump. Re-promote condition: a frame iter examines the dual-SR-loop interaction OR a small pilot (single mechanic, opt-in toggle, no schema bump) ships first to gather signal.
+
+**Meta-learning (iter 124):** the **steering self-audit pattern is now 5-time-validated** (iter-112 BS-10 framing + iter-115 sync sub-blob + iter-116 §9A content corpus + iter-120 §9C-bias-self-flag + iter-124 Cat-2-over-concentration + sidecar-curation observation). Pattern: vision-iter subagent should ALWAYS be asked for a self-audit; the audit consistently surfaces both over-concentration risks AND meta-findings (like sidecar curation) that the orchestrator's category-steering wouldn't have surfaced. Worth a frame iter to fold "self-audit instruction" into SKILL.md vision-mode template as default, not optional.
+
+§ Next nominates 🎯 Pattern-Family Gauntlet ship for iter 125.
+
+---
+
+### 2026-05-26 iter 124 — 🎯 Pattern-Family Gauntlet
+
+**Status:** QUEUED.
+
+**Value claim:** Drilling all 4-6 lessons in a pattern family (e.g. all Two Pointers, all Sliding Window) back-to-back rewires the family as one move-set, not 6 isolated drills. PROFILE.md L13-15 ("concepts intact, syntax/pattern degraded") + L22-24 ("trace mentally under interview pressure") both point at family-grain transfer as the unlock — currently the rusty engineer has to manually nav between lessons in a section, breaking interleaving-by-family flow. Cat 2 Paths & Sessions has had no Active ship since iter 45 path-aware SR queue (78+ iters); the closest predecessor is Today's Plan (curated mixed-section session), which is the OPPOSITE shape — Gauntlet is single-family-deep, Today's Plan is cross-family-wide.
+
+**Mechanic:** Sidebar 🎯 Gauntlet button → modal with section picker (28 sections, shows lesson-count per section) → tap a section → app strings its lessons into a chained mini-session. User answers L1 on lesson 1, auto-advances to L1 on lesson 2, … no manual nav between cards. Top progress pip "3/5". Misses route to `state.weakness` as usual. Reuses existing L1-render shell; the new logic is just the section-walker + progress strip.
+
+**Success criterion:** ≥25% of sessions that touch ≥3 Patterns lessons in a row within a 24h window use the Gauntlet flow (vs manual nav) within 30 days of ship; secondarily, median lessons-mastered-per-week rises by ≥0.5 for Gauntlet-users vs their pre-ship baseline.
+
+**Estimated scope:** single-iter ship (~250 LOC: session-runner reusing L1 modal + new top progress strip + section-picker modal + schema-additive `state.gauntlet`).
+
+**Data dependency:** none — reads existing CURRICULUM + manifest sections.
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk (subagent-flagged + orchestrator-mitigated):** overlap with Today's Plan, which already curates a multi-lesson session. **Orchestrator mitigation:** Today's Plan is mixed-section (due + path + weak), the Gauntlet is single-family-deep — opposite shape. Reframe in copy: "Today's Plan = broad sample; Gauntlet = deep on one family." Differentiator is interleaving direction.
+
+**Why this is a "new bucket" not "better cell":** Cat 2 Active list has been empty since iter-45's path-aware SR queue. Today's Plan curates ACROSS families; Speedrun (iter 71) times A SECTION but on L1-only one-lesson-deep; Gauntlet is the first multi-lesson section-coherent session shape.
+
+**Subagent source:** iter-124 vision iter — ranked #1 by leverage-per-effort; orchestrator promoted as #1.
+
+---
+
+### 2026-05-26 iter 124 — 📦 Cheatsheet → Printable PDF / Native-Phone Save
+
+**Status:** QUEUED.
+
+**Value claim:** The user wants to study a section on the subway / plane / kitchen counter with no data AND no app open. The existing Cheatsheet exports markdown, but the rusty engineer doesn't run `pandoc` on their phone — they want a tap that pulls the curriculum into iOS Files / Apple Books / Android Downloads where transit-and-toilet reading actually happens. The iter-113 Offline Drill Pack keeps the app drillable offline but doesn't address the read-elsewhere-when-the-app-is-closed use case. PROFILE 80%-phone amplifies the leverage; getting the corpus OUT of the SPA is a one-time engineering win.
+
+**Mechanic:** In the Cheatsheet modal, new "📱 Save to phone" button → renders the cheatsheet markdown to print-styled HTML in a hidden iframe → triggers `window.print()`. On iOS Safari + Android Chrome, this surfaces the native print dialog which offers "Save to Files" / "Save as PDF" alongside printer destinations. Print stylesheet uses serif body + Dracula-syntax-highlighted code blocks + lesson-section page breaks. No new state field — purely additive UI.
+
+**Success criterion:** ≥15% of cheatsheet-modal opens trigger the save button within 30 days; secondarily, at least 1 user-reported instance of "studied offline on the plane" via this surface (qualitative signal — the loop's first "leaves the app entirely to study" success story would be a category unlock).
+
+**Estimated scope:** single-iter ship (~120 LOC: print-stylesheet block + Save button + `window.print()` trigger + iframe-host scaffold + responsive page-break CSS).
+
+**Data dependency:** none — reuses existing cheatsheet markdown generator.
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk (subagent-flagged):** service-worker offline pack iter 113 already covers some of this value (lessons drillable offline). **Orchestrator mitigation:** the differentiator is leaving-the-app entirely. Offline Pack means "drill in the app with no signal"; Save-to-PDF means "read on Apple Books on the plane without the app open." Different surfaces for different reading modes (active drill vs passive review).
+
+**Why this is a "new bucket" not "better cell":** Cat 6 has had infrastructure ships (Offline Pack iter 113 SW cache, Sync Onboarding iter 114, AI Coach Export iter 88), but nothing yet that exports the corpus into a USER-OWNED native-OS file. The "your study material is in your Files app" property is qualitatively different from "the app caches lessons for offline use."
+
+**Subagent source:** iter-124 vision iter — ranked #3 by leverage-per-effort (orchestrator's Cat 6 + over-concentration mitigation elevated to #2 in this queue).
+
+---
+
+### 2026-05-26 iter 124 — HELD: 🔥 Pre-Mock Warmup Ramp (PROFILE Mock-aspirational risk)
+
+**Status:** HELD — heeds subagent's PROFILE-Mock-deprioritization self-flag.
+
+**Value claim:** Mock Interview cold-starts at full pressure; a 90-second 2-3-L1 warmup on the target section before the timer fires would help the rusty engineer ease in. **But:** PROFILE.md 80%-phone-first deprioritizes Mock (desktop-tier L3 surface). The warmup benefits only the small Mock-usage population.
+
+**Re-promote condition:** instrument and confirm `state.mockHistory` shows Mock is used ≥3 times by ≥20% of returning users within 30 days. If usage is below threshold, the warmup ramp is low-leverage and stays held.
+
+**Mechanic if promoted:** when user taps 🎯 Mock Interview, modal asks "Quick ramp first? 90 sec" — Yes runs 3 interleaved L1s + auto-launches Mock; Skip launches immediately.
+
+---
+
+### 2026-05-26 iter 124 — HELD: 🎚 Per-Track Sidebar Filter Pills (weak / Cat-5-disguised)
+
+**Status:** HELD — subagent self-flagged as borderline UI/UX polish disguised as Cat 2; orchestrator agrees.
+
+**Value claim:** Three-pill row above sidebar (All / Syntax / Patterns / Applied) collapses the sidebar to one track for focused sessions. Low-LOC (~80) but also low-FEEL — the rusty engineer probably won't viscerally remember the day this shipped.
+
+**Re-promote condition:** user-reported friction explicitly names sidebar dot-noise during track-focused sessions OR a Cat 5 Review trigger fires after iter-123 L3-chips ship ages back. Currently demoted to parking-lot pending real signal.
+
+**Mechanic if promoted:** repurpose existing `state.sidebarTrack` field (already persists for the tab-track selector) to also filter the sidebar list. Tap "Patterns" → only Patterns sections render; tap "All" → restore.
+
+---
+
+### 2026-05-26 iter 124 — HELD: 🧠 Mechanics SR Queue (dual-SR-loop conflict + schema bump risk)
+
+**Status:** HELD — subagent self-flagged dual-SR-loop conflict + `__v: 7` schema bump.
+
+**Value claim:** Mechanics modal lists ~10 cross-cutting idioms but they're never on the SR schedule themselves — only individual lessons are. A meta-SR layer over mechanics would let the rusty engineer drill a "due now" mechanic by getting routed to one random lesson tagged with it.
+
+**Re-promote condition:** a frame iter examines the dual-SR-loop interaction (lesson SR + mechanic SR could create noisy `due` badges contradicting each other) OR a smaller pilot ships first — opt-in toggle, single mechanic only, no schema bump — to gather user-side signal on whether the dual-loop is useful or confusing.
+
+**Mechanic if promoted:** Mechanics modal rows gain "due in 3d" / "due now" badges. Tap a due row → app picks one random lesson tagged with that mechanic and launches it at L1. Pass refreshes the mechanic's SR interval (1d → 30d like lessons).
+
+**Schema impact:** new field `state.mechanicReviews: { [mechanicId]: { lastPassedAt, interval, dueAt } }` — requires `__v` bump 6 → 7 with backfill (legacy users get all mechanics seeded as `due now`).
+
+---
+
 ## Meta-finding (iter 120 vision — fourteenth vision iter; iter-116 queue fully drained, Cat 1 + §9C push HEEDS subagent blind-spots warning)
 
 **Fourteenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112/116).** iter-116 roadmap queue fully shipped across iter 117/118/119 (Clarify-First + Hot-Seat + Time-to-Solve Calibration). Step 1B fires vision. Steering per iter-119: Cat 1 Drilling Surfaces (active list empty 28+ iters since iter-92), Cat 8 Modalities (only 1 ship at iter 109), Cat 9 §9C Adaptation/transfer (0 ships ever).

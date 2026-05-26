@@ -1,0 +1,111 @@
+{
+  "id": "t-tdz",
+  "title": "Temporal Dead Zone (TDZ)",
+  "section": "JS Traps",
+  "track": "syntax",
+  "status": "full",
+  "description": "let and const bindings exist from block-entry but throw ReferenceError until their declaration line is reached — unlike var, which hoists with the value undefined.",
+  "mechanics": [],
+  "reference": {
+    "code": "// var hoists with the value `undefined` — no error\nconsole.log(a); // undefined\nvar a = 1;\nconsole.log(a); // 1\n\n// let / const exist in a Temporal Dead Zone from block-entry until\n// their declaration line. Reading them in the TDZ throws.\ntry {\n  console.log(b); // throws ReferenceError\n  let b = 1;\n} catch (e) {\n  console.log(e.name); // \"ReferenceError\"\n}\n\n// Even `typeof` throws in the TDZ — unlike typeof on a TRULY\n// undeclared identifier, which safely returns \"undefined\".\nconsole.log(typeof neverDeclared); // \"undefined\"\ntry {\n  console.log(typeof c); // throws — c IS declared, just in TDZ\n  let c;\n} catch (e) {\n  console.log(e.name); // \"ReferenceError\"\n}\n\n// const has the exact same TDZ behavior as let.\ntry {\n  console.log(d);\n  const d = 1;\n} catch (e) {\n  console.log(e.name); // \"ReferenceError\"\n}",
+    "notes": [
+      "TDZ is per-binding-per-scope: the dead zone runs from block-entry to the declaration line, then the binding becomes live.",
+      "`typeof` throws inside the TDZ — the one place where typeof on a name is unsafe. On a truly undeclared name, typeof still returns \"undefined\".",
+      "`const` has the same TDZ behavior as `let` (plus immutability). Only `var` skips the TDZ — it hoists with the value `undefined`.",
+      "TDZ errors are always `ReferenceError`, never `SyntaxError` (the binding is valid; the access is just too early).",
+      "Restructure to fix: declare the let/const FIRST in the block, or move the read AFTER the declaration line."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "What does `console.log(a); var a = 1;` print?",
+        "options": [
+          "1",
+          "undefined",
+          "ReferenceError",
+          "null"
+        ],
+        "answer": 1,
+        "explain": "var hoists with the value `undefined` — no TDZ, just a hoisted-but-not-yet-assigned binding."
+      },
+      {
+        "q": "What happens when `console.log(b); let b = 1;` runs?",
+        "options": [
+          "Prints `undefined`",
+          "Prints `1`",
+          "Throws ReferenceError (TDZ)",
+          "Throws SyntaxError"
+        ],
+        "answer": 2,
+        "explain": "let bindings exist from block-entry but are in the Temporal Dead Zone until the declaration line — reading them throws ReferenceError."
+      },
+      {
+        "q": "Which of these throws? `(A) console.log(typeof notDeclaredAnywhere)`  `(B) { console.log(typeof x); let x; }`",
+        "options": [
+          "Only A",
+          "Only B",
+          "Both A and B",
+          "Neither — typeof never throws"
+        ],
+        "answer": 1,
+        "explain": "typeof on a truly undeclared name returns \"undefined\" safely. But typeof on a let/const inside its TDZ DOES throw — the binding exists, it's just not initialized yet."
+      },
+      {
+        "q": "Does `const` have the same TDZ behavior as `let`?",
+        "options": [
+          "No — const is initialized eagerly at block-entry",
+          "Yes — const has the same TDZ as let",
+          "Only in strict mode",
+          "Only when declared at module scope"
+        ],
+        "answer": 1,
+        "explain": "let and const share TDZ semantics — only var skips the dead zone."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Reading a let binding before its declaration throws. Pick the keyword and the Error property that exposes the error type.",
+        "template": "try {\n  console.log(b);\n  ___ b = 1;\n} catch (e) {\n  console.log(e.___);\n}",
+        "blanks": [
+          {
+            "answer": "let",
+            "hint": "block-scoped — has a TDZ"
+          },
+          {
+            "answer": "name",
+            "hint": "the Error property holding the constructor name"
+          }
+        ],
+        "expectedOutput": "ReferenceError"
+      },
+      {
+        "prompt": "Contrast typeof on a never-declared name (safe) with typeof on a let inside its TDZ (throws). Fill the operator and the Error property.",
+        "template": "console.log(___ neverDeclared);\ntry {\n  console.log(typeof x);\n  let x = 5;\n} catch (e) {\n  console.log(e.___);\n}",
+        "blanks": [
+          {
+            "answer": "typeof",
+            "hint": "the safe-on-undeclared operator"
+          },
+          {
+            "answer": "name",
+            "hint": "the Error property holding the constructor name"
+          }
+        ],
+        "expectedOutput": "undefined\nReferenceError"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `inTdz(fn)` that calls fn and returns the error name if it throws, otherwise the string \"ok\". Use it to prove all three TDZ cases throw ReferenceError: reading a `let`, `typeof` on a `let`, and reading a `const` — each before its declaration. Log the three results, one per line.",
+    "expectedOutput": "ReferenceError\nReferenceError\nReferenceError",
+    "canonical": "function inTdz(fn) {\n  try {\n    fn();\n    return \"ok\";\n  } catch (e) {\n    return e.name;\n  }\n}\n\nconsole.log(inTdz(() => { console.log(a); let a = 1; }));\nconsole.log(inTdz(() => { console.log(typeof b); let b; }));\nconsole.log(inTdz(() => { console.log(c); const c = 1; }));",
+    "hints": [
+      "The arrow body is its own block scope — `let a = 1` inside it creates a TDZ for `a` from the block-entry to that line.",
+      "All three reads happen BEFORE the declaration line, so the inner console.log never fires — the read itself throws.",
+      "`typeof` is normally the safe way to probe an identifier, but inside a TDZ it throws like any other read."
+    ]
+  }
+}

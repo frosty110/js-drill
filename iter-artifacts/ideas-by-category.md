@@ -125,7 +125,7 @@ The convention:
 **Review trigger:** If `L1/L2 quality across full curriculum` row has not been bumped in 8+ iters, OR if any specific section row (`Algorithms section`, `Linked List section`, etc.) is the highest-iter-touched, OR if the BS-08 watchlist hasn't been re-audited in 6+ iters, this category is stale.
 
 **Active ideas (cross-cutting audit themes from iter-27):**
-- **🪤 JS Traps section v1 (3-lesson MVP)** — new section covering canonical JS traps (`Array(3).fill([])` / `typeof null` / `parseInt` radix). Pure L1+L2+L3 (no Conversation/Walkthrough at MVP). Format-validation before scaling to ~12. See [`roadmap.md` iter-112 entry #3](roadmap.md). **First Cat 4 ship since iter 22** (s-index-math). Closes part of BS-03 + JS gotcha trap bag parking-lot entries.
+- **🪤 JS Traps section v2 — scale from 3 to ~12 lessons** — iter-115 MVP (3 lessons: t-tdz, t-floating-precision, t-delete-array-holes) shipped and validated. v2 expands to the full BS-03 + gotcha-bag scope (~9 more lessons covering `Array(3).fill([])` shared-ref, `JSON.stringify` undefined/function-drop, `this`-binding-loss-on-method-extract, hoisting/TDZ deepening, `for...in` on arrays, `Object.keys` ordering on numeric keys, mutation of frozen-shallow objects, `==` NaN quirks, structuredClone vs JSON-clone). Wait for soak window on v1 to surface gaps before committing scale. Pivot original MVP picks rejected during iter-115 curation pass: `Array(3).fill([])` is covered in `s-arr-create` notes; `typeof null` is touched by `s-this`; `parseInt` radix is in `s-number-parse` — pick fresh angles.
 - Audit theme #2: L2 under-build is systemic (33 of 79 patterns + 17 of 20 applied have only 1 L2 — violates PROFILE.md ≥2 floor). Multi-iter sweep candidate.
 - Audit theme #7: ~20 remaining absurd-distractor L1 questions (iter 29 closed 5 of ~25). Mobile-leverage cleanup; theme #7 part 2.
 - BS-13 retro-add visual diagrams to high-traffic lessons (binary-search, p-bfs, p-min-window, p-islands, p-merge-two-sorted, p-reverse-list, p-min-heap, s-iter-protocol).
@@ -145,7 +145,7 @@ The convention:
 - BS-15 `problem` field — Patterns/Applied lessons need interview-style problem statement field; `description` is currently technique-flavored.
 - BS-16 Conversation voice quality at scale — 99 lessons rolled out via subagents; structural-validation-only, no human-read quality audit. Soak window before next surface adds.
 
-**Shipped from this category:** *(none — Content category ships via direct authoring, not promotion from here.)*
+**Shipped from this category:** 🪤 JS Traps section v1 MVP (iter 115, 3 lessons: t-tdz + t-floating-precision + t-delete-array-holes — first Cat 4 ship since iter 22; closes part of BS-03 JS-specific gaps) → see [`shipped-by-category.md` § 4](shipped-by-category.md#4-content).
 
 ---
 

@@ -1,0 +1,123 @@
+{
+  "id": "t-delete-array-holes",
+  "title": "delete arr[i] leaves holes",
+  "section": "JS Traps",
+  "track": "syntax",
+  "status": "full",
+  "description": "`delete arr[i]` does not shift later elements or shrink `length` — it leaves a sparse hole where the slot reads as `undefined`, and most array methods silently skip it. Use `splice` (mutate) or `filter` (new array) to actually remove an element.",
+  "mechanics": [],
+  "reference": {
+    "code": "// `delete` was designed for object properties. On an array it removes\n// the slot BUT leaves the length alone — you get a sparse \"hole\".\nconst a = [1, 2, 3];\ndelete a[1];\nconsole.log(JSON.stringify(a));  // [1,null,3] — JSON.stringify writes holes as null\nconsole.log(a.length);           // 3  (NOT 2 — length unchanged)\nconsole.log(a[1]);               // undefined  (the hole reads as undefined)\n\n// How iteration methods treat the hole — silently inconsistent:\nconst b = [1, 2, 3];\ndelete b[1];\nlet feCount = 0;\nb.forEach(() => feCount++);\nconsole.log(feCount);                       // 2  (forEach SKIPS holes)\nconsole.log(JSON.stringify(b.map(x => x))); // [1,null,3]  (map PRESERVES holes)\nconsole.log(JSON.stringify(b.filter(() => true))); // [1,3]  (filter SKIPS holes)\nlet forCount = 0;\nfor (let i = 0; i < b.length; i++) forCount++;\nconsole.log(forCount);                      // 3  (index-for VISITS the hole as undefined)\n\n// The fix — splice mutates in place AND shifts + shrinks length.\nconst c = [1, 2, 3];\nc.splice(1, 1);\nconsole.log(JSON.stringify(c), c.length);   // [1,3] 2\n\n// Or filter, for a non-mutating new array.\nconst d = [1, 2, 3];\nconst e = d.filter((_, i) => i !== 1);\nconsole.log(JSON.stringify(e));             // [1,3]",
+    "notes": [
+      "`delete arr[i]` was inherited from object-property semantics — on arrays it almost never does what you want.",
+      "Length is unchanged after `delete`, so loops over `arr.length` still visit the hole (as `undefined`).",
+      "`JSON.stringify` serializes holes as `null` — that's why `[1, , 3]` prints as `[1,null,3]` in the runner.",
+      "Iteration methods are split: `forEach`, `map` (preserves but doesn't invoke the callback), `filter`, `reduce`, `some`, `every` SKIP holes; index-based `for` and `for...of` VISIT them.",
+      "`Array.from(arr)` and the spread `[...arr]` MATERIALIZE holes into real `undefined` slots — useful when you need consistent iteration.",
+      "To actually remove by index, use `arr.splice(i, 1)` (mutates, returns the removed slice) or `arr.filter((_, j) => j !== i)` (new array)."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "After `const a = [1, 2, 3]; delete a[1];`, what is `a.length`?",
+        "options": [
+          "2",
+          "3",
+          "undefined",
+          "Throws TypeError"
+        ],
+        "answer": 1,
+        "explain": "`delete` clears the slot but does not change `length` — the array is now sparse but still reports length 3."
+      },
+      {
+        "q": "After `const a = [1, 2, 3]; delete a[1];`, what does `a[1]` evaluate to?",
+        "options": [
+          "2",
+          "null",
+          "undefined",
+          "Throws ReferenceError"
+        ],
+        "answer": 2,
+        "explain": "Reading a hole returns `undefined` — same as reading any unset property on an object."
+      },
+      {
+        "q": "Which expression removes the element at index 1 AND shifts later elements down?",
+        "options": [
+          "delete a[1]",
+          "a.splice(1, 1)",
+          "a[1] = null",
+          "a.length--"
+        ],
+        "answer": 1,
+        "explain": "`splice(1, 1)` removes one element at index 1 and shifts the rest left, decrementing length. The other three leave the array in a broken state."
+      },
+      {
+        "q": "After `const a = [1, 2, 3]; delete a[1];`, how many times does `a.forEach(fn)` call `fn`?",
+        "options": [
+          "3 — once per index",
+          "2 — forEach skips holes",
+          "1 — only the first defined element",
+          "0 — forEach throws on sparse arrays"
+        ],
+        "answer": 1,
+        "explain": "`forEach`, `map` (callback), `filter`, and `reduce` all silently skip holes. That's why `delete` produces hard-to-spot bugs — the count is just off by one."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Show that `delete` leaves length intact but the slot reads as undefined. Pick the keyword and the property.",
+        "template": "const a = [1, 2, 3];\n___ a[1];\nconsole.log(a.___);\nconsole.log(a[1]);",
+        "blanks": [
+          {
+            "answer": "delete",
+            "hint": "the operator that clears the slot without shifting"
+          },
+          {
+            "answer": "length",
+            "hint": "the property that does NOT update after delete"
+          }
+        ],
+        "expectedOutput": "3\nundefined"
+      },
+      {
+        "prompt": "Use the right mutating method to actually remove the element at index 1 — length should drop to 2.",
+        "template": "const a = [1, 2, 3];\na.___(1, 1);\nconsole.log(JSON.stringify(a), a.length);",
+        "blanks": [
+          {
+            "answer": "splice",
+            "hint": "surgical remove that shifts later elements"
+          }
+        ],
+        "expectedOutput": "[1,3] 2"
+      },
+      {
+        "prompt": "Compare: forEach skips the hole, but an index-based for visits it. Fill the method and the loop keyword.",
+        "template": "const a = [1, 2, 3];\ndelete a[1];\nlet fe = 0;\na.___(() => fe++);\nlet idx = 0;\n___ (let i = 0; i < a.length; i++) idx++;\nconsole.log(fe, idx);",
+        "blanks": [
+          {
+            "answer": "forEach",
+            "hint": "the side-effect iteration method that skips holes"
+          },
+          {
+            "answer": "for",
+            "hint": "the C-style counting loop"
+          }
+        ],
+        "expectedOutput": "2 3"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `removeAt(arr, i)` that removes the element at index `i` from `arr` IN PLACE (no holes, length shrinks) and returns the mutated array. Then call it on `[10, 20, 30, 40]` removing index 1 and log `JSON.stringify(result)` and `result.length` on separate lines.",
+    "expectedOutput": "[10,30,40]\n3",
+    "canonical": "function removeAt(arr, i) {\n  arr.splice(i, 1);\n  return arr;\n}\n\nconst result = removeAt([10, 20, 30, 40], 1);\nconsole.log(JSON.stringify(result));\nconsole.log(result.length);",
+    "hints": [
+      "`delete arr[i]` is the trap this lesson is about — don't reach for it.",
+      "`splice(i, 1)` mutates the array, removing 1 element at index `i` and shifting later elements left.",
+      "`splice` returns the REMOVED slice, not the mutated array — return `arr` directly."
+    ]
+  }
+}

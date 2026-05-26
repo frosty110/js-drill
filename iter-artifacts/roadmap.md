@@ -175,7 +175,19 @@ Probe `tools/cdp/sync-onboarding.js` **12/12 PASS** at desktop viewport (1280×8
 
 ### 2026-05-26 iter 112 — 🪤 JS Traps section (v1: 3-lesson sample MVP)
 
-**Status:** QUEUED.
+**Status:** SHIPPED iter 115. **iter-112 vision queue FULLY DRAINED** (3 of 3 SHIPPED: Offline Pack iter 113 + Sync Onboarding iter 114 + JS Traps MVP iter 115). New section "JS Traps" (slug `js-traps`, track `syntax`) with 3 lessons authored via 3 parallel sub-agents:
+
+- **t-tdz** — Temporal Dead Zone (`let`/`const` TDZ vs `var` hoisting). 4 L1 questions + 2 L2 exercises + L3 canonical. Reference.code uses `var` to contrast hoisting behavior — added to validator's `BANNED_SYNTAX_EXEMPTIONS` (same pattern as `s-variables`/`s-loops`/`s-closures`).
+- **t-floating-precision** — `0.1 + 0.2 !== 0.3` IEEE 754 trap. 5 L1 questions + 3 L2 exercises + L3 canonical (epsilon-comparison helper). No `var` anywhere; no validator exemption needed.
+- **t-delete-array-holes** — `delete arr[i]` leaves holes; `length` stays the same; iteration methods skip holes inconsistently. 4 L1 questions + 3 L2 exercises + L3 canonical (`removeAt(arr, i)` using `splice`). Algorithm-shape canonical with explicit `for(i)` vs `forEach` contrast.
+
+**Curation pass:** orchestrator pre-checked the manifest for overlap before authoring — initial picks (Array.fill shared-ref / typeof null / parseInt radix) were rejected because `s-arr-create` mentions Array(n).fill([]) trap in notes/L1, `s-this` touches `typeof null`, and `s-number-parse` covers parseInt radix surprise comprehensively. Pivoted to TDZ + floating + delete-holes which have zero existing dedicated coverage. **Validates the "curation pass first" mitigation pre-decided in the iter-112 roadmap entry.**
+
+**Parallel sub-agent workflow:** First agent (t-tdz) authored + added the new section to manifest.json + added validator exemption. Subsequent 2 agents (parallel) authored their JSON files only — orchestrator patched manifest with their entries after. Pattern: **first-in-section agent does manifest + validator setup; follow-on agents are pure authoring.** Worth folding into the author-lesson skill scaffolding when multiple lessons go into a new section.
+
+Validator 698/0 (was 687/0 → +11 = 3 lessons × ~3-4 exercises each). Mobile probe `tools/cdp/js-traps-section.js` **10/10 PASS** (section header in sidebar, all 3 lessons status=full + track=syntax + section="JS Traps", select-lesson loads content + exposes L1/L2/L3 tabs, all 3 lessons have ≥3 L1 questions per PROFILE floor).
+
+**Scale decision:** v1 MVP locked in. Decision to scale to ~12 lessons (full BS-03 + JS gotcha trap bag closure) deferred until soak window — let users drill these 3 and surface "what's missing" before committing to 9 more.
 
 **Value claim:** Senior FE / full-stack interviews regularly ask "what does this print?" trap questions (`Array(3).fill([])` shared-reference, `typeof null === 'object'`, `parseInt` radix surprise, `[] == false` but `[] !== false`, `0.1 + 0.2 !== 0.3`, `Object.keys` ordering on numeric keys, `delete arr[0]` leaves holes, hoisting/TDZ edge cases). The 28 existing sections cover algorithms/DS deeply but have minimal coverage of these JS-specific traps. The rusty engineer who hasn't written vanilla JS in 5 years is most likely to fail on these — they're the prerequisite for confident L3 typing.
 **Mechanic:** New "JS Traps" section with 3 sample lessons (`a-traps-fill-shared-ref`, `a-traps-typeof-null`, `a-traps-parseint-radix` or similar). Each lesson: pure L1+L2+L3 ladder (no conversation/walkthrough at MVP — atomic traps don't need narrative). L1 asks "what does this print?" with 4 plausible distractors; L2 fills the trap-aware fix; L3 reproduces the bug-then-fix pattern.

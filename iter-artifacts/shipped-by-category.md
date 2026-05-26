@@ -44,6 +44,18 @@
 
 ---
 
+## 4. Content (lessons, syllabus coverage, quality)
+
+- **🪤 JS Traps section v1 (3-lesson MVP)** *(iter 115)* — new section `js-traps` (track `syntax`) with three lessons covering canonical JS traps with **zero existing dedicated coverage**:
+  - **t-tdz** — Temporal Dead Zone (`let`/`const` exist from block-start but throw ReferenceError until declaration line, unlike `var` which hoists to `undefined`). 4 L1 questions + 2 L2 exercises + L3 canonical. Reference.code uses `var` to contrast hoisting; added to validator `BANNED_SYNTAX_EXEMPTIONS`.
+  - **t-floating-precision** — `0.1 + 0.2 !== 0.3` IEEE 754 trap with three fix patterns (Number.EPSILON, friendly threshold, scale-and-integer math for money). 5 L1 questions + 3 L2 exercises + L3 canonical (`nearlyEqual` helper).
+  - **t-delete-array-holes** — `delete arr[i]` leaves a hole; `length` stays; `forEach`/`map`/`filter` skip holes but `for(i)` visits them as undefined. The fix is `splice` (mutates+shifts+shrinks). 4 L1 questions + 3 L2 exercises + L3 canonical (`removeAt(arr, i)`).
+  - **Curation pass discipline:** initial picks (Array.fill shared-ref / typeof null / parseInt radix) were rejected because grep against the manifest showed they're already touched in `s-arr-create` notes, `s-this`, and `s-number-parse` respectively. Pivot to TDZ/floating/delete-holes ensures zero duplicate-feeling drills — validates the mitigation pre-decided in the iter-112 roadmap entry.
+  - **Parallel sub-agent workflow:** 3 general-purpose sub-agents authored the JSON files in parallel (first agent did manifest + validator setup; follow-on agents pure authoring). Worth folding into `author-lesson` skill scaffolding for future new-section ships.
+  - Validator 698/0 (was 687/0 → +11 exercises). Mobile probe `tools/cdp/js-traps-section.js` (10 assertions: section header in sidebar, all 3 lessons status=full + track=syntax + section="JS Traps", selectLesson loads content + exposes L1/L2/L3 tabs, ≥3 L1 questions per lesson per PROFILE floor). **First Cat 4 ship since iter 22** (s-index-math). Closes part of BS-03 JS-specific gaps. v2 (scale to ~12 lessons) deferred to soak window.
+
+---
+
 ## 5. UI/UX Experience
 
 - **Lesson-history sparkline** *(iter 33; mobile probe iter 34)* — first per-lesson temporal surface. Established Metacognition category.

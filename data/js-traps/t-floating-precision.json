@@ -1,0 +1,118 @@
+{
+  "id": "t-floating-precision",
+  "title": "Floating-point precision (0.1 + 0.2)",
+  "section": "JS Traps",
+  "track": "syntax",
+  "status": "full",
+  "description": "JS numbers are IEEE 754 doubles, so 0.1 + 0.2 !== 0.3 and most decimal fractions can't be represented exactly in binary — compare with an epsilon, round with toFixed, or scale to integers for money math.",
+  "mechanics": [],
+  "reference": {
+    "code": "// The classic surprise — 0.1 + 0.2 is NOT 0.3 in binary floating point.\nconsole.log(0.1 + 0.2);            // 0.30000000000000004\nconsole.log(0.1 + 0.2 === 0.3);    // false\n\n// Why: 0.1 and 0.2 are infinite repeating fractions in binary,\n// just like 1/3 is 0.333... in decimal. Doubles get 52 bits of\n// mantissa, so the stored value is the nearest representable double.\n\n// Fix 1 — epsilon comparison. Number.EPSILON ~ 2.22e-16 is the\n// smallest gap near 1.0; for friendlier real-world tolerance use 1e-9.\nconst a = 0.1 + 0.2;\nconst b = 0.3;\nconsole.log(Math.abs(a - b) < Number.EPSILON); // true (diff is ~5.5e-17)\nconsole.log(Math.abs(a - b) < 1e-9);           // true (friendlier threshold)\n\n// Fix 2 — toFixed then string-compare. toFixed RETURNS A STRING.\nconsole.log(a.toFixed(2));                     // \"0.30\"\nconsole.log(a.toFixed(2) === b.toFixed(2));    // true\n\n// Fix 3 — scale to integers. Best for money: store cents, not dollars.\n// Naive  0.1 * 100 + 0.2 * 100  can STILL be 30.000000000000004,\n// so wrap each scaled term in Math.round before adding.\nconst cents = Math.round(0.1 * 100) + Math.round(0.2 * 100);\nconsole.log(cents / 100);                      // 0.3\n\n// Money example — summing a receipt without losing pennies.\nconst prices = [0.1, 0.2, 0.3];\nlet totalCents = 0;\nfor (const p of prices) totalCents += Math.round(p * 100);\nconsole.log(totalCents / 100);                 // 0.6",
+    "notes": [
+      "Why it happens: 0.1 and 0.2 are infinite repeating fractions in binary, so the stored IEEE 754 double is the nearest representable value — the rounding error surfaces on add.",
+      "`Number.EPSILON` (~2.22e-16) is the gap between 1 and the next representable double; for values away from 1 you usually want a friendlier tolerance like 1e-9.",
+      "`===` between two floats is almost always wrong unless one side is an integer literal you control end-to-end.",
+      "`toFixed(n)` returns a STRING, not a number. Useful for display or string-compare, never for further arithmetic without re-parsing.",
+      "For money, store integer cents (or use a library like decimal.js / big.js). Round each scaled term — `0.1 * 100` can already be 10.000000000000002.",
+      "The trap appears in many languages — it's not a JS bug, it's IEEE 754. Python's `0.1 + 0.2` prints `0.30000000000000004` too."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "What does `console.log(0.1 + 0.2)` print?",
+        "options": [
+          "0.3",
+          "0.30000000000000004",
+          "0.30000000000000001",
+          "NaN"
+        ],
+        "answer": 1,
+        "explain": "IEEE 754 can't represent 0.1 or 0.2 exactly in binary — the sum lands at the nearest representable double, which prints with the trailing `...004`."
+      },
+      {
+        "q": "What is `0.1 + 0.2 === 0.3`?",
+        "options": [
+          "true",
+          "false",
+          "throws TypeError",
+          "NaN"
+        ],
+        "answer": 1,
+        "explain": "The left side is 0.30000000000000004, not 0.3 — strict equality on floats almost always loses to rounding error."
+      },
+      {
+        "q": "Which is the safest way to check that two floats are 'equal' within tolerance?",
+        "options": [
+          "a === b",
+          "a == b",
+          "Math.abs(a - b) < 1e-9",
+          "Object.is(a, b)"
+        ],
+        "answer": 2,
+        "explain": "Compare the absolute difference against an epsilon. `Object.is` is even stricter than `===` for numbers and doesn't help with rounding error."
+      },
+      {
+        "q": "What type does `(0.1 + 0.2).toFixed(2)` return?",
+        "options": [
+          "number",
+          "string",
+          "boolean",
+          "BigInt"
+        ],
+        "answer": 1,
+        "explain": "`toFixed` returns a string. Useful for display or string-compare, but you'll need `Number(...)` or `+...` to do further math."
+      },
+      {
+        "q": "Why store money as integer cents instead of dollar floats?",
+        "options": [
+          "Integers are faster on modern CPUs",
+          "Floats can lose pennies because 0.1, 0.2, etc. aren't exactly representable",
+          "JavaScript numbers don't support decimals",
+          "JSON can't serialize float values"
+        ],
+        "answer": 1,
+        "explain": "Summing 0.1 + 0.2 + 0.3 as floats can drift away from 0.6. Scaling to integer cents (and rounding each scaled term) sidesteps the rounding error entirely."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Show the rounding error directly: print the sum, then the strict-equality check against 0.3.",
+        "template": "const sum = 0.1 + ___;\nconsole.log(sum);\nconsole.log(sum === ___);",
+        "blanks": [
+          { "answer": "0.2", "hint": "the other half of the classic example" },
+          { "answer": "0.3", "hint": "the value you'd expect but won't get" }
+        ],
+        "expectedOutput": "0.30000000000000004\nfalse"
+      },
+      {
+        "prompt": "Fix the comparison with an epsilon tolerance. Use the absolute difference and a friendly 1e-9 threshold.",
+        "template": "const a = 0.1 + 0.2;\nconst b = 0.3;\nconsole.log(Math.___(a - b) < 1e-9);",
+        "blanks": [
+          { "answer": "abs", "hint": "absolute value — Math.___" }
+        ],
+        "expectedOutput": "true"
+      },
+      {
+        "prompt": "Money math: sum two prices via scale-and-integer to avoid pennies drift. Round each scaled term before adding.",
+        "template": "const cents = Math.___(0.1 * 100) + Math.round(0.2 * 100);\nconsole.log(cents / 100);",
+        "blanks": [
+          { "answer": "round", "hint": "nearest integer — Math.___" }
+        ],
+        "expectedOutput": "0.3"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `nearlyEqual(a, b, eps)` that returns true when |a - b| <= eps. Then log: the raw value of `0.1 + 0.2`, whether `0.1 + 0.2 === 0.3`, whether `nearlyEqual(0.1 + 0.2, 0.3, 1e-9)`, and whether `nearlyEqual(0.1 + 0.2, 0.4, 1e-9)` — one result per line.",
+    "expectedOutput": "0.30000000000000004\nfalse\ntrue\nfalse",
+    "canonical": "function nearlyEqual(a, b, eps) {\n  return Math.abs(a - b) <= eps;\n}\n\nconsole.log(0.1 + 0.2);\nconsole.log(0.1 + 0.2 === 0.3);\nconsole.log(nearlyEqual(0.1 + 0.2, 0.3, 1e-9));\nconsole.log(nearlyEqual(0.1 + 0.2, 0.4, 1e-9));",
+    "hints": [
+      "`Math.abs(a - b)` collapses both signs of the gap into one nonnegative number.",
+      "`<=` (not `<`) is the conventional comparison so exact-equal values also pass.",
+      "1e-9 is a friendlier tolerance than `Number.EPSILON` (~2.22e-16) when the values aren't right at 1.0."
+    ]
+  }
+}

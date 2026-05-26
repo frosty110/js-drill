@@ -125,6 +125,7 @@ const BANNED_SYNTAX_EXEMPTIONS = new Set([
   's-variables', // lesson is about let/const/var — `var` is part of the curriculum
   's-loops',     // lesson teaches while AND do-while as the two while-family forms
   's-closures',  // demonstrates the classic var-vs-let captured-binding loop bug
+  't-tdz',       // lesson is about the Temporal Dead Zone — `var` hoisting is the contrast that defines TDZ
 ]);
 const BANNED_PATTERNS = [
   { name: 'do...while loop',          re: /\bdo\s*\{/ },

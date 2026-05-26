@@ -4,15 +4,15 @@
 > that split lesson content out of `index.html` and added mobile + syntax-highlight
 > work. The "How a lesson is structured" section below reflects the *new* layout.
 
-## Current state (snapshot)
+## Current state (snapshot — refreshed iter 115)
 
-- **143 fully-authored lessons** (`status: 'full'`), 0 stubs
-- **327 verified L2+L3 exercises** (all pass via `node tools/validate-data.js`)
+- **154 fully-authored lessons** (`status: 'full'`), 0 stubs
+- **698 verified L2+L3 exercises** (all pass via `node tools/validate-data.js`)
 - `index.html` is markup only (~140 lines); `app.css` (~430 lines) and `app.js` (~2,400 lines) load via `<link>` and `<script src>`
-- Lesson content lives in `data/<section-slug>/<lesson-id>.json` (143 files)
+- Lesson content lives in `data/<section-slug>/<lesson-id>.json` (154 files)
 - `data/manifest.json` is the sidebar index — loaded on boot, lessons lazy-load on click
-- Three tracks across 28 sections:
-  - **Syntax (44)**: Basics · Arrays · Hash Structures · Modern Syntax · Iterators & Generators · JS Toolbox · Algorithms · Classes · Async · Advanced JS
+- Three tracks across 29 sections:
+  - **Syntax (55)**: Basics · Arrays · Hash Structures · Modern Syntax · Iterators & Generators · JS Toolbox · Algorithms · Classes · Async · Advanced JS · JS Traps
   - **Patterns (79)**: Arrays & Hashing · Two Pointers · Sliding Window · Stack · Binary Search · Linked List · Trees · Tries · Heap · Graphs · Greedy · Dynamic Programming · Backtracking · Intervals · Matrix · Bit Manipulation · System Design
   - **Applied (20)**: Applied Problems — implementation problems (decks, games, hash maps, throttle/debounce, undo-redo, etc.)
 

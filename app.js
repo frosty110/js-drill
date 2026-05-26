@@ -208,6 +208,98 @@ function appendHistory(lessonId, event) {
   if (state.history[lessonId].length > HISTORY_MAX) {
     state.history[lessonId] = state.history[lessonId].slice(-HISTORY_MAX);
   }
+  // iter 107: keep the Session Heatstrip live. Cheap (30-cell DOM rebuild
+  // + ~50-event walk) and event-driven — no polling.
+  if (typeof renderHeatstrip === 'function') renderHeatstrip();
+}
+
+// iter 107: ⏱ Session Heatstrip — per-minute activity timeline over the last
+// 30 minutes. Walks `state.history` events per lesson; each event is bucketed
+// into a 60-second cell offset from now. Dominant-event priority within a
+// cell is L3-pass > L2-pass > L1-pass > L1-miss > other (richer signal wins
+// — a minute that contains both an L1-pass and an L3-pass renders as L3).
+// Returns `Array<{ kind, count, minutesAgo }>` where `kind` is one of
+// 'l3-pass' | 'l2-pass' | 'l1-pass' | 'l1-miss' | 'other' | 'idle'.
+// `count` is the number of events that landed in the cell (>=1 means non-idle).
+// Used by renderHeatstrip; pure read-only over state.history.
+const HEATSTRIP_LOOKBACK_MIN = 30;
+const HEATSTRIP_MINUTE_MS = 60000;
+function _heatstripCells(lookbackMinutes = HEATSTRIP_LOOKBACK_MIN) {
+  const now = Date.now();
+  const start = now - lookbackMinutes * HEATSTRIP_MINUTE_MS;
+  const cells = Array.from({ length: lookbackMinutes }, (_, idx) => ({
+    kind: 'idle', count: 0, minutesAgo: lookbackMinutes - 1 - idx
+  }));
+  const hist = state.history || {};
+  // Priority table — higher number wins within a cell.
+  const PRIORITY = { 'L3-pass': 4, 'L2-pass': 3, 'L1-pass': 2, 'L1-miss': 1 };
+  const KIND_OF = { 'L3-pass': 'l3-pass', 'L2-pass': 'l2-pass', 'L1-pass': 'l1-pass', 'L1-miss': 'l1-miss' };
+  const cellPriority = new Int8Array(lookbackMinutes);
+  for (const lessonId of Object.keys(hist)) {
+    const events = hist[lessonId] || [];
+    for (const e of events) {
+      if (typeof e.at !== 'number' || e.at < start || e.at > now) continue;
+      const offsetMin = Math.floor((now - e.at) / HEATSTRIP_MINUTE_MS);
+      if (offsetMin < 0 || offsetMin >= lookbackMinutes) continue;
+      const cellIdx = lookbackMinutes - 1 - offsetMin;
+      cells[cellIdx].count++;
+      const p = PRIORITY[e.event] || 0;
+      if (p > cellPriority[cellIdx]) {
+        cellPriority[cellIdx] = p;
+        cells[cellIdx].kind = KIND_OF[e.event] || 'other';
+      } else if (p === 0 && cells[cellIdx].kind === 'idle') {
+        // No priority match (e.g. 'hint-tier-1') but the cell DID have an
+        // event — surface as 'other' so the user sees presence-of-activity.
+        cells[cellIdx].kind = 'other';
+      }
+    }
+  }
+  return cells;
+}
+
+// iter 107: ⏱ Session Heatstrip — current-session summary for the tap-modal.
+// Defines "session" as the most recent contiguous block of events with no
+// >10-minute idle gap between consecutive events. Walks ALL events across
+// ALL lessons, sorts by timestamp, then walks backwards from the most recent
+// event including any event whose gap to its successor is ≤10 min. Returns
+// `{ minActive, lessonsTouched, passes, missCount, eventCount, startedAt }`
+// — facts, no scores (anti-gamification mitigation per iter-103 roadmap).
+const HEATSTRIP_IDLE_GAP_MS = 10 * 60000;
+function _heatstripSessionSummary() {
+  const now = Date.now();
+  const hist = state.history || {};
+  const all = [];
+  for (const lessonId of Object.keys(hist)) {
+    for (const e of (hist[lessonId] || [])) {
+      if (typeof e.at !== 'number') continue;
+      all.push({ lessonId, at: e.at, event: e.event });
+    }
+  }
+  if (!all.length) {
+    return { minActive: 0, lessonsTouched: 0, passes: 0, missCount: 0, eventCount: 0, startedAt: null };
+  }
+  all.sort((a, b) => a.at - b.at);
+  // Walk backwards from the latest event, including any event whose gap to
+  // its successor is ≤ HEATSTRIP_IDLE_GAP_MS. Also bail if the latest event
+  // is itself >10 min stale — no active session.
+  const last = all[all.length - 1];
+  if (now - last.at > HEATSTRIP_IDLE_GAP_MS) {
+    return { minActive: 0, lessonsTouched: 0, passes: 0, missCount: 0, eventCount: 0, startedAt: null };
+  }
+  const sessionEvents = [last];
+  for (let i = all.length - 2; i >= 0; i--) {
+    if (sessionEvents[0].at - all[i].at > HEATSTRIP_IDLE_GAP_MS) break;
+    sessionEvents.unshift(all[i]);
+  }
+  const startedAt = sessionEvents[0].at;
+  const minActive = Math.max(1, Math.round((last.at - startedAt) / HEATSTRIP_MINUTE_MS));
+  const lessonsTouched = new Set(sessionEvents.map(e => e.lessonId)).size;
+  const passes = sessionEvents.filter(e => e.event && e.event.endsWith('-pass')).length;
+  const missCount = sessionEvents.filter(e => e.event === 'L1-miss').length;
+  return {
+    minActive, lessonsTouched, passes, missCount,
+    eventCount: sessionEvents.length, startedAt
+  };
 }
 
 // iter 46: counts L3 attempts (windowed to last K) where the user invoked
@@ -8170,7 +8262,7 @@ async function init() {
         e.preventDefault();
         return;
       }
-      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal', 'streak-map-modal'];
+      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal', 'streak-map-modal', 'heatstrip-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);
         if (m && m.style.display === 'block') { m.style.display = 'none'; e.preventDefault(); return; }
@@ -8376,6 +8468,68 @@ async function init() {
   streakMapModal.addEventListener('click', (e) => {
     if (e.target === streakMapModal) streakMapModal.style.display = 'none';
   });
+
+  // iter 107: ⏱ Session Heatstrip — sidebar-top 4px activity timeline.
+  // renderHeatstrip rebuilds the 30 minute-cells from state.history and
+  // toggles the wrap visibility based on whether any non-idle cell exists.
+  // Auto-hide on cold-start / no-recent-activity keeps the strip from
+  // appearing as decoration before the user has done anything.
+  const heatstripWrap = document.getElementById('heatstrip-wrap');
+  const heatstripGrid = document.getElementById('heatstrip');
+  const heatstripModal = document.getElementById('heatstrip-modal');
+  window.renderHeatstrip = function renderHeatstrip() {
+    if (!heatstripWrap || !heatstripGrid) return;
+    const cells = _heatstripCells(HEATSTRIP_LOOKBACK_MIN);
+    const hasActivity = cells.some(c => c.kind !== 'idle');
+    if (!hasActivity) {
+      heatstripWrap.hidden = true;
+      heatstripGrid.innerHTML = '';
+      return;
+    }
+    heatstripWrap.hidden = false;
+    heatstripGrid.innerHTML = cells.map(c => {
+      const minLabel = c.minutesAgo === 0 ? 'now' : `${c.minutesAgo}m ago`;
+      const evLabel = c.kind === 'idle' ? 'no activity' : c.kind.toUpperCase();
+      return `<span class="heatstrip-cell ${c.kind}" aria-hidden="true" title="${minLabel} · ${evLabel}${c.count > 1 ? ` (${c.count} events)` : ''}"></span>`;
+    }).join('');
+  };
+  function openHeatstripModal() {
+    const sum = _heatstripSessionSummary();
+    const body = document.getElementById('heatstrip-modal-body');
+    if (!body) return;
+    if (!sum.eventCount) {
+      body.innerHTML = `<div style="color:#64748b;">No session active. Tap any lesson to start.</div>`;
+    } else {
+      const minLabel = sum.minActive === 1 ? '1 minute' : `${sum.minActive} minutes`;
+      const lessLabel = sum.lessonsTouched === 1 ? '1 lesson' : `${sum.lessonsTouched} lessons`;
+      const passLabel = sum.passes === 1 ? '1 pass' : `${sum.passes} passes`;
+      const missLine = sum.missCount > 0
+        ? `<div><span style="color:#94a3b8;">L1 misses recorded:</span> <span style="color:#cbd5e1;">${sum.missCount}</span></div>`
+        : '';
+      body.innerHTML = `
+        <div><span style="color:#94a3b8;">Active for:</span> <span style="color:#cbd5e1;">${minLabel}</span></div>
+        <div><span style="color:#94a3b8;">Lessons touched:</span> <span style="color:#cbd5e1;">${lessLabel}</span></div>
+        <div><span style="color:#94a3b8;">Passes (L1+L2+L3):</span> <span style="color:#cbd5e1;">${passLabel}</span></div>
+        ${missLine}
+      `;
+    }
+    heatstripModal.style.display = 'block';
+  }
+  if (heatstripWrap) {
+    heatstripWrap.addEventListener('click', openHeatstripModal);
+    heatstripWrap.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHeatstripModal(); }
+    });
+  }
+  document.getElementById('heatstrip-close')?.addEventListener('click', () => heatstripModal.style.display = 'none');
+  heatstripModal?.addEventListener('click', (e) => {
+    if (e.target === heatstripModal) heatstripModal.style.display = 'none';
+  });
+  // Initial render on boot (show recent activity from a prior session in the
+  // last 30 min) + a slow tick so the strip ages out without requiring a new
+  // event. 60-sec interval matches the cell-grain — never refreshes mid-cell.
+  renderHeatstrip();
+  setInterval(renderHeatstrip, HEATSTRIP_MINUTE_MS);
 
   document.getElementById('reveal-replay-btn').addEventListener('click', () => {
     const queue = _revealedQueue();

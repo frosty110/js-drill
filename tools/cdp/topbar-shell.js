@@ -129,21 +129,80 @@ const OUT = process.argv[3] || '/tmp/jsdrill-topbar-shell';
   await s.evalAwait(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
   await s.sleep(200);
 
-  // ── Phase 6: existing Cheatsheet sidebar button still LIVE ───────────
-  // Phase 1 contract: "the existing sidebar buttons remain live so nothing
-  // breaks until Phase 4 (iter 129) removes them." Verify by clicking the
-  // sidebar #export-btn and confirming #cheatsheet-modal opens.
-  const cheatsheetWorks = await s.evalAwait(`(() => {
+  // ── Phase 6 (iter 129 — Phase 4 of the nav refactor epic): sidebar
+  // mode-launcher buttons are now visually HIDDEN, but the underlying
+  // DOM elements remain (so the topbar synth-click bridge + this and
+  // all other CDP probes that query by ID still work). This is the
+  // canary that catches accidental cleanup the OTHER direction —
+  // i.e. if someone deletes the DOM elements instead of hiding them,
+  // the topbar synth-click breaks. Earlier phases of this probe
+  // (iter 127/128) asserted "sidebar Cheatsheet still opens modal"
+  // via direct sidebar click; iter 129 intentionally REPLACES that
+  // assertion (NOT deletes it) with the Phase 4 invariant: the
+  // sidebar button is in the DOM but display:none, AND the topbar
+  // Insights → Cheatsheet path opens the same modal.
+  const phase4 = await s.evalAwait(`(() => {
     const btn = document.getElementById('export-btn');
-    if (!btn) return { btnPresent: false };
-    btn.click();
-    const m = document.getElementById('cheatsheet-modal');
-    return { btnPresent: true, modalOpen: m && m.style.display !== 'none' && m.style.display !== '' };
+    if (!btn) return { btnInDom: false };
+    const cs = getComputedStyle(btn);
+    return {
+      btnInDom: true,
+      btnHidden: cs.display === 'none',
+      btnClickable: typeof btn.click === 'function'
+    };
   })()`);
-  s.assert(cheatsheetWorks.btnPresent, 'Existing sidebar #export-btn (Cheatsheet) still rendered');
-  s.assert(cheatsheetWorks.modalOpen, "Sidebar Cheatsheet button still opens modal (Phase 4 hasn't removed it yet)");
+  s.assert(phase4.btnInDom, 'Phase 4: sidebar #export-btn STILL IN DOM (synth-click bridge dependency)');
+  s.assert(phase4.btnHidden, 'Phase 4: sidebar #export-btn is visually hidden (display:none) — topbar takes over UX');
+  s.assert(phase4.btnClickable, 'Phase 4: hidden button is still .click()-able (synth-click + CDP probes intact)');
+  // Verify the user-visible path: topbar Insights → Cheatsheet opens the modal.
+  await s.evalAwait(`document.querySelector('.topbar-menu[data-menu="insights"]').click()`);
+  await s.sleep(250);
+  await s.evalAwait(`document.querySelector('.topbar-item[data-btn-id="export-btn"]').click()`);
+  await s.sleep(400);
+  const topbarPath = await s.evalAwait(`(() => {
+    const m = document.getElementById('cheatsheet-modal');
+    return { modalOpen: m && m.style.display !== 'none' && m.style.display !== '' };
+  })()`);
+  s.assert(topbarPath.modalOpen, "Phase 4: topbar Insights → Cheatsheet opens #cheatsheet-modal (new user-visible path)");
   await s.evalAwait(`document.getElementById('cheatsheet-close').click()`);
   await s.sleep(200);
+
+  // Spot-check 3 more mode-launchers to confirm the visual-hide is consistent
+  // (no rogue button left visible). Spans all 5 menu categories.
+  const otherHidden = await s.evalAwait(`(() => {
+    const ids = ['mock-btn', 'rapid-fire-btn', 'gauntlet-btn', 'stats-btn', 'hide-mastered-btn'];
+    return ids.map(id => {
+      const b = document.getElementById(id);
+      const cs = b ? getComputedStyle(b) : null;
+      return { id, inDom: !!b, hidden: cs?.display === 'none' };
+    });
+  })()`);
+  for (const item of otherHidden) {
+    s.assert(item.inDom && item.hidden, `Phase 4: ${item.id} in DOM + visually hidden (inDom=${item.inDom}, hidden=${item.hidden})`);
+  }
+
+  // State-indicator chips that double as status badges must NOT be hidden
+  // by Phase 4 — they live in the .hidden class only when their underlying
+  // state is empty, NOT by the Phase 4 cleanup rule.
+  const stateChips = await s.evalAwait(`(() => {
+    const ids = ['review-btn', 'weak-btn', 'at-risk-btn', 'resurrect-btn', 'reveal-replay-btn', 'bridge-btn'];
+    return ids.map(id => {
+      const b = document.getElementById(id);
+      // Read the CSS rule's effect (display:none from app.css selectors) by
+      // temporarily removing the .hidden class.
+      if (!b) return { id, classListHidden: null, ruleHides: null };
+      const wasHidden = b.classList.contains('hidden');
+      if (wasHidden) b.classList.remove('hidden');
+      const cs = getComputedStyle(b);
+      const ruleHides = cs.display === 'none';
+      if (wasHidden) b.classList.add('hidden');
+      return { id, classListHidden: wasHidden, ruleHides };
+    });
+  })()`);
+  for (const c of stateChips) {
+    s.assert(c.ruleHides === false,
+      `Phase 4: state-indicator ${c.id} NOT hidden by Phase 4 cleanup rule (visibility controlled only by .hidden class for empty state)`);
+  }
 
   // ── Phase 7: desktop viewport — menus visible + click opens dropdown ──
   // Re-do device emulation to a desktop viewport without disconnecting.

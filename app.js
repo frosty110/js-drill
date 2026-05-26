@@ -10730,3 +10730,97 @@ function pollOfflinePackStats() {
   } catch (_) { /* SW gone between check and post — ignore */ }
 }
 init().catch(err => console.error(err));
+
+// ────────────────────────────────────────────────────────────────────────
+// iter 127: top-bar dropdown shell (Phase 2 of the nav refactor epic).
+// Single dropdown panel anchored under the topbar; opens with content
+// populated by whichever menu button (Practice/Drills/Train/Insights) or
+// the ⚙️ Settings icon was clicked. Phase 3 (iter 128) fills the menus
+// with actual mode-launchers; Phase 2 ships the shell + open/close JS only.
+//
+// The existing sidebar buttons remain wired for this phase so nothing
+// breaks — the user can reach every drill via either the sidebar OR (in
+// Phase 3) the topbar dropdowns. Phase 4 removes the sidebar buttons.
+// ────────────────────────────────────────────────────────────────────────
+
+// Phase 3 will replace this stub with real per-menu content. For Phase 2,
+// the dropdown opens but renders an "items coming in Phase 3" hint so the
+// user can verify open/close + responsive behavior without dead UI.
+function renderTopbarMenuContents(menuKey) {
+  const labels = {
+    practice: 'Practice — sessions + picks (Mock, Today\'s Plan, Lucky, Shuffle, Replay, Weak, Review, At Risk, Warmup)',
+    drills: 'Drills — mode-launchers (Predict, Bug-Hunt, Recognize, Reverse, Match, Trace-Hop, Reverse-Walk, What-If, Notes, Locate, Claim, Gotcha, Swap, Conv, Constellation, Clarify, Hot-Seat)',
+    train: 'Train — timed streams (Rapid, Big-O, Speedrun, Gauntlet)',
+    insights: 'Insights — visualizations (Stats, Streak, Sections, Mechanics, Cheatsheet, AI Coach)',
+    settings: 'Settings — toggles (Hide Mastered, Path View, Calibrate, Clarify Ritual, Hot-Seat), Data (Export/Import/Sync), Reset'
+  };
+  const hint = labels[menuKey] || 'Menu items coming in Phase 3 (iter 128).';
+  return `<div class="topbar-dropdown-stub">${hint}<br><br>Phase 3 (iter 128) wires items.<br>For now, use the sidebar buttons.</div>`;
+}
+
+function initTopbarDropdowns() {
+  const topbar = document.getElementById('topbar');
+  if (!topbar) return; // defensive — non-app pages won't have it
+  const dropdown = document.getElementById('topbar-dropdown');
+  const body = dropdown ? dropdown.querySelector('.topbar-dropdown-body') : null;
+  if (!dropdown || !body) return;
+
+  let openMenu = null;
+
+  function close() {
+    if (!openMenu) return;
+    openMenu.setAttribute('aria-expanded', 'false');
+    openMenu = null;
+    dropdown.classList.add('hidden');
+    dropdown.setAttribute('aria-hidden', 'true');
+    body.innerHTML = '';
+  }
+
+  function open(menuButton) {
+    if (openMenu === menuButton) { close(); return; }
+    if (openMenu) {
+      openMenu.setAttribute('aria-expanded', 'false');
+    }
+    openMenu = menuButton;
+    menuButton.setAttribute('aria-expanded', 'true');
+    const menuKey = menuButton.getAttribute('data-menu') || menuButton.id.replace(/^topbar-/, '') || 'settings';
+    body.innerHTML = renderTopbarMenuContents(menuKey);
+    dropdown.classList.remove('hidden');
+    dropdown.setAttribute('aria-hidden', 'false');
+  }
+
+  topbar.querySelectorAll('.topbar-menu').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); open(btn); });
+  });
+  const settingsBtn = document.getElementById('topbar-settings');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); open(settingsBtn); });
+  }
+
+  // ❓ Help icon — opens the existing help-modal (same as `?` keypress).
+  const helpBtn = document.getElementById('topbar-help');
+  if (helpBtn) {
+    helpBtn.addEventListener('click', () => {
+      const helpModal = document.getElementById('help-modal');
+      if (helpModal) helpModal.style.display = 'block';
+    });
+  }
+
+  // Click anywhere outside the dropdown + menu strip closes it.
+  document.addEventListener('click', (e) => {
+    if (!openMenu) return;
+    if (dropdown.contains(e.target)) return;
+    if (e.target.closest('.topbar-menu')) return;
+    if (e.target.id === 'topbar-settings') return;
+    close();
+  });
+
+  // ESC closes (only if a topbar menu is the open thing — don't fight other ESC handlers).
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && openMenu) close();
+  });
+}
+
+// Defer-loaded scripts run after DOM parse, so wiring synchronously is safe.
+// Wrapped in a try/catch so a single missing element doesn't block init().
+try { initTopbarDropdowns(); } catch (e) { console.warn('[topbar] init failed:', e); }

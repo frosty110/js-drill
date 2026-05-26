@@ -133,6 +133,30 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ---
 
+### 2026-05-26 iter 127 — 🧭 Topbar Nav Refactor (4-phase epic, iters 127-130)
+
+**Status:** Phase 2 SHIPPED iter 127 (the shell — HTML structure + CSS + dropdown open/close JS + mobile media query). Phase 3 (iter 128) wires the 4 menus to the actual mode-launcher handlers. Phase 4 (iter 129) removes the now-redundant sidebar buttons. (Phase 1 of the epic is the user's pre-iter framing/decision — not a code phase.)
+
+**Value claim:** The sidebar has accumulated ~30 mode-launcher buttons since iter 49 Recognize through iter 125 Gauntlet (+ iter 126 PDF Save). Even with iter 104's Cmd-K Command Palette adding a search layer, **browsing the available modes is increasingly hard** — the palette is search-only, not browsable. A topbar with 4 named dropdown menus (Practice / Drills / Train / Insights) categorizes the modes so the user can BROWSE by intent ("what kind of session do I want?"). This is the second REORGANIZE-not-ADD surface in the loop's history (first was Cmd-K in iter 104). PROFILE 80%-phone is respected — on mobile the 4 menus collapse (Phase 1) and Phase 3 will add a single ☰-Menu sheet that exposes the same categories vertically.
+
+**Mechanic:** New `<header id="topbar">` above the existing `.app-stage` layout. 4 `.topbar-menu` buttons (`data-menu="practice|drills|train|insights"`) on the left, 3 `.topbar-icon` buttons (🔍 palette / ❓ help / ⚙️ settings) on the right. Single `#topbar-dropdown` panel (absolutely positioned under the topbar, full-width) repopulated per-menu when one is clicked. Phase 2 ships an "items coming in Phase 3" stub in the dropdown body so users can verify open/close + a11y + outside-click-closes WITHOUT dead UI. Sidebar buttons remain LIVE this whole epic until Phase 4 removes them — no breaking changes for users at any phase boundary.
+
+**Success criterion:** Post-Phase-4, the sidebar is purely the lesson list (no mode-launcher buttons); mean keystrokes-to-mode-launch via the topbar is ≤ Cmd-K's keystrokes-to-launch for the same mode (browse-vs-search parity); no regression in any existing CDP probe.
+
+**Estimated scope:** 4-iter epic. Phase 2 (iter 127) = ~380 LOC across index.html + app.css + app.js (shell only, no per-mode wiring). Phase 3 (iter 128) = ~200 LOC (4 menu content builders, each emitting `.topbar-item` rows that synthetically click the existing sidebar handlers). Phase 4 (iter 129) = ~50 LOC delete (sidebar button removal + Cmd-K rebuild). Optional Phase 5 (iter 130) = mobile single-Menu sheet (per the HTML comment "Phase 3 should introduce a single ☰-Menu trigger" — actually deferred to Phase 5 for Phase 3 scope discipline).
+
+**Data dependency:** none — reuses existing sidebar button handlers (synthetic click) per the Cmd-K precedent.
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk:** Sync chip overlap with topbar right-icons (caught + mitigated this iter by `#sync-chip { top: 56px !important; }` in app.css). Wordmark visibility under Tailwind reset (deferred — element exists with correct text; visual rendering can iterate). Mobile Menu sheet deferred to Phase 5.
+
+**Why this is a "new bucket" not "better cell":** First topbar/header surface in the app's history — every prior chrome was sidebar-resident (binder tabs, mode buttons, progress chips). Browsable navigation is the new bucket; Cmd-K's search-only access pattern was the closest precedent and it's preserved (the 🔍 icon in the topbar IS the existing palette trigger).
+
+**Subagent source:** none — user-initiated multi-iter epic. Roadmap entry added retroactively iter 127 for traceability.
+
+---
+
 ### 2026-05-26 iter 124 — 🎯 Pattern-Family Gauntlet
 
 **Status:** SHIPPED iter 125 (as 🥊 — see [SELF-IMPROVE.md § iteration log iter 125](../SELF-IMPROVE.md)). Emoji deviation 🎯→🥊 because 🎯 was already taken by Mock Interview + Reverse. Implementation chose ALL L1s per lesson (not just 1 per lesson as the entry's "3/5" pip implied) so deck depth is ~3-4× lesson count — makes the Speedrun differentiator load-bearing and probe-asserted. Mobile probe `tools/cdp/gauntlet.js` 19/19 PASS. First Cat 2 Paths & Sessions Active-list refill since iter 45 — 80-iter drought broken.

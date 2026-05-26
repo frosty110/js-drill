@@ -5132,6 +5132,54 @@ function _aggregateSectionRetention(lookbackDays = 14) {
 
 // Renders the section-retention block for the Stats modal. Returns HTML string
 // or '' when no qualifying sections (avoid empty-section noise in Stats).
+// iter 131 — Calibrate v2 Stats tile. iter-119 v1 captured calibration
+// data per mechanic into state.timeCalibration.byMechanic[id].predictions[];
+// v2 is the visualization surface that was DEFERRED at v1 ship pending
+// soak data. Renders the top-5 most-miscalibrated mechanics by median
+// errorSec (|actual_sec − bucket_midpoint_sec|). Auto-hides when no
+// mechanic has ≥5 predictions yet — clean-progress users see nothing
+// (graceful empty state, not a confusing "0 / 0" tile). PROFILE L65-69
+// success-criterion surface: self-knowledge of pattern-time accuracy.
+const CALIBRATION_TILE_MIN_PREDICTIONS = 5;
+const CALIBRATION_TILE_TOP_N = 5;
+function _renderCalibrationTile() {
+  const cal = state.timeCalibration;
+  if (!cal || !cal.byMechanic || typeof cal.byMechanic !== 'object') return '';
+  const rows = [];
+  for (const [id, data] of Object.entries(cal.byMechanic)) {
+    if (!data || !Array.isArray(data.predictions)) continue;
+    if (data.predictions.length < CALIBRATION_TILE_MIN_PREDICTIONS) continue;
+    const errors = data.predictions.map(p => +p.errorSec || 0).sort((a, b) => a - b);
+    const mid = Math.floor(errors.length / 2);
+    const median = errors.length % 2 === 0
+      ? (errors[mid - 1] + errors[mid]) / 2
+      : errors[mid];
+    const m = MECHANICS.find(x => x.id === id);
+    rows.push({
+      id,
+      label: (m && m.label) ? m.label : id,
+      median,
+      count: data.predictions.length
+    });
+  }
+  if (rows.length === 0) return ''; // auto-hide when no soak data
+  rows.sort((a, b) => b.median - a.median);
+  const top = rows.slice(0, CALIBRATION_TILE_TOP_N);
+  const formatSec = (s) => s >= 60 ? `${Math.round(s/60)}m` : `${Math.round(s)}s`;
+  return `
+    <div data-calibration-tile style="margin-top: 18px;">
+      <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">⏱ Calibration · top ${top.length} miscalibrated mechanic${top.length === 1 ? '' : 's'}</div>
+      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">Median |actual − estimate| per mechanic from your L3-pass history. Higher = bigger gap between your time bucket and actual seconds.</div>
+      ${top.map(r => `
+        <div data-cal-row data-mech-id="${escapeHtml(r.id)}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #1e293b; border-radius: 6px; margin-bottom: 4px;">
+          <span style="color: #cbd5e1; font-size: 13px;">${escapeHtml(r.label)}</span>
+          <span style="color: #fbbf24; font-size: 13px; font-variant-numeric: tabular-nums;">${formatSec(r.median)} <span style="color: #64748b; font-size: 11px;">· ${r.count}×</span></span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function _renderSectionRetentionBlock(lookbackDays = 14) {
   const rows = _aggregateSectionRetention(lookbackDays);
   if (rows.length === 0) return '';
@@ -9992,6 +10040,7 @@ async function init() {
         `;
       })()}
       ${_renderSectionRetentionBlock(14)}
+      ${_renderCalibrationTile()}
       ${bestTimesEntries.length ? `
         <div style="margin-top: 18px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Mock interview personal bests</div>

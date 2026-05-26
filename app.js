@@ -10743,19 +10743,108 @@ init().catch(err => console.error(err));
 // Phase 3) the topbar dropdowns. Phase 4 removes the sidebar buttons.
 // ────────────────────────────────────────────────────────────────────────
 
-// Phase 3 will replace this stub with real per-menu content. For Phase 2,
-// the dropdown opens but renders an "items coming in Phase 3" hint so the
-// user can verify open/close + responsive behavior without dead UI.
+// iter 128 — Phase 3 of the topbar nav refactor epic. Each menu emits
+// .topbar-item rows that synthetically click the corresponding sidebar
+// button (same pattern as iter-104 Cmd-K palette — zero duplicate handlers).
+// Taxonomy honors iter-127's stub strings verbatim:
+//   Practice — sessions + picks (Mock, Today's Plan, Lucky, Shuffle, Replay, Weak, Review, At Risk, Warmup)
+//   Drills — mode-launchers (Predict, Bug-Hunt, Recognize, Reverse, Match, Trace-Hop, Reverse-Walk, What-If, Notes, Locate, Claim, Gotcha, Swap, Conv, Constellation, Clarify, Hot-Seat)
+//   Train — timed streams (Rapid, Big-O, Speedrun, Gauntlet)
+//   Insights — visualizations (Stats, Streak, Sections, Mechanics, Cheatsheet, AI Coach)
+//   Settings — toggles (Hide Mastered, Path View, Calibrate), Data (Backup/Restore), Reset
+const TOPBAR_MENU_TAXONOMY = {
+  practice: {
+    label: 'Practice',
+    blurb: 'Sessions + picks — what to drill next.',
+    items: [
+      'today-btn', 'mock-btn', 'warmup-btn', 'lucky-btn', 'shuffle-btn',
+      'review-btn', 'weak-btn', 'at-risk-btn', 'reveal-replay-btn',
+      'resurrect-btn', 'bridge-btn'
+    ]
+  },
+  drills: {
+    label: 'Drills',
+    blurb: 'Single-mode recall surfaces — pick a recall direction.',
+    items: [
+      'crystal-btn', 'bug-hunt-btn', 'recognize-btn', 'reverse-btn',
+      'match-btn', 'trace-hop-btn', 'reverse-walk-btn', 'whatif-btn',
+      'notes-drill-btn', 'notes-locate-btn', 'claim-btn', 'gotcha-btn',
+      'swap-btn', 'conv-drill-btn', 'constellation-btn',
+      'clarify-ritual-btn', 'hotseat-btn'
+    ]
+  },
+  train: {
+    label: 'Train',
+    blurb: 'Cross-lesson timed and coverage streams.',
+    items: ['rapid-fire-btn', 'big-o-btn', 'speedrun-btn', 'gauntlet-btn']
+  },
+  insights: {
+    label: 'Insights',
+    blurb: 'Visualizations and cross-lesson read-only views.',
+    items: ['stats-btn', 'streak-map-btn', 'sections-grid-btn', 'mechanics-btn', 'export-btn', 'ai-coach-btn']
+  },
+  settings: {
+    label: 'Settings',
+    blurb: 'Toggles, data, and account.',
+    items: ['hide-mastered-btn', 'path-btn', 'calibrate-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
+  }
+};
+
+// Pull display data from the sidebar button itself so the taxonomy stays
+// DRY: button label is the source of truth, descriptions come from the
+// `title` attribute the sidebar buttons already populate for hover-help.
+// Returns null when the button is missing OR currently hidden (the
+// conditional sidebar buttons — Review/Weak/At Risk/etc. — use a `hidden`
+// class until the underlying state populates them; menu items follow the
+// same actionability gate so we don't list dead clicks).
+function _topbarItemFromButton(btn) {
+  if (!btn) return null;
+  if (btn.classList.contains('hidden')) return null;
+  const cloned = btn.cloneNode(true);
+  // Strip count spans (e.g. <span id="review-count">0</span>) so the label
+  // doesn't carry "Review (0)" into the menu.
+  cloned.querySelectorAll('[id$="-count"]').forEach(el => el.remove());
+  // Collapse whitespace + strip empty parens left behind by the span removal.
+  const text = cloned.textContent.trim().replace(/\s*\(\s*\)\s*$/, '').replace(/\s+/g, ' ').trim();
+  // Split on first whitespace: emoji prefix + label tail. Plain-text buttons
+  // (Reset / Backup / Restore) have no leading emoji — emoji becomes ''.
+  const spaceIdx = text.indexOf(' ');
+  let emoji = '', label = text;
+  if (spaceIdx > 0) {
+    const first = text.slice(0, spaceIdx);
+    // Heuristic: if the first token contains any non-ASCII byte, treat it
+    // as an emoji/symbol; otherwise it's part of the label.
+    if (/[^\x00-\x7f]/.test(first)) {
+      emoji = first;
+      label = text.slice(spaceIdx + 1).trim();
+    }
+  }
+  const desc = (btn.getAttribute('title') || '').trim();
+  return { id: btn.id, emoji, label, desc };
+}
+
 function renderTopbarMenuContents(menuKey) {
-  const labels = {
-    practice: 'Practice — sessions + picks (Mock, Today\'s Plan, Lucky, Shuffle, Replay, Weak, Review, At Risk, Warmup)',
-    drills: 'Drills — mode-launchers (Predict, Bug-Hunt, Recognize, Reverse, Match, Trace-Hop, Reverse-Walk, What-If, Notes, Locate, Claim, Gotcha, Swap, Conv, Constellation, Clarify, Hot-Seat)',
-    train: 'Train — timed streams (Rapid, Big-O, Speedrun, Gauntlet)',
-    insights: 'Insights — visualizations (Stats, Streak, Sections, Mechanics, Cheatsheet, AI Coach)',
-    settings: 'Settings — toggles (Hide Mastered, Path View, Calibrate, Clarify Ritual, Hot-Seat), Data (Export/Import/Sync), Reset'
-  };
-  const hint = labels[menuKey] || 'Menu items coming in Phase 3 (iter 128).';
-  return `<div class="topbar-dropdown-stub">${hint}<br><br>Phase 3 (iter 128) wires items.<br>For now, use the sidebar buttons.</div>`;
+  const cat = TOPBAR_MENU_TAXONOMY[menuKey];
+  if (!cat) {
+    return `<div class="topbar-dropdown-stub">Menu "${escapeHtml(menuKey)}" not configured.</div>`;
+  }
+  const items = cat.items.map(id => _topbarItemFromButton(document.getElementById(id))).filter(Boolean);
+  if (!items.length) {
+    return `<div class="topbar-dropdown-stub">Nothing actionable in <b>${escapeHtml(cat.label)}</b> right now — try again once you've drilled a few lessons.</div>`;
+  }
+  const blurb = cat.blurb
+    ? `<div class="topbar-menu-blurb">${escapeHtml(cat.blurb)}</div>`
+    : '';
+  const rows = items.map(it => `
+    <button class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}">
+      <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
+      <div class="topbar-item-text">
+        <div class="topbar-item-name">${escapeHtml(it.label)}</div>
+        ${it.desc ? `<div class="topbar-item-desc">${escapeHtml(it.desc)}</div>` : ''}
+      </div>
+    </button>
+  `).join('');
+  return blurb + rows;
 }
 
 function initTopbarDropdowns() {
@@ -10796,6 +10885,22 @@ function initTopbarDropdowns() {
   if (settingsBtn) {
     settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); open(settingsBtn); });
   }
+
+  // iter 128 Phase 3: delegated click on .topbar-item → synth-click the
+  // sidebar button it references. Close the dropdown first so the synth
+  // click's downstream UI (e.g. a modal opening) isn't visually fighting
+  // the dropdown panel. Same pattern as iter-104 Cmd-K palette which also
+  // synth-clicks sidebar buttons — zero duplicate handlers.
+  body.addEventListener('click', (e) => {
+    const item = e.target.closest('.topbar-item');
+    if (!item) return;
+    e.stopPropagation();
+    const btnId = item.dataset.btnId;
+    const target = btnId ? document.getElementById(btnId) : null;
+    if (!target) return;
+    close();
+    target.click();
+  });
 
   // ❓ Help icon — opens the existing help-modal (same as `?` keypress).
   const helpBtn = document.getElementById('topbar-help');

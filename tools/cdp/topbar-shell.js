@@ -165,12 +165,12 @@ const OUT = process.argv[3] || '/tmp/jsdrill-topbar-shell';
     const expanded = document.querySelector('.topbar-menu[data-menu="practice"]')?.getAttribute('aria-expanded');
     return {
       visible: d && !d.classList.contains('hidden'),
-      bodyHasStub: body?.innerHTML.includes('Phase 3') || false,
+      bodyHasItems: !!body?.querySelector('.topbar-item'),
       ariaExpanded: expanded
     };
   })()`);
   s.assert(dropdownOpen.visible, 'Clicking Practice menu opens #topbar-dropdown');
-  s.assert(dropdownOpen.bodyHasStub, 'Dropdown body contains "Phase 3" stub text');
+  s.assert(dropdownOpen.bodyHasItems, 'Dropdown body contains .topbar-item rows (Phase 3 wired)');
   s.assert(dropdownOpen.ariaExpanded === 'true', 'aria-expanded="true" on opened menu (a11y contract)');
   await s.snap('03-dropdown-open');
 
@@ -184,6 +184,93 @@ const OUT = process.argv[3] || '/tmp/jsdrill-topbar-shell';
   s.assert(dropdownClosed.hidden, 'Outside-click closes dropdown');
   s.assert(dropdownClosed.ariaExpanded === 'false', 'aria-expanded resets to "false" after close');
   await s.snap('04-after-outside-click');
+
+  // ── Phase 9 (iter 128): each menu populates with real .topbar-item rows ─
+  // The Phase 3 ship replaces the "Phase 3 wires items" stub with actual
+  // synth-click rows pointing at existing sidebar buttons. Verify each
+  // menu's item count + that each item has emoji + label + data-btn-id.
+  const menuKeys = ['practice', 'drills', 'train', 'insights'];
+  for (const key of menuKeys) {
+    await s.evalAwait(`document.querySelector('.topbar-menu[data-menu="${key}"]').click()`);
+    await s.sleep(250);
+    const info = await s.evalAwait(`(() => {
+      const body = document.querySelector('#topbar-dropdown .topbar-dropdown-body');
+      const items = Array.from(body.querySelectorAll('.topbar-item'));
+      const blurb = body.querySelector('.topbar-menu-blurb');
+      return {
+        itemCount: items.length,
+        firstId: items[0]?.dataset.btnId || null,
+        firstLabel: items[0]?.querySelector('.topbar-item-name')?.textContent.trim() || '',
+        firstDescLen: items[0]?.querySelector('.topbar-item-desc')?.textContent.length || 0,
+        firstEmoji: items[0]?.querySelector('.topbar-item-emoji')?.textContent.trim() || '',
+        blurbText: blurb?.textContent.trim() || '',
+        allHaveBtnId: items.every(i => !!i.dataset.btnId),
+        allMenuItemRole: items.every(i => i.getAttribute('role') === 'menuitem')
+      };
+    })()`);
+    s.assert(info.itemCount >= 3, `Menu "${key}" has ≥3 actionable items (got ${info.itemCount})`);
+    s.assert(info.allHaveBtnId, `Menu "${key}": every item has data-btn-id`);
+    s.assert(info.allMenuItemRole, `Menu "${key}": every item has role="menuitem"`);
+    s.assert(info.firstLabel.length > 0, `Menu "${key}": first item has a label (got "${info.firstLabel}")`);
+    s.assert(info.firstDescLen > 0, `Menu "${key}": first item has a description from button title (got ${info.firstDescLen} chars)`);
+    s.assert(info.blurbText.length > 0, `Menu "${key}": orientation blurb present (got "${info.blurbText.slice(0, 40)}...")`);
+    // Close before next iteration.
+    await s.evalAwait(`document.querySelector('.topbar-menu[data-menu="${key}"]').click()`);
+    await s.sleep(200);
+  }
+  await s.snap('05-phase3-menu-populated');
+
+  // ── Phase 10: clicking a topbar-item synth-clicks the sidebar button ──
+  // Use a deterministic target: Train → Speedrun (a single-action button
+  // that opens an alert if the section list is empty — but we DO have full
+  // sections so it'll route into the speedrun picker shell, NOT through a
+  // separate modal). Easier: pick Insights → Stats, which always opens
+  // #stats-modal regardless of state.
+  await s.evalAwait(`document.querySelector('.topbar-menu[data-menu="insights"]').click()`);
+  await s.sleep(250);
+  await s.evalAwait(`document.querySelector('.topbar-item[data-btn-id="stats-btn"]').click()`);
+  await s.sleep(400);
+  const synthClick = await s.evalAwait(`(() => {
+    const statsModal = document.getElementById('stats-modal');
+    const dropdown = document.getElementById('topbar-dropdown');
+    return {
+      statsModalOpen: statsModal && statsModal.style.display !== 'none' && statsModal.style.display !== '',
+      dropdownClosedAfterSynthClick: dropdown.classList.contains('hidden')
+    };
+  })()`);
+  s.assert(synthClick.dropdownClosedAfterSynthClick, 'Dropdown closes when a topbar-item is clicked (no UI conflict)');
+  s.assert(synthClick.statsModalOpen, 'Insights → Stats synth-click opens #stats-modal (the existing sidebar handler fires)');
+  await s.evalAwait(`document.getElementById('stats-close').click()`);
+  await s.sleep(200);
+  await s.snap('06-after-synth-click');
+
+  // ── Phase 11: hidden sidebar buttons are filtered out of the menu ──
+  // Practice menu's conditional rows (Review / Weak / At Risk / Reveal
+  // Replay / Resurrect / Bridge) hide-when-empty via .hidden class. With
+  // the probe's empty-progress localStorage seed, none of those buttons
+  // have content → they're hidden → they should NOT appear in the menu.
+  // The always-visible Practice items (today / mock / warmup / lucky /
+  // shuffle) should be present. Count both groups.
+  await s.evalAwait(`document.querySelector('.topbar-menu[data-menu="practice"]').click()`);
+  await s.sleep(250);
+  const practice = await s.evalAwait(`(() => {
+    const items = Array.from(document.querySelectorAll('#topbar-dropdown .topbar-item'));
+    const ids = items.map(i => i.dataset.btnId);
+    return {
+      ids,
+      hasToday: ids.includes('today-btn'),
+      hasMock: ids.includes('mock-btn'),
+      hasReviewHidden: !ids.includes('review-btn'),    // hidden when no due reviews
+      hasWeakHidden: !ids.includes('weak-btn'),         // hidden when no weak spots
+      hasAtRiskHidden: !ids.includes('at-risk-btn')     // hidden when no at-risk lessons
+    };
+  })()`);
+  s.assert(practice.hasToday, 'Practice menu includes today-btn (always-visible)');
+  s.assert(practice.hasMock, 'Practice menu includes mock-btn (always-visible)');
+  s.assert(practice.hasReviewHidden, "Practice menu excludes review-btn when sidebar btn is .hidden (clean-progress state)");
+  s.assert(practice.hasWeakHidden, "Practice menu excludes weak-btn when sidebar btn is .hidden");
+  s.assert(practice.hasAtRiskHidden, "Practice menu excludes at-risk-btn when sidebar btn is .hidden");
+  await s.snap('07-practice-conditional-filter');
 
   await s.close();
   const r = s.report();

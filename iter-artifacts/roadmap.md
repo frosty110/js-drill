@@ -105,6 +105,93 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 95 vision — eighth vision iter; iter-90 queue fully drained)
+
+**Eighth vision iter (after 26/31/48/55/59/64/82/90).** Iter-90 vision queue (Conv Drill iter 91 + Trace-Hop iter 93 + Mechanic-Bridge iter 94) fully shipped this week — the FASTEST queue-to-drain rate in loop history. Iter 95 fires vision to refresh the queue per SKILL.md Step 1B ("shipping is genuinely blocked when Step 1A surfaces nothing").
+
+**Single constraint-aware subagent (iter-82/iter-90 cost-conservative precedent).** Returned 5 proposals each naming a previously-untapped data dimension explicitly per the iter-59 framing.
+
+**Promoted top 3 by impact + feasibility (orchestrator adjusted subagent's ranking):**
+1. 📝 **Notes Cloze Tap-Drill** (subagent #1) — exploits `reference.notes[]` text strings as cloze sources (currently display-only). Different from 🎰 Gotcha (whole-note yes/no recognition) and 🃏 Flash (code-token cloze). Cloze-with-distractors is a third recall direction over the same field.
+2. 🧠 **Mechanic Constellation** (subagent #4, orchestrator-boosted) — uses `mechanics[]` tags as the *primary axis* of a recall task ("name 3 lessons that use the visited-set mechanic"). Currently mechanics are display-only across Mechanics modal / Matrix view / Bridge routing. None TESTS the user at the mechanic grain.
+3. ⏪ **Reverse-Walkthrough** (subagent #5, orchestrator-boosted) — given final `{state, returns}` of a walkthrough trace, pick which of 4 inputs produced it. Same-lesson examples used as distractor pool (feasibility caveat: needs ≥4 examples per lesson — many have 2-3; ship will need a per-lesson eligibility filter). Novel end-state → input direction.
+
+**Held (NOT promoted) with documented reasons:**
+- 🎚 **Calibrated L1 Stream** (subagent #1 by their ranking) — **BLOCKED on schema**: needs per-question miss-rate granularity, but `state.misses[]` is per-lesson grain (iter-58 schema). Would need either (a) schema bump to track per-question misses, OR (b) on-miss instrumentation in L1 render path that writes `{lessonId, questionIdx}`. Re-promote after a frame iter ratifies the schema change.
+- 🔮 **Output-Predict L2** (subagent #3) — **distractor-quality concern**: L2.exercises[].template strings across sibling lessons look structurally identical (fill-in skeletons), so distinguishing real from distractor templates degenerates to "guess which one has the right blank shape" — not a useful recall signal. Could ship if distractors are drawn from FAR-AWAY sections (different sections + different mechanics), but the pool may shrink too much.
+
+**Meta-learning (iter 95):** the subagent's leverage-per-effort ranking is a useful starting heuristic but not authoritative — orchestrator's feasibility cross-check caught 2 of 5 proposals with implementation blockers (schema dependency + distractor degeneracy) that the prompt didn't surface. Future vision-iter prompts could include an explicit "feasibility self-check" instruction asking the subagent to name 1 implementation risk per proposal. § Next nominates 📝 Notes Cloze Tap-Drill ship for iter 96+ (post-`/clear`).
+
+---
+
+### 2026-05-25 iter 95 — Notes Cloze Tap-Drill
+
+**Status:** queued (vision iter 95 — top promoted entry; exploits `reference.notes[]` as a third recall direction)
+
+**Value claim:** PROFILE.md §State they're in ("forget exact method names, argument order, the small ceremonies") + §What they need ("recall under pressure"). The `reference.notes[]` field carries the load-bearing gotchas — what interviewers actually probe — but currently they're only visible passively when Reference tab is open. The rusty engineer rarely re-opens Reference once a lesson is amber. Gotcha (iter 83) tests recognition of whole notes; Flash (iter 35) tests cloze on code tokens; none tests cloze-with-distractors on the notes themselves.
+**Mechanic:** New 📝 sidebar drill. Pulls a random `reference.notes[i]` from any mastered/amber lesson. Picks one keyword to blank (heuristic: ≥4 chars, not a stop-word, ideally appears in `reference.code` for cross-validation that it's load-bearing). Shows the note with `___` in place of the keyword. Renders 4 tap options: the real keyword + 3 distractors sampled from same-section notes. 12-card session. Misses route to `state.weakness`.
+**Success criterion:** Gotcha miss rate drops measurably for users who run Notes Tap-Drill 3+ times (notes content moves from passive reading to active recall). Lifetime hit rate trends up week-over-week.
+**Estimated scope:** single-iter ship (~110 LOC JS + ~25 CSS). Reuses Gotcha card stack + Recognize shell base.
+**Data dependency:** none — `reference.notes[]` exists on 143/143 full lessons (typical 2-5 notes per lesson). Schema-additive `state.notesDrill = {attempts, correct, sessions, lastRunAt}`.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (orchestrator-flagged):** keyword-blanking heuristic is fiddly — some notes are 1 short sentence with no clear cloze target; others are multi-clause and benefit from blanking the LAST distinctive word. Ship MVP with a simple heuristic (last-token-≥4-chars + not in stop-words); refine with usage data.
+**Why this is a "new bucket" not "better cell":** uses **`reference.notes[]` as the *prompt source* with MC distractors**, not as display content. Gotcha = recognition; Flash = code cloze; Notes Tap-Drill = note cloze with distractors. Three distinct recall directions over three distinct fields.
+**Subagent source:** iter-95 vision iter — top by leverage-per-effort + clean data dimension; smallest scope risk among the 3 promoted.
+
+---
+
+### 2026-05-25 iter 95 — Mechanic Constellation Quiz
+
+**Status:** queued (vision iter 95 — second promoted entry; converts `mechanics[]` from display-only to recall target)
+
+**Value claim:** PROFILE.md §What they need #2 ("pattern fluency… produce them without thinking"). The Mechanics modal (iter 63) + Mechanics × Track Matrix (iter 63) + 🧠 Bridge (iter 94) all use `mechanics[]` as a *display/routing* axis. None TESTS whether the user can name which lessons use a given mechanic — and that's the actual interview-transfer skill ("oh, this is just a visited-set problem"). Active retrieval at the mechanic grain.
+**Mechanic:** New sidebar 🧠 (different from Bridge's 🧠 — pick a different emoji like 🪐 Constellation or 🎯 Identify) → 10-card session. Each card shows ONE mechanic name (e.g., "monotonic stack") + 6 lesson titles. 3 titles are actually tagged with that mechanic (from MECHANIC_INDEX); 3 are NOT (sampled from same-section/track for plausibility). User multi-selects the 3 correct titles. Reveal shows actual mechanic tag list per title + drill CTA to any of them. Misses route to `state.weakness` on every wrong-tap.
+**Success criterion:** Per-mechanic identification accuracy predicts cross-track transfer (Bridge ship-through rate); users who run Constellation 5+ times show measurably higher Bridge engagement (= they recognize bridging opportunities before the loop surfaces them).
+**Estimated scope:** single-iter ship (~130 LOC JS + ~25 CSS). Uses MECHANIC_INDEX from iter-63; lazy-loads via existing `ensureMechanicIndex()` path (iter-94 precedent).
+**Data dependency:** none — MECHANIC_INDEX populated on first call; 73% mechanics-field coverage per iter-63. Schema-additive `state.mechConstellation = {attempts, correct, sessions, lastRunAt}`.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk:** mechanics with very few tagged lessons (<4) won't yield a 3-correct quiz card; filter to mechanics with ≥3 tagged lessons + skip otherwise. Per iter-63 inventory there are ~30 such mechanics.
+**Why this is a "new bucket" not "better cell":** **first surface drilling mechanics as a recall TARGET** (vs Bridge/Matrix/modal which all USE mechanics as input). Multi-select tap is also a recall mode L1's single-correct MC doesn't cover.
+**Subagent source:** iter-95 vision iter — second by impact (cleanest data substrate, no per-lesson authoring, novel multi-select mode).
+
+---
+
+### 2026-05-25 iter 95 — Reverse-Walkthrough (end-state → input)
+
+**Status:** queued (vision iter 95 — third promoted entry; backward direction over walkthrough trace data)
+
+**Value claim:** PROFILE.md §State they're in ("can't produce canonical from blank in 5 min"). Walkthrough plays forward (input → state evolution); Trace-Hop tests mid-state recall. The third direction — given the *final* state, what was the input? — exercises backward state-machine reasoning. Interview-relevant move: "if this code RAN and produced this state, what input did it process?"
+**Mechanic:** New sidebar ⏪ button → 8-card session. Each card pulls a random Patterns/Applied lesson with ≥4 `walkthrough.examples[]`. Runs trace on each example; shows ONLY the final `{state, returns}` of one example. Renders 4 candidate input shapes (the real input + 3 from sibling examples in THE SAME LESSON, so input shapes are compatible — avoids type-mismatch giveaways). Tap which input produced this final state. Reveal shows trace context + lesson + drill CTA. Misses route to `state.weakness`.
+**Success criterion:** Per-lesson Reverse-Walkthrough accuracy correlates with L3 first-attempt pass rate on long-untouched mastered lessons (measuring whether backward-state reasoning predicts canonical-recall fidelity).
+**Estimated scope:** single-iter ship (~150 LOC JS + ~30 CSS). Reuses `_compileWalkthrough` cache (iter-78/iter-93 precedent) + Gotcha card stack.
+**Data dependency:** lessons with ≥4 examples. **Feasibility caveat:** many lessons have only 2-3 examples; ship will need an eligibility filter that drops lessons with <4 examples from the pool. Schema-additive `state.reverseWalk = {attempts, correct, sessions, lastRunAt}`.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (orchestrator-flagged):** eligibility-filter shrinks the pool. If <8 lessons have ≥4 examples, the deck-build will fail and the surface degrades to alert("not enough lessons"). Mitigation: relax to ≥3 examples + sample 3 from the SAME lesson (instead of 4 from 4 candidates); accept some same-lesson distractor pressure as the design constraint.
+**Why this is a "new bucket" not "better cell":** Walkthrough/Trace-Hop test forward-direction state recall; this tests **backward direction** (end-state → input) — same trace data, opposite cognitive operation. None of the existing 9 walkthrough-pivoting surfaces drill this.
+**Subagent source:** iter-95 vision iter — third by impact (most novel cognitive direction, feasibility caveat noted, smallest scope risk among walkthrough-pivots).
+
+---
+
+### 2026-05-25 iter 95 — HELD: 🎚 Calibrated L1 Stream (BLOCKED on schema)
+
+**Status:** HELD — needs a schema-bump frame iter before it can ship.
+
+**Value claim:** Rapid-Fire treats all L1 questions as equal-weight; calibrating by per-question empirical miss-rate would 2x signal density per session by surfacing the user's actually-hardest items first.
+**Mechanic:** For each `{lessonId, questionIdx}`, derive a difficulty score from historical misses + reveal-flag + weakness count. Stream items in user's hardest quartile as 2-tap MC cards; missed items boost.
+**Why blocked:** `state.misses[lessonId]` (iter-58 schema) is per-lesson grain — it tracks WHICH lesson the user missed L1 on, but not WHICH question within the lesson. Calibration needs per-question grain. **Frame-iter prerequisite:** decide between (a) schema bump to add `questionIdx` to misses, OR (b) new `state.itemHistory: { [lessonId-questionIdx]: { misses, lastMissAt } }` field. Once ratified, ship is ~120 LOC.
+
+---
+
+### 2026-05-25 iter 95 — HELD: 🔮 Output-Predict L2 (distractor degeneracy)
+
+**Status:** HELD — distractor-quality concern; may not ship as-is.
+
+**Value claim:** Show `L2.exercises[].expectedOutput`; pick which of 4 candidate `template` strings produced it. Tests output→code-shape reasoning (the missing third corner of code/output/problem triangle).
+**Why held:** L2.exercises[].template strings across sibling lessons look structurally identical (fill-in skeletons with `___` markers in similar positions). Distinguishing the real template from 3 distractors degenerates to "spot the right blank shape" — not a useful recall signal. Could ship if distractors are drawn from FAR-AWAY sections (different track + different mechanics), but the pool may shrink to <4 candidates per card.
+**Re-promote condition:** if a future iter audits L2 templates and finds enough structural diversity in a curated cross-section pool. Until then, hold.
+
+---
+
 ### 2026-05-25 iter 90 — Conversation Drill (interview-arc section classifier)
 
 **Status:** SHIPPED iter 91. 🎬 Conv sidebar button → 10-card mobile session. Each card shows ONE `conversation.sections[i].say` paragraph (~100-700 chars) with the section title HIDDEN; user taps which of 6 fixed interview phases it is (🎯 Restate / 🧱 Brute force / 💡 Spot pattern / 🔍 Trace / ⚠️ Edge cases / 📏 Complexity). Tap locks all 6 options, colors the actual phase green + picked-wrong red, reveals actual `sectionTitle` + lesson title + section + "Drill this lesson →" deep-link + "Next card" CTA. Misses route to `state.weakness` via existing path. New helpers: `_convDrillPhaseIdx` (regex `/^\s*([1-6])\b/` over section.title), `_convDrillBuildDeck` (preloads 40 random Patterns/Applied lessons, flattens sections with `say ≥ 100 chars`, Fisher-Yates, slices 10), `startConvDrillSession`. Schema-additive `state.convDrill = { attempts, correct, sessions, lastRunAt }`. ~155 LOC JS + ~45 LOC CSS (fuchsia accent — distinguishes from Gotcha pink, Swap indigo, Crystal purple). Mobile probe `tools/cdp/conversation-drill.js` 5/5 PASS. **No adversary** — Step 2 mitigation on "6 fixed numbered titles → trivially solvable" verified by probe finding ~750-char paragraphs that require interview-phase reading (numbers are stripped/hidden). **First surface to test the 6-section interview-arc skill** that 99 OOB-2026-05-24 lessons authored — confirms the iter-90 vision iter's "largest authored corpus the app has never tested" thesis.

@@ -331,6 +331,78 @@ const OUT = process.argv[3] || '/tmp/jsdrill-topbar-shell';
   s.assert(practice.hasAtRiskHidden, "Practice menu excludes at-risk-btn when sidebar btn is .hidden");
   await s.snap('07-practice-conditional-filter');
 
+  // ── Phase 12 (iter 130 — Phase 5 of the nav refactor epic): mobile-only
+  // 📂 Browse button opens a category-picker dropdown; tapping a category
+  // re-renders the dropdown with that category's items. Verified at iPhone
+  // viewport where the 4 .topbar-menu buttons are display:none.
+  const browseBtn = await s.evalAwait(`(() => {
+    const btn = document.getElementById('topbar-mobile-menu');
+    const cs = btn ? getComputedStyle(btn) : null;
+    return {
+      present: !!btn,
+      visible: cs && cs.display !== 'none',
+      label: btn?.textContent.trim() || '',
+      dataMenu: btn?.getAttribute('data-menu') || ''
+    };
+  })()`);
+  s.assert(browseBtn.present, 'Phase 5: #topbar-mobile-menu Browse button is in the DOM');
+  s.assert(browseBtn.visible, 'Phase 5: Browse button is VISIBLE on mobile (≤767px)');
+  s.assert(browseBtn.label.includes('📂'), `Phase 5: Browse button shows 📂 (got "${browseBtn.label}")`);
+  s.assert(browseBtn.dataMenu === 'mobile-browse', `Phase 5: Browse button has data-menu="mobile-browse" (got "${browseBtn.dataMenu}")`);
+
+  // Open the Browse dropdown → 4 category rows + orientation blurb.
+  await s.evalAwait(`document.getElementById('topbar-mobile-menu').click()`);
+  await s.sleep(250);
+  await s.snap('08-mobile-browse-open');
+  const browseOpen = await s.evalAwait(`(() => {
+    const rows = Array.from(document.querySelectorAll('.topbar-item-mobile-cat'));
+    return {
+      visible: !document.getElementById('topbar-dropdown').classList.contains('hidden'),
+      rowCount: rows.length,
+      cats: rows.map(r => r.dataset.mobileCat),
+      hasCarets: rows.every(r => r.querySelector('.topbar-item-caret')),
+      hasBlurb: !!document.querySelector('#topbar-dropdown .topbar-menu-blurb'),
+      ariaExpanded: document.getElementById('topbar-mobile-menu').getAttribute('aria-expanded')
+    };
+  })()`);
+  s.assert(browseOpen.visible, 'Phase 5: Browse dropdown visible after click');
+  s.assert(browseOpen.rowCount === 4, `Phase 5: 4 category rows rendered (got ${browseOpen.rowCount})`);
+  s.assert(JSON.stringify(browseOpen.cats) === '["practice","drills","train","insights"]',
+    `Phase 5: rows in order Practice/Drills/Train/Insights (got ${JSON.stringify(browseOpen.cats)})`);
+  s.assert(browseOpen.hasCarets, 'Phase 5: every row shows ▸ caret');
+  s.assert(browseOpen.hasBlurb, 'Phase 5: orientation blurb present in mobile-browse view');
+  s.assert(browseOpen.ariaExpanded === 'true', 'Phase 5: aria-expanded="true" on Browse button when open');
+
+  // Drill into Train → dropdown re-renders with .topbar-item rows + blurb.
+  await s.evalAwait(`document.querySelector('.topbar-item-mobile-cat[data-mobile-cat="train"]').click()`);
+  await s.sleep(250);
+  await s.snap('09-mobile-browse-drilled-into-train');
+  const drilled = await s.evalAwait(`(() => {
+    const items = Array.from(document.querySelectorAll('#topbar-dropdown .topbar-item'));
+    return {
+      stillOpen: !document.getElementById('topbar-dropdown').classList.contains('hidden'),
+      itemCount: items.length,
+      itemIds: items.map(i => i.dataset.btnId),
+      ariaStillExpanded: document.getElementById('topbar-mobile-menu').getAttribute('aria-expanded')
+    };
+  })()`);
+  s.assert(drilled.stillOpen, 'Phase 5: dropdown stays open after category drill-in (mobile flow)');
+  s.assert(drilled.itemCount >= 4, `Phase 5: Train category renders ≥4 items after drill-in (got ${drilled.itemCount})`);
+  s.assert(drilled.itemIds.includes('gauntlet-btn'), 'Phase 5: Train drill-in includes gauntlet-btn (verified by iter-125 ship)');
+  s.assert(drilled.ariaStillExpanded === 'true', 'Phase 5: Browse button stays aria-expanded="true" during drill-in (single open transaction)');
+
+  // Tap one item → synth-clicks the sidebar button + closes dropdown
+  // (delegated handler covers both .topbar-item-mobile-cat AND .topbar-item).
+  await s.evalAwait(`document.querySelector('.topbar-item[data-btn-id="gauntlet-btn"]').click()`);
+  await s.sleep(500);
+  const afterPick = await s.evalAwait(`(() => ({
+    dropdownClosed: document.getElementById('topbar-dropdown').classList.contains('hidden'),
+    // Gauntlet-btn opens the gauntlet picker shell — verify it rendered.
+    inGauntletShell: !!document.querySelector('.gauntlet-shell')
+  }))()`);
+  s.assert(afterPick.dropdownClosed, 'Phase 5: tapping a drilled-in item closes the dropdown');
+  s.assert(afterPick.inGauntletShell, 'Phase 5: synth-click of gauntlet-btn opens the Gauntlet picker shell (sidebar handler fires through hidden button)');
+
   await s.close();
   const r = s.report();
   process.exit(r.failed === 0 ? 0 : 1);

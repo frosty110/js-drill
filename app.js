@@ -10824,6 +10824,25 @@ function _topbarItemFromButton(btn) {
 }
 
 function renderTopbarMenuContents(menuKey) {
+  // iter 130 Phase 5: mobile-only "Browse" entry point. The 4 .topbar-menu
+  // buttons are hidden on mobile via the iter-127 media query, so this view
+  // exposes the categories as tappable rows. Clicking a row re-renders the
+  // dropdown with that category's items (delegated in initTopbarDropdowns).
+  if (menuKey === 'mobile-browse') {
+    const cats = ['practice', 'drills', 'train', 'insights'];
+    const blurb = `<div class="topbar-menu-blurb">Browse modes by category. (Or use 🔍 to search by name, ⚙️ for toggles.)</div>`;
+    const rows = cats.map(key => {
+      const cat = TOPBAR_MENU_TAXONOMY[key];
+      if (!cat) return '';
+      return `<button class="topbar-item-mobile-cat" role="menuitem" data-mobile-cat="${escapeHtml(key)}">
+        <div class="topbar-item-text">
+          <div class="topbar-item-name">${escapeHtml(cat.label)} <span class="topbar-item-caret" aria-hidden="true">▸</span></div>
+          <div class="topbar-item-desc">${escapeHtml(cat.blurb)}</div>
+        </div>
+      </button>`;
+    }).join('');
+    return blurb + rows;
+  }
   const cat = TOPBAR_MENU_TAXONOMY[menuKey];
   if (!cat) {
     return `<div class="topbar-dropdown-stub">Menu "${escapeHtml(menuKey)}" not configured.</div>`;
@@ -10886,12 +10905,36 @@ function initTopbarDropdowns() {
     settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); open(settingsBtn); });
   }
 
+  // iter 130 Phase 5: mobile-only 📂 Browse button — opens the dropdown
+  // with menuKey='mobile-browse', which renders 4 category rows. The
+  // open() helper derives menuKey from `data-menu` || id.replace('topbar-',''),
+  // so this id 'topbar-mobile-menu' resolves to menuKey='mobile-menu'. We
+  // want 'mobile-browse' instead, so we set the data-menu attribute below
+  // OR special-case the open(). Cleanest: set data-menu on the button.
+  const mobileMenuBtn = document.getElementById('topbar-mobile-menu');
+  if (mobileMenuBtn) {
+    mobileMenuBtn.setAttribute('data-menu', 'mobile-browse');
+    mobileMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); open(mobileMenuBtn); });
+  }
+
   // iter 128 Phase 3: delegated click on .topbar-item → synth-click the
   // sidebar button it references. Close the dropdown first so the synth
   // click's downstream UI (e.g. a modal opening) isn't visually fighting
   // the dropdown panel. Same pattern as iter-104 Cmd-K palette which also
   // synth-clicks sidebar buttons — zero duplicate handlers.
   body.addEventListener('click', (e) => {
+    // iter 130 Phase 5: mobile category-picker row → drill into that
+    // category's items WITHOUT closing the dropdown. Re-render body with
+    // the selected category's content; aria-expanded on the mobile-menu
+    // button stays true. Checked first because `.topbar-item-mobile-cat`
+    // doesn't have data-btn-id (the synth-click branch below would no-op).
+    const catRow = e.target.closest('.topbar-item-mobile-cat');
+    if (catRow) {
+      e.stopPropagation();
+      const key = catRow.dataset.mobileCat;
+      if (key) body.innerHTML = renderTopbarMenuContents(key);
+      return;
+    }
     const item = e.target.closest('.topbar-item');
     if (!item) return;
     e.stopPropagation();

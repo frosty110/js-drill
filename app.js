@@ -1,4 +1,16 @@
 // ──────────────────────────────────────────────────────────────────────────
+//  CORE MODULE IMPORTS — pure leaf utilities extracted to js/core/.
+//  Loaded by index.html before this file; we destructure once here so the
+//  rest of app.js can call them by the same names as before the split.
+//  See js/core/util.js and js/core/runner.js for what lives where.
+// ──────────────────────────────────────────────────────────────────────────
+const {
+  escapeHtml, formatTime, normalize, normalizeLines, outputsMatch,
+  stripCommentsForDiff, lcsDiffRows, colorizeInto, renderFlash
+} = window.DrillUtil;
+const { formatArg, runCode } = window.DrillRunner;
+
+// ──────────────────────────────────────────────────────────────────────────
 //  CONTENT LOADER (replaces the inline CURRICULUM + CONTENT data blocks)
 //  CURRICULUM is loaded once from data/manifest.json on boot.
 //  Per-lesson bodies live in data/<section-slug>/<lesson-id>.json and are
@@ -4480,12 +4492,6 @@ function dailyPlan() {
   }
   return plan;
 }
-function formatTime(ms) {
-  const totalSec = Math.floor(ms / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
 function startMockInterview(lessonId) {
   if (state.mock.tickHandle) { clearInterval(state.mock.tickHandle); state.mock.tickHandle = null; }
   state.mock.active = true;
@@ -4791,98 +4797,6 @@ function syncBinderToLesson(id) {
   if (l && (l.track === 'syntax' || l.track === 'patterns' || l.track === 'applied')) {
     state.sidebarTrack = l.track;
   }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-//  CODE RUNNER (sandboxed via new Function)
-// ──────────────────────────────────────────────────────────────────────────
-function formatArg(a) {
-  if (typeof a === 'string') return a;
-  if (typeof a === 'number' || typeof a === 'boolean') return String(a);
-  if (a === null) return 'null';
-  if (a === undefined) return 'undefined';
-  if (typeof a === 'function') return `[Function${a.name ? ': ' + a.name : ''}]`;
-  // Native JSON.stringify produces "{}" for Map/Set — special-case them so
-  // users experimenting with `console.log(myMap)` see real content.
-  if (a instanceof Map) {
-    const pairs = [...a.entries()].map(([k, v]) => `${formatArg(k)} => ${formatArg(v)}`);
-    return `Map(${a.size}) { ${pairs.join(', ')} }`;
-  }
-  if (a instanceof Set) {
-    const items = [...a].map(formatArg);
-    return `Set(${a.size}) { ${items.join(', ')} }`;
-  }
-  try { return JSON.stringify(a); } catch { return String(a); }
-}
-async function runCode(code) {
-  const logs = [];
-  // Debug logs (console.debug / console.info) are captured separately and
-  // NEVER fed into the grader. This gives the user an escape hatch: any
-  // `console.log` they add for debugging counts toward the graded output
-  // (and may break the subsequence match if it lands between expected
-  // lines), but `console.debug` is free — it just shows up in the dev pane.
-  const debugLogs = [];
-  const fakeConsole = {
-    log: (...args) => logs.push(args.map(formatArg).join(' ')),
-    error: (...args) => logs.push('[error] ' + args.map(formatArg).join(' ')),
-    warn:  (...args) => logs.push('[warn] '  + args.map(formatArg).join(' ')),
-    debug: (...args) => debugLogs.push(args.map(formatArg).join(' ')),
-    info:  (...args) => debugLogs.push(args.map(formatArg).join(' '))
-  };
-  // Capture unhandled async rejections inside the user code — async IIFEs
-  // whose returned Promise isn't surfaced to us would otherwise hit the
-  // window-level handler with no lesson feedback.
-  let unhandled = null;
-  const rejectionHandler = (e) => {
-    if (!unhandled) unhandled = (e && e.reason) || new Error('Unhandled rejection');
-    e && e.preventDefault && e.preventDefault();
-  };
-  const hasWindow = typeof window !== 'undefined';
-  if (hasWindow) window.addEventListener('unhandledrejection', rejectionHandler);
-  try {
-    // Wrap in strict mode so `this` semantics match what s-this teaches.
-    const wrapped = '"use strict";\n' + code;
-    // eslint-disable-next-line no-new-func
-    const result = new Function('console', wrapped)(fakeConsole);
-    if (result && typeof result.then === 'function') {
-      await result;
-    }
-    // Adaptive drain — exit early when logs stabilize, capped at 8 ticks.
-    let prev = -1;
-    for (let i = 0; i < 8; i++) {
-      if (logs.length === prev) break;
-      prev = logs.length;
-      await new Promise(r => setTimeout(r, 0));
-    }
-    if (unhandled) {
-      return { ok: false, output: (unhandled && unhandled.message) || String(unhandled), debug: debugLogs.join('\n') };
-    }
-    return { ok: true, output: logs.join('\n'), debug: debugLogs.join('\n') };
-  } catch (e) {
-    return { ok: false, output: (e && e.message) || String(e), debug: debugLogs.join('\n') };
-  } finally {
-    if (hasWindow) window.removeEventListener('unhandledrejection', rejectionHandler);
-  }
-}
-function normalize(s) { return (s ?? '').toString().trim().replace(/\r\n/g, '\n'); }
-function normalizeLines(s) {
-  return normalize(s).split('\n').map(l => l.replace(/\s+$/, '')).filter(l => l.length > 0);
-}
-// Subsequence match: every expected line must appear in actual, in order.
-// Extra lines in actual (debug `console.log` calls the user left in) are
-// tolerated — they just don't match any expected line. Identical sequences
-// pass under subsequence too, so this is strictly more permissive than the
-// old equality check.
-function outputsMatch(actual, expected) {
-  const exp = normalizeLines(expected);
-  const act = normalizeLines(actual);
-  if (exp.length === 0) return act.length === 0;
-  let i = 0;
-  for (const line of act) {
-    if (line === exp[i]) i++;
-    if (i === exp.length) return true;
-  }
-  return false;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -5477,67 +5391,6 @@ function renderEmpty(shell) {
 // Static-syntax-highlighter — reuses CodeMirror's JS tokenizer + Dracula
 // theme. Appends colored <span class="cm-…"> nodes into `target`, which must
 // sit under a `.cm-s-dracula` ancestor for the colors to apply.
-function colorizeInto(target, code, mode = 'javascript') {
-  target.textContent = '';
-  if (window.CodeMirror && CodeMirror.runMode) {
-    CodeMirror.runMode(code, mode, target);
-  } else {
-    target.textContent = code;
-  }
-}
-
-// Flash-mode render — same tokens as colorizeInto, but 1-3 randomly-chosen
-// "good" tokens (length >= 3, alphanumeric content, not a comment) are wrapped
-// in tap-to-reveal blur spans. Active-recall surface on the Reference tab:
-// the user mentally fills the blank before tapping to confirm. No typing,
-// no validation, pure self-graded retrieval. See roadmap.md iter-31 entry #2
-// and ideas-by-category.md § Drilling Surfaces.
-function renderFlash(target, code, mode = 'javascript') {
-  target.textContent = '';
-  if (!(window.CodeMirror && CodeMirror.runMode)) {
-    target.textContent = code;
-    return;
-  }
-  const tokens = [];
-  CodeMirror.runMode(code, mode, (text, style) => {
-    tokens.push({ text, style });
-  });
-  // Pick "good" candidates: length >= 3, alphanumeric content, not comment/string-content noise.
-  const goodIdx = [];
-  tokens.forEach((t, i) => {
-    if (t.text.length < 3) return;
-    if (!/[a-zA-Z0-9]{3,}/.test(t.text)) return;
-    if (t.style && /^(comment)$/.test(t.style)) return;
-    goodIdx.push(i);
-  });
-  // Shuffle and pick 1-3.
-  for (let i = goodIdx.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [goodIdx[i], goodIdx[j]] = [goodIdx[j], goodIdx[i]];
-  }
-  const n = Math.min(goodIdx.length, 1 + Math.floor(Math.random() * 3));
-  const blurSet = new Set(goodIdx.slice(0, n));
-  tokens.forEach((tok, i) => {
-    const span = document.createElement('span');
-    if (blurSet.has(i)) {
-      span.className = 'flash-blur';
-      span.textContent = tok.text;
-      span.setAttribute('role', 'button');
-      span.setAttribute('tabindex', '0');
-      span.title = 'Tap to reveal';
-      const reveal = () => span.classList.add('revealed');
-      span.addEventListener('click', reveal);
-      span.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(); }
-      });
-    } else {
-      if (tok.style) span.className = 'cm-' + tok.style.replace(/ +/g, ' cm-');
-      span.textContent = tok.text;
-    }
-    target.appendChild(span);
-  });
-}
-
 // ──────────────────────────────────────────────────────────────────────────
 //  CONVERSATION TAB — interview walk-through for Patterns/Applied lessons
 // ──────────────────────────────────────────────────────────────────────────
@@ -7441,51 +7294,6 @@ function renderL3(body, lesson, content) {
       feedback.innerHTML = '<span class="text-rose-400">Output doesn\'t match expected. Try again.</span>' + hint;
     }
   }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-//  UTIL
-// ──────────────────────────────────────────────────────────────────────────
-function escapeHtml(s) {
-  return (s ?? '').toString()
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-// Comment stripping for the L3 side-by-side diff. Drops block comments,
-// then line comments, then any line that's now whitespace-only — comments
-// are noise when comparing recalled code to the canonical's annotated form.
-// Naive: doesn't track string/regex literals. Safe for our canonicals (no
-// `//` inside template strings), reviewer-enforced going forward.
-function stripCommentsForDiff(code) {
-  return code
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map(line => line.replace(/\/\/.*$/, '').replace(/\s+$/, ''))
-    .filter(line => line.trim().length > 0);
-}
-
-// LCS-based line alignment for side-by-side diff. O(n*m) DP — fine for
-// snippets under a few hundred lines (our canonicals top out ~40).
-// Returns rows of `{left, right, status: 'eq'|'del'|'add'}`.
-function lcsDiffRows(a, b) {
-  const n = a.length, m = b.length;
-  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    }
-  }
-  const rows = [];
-  let i = 0, j = 0;
-  while (i < n && j < m) {
-    if (a[i] === b[j]) { rows.push({ left: a[i], right: b[j], status: 'eq' }); i++; j++; }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) { rows.push({ left: a[i], right: '', status: 'del' }); i++; }
-    else { rows.push({ left: '', right: b[j], status: 'add' }); j++; }
-  }
-  while (i < n) rows.push({ left: a[i++], right: '', status: 'del' });
-  while (j < m) rows.push({ left: '', right: b[j++], status: 'add' });
-  return rows;
 }
 
 // ──────────────────────────────────────────────────────────────────────────

@@ -152,6 +152,8 @@ const state = {
   match: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 109: 🔖 Match — bidirectional title ↔ description matcher (additive, no `__v` bump)
   offlinePack: { lessonCount: 0, totalCount: 0, lastCheckedAt: 0 }, // iter 113: 📦 Offline Drill Pack — last-known SW cache stats for sidebar chip (additive, no `__v` bump)
   syncHintShown: false, // iter 114: ☁️ Sync Onboarding — one-time hint-banner-dismissed flag (additive, no `__v` bump)
+  clarifyRitualOn: false, // iter 117: 🎤 Clarify-First Ritual — opt-in toggle gates Patterns/Applied L3 behind clarifier chip drill (default OFF — user must opt in)
+  clarify: { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 }, // iter 117: 🎤 Clarify-First Ritual — lifetime stats (attempts = total chip-taps; correct = right chips tapped; completed = full rituals passed)
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
@@ -839,6 +841,17 @@ function loadProgress() {
     // post-L3-pass-on-desktop hint banner from re-showing. Set by either
     // Dismiss or Tap-Sync; once true, never re-prompted in this profile.
     state.syncHintShown = !!parsed.syncHintShown;
+    // iter 117: 🎤 Clarify-First Ritual — opt-in toggle (default OFF).
+    state.clarifyRitualOn = !!parsed.clarifyRitualOn;
+    state.clarify = parsed.clarify && typeof parsed.clarify === 'object'
+      ? {
+          attempts: +parsed.clarify.attempts || 0,
+          correct: +parsed.clarify.correct || 0,
+          completed: +parsed.clarify.completed || 0,
+          sessions: +parsed.clarify.sessions || 0,
+          lastRunAt: +parsed.clarify.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 };
     // iter 104: 🗺 Command Palette use-counter. Legacy users get empty map.
     state.commandUsage = parsed.commandUsage && typeof parsed.commandUsage === 'object' && !Array.isArray(parsed.commandUsage)
       ? parsed.commandUsage : {};
@@ -919,6 +932,8 @@ function saveProgress() {
     match: state.match,
     offlinePack: state.offlinePack,
     syncHintShown: state.syncHintShown,
+    clarifyRitualOn: state.clarifyRitualOn,
+    clarify: state.clarify,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -7366,6 +7381,19 @@ function _buildHintLadder(drill) {
 }
 
 function renderL3(body, lesson, content) {
+  // iter 117: 🎤 Clarify-First Ritual — opt-in gate before the L3 editor.
+  // Skip when (a) toggle off, (b) mock interview in progress (no scaffolding
+  // by design — mirrors iter-81 Edge case chips bypass), (c) lesson lacks
+  // Conv Sec.1 say bullets (Syntax track), (d) user already completed the
+  // ritual for this lesson this session.
+  if (
+    state.clarifyRitualOn
+    && !(state.mock.active && state.mock.lessonId === lesson.id)
+    && content?.conversation?.sections?.[0]?.say
+    && !_clarifySessionCompleted.has(lesson.id)
+  ) {
+    return _renderClarifyRitual(body, lesson, content);
+  }
   const drill = content.L3;
   const isMock = state.mock.active && state.mock.lessonId === lesson.id;
   const bestMs = state.bestTimes[lesson.id];
@@ -8420,6 +8448,27 @@ async function init() {
     saveProgress();
     renderSidebar();
   });
+
+  // iter 117: 🎤 Clarify-First Ritual — opt-in toggle (default OFF).
+  // ON state painted sky-200 (matches button hover color). Toggling resets
+  // the in-memory per-session completion set so flipping ON immediately
+  // gates the current lesson's L3 (no need to re-navigate).
+  const clarifyBtn = document.getElementById('clarify-ritual-btn');
+  if (clarifyBtn) {
+    if (state.clarifyRitualOn) {
+      clarifyBtn.classList.add('text-sky-200');
+      clarifyBtn.classList.remove('text-slate-500');
+    }
+    clarifyBtn.addEventListener('click', () => {
+      state.clarifyRitualOn = !state.clarifyRitualOn;
+      clarifyBtn.classList.toggle('text-sky-200', state.clarifyRitualOn);
+      clarifyBtn.classList.toggle('text-slate-500', !state.clarifyRitualOn);
+      _clarifySessionCompleted.clear();
+      saveProgress();
+      // Re-render the active lesson so the gate engages/disengages on the fly.
+      if (state.currentLessonId && state.currentTab === 'L3') renderLesson();
+    });
+  }
 
   // Path View toggle — filters the sidebar to the subscribed path's lessons.
   document.getElementById('path-btn').addEventListener('click', () => {
@@ -9497,6 +9546,147 @@ function _showSyncHintBanner() {
   };
   banner.querySelector('[data-action="tap-sync"]').addEventListener('click', () => close(true));
   banner.querySelector('[data-action="dismiss"]').addEventListener('click', () => close(false));
+}
+// iter 117: 🎤 Clarify-First Ritual — opt-in pre-L3 tap-gate. When the user
+// flips `state.clarifyRitualOn` on, every Patterns/Applied L3 visit shows a
+// clarifier-chip card BEFORE the editor unlocks. Correct chips are mined from
+// the lesson's `conversation.sections[0].say` bullet list (the existing
+// "Restate & clarify" interview-narration content — 99 lessons authored);
+// distractors come from `data/clarify-distractor-bank.json`. User taps chips
+// in any order; correct taps mark green + count toward unlock; wrong taps
+// mark red + increment state.clarify.attempts (signal not failure). When all
+// correct chips are tapped → ritual completes + editor renders. Per-lesson
+// per-session completion cached in `_clarifySessionCompleted` so the user
+// doesn't re-do the ritual when they tab-switch back to L3. First Cat 9 §9A
+// ship ever — drills the interview ritual the L1/L2/L3 ladder doesn't cover.
+const _clarifySessionCompleted = new Set();
+let _CLARIFY_BANK = null;
+async function _clarifyLoadBank() {
+  if (_CLARIFY_BANK) return _CLARIFY_BANK;
+  try {
+    const res = await fetch('data/clarify-distractor-bank.json', { cache: 'no-cache' });
+    const body = await res.json();
+    _CLARIFY_BANK = Array.isArray(body.distractors) ? body.distractors : [];
+  } catch (_) {
+    _CLARIFY_BANK = [];
+  }
+  return _CLARIFY_BANK;
+}
+function _clarifyExtractBullets(say) {
+  // The conversation.sections[0].say is a paragraph with embedded bullet
+  // questions. Format is consistent across 99/99 lessons: bullet lines
+  // start with "• ". Extract each as a chip-sized clarifier question.
+  if (typeof say !== 'string') return [];
+  const lines = say.split(/\r?\n/);
+  const bullets = [];
+  for (const line of lines) {
+    const m = line.match(/^\s*•\s+(.+?)\s*$/);
+    if (m && m[1]) bullets.push(m[1]);
+  }
+  return bullets;
+}
+function _clarifyShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function _clarifyBuildCard(lesson, content, bank) {
+  const say = content?.conversation?.sections?.[0]?.say;
+  const bullets = _clarifyExtractBullets(say);
+  if (bullets.length < 2) return null;
+  // Cap correct picks at 3 to keep the card tappable on mobile.
+  const correct = _clarifyShuffle(bullets).slice(0, Math.min(3, bullets.length));
+  // 2-3 distractors from the bank, never duplicating a correct chip's text.
+  const distractorPool = (bank || []).filter(d => !correct.includes(d));
+  const distractorCount = Math.max(2, 6 - correct.length);
+  const distractors = _clarifyShuffle(distractorPool).slice(0, distractorCount);
+  const chips = _clarifyShuffle(
+    correct.map(text => ({ text, isCorrect: true }))
+      .concat(distractors.map(text => ({ text, isCorrect: false })))
+  );
+  return { chips, correctCount: correct.length };
+}
+function _renderClarifyRitual(body, lesson, content) {
+  body.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'clarify-shell';
+  wrap.innerHTML = `
+    <div class="clarify-header">
+      <span class="clarify-tag">🎤 Clarify-First · before you code</span>
+      <button class="clarify-skip" data-action="clarify-skip" type="button">Skip this time →</button>
+    </div>
+    <div class="clarify-instructions">
+      Real interviewers grade the <strong>questions you ask before coding</strong>. Tap the chips that are valid clarifiers for THIS problem — ignore the off-topic ones.
+    </div>
+    <div class="clarify-card" data-clarify-card>
+      <div class="clarify-loading">Loading clarifiers…</div>
+    </div>
+  `;
+  body.appendChild(wrap);
+  wrap.querySelector('[data-action="clarify-skip"]').addEventListener('click', () => {
+    _clarifySessionCompleted.add(lesson.id);
+    // Re-render — the early-return gate now lets the normal L3 editor through.
+    renderLesson();
+  });
+  const cardEl = wrap.querySelector('[data-clarify-card]');
+  _clarifyLoadBank().then(bank => {
+    const card = _clarifyBuildCard(lesson, content, bank);
+    if (!card) {
+      // No bullets available (Syntax lessons or malformed Conv data) — let editor through.
+      _clarifySessionCompleted.add(lesson.id);
+      renderLesson();
+      return;
+    }
+    state.clarify.sessions++;
+    state.clarify.lastRunAt = Date.now();
+    saveProgress();
+    let correctTapped = 0;
+    cardEl.innerHTML = `
+      <div class="clarify-progress" data-clarify-progress>
+        Tapped <strong data-clarify-counter>0</strong> of <strong>${card.correctCount}</strong> valid clarifiers
+      </div>
+      <div class="clarify-chips">
+        ${card.chips.map((c, i) => `
+          <button class="clarify-chip" data-chip="${i}" data-correct="${c.isCorrect ? '1' : '0'}" type="button">
+            ${escapeHtml(c.text)}
+          </button>
+        `).join('')}
+      </div>
+    `;
+    const chipBtns = cardEl.querySelectorAll('.clarify-chip');
+    chipBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.classList.contains('clarify-chip-correct') || btn.classList.contains('clarify-chip-wrong')) return;
+        const isCorrect = btn.dataset.correct === '1';
+        state.clarify.attempts++;
+        if (isCorrect) {
+          state.clarify.correct++;
+          btn.classList.add('clarify-chip-correct');
+          btn.disabled = true;
+          correctTapped++;
+          const cnt = cardEl.querySelector('[data-clarify-counter]');
+          if (cnt) cnt.textContent = String(correctTapped);
+          if (correctTapped >= card.correctCount) {
+            state.clarify.completed++;
+            saveProgress();
+            _clarifySessionCompleted.add(lesson.id);
+            const progress = cardEl.querySelector('[data-clarify-progress]');
+            if (progress) progress.innerHTML = '<strong style="color:#a3e635">✓ Ritual complete — unlocking editor…</strong>';
+            setTimeout(() => renderLesson(), 700);
+          } else {
+            saveProgress();
+          }
+        } else {
+          btn.classList.add('clarify-chip-wrong');
+          btn.disabled = true;
+          saveProgress();
+        }
+      });
+    });
+  });
 }
 function pollOfflinePackStats() {
   // Send a postMessage to the active service worker; on reply, update

@@ -16,6 +16,26 @@ app's existence.
 
 ## How the app encodes it today
 
+- **🎤 Clarify-First Ritual (iter 117).** Opt-in pre-L3 gate (toggle in
+  sidebar; default OFF). When ON, every Patterns/Applied L3 visit shows
+  a chip-card BEFORE the editor unlocks. Correct chips are mined from
+  the lesson's `conversation.sections[0].say` bullet list (the existing
+  "Restate & clarify" interview-narration content — 99 of 99 lessons
+  authored). Distractors come from a small `data/clarify-distractor-bank.json`
+  of ~15 generic-sounding clarifiers (lesson-irrelevant). User taps
+  chips in any order; correct → green ✓ + counter; wrong → red ✗ +
+  counted in state.clarify.attempts. When all correct chips are tapped
+  → editor unlocks. Skip-this-time button respects user agency. Per-
+  lesson per-session completion cached in `_clarifySessionCompleted` so
+  the user doesn't re-do the ritual when tab-switching within the same
+  session. Bypassed during Mock Interview (no scaffolding by design;
+  mirrors iter-81 Edge case chips bypass). **First Cat 9 §9A ship ever**
+  — drills the interview ritual the L1/L2/L3 ladder doesn't cover
+  (existing surfaces drill the ANSWER; this drills the QUESTIONS-BEFORE-CODING
+  cadence — the #1 senior-vs-junior grading axis). The retrieval here
+  is sideways: shown the problem, recall the "what would I ask" list
+  that's been buried in the Conversation tab content for 99 lessons.
+
 - **🔖 Match (iter 109).** Bidirectional title ↔ description matcher —
   the first surface drilling the **name-to-concept retrieval direction**
   the L1→L2→L3 ladder doesn't cover. L1 tests concepts; L2/L3 test code

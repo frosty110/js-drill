@@ -105,6 +105,100 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 116 vision — thirteenth vision iter; iter-112 queue fully drained, Cat 3/9§9A push)
+
+**Thirteenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112).** iter-112 roadmap queue fully shipped across iter 113/114/115 (Offline Pack + Sync Onboarding + JS Traps MVP) at the fastest 3-iter cadence yet. Step 1B fires vision per iter-115's nomination — § Next explicitly steered toward Cat 3 Mechanics (last touched iter 58 via 🏷 Mistake Tagging; SR mechanics work-stream stale ≥50 iters) and Cat 9 §9A In-the-room behaviors (last touched iter 81 via 🛡 Edge case chips; §9A has ZERO ships ever despite §9B having 4).
+
+**Single constraint-aware subagent** (cost-conservative iter-100/103/108/112 precedent). Prompt steered toward Cat 3 + Cat 9 §9A. Also added a **blind-spots audit instruction** per the iter-112 pattern (vision iter doubles as a "what's already built that we're treating as blocked?" mechanism) — explicitly asked subagent to flag any assumption that looks load-bearing for its proposals.
+
+**Subagent returned 5 proposals; orchestrator added pre-decided mitigations to top-3 implementation-risk concerns** (subagent flagged risks per the iter-95 instruction):
+- 🎤 **Clarify-First Ritual** (subagent rank #1) — subagent flagged "too-formulaic distractors." Orchestrator mitigation: build correct options from lesson-specific `conversation.sections[0]` "Clarify" content (99 lessons authored); distractors from small curated bank of ~12 generic clarifiers — avoids the all-formulaic feel by injecting plausible-but-wrong-for-this-lesson options.
+- 🔥 **Hot-Seat Follow-Up** (subagent rank #2) — subagent flagged "needs lesson-specific follow-ups." Orchestrator mitigation: build a small `data/hotseat-followups.json` registry (~10-15 mechanic-tag → follow-up mappings, e.g., `hash map` → "now make it O(1) space"; `sliding window` → "now input streams — one pass only"); per-lesson follow-ups resolved by `lesson.mechanics[]` lookup. **Single-iter ship feasible** because mechanic-tag mining (vs per-lesson authoring) keeps content cost bounded.
+- ⏱ **Time-to-Solve Calibration** (subagent rank #3) — subagent flagged "skip-rate >50% kills the signal." Orchestrator mitigation: make estimate OPTIONAL with a no-shame "skip" affordance; treat skip-rate as a separate engagement signal (Stats tile shows "calibration engagement: X%") so even high-skip data has value.
+
+**Promoted top 3 (Cat 3 + Cat 9 §9A push validated — 2 §9A first-ships + 1 Cat 3 ship):**
+1. 🎤 **Clarify-First Ritual** — pre-L3 tap-gate chip drill mining Conv Sec.1 "Clarify" content. **First Cat 9 §9A ship ever.** ~140 LOC + tiny `data/clarify-distractor-bank.json` (~12 generic clarifiers). Mobile-tap-only.
+2. 🔥 **Hot-Seat Follow-Up** — post-L3-pass tap-card with mechanic-tag-derived follow-up. **Second Cat 9 §9A ship.** ~120 LOC + `data/hotseat-followups.json` (~10-15 mappings). Mobile-tap-only.
+3. ⏱ **Time-to-Solve Calibration** — pre-L3 4-button estimate + Brier-style scoring per mechanic + Stats tile. **First Cat 3 SR-mechanics ship since iter 58.** ~150 LOC + schema-additive `state.timeCalibration = {[mechanic]: {predictions: [], errors: []}}`. Mobile-tap-only.
+
+**Held with explicit re-promote conditions:**
+- 🗣 **Approach-First Sketch** (subagent rank #4) — HELD on data-quality concern. Subagent correctly flagged that walkthrough trace labels weren't authored as standalone-orderable. Re-promote condition: audit ≥40 lessons confirming trace labels are distinct + orderable (e.g., not all "update result"); if audit fails, scope reduces to a curated subset.
+- 🎲 **Mixed-Section Mock Gauntlet** (subagent rank #5) — HELD on PROFILE-violation. Subagent self-flagged "desktop-only" (L3 typing under timer is desk-tier per PROFILE §34-36). Re-promote condition: a mobile-variant design (e.g., L1-instead-of-L3 gauntlet) that respects 80%-phone.
+
+**Meta-learning (iter 116):** the **Cat 3 + Cat 9 §9A push worked** — every promoted entry landed in the steered categories (2 §9A + 1 Cat 3). Validates the iter-112 finding that "explicit category steering breaks the recombination-gradient attractor" — second use of the pattern. Also: **subagent blind-spots audit surfaced 2 useful findings** beyond the proposals: (a) `js/sync.js` per-field merge supports arbitrary new sub-blobs (so all 3 promoted state schemas are sync-additive with zero infra blocker), (b) the existing conversation + walkthrough corpus is rich enough for §9A drills without per-lesson authoring — the "§9A needs content" framing is wrong if the proposals mine existing fields. **Pattern is now load-bearing: vision-iter blind-spots audit caught 3 useful findings across iter-112 + iter-116 (BS-10 framing error; sync sub-blob additivity; §9A content-blocker misframing).**
+
+§ Next nominates 🎤 Clarify-First Ritual ship for iter 117+ (first §9A ship ever).
+
+---
+
+### 2026-05-26 iter 116 — 🎤 Clarify-First Ritual
+
+**Status:** QUEUED.
+
+**Value claim:** PROFILE.md §22-24 ("out of practice with the cadence of read prompt → talk through approach"). The rusty engineer jumps to code without the 3-question clarifying ritual that signals seniority — the #1 senior-vs-junior grading axis in coding interviews. **First Cat 9 §9A ship ever** (34 iters since last Cat 9 ship; §9B has 4 ships, §9A has zero).
+**Mechanic:** Before any Patterns/Applied L3, show the prompt + 4-6 tap-chips of candidate clarifying questions. Correct options mined from the lesson's `conversation.sections[0]` "Clarify" content (99 lessons have this); distractors from a small `data/clarify-distractor-bank.json` of ~12 generic clarifiers ("can the input be empty?", "are duplicates allowed?", "is the input sorted?", etc.). User must tap the 2-3 valid ones before the L3 editor unlocks. Opt-in via Mock Interview toggle initially (avoid forcing all L3 users into the ritual until calibrated).
+**Success criterion:** Median time-to-first-edit on L3 increases by 20-40s while L3 pass-rate holds steady — users front-load thinking instead of stalling mid-code. Secondarily: clarifier-tap-correctness improves session-over-session.
+**Estimated scope:** single-iter ship (~140 LOC JS + ~30 CSS + ~12 generic-distractor entries in new JSON registry).
+**Data dependency:** `conversation.sections[0]` already authored for 99 Patterns/Applied lessons (per CLAUDE.md). For lessons without conversation (55 Syntax lessons), gate is hidden or uses Reference notes as fallback.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged, orchestrator-mitigated):** too-formulaic distractors → ritual becomes rote. **Mitigation pre-decided:** use lesson-specific clarifiers as CORRECT options; distractors from small curated bank — every card mixes lesson-aware correct picks with generic plausible wrongs, which forces actual reading not pattern-matching.
+**Why this is a "new bucket" not "better cell":** every prior surface drills the *answer* (code production, recognition, recall). This drills the *interview ritual* — what to SAY before coding. Different cognitive operation entirely.
+**Subagent source:** iter-116 vision iter — ranked #1 by leverage-per-effort; first Cat 9 §9A ship ever.
+
+---
+
+### 2026-05-26 iter 116 — 🔥 Hot-Seat Follow-Up
+
+**Status:** QUEUED.
+
+**Value claim:** PROFILE.md §22 ("interviewer asks a follow-up after you finish"). Rusty engineers freeze when "now make it O(1) space" lands after a working solution — the L3 ladder ends at first-pass, but real interviews don't. **Second Cat 9 §9A ship**, paired with Clarify-First Ritual to cover both ENDS of the interview interaction (clarify → code → follow-up).
+**Mechanic:** After any L3 pass, surface a tap-card with one of 3-4 follow-ups resolved via the lesson's `mechanics[]` tags. Follow-ups live in a new `data/hotseat-followups.json` registry (~10-15 mechanic-tag → follow-up mappings: `hash map` → "now make it O(1) space"; `sliding window` → "now input streams, one pass only"; `binary search` → "now find leftmost/rightmost"; etc.). User picks the right new approach name (tap, not type) within 30s. Misses route to `state.weakness` per existing pattern.
+**Success criterion:** ≥40% of L3 passes get a follow-up tap attempted within the same session; users who engage with follow-ups show faster repeat-mock-interview times than non-engagers.
+**Estimated scope:** single-iter ship (~120 LOC JS + ~25 CSS + new JSON registry with ~10-15 mechanic-tagged entries). Schema-additive `state.hotseat = {attempts, correct, sessions, lastRunAt}`.
+**Data dependency:** `lesson.mechanics[]` tag (already present on most Patterns lessons per the Mechanics modal infrastructure). New JSON registry is small + hand-authored.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged, orchestrator-mitigated):** generic follow-ups feel hollow. **Mitigation pre-decided:** mechanic-tag-based resolution (vs per-lesson authoring) keeps content cost bounded while still being lesson-relevant — every lesson tagged `hash map` gets the O(1)-space prompt because it's load-bearing for THAT class of solution. Per-lesson overrides supported via optional `lesson.hotseat[]` field for high-traffic lessons.
+**Why this is a "new bucket" not "better cell":** existing surfaces all end at "got the right answer." This is the first surface that asks "now what?" — the iterate-on-correct-answer beat that mid-interview pressure depends on.
+**Subagent source:** iter-116 vision iter — ranked #2; second §9A ship; pairs orthogonally with Clarify-First Ritual.
+
+---
+
+### 2026-05-26 iter 116 — ⏱ Time-to-Solve Calibration
+
+**Status:** QUEUED.
+
+**Value claim:** PROFILE.md §65 ("hit L3 within target time") is currently a stated success criterion with no calibration surface — users don't know if their 6-minute Two Sum is fast, average, or panic territory. **First Cat 3 SR-mechanics ship since iter 58 🏷 Mistake Tagging.**
+**Mechanic:** Before every L3, user taps a 4-button estimate ("<2 / 2-5 / 5-10 / 10+ min"). After L3 pass, compute estimate-vs-actual delta and store Brier-score-style calibration per `lesson.mechanics[]` tag. Stats modal shows over/under-confidence per mechanic ("you systematically underestimate `sliding window` by 4 min — that's the interview blowup risk"). Estimate is OPTIONAL with a no-shame "skip" affordance; skip-rate is itself a signal tracked separately as "calibration engagement %".
+**Success criterion:** Median absolute estimation error drops from session 1 to session 10 by ≥30% for users who engage; Stats tile surfaces ≥3 mechanics where the user is systematically miscalibrated by week 2.
+**Estimated scope:** single-iter ship (~150 LOC JS + ~35 CSS). Schema-additive `state.timeCalibration = { [mechanic]: { predictions: [{estimateBucket, actualMs}], errors: [absError] } }`.
+**Data dependency:** `lesson.mechanics[]` tag (existing) + L3 timer (already captured via mockHistory schema). No new authoring.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged, orchestrator-mitigated):** mobile skip-rate >50% → noisy signal → vanity stats. **Mitigation pre-decided:** estimate is OPTIONAL not gated; skip-rate is a tracked signal not a failure mode; Stats tile auto-hides until ≥5 data points per mechanic so vanity metrics aren't shown prematurely.
+**Why this is a "new bucket" not "better cell":** existing Cat 3 Mechanics surfaces (Mistake Tagging, Mechanics × Track Matrix, Mechanic-Bridge) all measure *what* the user knows; this measures *how well-calibrated* their self-assessment is — a meta-cognitive layer that's load-bearing for interview-readiness (over-confidence is the most dangerous failure mode for the rusty engineer).
+**Subagent source:** iter-116 vision iter — ranked #3; first Cat 3 ship since iter 58.
+
+---
+
+### 2026-05-26 iter 116 — HELD: 🗣 Approach-First Sketch (walkthrough-trace data-quality blocker)
+
+**Status:** HELD — needs walkthrough-trace label audit before scoping.
+
+**Value claim:** Drills PROFILE §22 "talk through approach before coding" — the #1 interview-grading axis that the silent L3 editor actively trains against. Pairs orthogonally with Clarify-First Ritual (clarify → plan → code).
+**Mechanic:** Tap-only "plan card" gate before L3 unlocks: user orders 4-6 shuffled approach-step chips mined from the lesson's `walkthrough.trace` line-labels.
+**Why held:** subagent correctly flagged that walkthrough trace labels weren't authored to be standalone-orderable. Many lessons may have ambiguous labels ("update result") or trivially-orderable sequences. **Re-promote condition:** audit ≥40 lessons confirming trace labels are distinct + orderable; if audit fails, scope reduces to a curated subset (~20 lessons with clear trace-label sequences) for v1.
+
+---
+
+### 2026-05-26 iter 116 — HELD: 🎲 Mixed-Section Mock Gauntlet (PROFILE 80%-phone violation)
+
+**Status:** HELD — desktop-only violates PROFILE.md 80%-phone profile.
+
+**Value claim:** Real interviews don't tell you the section; current Mock Interview surface labels the section, so the user knows the family before they read. A mixed-section gauntlet would drill cold-start pattern recognition under timer.
+**Mechanic:** 3-problem timed session pulling random L3 prompts across Patterns sections with no section label; user taps section-name (Recognize-style) then solves under timer.
+**Why held:** subagent self-flagged that L3 typing under timer is desktop-only (PROFILE §34-36). This feature would serve the 20% desk-tier slice while excluding the dominant 80% mobile user. **Re-promote condition:** a mobile-variant design (e.g., L1-instead-of-L3 gauntlet, or "Recognize-then-tap-canonical-shape" rather than "Recognize-then-type") that respects the mobile-first constraint.
+
+---
+
 ## Meta-finding (iter 112 vision — twelfth vision iter; iter-103 queue + 3 shortlist ships drained, Cat 4/6 push)
 
 **Twelfth vision iter (after 26/31/48/55/59/64/82/90/95/100/103).** iter-103 roadmap queue fully shipped across iter 104/106/107 (Command Palette + Mastery Half-Life + Session Heatstrip), then 3 consecutive shortlist consumptions from `ideas-by-category.md` (iter-108 🍀 Lucky + iter-109 🔖 Match + iter-111 🌈 Sections). 4 product ships in 4 iters with no roadmap refill — Step 1B fires vision per iter-109's emergent rule (3+ consecutive shortlist ships + remaining-shortlist-all-heavy-OR-stale-category → vision).

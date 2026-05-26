@@ -180,7 +180,6 @@ The convention:
 **Review trigger:** If `State persistence (schema __v)`, `Storage backend`, OR `Per-lesson event tracking` rows have not been bumped in 15+ iters, this category is stale. (Persistence is intentionally low-churn — schema bumps are expensive — so the trigger is longer.)
 
 **Active ideas:**
-- **☁️ Sync Onboarding Promotion** — promote the EXISTING `js/sync.js` chip (production Supabase sync, already shipped) via a post-L3-pass-on-desktop hint banner. See [`roadmap.md` iter-112 entry #2](roadmap.md). **NOTE:** the iter-95+ "BS-10 Cross-device sync = BLOCKED" framing was wrong for ~17 iters — `js/sync.js` is fully built (500+ LOC, anonymous-first email-OTP, three-blob bundle with per-field merge). Caught by iter-112 vision-iter fresh-eyes subagent. Remaining work is UX-discoverability, not infrastructure.
 - **📦 Offline Drill Pack v2** — vendor CDN dependencies (Tailwind via local build, CodeMirror v5 self-hosted) so the app works fully offline on the FIRST visit, not just return visits. Follow-on to iter-113 SW pack which assumes CDN is in browser HTTP cache. Lower leverage than v1 but closes the cold-start-offline edge case.
 
 **Parking-lot ideas:**
@@ -194,7 +193,7 @@ The convention:
 **Cross-cutting concerns:**
 - Current schema `__v: 6` (bumped iter 32 for `history` field). Load accepts 2-6 for legacy users.
 
-**Shipped from this category:** 🤖 AI Coach Export (iter 88) · ☁️ Cross-device sync infrastructure (iter ~88 via `js/sync.js`; UX-promotion still queued) · 📦 Offline Drill Pack v1 (iter 113) → see [`shipped-by-category.md` § 6](shipped-by-category.md#6-persistence--sync).
+**Shipped from this category:** 🤖 AI Coach Export (iter 88) · ☁️ Cross-device sync infrastructure (iter ~88 via `js/sync.js`) · 📦 Offline Drill Pack v1 (iter 113) · ☁️ Sync Onboarding banner (iter 114, completes the sync UX surface) → see [`shipped-by-category.md` § 6](shipped-by-category.md#6-persistence--sync).
 
 ---
 

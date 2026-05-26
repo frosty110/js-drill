@@ -151,6 +151,7 @@ const state = {
   notesLocate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 102: 🗂 Notes→Lesson Reverse Lookup — cross-corpus localization (additive, no `__v` bump)
   match: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 109: 🔖 Match — bidirectional title ↔ description matcher (additive, no `__v` bump)
   offlinePack: { lessonCount: 0, totalCount: 0, lastCheckedAt: 0 }, // iter 113: 📦 Offline Drill Pack — last-known SW cache stats for sidebar chip (additive, no `__v` bump)
+  syncHintShown: false, // iter 114: ☁️ Sync Onboarding — one-time hint-banner-dismissed flag (additive, no `__v` bump)
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
@@ -834,6 +835,10 @@ function loadProgress() {
           lastCheckedAt: +parsed.offlinePack.lastCheckedAt || 0
         }
       : { lessonCount: 0, totalCount: 0, lastCheckedAt: 0 };
+    // iter 114: ☁️ Sync Onboarding — one-time flag preventing the
+    // post-L3-pass-on-desktop hint banner from re-showing. Set by either
+    // Dismiss or Tap-Sync; once true, never re-prompted in this profile.
+    state.syncHintShown = !!parsed.syncHintShown;
     // iter 104: 🗺 Command Palette use-counter. Legacy users get empty map.
     state.commandUsage = parsed.commandUsage && typeof parsed.commandUsage === 'object' && !Array.isArray(parsed.commandUsage)
       ? parsed.commandUsage : {};
@@ -913,6 +918,7 @@ function saveProgress() {
     notesLocate: state.notesLocate,
     match: state.match,
     offlinePack: state.offlinePack,
+    syncHintShown: state.syncHintShown,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -5068,6 +5074,11 @@ function markPassed(lessonId, level) {
   // this clean pass, so the user understands the dot just demoted from
   // ringed-green to plain green.
   if (clearedRevealFlag) _showRevealClearedToast(lessonId, level);
+  // iter 114: ☁️ Sync Onboarding — first L3 pass on a desktop user-agent
+  // surfaces the one-time hint banner promoting the existing top-right
+  // Sync chip. _maybeShowSyncHint() guards all conditions internally so
+  // calling unconditionally on every L3 pass is safe.
+  if (level === 'L3' && typeof _maybeShowSyncHint === 'function') _maybeShowSyncHint();
 }
 function updateReviewBadge() {
   const btn = document.getElementById('review-btn');
@@ -9418,6 +9429,74 @@ function updateOfflinePackChip() {
   const n = state.offlinePack?.lessonCount || 0;
   btn.classList.toggle('hidden', n === 0);
   cnt.textContent = String(n);
+}
+// iter 114: ☁️ Sync Onboarding — one-time hint banner promoting the existing
+// `js/sync.js` top-right chip. Fires only when ALL conditions met:
+//   - banner has never been shown/dismissed (state.syncHintShown === false)
+//   - the user just passed L3 (commitment moment, not mid-drill — minimizes
+//     friction-during-engagement per PROFILE "friction near zero")
+//   - the user is on a desktop user-agent (fine pointer; cross-device
+//     promotion is only meaningful if the user has *another* device)
+//   - the Sync chip is actually mounted (js/sync.js has loaded and rendered)
+// On Tap-Sync: synthetically click the existing #sync-chip (no duplicate auth
+// logic). On Dismiss: just set the flag. Either way, banner self-removes.
+function _isDesktopPointer() {
+  if (!window.matchMedia) return true;
+  // Fine pointer + non-mobile UA + viewport ≥ 768px = desktop.
+  const finePointer = window.matchMedia('(pointer: fine)').matches;
+  const wideViewport = window.matchMedia('(min-width: 768px)').matches;
+  return finePointer && wideViewport;
+}
+function _maybeShowSyncHint() {
+  if (state.syncHintShown) return;
+  if (!_isDesktopPointer()) return;
+  // SW + sync chip presence required — if js/sync.js failed to load or the
+  // chip hasn't mounted yet, deferring is the right call (banner can fire
+  // on a later L3 pass).
+  if (!document.getElementById('sync-chip')) return;
+  // Don't show if a sync session is already active (chip class is-on means
+  // signed in; no point promoting what they're already using).
+  const chip = document.getElementById('sync-chip');
+  if (chip && chip.classList.contains('is-on')) {
+    // User already adopted sync; mark flag to skip future evaluations.
+    state.syncHintShown = true;
+    saveProgress();
+    return;
+  }
+  _showSyncHintBanner();
+}
+function _showSyncHintBanner() {
+  if (document.getElementById('sync-hint-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'sync-hint-banner';
+  banner.innerHTML = `
+    <div class="sync-hint-body">
+      <span class="sync-hint-icon">☁️</span>
+      <div class="sync-hint-text">
+        <div class="sync-hint-title">Drilling on multiple devices?</div>
+        <div class="sync-hint-sub">Your phone progress and laptop progress are separate today. Tap Sync to merge them across devices.</div>
+      </div>
+      <div class="sync-hint-actions">
+        <button class="sync-hint-action sync-hint-tap" data-action="tap-sync">Tap Sync</button>
+        <button class="sync-hint-action sync-hint-dismiss" data-action="dismiss">Dismiss</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(banner);
+  // Slide-in via requestAnimationFrame so the initial transform is paintable.
+  requestAnimationFrame(() => banner.classList.add('sync-hint-show'));
+  const close = (alsoTapChip) => {
+    state.syncHintShown = true;
+    saveProgress();
+    banner.classList.remove('sync-hint-show');
+    setTimeout(() => banner.remove(), 250);
+    if (alsoTapChip) {
+      const chip = document.getElementById('sync-chip');
+      if (chip) chip.click();
+    }
+  };
+  banner.querySelector('[data-action="tap-sync"]').addEventListener('click', () => close(true));
+  banner.querySelector('[data-action="dismiss"]').addEventListener('click', () => close(false));
 }
 function pollOfflinePackStats() {
   // Send a postMessage to the active service worker; on reply, update

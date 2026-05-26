@@ -50,7 +50,7 @@ The convention:
 - L2 under-build (50 lessons violate ≥2 floor) — see BS-08.
 - **[iter 38] Code-writing prioritized over code-reading.** Reading-direction entries (Code-reading speed drill, Pure-flashcard pattern mode) demoted; *writing*-direction surfaces remain the priority. Mental-execution-of-writing (Crystal Ball, shipped iter 77) is retained as a complement, not a substitute.
 
-**Shipped from this category:** Reference-Card Flash Mode (iter 35) · Walkthrough Quiz (iter 36) · L3 hint ladder (iter 37) · Critical-line fill (iter 41/42) · L1 Rapid-Fire (iter 54) · Crystal Ball (iter 77) · Trace-bug (iter 78) · Conversation Drill (iter 91) · Trace-Hop (iter 93) · Notes Cloze Tap-Drill (iter 97) · Reverse-Walkthrough (iter 99) → see [`shipped-by-category.md` § 1](shipped-by-category.md#1-drilling-surfaces).
+**Shipped from this category:** Reference-Card Flash Mode (iter 35) · Walkthrough Quiz (iter 36) · L3 hint ladder (iter 37) · Critical-line fill (iter 41/42) · L1 Rapid-Fire (iter 54) · Crystal Ball (iter 77) · Trace-bug (iter 78) · Conversation Drill (iter 91) · Trace-Hop (iter 93) · Notes Cloze Tap-Drill (iter 97) · Reverse-Walkthrough (iter 99) · Notes Locate (iter 102) → see [`shipped-by-category.md` § 1](shipped-by-category.md#1-drilling-surfaces).
 
 ---
 

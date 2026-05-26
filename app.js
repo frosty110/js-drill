@@ -136,6 +136,7 @@ const state = {
   notesDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 97: 📝 Notes Cloze Tap-Drill — cloze-MC over reference.notes[] keywords (additive, no `__v` bump)
   mechConstellation: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 98: 🪐 Mechanic Constellation — multi-select recall over mechanics[] tag (additive, no `__v` bump)
   reverseWalk: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over walkthrough.examples (additive, no `__v` bump)
+  notesLocate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 102: 🗂 Notes→Lesson Reverse Lookup — cross-corpus localization (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
@@ -650,6 +651,15 @@ function loadProgress() {
           lastRunAt: +parsed.reverseWalk.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 102: 🗂 Notes→Lesson Reverse Lookup lifetime stats. Legacy users get zeros.
+    state.notesLocate = parsed.notesLocate && typeof parsed.notesLocate === 'object'
+      ? {
+          attempts: +parsed.notesLocate.attempts || 0,
+          correct: +parsed.notesLocate.correct || 0,
+          sessions: +parsed.notesLocate.sessions || 0,
+          lastRunAt: +parsed.notesLocate.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
@@ -723,6 +733,7 @@ function saveProgress() {
     notesDrill: state.notesDrill,
     mechConstellation: state.mechConstellation,
     reverseWalk: state.reverseWalk,
+    notesLocate: state.notesLocate,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     welcomed: state.welcomed,
@@ -2487,6 +2498,188 @@ async function startReverseWalkSession() {
     `;
     shell.querySelector('[data-action="reverse-walk-again"]').addEventListener('click', () => startReverseWalkSession());
     shell.querySelector('[data-action="reverse-walk-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 102: 🗂 Notes→Lesson Reverse Lookup — cross-corpus localization over
+// `reference.notes[]`. Each card shows ONE note string + 4 lesson-title MC
+// buttons (1 correct + 3 distractors, same-section-preferred for plausibility);
+// user taps which lesson the note belongs to. Reveal shows lesson + drill CTA.
+// Third recall direction over the notes corpus: 🎰 Gotcha = whole-note yes/no
+// recognition; 📝 Notes Cloze = intra-note keyword cloze; 🗂 Locate = note →
+// which lesson localization. Interview-mid-problem retrieval pattern: "I
+// remember a gotcha about negative-zero, where was that?" — currently
+// unsupported. From roadmap.md iter-100 #2.
+const NOTES_LOCATE_DECK_LEN = 10;
+const NOTES_LOCATE_OPTIONS = 4;
+const NOTES_LOCATE_MIN_NOTE_LEN = 30;
+function _notesLocateBuildCard(noteEntry, allFullLessons) {
+  // Pick 3 distractors. Prefer same-section lessons; fall back to any
+  // full-status lesson if same-section pool is too small.
+  const same = [];
+  const other = [];
+  for (const l of allFullLessons) {
+    if (l.id === noteEntry.lessonId) continue;
+    if (l.section === noteEntry.sectionName) same.push(l);
+    else other.push(l);
+  }
+  for (const arr of [same, other]) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+  const distractors = same.concat(other).slice(0, NOTES_LOCATE_OPTIONS - 1);
+  if (distractors.length < NOTES_LOCATE_OPTIONS - 1) return null;
+  const correctLesson = findLesson(noteEntry.lessonId);
+  if (!correctLesson) return null;
+  const options = [
+    { lesson: correctLesson, isCorrect: true },
+    ...distractors.map(l => ({ lesson: l, isCorrect: false }))
+  ];
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return {
+    lessonId: noteEntry.lessonId,
+    sectionName: noteEntry.sectionName,
+    note: noteEntry.note,
+    options
+  };
+}
+async function _notesLocateBuildDeck() {
+  // Preload a broad sample so the note pool is large.
+  const sample = CURRICULUM.filter(l => l.status === 'full').slice(0, 80);
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+      if (Object.keys(CONTENT).length >= 40) break;
+    }
+  }
+  const allFull = CURRICULUM.filter(l => l.status === 'full');
+  // Flatten eligible notes — filter by min length (uniqueness proxy per
+  // iter-100 roadmap entry; longer notes are more distinctive).
+  const pool = [];
+  for (const lesson of CURRICULUM) {
+    const c = CONTENT[lesson.id];
+    if (!c || !c.reference || !Array.isArray(c.reference.notes)) continue;
+    for (const note of c.reference.notes) {
+      if (typeof note !== 'string' || note.length < NOTES_LOCATE_MIN_NOTE_LEN) continue;
+      pool.push({ lessonId: lesson.id, sectionName: lesson.section, note });
+    }
+  }
+  if (pool.length < 4) return null;
+  // Fisher-Yates.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  // Build cards.
+  const deck = [];
+  for (const noteEntry of pool) {
+    if (deck.length >= NOTES_LOCATE_DECK_LEN) break;
+    const card = _notesLocateBuildCard(noteEntry, allFull);
+    if (card) deck.push(card);
+  }
+  return deck.length >= 4 ? deck : null;
+}
+async function startNotesLocateSession() {
+  const deck = await _notesLocateBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('Notes Locate needs more loaded lessons. Click around a few first, then try again.');
+    return;
+  }
+  state.notesLocate.sessions++;
+  state.notesLocate.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell notes-locate-shell">
+        <div class="recognize-header">
+          <span>🗂 Locate · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-notes-locate">✕ Exit</button>
+        </div>
+        <div class="notes-locate-tag">Which lesson does this gotcha belong to?</div>
+        <div class="notes-locate-note">${escapeHtml(card.note)}</div>
+        <div class="notes-locate-options">
+          ${card.options.map((o, i) => `
+            <button class="recognize-opt notes-locate-opt" data-opt="${i}">
+              <span class="notes-locate-opt-letter">${String.fromCharCode(65 + i)}</span>
+              <span class="notes-locate-opt-body">
+                <span class="notes-locate-opt-title">${escapeHtml(o.lesson.title)}</span>
+                <span class="notes-locate-opt-section">${escapeHtml(o.lesson.section)}</span>
+              </span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-notes-locate-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-notes-locate"]').addEventListener('click', () => renderLesson());
+    const optBtns = shell.querySelectorAll('.notes-locate-opt');
+    let answered = false;
+    optBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const optIdx = +btn.dataset.opt;
+        const picked = card.options[optIdx];
+        const wasRight = !!picked.isCorrect;
+        if (wasRight) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.notesLocate.attempts++;
+        if (wasRight) state.notesLocate.correct++;
+        saveProgress();
+        optBtns.forEach((b, i) => {
+          b.disabled = true;
+          if (card.options[i].isCorrect) b.classList.add('recognize-opt-correct');
+          else if (i === optIdx) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-notes-locate-feedback]');
+        if (fb) {
+          const correctLesson = card.options.find(o => o.isCorrect).lesson;
+          fb.innerHTML = `
+            <div class="notes-locate-reveal">
+              <div class="notes-locate-reveal-title">${wasRight ? '✓ Got it' : '✗ The note was from'}: <strong>${escapeHtml(correctLesson.title)}</strong></div>
+              <div class="notes-locate-reveal-section">${escapeHtml(correctLesson.section)}</div>
+              <button class="notes-locate-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="notes-locate-next" data-action="notes-locate-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="notes-locate-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell notes-locate-shell">
+        <div class="recognize-header"><span>🗂 Locate · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} lessons identified · ${deck.length - correct} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.notesLocate.correct} / ${state.notesLocate.attempts} (${state.notesLocate.attempts > 0 ? Math.round(state.notesLocate.correct / state.notesLocate.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="notes-locate-again">🗂 Another session</button>
+            <button class="secondary" data-action="notes-locate-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="notes-locate-again"]').addEventListener('click', () => startNotesLocateSession());
+    shell.querySelector('[data-action="notes-locate-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -7800,6 +7993,14 @@ async function init() {
   const reverseWalkBtn = document.getElementById('reverse-walk-btn');
   if (reverseWalkBtn) reverseWalkBtn.addEventListener('click', () => {
     startReverseWalkSession();
+  });
+
+  // iter 102: 🗂 Notes Locate — cross-corpus localization over reference.notes[].
+  // Third recall direction over the notes corpus: Gotcha = recognition;
+  // Notes Cloze = intra-note keyword; Locate = note → which lesson.
+  const notesLocateBtn = document.getElementById('notes-locate-btn');
+  if (notesLocateBtn) notesLocateBtn.addEventListener('click', () => {
+    startNotesLocateSession();
   });
 
   // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed

@@ -213,7 +213,6 @@ The convention:
 - Time-to-pass distribution per lesson (rolling avg of mock-interview attempts).
 - Cheatsheet of "your weakest 10 idioms" auto-generated from miss history.
 - Heatmap of drilling activity per day (GitHub-contribution style). *(Note: distinct from shipped Streak Map (iter 62) which is calendar density; this is contribution-style.)*
-- **Pattern-family heatmap** — small per-section grid on the home/sidebar surface, color-coded by mastery rate; tap a red cell → drill that section's weakest lesson. Visual one-tap answer to "where do I need to study tonight?". Distinct from drilling-activity heatmap (which is volume); this is *mastery*.
 - **"Your weakest verb" surface** — auto-aggregated keyword tally from miss history ("you've missed `splice` 6× across 4 lessons" / "you've missed `>>>` 3× in bit-manipulation"). No classifier needed — keyword match against L1 question text + canonical tokens.
 - **Post-mock self-evaluation journal** — after each mock interview, optional 30s text capture: "what would the interviewer comment on?". Stored as a flat reviewable list, exportable.
 - **Section-mastery progress arc** — sparkline at the section header (not lesson header) showing aggregate L1 + L2 pass rate week-over-week. Surfaces "you're plateauing in DP" without per-lesson drill-down.
@@ -224,7 +223,7 @@ The convention:
 **Cross-cutting concerns:**
 - Sparkline (iter 33) established this category. Per-lesson temporal data is now load-bearing for Streak Map, Decay Radar, Mock Replay Reel.
 
-**Shipped from this category:** Section-level progress bar (iter 40) · Reveal Replay (iter 56) · 🏷 Mistake Tagging (iter 58) · 📡 Decay Radar (iter 60) · ⌚ Mock Replay Reel (iter 61) · 📅 Streak Map (iter 62) · 💀 Resurrect Queue (iter 65) · 🧭 Track Balance Compass (iter 66) · 🎯 Hint-Cost Ladder Stats (iter 101) → see [`shipped-by-category.md` § 7](shipped-by-category.md#7-metacognition--visibility).
+**Shipped from this category:** Section-level progress bar (iter 40) · Reveal Replay (iter 56) · 🏷 Mistake Tagging (iter 58) · 📡 Decay Radar (iter 60) · ⌚ Mock Replay Reel (iter 61) · 📅 Streak Map (iter 62) · 💀 Resurrect Queue (iter 65) · 🧭 Track Balance Compass (iter 66) · 🎯 Hint-Cost Ladder Stats (iter 101) · 📈 Mastery Half-Life (iter 106) · ⏱ Session Heatstrip (iter 107) · 🌈 Sections heatmap (iter 111, spatial axis) → see [`shipped-by-category.md` § 7](shipped-by-category.md#7-metacognition--visibility).
 
 ---
 
@@ -346,13 +345,12 @@ The trigger check is bounded: 9 categories × ~3 rows each = ~27 freshness looku
 
 **Shortlist (highest leverage first):**
 
-1. **Pattern-family heatmap** *(Cat 7)* — per-section mastery grid; tap red → drill weakest. Visual one-tap answer to "where do I need to study tonight?". Single-iter; uses existing `progress` field; mobile-native.
-2. **L3 "calculator-style" keyboard chips** *(Cat 5)* — one-tap insertion chips for the 20 most-typed JS tokens on mobile L3. Directly attacks the PROFILE 80%-phone mobile-L3 cost barrier without making L3 "the main mobile surface."
-3. **Code-from-bullet-points** *(Cat 1)* — Reference tab toggle hides canonical, shows `reference.notes` as bullets; user types canonical. Fills the documented L2-to-L3 cell gap ("see concept, recall code"). Cat 1 active list is empty; this restores it.
-4. **Whiteboard mode toggle** *(Cat 9 §9A)* — ~30 LOC; strip syntax highlighting + autocomplete + run-button on L3. Trains the realistic-interview surface where tooling is absent. First §9A ship — Cat 9's §9B-only ship history is unbalanced.
-5. **PWA install + offline drilling** *(Cat 5)* — `manifest.json` + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter. Bigger scope than #1-4 but the leverage is enormous given PROFILE 80%-phone.
+1. **L3 "calculator-style" keyboard chips** *(Cat 5)* — one-tap insertion chips for the 20 most-typed JS tokens on mobile L3. Directly attacks the PROFILE 80%-phone mobile-L3 cost barrier without making L3 "the main mobile surface."
+2. **Code-from-bullet-points** *(Cat 1)* — Reference tab toggle hides canonical, shows `reference.notes` as bullets; user types canonical. Fills the documented L2-to-L3 cell gap ("see concept, recall code"). Cat 1 active list is empty; this restores it.
+3. **Whiteboard mode toggle** *(Cat 9 §9A)* — ~30 LOC; strip syntax highlighting + autocomplete + run-button on L3. Trains the realistic-interview surface where tooling is absent. First §9A ship — Cat 9's §9B-only ship history is unbalanced.
+4. **PWA install + offline drilling** *(Cat 5)* — `manifest.json` + service-worker pre-cache. Permanent mobile-reach unlock (subway, plane). Single-iter ship + a follow-on Push API iter. Bigger scope than #1-3 but the leverage is enormous given PROFILE 80%-phone.
 
-*(Shortlist #1 → 🍀 Lucky roulette SHIPPED iter 108; shortlist #5 (Algorithm matcher) → 🔖 Match SHIPPED iter 109 — see [`shipped-by-category.md` § 2 + § 8](shipped-by-category.md).)*
+*(Shortlist consumed: iter-93 #1 → 🍀 Lucky roulette SHIPPED iter 108; iter-93 #5 (Algorithm matcher) → 🔖 Match SHIPPED iter 109; iter-93 #2 (Pattern-family heatmap) → 🌈 Sections SHIPPED iter 111. 3 of 7 original shortlist items consumed in 4 iters; remaining 4 are heavier-scope or non-mobile-L1/L2 — vision iter recommended before next shortlist consumption.)*
 
 **Deferred to a second pass (strong but heavier scope OR awaits earlier ship):**
 - **Audio mini-explainers per high-leverage lesson** *(Cat 8)* — TTS-only, no input loop; ships independently of BLOCKED Audio Mode. 2-iter (top-20 lessons curation + ship).

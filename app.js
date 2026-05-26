@@ -3058,6 +3058,111 @@ async function startMatchSession() {
   renderCard();
 }
 
+// iter 111: 🌈 Sections — section mastery heatmap (Cat 7 § Metacognition;
+// spatial axis vs the 5 existing temporal Cat 7 surfaces — Hint-Cost,
+// Half-Life, Heatstrip, At Risk, Resurrect all operate on TIME HORIZONS,
+// none aggregates to SECTION grain). 28-cell grid colored by per-section
+// mastery %; tap a cell → close grid + drill the first not-mastered lesson
+// in that section. Pure derivation over CURRICULUM + state.progress — no
+// new state, no `__v` bump. Sourced from ideas-by-category.md Promotion
+// shortlist #1.
+function _sgBuildRows() {
+  // Group full lessons by section, preserving manifest order. Returns
+  // [{name, mastered, total, pct, weakestId, allMastered}]; skips empty sections.
+  const order = [];
+  const groups = new Map();
+  for (const l of CURRICULUM) {
+    if (l.status !== 'full') continue;
+    if (!groups.has(l.section)) { groups.set(l.section, []); order.push(l.section); }
+    groups.get(l.section).push(l);
+  }
+  return order.map(name => {
+    const lessons = groups.get(name);
+    const total = lessons.length;
+    const mastered = lessons.filter(l => lessonOverallStatus(l.id) === 'mastered').length;
+    const pct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+    const allMastered = total > 0 && mastered === total;
+    let weakestId = null;
+    if (allMastered) {
+      // Retention pick — random lesson from the mastered set.
+      weakestId = lessons[Math.floor(Math.random() * lessons.length)].id;
+    } else {
+      // First not-mastered by manifest order.
+      const first = lessons.find(l => lessonOverallStatus(l.id) !== 'mastered');
+      weakestId = first ? first.id : (lessons[0] ? lessons[0].id : null);
+    }
+    return { name, mastered, total, pct, weakestId, allMastered };
+  });
+}
+function _sgColor(pct) {
+  // Interpolate red-400 (rgb 248,113,113) → amber-400 (251,191,36) →
+  // emerald-400 (52,211,153). Cells render with rgba alpha so the colored
+  // wash is informational, not over-saturated.
+  let r, g, b;
+  if (pct <= 50) {
+    const t = pct / 50;
+    r = 248 + (251 - 248) * t;
+    g = 113 + (191 - 113) * t;
+    b = 113 + (36 - 113) * t;
+  } else {
+    const t = (pct - 50) / 50;
+    r = 251 + (52 - 251) * t;
+    g = 191 + (211 - 191) * t;
+    b = 36 + (153 - 36) * t;
+  }
+  return { r: Math.round(r), g: Math.round(g), b: Math.round(b) };
+}
+function startSectionGrid() {
+  const rows = _sgBuildRows();
+  if (!rows.length) {
+    alert('No sections with authored lessons yet.');
+    return;
+  }
+  const shell = document.getElementById('lesson-shell');
+  // Weakest section first in the "where to study tonight?" nudge (lowest pct).
+  const weakestSection = rows.slice().sort((a, b) => a.pct - b.pct)[0];
+  shell.innerHTML = `
+    <div class="recognize-shell sg-shell">
+      <div class="recognize-header">
+        <span>🌈 Sections · mastery heatmap</span>
+        <button class="recognize-exit" data-action="exit-sg">✕ Exit</button>
+      </div>
+      <div class="sg-nudge">Where to study tonight? Try <strong>${escapeHtml(weakestSection.name)}</strong> (${weakestSection.pct}% mastered).</div>
+      <div class="sg-grid">
+        ${rows.map(r => {
+          const c = _sgColor(r.pct);
+          const bg = `rgba(${c.r},${c.g},${c.b},0.18)`;
+          const border = `rgba(${c.r},${c.g},${c.b},0.55)`;
+          const ringClass = r.allMastered ? 'sg-cell-mastered' : '';
+          return `<button class="sg-cell ${ringClass}" data-section="${escapeHtml(r.name)}" data-lesson="${escapeHtml(r.weakestId || '')}" style="background:${bg};border-color:${border};">
+            <div class="sg-cell-name">${escapeHtml(r.name)}</div>
+            <div class="sg-cell-pct">${r.pct}%</div>
+            <div class="sg-cell-counts">${r.mastered}/${r.total}</div>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="sg-legend">
+        <span class="sg-legend-swatch" style="background:rgba(248,113,113,0.6);"></span> 0% mastered
+        <span class="sg-legend-swatch" style="background:rgba(251,191,36,0.6);"></span> 50%
+        <span class="sg-legend-swatch" style="background:rgba(52,211,153,0.6);"></span> 100%
+      </div>
+    </div>
+  `;
+  shell.querySelector('[data-action="exit-sg"]').addEventListener('click', () => renderLesson());
+  shell.querySelectorAll('.sg-cell').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lessonId = btn.dataset.lesson;
+      if (!lessonId) return;
+      const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      const wantedTab = coarse ? 'L1' : 'L3';
+      selectLesson(lessonId);
+      // selectLesson set currentTab='auto'; override for the drill-tier
+      // calibration matching Resurrect/Bridge precedent.
+      selectTab(wantedTab);
+    });
+  });
+}
+
 // iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill. Loads a curated
 // data/idiom-pairs.json of {a, b, sameBehavior, explain, sourceLessonId?}.
 // Each card stacks two snippets vertically (mobile-first; PROFILE.md 80%-phone)
@@ -8208,6 +8313,14 @@ async function init() {
   const matchBtn = document.getElementById('match-btn');
   if (matchBtn) matchBtn.addEventListener('click', () => {
     startMatchSession();
+  });
+
+  // iter 111: 🌈 Sections — section mastery heatmap. Cat 7 spatial axis
+  // (the 5 existing Cat 7 surfaces are all temporal). 28-cell grid colored
+  // by mastery %; tap → drill the section's first not-mastered lesson.
+  const sectionsGridBtn = document.getElementById('sections-grid-btn');
+  if (sectionsGridBtn) sectionsGridBtn.addEventListener('click', () => {
+    startSectionGrid();
   });
 
   // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed

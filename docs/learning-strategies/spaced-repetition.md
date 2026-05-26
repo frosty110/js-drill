@@ -16,6 +16,23 @@ specifically toward lessons their memory is currently weakest on.
 
 ## How the app encodes it today
 
+- **🌈 Sections heatmap (iter 111).** Sidebar 🌈 Sections opens a 28-cell
+  grid (one per section) colored by per-section mastery % via a continuous
+  red→amber→emerald gradient. Tap → drill the section's first not-mastered
+  lesson at L1 (touch) or L3 (fine-pointer); fully-mastered sections show
+  an emerald inset-ring and route to a random lesson for retention. **The
+  first SPATIAL aggregation surface** — every prior SR-adjacent surface
+  (Decay Radar, Resurrect Queue, Streak Map, Mastery Half-Life, At Risk,
+  Session Heatstrip) operates on a TIME HORIZON; the heatmap is the first
+  to aggregate to SECTION grain as a snapshot. Distinct from iter-47
+  Stats § Section retention block (which is temporal 14-day rolling
+  pass-rate inside the Stats modal). The "where to study tonight?" nudge
+  above the grid names the weakest section by lowest mastery %. Pure
+  derivation over CURRICULUM + state.progress — no new state field. Closes
+  the decision-fatigue "I have 28 sections and don't know which to drill"
+  failure mode at the section grain (complement to iter-108 🍀 Lucky which
+  closes it at the LESSON grain).
+
 - **💀 Resurrect Queue (iter 65).** Lessons whose `now - dueAt > 2 * interval`
   (overdue past one full bucket) get a dedicated sidebar pill `💀 Resurrect (N)`
   separate from the standard 🕒 Review badge. Closes a measurement gap on the

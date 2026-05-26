@@ -105,6 +105,91 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 100 vision — ninth vision iter; iter-95 queue fully drained)
+
+**Ninth vision iter (after 26/31/48/55/59/64/82/90/95).** Iter-95 queue (Notes Cloze iter 97 + Mechanic Constellation iter 98 + Reverse-Walkthrough iter 99) fully shipped in 3 iters — matching the iter-90 queue's drain speed (Conv Drill → Trace-Hop → Mechanic-Bridge). Iter 100 fires vision per SKILL.md Step 1B ("shipping is genuinely blocked when Step 1A surfaces nothing").
+
+**Single constraint-aware subagent** (iter-82/iter-90/iter-95 cost-conservative precedent). Subagent returned 5 proposals, each naming a previously-untapped data dimension or recall direction. **Subagent self-flagged 2 with implementation risks** (iter-95 meta-learning applied — the explicit "name 1 risk per proposal" instruction in the prompt caught both pre-orchestrator-validation).
+
+**Orchestrator feasibility cross-check rejected 1 more:**
+- 🔗 **Mechanic Chain** (subagent rank #3 promoted) — FAILS feasibility: scan found only 2/99 Patterns/Applied lessons have ≥3 mechanics tagged (65 have 1, 21 have 2). Multi-select set-recall is degenerate at this corpus density. **HOLD with re-promote condition: per-lesson mechanics-tag expansion (audit-iter target — bring average from current ~1.3 mechanics/lesson to ≥3).**
+
+**Promoted top 2** (down from 3 because of #5's feasibility miss):
+1. 🎯 **Hint-Cost Ladder Stats** (subagent rank #1) — closes the iter-37 deferred "hints-used-per-attempt instrumentation" follow-up. Data substrate ALREADY EXISTS (`state.history` captures `hint-tier-*` + `critical-lines-used` events per iter-32 schema). Per-lesson trend pill is already shipped; missing piece is a global Stats-modal "Self-rescue rate" tile + per-attempt L3 ribbon. **Cleanest single-iter ship — lowest implementation risk.**
+2. 📐 **Notes→Lesson Reverse Lookup** (subagent rank #2) — given a `reference.notes[]` string, pick which lesson it's from (4 MC distractors weighted by section adjacency). Clean reverse direction over the notes corpus — Gotcha tests subjective recognition ("knew it / didn't"); Notes Cloze tests intra-note keyword recall; Notes→Lesson tests **objective cross-corpus localization** ("which lesson does this gotcha belong to?"). Distinct cognitive operation.
+
+**Held with explicit re-promote conditions:**
+- 🪞 **Distractor Cross-Tap** (subagent rank #2 by their own ranking) — HOLD until a build-time index confirms ≥40 cross-lesson distractor collisions in the L1 corpus. Re-promote: 30-line probe script reports collision count ≥40.
+- 🧪 **Edge-Case Authorship** (subagent rank #4) — HOLD until a fuzzy-match prototype shows ≥70% true-positive rate on 20 seeded responses; PROFILE amendment B-adjacent (user-as-edge-case-author framing).
+- 🔗 **Mechanic Chain** (subagent rank #3, orchestrator-held) — HOLD until per-lesson mechanics-tag expansion brings ≥40 lessons to ≥3 mechanics. Re-promote: feasibility re-scan shows ≥40% of Patterns/Applied lessons with ≥3 mechanics.
+
+**Meta-learning (iter 100):** the iter-95 instruction "subagent names 1 implementation risk per proposal" worked — subagent flagged 2/5 risks (Cross-Tap collision count + Edge-Case fuzzy match). Orchestrator caught 1 additional (Mechanic Chain feasibility) via empirical scan. **Combined yield: 3/5 ideas blocked at vision-iter time, 2/5 promoted clean — much better than iter-95's 3/5 promoted (with 2 of those orchestrator-caught later).** Worth keeping the explicit-risk instruction in future vision-iter prompts. Also: the easy "recombine existing corpus" gradient is genuinely mining out — Cat 1/3/9 surfaces have multiplied 4-5x this month; the next iter's vision iter may need to push into Cat 5 UI/UX or Cat 7 Metacognition territory instead.
+
+§ Next nominates 🎯 Hint-Cost Ladder Stats ship for iter 101+ (post-`/clear` strongly recommended given 6-ship session length).
+
+---
+
+### 2026-05-25 iter 100 — Hint-Cost Ladder Stats
+
+**Status:** queued (vision iter 100 — top promoted entry; closes iter-37 deferred hints-used instrumentation)
+
+**Value claim:** PROFILE.md §What they need ("mock interview personal-bests trend down… friction near zero") + §State they're in (the rusty engineer can pass L3 but doesn't track *whether* they leaned on hints; without this measurement, "I passed" and "I crawled through with 3 hints" look identical in the dot color). Quality-of-pass is a real signal currently invisible to the user.
+**Mechanic:** Stats modal gets a new "Self-rescue rate" tile aggregating passes-with-zero-hints / total-passes across all lessons (uses existing `state.history` `hint-tier-*` + `critical-lines-used` event filter). L3 trend chip extends to a per-attempt cost ribbon: 0 hints used = green ✓, 1-2 hints = amber chip, 3+ hints = red chip. Both surfaces consume the already-captured event stream (iter-32 schema).
+**Success criterion:** Among users with ≥5 L3 passes, "Self-rescue rate" tile renders a non-zero percentage; after 1 week, user can name ≥3 lessons they passed-with-hints (the ribbon makes this visible per-attempt where it wasn't before).
+**Estimated scope:** single-iter ship (~120 LOC JS + ~25 CSS). Most logic is read-only over existing `state.history` — no schema migration, no `__v` bump. Stats-tile pattern mirrors iter-84/85 Recognize/Gotcha/Claim/Crystal/Bug-Hunt tiles.
+**Data dependency:** existing `state.history[lessonId]` event log (iter-32 schema, `__v: 6` since iter 32 onward). Hint-tier events are already captured per the iter-37 ship.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent + orchestrator-flagged):** pre-feature passes have no signal — the first 1-2 weeks of stats are partially-noisy because users may have passed lessons cleanly long before hint-tier-events were captured. Mitigation: render the tile with "since you started tracking" sub-text + only count L3 passes that have a coincident timestamp in `state.reviews` (proxy for "post-instrumentation pass").
+**Why this is a "new bucket" not "better cell":** every shipped surface (Reveal Replay, At Risk, Resurrect, Streak Map) measures *outcome* (passed/missed/overdue/active). None measures *process cost*. Hint-Cost is a new grain — quality-of-pass, not pass/fail. Closes the iter-37 deferred metric AND adds a measurement-gap-closing tile to the Stats modal.
+**Subagent source:** iter-100 vision iter — top by leverage-per-effort (lowest LOC, lowest risk, closes a deferred follow-up, data substrate already exists).
+
+---
+
+### 2026-05-25 iter 100 — Notes→Lesson Reverse Lookup
+
+**Status:** queued (vision iter 100 — second promoted entry; cross-corpus localization over notes field)
+
+**Value claim:** PROFILE.md §State they're in ("forget exact method names, argument order, the small ceremonies") + interview-format reality: "I remember a gotcha about negative-zero, where was that?" is the actual interview-mid-problem retrieval pattern. Currently unsupported — Gotcha tests subjective "knew it / didn't"; Notes Cloze tests intra-note keyword recall; nothing tests **objective lesson identification from a note**.
+**Mechanic:** New sidebar surface (📐 Trace or different emoji — 📐 taken by Claim; try 🗂 Locate or 🔖). Pick a random `reference.notes[]` string from any lesson, show it as the card prompt, render 4 lesson-title MC buttons (1 correct + 3 distractors weighted by section adjacency). 10 cards per session. Tap to reveal lesson + drill CTA. Misses route to `state.weakness`. Pre-filter pool by note-uniqueness score to avoid generic notes that "could match anything."
+**Success criterion:** Every passed card opens a fast-jump to that lesson's Reference tab; after 3 sessions user reports they remember at least 2 gotchas they'd forgotten were attached to specific lessons (the cross-corpus localization is the unique contribution).
+**Estimated scope:** single-iter ship (~110 LOC JS + ~20 CSS). Reuses Gotcha card stack + Recognize shell base.
+**Data dependency:** `reference.notes[]` exists on 143/143 full lessons. Schema-additive `state.notesLocate = {attempts, correct, sessions, lastRunAt}`. No `__v` bump.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged):** generic notes ("watch for off-by-one", "remember to handle null") could plausibly match multiple lessons — multi-correct cards would be ambiguous. **Mitigation:** precompute a uniqueness score per note (e.g., token-overlap distance from other notes); filter to top-quartile-unique notes. If the unique pool is <30 notes, fall back to including all notes but explicitly mark "this note could fit multiple lessons" in the reveal.
+**Why this is a "new bucket" not "better cell":** Gotcha = recognition (whole-note yes/no); Notes Cloze = intra-note keyword cloze with MC distractors; Notes→Lesson Lookup = **cross-corpus localization** (note → which lesson). Three distinct cognitive operations over the same `reference.notes[]` field. The corpus is now triple-mined for recall directions.
+**Subagent source:** iter-100 vision iter — second by leverage-per-effort (clean reverse direction, no schema risk, fully feasible).
+
+---
+
+### 2026-05-25 iter 100 — HELD: 🪞 Distractor Cross-Tap (needs build-time collision count ≥40)
+
+**Status:** HELD — needs a pre-ship collision-count probe.
+
+**Value claim:** Drills the near-miss discrimination skill — given the right answer to an L1, pick the distractor that's "dangerously close" (= another lesson's correct answer, or a real-world common confusion). Tests the rusty engineer's actual failure mode: confusing two near-equivalent calls.
+**Mechanic:** Sidebar 🪞 button → 8-card session. Each card shows an L1 question + its CORRECT answer marked + asks "which of these distractors is most dangerously close to ALSO being right?". Tap reveals cross-lesson collision context (or curated "common confusion" annotation if collision detected at build time).
+**Data dimension:** `L1.questions[].options[]` × cross-lesson — currently each lesson's options exist only inside its own MC; no surface joins them across lessons. Cross-lesson collisions are latent in the corpus.
+**Why held:** ship gates on build-time index confirming ≥40 cross-lesson distractor collisions. If <40, the surface degenerates into "show me a regular L1 again" with no novel signal. **Re-promote condition:** 30-line probe script reports collision count ≥40 (fuzzy-match `options[].toLowerCase().trim()` across all lessons → identify pairs where lesson-A's distractor equals lesson-B's correct answer).
+
+---
+
+### 2026-05-25 iter 100 — HELD: 🧪 Edge-Case Authorship (needs fuzzy-matcher pilot)
+
+**Status:** HELD — needs fuzzy-match pilot + PROFILE-amendment-adjacent framing.
+
+**Value claim:** Tests whether the user can GENERATE edge-case inputs unprompted (vs the existing 🛡 edge-case chips which display the answer). Pre-submit L3 micro-step asks "type one edge case that would break a naive solution" before Run.
+**Why held:** free-text matching is fuzzy — "empty" vs "empty array" vs "[]" all mean the same thing but match heuristics struggle. **Re-promote condition:** prototype fuzzy-matcher on 20 seeded responses shows ≥70% true-positive + ≤15% false-positive. Also PROFILE amendment B-adjacent (user-as-edge-case-author framing) — strict PROFILE compliance not blocking but would benefit from frame iter to ratify.
+
+---
+
+### 2026-05-25 iter 100 — HELD: 🔗 Mechanic Chain (data sparsity)
+
+**Status:** HELD — corpus too sparse for multi-select set-recall.
+
+**Value claim:** Given a canonical, multi-select which mechanics it uses (lesson → mechanic SET direction, complementing iter-98 🪐 Constellation's mechanic → lesson SET direction).
+**Why held:** empirical feasibility scan (orchestrator iter-100) found only 2/99 Patterns/Applied lessons have ≥3 mechanics tagged (65 have 1, 21 have 2). Multi-select set-recall is degenerate when sets are 1-2 elements. The unique cognitive claim ("set recall, not single pick") evaporates at this corpus density. **Re-promote condition:** per-lesson mechanics-tag expansion (audit-iter target) brings ≥40 lessons to ≥3 mechanics. Reasonable scope: ~30-50 lessons × 1-2 additional tags = manageable content iter.
+
+---
+
 ## Meta-finding (iter 95 vision — eighth vision iter; iter-90 queue fully drained)
 
 **Eighth vision iter (after 26/31/48/55/59/64/82/90).** Iter-90 vision queue (Conv Drill iter 91 + Trace-Hop iter 93 + Mechanic-Bridge iter 94) fully shipped this week — the FASTEST queue-to-drain rate in loop history. Iter 95 fires vision to refresh the queue per SKILL.md Step 1B ("shipping is genuinely blocked when Step 1A surfaces nothing").

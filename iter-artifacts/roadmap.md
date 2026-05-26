@@ -135,7 +135,7 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ### 2026-05-26 iter 124 — 🎯 Pattern-Family Gauntlet
 
-**Status:** QUEUED.
+**Status:** SHIPPED iter 125 (as 🥊 — see [SELF-IMPROVE.md § iteration log iter 125](../SELF-IMPROVE.md)). Emoji deviation 🎯→🥊 because 🎯 was already taken by Mock Interview + Reverse. Implementation chose ALL L1s per lesson (not just 1 per lesson as the entry's "3/5" pip implied) so deck depth is ~3-4× lesson count — makes the Speedrun differentiator load-bearing and probe-asserted. Mobile probe `tools/cdp/gauntlet.js` 19/19 PASS. First Cat 2 Paths & Sessions Active-list refill since iter 45 — 80-iter drought broken.
 
 **Value claim:** Drilling all 4-6 lessons in a pattern family (e.g. all Two Pointers, all Sliding Window) back-to-back rewires the family as one move-set, not 6 isolated drills. PROFILE.md L13-15 ("concepts intact, syntax/pattern degraded") + L22-24 ("trace mentally under interview pressure") both point at family-grain transfer as the unlock — currently the rusty engineer has to manually nav between lessons in a section, breaking interleaving-by-family flow. Cat 2 Paths & Sessions has had no Active ship since iter 45 path-aware SR queue (78+ iters); the closest predecessor is Today's Plan (curated mixed-section session), which is the OPPOSITE shape — Gauntlet is single-family-deep, Today's Plan is cross-family-wide.
 

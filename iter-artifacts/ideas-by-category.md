@@ -89,7 +89,7 @@ The convention:
 **Cross-cutting concerns:**
 - Weak-spot tracker originally operated only at lesson grain (not concept grain) — see [`roadmap.md` iter-26 entry #2 (Error Post-Mortem)](roadmap.md). **Partially closed iter 58** by 🏷 Mistake Tagging Postmortem (concept-grain user-tagged misses).
 
-**Shipped from this category:** Per-track Starter Paths (iter 39) · 🔎 Recognize (iter 49) · L1 Rapid-Fire (iter 54) · 🌅 3-Card Warmup (iter 57) · 🍀 Lucky roulette (iter 108) → see [`shipped-by-category.md` § 2](shipped-by-category.md#2-paths--sessions).
+**Shipped from this category:** Per-track Starter Paths (iter 39) · 🔎 Recognize (iter 49) · L1 Rapid-Fire (iter 54) · 🌅 3-Card Warmup (iter 57) · 🍀 Lucky roulette (iter 108) · 🥊 Pattern-Family Gauntlet (iter 125, **first Active-list refill since iter 45 path-aware SR queue — 80-iter drought broken**) → see [`shipped-by-category.md` § 2](shipped-by-category.md#2-paths--sessions).
 
 ---
 

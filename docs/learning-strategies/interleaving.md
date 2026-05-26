@@ -83,6 +83,24 @@ surfaced as a competing access pattern.
   different deck filter is the cleanest §9C/§9B-adjacent ship pattern.
   Misses route to `state.weakness` like normal Rapid-Fire so the focused
   practice still feeds the SR rotation.
+- **🥊 Pattern-Family Gauntlet (iter 125).** Sidebar 🥊 button → section
+  picker → chained L1 session running EVERY L1 question across EVERY full
+  lesson in the chosen section. The interleaving is *within-family*, not
+  cross-family: 40 cards over the 10 Basics lessons, served in lesson order
+  but L1-question-shuffled within each lesson's bank. The discrimination it
+  trains is the one Speedrun's 1-Q-per-lesson can't — under interview
+  pressure, you don't get "first question only" on each pattern; you have
+  to produce *every* L1-graspable fact about the family. Cousin to Speedrun
+  (lime, 1 Q/lesson, stopwatch — speed-first) and Rapid-Fire (yellow, fully
+  cross-corpus shuffle — discrimination-first); Gauntlet (indigo) is the
+  narrower-than-Rapid wider-than-Speedrun cell on the interleaving axis.
+  Closes iter-124 vision iter roadmap #1 — first Cat 2 Paths & Sessions
+  Active ship since iter 45 path-aware SR queue (78+ iters stale). Misses
+  → `state.weakness` like every other L1 surface; correct →
+  `appendHistory('L1-pass')`. No timer (PROFILE rusty-engineer consolidation,
+  not speed under pressure) and `state.gauntlet.bySection[slug]` retains
+  last `correct/total` per section as a coverage signal — *not* a best time
+  — so re-runs surface improvement without gamifying the rhythm.
 - **⚡ Rapid-Fire L1 stream** (iter 54) is the explicit interleaving surface
   on the highest-throughput mobile modality. 20 L1 questions sampled across
   every full lesson in every track + every section, shuffled by

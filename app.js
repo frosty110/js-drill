@@ -138,6 +138,7 @@ const state = {
   rapidFire: { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 }, // iter 54: cross-lesson L1 interleaving stream (additive)
   warmup: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 57: 3-card daily-plan swipe-stack micro-session (additive)
   speedrun: { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 }, // iter 71: 🏁 Section Speedrun — per-section first mobile timed-pressure surface; bests keyed by section slug (additive, no `__v` bump)
+  gauntlet: { sessions: 0, completions: 0, lastRunAt: 0, bySection: {} }, // iter 125: 🥊 Pattern-Family Gauntlet — chained L1 stream over EVERY L1 question of EVERY full lesson in one section. Cousin to Speedrun (1 L1/lesson + timer); Gauntlet is all-L1 untimed for family-grain interleaving. bySection[slug] = { sessions, lastCorrect, lastTotal } (additive, no `__v` bump)
   bugHunt: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 73: 🪲 Bug-Hunt — §9B code-evaluation skill drill (additive, no `__v` bump)
   crystal: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 77: 🔮 Predict — mental-execution drill (additive, no `__v` bump)
   claim: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 79: 📐 Smell-Test Complexity-Claim drill (additive, no `__v` bump)
@@ -485,49 +486,50 @@ const TRACK_PILLS = {
 };
 
 // Study-plan registry. The user subscribes to exactly one (state.subscribedPathId).
+// Populated from data/paths.json on boot via loadPaths(). Each entry:
+//   { id, label, icon, kind, blurb, lessons: [lessonId, ...], [url] }
 // The 📅 Today's Plan button routes by the subscribed path's `kind`:
 //   - 'lessons' → opens the in-app Today's Plan modal (curated due/path/weak session)
 //   - 'prep'    → navigates to a standalone dashboard page (e.g. prep.html)
 // The 🧭 Path View sidebar filter scopes the sidebar to the path's drill-lesson
-// sequence (`lessonOrderKey` → resolved by getPathLessonOrder). A path with no
-// drill-lesson mapping disables the 🧭 button.
+// sequence (path.lessons). A path with empty lessons[] disables the 🧭 button.
 // Progress is keyed by lesson id, NOT by path, so switching plans never resets
 // mastery — two-sum stays mastered whether you reach it via Starter or Prep.
-const PATHS = [
-  {
-    id: 'starter',
-    label: 'Starter Path',
-    icon: '🧭',
-    kind: 'lessons',
-    lessonOrderKey: 'STARTER_PATH',
-    blurb: 'Linear recommended order through the full JS Drill curriculum.',
-  },
-  {
-    id: 'prep-4day',
-    label: '4-Day Interview Prep',
-    icon: '📅',
-    kind: 'prep',
-    url: 'prep.html',
-    lessonOrderKey: 'PREP_4DAY_PATH',
-    blurb: 'Day-by-day interview cram: drills, glossary, code shapes, and mocks.',
-  },
-];
+// Adding a new path is now a pure-data change: append an entry to data/paths.json.
+let PATHS = []; // populated by loadPaths() on boot
+
+async function loadPaths() {
+  try {
+    const res = await fetch('data/paths.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error('Paths fetch failed: ' + res.status);
+    const data = await res.json();
+    PATHS = Array.isArray(data.paths) ? data.paths : [];
+  } catch (e) {
+    console.warn('[paths] fetch failed, using minimal Starter-only fallback:', e);
+    // Defensive fallback so the app still boots into Starter Path mode even when
+    // data/paths.json is missing or malformed. lessons:[] disables 🧭 Path View
+    // (would otherwise crash trying to filter on an undefined sequence).
+    PATHS = [{
+      id: 'starter',
+      label: 'Starter Path',
+      icon: '🧭',
+      kind: 'lessons',
+      blurb: 'Linear recommended order through the full JS Drill curriculum.',
+      lessons: []
+    }];
+  }
+}
 
 function getSubscribedPath() {
   return PATHS.find(p => p.id === state.subscribedPathId) || PATHS[0];
 }
 
-// Resolve a path's ordered drill-lesson list. Indirection (string key → array)
-// avoids a TDZ problem: the arrays (STARTER_PATH, PREP_4DAY_PATH) are declared
-// later in the file, but this resolver only runs at call-time. Returns null for
-// paths with no drill-lesson sequence (→ 🧭 Path View disabled for that path).
+// Resolve a path's ordered drill-lesson list from its `lessons` field
+// (populated from data/paths.json by loadPaths). Returns null for paths
+// with no/empty drill-lesson sequence (→ 🧭 Path View disabled).
 function getPathLessonOrder(path) {
   if (!path) return null;
-  switch (path.lessonOrderKey) {
-    case 'STARTER_PATH': return STARTER_PATH;
-    case 'PREP_4DAY_PATH': return PREP_4DAY_PATH;
-    default: return null;
-  }
+  return Array.isArray(path.lessons) && path.lessons.length ? path.lessons : null;
 }
 
 // True when the subscribed path exposes a non-empty drill-lesson sequence the
@@ -587,90 +589,14 @@ const REVIEW_INTERVALS = [
   30 * 24 * 60 * 60 * 1000    // 1 month (max — re-pass holds at 30d)
 ];
 
-// Recommended progression for someone starting from scratch — syntax first,
-// then patterns building on those syntax tools.
-const STARTER_PATH = [
-  // Foundations
-  's-variables', 's-numbers', 's-strings', 's-strmethods', 's-template',
-  's-cond', 's-loops', 's-functions', 's-closures', 's-recursion',
-  // Arrays
-  'array-iteration', 'array-transform', 's-arr-create', 's-arr-index',
-  's-arr-mutate', 's-arr-search', 'sorting',
-  // Data-structure idioms (MUST come before patterns that depend on them)
-  's-stack-pattern', 's-queue-pattern',
-  // Objects + maps
-  's-obj-basics', 's-obj-iter', 'map-set',
-  // Modern syntax
-  'destructuring-spread', 's-optional', 's-nullish',
-  // Iterators & Generators (depends on for-of from array-iteration above)
-  's-iter-protocol', 's-iter-custom', 's-generators', 's-gen-delegation', 's-async-iter',
-  // JS Toolbox — utility-belt syntax that comes up in nearly every coding challenge
-  's-array-from', 's-json-api', 's-math-toolkit', 's-regexp-basics', 's-number-parse', 's-bitwise-toolkit',
-  // Classes + async
-  's-class', 's-class-inh', 's-promises', 's-async', 's-trycatch',
-  // Patterns — Arrays & Hashing first
-  'two-sum', 'p-contains-dup', 'p-anagrams', 'p-valid-anagram',
-  'p-longest-consecutive', 'p-encode-decode-strings',
-  // Two pointers
-  'valid-palindrome', 'p-3sum', 'p-container', 'p-trapping-rain',
-  // Sliding window
-  'best-time-stock', 'p-longest-sub', 'p-min-window', 'p-sliding-window-max',
-  // Stack (depends on s-stack-pattern above)
-  'valid-parentheses', 'p-daily-temp', 'p-min-stack', 'p-largest-rect-hist',
-  // Binary search
-  'binary-search', 'p-rotated', 'p-min-rotated', 'p-koko-bananas',
-  // Linked list
-  'p-reverse-list', 'p-cycle', 'p-merge-two-sorted', 'p-remove-nth',
-  'p-add-two-numbers', 'p-reorder-list', 'p-merge-k-lists',
-  // Trees (depends on s-queue-pattern for BFS)
-  'p-max-depth', 'p-invert', 'p-bfs', 'p-valid-bst', 'p-lca-bst',
-  'p-same-tree', 'p-construct-tree', 'p-max-path-sum', 'p-serialize-tree',
-  // Tries + heap (p-min-heap must precede p-top-k-frequent and the heap upgrade for p-kth-largest)
-  'p-trie', 'p-min-heap', 'p-top-k-frequent', 'p-kth-largest', 'p-median-data-stream',
-  'p-word-search-ii',
-  // Graphs
-  'p-islands', 'p-course', 'p-clone-graph', 'p-connected-components',
-  'p-course-ii', 'p-num-provinces', 'p-pacific-atlantic',
-  // Greedy
-  'p-max-subarray', 'p-jump-game', 'p-gas-station',
-  // Dynamic Programming (foundational interview category)
-  'p-climbing-stairs', 'p-house-robber', 'p-coin-change', 'p-longest-inc-sub', 'p-word-break',
-  'p-edit-distance', 'p-longest-common-subseq', 'p-unique-paths', 'p-max-product-subarray',
-  // Backtracking (recursive search)
-  'p-subsets', 'p-permutations', 'p-combination-sum', 'p-word-search',
-  // Intervals
-  'p-merge-intervals', 'p-insert-interval', 'p-meeting-rooms-ii',
-  // Matrix / Grid
-  'p-spiral-matrix', 'p-rotate-image', 'p-set-matrix-zeroes',
-  // Bit manipulation (XOR is famous interview trick)
-  'p-single-number', 'p-count-bits', 'p-num-1-bits', 'p-missing-number', 'p-reverse-bits',
-  // Advanced JS (interview deep dives)
-  's-this', 's-prototype', 's-event-loop',
-  // System design classics
-  'p-lru-cache'
-  // Applied Problems are intentionally OUTSIDE the linear path — they're a
-  // different practice mode (build me X) rather than a learning progression.
-];
-
-// Drill lessons referenced across the 4-Day Interview Prep plan, in prep-day
-// order (deduped). This is the lessonOrder for the 'prep-4day' path, so the
-// 🧭 Path View filter scopes the sidebar to just the prep lessons in sequence.
+// iter 125: STARTER_PATH and PREP_4DAY_PATH lesson sequences moved to
+// data/paths.json (the `lessons` field of each path entry). Loaded into the
+// PATHS registry by loadPaths() on boot. Adding a new path is now a pure-data
+// change: append an entry to data/paths.json.
 //
-// SOURCE OF TRUTH is prep.html's PLAN (each item's `lesson.id`). This array is
-// a hardcoded mirror — tools/validate-data.js re-extracts the IDs from prep.html
-// and fails if the two drift, so editing the prep plan flags a required re-sync.
-const PREP_4DAY_PATH = [
-  'sorting', 's-bigo-intuition', 'binary-search', 's-bfs-template', 's-tree-traversals',
-  'p-max-subarray', 'two-sum', 'p-contains-dup', 'p-anagrams', 'p-valid-anagram',
-  'p-encode-decode-strings', 'p-longest-consecutive', 'valid-palindrome', 'p-3sum',
-  'p-container', 'p-trapping-rain', 'best-time-stock', 'p-longest-sub', 'p-min-window',
-  'p-sliding-window-max', 'valid-parentheses', 'p-daily-temp', 'p-min-stack',
-  'p-largest-rect-hist', 'p-rotated', 'p-koko-bananas', 'p-reverse-list', 'p-cycle',
-  'p-merge-two-sorted', 'p-max-depth', 'p-invert', 'p-bfs', 'p-same-tree', 's-heap-ops',
-  'p-valid-bst', 'p-lca-bst', 'p-construct-tree', 'p-kth-largest', 'p-top-k-frequent',
-  'p-merge-intervals', 'p-meeting-rooms-ii', 'p-insert-interval', 'p-islands', 'p-course',
-  'p-clone-graph', 'p-climbing-stairs', 'p-coin-change'
-];
+// Source-of-truth note for the prep path: prep.html's PLAN (each item's
+// `lesson.id`) remains canonical. tools/validate-data.js re-extracts those
+// ids and fails if data/paths.json's prep-4day.lessons drifts from prep.html.
 
 // The 🧭 Path View sidebar filter scopes the sidebar to the *subscribed* path's
 // drill-lesson sequence (getPathLessonOrder), then applies the per-track
@@ -747,6 +673,15 @@ function loadProgress() {
           lastRunAt: +parsed.speedrun.lastRunAt || 0
         }
       : { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 };
+    // iter 125: 🥊 Pattern-Family Gauntlet — chained all-L1 untimed session.
+    state.gauntlet = parsed.gauntlet && typeof parsed.gauntlet === 'object'
+      ? {
+          sessions: +parsed.gauntlet.sessions || 0,
+          completions: +parsed.gauntlet.completions || 0,
+          lastRunAt: +parsed.gauntlet.lastRunAt || 0,
+          bySection: parsed.gauntlet.bySection && typeof parsed.gauntlet.bySection === 'object' ? parsed.gauntlet.bySection : {}
+        }
+      : { sessions: 0, completions: 0, lastRunAt: 0, bySection: {} };
     // iter 73: Bug-Hunt lifetime stats. Legacy users get zeroed defaults.
     state.bugHunt = parsed.bugHunt && typeof parsed.bugHunt === 'object'
       ? {
@@ -978,6 +913,7 @@ function saveProgress() {
     rapidFire: state.rapidFire,
     warmup: state.warmup,
     speedrun: state.speedrun,
+    gauntlet: state.gauntlet,
     bugHunt: state.bugHunt,
     crystal: state.crystal,
     claim: state.claim,
@@ -4703,6 +4639,196 @@ async function startSpeedrunSession(sectionSlug) {
     shell.querySelector('[data-action="speedrun-again"]').addEventListener('click', () => startSpeedrunSession(sectionSlug));
     shell.querySelector('[data-action="speedrun-pick"]').addEventListener('click', () => startSpeedrunPicker());
     shell.querySelector('[data-action="speedrun-done"]').addEventListener('click', () => renderLesson());
+  }
+
+  renderCard();
+}
+
+// iter 125: 🥊 Pattern-Family Gauntlet — chained L1 stream across EVERY full
+// lesson in a single section, surfacing EVERY L1 question per lesson (not
+// just the first). Cousin to Speedrun (iter 71): Speedrun is 1 L1/lesson on
+// a stopwatch (speed-first); Gauntlet is all-L1 untimed (interleaving-by-
+// family). Roadmap iter-124 #1 — first Cat 2 Active list refill since iter
+// 45 path-aware SR queue (78+ iters stale). Misses → state.weakness like
+// every other L1 surface; correct→appendHistory('L1-pass'), miss→'L1-miss'.
+// No timer, no PB. Differentiator vs Today's Plan: family-deep, not
+// cross-family-wide. Differentiator vs Speedrun: question coverage depth.
+const GAUNTLET_MIN_LESSONS = 3; // sections with <3 full lessons skipped
+
+function _gauntletPickableSections() {
+  // Reuse Speedrun's section-grouping helper so manifest order is preserved.
+  const rows = [];
+  for (const sec of _speedrunSectionsGrouped()) {
+    const fullLessons = sec.lessons.filter(l => l.status === 'full');
+    if (fullLessons.length < GAUNTLET_MIN_LESSONS) continue;
+    const stat = state.gauntlet?.bySection?.[sec.slug] || null;
+    rows.push({
+      slug: sec.slug,
+      name: sec.name,
+      track: fullLessons[0]?.track || '',
+      fullCount: fullLessons.length,
+      lastCorrect: stat ? +stat.lastCorrect || 0 : 0,
+      lastTotal: stat ? +stat.lastTotal || 0 : 0
+    });
+  }
+  return rows;
+}
+
+async function _gauntletBuildDeck(sectionSlug) {
+  const sec = _speedrunSectionsGrouped().find(s => s.slug === sectionSlug);
+  if (!sec) return null;
+  const fullLessons = sec.lessons.filter(l => l.status === 'full');
+  for (const l of fullLessons) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    }
+  }
+  const deck = [];
+  for (const l of fullLessons) {
+    const content = CONTENT[l.id];
+    if (!content || !content.L1 || !Array.isArray(content.L1.questions)) continue;
+    for (let qi = 0; qi < content.L1.questions.length; qi++) {
+      const q = content.L1.questions[qi];
+      if (!q || !Array.isArray(q.options) || typeof q.answer !== 'number') continue;
+      deck.push({
+        lessonId: l.id,
+        lessonTitle: l.title,
+        sectionName: sec.name,
+        qIdx: qi,
+        qTotal: content.L1.questions.length,
+        q: q.q,
+        options: q.options,
+        answerIdx: q.answer,
+        explain: q.explain || ''
+      });
+    }
+  }
+  return deck.length >= GAUNTLET_MIN_LESSONS ? deck : null;
+}
+
+function startGauntletPicker() {
+  const sections = _gauntletPickableSections();
+  if (!sections.length) {
+    alert('No gauntlet-eligible sections yet (need ≥3 full lessons each).');
+    return;
+  }
+  const shell = document.getElementById('lesson-shell');
+  shell.innerHTML = `
+    <div class="gauntlet-shell gauntlet-picker">
+      <div class="gauntlet-header">
+        <span>🥊 Pattern-Family Gauntlet · pick a section</span>
+        <button class="gauntlet-exit" data-action="exit-gauntlet">✕ Exit</button>
+      </div>
+      <div class="gauntlet-picker-hint">Run EVERY L1 question across EVERY lesson in one section, back-to-back. No timer — interleave the family's patterns. (Today's Plan = broad sample · Speedrun = first-L1 sprint · Gauntlet = deep on one family.)</div>
+      <div class="gauntlet-picker-list" data-gauntlet-picker>
+        ${sections.map(s => `
+          <button class="gauntlet-pick-row" data-slug="${escapeHtml(s.slug)}">
+            <span class="gauntlet-pick-name">${escapeHtml(s.name)}</span>
+            <span class="gauntlet-pick-count">${s.fullCount} lessons</span>
+            <span class="gauntlet-pick-last" data-last>${s.lastTotal ? `last: ${s.lastCorrect}/${s.lastTotal}` : ''}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  shell.querySelector('[data-action="exit-gauntlet"]').addEventListener('click', () => renderLesson());
+  shell.querySelectorAll('.gauntlet-pick-row').forEach(btn => {
+    btn.addEventListener('click', () => startGauntletSession(btn.dataset.slug));
+  });
+}
+
+async function startGauntletSession(sectionSlug) {
+  const deck = await _gauntletBuildDeck(sectionSlug);
+  if (!deck || !deck.length) {
+    alert('Gauntlet deck is empty for this section.');
+    return;
+  }
+  state.gauntlet.sessions++;
+  state.gauntlet.lastRunAt = Date.now();
+  saveProgress();
+
+  const sectionName = deck[0].sectionName;
+  let idx = 0, correct = 0, misses = 0;
+  const shell = document.getElementById('lesson-shell');
+
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="gauntlet-shell">
+        <div class="gauntlet-header">
+          <span>🥊 ${escapeHtml(sectionName)} · ${idx + 1} of ${deck.length}</span>
+          <button class="gauntlet-exit" data-action="exit-gauntlet">✕ Exit</button>
+        </div>
+        <div class="gauntlet-progress-strip" data-gauntlet-progress>
+          ${deck.map((_, i) => `<span class="gauntlet-pip${i < idx ? ' gauntlet-pip-done' : ''}${i === idx ? ' gauntlet-pip-active' : ''}"></span>`).join('')}
+        </div>
+        <div class="gauntlet-meta"><span class="gauntlet-lesson">${escapeHtml(card.lessonTitle)}</span> · L1 Q${card.qIdx + 1}/${card.qTotal}</div>
+        <div class="gauntlet-question">${escapeHtml(card.q)}</div>
+        <div class="gauntlet-options">
+          ${card.options.map((opt, i) => `<button class="gauntlet-opt" data-opt-idx="${i}"><span class="gauntlet-letter">${String.fromCharCode(65 + i)}</span>${escapeHtml(opt)}</button>`).join('')}
+        </div>
+        <div class="gauntlet-feedback" data-gauntlet-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-gauntlet"]').addEventListener('click', () => renderLesson());
+    const opts = shell.querySelectorAll('.gauntlet-opt');
+    let answered = false;
+    const grade = (pickedIdx) => {
+      if (answered) return;
+      answered = true;
+      const wasCorrect = pickedIdx === card.answerIdx;
+      if (wasCorrect) {
+        correct++;
+        appendHistory(card.lessonId, 'L1-pass');
+      } else {
+        misses++;
+        state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+        appendHistory(card.lessonId, 'L1-miss');
+      }
+      saveProgress();
+      opts.forEach((b, i) => {
+        b.disabled = true;
+        if (i === card.answerIdx) b.classList.add('gauntlet-opt-correct');
+        else if (i === pickedIdx) b.classList.add('gauntlet-opt-wrong');
+      });
+      const fb = shell.querySelector('[data-gauntlet-feedback]');
+      if (fb) fb.innerHTML = wasCorrect ? `<span class="gauntlet-good">✓</span>` : `<span class="gauntlet-bad">✗ ${card.explain ? escapeHtml(card.explain) : ''}</span>`;
+      setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 380 : 1200);
+    };
+    opts.forEach(btn => btn.addEventListener('click', () => grade(+btn.dataset.optIdx)));
+  }
+
+  function renderSummary() {
+    state.gauntlet.completions++;
+    if (!state.gauntlet.bySection) state.gauntlet.bySection = {};
+    const prev = state.gauntlet.bySection[sectionSlug] || { sessions: 0 };
+    state.gauntlet.bySection[sectionSlug] = {
+      sessions: (prev.sessions || 0) + 1,
+      lastCorrect: correct,
+      lastTotal: deck.length,
+      lastRunAt: Date.now()
+    };
+    saveProgress();
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="gauntlet-shell">
+        <div class="gauntlet-header"><span>🥊 Gauntlet · done</span></div>
+        <div class="gauntlet-summary">
+          <div class="gauntlet-summary-score">${correct} / ${deck.length}</div>
+          <div class="gauntlet-summary-pct">${pct}% across ${escapeHtml(sectionName)}</div>
+          ${misses ? `<div class="gauntlet-summary-line">${misses} miss${misses === 1 ? '' : 'es'} flagged as weak spot</div>` : `<div class="gauntlet-summary-line">Clean run.</div>`}
+          <div class="gauntlet-summary-actions">
+            <button class="primary" data-action="gauntlet-again">🥊 Re-run</button>
+            <button class="secondary" data-action="gauntlet-pick">Pick another</button>
+            <button class="secondary" data-action="gauntlet-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="gauntlet-again"]').addEventListener('click', () => startGauntletSession(sectionSlug));
+    shell.querySelector('[data-action="gauntlet-pick"]').addEventListener('click', () => startGauntletPicker());
+    shell.querySelector('[data-action="gauntlet-done"]').addEventListener('click', () => renderLesson());
   }
 
   renderCard();
@@ -8569,6 +8695,10 @@ function _renderMechanicsDetailHtml(m) {
 //  INIT
 // ──────────────────────────────────────────────────────────────────────────
 async function init() {
+  // iter 125: load PATHS registry from data/paths.json BEFORE loadProgress —
+  // loadProgress validates state.subscribedPathId against PATHS, so the registry
+  // must be populated first. loadPaths() never throws (defensive fallback inside).
+  await loadPaths();
   loadProgress();
   try { await loadManifest(); } catch (e) {
     document.getElementById('lesson-shell').innerHTML = '<div class="p-6 text-red-300">Failed to load lesson data: ' + (e && e.message ? e.message : e) + '</div>';
@@ -8838,6 +8968,14 @@ async function init() {
   // not direct session-start; users see all sections + their PBs first.
   document.getElementById('speedrun-btn').addEventListener('click', () => {
     startSpeedrunPicker();
+  });
+
+  // iter 125: 🥊 Pattern-Family Gauntlet — chained all-L1 untimed session
+  // across every full lesson in one section. Cousin to Speedrun (1 L1/lesson
+  // + stopwatch); Gauntlet is deep-on-one-family. Closes iter-124 roadmap #1
+  // — first Cat 2 Active list refill since iter 45 (78+ iters stale).
+  document.getElementById('gauntlet-btn').addEventListener('click', () => {
+    startGauntletPicker();
   });
 
   // iter 73: 🪲 Bug-Hunt — §9B code-evaluation drill. Auto-mutator picks

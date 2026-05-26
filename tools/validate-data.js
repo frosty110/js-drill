@@ -409,39 +409,41 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     }
   }
 
-  // Prep-path sync check (hard failure). app.js hardcodes PREP_4DAY_PATH as a
-  // mirror of the drill lessons referenced in prep.html's PLAN. If someone edits
-  // the prep plan (adds/removes/reorders a `lesson.id`) without re-syncing the
-  // app.js array, the 🧭 Path View filter for the prep path goes stale. Re-extract
-  // from prep.html and compare order-sensitively.
+  // Prep-path sync check (hard failure). data/paths.json's `prep-4day` entry
+  // mirrors the drill lessons referenced in prep.html's PLAN. If someone edits
+  // the prep plan (adds/removes/reorders a `lesson.id`) without re-syncing
+  // data/paths.json, the 🧭 Path View filter for the prep path goes stale.
+  // Re-extract from prep.html and compare order-sensitively.
+  // iter 125: source moved from app.js (const PREP_4DAY_PATH = [...]) to
+  // data/paths.json (paths[].lessons for id === 'prep-4day').
   {
-    const appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+    const pathsSrc = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/paths.json'), 'utf8'));
     const prepSrc = fs.readFileSync(path.join(ROOT, 'prep.html'), 'utf8');
 
-    const m = appSrc.match(/const PREP_4DAY_PATH = \[([\s\S]*?)\];/);
-    const appIds = m
-      ? [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1])
+    const prepPath = Array.isArray(pathsSrc.paths)
+      ? pathsSrc.paths.find(p => p.id === 'prep-4day')
       : null;
+    const appIds = prepPath && Array.isArray(prepPath.lessons) ? prepPath.lessons : null;
 
     const prepIdsAll = [...prepSrc.matchAll(/lesson:\s*\{\s*id:\s*'([^']+)'/g)].map(x => x[1]);
     const prepIds = [...new Set(prepIdsAll)]; // dedupe, preserve first-occurrence order
 
     if (!appIds) {
-      console.log('\n✗ Prep-path sync: could not find PREP_4DAY_PATH in app.js.');
+      console.log('\n✗ Prep-path sync: could not find prep-4day entry in data/paths.json.');
       process.exit(1);
     }
     const sameOrder = appIds.length === prepIds.length && appIds.every((id, i) => id === prepIds[i]);
     if (!sameOrder) {
       const inPrepNotApp = prepIds.filter(id => !appIds.includes(id));
       const inAppNotPrep = appIds.filter(id => !prepIds.includes(id));
-      console.log('\n✗ Prep-path drift — app.js PREP_4DAY_PATH is out of sync with prep.html PLAN.');
-      console.log(`  prep.html unique lessons: ${prepIds.length}, app.js PREP_4DAY_PATH: ${appIds.length}`);
-      if (inPrepNotApp.length) console.log(`  In prep.html but missing from app.js: ${inPrepNotApp.join(', ')}`);
-      if (inAppNotPrep.length) console.log(`  In app.js but missing from prep.html: ${inAppNotPrep.join(', ')}`);
+      console.log('\n✗ Prep-path drift — data/paths.json prep-4day.lessons is out of sync with prep.html PLAN.');
+      console.log(`  prep.html unique lessons: ${prepIds.length}, data/paths.json prep-4day.lessons: ${appIds.length}`);
+      if (inPrepNotApp.length) console.log(`  In prep.html but missing from data/paths.json: ${inPrepNotApp.join(', ')}`);
+      if (inAppNotPrep.length) console.log(`  In data/paths.json but missing from prep.html: ${inAppNotPrep.join(', ')}`);
       if (!inPrepNotApp.length && !inAppNotPrep.length) console.log('  Same set, different order — re-copy in prep-day order.');
-      console.log('\n  Re-sync: copy the deduped lesson.id sequence from prep.html into PREP_4DAY_PATH in app.js.');
+      console.log('\n  Re-sync: copy the deduped lesson.id sequence from prep.html into data/paths.json (paths[].lessons for id "prep-4day").');
       process.exit(1);
     }
-    console.log(`\n🧭 Prep-path sync: PREP_4DAY_PATH matches prep.html (${appIds.length} lessons, in order).`);
+    console.log(`\n🧭 Prep-path sync: data/paths.json prep-4day.lessons matches prep.html (${appIds.length} lessons, in order).`);
   }
 })();

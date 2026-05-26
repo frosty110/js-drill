@@ -156,6 +156,7 @@ const state = {
   clarify: { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 }, // iter 117: 🎤 Clarify-First Ritual — lifetime stats (attempts = total chip-taps; correct = right chips tapped; completed = full rituals passed)
   hotseatOn: false, // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle surfaces a post-L3-pass tap-card with a mechanic-tag-derived follow-up + 3 distractors (default OFF — user must opt in)
   hotseat: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 118: 🔥 Hot-Seat Follow-Up — lifetime stats (attempts = chip-taps; correct = right chips on first try; sessions = cards shown)
+  whatif: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 122: 🧪 What-If Output Predictor — pick the output for a specific walkthrough-example input (additive, no `__v` bump)
   calibrateOn: false, // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
   timeCalibration: { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } }, // iter 119: byMechanic[id] = { predictions: [{bucket, actualMs, errorSec}], median errorSec computed on read }. meta tracks engagement separately (estimates = bucket taps; skips = skip taps; passes = passes-with-estimate)
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
@@ -866,6 +867,15 @@ function loadProgress() {
           lastRunAt: +parsed.hotseat.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 122: 🧪 What-If Output Predictor lifetime stats. Legacy users get zeros.
+    state.whatif = parsed.whatif && typeof parsed.whatif === 'object'
+      ? {
+          attempts: +parsed.whatif.attempts || 0,
+          correct: +parsed.whatif.correct || 0,
+          sessions: +parsed.whatif.sessions || 0,
+          lastRunAt: +parsed.whatif.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle (default OFF).
     state.calibrateOn = !!parsed.calibrateOn;
     state.timeCalibration = parsed.timeCalibration && typeof parsed.timeCalibration === 'object'
@@ -964,6 +974,7 @@ function saveProgress() {
     hotseat: state.hotseat,
     calibrateOn: state.calibrateOn,
     timeCalibration: state.timeCalibration,
+    whatif: state.whatif,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -2745,6 +2756,256 @@ async function startReverseWalkSession() {
     `;
     shell.querySelector('[data-action="reverse-walk-again"]').addEventListener('click', () => startReverseWalkSession());
     shell.querySelector('[data-action="reverse-walk-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
+// iter 122: 🧪 What-If Output Predictor — given the (memorized) canonical
+// + ONE input drawn from `walkthrough.examples[].label`, pick the function's
+// output from 4 MC options. Inverts the L1/L2/L3 ladder — L1 tests concepts,
+// L2/L3 test code production, Crystal Ball (iter 77) tests "what does this
+// canonical typically output", and What-If tests "for THIS input, what's the
+// output?" — the trace-transfer cognitive direction PROFILE L22-24 names
+// ("trace mentally under interview pressure") that no surface drills as pure
+// input→output prediction.
+//
+// **Adapted spec from iter-120 roadmap entry:** the entry envisioned
+// SYNTHESIZED fresh inputs + bucket-shift distractors. Empirical scan
+// (iter-122 setup) found all 99 Patterns/Applied lessons store inputs in
+// `example.label` as a free-form string ("[2,7,11,15] target=9 → [0,1]"),
+// not a structured `inputs` field. Adapted to: use the 3 walkthrough
+// examples as the input pool (per-lesson recall task), with the OTHER 2
+// examples' `expected` as plausible same-lesson distractors + 1 algorithmic
+// shift on the correct answer (±1 numeric / flipped boolean / reversed
+// array / swapped first-last). v2 candidate: synthesize fresh inputs by
+// mutating the label's input portion — requires per-pattern parser, deferred.
+const WHATIF_DECK_LEN = 8;
+function _whatifStringify(v) {
+  if (v === undefined) return undefined;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try { return JSON.stringify(v); } catch (_) { return undefined; }
+}
+function _whatifShifts(raw, asStr) {
+  // Produce 2-3 plausible-wrong variants of the correct answer. Strategy
+  // varies by output shape to avoid type-mismatch giveaways (the iter-30
+  // audit's anti-pattern that 🔮 Crystal's same-output-type filter also
+  // protects against). Returns an array of string candidates; caller dedups.
+  const out = [];
+  if (typeof raw === 'number') {
+    out.push(String(raw + 1));
+    out.push(String(raw - 1));
+    if (raw !== 0) out.push('0');
+  } else if (typeof raw === 'boolean') {
+    out.push(String(!raw));
+  } else if (typeof asStr === 'string') {
+    const s = asStr.trim();
+    if (s === 'true') out.push('false');
+    else if (s === 'false') out.push('true');
+    else if (/^-?\d+$/.test(s)) {
+      const n = parseInt(s, 10);
+      out.push(String(n + 1));
+      out.push(String(n - 1));
+    } else if (s.startsWith('[') && s.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          if (parsed.length >= 2) {
+            const reversed = parsed.slice().reverse();
+            out.push(JSON.stringify(reversed));
+            const swapped = parsed.slice();
+            [swapped[0], swapped[swapped.length - 1]] = [swapped[swapped.length - 1], swapped[0]];
+            out.push(JSON.stringify(swapped));
+          }
+          out.push('[]');
+        }
+      } catch (_) {}
+    }
+  }
+  return out;
+}
+function _whatifBuildCard(lesson, content) {
+  const examples = content && content.walkthrough && Array.isArray(content.walkthrough.examples)
+    ? content.walkthrough.examples : null;
+  if (!examples || examples.length < 3) return null;
+  // Filter to examples with both an `expected` and a `label` we can split on →.
+  const usable = examples
+    .map((ex, idx) => {
+      const expStr = _whatifStringify(ex.expected);
+      if (expStr === undefined) return null;
+      const label = typeof ex.label === 'string' ? ex.label : '';
+      const arrowIdx = label.indexOf('→');
+      const inputPhrase = arrowIdx >= 0 ? label.slice(0, arrowIdx).trim() : label.trim();
+      if (!inputPhrase) return null;
+      return { idx, raw: ex.expected, expStr, inputPhrase };
+    })
+    .filter(Boolean);
+  if (usable.length < 2) return null;
+  // Pick the "correct" example.
+  const correct = usable[Math.floor(Math.random() * usable.length)];
+  // Build distractor pool from OTHER examples' expected, deduped by string.
+  const pool = new Set();
+  for (const u of usable) {
+    if (u.idx === correct.idx) continue;
+    if (u.expStr !== correct.expStr) pool.add(u.expStr);
+  }
+  // Pad with algorithmic shifts.
+  for (const shift of _whatifShifts(correct.raw, correct.expStr)) {
+    if (pool.size >= 3) break;
+    if (shift !== undefined && shift !== correct.expStr) pool.add(shift);
+  }
+  // If still short (very rare), pad with em-dash so the card still renders 4-option.
+  while (pool.size < 3) pool.add(pool.size === 0 ? '—' : pool.size === 1 ? '(no output)' : 'undefined');
+  // Slice to exactly 3 distractors.
+  const distractors = Array.from(pool).slice(0, 3);
+  const options = [
+    { val: correct.expStr, isCorrect: true },
+    ...distractors.map(d => ({ val: d, isCorrect: false }))
+  ];
+  // Fisher-Yates shuffle.
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  // Truncate canonical to ≤30 lines for mobile readability — Crystal Ball
+  // precedent (iter 77). Long canonicals still render; the editor scrolls.
+  const code = (content.reference && content.reference.code) || (content.L3 && content.L3.canonical) || '';
+  return {
+    lessonId: lesson.id,
+    lessonTitle: lesson.title,
+    sectionName: lesson.section,
+    inputPhrase: correct.inputPhrase,
+    canonicalCode: code,
+    options,
+    correctVal: correct.expStr
+  };
+}
+async function _whatifBuildDeck() {
+  const candidates = CURRICULUM.filter(l =>
+    l.status === 'full' && (l.track === 'patterns' || l.track === 'applied')
+  );
+  const shuffled = candidates.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  // Preload a sample of 40 lessons to keep deck-build under ~1s on first run.
+  const sample = shuffled.slice(0, 40);
+  for (const l of sample) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { continue; }
+    }
+  }
+  const deck = [];
+  for (const lesson of shuffled) {
+    if (deck.length >= WHATIF_DECK_LEN) break;
+    const c = CONTENT[lesson.id];
+    if (!c) continue;
+    const card = _whatifBuildCard(lesson, c);
+    if (card) deck.push(card);
+  }
+  return deck.length >= 4 ? deck : null;
+}
+async function startWhatifSession() {
+  const deck = await _whatifBuildDeck();
+  if (!deck || deck.length < 4) {
+    alert('What-If needs more lessons with walkthrough examples. Click around a few Patterns lessons first, then try again.');
+    return;
+  }
+  state.whatif.sessions++;
+  state.whatif.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell whatif-shell">
+        <div class="recognize-header">
+          <span>🧪 What-If · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-whatif">✕ Exit</button>
+        </div>
+        <div class="whatif-lesson-tag">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
+        <pre class="whatif-canonical cm-s-dracula" data-whatif-code></pre>
+        <div class="whatif-input">
+          <span class="whatif-input-label">INPUT</span>
+          <span class="whatif-input-val">${escapeHtml(card.inputPhrase)}</span>
+        </div>
+        <div class="whatif-tag">What does the function output?</div>
+        <div class="whatif-options">
+          ${card.options.map((o, i) => `
+            <button class="recognize-opt whatif-opt" data-opt="${i}">
+              <span class="whatif-opt-letter">${String.fromCharCode(65 + i)}</span>
+              <span class="whatif-opt-val">${escapeHtml(o.val)}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-whatif-feedback></div>
+      </div>
+    `;
+    // Syntax-highlight the canonical via existing CodeMirror runMode helper.
+    const codeEl = shell.querySelector('[data-whatif-code]');
+    if (codeEl && typeof colorizeInto === 'function') colorizeInto(codeEl, card.canonicalCode);
+    else if (codeEl) codeEl.textContent = card.canonicalCode;
+    shell.querySelector('[data-action="exit-whatif"]').addEventListener('click', () => renderLesson());
+    const optBtns = shell.querySelectorAll('.whatif-opt');
+    let answered = false;
+    optBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const optIdx = +btn.dataset.opt;
+        const picked = card.options[optIdx];
+        const wasRight = !!picked.isCorrect;
+        if (wasRight) correct++;
+        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        state.whatif.attempts++;
+        if (wasRight) state.whatif.correct++;
+        saveProgress();
+        optBtns.forEach((b, i) => {
+          b.disabled = true;
+          if (card.options[i].isCorrect) b.classList.add('recognize-opt-correct');
+          else if (i === optIdx) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-whatif-feedback]');
+        if (fb) {
+          fb.innerHTML = `
+            <div class="whatif-reveal">
+              <div class="whatif-reveal-title">${wasRight ? '✓ Got it' : '✗ The correct output was'}</div>
+              <div class="whatif-reveal-val">${escapeHtml(card.correctVal)}</div>
+              <button class="whatif-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="whatif-next" data-action="whatif-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="whatif-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell whatif-shell">
+        <div class="recognize-header"><span>🧪 What-If · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} outputs correct · ${deck.length - correct} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.whatif.correct} / ${state.whatif.attempts} (${state.whatif.attempts > 0 ? Math.round(state.whatif.correct / state.whatif.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="whatif-again">🧪 Another session</button>
+            <button class="secondary" data-action="whatif-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="whatif-again"]').addEventListener('click', () => startWhatifSession());
+    shell.querySelector('[data-action="whatif-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }
@@ -8457,6 +8718,14 @@ async function init() {
   const notesLocateBtn = document.getElementById('notes-locate-btn');
   if (notesLocateBtn) notesLocateBtn.addEventListener('click', () => {
     startNotesLocateSession();
+  });
+
+  // iter 122: 🧪 What-If Output Predictor — per-lesson input→output recall
+  // over walkthrough.examples. Trace-transfer cognitive direction PROFILE
+  // L22-24 names but no surface drills as pure prediction.
+  const whatifBtn = document.getElementById('whatif-btn');
+  if (whatifBtn) whatifBtn.addEventListener('click', () => {
+    startWhatifSession();
   });
 
   // iter 109: 🔖 Match — bidirectional title ↔ description matcher.

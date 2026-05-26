@@ -125,6 +125,7 @@ The convention:
 **Review trigger:** If `L1/L2 quality across full curriculum` row has not been bumped in 8+ iters, OR if any specific section row (`Algorithms section`, `Linked List section`, etc.) is the highest-iter-touched, OR if the BS-08 watchlist hasn't been re-audited in 6+ iters, this category is stale.
 
 **Active ideas (cross-cutting audit themes from iter-27):**
+- **🪤 JS Traps section v1 (3-lesson MVP)** — new section covering canonical JS traps (`Array(3).fill([])` / `typeof null` / `parseInt` radix). Pure L1+L2+L3 (no Conversation/Walkthrough at MVP). Format-validation before scaling to ~12. See [`roadmap.md` iter-112 entry #3](roadmap.md). **First Cat 4 ship since iter 22** (s-index-math). Closes part of BS-03 + JS gotcha trap bag parking-lot entries.
 - Audit theme #2: L2 under-build is systemic (33 of 79 patterns + 17 of 20 applied have only 1 L2 — violates PROFILE.md ≥2 floor). Multi-iter sweep candidate.
 - Audit theme #7: ~20 remaining absurd-distractor L1 questions (iter 29 closed 5 of ~25). Mobile-leverage cleanup; theme #7 part 2.
 - BS-13 retro-add visual diagrams to high-traffic lessons (binary-search, p-bfs, p-min-window, p-islands, p-merge-two-sorted, p-reverse-list, p-min-heap, s-iter-protocol).
@@ -179,7 +180,8 @@ The convention:
 **Review trigger:** If `State persistence (schema __v)`, `Storage backend`, OR `Per-lesson event tracking` rows have not been bumped in 15+ iters, this category is stale. (Persistence is intentionally low-churn — schema bumps are expensive — so the trigger is longer.)
 
 **Active ideas:**
-- **BS-10 Cross-device sync** — anonymous-first, opt-in login. Frame-iter prereq to scope before any code. Strong win for 80%-phone profile.
+- **📵 Offline Drill Pack** — service-worker pre-cache of `data/manifest.json` + all 143 lesson JSONs + app shell. Massive mobile-leverage per PROFILE 80%-phone (subway / spotty LTE / plane). v1 accepts CDN-from-cache; v2 vendors Tailwind/CodeMirror. See [`roadmap.md` iter-112 entry #1](roadmap.md).
+- **☁️ Sync Onboarding Promotion** — promote the EXISTING `js/sync.js` chip (production Supabase sync, already shipped) via a post-L3-pass-on-desktop hint banner. See [`roadmap.md` iter-112 entry #2](roadmap.md). **NOTE:** the iter-95+ "BS-10 Cross-device sync = BLOCKED" framing was wrong for ~17 iters — `js/sync.js` is fully built (500+ LOC, anonymous-first email-OTP, three-blob bundle with per-field merge). Caught by iter-112 vision-iter fresh-eyes subagent. Remaining work is UX-discoverability, not infrastructure.
 
 **Parking-lot ideas:**
 - Auto-export progress JSON to clipboard on demand (currently manual file download).
@@ -187,6 +189,7 @@ The convention:
 - IndexedDB migration path (when localStorage hits 5MB — distant).
 - "Reset just this section" instead of full progress wipe.
 - Cloud backup via gist URL (deferred from iter-26 vision subagent A entry #5).
+- **📤 Resume Snippet Export** — recruiter-ready paragraph + public read-only progress URL. HELD on gamification risk per PROFILE L75; re-promote condition: concrete anti-gamification mitigation pre-decided (no streak/mock counts; mastered-LESSON-list emphasis). See [`roadmap.md` iter-112 HELD](roadmap.md).
 
 **Cross-cutting concerns:**
 - Current schema `__v: 6` (bumped iter 32 for `history` field). Load accepts 2-6 for legacy users.

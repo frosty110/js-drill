@@ -105,6 +105,104 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 112 vision — twelfth vision iter; iter-103 queue + 3 shortlist ships drained, Cat 4/6 push)
+
+**Twelfth vision iter (after 26/31/48/55/59/64/82/90/95/100/103).** iter-103 roadmap queue fully shipped across iter 104/106/107 (Command Palette + Mastery Half-Life + Session Heatstrip), then 3 consecutive shortlist consumptions from `ideas-by-category.md` (iter-108 🍀 Lucky + iter-109 🔖 Match + iter-111 🌈 Sections). 4 product ships in 4 iters with no roadmap refill — Step 1B fires vision per iter-109's emergent rule (3+ consecutive shortlist ships + remaining-shortlist-all-heavy-OR-stale-category → vision).
+
+**Single constraint-aware subagent** (cost-conservative iter-100/103/108 precedent). Prompt explicitly steered toward **Cat 4 Content / Cat 6 Persistence** per iter-111's "Cat 7 mined out — 4 ships in 12 iters" meta-finding. Cat 7 had been the recombination-gradient default since iter-101; this vision iter forces the loop into territory it has been avoiding (Cat 4 needs per-lesson authoring; Cat 6 needs cross-device infrastructure).
+
+**Subagent returned 5 proposals; orchestrator cross-check surfaced 1 over-cost claim:**
+- 📵 **Offline Drill Pack** (subagent rank #1) — subagent flagged CDN-vendoring as risk-of-being-half-measure. Orchestrator agrees but **rescopes**: ship lessons + manifest + app-shell offline-cache as v1 (single iter), document CDN-vendoring as v2 follow-on. Don't let "true offline guarantee" perfectionism block the dominant-use-case win.
+- ☁️ **Sync Onboarding** (subagent rank #2) — **subagent re-discovered that `js/sync.js` already exists and is auto-injected as a top-right chip** (verified by orchestrator: `js/sync.js` is 500+ lines of production Supabase sync; `supabase/migrations/001_user_progress.sql` exists; CLAUDE.md documents the contract). This is NOT a "build sync" entry; it's a "promote the existing chip via discoverability UX" entry. Cost drops from multi-iter scaffold to single-iter ship. Subagent's email-OTP friction risk is mitigated by ONLY surfacing the hint when the user has demonstrated commitment (first L3 pass on desktop), NOT auto-prompting during drilling.
+- 🪤 **JS Traps content section** (subagent rank #3) — Cat 4 Content. Subagent estimated 12 lessons × full L1/L2/L3 + conversation/walkthrough. Orchestrator rescopes: **v1 ships 1-3 sample lessons** to validate the format (the 30+ existing s-* syntax lessons cover some of this; risk of overlap is real). Decision to scale to 12 deferred until the 3-sample MVP lands.
+- 🗣 **Eyes-Free Audio L1** (subagent rank #4) — BLOCKED on PROFILE Amendment C (Commute Audio Mode); subagent correctly identified the dependency. HELD with re-promote condition.
+- 📤 **Resume Snippet Export** (subagent rank #5) — gamification risk per PROFILE L75 (subagent self-flagged); orchestrator agrees and additionally notes the surface area drifts toward "streak-bragging." HELD with explicit anti-gamification mitigation as re-promote condition.
+
+**Promoted top 3 (Cat 4/6 push validated — 2 of 3 land in Persistence, 1 in Content):**
+1. 📵 **Offline Drill Pack** — service-worker pre-cache `data/manifest.json` + 143 lesson JSONs + app shell (CSS/JS). v1 accepts CDN-from-cache (Tailwind, CodeMirror reload-from-cache after first online visit); v2 vendors CDN assets for true offline guarantee. Single-iter ship. **Mobile leverage = enormous** per PROFILE 80%-phone (subway / plane / spotty LTE moments).
+2. ☁️ **Sync Onboarding Promotion** — promote the EXISTING `js/sync.js` chip via a one-time hint banner shown after the user's first L3 pass on a *desktop user-agent* (signal of commitment + signal the user has been drilling cross-device). Banner copy: "Your phone progress and laptop progress are separate today. Tap Sync to merge them." Defer the email-OTP modal until the user explicitly taps. ~50 LOC ship. **First Cat 6 surface improvement since iter 88 AI Coach Export.**
+3. 🪤 **JS Traps section (v1: 3-lesson sample MVP)** — new section "JS Traps" with 3 hand-curated lessons covering canonical phone-tappable traps (e.g., `Array(3).fill([])` shared-reference; `typeof null === 'object'`; `parseInt` radix surprise). Pure L1+L2+L3 ladder (no conversation/walkthrough at MVP — Patterns-style narrative is overkill for atomic traps). Validates the format before scaling to 12. **First Cat 4 content ship since iter 22.**
+
+**Held with explicit re-promote conditions:**
+- 🗣 **Eyes-Free Audio L1** (subagent held) — BLOCKED on PROFILE Amendment C ratification (Commute Audio Mode) + Page Visibility instrumentation. Re-promote condition: a frame iter ratifies Amendment C and a small instrumentation pilot confirms walk/commute sessions are actually eyes-free (subagent's "screen-on-in-pocket" risk).
+- 📤 **Resume Snippet Export** (orchestrator-held on gamification) — re-promote condition: a concrete anti-gamification mitigation pre-decided (e.g., share URL renders mastered-lesson LIST not streak/mock counts; recruiter-paragraph text emphasizes specific patterns drilled not days-in-a-row). Pattern matches iter-103 Heatstrip's pre-decided-mitigation gate.
+
+**Meta-learning (iter 112):** the **Cat 4/6 push worked** — subagent honored steering (2 Persistence + 1 Content + 1 Modalities + 1 Persistence-adjacent). Surfaced 1 important meta-discovery: **the loop's "blind spots ledger" didn't track that `js/sync.js` was already shipped**, so iter-95's BS-10 Cross-device sync entry incorrectly carried "BLOCKED — Frame-iter prereq" framing for many iters when the infrastructure was actually live. Worth a SELF-IMPROVE.md correction: BS-10 should be "INFRA SHIPPED iter ~88 (sync.js); UX PROMOTION pending" not "BLOCKED." Subagent fresh-eyes caught this where iteration-history-primed orchestrator did not. Validates the iter-55 fresh-eyes-priming meta-finding.
+
+§ Next nominates 📵 Offline Drill Pack ship for iter 113+.
+
+---
+
+### 2026-05-26 iter 112 — 📵 Offline Drill Pack
+
+**Status:** QUEUED.
+
+**Value claim:** PROFILE.md L26-28 (20 free minutes, friction near zero) + L42 (phone-tier dominance). Today a subway-tunnel or spotty-LTE moment breaks lesson lazy-load and the user loses their 20-min window. Offline-cache the corpus once on first visit; never block on network again.
+**Mechanic:** Service worker pre-caches `data/manifest.json` + all 143 lesson JSONs + `app.js` / `app.css` / `index.html` / `tokens.css` on first visit. Subsequent visits hydrate from cache. A "Pack downloaded ✓" chip in the sidebar confirms offline-readiness. CDN deps (Tailwind, CodeMirror) cached via browser HTTP cache after first online visit; v2 vendors them for true offline guarantee.
+**Success criterion:** Sessions started in `navigator.onLine === false` complete at ≥70% the rate of online sessions, measured via a new `state.history` event with `online: false` flag on session-start.
+**Estimated scope:** single-iter ship (~120 LOC service worker + 20 LOC chip UI + ~30 LOC CSS). Adds `service-worker.js` + a `<script>` registration in `index.html`. Schema-additive `state.offlinePack = { lastCachedAt, lessonCount }`.
+**Data dependency:** none — all 143 lesson JSONs already exist as static files; pure manifest-walk + cache.addAll.
+**PROFILE.md amendment proposed?** No (PROFILE already names mobile/transit as the dominant use case).
+**Implementation risk (subagent-flagged):** CDN deps (Tailwind, CodeMirror) make true offline a half-measure without vendoring; **orchestrator mitigation pre-decided** — ship v1 with browser-HTTP-cache for CDNs (works after first online visit), document v2 vendoring as a follow-on iter.
+**Why this is a "new bucket" not "better cell":** every prior surface assumed network-available. Offline-pack is the first surface that fundamentally changes the *substrate* of every other surface — they all keep working without network. Compounds with every existing feature.
+**Subagent source:** iter-112 vision iter — ranked #1 by leverage-per-effort; aligns with iter-93 Promotion shortlist #4 (PWA install) but with sharper scope.
+
+---
+
+### 2026-05-26 iter 112 — ☁️ Sync Onboarding Promotion
+
+**Status:** QUEUED.
+
+**Value claim:** `js/sync.js` is fully built but hidden behind a small top-right chip the user doesn't notice. The rusty engineer who taps L1/L2 on transit then sits down at a laptop expecting their progress to follow them today starts cold (separate localStorage stores per browser/device). Closes that expectation gap by making the existing sync infrastructure DISCOVERABLE at exactly the moment commitment is highest.
+**Mechanic:** After the user's first L3 pass on a *desktop user-agent* (signal of commitment + cross-device drilling), show a one-time hint banner with copy "Your phone progress and laptop progress are separate today. Tap Sync to merge them." Banner has Dismiss + Tap-Sync buttons. Banner dismissal stored in `state.syncHintShown = true`. Tap-Sync triggers the existing top-right chip's sign-in modal (no new auth code needed).
+**Success criterion:** % of weekly active users with ≥1 lesson touched on both a mobile and desktop user-agent within a 7-day window rises above 25% (matches subagent's metric).
+**Estimated scope:** single-iter ship (~50 LOC banner UI + handler + state field). Reuses 100% of existing `js/sync.js` infrastructure.
+**Data dependency:** `navigator.userAgent` for desktop detection + `state.history` L3-pass events for first-pass detection. Both already in place.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged, orchestrator-mitigated):** email-OTP friction during a drill session violates PROFILE.md "friction near zero." **Mitigation pre-decided:** the banner ONLY surfaces post-L3-pass (commitment moment, not mid-drill); the email-OTP modal opens ONLY on explicit tap; banner has a clear Dismiss; `syncHintShown` flag prevents re-prompting on subsequent L3 passes.
+**Why this is a "new bucket" not "better cell":** every prior persistence surface (localStorage, Backup/Restore, AI Coach Export) operates within a single browser. Sync-onboarding promotes the existing multi-device substrate that's been silently shipped. Different category of leverage — closes a *cross-device* gap, not a single-device feature.
+**Subagent source:** iter-112 vision iter — ranked #2; subagent fresh-eyes caught that `js/sync.js` already exists (orchestrator verified — file is 500+ lines of production Supabase sync). This entry is a *promotion* not a *build*.
+
+---
+
+### 2026-05-26 iter 112 — 🪤 JS Traps section (v1: 3-lesson sample MVP)
+
+**Status:** QUEUED.
+
+**Value claim:** Senior FE / full-stack interviews regularly ask "what does this print?" trap questions (`Array(3).fill([])` shared-reference, `typeof null === 'object'`, `parseInt` radix surprise, `[] == false` but `[] !== false`, `0.1 + 0.2 !== 0.3`, `Object.keys` ordering on numeric keys, `delete arr[0]` leaves holes, hoisting/TDZ edge cases). The 28 existing sections cover algorithms/DS deeply but have minimal coverage of these JS-specific traps. The rusty engineer who hasn't written vanilla JS in 5 years is most likely to fail on these — they're the prerequisite for confident L3 typing.
+**Mechanic:** New "JS Traps" section with 3 sample lessons (`a-traps-fill-shared-ref`, `a-traps-typeof-null`, `a-traps-parseint-radix` or similar). Each lesson: pure L1+L2+L3 ladder (no conversation/walkthrough at MVP — atomic traps don't need narrative). L1 asks "what does this print?" with 4 plausible distractors; L2 fills the trap-aware fix; L3 reproduces the bug-then-fix pattern.
+**Success criterion:** After 14 days of being live, the new section's average L1-pass rate on first attempt is 40-70% — calibrated to be neither trivial nor unreachable. Below 40% → distractors are too plausible; above 70% → traps are too well-known.
+**Estimated scope:** single-iter ship for the 3-lesson MVP (~30 min per lesson via `author-lesson` skill = ~90 min total + validator + manifest update). Multi-iter ship for the full ~12-lesson section (3 follow-on iters, ~3 lessons per iter). Format-validation MVP first; scale decision deferred.
+**Data dependency:** none — pure new content authoring.
+**PROFILE.md amendment proposed?** No.
+**Implementation risk (subagent-flagged):** overlap with existing `s-event-loop`, `s-this`, `s-coercion`, `s-hoisting`, `s-prototype` syntax lessons creating duplicate-feeling drills. **Orchestrator mitigation:** v1 deliberately picks 3 traps that have NO existing lesson (verify via manifest grep before authoring); curation pass before MVP defines the "no overlap" list; subagent's authoring instruction includes "do not duplicate existing s-* lesson scope."
+**Why this is a "new bucket" not "better cell":** every existing section covers a DATA STRUCTURE or PATTERN; this is the first section about LANGUAGE-LEVEL TRAPS that don't fit any algorithmic category. Different lesson shape: bug-then-fix rather than concept-then-canonical. First Cat 4 content ship since iter 22 (s-index-math).
+**Subagent source:** iter-112 vision iter — ranked #3; closes BS-03 "JS-specific gaps" parking-lot entry in `ideas-by-category.md § Content`.
+
+---
+
+### 2026-05-26 iter 112 — HELD: 🗣 Eyes-Free Audio L1 (PROFILE Amendment C blocker)
+
+**Status:** HELD — needs PROFILE Amendment C (Commute Audio Mode) ratification + Page Visibility instrumentation pilot.
+
+**Value claim:** Walking/driving/gym/dishes phone time is currently unaddressed — all surfaces require visual attention. AirPods-in eyes-out moments could unlock significant additional drill time for the rusty engineer.
+**Mechanic:** New 🎧 Audio sidebar mode reads L1 question + 4 options via Web Speech API TTS; accepts a single big-tap answer (or Bluetooth media-button click); advances on success/failure with a 2-sec audio cue and spoken explain; runs interleaved L1s from due+weak lessons.
+**Why held:** PROFILE.md draft Amendment C (Commute Audio Mode) is unratified — the assumption that "transit phone time is actually eyes-free" hasn't been validated. Subagent correctly flagged the "screen-on-in-pocket" risk: many transit/walking phone moments are actually screen-on-but-not-actively-attending, which is a different design target than truly eyes-free.
+**Re-promote condition:** (a) a frame iter ratifies PROFILE Amendment C with concrete evidence (user-report, micro-poll, or self-instrumentation), AND (b) a Page Visibility instrumentation pilot (~30 LOC, ship-able independently) confirms a non-trivial population of "visibilitystate: hidden + still-active" sessions.
+
+---
+
+### 2026-05-26 iter 112 — HELD: 📤 Resume Snippet Export (gamification risk)
+
+**Status:** HELD — needs concrete anti-gamification mitigation pre-decided.
+
+**Value claim:** A rusty engineer prepping for interviews needs to articulate "I drilled 73 patterns including DP, graphs, two-pointers" in cover letters / recruiter calls / Blind posts. Today the only export is a JSON backup or a markdown cheatsheet — neither is a shareable artifact.
+**Mechanic:** New 📤 Share modal generates a recruiter-ready paragraph + a public read-only progress URL (sync-backed) showing mastered sections / mock-best / drill-time totals — copy-button mobile-first; the URL renders a sanitized static page with no PII.
+**Why held:** PROFILE.md L75 anti-gamification ("Gamification that obscures actual progress against interview readiness") — both the subagent and orchestrator flagged this. Share artifacts drift toward streak-bragging unless explicitly designed against that pattern.
+**Re-promote condition:** a concrete pre-decided mitigation list — e.g., (a) share URL shows mastered-LESSON-list not streak/mock counts; (b) recruiter-paragraph emphasizes specific patterns drilled (e.g., "binary search variants, sliding window, BFS/DFS templates") not days-in-a-row; (c) no leaderboard / no public comparison; (d) URL is opt-in per-export, not always-live. Matches the iter-103 Heatstrip pre-decided-mitigation gate.
+
+---
+
 ## Meta-finding (iter 103 vision — tenth vision iter; iter-100 queue fully drained, Cat 5/7 push)
 
 **Tenth vision iter (after 26/31/48/55/59/64/82/90/95/100).** Iter-100 queue (Hint-Cost iter 101 + Notes Locate iter 102) fully shipped in 2 iters. Iter 103 fires vision per SKILL.md Step 1B with explicit Cat 5 UI/UX + Cat 7 Metacognition steering per iter-100's "the recombine-existing-corpus gradient is mining out" meta-finding.

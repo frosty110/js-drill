@@ -105,6 +105,51 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+### 2026-05-25 iter 90 — Conversation Drill (interview-arc section classifier)
+
+**Status:** queued (vision iter 90 — top promoted entry; the largest authored corpus the app has never tested)
+
+**Value claim:** PROFILE.md §What they need #3 ("interview-format conditioning… cadence of read prompt → talk through approach"); the existing Conversation tab on 99 Patterns/Applied lessons is read-only — the 6-section interview arc (Restate / Brute-force / Spot-pattern / Trace / Edges / Complexity, varies by lesson shape) is genuinely a load-bearing skill (recruiters grade the arc, not just the code) but no current surface tests it.
+**Mechanic:** Sidebar 🎬 button → 10-card mobile stream. Each card shows ONE `conversation.sections[i].say` paragraph with the section title HIDDEN; user taps which of the 6 fixed interview-phase types it is. Reveal shows actual title + source lesson + "Drill this lesson →" deep-link CTA. Misses route to `state.weakness` via existing path.
+**Success criterion:** Among users with ≥5 Conversation Drill sessions, mock-interview personal-best times trend down measurably; lifetime hit rate on "which interview phase is this?" trends up week-over-week.
+**Estimated scope:** single-iter ship (~150 LOC JS + ~30 CSS). Reuses Rapid-Fire shell with content drawn from `conversation.sections[]` instead of `L1.questions[]`.
+**Data dependency:** none — every full Patterns/Applied lesson with a `conversation` block (99/99 per OOB-2026-05-24) has 3-6 `.sections[]` each with `.title` + `.say`. Schema-additive `state.convDrill = {attempts, correct, sessions, lastRunAt}`.
+**PROFILE.md amendment proposed?** No.
+**Why this is a "new bucket" not "better cell":** Uses the **6-section interview-title axis as a classification target** — today the section titles are decoration in a static accordion; nothing has ever quizzed the *structural arc* of an interview answer as its own skill. Distinct from 🔎 Recognize (uses L3 prompts → section names from the 28-section sidebar curriculum) and the Conversation tab itself (reveal-only read).
+**Subagent source:** iter-90 vision iter — top by leverage-per-effort; largest under-exploited authored corpus.
+
+---
+
+### 2026-05-25 iter 90 — Trace-Hop (pick-the-next-state mobile micro-quiz)
+
+**Status:** queued (vision iter 90 — second promoted entry; activates walkthrough trace generators as a recall corpus)
+
+**Value claim:** PROFILE.md §State they're in ("can't produce canonical from blank in 5 min") + §Usage context (L1 tap is highest-throughput on mobile). The Walkthrough tab is desktop-friendly scrubbing — read-only mental simulation; this surface inverts it into a discrete-state recall test. Mid-execution state ("after line 7, what's the locals snapshot?") is the exact mental model the rusty engineer needs to *write* the code from scratch.
+**Mechanic:** Sidebar 🎯 (or different emoji — 🎯 is taken by Reverse and Mock; use 🧬 or 🔬) → 8-card session. Each card shows 3 consecutive state-snapshots from a random walkthrough trace with the *middle* frame's `state` panel blanked; user taps which of 4 state-objects fits (3 distractors auto-sampled from other frames of the same trace — so the user reasons about *which* step belongs here, not just type-matching). Reveal shows the trace context + lesson.
+**Success criterion:** Per-lesson Trace-Hop accuracy predicts L3-pass on first attempt (correlation ≥ 0.5 within 30 days); users with ≥3 sessions show measurably higher L3 pass rate on unseen Patterns lessons.
+**Estimated scope:** single-iter ship (~180 LOC JS + ~30 CSS). Trace generators already compile at runtime (since iter 33+ walkthrough infrastructure); collect 3 consecutive yields + shuffle distractors from same trace.
+**Data dependency:** none — `walkthrough.trace` exists on 99 Patterns/Applied lessons (per OOB-2026-05-24). Schema-additive `state.traceHop`.
+**PROFILE.md amendment proposed?** No.
+**Why this is a "new bucket" not "better cell":** Uses **walkthrough trace yields as a discrete-state corpus** — the only existing surface that touches mid-execution state is the visual stepper (read-only). Distinct from 🪲 Walkthrough Bug-Hunt (which mutates a state value and asks "which row is corrupted") — Trace-Hop asks "given the line that just ran, which locals snapshot is correct?" — a different cognitive operation (positional recall vs. anomaly detection).
+**Subagent source:** iter-90 vision iter — second by leverage-per-effort; activates trace corpus that's never been read for recall.
+
+---
+
+### 2026-05-25 iter 90 — Mechanic-Bridge (cross-track transfer routing)
+
+**Status:** queued (vision iter 90 — third promoted entry; converts Mechanics matrix diagnostic into 1-tap action)
+
+**Value claim:** PROFILE.md §What they need #2 ("pattern fluency… so they produce them without thinking"). The existing 🧩 Mechanics × Track Matrix view (iter 63) *shows* transfer gaps (mechanic mastered in track A, unmastered in track B) but never *closes* them — the user sees the ⚠ marker and… does nothing. This surface converts the diagnostic into a routing action.
+**Mechanic:** New sidebar pill 🧠 Bridge → picks a `mechanics[]` tag the user has mastered in one track but unmastered in another (e.g., "array-as-queue" mastered in `syntax/s-queue-pattern` but unmastered on `patterns/p-bfs`); routes user to the unmastered lesson's L1 with a 1-line "you know this from <other lesson> — try it here" preface above the question. Auto-hides when no transfer gaps exist.
+**Success criterion:** Time-to-master a lesson reached via Bridge is shorter than the same lesson reached cold (measured: timestamp of first-open → green dot). Within 30 days, ≥3 cross-track mastery transfers from Bridge sessions.
+**Estimated scope:** single-iter ship (~120 LOC JS + ~20 CSS). One query joining `MECHANIC_INDEX × state.progress × manifest.track`.
+**Data dependency:** none — `mechanics[]` array already exists on lessons (73% coverage as of iter 63), `state.progress` already populated. Pure derivation; no new state.
+**PROFILE.md amendment proposed?** No.
+**Why this is a "new bucket" not "better cell":** Uses **mechanic-track intersection as a routing signal**, not a stats display. 🧭 Track Balance Compass (iter 66) operates at track-grain percentages; 🧩 Mechanics × Track Matrix (iter 63) is a diagnostic view that requires the user to navigate manually; Bridge is the only surface that converts the matrix finding into a 1-tap action. Closes the "diagnostic-but-not-actionable" gap on a load-bearing PROFILE need.
+**Subagent source:** iter-90 vision iter — third by leverage-per-effort; cheapest of the top 3 + smallest scope risk.
+
+---
+
 ### 2026-05-25 iter 82 — Gotcha Roulette (notes-only recall stream)
 
 **Status:** SHIPPED iter 83. 🎰 Gotcha sidebar button → 8-card session showing one `reference.notes[i]` string per card with source lesson title hidden (rendered as `<Section> · ???`); 2-tap "✓ Knew it" / "✗ Didn't"; reveal shows lesson title + section + "Drill this lesson →" deep-link CTA + "Next card" button. Misses route to `state.weakness` via existing path. New helpers `_gotchaBuildDeck()` (flatten all `reference.notes[]` ≥20 chars across loaded lessons, Fisher-Yates shuffle, slice 8) + `startGotchaSession()`. Schema-additive `state.gotcha = {attempts, correct, sessions, lastRunAt}`. ~140 LOC JS + 40 CSS (pink accent). Mobile probe `tools/cdp/gotcha-roulette.js` 4/4 PASS. **Scope adjustment from spec**: used 2-button tap instead of swipe gesture (per Step 2 mitigation — same UX intent, more testable + cross-browser safer). **First surface to read `reference.notes[]` as a corpus** — confirms the iter-82 subagent's data-dimension thesis.

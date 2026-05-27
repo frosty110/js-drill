@@ -211,6 +211,19 @@ function _cacheClearLevel(lessonId, level) {
 }
 // Expose for probes.
 window.__jsdrillCache = inProgressCache;
+window.__jsdrillContent = CONTENT;
+
+// Fisher-Yates index permutation. Used by L1 surfaces to randomize question
+// order per session and option order per render — defeats positional learning
+// (76% of authored L1 answers were "B"; without shuffle, tapping B passes).
+function _shuffleIndices(n) {
+  const a = Array.from({ length: n }, (_, i) => i);
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 // Mock interview attempts kept per lesson — enough to see a trend
 // (improving / plateaued / regressing) without bloating localStorage.
@@ -2338,13 +2351,14 @@ function _bigOBuildDeck() {
       if (!q || !BIG_O_FILTER_RE.test(q.q || '')) continue;
       if (!Array.isArray(q.options) || q.options.length < 2) continue;
       if (typeof q.answer !== 'number') continue;
+      const optOrder = _shuffleIndices(q.options.length);
       pool.push({
         lessonId: lesson.id,
         lessonTitle: lesson.title,
         sectionName: lesson.section,
         q: q.q,
-        options: q.options,
-        answerIdx: q.answer,
+        options: optOrder.map(i => q.options[i]),
+        answerIdx: optOrder.indexOf(q.answer),
         explain: q.explain || ''
       });
     }
@@ -4924,13 +4938,14 @@ function _rapidFireBuildDeck() {
       const q = content.L1.questions[qi];
       if (!q || !Array.isArray(q.options) || q.options.length < 2) continue;
       if (typeof q.answer !== 'number') continue;
+      const optOrder = _shuffleIndices(q.options.length);
       pool.push({
         lessonId: lesson.id,
         lessonTitle: lesson.title,
         sectionName: lesson.section,
         q: q.q,
-        options: q.options,
-        answerIdx: q.answer,
+        options: optOrder.map(i => q.options[i]),
+        answerIdx: optOrder.indexOf(q.answer),
         explain: q.explain || ''
       });
     }
@@ -5138,14 +5153,15 @@ async function _warmupBuildDeck() {
     // surprise lives in Rapid-Fire).
     const q = content.L1.questions[0];
     if (!q || !Array.isArray(q.options) || typeof q.answer !== 'number') continue;
+    const optOrder = _shuffleIndices(q.options.length);
     deck.push({
       lessonId: id,
       lessonTitle: lesson.title,
       sectionName: lesson.section,
       why,  // 'review due' | 'weak spot' | 'next on path'
       q: q.q,
-      options: q.options,
-      answerIdx: q.answer,
+      options: optOrder.map(i => q.options[i]),
+      answerIdx: optOrder.indexOf(q.answer),
       explain: q.explain || ''
     });
   }
@@ -5321,13 +5337,14 @@ async function _speedrunBuildDeck(sectionSlug) {
     if (!content || !content.L1 || !Array.isArray(content.L1.questions) || !content.L1.questions.length) continue;
     const q = content.L1.questions[0];
     if (!q || !Array.isArray(q.options) || typeof q.answer !== 'number') continue;
+    const optOrder = _shuffleIndices(q.options.length);
     deck.push({
       lessonId: l.id,
       lessonTitle: l.title,
       sectionName: sec.name,
       q: q.q,
-      options: q.options,
-      answerIdx: q.answer,
+      options: optOrder.map(i => q.options[i]),
+      answerIdx: optOrder.indexOf(q.answer),
       explain: q.explain || ''
     });
   }
@@ -5522,6 +5539,7 @@ async function _gauntletBuildDeck(sectionSlug) {
     for (let qi = 0; qi < content.L1.questions.length; qi++) {
       const q = content.L1.questions[qi];
       if (!q || !Array.isArray(q.options) || typeof q.answer !== 'number') continue;
+      const optOrder = _shuffleIndices(q.options.length);
       deck.push({
         lessonId: l.id,
         lessonTitle: l.title,
@@ -5529,8 +5547,8 @@ async function _gauntletBuildDeck(sectionSlug) {
         qIdx: qi,
         qTotal: content.L1.questions.length,
         q: q.q,
-        options: q.options,
-        answerIdx: q.answer,
+        options: optOrder.map(i => q.options[i]),
+        answerIdx: optOrder.indexOf(q.answer),
         explain: q.explain || ''
       });
     }
@@ -8950,20 +8968,26 @@ function buildL1AiPrompt(lesson, content, localState) {
     lines.push('```');
     lines.push('');
   }
-  qs.forEach((q, qi) => {
-    const s = (localState && localState[qi]) || {};
-    lines.push(`## Question ${qi + 1}`);
+  // Walk in the same shuffled display order the user saw, so the prompt's
+  // letters (A/B/C/D) match the user's mental picture of "I picked B".
+  const qOrder = (localState && Array.isArray(localState.qOrder)) ? localState.qOrder : qs.map((_, i) => i);
+  qOrder.forEach((qi, displayIdx) => {
+    const q = qs[qi];
+    const perQ = (localState && localState.perQ && localState.perQ[qi]) || { locked: false, selected: null, optOrder: q.options.map((_, i) => i) };
+    const correctDisplayIdx = perQ.optOrder.indexOf(q.answer);
+    lines.push(`## Question ${displayIdx + 1}`);
     lines.push(q.q);
     lines.push('');
-    q.options.forEach((opt, oi) => {
-      const letter = String.fromCharCode(65 + oi);
+    perQ.optOrder.forEach((origOi, displayOi) => {
+      const opt = q.options[origOi];
+      const letter = String.fromCharCode(65 + displayOi);
       const tags = [];
-      if (s.locked && s.selected === oi) tags.push(oi === q.answer ? 'my answer ✓' : 'my answer ✗');
-      if (q.answer === oi && !(s.locked && s.selected === oi)) tags.push('correct');
+      if (perQ.locked && perQ.selected === displayOi) tags.push(displayOi === correctDisplayIdx ? 'my answer ✓' : 'my answer ✗');
+      if (displayOi === correctDisplayIdx && !(perQ.locked && perQ.selected === displayOi)) tags.push('correct');
       const tagStr = tags.length ? `   ← ${tags.join(', ')}` : '';
       lines.push(`- ${letter}. ${opt}${tagStr}`);
     });
-    if (!s.locked) lines.push(`(unanswered)`);
+    if (!perQ.locked) lines.push(`(unanswered)`);
     if (q.explain) {
       lines.push('');
       lines.push(`> App's explanation: ${q.explain}`);
@@ -9117,11 +9141,29 @@ async function startAiCoachExport() {
 
 function renderL1(body, lesson, content) {
   const qs = content.L1.questions;
-  // Use cached in-flight state if present (and shape-compatible) so a tab
-  // switch back into L1 preserves the user's locked picks. See BS-12.
+  // Per-session shuffle: question order + per-question option order. Both
+  // permutations live in the in-flight cache so a tab switch back into L1
+  // preserves what the user is looking at (and their locked picks). Retry
+  // clears the cache, which reshuffles on the next render. See BS-12.
+  //
+  // Shape: { qOrder: [displayPos→origQi], perQ: [origQi→{selected, locked,
+  // optOrder: [displayPos→origOi]}] }. `selected` is the DISPLAY-position
+  // index into optOrder, so replays don't require remembering original idx.
   let localState = _cacheGet(lesson.id, 'L1');
-  if (!Array.isArray(localState) || localState.length !== qs.length) {
-    localState = qs.map(() => ({ selected: null, locked: false }));
+  const shapeOk = localState && Array.isArray(localState.qOrder)
+    && localState.qOrder.length === qs.length
+    && Array.isArray(localState.perQ) && localState.perQ.length === qs.length
+    && localState.perQ.every((p, i) => p && Array.isArray(p.optOrder)
+        && p.optOrder.length === qs[i].options.length);
+  if (!shapeOk) {
+    localState = {
+      qOrder: _shuffleIndices(qs.length),
+      perQ: qs.map(q => ({
+        selected: null,
+        locked: false,
+        optOrder: _shuffleIndices(q.options.length)
+      }))
+    };
     _cacheSet(lesson.id, 'L1', localState);
   }
   // Capture per-question render handles so we can replay locked-state
@@ -9131,43 +9173,48 @@ function renderL1(body, lesson, content) {
 
   const wrap = document.createElement('div');
   wrap.innerHTML = `<div class="mb-4 text-sm text-slate-400">Pick the right answer for each. Pass = all correct in one session.</div>`;
-  qs.forEach((q, qi) => {
+  localState.qOrder.forEach((qi, displayIdx) => {
+    const q = qs[qi];
+    const perQ = localState.perQ[qi];
+    const correctDisplayIdx = perQ.optOrder.indexOf(q.answer);
     const card = document.createElement('div');
     card.className = 'mb-6 p-5 rounded-lg bg-slate-900 border border-slate-800';
     card.innerHTML = `
-      <div class="text-sm text-slate-500 mb-1">Question ${qi+1} of ${qs.length}</div>
+      <div class="text-sm text-slate-500 mb-1">Question ${displayIdx+1} of ${qs.length}</div>
       <div class="text-white font-medium mb-3">${escapeHtml(q.q)}</div>
       <div class="space-y-2" data-qi="${qi}"></div>
       <div class="explain mt-3 text-sm text-slate-400 hidden"></div>
     `;
     const optsContainer = card.querySelector('[data-qi]');
-    q.options.forEach((opt, oi) => {
+    perQ.optOrder.forEach((origOi, displayOi) => {
+      const opt = q.options[origOi];
       const optEl = document.createElement('div');
       optEl.className = 'mc-option';
-      const letter = String.fromCharCode(65 + oi);  // A, B, C, D
+      const letter = String.fromCharCode(65 + displayOi);  // A, B, C, D
       optEl.innerHTML = `<span class="text-slate-500 font-mono text-xs mr-2">${letter}.</span>${escapeHtml(opt)}`;
       optEl.setAttribute('role', 'button');
       optEl.setAttribute('tabindex', '0');
       optEl.addEventListener('keydown', (e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && !localState[qi].locked) {
+        if ((e.key === 'Enter' || e.key === ' ') && !perQ.locked) {
           e.preventDefault();
           optEl.click();
         }
       });
       optEl.addEventListener('click', () => {
-        if (localState[qi].locked) return;
-        localState[qi].selected = oi;
-        localState[qi].locked = true;
-        if (oi !== q.answer) recordWrong(lesson.id);
+        if (perQ.locked) return;
+        perQ.selected = displayOi;
+        perQ.locked = true;
+        const isRightClick = displayOi === correctDisplayIdx;
+        if (!isRightClick) recordWrong(lesson.id);
         // mark correctness
         [...optsContainer.children].forEach((el, idx) => {
           el.classList.add('disabled');
-          if (idx === q.answer) el.classList.add('correct');
-          if (idx === oi && oi !== q.answer) el.classList.add('incorrect');
+          if (idx === correctDisplayIdx) el.classList.add('correct');
+          if (idx === displayOi && !isRightClick) el.classList.add('incorrect');
         });
         const ex = card.querySelector('.explain');
         ex.classList.remove('hidden');
-        const isRight = oi === q.answer;
+        const isRight = isRightClick;
         ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${q.explain ? ' ' + escapeHtml(q.explain) : ''}`;
         // iter 58: Mistake Tagging chip strip — opt-in concept-tagging UI
         // shown only after a miss. Renders below the explain text inside
@@ -9230,18 +9277,21 @@ function renderL1(body, lesson, content) {
 
   // Replay any cached locked-state visuals from a prior tab visit. This runs
   // AFTER the cards are in the DOM so classList.add side-effects stick.
-  qs.forEach((q, qi) => {
-    const s = localState[qi];
-    if (!s.locked) return;
-    const { card, optsContainer } = cardHandles[qi];
+  // Iterate in DISPLAY order so cardHandles[displayIdx] lines up.
+  localState.qOrder.forEach((qi, displayIdx) => {
+    const q = qs[qi];
+    const perQ = localState.perQ[qi];
+    if (!perQ.locked) return;
+    const correctDisplayIdx = perQ.optOrder.indexOf(q.answer);
+    const { card, optsContainer } = cardHandles[displayIdx];
     [...optsContainer.children].forEach((el, idx) => {
       el.classList.add('disabled');
-      if (idx === q.answer) el.classList.add('correct');
-      if (idx === s.selected && s.selected !== q.answer) el.classList.add('incorrect');
+      if (idx === correctDisplayIdx) el.classList.add('correct');
+      if (idx === perQ.selected && perQ.selected !== correctDisplayIdx) el.classList.add('incorrect');
     });
     const ex = card.querySelector('.explain');
     ex.classList.remove('hidden');
-    const isRight = s.selected === q.answer;
+    const isRight = perQ.selected === correctDisplayIdx;
     ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${q.explain ? ' ' + escapeHtml(q.explain) : ''}`;
   });
 
@@ -9267,9 +9317,12 @@ function renderL1(body, lesson, content) {
   });
 
   function maybePassL1() {
-    const allLocked = localState.every(s => s.locked);
+    const allLocked = localState.perQ.every(p => p.locked);
     if (!allLocked) return;
-    const allCorrect = localState.every((s, i) => s.selected === qs[i].answer);
+    const allCorrect = localState.perQ.every((p, qi) => {
+      const correctDisplayIdx = p.optOrder.indexOf(qs[qi].answer);
+      return p.selected === correctDisplayIdx;
+    });
     const statusEl = document.getElementById('l1-status');
     if (allCorrect) {
       statusEl.innerHTML = '<span class="text-emerald-400 font-medium">✓ L1 passed.</span> Onward.';

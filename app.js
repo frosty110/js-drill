@@ -6021,6 +6021,76 @@ function _renderCalibrationTile() {
   `;
 }
 
+// iter 155: ⏳ Time-Invested Section Ledger. Walks state.history per lesson;
+// each consecutive event pair within TIME_INVESTED_GAP_MS counts as session
+// time (capped at TIME_INVESTED_INTERVAL_CAP_MS per pair so an "I left the
+// tab open overnight" doesn't poison the sum). Groups ms-spent by
+// lesson.section; renders top-N as horizontal bars sorted desc.
+// Complements iter-66 Track Balance Compass on the orthogonal axis: Compass
+// shows % mastered per TRACK; Ledger shows minutes-spent per SECTION.
+// PROFILE L46-48 (effort allocation visibility) + L75 (own-data only — no
+// global benchmark or peer comparison). Schema-additive zero — reads existing
+// state.history.
+const TIME_INVESTED_GAP_MS = 5 * 60 * 1000;
+const TIME_INVESTED_INTERVAL_CAP_MS = 5 * 60 * 1000;
+const TIME_INVESTED_TOP_N = 8;
+function _renderTimeInvestedTile() {
+  const hist = state.history || {};
+  const bySection = {};
+  for (const lessonId of Object.keys(hist)) {
+    const lesson = findLesson(lessonId);
+    if (!lesson || !lesson.section) continue;
+    const events = hist[lessonId] || [];
+    if (events.length < 2) continue;
+    let sectionMs = 0;
+    for (let i = 1; i < events.length; i++) {
+      const a = events[i - 1]?.at;
+      const b = events[i]?.at;
+      if (typeof a !== 'number' || typeof b !== 'number') continue;
+      const gap = b - a;
+      if (gap > 0 && gap < TIME_INVESTED_GAP_MS) {
+        sectionMs += Math.min(gap, TIME_INVESTED_INTERVAL_CAP_MS);
+      }
+    }
+    if (sectionMs > 0) {
+      bySection[lesson.section] = (bySection[lesson.section] || 0) + sectionMs;
+    }
+  }
+  const rows = Object.entries(bySection)
+    .map(([section, ms]) => ({ section, ms }))
+    .sort((a, b) => b.ms - a.ms);
+  if (rows.length === 0) return ''; // auto-hide when no inferable session data
+  const topN = rows.slice(0, TIME_INVESTED_TOP_N);
+  const maxMs = topN[0].ms;
+  const totalMs = rows.reduce((s, r) => s + r.ms, 0);
+  const formatMs = (ms) => {
+    const min = Math.floor(ms / 60000);
+    if (min < 1) return '<1m';
+    if (min < 60) return `${min}m`;
+    const h = Math.floor(min / 60);
+    const rem = min % 60;
+    return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
+  };
+  return `
+    <div data-time-invested-tile style="margin-top: 18px;">
+      <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">⏳ Time invested · top ${topN.length} section${topN.length === 1 ? '' : 's'} <span style="color:#475569;">· ${formatMs(totalMs)} total</span></div>
+      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">Inferred from event timestamps — consecutive events within 5min count as session time (capped at 5min per gap). Effort-allocation complement to 🧭 Track Balance above.</div>
+      ${topN.map(r => {
+        const pct = Math.round((r.ms / maxMs) * 100);
+        return `
+          <div style="display: grid; grid-template-columns: 130px 1fr 60px; gap: 8px; align-items: center; padding: 4px 0;">
+            <span style="color: #cbd5e1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(r.section)}">${escapeHtml(r.section)}</span>
+            <div style="height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden;">
+              <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #67e8f9, #a78bfa);"></div>
+            </div>
+            <span style="color: #94a3b8; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right;">${formatMs(r.ms)}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function _renderSectionRetentionBlock(lookbackDays = 14) {
   const rows = _aggregateSectionRetention(lookbackDays);
   if (rows.length === 0) return '';
@@ -11151,6 +11221,7 @@ async function init() {
         </div>
       ` : ''}
       ${_renderCalibrationTile()}
+      ${_renderTimeInvestedTile()}
       ${bestTimesEntries.length ? `
         <div style="margin-top: 18px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Mock interview personal bests</div>

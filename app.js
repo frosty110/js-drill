@@ -10040,6 +10040,11 @@ async function init() {
         `;
       })()}
       ${_renderSectionRetentionBlock(14)}
+      ${state.calibrateOn === false ? `
+        <div data-calibration-hint style="margin-top: 18px; padding: 10px 12px; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.3); border-radius: 8px; font-size: 12px; color: #fde68a; line-height: 1.5;">
+          💡 <strong>⏱ Calibration</strong> not tracking yet — turn on from <strong>⚙️ Settings → ⏱ Calibrate</strong> to log your time-to-solve per mechanic and see your top miscalibrated patterns here.
+        </div>
+      ` : ''}
       ${_renderCalibrationTile()}
       ${bestTimesEntries.length ? `
         <div style="margin-top: 18px;">

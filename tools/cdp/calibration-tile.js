@@ -52,6 +52,15 @@ const OUT = process.argv[3] || '/tmp/jsdrill-calibration-tile';
   })()`);
   s.assert(cleanState.modalOpen, 'Stats modal opens via #stats-btn click');
   s.assert(!cleanState.tilePresent, 'Phase 1: Clean state → NO calibration tile (auto-hide invariant)');
+  // iter 138: discovery hint surfaces when calibrateOn=false (the iter-131
+  // tile auto-hide otherwise leaves the feature invisible to non-toggled
+  // users; this hint tells them how to enable it).
+  const hint = await s.evalAwait(`(() => {
+    const el = document.querySelector('[data-calibration-hint]');
+    return { present: !!el, text: el?.textContent.trim().slice(0, 60) || '' };
+  })()`);
+  s.assert(hint.present, 'iter 138: discovery hint rendered when calibrateOn=false');
+  s.assert(/Calibration/.test(hint.text), `iter 138: hint mentions "Calibration" (got "${hint.text}")`);
   await s.evalAwait(`document.getElementById('stats-close').click()`);
   await s.sleep(200);
 

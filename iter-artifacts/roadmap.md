@@ -163,7 +163,7 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ### 2026-05-26 iter 146 — 🚧 Constraint-Shift Drill
 
-**Status:** queued
+**Status:** SHIPPED iter 148 (v1, 2 entries: two-sum + valid-palindrome). New `data/constraint-shifts.json` sidecar (5th registry). Dual-grade (runCode output match + per-entry structural-fingerprint regex must-not-match). Mobile probe 28/28 PASS including 2 LOAD-BEARING canonical-regex-match assertions + 1 LOAD-BEARING dual-grade-passes assertion. iter-149 candidate: scale corpus to ~25 entries with refined regex strategies. **First Cat 9 §9C ship ever** — sidecar-route bypassed the iter-139 "per-lesson authoring blocker" framing iter-146 vision-iter subagent corrected.
 
 **Value claim** (one sentence): Drills the senior-interview follow-up pivot ("you wrote it O(n²); now do it O(n)" / "now O(1) extra space") that no existing surface drills — currently the L1→L2→L3 ladder + Mutate-and-Predict + Hot-Seat all stay on the ORIGINAL constraint; Constraint-Shift forces re-derivation under a SWAPPED constraint per PROFILE L20-21 ("pattern recall degraded ... can't produce canonical implementation").
 

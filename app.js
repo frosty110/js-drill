@@ -160,6 +160,7 @@ const state = {
   whatif: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 122: 🧪 What-If Output Predictor — pick the output for a specific walkthrough-example input (additive, no `__v` bump)
   calibrateOn: false, // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
   timeCalibration: { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } }, // iter 119: byMechanic[id] = { predictions: [{bucket, actualMs, errorSec}], median errorSec computed on read }. meta tracks engagement separately (estimates = bucket taps; skips = skip taps; passes = passes-with-estimate)
+  paceBarOn: false, // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF) surfaces a peripheral-vision width-growing bar above the L3 editor against user's OWN median time-to-solve. L75 anti-gamification mitigated: user's own median only (no global benchmark), no timer numerals, no streak, auto-hides when no data.
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
@@ -473,6 +474,43 @@ function _masteryHalfLife(slipperyTopN = 5) {
   slippery.sort((a, b) => a.medianGapMs - b.medianGapMs);
   out.slipperyList = slippery.slice(0, slipperyTopN);
   return out;
+}
+
+// iter 140: ⏲ Pace-Bar — per-lesson rolling median time-to-solve for the
+// peripheral-vision tempo bar above L3. Returns ms median or null when not
+// enough data. Two data sources, in priority order:
+//   1. state.mockHistory[lessonId] (≥2 entries) — clean ms durations from
+//      timed mock-interview attempts.
+//   2. Derived from state.history L3-enter → L3-pass deltas (≥2 deltas).
+//      Each delta is capped at PACE_BAR_ATTEMPT_CAP_MS (60 min) so an
+//      "I left the tab open overnight" outlier doesn't poison the median.
+// If neither source yields ≥2 samples, returns null and the bar auto-hides.
+// L75 mitigation: this function never reads or returns a global benchmark —
+// only the user's own data.
+const PACE_BAR_ATTEMPT_CAP_MS = 60 * 60 * 1000;
+function _paceBarMedianMs(lessonId) {
+  const median = (arr) => {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  };
+  const mock = state.mockHistory?.[lessonId] || [];
+  if (mock.length >= 2) return median(mock);
+  const events = state.history?.[lessonId] || [];
+  const deltas = [];
+  let lastEnter = null;
+  for (const e of events) {
+    if (!e || typeof e.at !== 'number') continue;
+    if (e.event === 'L3-enter') {
+      lastEnter = e.at;
+    } else if (e.event === 'L3-pass' && lastEnter !== null) {
+      const d = e.at - lastEnter;
+      if (d > 0 && d <= PACE_BAR_ATTEMPT_CAP_MS) deltas.push(d);
+      lastEnter = null;
+    }
+  }
+  if (deltas.length < 2) return null;
+  return median(deltas);
 }
 
 // Per-track pill metadata — keep this in one place so the lesson header,
@@ -837,6 +875,8 @@ function loadProgress() {
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle (default OFF).
     state.calibrateOn = !!parsed.calibrateOn;
+    // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF).
+    state.paceBarOn = !!parsed.paceBarOn;
     state.timeCalibration = parsed.timeCalibration && typeof parsed.timeCalibration === 'object'
       ? {
           byMechanic: (parsed.timeCalibration.byMechanic && typeof parsed.timeCalibration.byMechanic === 'object') ? parsed.timeCalibration.byMechanic : {},
@@ -934,6 +974,7 @@ function saveProgress() {
     hotseat: state.hotseat,
     calibrateOn: state.calibrateOn,
     timeCalibration: state.timeCalibration,
+    paceBarOn: state.paceBarOn,
     whatif: state.whatif,
     commandUsage: state.commandUsage,
     misses: state.misses,
@@ -8124,6 +8165,25 @@ function renderL3(body, lesson, content) {
   const bestMs = state.bestTimes[lesson.id];
   const wrap = document.createElement('div');
 
+  // iter 140: ⏲ Pace-Bar — append 'L3-enter' event when user opens L3 (non-mock).
+  // Schema-additive: existing history walkers either branch on specific event
+  // strings (L1-pass/L2-pass/L3-pass/hint-tier-*/critical-lines-used) or ignore
+  // unknowns, so this is backward-compatible. _paceBarMedianMs reads enter→pass
+  // deltas to compute a per-lesson rolling median when mockHistory is empty.
+  if (!isMock) appendHistory(lesson.id, 'L3-enter');
+
+  // iter 140: Clear any prior Pace-Bar animation interval on re-render. Each
+  // renderL3 owns its own interval; a stale interval from a previous render
+  // would otherwise tick against the wrong wrap element.
+  if (window._paceBarInterval) {
+    clearInterval(window._paceBarInterval);
+    window._paceBarInterval = null;
+  }
+  // Compute median ONCE per render. Null when there's not enough data — bar
+  // auto-hides (no skeleton, no "no data yet" copy — L75 mitigation: silent
+  // off-state rather than a nag).
+  const paceBarMedianMs = (!isMock && state.paceBarOn) ? _paceBarMedianMs(lesson.id) : null;
+
   const mockBanner = isMock
     ? `<div class="mb-4 p-4 rounded-lg bg-rose-950/50 border border-rose-900 flex items-center justify-between">
          <div>
@@ -8176,6 +8236,16 @@ function renderL3(body, lesson, content) {
 
   wrap.innerHTML = `
     ${mockBanner}
+    ${paceBarMedianMs != null ? `
+    <!-- iter 140: ⏲ Pace-Bar — opt-in peripheral-vision tempo cue.
+         Bar fill grows from 0% to 100% over paceBarMedianMs; color is
+         keyed to elapsed/median ratio (green <50%, amber 50-100%, red ≥100%).
+         No numerals, no streak, no "broke pace" callout — pure peripheral
+         signal. data-pace-median-ms exposes the median for probe assertions. -->
+    <div class="pace-bar" data-pace-bar data-pace-median-ms="${Math.round(paceBarMedianMs)}" role="presentation" aria-hidden="true">
+      <div class="pace-bar-fill pace-bar-green" data-pace-bar-fill></div>
+    </div>
+    ` : ''}
     <div class="mb-4 text-sm text-slate-400 flex items-center justify-between flex-wrap gap-2">
       <span>Blank editor. Type the canonical solution from memory, then Run. Pass when output matches.</span>
       <div class="flex items-center gap-2 flex-wrap">${bestBadge}${slopeBadge}${trendBadge}</div>
@@ -8254,6 +8324,38 @@ function renderL3(body, lesson, content) {
   // skipped for this lesson this session. _calibrationMaybeInject() handles
   // all gates internally.
   if (typeof _calibrationMaybeInject === 'function') _calibrationMaybeInject(lesson, wrap);
+
+  // iter 140: ⏲ Pace-Bar driver. Ticks every 500ms; updates fill width and
+  // color class based on elapsed/median ratio. Auto-stops when the bar element
+  // leaves the DOM (lesson nav / tab switch) — no manual cleanup needed because
+  // the next renderL3 also clears window._paceBarInterval at the top.
+  if (paceBarMedianMs != null) {
+    const fillEl = wrap.querySelector('[data-pace-bar-fill]');
+    if (fillEl) {
+      const startTs = Date.now();
+      const tick = () => {
+        if (!fillEl.isConnected) {
+          clearInterval(window._paceBarInterval);
+          window._paceBarInterval = null;
+          return;
+        }
+        const pct = (Date.now() - startTs) / paceBarMedianMs;
+        const widthPct = Math.min(pct, 1) * 100;
+        fillEl.style.width = widthPct + '%';
+        // Color band keyed to ratio of elapsed/median; tracks the bar fill
+        // since width is min-clamped to 100% but the ratio keeps growing past.
+        const wantClass = pct < 0.5 ? 'pace-bar-green'
+                        : pct < 1.0 ? 'pace-bar-amber'
+                        : 'pace-bar-red';
+        if (!fillEl.classList.contains(wantClass)) {
+          fillEl.classList.remove('pace-bar-green', 'pace-bar-amber', 'pace-bar-red');
+          fillEl.classList.add(wantClass);
+        }
+      };
+      tick(); // paint immediately so the bar appears at 0% rather than after 500ms.
+      window._paceBarInterval = setInterval(tick, 500);
+    }
+  }
 
   if (isMock) {
     wrap.querySelector('[data-action="end-mock"]').addEventListener('click', () => {
@@ -9287,6 +9389,29 @@ async function init() {
       calibBtn.classList.toggle('text-slate-500', !state.calibrateOn);
       _calibrationEstimated.clear();
       _calibrationSkipped.clear();
+      saveProgress();
+      if (state.currentLessonId && state.currentTab === 'L3') renderLesson();
+    });
+  }
+
+  // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF). Emerald-200 hover
+  // when ON. Flipping re-renders an active L3 so the bar appears/disappears
+  // immediately. Clearing window._paceBarInterval prevents a stale tick from
+  // outliving the bar element when the user toggles OFF while on L3.
+  const paceBarBtn = document.getElementById('pace-bar-btn');
+  if (paceBarBtn) {
+    if (state.paceBarOn) {
+      paceBarBtn.classList.add('text-emerald-200');
+      paceBarBtn.classList.remove('text-slate-500');
+    }
+    paceBarBtn.addEventListener('click', () => {
+      state.paceBarOn = !state.paceBarOn;
+      paceBarBtn.classList.toggle('text-emerald-200', state.paceBarOn);
+      paceBarBtn.classList.toggle('text-slate-500', !state.paceBarOn);
+      if (window._paceBarInterval) {
+        clearInterval(window._paceBarInterval);
+        window._paceBarInterval = null;
+      }
       saveProgress();
       if (state.currentLessonId && state.currentTab === 'L3') renderLesson();
     });
@@ -10840,7 +10965,7 @@ const TOPBAR_MENU_TAXONOMY = {
   settings: {
     label: 'Settings',
     blurb: 'Toggles, data, and account.',
-    items: ['hide-mastered-btn', 'path-btn', 'calibrate-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
+    items: ['hide-mastered-btn', 'path-btn', 'calibrate-btn', 'pace-bar-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
   }
 };
 

@@ -869,26 +869,190 @@ function goToCramHome() {
   renderLesson();
 }
 
+// Phase 3: cram-reference content. Loaded lazily on first modal open.
+let CRAM_REFS = { glossary: null, cheat: null, behavior: null };
+async function loadCramRefs() {
+  if (CRAM_REFS.glossary && CRAM_REFS.cheat && CRAM_REFS.behavior) return CRAM_REFS;
+  try {
+    const [g, c, b] = await Promise.all([
+      fetch('data/cram-glossary.json', { cache: 'no-cache' }).then(r => r.json()),
+      fetch('data/cram-cheat.json', { cache: 'no-cache' }).then(r => r.json()),
+      fetch('data/cram-behavior.json', { cache: 'no-cache' }).then(r => r.json())
+    ]);
+    CRAM_REFS = { glossary: g.terms || [], cheat: c.rows || [], behavior: b.cards || [] };
+  } catch (e) {
+    console.warn('[cram-refs] load failed', e);
+    CRAM_REFS = { glossary: [], cheat: [], behavior: [] };
+  }
+  return CRAM_REFS;
+}
+
+// 6 Must-Know Code Shapes — interview canonical snippets. Each shape maps to
+// a representative lesson in the existing curriculum (the canonical IS the
+// lesson — single source of truth). Tap → drill the lesson.
+const CRAM_CODE_SHAPES = [
+  { title: '1. Binary Search (closed interval)', note: "Invariant: if target exists, it is in arr[lo..hi]. After the loop, lo === hi + 1.", lessonId: 'binary-search' },
+  { title: '2. BFS (graph or tree level-order)', note: "Queue + visited Set. For level-order: capture queue.length at the top of each iteration — that's the number of nodes in the current level.", lessonId: 's-bfs-template' },
+  { title: '3. DFS (in/pre/post-order)', note: "Pre-order: work BEFORE children. Post-order: work AFTER children — needed when the parent's result depends on the children's results (e.g. tree height).", lessonId: 's-tree-traversals' },
+  { title: '4. Sliding Window (variable size)', note: 'Works when the "valid window" condition is monotonic as you grow the window. Breaks if growing can both make it more AND less valid (e.g. sums with negatives — use prefix-sum + deque).', lessonId: 'p-longest-sub' },
+  { title: '5. Two Pointers (sorted array)', note: 'Key insight: at each step, you eliminate ALL pairs involving the moved index — that\'s why two pointers is O(n), not O(n²).', lessonId: 'valid-palindrome' },
+  { title: '6. Heap-of-K (for "K most ___")', note: "Maintain a min-heap of size K. On each new v: if heap.size < K → push; else if v > heap.top → pop+push v. O(N log K) time, O(K) space.", lessonId: 's-heap-ops' }
+];
+
+function _openCramRefModal({ title, sub, searchPlaceholder, bodyHtml, onSearch, onBody }) {
+  const modal = document.getElementById('cram-ref-modal');
+  const titleEl = document.getElementById('cram-ref-title');
+  const subEl = document.getElementById('cram-ref-sub');
+  const search = document.getElementById('cram-ref-search');
+  const body = document.getElementById('cram-ref-body');
+  if (!modal || !body) return;
+  if (titleEl) titleEl.textContent = title;
+  if (subEl) subEl.textContent = sub || '';
+  if (searchPlaceholder) {
+    search.placeholder = searchPlaceholder;
+    search.value = '';
+    search.hidden = false;
+    search.oninput = () => onSearch && onSearch(search.value, body);
+  } else {
+    search.hidden = true;
+    search.oninput = null;
+  }
+  body.innerHTML = bodyHtml;
+  if (onBody) onBody(body);
+  modal.style.display = 'block';
+}
+
+function _matchesSearch(q, ...fields) {
+  if (!q) return true;
+  const needle = q.toLowerCase();
+  return fields.some(f => (f || '').toLowerCase().includes(needle));
+}
+
+async function openCramCheatModal() {
+  await loadCramRefs();
+  const renderRows = (q) => CRAM_REFS.cheat
+    .filter(r => _matchesSearch(q, r.trigger, r.pattern))
+    .map(r => {
+      const lesson = r.lessonId ? findLesson(r.lessonId) : null;
+      const lessonBadge = lesson
+        ? `<button data-cram-ref-lesson="${escapeHtml(r.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;">${escapeHtml(lesson.title)} →</button>`
+        : '';
+      return `<div style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:11px;color:#94a3b8;font-style:italic;line-height:1.5;">${escapeHtml(r.trigger)}</div>
+        <div style="font-size:14px;color:#e2e8f0;margin-top:6px;font-weight:500;">${escapeHtml(r.pattern)}</div>
+        ${lessonBadge ? `<div style="margin-top:8px;">${lessonBadge}</div>` : ''}
+      </div>`;
+    }).join('') || `<div style="color:#64748b;text-align:center;padding:24px;font-size:13px;">No rows match.</div>`;
+  _openCramRefModal({
+    title: '⚡ Cheat — which pattern when?',
+    sub: 'Cue → pattern → tap to drill the canonical lesson.',
+    searchPlaceholder: 'Filter cues or patterns…',
+    bodyHtml: renderRows(''),
+    onSearch: (q, body) => { body.innerHTML = renderRows(q); wireCramRefLessonBtns(); },
+    onBody: wireCramRefLessonBtns
+  });
+}
+
+async function openCramGlossaryModal() {
+  await loadCramRefs();
+  const renderTerms = (q) => CRAM_REFS.glossary
+    .filter(t => _matchesSearch(q, t.term, t.def, t.where))
+    .map(t => `<div style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;">
+      <div style="font-size:14px;font-weight:600;color:#67e8f9;margin-bottom:4px;">${escapeHtml(t.term)}</div>
+      <div style="font-size:13px;color:#e2e8f0;line-height:1.55;">${escapeHtml(t.def)}</div>
+      ${t.where ? `<div style="font-size:11px;color:#94a3b8;margin-top:8px;padding-top:8px;border-top:1px solid #1e293b;"><strong style="color:#64748b;">Where:</strong> ${escapeHtml(t.where)}</div>` : ''}
+    </div>`).join('') || `<div style="color:#64748b;text-align:center;padding:24px;font-size:13px;">No terms match.</div>`;
+  _openCramRefModal({
+    title: `🅰 Glossary — ${CRAM_REFS.glossary.length} interview terms`,
+    sub: 'Definitions and where each term shows up in problems.',
+    searchPlaceholder: 'Filter terms or definitions…',
+    bodyHtml: renderTerms(''),
+    onSearch: (q, body) => { body.innerHTML = renderTerms(q); }
+  });
+}
+
+async function openCramBehaviorModal() {
+  await loadCramRefs();
+  _openCramRefModal({
+    title: '🎤 Interview Behavior',
+    sub: 'The 8-step say-this-in-the-interview ritual.',
+    bodyHtml: CRAM_REFS.behavior.map(c => `<div style="background:#0b1220;border-left:3px solid #67e8f9;border-radius:8px;padding:12px 14px;">
+      <div style="font-size:11px;color:#67e8f9;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px;">${escapeHtml(c.num)}</div>
+      <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:6px;">${escapeHtml(c.title)}</div>
+      <div style="font-size:13px;color:#cbd5e1;line-height:1.55;">${escapeHtml(c.body)}</div>
+    </div>`).join('')
+  });
+}
+
+function openCramShapesModal() {
+  const path = getSubscribedPath();
+  const reviewedSet = new Set((path && path.lessons) ? path.lessons : []);
+  _openCramRefModal({
+    title: '〈〉 6 Must-Know Code Shapes',
+    sub: 'Each shape is a canonical lesson. Tap to drill.',
+    bodyHtml: CRAM_CODE_SHAPES.map(s => {
+      const lesson = findLesson(s.lessonId);
+      const mastered = window.DrillStorage && window.DrillStorage.isLessonFullyDone(s.lessonId);
+      const dotColor = mastered ? '#34d399' : '#475569';
+      return `<div style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span>
+              <span style="font-size:14px;font-weight:600;color:#e2e8f0;">${escapeHtml(s.title)}</span>
+            </div>
+            <div style="font-size:13px;color:#94a3b8;margin-top:6px;line-height:1.5;">${escapeHtml(s.note)}</div>
+          </div>
+          <button data-cram-ref-lesson="${escapeHtml(s.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;flex-shrink:0;">${lesson ? 'Drill →' : 'Missing'}</button>
+        </div>
+      </div>`;
+    }).join(''),
+    onBody: wireCramRefLessonBtns
+  });
+}
+
+function wireCramRefLessonBtns() {
+  document.querySelectorAll('[data-cram-ref-lesson]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-cram-ref-lesson');
+      document.getElementById('cram-ref-modal').style.display = 'none';
+      selectLesson(id);
+    });
+  });
+}
+
 function updatePathChip() {
   const label = document.getElementById('path-chip-label');
   if (label) label.textContent = getSubscribedPath().label;
 }
 
+// Buttons that should only ever surface when a cram-kind path is active.
+// On no-path / Starter / any path without sidebarButtons[], these stay hidden
+// (in topbar dropdowns too — _topbarItemFromButton filters display:none).
+const CRAM_ONLY_BUTTON_IDS = new Set([
+  'cram-cheat-btn', 'cram-glossary-btn', 'cram-behavior-btn',
+  'cram-shapes-btn', 'cram-review-btn'
+]);
+
 // When a path declares `sidebarButtons[]`, hide every button NOT in the list
 // (and show every listed button that exists). Paths without the field render
-// the full power-user sidebar. Run on boot, on path switch.
+// the full power-user sidebar, EXCEPT the cram-only buttons which stay hidden
+// (their context-of-use is a cram path only).
 function applySidebarCuration() {
   const path = getSubscribedPath();
   const list = path && Array.isArray(path.sidebarButtons) ? path.sidebarButtons : null;
   const candidates = document.querySelectorAll('[id$="-btn"], #streak-display');
   if (!list) {
-    candidates.forEach(el => { el.dataset.curatedHidden = ''; el.style.removeProperty('display'); });
+    candidates.forEach(el => {
+      if (CRAM_ONLY_BUTTON_IDS.has(el.id)) el.style.display = 'none';
+      else el.style.removeProperty('display');
+    });
     return;
   }
   const set = new Set(list);
   candidates.forEach(el => {
-    if (set.has(el.id)) { el.dataset.curatedHidden = ''; el.style.removeProperty('display'); }
-    else { el.style.display = 'none'; el.dataset.curatedHidden = '1'; }
+    if (set.has(el.id)) el.style.removeProperty('display');
+    else el.style.display = 'none';
   });
 }
 
@@ -11761,6 +11925,15 @@ async function init() {
   applySidebarCuration();
   updateCramProgressStrip();
   document.getElementById('topbar-cram-progress').addEventListener('click', () => openTodaysPlan());
+
+  // Phase 3 — cram reference modals
+  const cramRefModal = document.getElementById('cram-ref-modal');
+  document.getElementById('cram-cheat-btn')?.addEventListener('click', openCramCheatModal);
+  document.getElementById('cram-glossary-btn')?.addEventListener('click', openCramGlossaryModal);
+  document.getElementById('cram-behavior-btn')?.addEventListener('click', openCramBehaviorModal);
+  document.getElementById('cram-shapes-btn')?.addEventListener('click', openCramShapesModal);
+  document.getElementById('cram-ref-close')?.addEventListener('click', () => cramRefModal.style.display = 'none');
+  cramRefModal?.addEventListener('click', (e) => { if (e.target === cramRefModal) cramRefModal.style.display = 'none'; });
   todayModal.addEventListener('click', (e) => {
     if (e.target === todayModal) todayModal.style.display = 'none';
   });
@@ -12445,7 +12618,8 @@ const TOPBAR_MENU_TAXONOMY = {
   insights: {
     label: 'Insights',
     blurb: 'Visualizations and cross-lesson read-only views.',
-    items: ['stats-btn', 'streak-map-btn', 'sections-grid-btn', 'mechanics-btn', 'export-btn', 'ai-coach-btn']
+    items: ['stats-btn', 'streak-map-btn', 'sections-grid-btn', 'mechanics-btn', 'export-btn', 'ai-coach-btn',
+            'cram-cheat-btn', 'cram-glossary-btn', 'cram-behavior-btn', 'cram-shapes-btn', 'cram-review-btn']
   },
   settings: {
     label: 'Settings',

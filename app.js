@@ -158,6 +158,7 @@ const state = {
   hotseatOn: false, // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle surfaces a post-L3-pass tap-card with a mechanic-tag-derived follow-up + 3 distractors (default OFF — user must opt in)
   hotseat: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 118: 🔥 Hot-Seat Follow-Up — lifetime stats (attempts = chip-taps; correct = right chips on first try; sessions = cards shown)
   whatif: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 122: 🧪 What-If Output Predictor — pick the output for a specific walkthrough-example input (additive, no `__v` bump)
+  mutate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 142: 🔀 Mutate-and-Predict — 5-card session showing canonical with ONE line mutated; user picks consequence-class taxonomy (still-correct / wrong-content-same-shape / throws / different-type). §9B forward-simulation drill — distinct from iter-73 Bug-Hunt's locate-the-bug task
   calibrateOn: false, // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
   timeCalibration: { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } }, // iter 119: byMechanic[id] = { predictions: [{bucket, actualMs, errorSec}], median errorSec computed on read }. meta tracks engagement separately (estimates = bucket taps; skips = skip taps; passes = passes-with-estimate)
   paceBarOn: false, // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF) surfaces a peripheral-vision width-growing bar above the L3 editor against user's OWN median time-to-solve. L75 anti-gamification mitigated: user's own median only (no global benchmark), no timer numerals, no streak, auto-hides when no data.
@@ -902,6 +903,15 @@ function loadProgress() {
           lastRunAt: +parsed.whatif.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 142: 🔀 Mutate-and-Predict lifetime stats. Legacy users get zeros.
+    state.mutate = parsed.mutate && typeof parsed.mutate === 'object'
+      ? {
+          attempts: +parsed.mutate.attempts || 0,
+          correct: +parsed.mutate.correct || 0,
+          sessions: +parsed.mutate.sessions || 0,
+          lastRunAt: +parsed.mutate.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle (default OFF).
     state.calibrateOn = !!parsed.calibrateOn;
     // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF).
@@ -1008,6 +1018,7 @@ function saveProgress() {
     paceBarOn: state.paceBarOn,
     hapticOn: state.hapticOn,
     whatif: state.whatif,
+    mutate: state.mutate,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -5167,6 +5178,245 @@ async function startBugHuntSession() {
   renderCard();
 }
 
+// iter 142: 🔀 Mutate-and-Predict — §9B forward-simulation drill. Where
+// Bug-Hunt (iter 73) trains LOCALIZATION (click the buggy line — visual /
+// textual recognition), Mutate trains FORWARD SIMULATION (name the type
+// of failure the mutation causes — mental trace + taxonomy classification).
+// Reuses BUG_HUNT_MUTATORS + _bugHuntCollectMatches + _bugHuntLineOf +
+// _bugHuntShuffle from iter 73 so the operator-mutation infrastructure
+// stays in one place. The differentiator is the classifier + the consequence
+// taxonomy distractor pool (not the localization).
+const MUTATE_DECK_LEN = 5;
+const MUTATE_CLASSES = [
+  { label: 'Output unchanged', desc: 'The mutated code produces the same output as the canonical did.' },
+  { label: 'Wrong output, same shape', desc: 'Output is the same TYPE (number/array/string) but the content is wrong.' },
+  { label: 'Runtime error / throws', desc: 'The mutation makes the code throw at runtime (or hit a forbidden path).' },
+  { label: 'Different output type', desc: 'Output type changed entirely — e.g. array became undefined, number became string.' }
+];
+// Subset of BUG_HUNT_MUTATORS that's safe to run unattended. The Bug-Hunt
+// probe gets away with all 10 because its session is short and a user can
+// reload if a mutation freezes the tab; Mutate's deck-builder runs 5+
+// classification probes in sequence, so a single hang would brick the
+// drill. The 3 excluded mutators (`++ → --`, `-- → ++`, `&& → ||`) can
+// flip a loop counter direction or relax a restrictive guard, turning a
+// finite loop into an infinite one. runCode wraps the user code in a
+// SYNCHRONOUS `new Function` call — a Promise.race timeout can't interrupt
+// it; the only safe protection is not picking those mutations. The
+// remaining 7 still cover the full consequence-class taxonomy.
+const MUTATE_MUTATORS = BUG_HUNT_MUTATORS.filter(m =>
+  m.name !== '++ → --' && m.name !== '-- → ++' && m.name !== '&& → ||'
+);
+
+// Heuristic type inference over a stringified `runCode` output. The runner
+// already stringifies numbers / booleans / objects / arrays via formatArg
+// (see js/core/runner.js), so a regex pass over the trimmed string is enough
+// to distinguish the 6-7 shapes the classifier needs. Used by _mutateClassify.
+function _mutateInferType(s) {
+  if (s === null || s === undefined) return 'undefined';
+  const t = String(s).trim();
+  if (!t) return 'empty';
+  if (t === 'undefined') return 'undefined';
+  if (t === 'null') return 'null';
+  if (t === 'true' || t === 'false') return 'boolean';
+  if (/^-?\d+$/.test(t)) return 'integer';
+  if (/^-?\d+(\.\d+)?$/.test(t)) return 'number';
+  if (t.startsWith('[')) return 'array';
+  if (t.startsWith('{') && !t.startsWith('{ ')) return 'object';  // exclude Map() rendering
+  return 'string';
+}
+
+// Classify a mutation result against the canonical's expected output.
+// Returns 0..3 (index into MUTATE_CLASSES) or null if the mutation isn't
+// usable (e.g. produced a hang or unparseable state — guarded upstream).
+function _mutateClassify(res, expected) {
+  if (!res.ok) return 2;                              // runtime error / throws
+  const actual = res.output || '';
+  if (actual === expected) return 0;                  // output unchanged
+  const actType = _mutateInferType(actual);
+  const expType = _mutateInferType(expected);
+  if (actType !== expType) return 3;                  // different output type
+  return 1;                                           // wrong content, same shape
+}
+
+// Pick the first classifiable mutation from a random walk of mutators ×
+// match sites. Returns null when none of the tried mutations land in a
+// usable class (rare — most canonicals have plenty of operators to mutate).
+async function _mutateClassifyMutation(canonical, expected) {
+  // Use the safe subset, not the full Bug-Hunt pool — see MUTATE_MUTATORS
+  // comment for the hang-protection rationale.
+  for (const mut of _bugHuntShuffle(MUTATE_MUTATORS)) {
+    const matches = _bugHuntCollectMatches(canonical, mut.from);
+    if (!matches.length) continue;
+    for (const pick of _bugHuntShuffle(matches).slice(0, 3)) {
+      const mutated = canonical.slice(0, pick.start) + mut.to + canonical.slice(pick.end);
+      let res;
+      try {
+        res = await runCode(mutated);
+      } catch (_) { continue; }
+      const cls = _mutateClassify(res, expected);
+      if (cls === null) continue;
+      return {
+        mutator: mut.name,
+        line: _bugHuntLineOf(canonical, pick.start),
+        mutatedCode: mutated,
+        originalCode: canonical,
+        consequenceClass: cls,
+        observedOutput: res.ok ? (res.output || '(empty)') : (res.output || 'Error')
+      };
+    }
+  }
+  return null;
+}
+
+// Build a 5-card deck. Samples Patterns/Applied lessons (operator-mutation
+// is most interview-realistic on algorithmic code, not on basic Syntax
+// reference demos). Note: differentiator from Bug-Hunt's deck — Bug-Hunt
+// filters for mutations that BREAK output (the "find the bug" surface
+// requires a real bug); Mutate INCLUDES unchanged-output mutations as the
+// `consequenceClass=0` ("still-correct") class — that's a load-bearing
+// piece of the consequence-class taxonomy. The probe asserts at least one
+// class-0 card can land in a deck given enough samples.
+async function _mutateBuildDeck() {
+  const candidates = CURRICULUM.filter(l =>
+    (l.track === 'patterns' || l.track === 'applied') && l.status === 'full'
+  );
+  const shuffled = _bugHuntShuffle(candidates).slice(0, 12);
+  for (const l of shuffled) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    }
+  }
+  const deck = [];
+  for (const l of shuffled) {
+    if (deck.length >= MUTATE_DECK_LEN) break;
+    const c = CONTENT[l.id];
+    if (!c || !c.L3 || !c.L3.canonical || !c.L3.expectedOutput) continue;
+    const classified = await _mutateClassifyMutation(c.L3.canonical, c.L3.expectedOutput);
+    if (!classified) continue;
+    deck.push({
+      lessonId: l.id,
+      lessonTitle: l.title,
+      sectionName: l.section,
+      mutatedCode: classified.mutatedCode,
+      mutatedLine: classified.line,
+      mutator: classified.mutator,
+      originalCode: classified.originalCode,
+      correctClass: classified.consequenceClass,
+      observedOutput: classified.observedOutput,
+      expectedOutput: c.L3.expectedOutput
+    });
+  }
+  return deck;
+}
+
+async function startMutateSession() {
+  const deck = await _mutateBuildDeck();
+  if (!deck || deck.length < 3) {
+    alert('Mutate-and-Predict needs more Patterns/Applied lessons loaded. Try again after clicking around a few lessons.');
+    return;
+  }
+  state.mutate.sessions++;
+  state.mutate.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell mutate-shell">
+        <div class="recognize-header">
+          <span>🔀 Mutate · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-mutate">✕ Exit</button>
+        </div>
+        <div class="whatif-lesson-tag">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
+        <pre class="whatif-canonical cm-s-dracula" data-mutate-code></pre>
+        <div class="mutate-mutator-tag">Mutation: <span class="mutate-mutator">${escapeHtml(card.mutator)}</span> at line ${card.mutatedLine}</div>
+        <div class="whatif-tag">What happens when this code runs against the canonical's expected input?</div>
+        <div class="whatif-options">
+          ${MUTATE_CLASSES.map((c, i) => `
+            <button class="recognize-opt whatif-opt mutate-opt" data-opt="${i}" title="${escapeHtml(c.desc)}">
+              <span class="whatif-opt-letter">${String.fromCharCode(65 + i)}</span>
+              <span class="whatif-opt-val">${escapeHtml(c.label)}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="recognize-feedback" data-mutate-feedback></div>
+      </div>
+    `;
+    const codeEl = shell.querySelector('[data-mutate-code]');
+    if (codeEl && typeof colorizeInto === 'function') colorizeInto(codeEl, card.mutatedCode);
+    else if (codeEl) codeEl.textContent = card.mutatedCode;
+    shell.querySelector('[data-action="exit-mutate"]').addEventListener('click', () => renderLesson());
+    const optBtns = shell.querySelectorAll('.mutate-opt');
+    let answered = false;
+    optBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const optIdx = +btn.dataset.opt;
+        const wasRight = optIdx === card.correctClass;
+        if (wasRight) correct++;
+        else {
+          state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+          appendHistory(card.lessonId, 'L1-miss');
+        }
+        state.mutate.attempts++;
+        if (wasRight) state.mutate.correct++;
+        saveProgress();
+        optBtns.forEach((b, i) => {
+          b.disabled = true;
+          if (i === card.correctClass) b.classList.add('recognize-opt-correct');
+          else if (i === optIdx) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-mutate-feedback]');
+        if (fb) {
+          const obs = card.correctClass === 0
+            ? '(Output: unchanged from the canonical.)'
+            : card.correctClass === 2
+              ? `Threw: ${escapeHtml(card.observedOutput)}`
+              : `Output: <span class="mono">${escapeHtml(card.observedOutput)}</span> (expected <span class="mono">${escapeHtml(card.expectedOutput)}</span>)`;
+          fb.innerHTML = `
+            <div class="whatif-reveal">
+              <div class="whatif-reveal-title">${wasRight ? '✓ Got it' : '✗ The right answer was'}</div>
+              <div class="whatif-reveal-val">${escapeHtml(MUTATE_CLASSES[card.correctClass].label)}</div>
+              <div class="mutate-observed">${obs}</div>
+              <button class="whatif-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+              <button class="whatif-next" data-action="mutate-next">Next card</button>
+            </div>
+          `;
+          const drillBtn = fb.querySelector('[data-drill]');
+          if (drillBtn) drillBtn.addEventListener('click', () => {
+            const lid = drillBtn.dataset.drill;
+            if (typeof selectLesson === 'function') selectLesson(lid);
+          });
+          fb.querySelector('[data-action="mutate-next"]').addEventListener('click', () => { idx++; renderCard(); });
+        }
+      });
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell mutate-shell">
+        <div class="recognize-header"><span>🔀 Mutate · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} consequences predicted · ${deck.length - correct} flagged as weak spots</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.mutate.correct} / ${state.mutate.attempts} (${state.mutate.attempts > 0 ? Math.round(state.mutate.correct / state.mutate.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="mutate-again">🔀 Another session</button>
+            <button class="secondary" data-action="mutate-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="mutate-again"]').addEventListener('click', () => startMutateSession());
+    shell.querySelector('[data-action="mutate-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
 // iter 47: per-section retention aggregation for the Stats modal. Walks every
 // lesson's state.history events, bins by day across lookbackDays, returns
 // sorted rows (worst retention first → drives "what needs attention" UX).
@@ -9280,6 +9530,15 @@ async function init() {
     startWhatifSession();
   });
 
+  // iter 142: 🔀 Mutate-and-Predict — §9B consequence-class drill. Distinct
+  // from iter-73 Bug-Hunt: Bug-Hunt = locate the buggy line; Mutate = name
+  // the type of failure the mutation causes. Forward-simulation cognitive
+  // operation; first §9B ship since iter 81 Edge-case chips.
+  const mutateBtn = document.getElementById('mutate-btn');
+  if (mutateBtn) mutateBtn.addEventListener('click', () => {
+    startMutateSession();
+  });
+
   // iter 109: 🔖 Match — bidirectional title ↔ description matcher.
   // Cat 8 § Modalities first ship; trains the name-to-concept retrieval
   // direction the L1/L2/L3 ladder doesn't cover.
@@ -11017,6 +11276,7 @@ const TOPBAR_MENU_TAXONOMY = {
     items: [
       'crystal-btn', 'bug-hunt-btn', 'recognize-btn', 'reverse-btn',
       'match-btn', 'trace-hop-btn', 'reverse-walk-btn', 'whatif-btn',
+      'mutate-btn',
       'notes-drill-btn', 'notes-locate-btn', 'claim-btn', 'gotcha-btn',
       'swap-btn', 'conv-drill-btn', 'constellation-btn',
       'clarify-ritual-btn', 'hotseat-btn'

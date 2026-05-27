@@ -38,6 +38,24 @@ recall friction with much less typing.
 
 ## How the app encodes it today
 
+- **🚧 Constraint-Shift Drill (iter 148, corpus expanded iter 150/151/152).**
+  Shows a real canonical with its ORIGINAL constraint claim and prompts the
+  user to rewrite it under a SWAPPED constraint (e.g. "O(n) hash → O(1) extra
+  space"; "string-allocation → in-place"; "iterative pointer-flip → recursive
+  base case"). Dual-grade: runCode output match + per-entry structural-
+  fingerprint regex that catches the canonical's antipattern (must NOT match
+  in the user's submission). The desirable-difficulty payoff is the load-
+  bearing part: the user IS NOT allowed to reach for the technique they
+  already know works. They have to derive a different solution path, which
+  forces engagement with the constraint trade-off itself (the senior-
+  interview pivot follow-up: "now do it without extra space"). 5 entries
+  across 2 antipattern families (Map/Set-based + pointer-flip-based) in
+  `data/constraint-shifts.json` — the 5th sidecar registry pattern.
+  Distinguishes from Mutate-and-Predict (iter 142, name-the-consequence-of-
+  a-given-mutation) and Bug-Hunt (iter 73, locate-the-buggy-line) by being
+  the only surface where the user PRODUCES code under an imposed constraint
+  rather than evaluating code that's already been changed.
+
 - **🏁 Section Speedrun (iter 71).** First MOBILE timed-pressure surface.
   Mock Interview's stopwatch is desktop-only (per PROFILE §usage-context)
   and times one lesson; Speedrun times a whole SECTION as a unit — the

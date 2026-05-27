@@ -637,6 +637,48 @@ function updatePathChip() {
   if (label) label.textContent = getSubscribedPath().label;
 }
 
+// When a path declares `sidebarButtons[]`, hide every button NOT in the list
+// (and show every listed button that exists). Paths without the field render
+// the full power-user sidebar. Run on boot, on path switch.
+function applySidebarCuration() {
+  const path = getSubscribedPath();
+  const list = path && Array.isArray(path.sidebarButtons) ? path.sidebarButtons : null;
+  const candidates = document.querySelectorAll('[id$="-btn"], #streak-display');
+  if (!list) {
+    candidates.forEach(el => { el.dataset.curatedHidden = ''; el.style.removeProperty('display'); });
+    return;
+  }
+  const set = new Set(list);
+  candidates.forEach(el => {
+    if (set.has(el.id)) { el.dataset.curatedHidden = ''; el.style.removeProperty('display'); }
+    else { el.style.display = 'none'; el.dataset.curatedHidden = '1'; }
+  });
+}
+
+// Top-bar cram progress strip: "Day N · ▓▓▓░░ · X/Y". Visible only when the
+// subscribed path is kind:'cram' AND the cycle is still active. Tap routes
+// to the cram home view (Phase 2 takes over when subscribed; for now opens
+// the Today modal).
+function updateCramProgressStrip() {
+  const wrap = document.getElementById('topbar-cram-progress');
+  if (!wrap) return;
+  const path = getSubscribedPath();
+  if (!path || path.kind !== 'cram') { wrap.hidden = true; return; }
+  const dayIdx = getCramDayIndex(path);
+  if (dayIdx < 0) { wrap.hidden = true; return; }
+  const day = path.days[dayIdx];
+  let total = 0, done = 0;
+  for (const b of day.blocks) for (const t of b.tasks) { total++; if (isCramTaskDone(t)) done++; }
+  const pct = total ? Math.round(100 * done / total) : 0;
+  const dayEl = document.getElementById('topbar-cram-day');
+  const barEl = document.getElementById('topbar-cram-bar');
+  const countEl = document.getElementById('topbar-cram-count');
+  if (dayEl) dayEl.textContent = `⏱ Day ${dayIdx + 1}/${path.days.length}`;
+  if (barEl) barEl.style.width = pct + '%';
+  if (countEl) countEl.textContent = `${done}/${total}`;
+  wrap.hidden = false;
+}
+
 function openPathModal(opts = {}) {
   const modal = document.getElementById('path-modal');
   const body = document.getElementById('path-body');
@@ -683,6 +725,8 @@ function openPathModal(opts = {}) {
       if (welcome) state.welcomed = true;
       saveProgress();
       updatePathChip();
+      applySidebarCuration();
+      updateCramProgressStrip();
       modal.style.display = 'none';
       if (typeof renderSidebar === 'function') renderSidebar();
       if (welcome && typeof renderLesson === 'function') renderLesson();
@@ -7311,9 +7355,8 @@ function selectTab(tab) {
 function renderLesson() {
   const shell = document.getElementById('lesson-shell');
   shell.innerHTML = '';
-  // Any per-tab body classes (e.g. l2-mobile-active for the bottom sheet
-  // padding) belong to the tab that set them — clear on every render.
   document.body.classList.remove('l2-mobile-active');
+  if (typeof updateCramProgressStrip === 'function') updateCramProgressStrip();
   if (!state.currentLessonId) { renderEmpty(shell); return; }
 
   const lesson = findLesson(state.currentLessonId);
@@ -11424,6 +11467,7 @@ async function init() {
         if (cb.checked) state.cramTaskChecks[id] = true;
         else delete state.cramTaskChecks[id];
         saveProgress();
+        updateCramProgressStrip();
         openCramToday(path);
       });
     });
@@ -11464,6 +11508,9 @@ async function init() {
     if (e.target === pathModal) pathModal.style.display = 'none';
   });
   updatePathChip();
+  applySidebarCuration();
+  updateCramProgressStrip();
+  document.getElementById('topbar-cram-progress').addEventListener('click', () => openTodaysPlan());
   todayModal.addEventListener('click', (e) => {
     if (e.target === todayModal) todayModal.style.display = 'none';
   });

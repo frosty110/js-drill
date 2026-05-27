@@ -1320,10 +1320,21 @@ function openPathModal(opts = {}) {
   body.innerHTML = cardsHtml + footerHtml;
   body.querySelectorAll('[data-path-id]').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.subscribedPathId = btn.getAttribute('data-path-id');
+      const prevPathId = state.subscribedPathId;
+      const newPathId = btn.getAttribute('data-path-id');
+      state.subscribedPathId = newPathId;
       _invalidateStarterPathCache();
       if (!subscribedPathHasLessons()) state.starterPath = false;
       if (welcome) state.welcomed = true;
+      // Picking a cram path is a *focus-mode switch*, not just a Today's Plan
+      // re-target: drop the user on Cram Home so the new shell is visible.
+      // Stale currentLessonId would otherwise keep them on a lesson with a
+      // tiny topbar strip as the only cue that anything changed.
+      const newPath = getSubscribedPath();
+      if (newPath && newPath.kind === 'cram' && newPathId !== prevPathId) {
+        state.currentLessonId = null;
+        state.cramView = { mode: 'today', dayIndex: -1 };
+      }
       saveProgress();
       updatePathChip();
       applySidebarCuration();
@@ -1331,7 +1342,7 @@ function openPathModal(opts = {}) {
       if (typeof updateCramReviewCount === 'function') updateCramReviewCount();
       modal.style.display = 'none';
       if (typeof renderSidebar === 'function') renderSidebar();
-      if (welcome && typeof renderLesson === 'function') renderLesson();
+      if (typeof renderLesson === 'function') renderLesson();
     });
   });
   const browse = body.querySelector('[data-action="browse-on-own"]');

@@ -5031,8 +5031,15 @@ async function _bugHuntFindBreakingMutation(canonical, expected) {
   // Try mutators in random order; for each, try matches in random order until
   // one yields a runCode output that doesn't match expected. Returns null if
   // no breaking mutation found (caller skips the lesson).
+  // iter 143: switched from BUG_HUNT_MUTATORS (10) to SAFE_MUTATORS (7) —
+  // the 3 excluded mutators (`++ → --`, `-- → ++`, `&& → ||`) could produce
+  // sync infinite loops at loop counters / restrictive guards. iter-142
+  // CDP probe started hanging intermittently; user-facing risk is a frozen
+  // tab on Bug-Hunt session start. Variety loss is 30%, but the remaining
+  // 7 still cover boundary comparisons (most common bug shape) + equality
+  // flips + `|| → &&`. See SAFE_MUTATORS comment above.
   const expectedLines = normalizeLines(expected);
-  for (const mut of _bugHuntShuffle(BUG_HUNT_MUTATORS)) {
+  for (const mut of _bugHuntShuffle(SAFE_MUTATORS)) {
     const matches = _bugHuntCollectMatches(canonical, mut.from);
     if (!matches.length) continue;
     for (const pick of _bugHuntShuffle(matches).slice(0, 4)) {
@@ -5193,17 +5200,19 @@ const MUTATE_CLASSES = [
   { label: 'Runtime error / throws', desc: 'The mutation makes the code throw at runtime (or hit a forbidden path).' },
   { label: 'Different output type', desc: 'Output type changed entirely — e.g. array became undefined, number became string.' }
 ];
-// Subset of BUG_HUNT_MUTATORS that's safe to run unattended. The Bug-Hunt
-// probe gets away with all 10 because its session is short and a user can
-// reload if a mutation freezes the tab; Mutate's deck-builder runs 5+
-// classification probes in sequence, so a single hang would brick the
-// drill. The 3 excluded mutators (`++ → --`, `-- → ++`, `&& → ||`) can
-// flip a loop counter direction or relax a restrictive guard, turning a
-// finite loop into an infinite one. runCode wraps the user code in a
-// SYNCHRONOUS `new Function` call — a Promise.race timeout can't interrupt
-// it; the only safe protection is not picking those mutations. The
-// remaining 7 still cover the full consequence-class taxonomy.
-const MUTATE_MUTATORS = BUG_HUNT_MUTATORS.filter(m =>
+// Hang-safe subset of BUG_HUNT_MUTATORS — shared between iter-73 Bug-Hunt
+// (after iter-143 port) and iter-142 Mutate-and-Predict. The 3 excluded
+// mutators (`++ → --`, `-- → ++`, `&& → ||`) can flip a loop counter
+// direction or relax a restrictive guard, turning a finite loop into an
+// infinite one. runCode wraps user code in a SYNCHRONOUS `new Function`
+// call — a Promise.race timeout can't interrupt it; the only safe
+// protection is not picking those mutations. iter-143 surfaced that the
+// vulnerability had been latent in Bug-Hunt since iter 73 (Bug-Hunt CDP
+// probe started hanging intermittently after iter-142's tighter deck-build
+// loop made the issue reproducible). The remaining 7 mutators still cover
+// the most common interview bug shapes: boundary comparisons (4) +
+// equality flips (2) + `|| → &&` (1, the restriction-only direction).
+const SAFE_MUTATORS = BUG_HUNT_MUTATORS.filter(m =>
   m.name !== '++ → --' && m.name !== '-- → ++' && m.name !== '&& → ||'
 );
 
@@ -5242,9 +5251,9 @@ function _mutateClassify(res, expected) {
 // match sites. Returns null when none of the tried mutations land in a
 // usable class (rare — most canonicals have plenty of operators to mutate).
 async function _mutateClassifyMutation(canonical, expected) {
-  // Use the safe subset, not the full Bug-Hunt pool — see MUTATE_MUTATORS
-  // comment for the hang-protection rationale.
-  for (const mut of _bugHuntShuffle(MUTATE_MUTATORS)) {
+  // Use the hang-safe subset (shared with Bug-Hunt since iter 143) — see
+  // SAFE_MUTATORS comment for the hang-protection rationale.
+  for (const mut of _bugHuntShuffle(SAFE_MUTATORS)) {
     const matches = _bugHuntCollectMatches(canonical, mut.from);
     if (!matches.length) continue;
     for (const pick of _bugHuntShuffle(matches).slice(0, 3)) {

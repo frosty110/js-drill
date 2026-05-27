@@ -105,6 +105,134 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 139 vision — sixteenth vision iter; iter-124 queue drained iter 125/126, 13 single-ship iters consumed it across iter 127-138 polish + sidecar)
+
+**Sixteenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112/116/120/124).** Fires per § Next iteration's 10-defer-recommendation accumulation across iter 127-138 (10 single-ship iters past the iter-124 queue drain). Roadmap Queued empty post-iter-126; ideas-by-category.md shortlist consumption stalled (#1 shipped iter 123; remaining 3 have category-saturation or scope-reduction blockers); iter 132/134/135/136 exhausted the 4-of-4 sidecar-bank curation pattern; iter 127-130 epic + iter 137/138 polish all originated as direct user/UX nominations rather than vision-iter promotions. This iter fires the first vision pass in a fresh /clear-d session per § Next's STRONG recommendation.
+
+**ONE constraint-aware subagent** (iter-100/103/108/112/116/120/124 cost-conservative precedent; 7th use). Explicit AVOID list (Cat 1 — 2 fresh ships iter 121/122; Cat 5 — 6 fresh ships iter 123 + topbar 127-130 + 133/137/138; Cat 9 §9A — 2 fresh ships iter 117/118; Cat 7 — 4-of-12 mined out; Cat 4 sidecar-curation pattern — 4-of-4 banks touched/exhausted by iter 136). Explicit STEER toward Cat 3 Mechanics (5 ships in 100+ iters), Cat 8 Modalities (1 ship ever — Match iter 109), Cat 9 §9B Code Evaluation (last ship iter 81; 58 iters stale), Cat 9 §9C Adaptation/transfer (under-shipped), and **Cat 4 NEW shapes — NOT sidecar-bank-expansion** (cross-lesson DATA STRUCTURES like a stamps library or prereq edge table would be in-scope). Subagent prompt asked for the by-now-standard steering self-audit (iter-112/115/116/120/124 pattern, 6th use).
+
+**Subagent returned 5 proposals + load-bearing self-audit:**
+- 2 Cat 3 (Pace-Bar / SR Pass-Quality Modulator) — subagent self-flagged this as borderline overcorrection on the Cat 3 steer.
+- 1 Cat 8 (Haptic Tap-Pulse) — pure UI layer, no schema, dual-coding modality.
+- 1 Cat 9 §9B (Mutate-and-Predict) — distinct from iter-73 Bug-Hunt (locate bug line) and iter-122 What-If (predict on new input); names consequence class of code mutation.
+- 1 Cat 4 (Patterns Prerequisite Graph) — self-flagged as borderline ("requires hand-authoring ~80 edges, brushes per-lesson constraint" — orchestrator agrees it's cross-lesson DATA STRUCTURE not per-lesson sidecar, so within steer).
+- Subagent honestly bailed on Cat 9 §9C (under-shipped per steer) — surfaced as orchestrator-blind: "§9C ideas I brainstormed all required new content authoring at per-lesson grain or new modalities." Worth a future re-prompt with §9C as hard requirement.
+
+**Heeded the self-audit (iter-120/124 precedent for "promote ≤(N-2) when subagent flags overcorrection in N proposals"). Promoted 3 (not 5):**
+
+1. ⏱ **Pace-Bar** (Cat 3 — Mechanics, live tempo cue using existing `state.bestTimes` + `state.mockHistory` rolling median; opt-in toggle, no streak, no count-up clock; closes PROFILE L23-24 "out of practice with the cadence" + L65 "within target time"). First Cat 3 mechanic that surfaces *real-time* feedback during the attempt (Calibration v1/v2 are pre-attempt prediction + post-hoc Stats; nothing live during L3 today). Single-iter ship ≤200 LOC.
+2. 📳 **Haptic Tap-Pulse** (Cat 8 — Modalities, second Cat 8 ship after iter-109 Match; opt-in `navigator.vibrate` toggle, 30/60/120ms pulse pattern for L1 correct/miss/L3-pass). Adds the tactile dual-coding channel — PROFILE L42-44 ("works in 30-second tap-and-recall sessions") + L26-28 mobile-first usage. Pure UI layer over existing pass/miss events; graceful no-op when API absent. Single-iter ship ≤200 LOC.
+3. 🔀 **Mutate-and-Predict** (Cat 9 §9B — Code Evaluation, first §9B ship since iter 81 Edge-case-chips, 58-iter drought). Mobile 5-card session: shows canonical with ONE line mutated, asks 4 MC for the consequence class (still-correct / off-by-one-edge / infinite-or-throw / different-shape). Distinct cognitive operation from iter-73 Bug-Hunt (locate bug line) and iter-122 What-If (predict on new input) — predict the *effect* of a code change. Reuses iter-73 mutator list; distractors come from the 4-class taxonomy. Single-iter ship ≤200 LOC.
+
+**Held with explicit re-promote conditions:**
+
+- 🔁 **SR Pass-Quality Modulator** (Cat 3) — HELD per subagent self-audit ("may not be perceptible in <8 weeks; partially covered by Reveal Replay + Resurrect Queue + Hint-Cost Ladder"). The behind-the-scenes-mechanic profile risks shipping invisible value. Re-promote condition: a frame iter examines whether shaky-pass demotion mechanics need explicit user-visible surfaces OR a probe surfaces concrete repeat-miss data showing the existing surfaces miss the use case.
+- 🌐 **Patterns Prerequisite Graph + Unlock Path** (Cat 4 NEW shape) — HELD on 2-iter scaffold+ship cost + ~80 edges hand-authored. Subagent self-flagged borderline against the "no per-lesson content authoring" constraint; orchestrator agrees the edge table is *cross-lesson* not per-lesson, but the manual authoring cost is real (~80 edges × ~5min/edge = ~7hr authoring). Re-promote condition: user-reported friction explicitly names "I don't know which lesson to drill first to unlock harder ones" OR a smaller pilot ships first (3-5 hand-curated prereq chips on top-5 hardest patterns lessons; if discoverability + click-through validate the surface, scale the edge table).
+
+**Meta-learning (iter 139):** **subagent self-audit pattern is now 6-time-validated** (iter-112 BS-10 + iter-115 sync sub-blob + iter-116 §9A content corpus + iter-120 §9C-bias-self-flag + iter-124 Cat-2-over-concentration + sidecar-curation observation + iter-139 Cat-3-over-concentration + §9C-content-authoring-honest-bail). Pattern is load-bearing — the self-audit consistently surfaces over-concentration AND orchestrator-blind constraint clashes that category-steering alone wouldn't have caught. **Worth a frame iter to fold "self-audit instruction" into SKILL.md vision-mode template as default, not optional** (queued meta-lesson from iter 124 still not folded in — should fire alongside the iter-130 "mobile entry point is its own Phase" meta-lesson).
+
+**Sidecar pattern exhaustion (iter 136 confirmed):** the 4-of-4 sidecar banks (complexity-claims, idiom-pairs, clarify-distractor-bank, hotseat-followups) are all touched within the last 12 iters. Sidecar-curation as a recurring lever requires either (a) host-drill staleness re-accumulating across 30+ iters, or (b) NEW sidecar banks created by future ships. The pattern is paused, not retired.
+
+**§ Next nominates** ⏱ Pace-Bar ship for iter 140 (highest leverage of the 3 — Cat 3 mechanic with longest drought + live-feedback novelty; smallest data dependency; opt-in default-OFF mitigates the L75 anti-gamification concern subagent flagged).
+
+---
+
+### 2026-05-26 iter 139 — ⏱ Pace-Bar (per-lesson live tempo coach)
+
+**Status:** queued
+
+**Value claim** (one sentence): Gives the rusty engineer real-time "am I on track?" feedback during an L2/L3 attempt — the calibration loop that closes "they don't know they're slow until the buzzer," closing PROFILE L23-24 ("out of practice with the cadence … under time pressure") + L65 ("within target time").
+
+**Mechanic** (one sentence): While on L2/L3, a thin horizontal bar at top of editor fills left-to-right against the user's *own* rolling median time-to-pass for that lesson (from `state.history` + `state.bestTimes` + `state.mockHistory`); fills green for first 50%, amber 50-100%, red past 100%; opt-in toggle default OFF; no timer numerals, no streak — peripheral-vision pace cue only.
+
+**Success criterion** (one falsifiable sentence): Among users who enable Pace-Bar, median L3 pass-time variance per lesson drops ≥15% over 4 weeks vs their pre-Pace-Bar baseline.
+
+**Estimated scope:** single-iter ship ≤200 LOC.
+
+**Data dependency:** existing `state.history` + `state.bestTimes` + `state.mockHistory` — no schema bump; new `state.paceBarOn` boolean (schema-additive).
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk (subagent-flagged):** PROFILE L75 anti-gamification ("can't recover from broken streak" trap) brushes any time-based UI. **Orchestrator mitigation:** opt-in default OFF, uses user's OWN median (not a global benchmark), no count-up clock, no streak counter, no "you broke your pace record" callout — bar is purely peripheral-vision pace cue that vanishes when the user disables.
+
+**Why this is a "new bucket" not "better cell":** First Cat 3 surface that gives *live* feedback during the attempt. Calibration v1 (iter 119) captures pre-attempt prediction; Calibration v2 (iter 131) renders post-hoc Stats. Nothing today provides in-attempt tempo feedback. PROFILE L23-24's "cadence under pressure" need has no existing surface.
+
+**Subagent source:** iter-139 vision iter — ranked #1 by leverage-per-effort; promoted #1 by orchestrator (Cat 3 longest drought + smallest data dep + cleanest adversary pre-resolution).
+
+---
+
+### 2026-05-26 iter 139 — 📳 Haptic Tap-Pulse
+
+**Status:** queued
+
+**Value claim** (one sentence): Adds a non-visual confirmation channel to L1 tap-flow so the mobile drilling user gets dual-coded feedback (visual + tactile) — exploits the dual-coding learning principle the app's `docs/learning-strategies/` names but never embodied tactilely; PROFILE L26-28 mobile-first + L42-44 "30-second tap-and-recall sessions."
+
+**Mechanic** (one sentence): Sidebar 📳 Haptic toggle (default OFF, gated on `navigator.vibrate` support); when ON: L1 correct = 1× 30ms pulse, L1 miss = 2× 60ms pulses, L3 pass = 1× 120ms long pulse, Rapid-Fire streak-of-5 = subtle 3-pulse roll.
+
+**Success criterion** (one falsifiable sentence): Among Haptic-enabled users, L1 Rapid-Fire session-completion rate rises ≥10% vs baseline (proxy for "drilling head-down on phone became more sustainable").
+
+**Estimated scope:** single-iter ship ≤200 LOC.
+
+**Data dependency:** none — pure UI layer over existing pass/miss events; new `state.hapticOn` boolean (schema-additive).
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk (subagent-flagged):** battery drain + annoyance. **Orchestrator mitigation:** opt-in default OFF; no auto-fire on routine actions (only L1 correct/miss + L3 pass + Rapid-Fire streak-of-5); gracefully no-ops on platforms without `navigator.vibrate` (iOS Safari ≤16, desktop) — the toggle should not even appear when the API is absent.
+
+**Why this is a "new bucket" not "better cell":** Cat 8 has had exactly 1 ship in 30 iters (Match iter 109 = visual-pairing modality). Haptic is the tactile modality — orthogonal axis. Dual-coding principle is named in `docs/learning-strategies/dual-coding.md` but the app's existing implementations are all visual + textual; tactile is the missing third channel.
+
+**Subagent source:** iter-139 vision iter — ranked #3 by leverage-per-effort; promoted #2 by orchestrator (Cat 8 longest drought of any active category; lowest implementation cost of the 3 promotes; opt-in mitigates the only adversary objection).
+
+---
+
+### 2026-05-26 iter 139 — 🔀 Mutate-and-Predict (consequence-class drill)
+
+**Status:** queued
+
+**Value claim** (one sentence): Drills the "read code, predict change-of-behavior" skill recruiters probe after a candidate writes a function ("what if I tweak this line?"); PROFILE L22-24 ("trace mentally under interview pressure") — currently the catalog has 🪲 Bug-Hunt (locate the bug line) and 🧪 What-If (predict output on NEW input) but no surface for "predict the *consequence class* of a code mutation."
+
+**Mechanic** (one sentence): Sidebar 🔀 Mutate button → 5-card mobile session; each card shows a real canonical with ONE line marked as mutated (e.g., `i < arr.length` → `i <= arr.length`, `===` → `==`, `slice(0, k)` → `slice(0, k+1)`); user picks from 4 MC: (a) "Still correct on all inputs" (b) "Off-by-one on edge case" (c) "Infinite loop / throws" (d) "Different output shape"; mutations derived from same operator-pair list as iter-73 Bug-Hunt; distractors come from the 4-class taxonomy itself.
+
+**Success criterion** (one falsifiable sentence): Users who play ≥3 Mutate sessions show ≥15% improvement on subsequent iter-73 Bug-Hunt accuracy (transfer test — the mutation-effect vocabulary improves bug *diagnosis*, not just bug *location*).
+
+**Estimated scope:** single-iter ship ≤200 LOC.
+
+**Data dependency:** existing canonicals from lesson JSON + iter-73 mutator list — no new content; new `state.mutate = {attempts, correct, sessions, lastRunAt}` (schema-additive).
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk (subagent-flagged):** overlap with iter-73 Bug-Hunt. **Orchestrator mitigation:** the *cognitive operation* is distinct. Bug-Hunt asks "where's the bug?" — a localization task using visual + textual recognition. Mutate-and-Predict asks "what's the consequence?" — a forward-simulation task naming the type of failure. Different surface, different L1-vs-trace direction; pre-resolved by the in-app probe asserting Mutate misclassifications correlate with Bug-Hunt misses on the same underlying canonical (transfer hypothesis).
+
+**Why this is a "new bucket" not "better cell":** Cat 9 §9B "code evaluation skills" had 4 ships in iter 73-81 (Bug-Hunt / Reverse / Smell test / Edge case chips) then went silent for 58 iters. The remaining §9B parking-lot ideas (Trap-recognition, "Where's your bug?" debugging drill, PR-style review drill, Anti-templating "what would break?") are all distinct from Mutate-and-Predict — this is forward-simulation-from-mutation, none of the others cover the consequence-class taxonomy direction.
+
+**Subagent source:** iter-139 vision iter — ranked #4 by leverage-per-effort; promoted #3 by orchestrator (Cat 9 §9B longest single-sub-category drought + reuses iter-73 mutator infrastructure + clean differentiator from existing surfaces).
+
+---
+
+### 2026-05-26 iter 139 — HELD: 🔁 SR Pass-Quality Modulator (subagent self-audit drop)
+
+**Status:** HELD — heeded subagent's self-audit drop recommendation.
+
+**Value claim:** Stops the binary pass/fail SR from rewarding shaky passes (revealed, hint-assisted) with the same 1d→30d ladder as clean passes — the rusty engineer needs SR intervals that reflect *how* they passed.
+
+**Re-promote condition:** a frame iter examines whether shaky-pass demotion mechanics need explicit user-visible surfaces (subagent self-flagged "may not be perceptible in <8 weeks"); OR a probe surfaces concrete repeat-miss data showing existing surfaces (Reveal Replay iter 56 + Resurrect Queue iter 65 + Hint-Cost Ladder iter 101) miss the use case. Currently the loop has 3 surfaces handling shaky-pass routing; modulating the SR interval itself may be redundant.
+
+**Mechanic if promoted:** On L3 pass, compute quality score from hints used + reveal flag + critical-line fallback + time-vs-bestTime ratio; map to multiplier (clean+fast 1.3×, hint-assisted 0.7×, revealed+slow 0.4×) on the existing 1d/3d/7d/14d/30d ladder. Surface modifier in 1-line lesson-dot tooltip.
+
+---
+
+### 2026-05-26 iter 139 — HELD: 🌐 Patterns Prerequisite Graph + Unlock Path overlay
+
+**Status:** HELD — 2-iter scaffold+ship cost + ~80 edges hand-authored brushes the "no per-lesson content authoring" constraint.
+
+**Value claim:** Surfaces the latent dependency edges between lessons (two-sum unlocks hashing-frequency unlocks group-anagrams) so the rusty engineer can see *why* a Patterns lesson is hard — they're missing a prerequisite, not the pattern itself.
+
+**Re-promote condition:** user-reported friction explicitly names "I don't know which lesson to drill first to unlock harder ones" OR a smaller pilot ships first — 3-5 hand-curated prereq chips on the top-5 hardest patterns lessons; if discoverability + click-through validate the surface, scale the edge table.
+
+**Mechanic if promoted:** New `data/pattern-prereqs.json` mapping `<lessonId>` → `[prereqLessonIds]` (~80 edges, hand-authored once across 99 Patterns/Applied — cross-lesson DATA STRUCTURE, not per-lesson sidecar). New 🌐 Prereqs sidebar button → mobile-first nested list (NOT a graph viz) with status dots ("✓ two-sum  ◐ hashing-frequency  ○ sort-stability"). Tap a row → routes to that prereq lesson.
+
+---
+
 ## Meta-finding (iter 124 vision — fifteenth vision iter; iter-120 queue drained iter 121/122, Cat 2/3/4/6 push HEEDED subagent's Cat-2-over-concentration warning)
 
 **Fifteenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112/116/120).** iter-120 roadmap queue fully shipped across iter 121 Cinema + iter 122 What-If. Step 1B fires vision per iter-123's nomination — `ideas-by-category.md` Promotion shortlist #1 (L3 keyboard chips) shipped iter 123; remaining shortlist items all have category-saturation / claim-stale / scope-reduction blockers; roadmap Queued empty.

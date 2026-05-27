@@ -212,7 +212,17 @@ console.log(isAnagram('rat', 'car'));`,
   }
   return Object.values(groups);
 }
-console.log(JSON.stringify(groupAnagrams(["eat","tea","tan","ate","nat","bat"])));`
+console.log(JSON.stringify(groupAnagrams(["eat","tea","tan","ate","nat","bat"])));`,
+    'p-reverse-list': `function reverseList(head) {
+  if (!head || !head.next) return head;
+  const newHead = reverseList(head.next);
+  head.next.next = head;
+  head.next = null;
+  return newHead;
+}
+function toList(arr) { let d = { next: null }, c = d; for (const v of arr) { c.next = { val: v, next: null }; c = c.next; } return d.next; }
+function toArr(h) { const o = []; while (h) { o.push(h.val); h = h.next; } return o; }
+console.log(JSON.stringify(toArr(reverseList(toList([1, 2, 3, 4, 5])))));`
   };
   const goodShifted = shiftedSolutions[cardLessonId];
   if (!goodShifted) {

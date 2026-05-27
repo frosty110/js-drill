@@ -194,7 +194,25 @@ console.log(JSON.stringify(twoSum([2, 7, 11, 15], 9)));`,
   }
   return true;
 }
-console.log(isPalindrome('A man, a plan, a canal: Panama'));`
+console.log(isPalindrome('A man, a plan, a canal: Panama'));`,
+    'p-valid-anagram': `function isAnagram(s, t) {
+  if (s.length !== t.length) return false;
+  const a = s.split('').sort().join('');
+  const b = t.split('').sort().join('');
+  return a === b;
+}
+console.log(isAnagram('anagram', 'nagaram'));
+console.log(isAnagram('rat', 'car'));`,
+    'p-anagrams': `function groupAnagrams(strs) {
+  const groups = {};
+  for (const s of strs) {
+    const key = s.split('').sort().join('');
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  }
+  return Object.values(groups);
+}
+console.log(JSON.stringify(groupAnagrams(["eat","tea","tan","ate","nat","bat"])));`
   };
   const goodShifted = shiftedSolutions[cardLessonId];
   if (!goodShifted) {

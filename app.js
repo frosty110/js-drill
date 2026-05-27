@@ -160,6 +160,7 @@ const state = {
   whatif: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 122: 🧪 What-If Output Predictor — pick the output for a specific walkthrough-example input (additive, no `__v` bump)
   mutate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 142: 🔀 Mutate-and-Predict — 5-card session showing canonical with ONE line mutated; user picks consequence-class taxonomy (still-correct / wrong-content-same-shape / throws / different-type). §9B forward-simulation drill — distinct from iter-73 Bug-Hunt's locate-the-bug task
   phoneScreen: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 147: 📞 Phone Screen Simulator — chained 3-card session (syntax warmup + pattern L3 + mechanic-related L2 follow-up) under ONE unbroken timer. Cat 2 Paths & Sessions; distinct from Mock (single lesson) + Gauntlet (same-section L1 chain, no timer) via chained-different-lesson-types + single-timer combination
+  constraintShift: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 148: 🚧 Constraint-Shift Drill — multi-card session showing canonical with swapped constraint claim; user rewrites; grade via runCode + per-entry structural-fingerprint regex (must NOT match for passage). First Cat 9 §9C ship ever; 5th sidecar registry (data/constraint-shifts.json)
   calibrateOn: false, // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
   timeCalibration: { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } }, // iter 119: byMechanic[id] = { predictions: [{bucket, actualMs, errorSec}], median errorSec computed on read }. meta tracks engagement separately (estimates = bucket taps; skips = skip taps; passes = passes-with-estimate)
   paceBarOn: false, // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF) surfaces a peripheral-vision width-growing bar above the L3 editor against user's OWN median time-to-solve. L75 anti-gamification mitigated: user's own median only (no global benchmark), no timer numerals, no streak, auto-hides when no data.
@@ -921,6 +922,15 @@ function loadProgress() {
           lastRunAt: +parsed.phoneScreen.lastRunAt || 0
         }
       : { sessions: 0, completions: 0, lastRunAt: 0 };
+    // iter 148: 🚧 Constraint-Shift Drill lifetime stats. Legacy users get zeros.
+    state.constraintShift = parsed.constraintShift && typeof parsed.constraintShift === 'object'
+      ? {
+          attempts: +parsed.constraintShift.attempts || 0,
+          correct: +parsed.constraintShift.correct || 0,
+          sessions: +parsed.constraintShift.sessions || 0,
+          lastRunAt: +parsed.constraintShift.lastRunAt || 0
+        }
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle (default OFF).
     state.calibrateOn = !!parsed.calibrateOn;
     // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF).
@@ -1029,6 +1039,7 @@ function saveProgress() {
     whatif: state.whatif,
     mutate: state.mutate,
     phoneScreen: state.phoneScreen,
+    constraintShift: state.constraintShift,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -5720,6 +5731,200 @@ async function startPhoneScreenSession() {
   renderCard();
 }
 
+// iter 148: 🚧 Constraint-Shift Drill — Cat 9 §9C Adaptation/transfer + Cat 4
+// sidecar registry hybrid. First §9C ship ever; 5th sidecar registry after
+// iter-79 complexity-claims / iter-86-87 idiom-pairs / iter-117 clarify-
+// distractor-bank / iter-118 hotseat-followups. Each card shows a real
+// canonical with its ORIGINAL constraint claim and prompts the user to
+// rewrite it to satisfy a SHIFTED constraint. Grade = runCode (output
+// matches expectedOutput) PLUS the per-entry structural-fingerprint regex
+// (must NOT match in the user's submission for the shift to count — the
+// regex catches the canonical's antipattern, e.g. "new Map()" for the
+// "O(1) extra space" shift). Trains the senior-interview pivot follow-up
+// ("now do it without extra space" / "now do it in-place").
+let CONSTRAINT_SHIFTS_BANK = null;
+async function _loadConstraintShiftsBank() {
+  if (CONSTRAINT_SHIFTS_BANK) return CONSTRAINT_SHIFTS_BANK;
+  try {
+    const res = await fetch('data/constraint-shifts.json');
+    if (!res.ok) return null;
+    const j = await res.json();
+    CONSTRAINT_SHIFTS_BANK = Array.isArray(j.shifts) ? j.shifts : [];
+    return CONSTRAINT_SHIFTS_BANK;
+  } catch (_) { return null; }
+}
+
+async function _constraintShiftBuildDeck() {
+  const bank = await _loadConstraintShiftsBank();
+  if (!bank || !bank.length) return null;
+  // Ensure every entry's lesson content is loaded so we can show canonical.
+  for (const e of bank) {
+    if (!CONTENT[e.lessonId]) {
+      try { await loadLessonContent(e.lessonId); } catch (_) { /* skip */ }
+    }
+  }
+  // Filter to entries whose lesson + canonical are actually available.
+  const usable = bank.filter(e => CONTENT[e.lessonId] && CONTENT[e.lessonId].L3 && CONTENT[e.lessonId].L3.canonical);
+  if (!usable.length) return null;
+  // Shuffle (reuse iter-73 _bugHuntShuffle) + take all (v1 ships 2 entries; full deck per session).
+  const shuffled = _bugHuntShuffle(usable);
+  return shuffled.map(e => {
+    const c = CONTENT[e.lessonId];
+    const lesson = CURRICULUM.find(l => l.id === e.lessonId);
+    return {
+      lessonId: e.lessonId,
+      lessonTitle: lesson ? lesson.title : e.lessonId,
+      sectionName: lesson ? lesson.section : '',
+      canonical: c.L3.canonical,
+      expectedOutput: c.L3.expectedOutput,
+      originalClaim: e.originalClaim,
+      shiftedClaim: e.shiftedClaim,
+      hint: e.hint || '',
+      structuralCheck: e.structuralCheck,
+      structuralCheckExplain: e.structuralCheckExplain || ''
+    };
+  });
+}
+
+async function startConstraintShiftSession() {
+  const deck = await _constraintShiftBuildDeck();
+  if (!deck || deck.length < 1) {
+    alert('Constraint-Shift sidecar is empty or failed to load. Try again after the lesson content is cached.');
+    return;
+  }
+  state.constraintShift.sessions++;
+  state.constraintShift.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0, correct = 0;
+  const shell = document.getElementById('lesson-shell');
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    shell.innerHTML = `
+      <div class="recognize-shell shift-shell">
+        <div class="recognize-header">
+          <span>🚧 Constraint-Shift · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-shift">✕ Exit</button>
+        </div>
+        <div class="whatif-lesson-tag">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
+        <div class="shift-claims-block">
+          <div class="shift-claim-row">
+            <span class="shift-claim-label shift-claim-orig">Original</span>
+            <span class="shift-claim-text">${escapeHtml(card.originalClaim)}</span>
+          </div>
+          <div class="shift-claim-row">
+            <span class="shift-claim-label shift-claim-shift">Shift to</span>
+            <span class="shift-claim-text shift-claim-shift-text">${escapeHtml(card.shiftedClaim)}</span>
+          </div>
+        </div>
+        <div class="shift-canonical-label">Canonical (the original-constraint solution — read it, then rewrite below):</div>
+        <pre class="whatif-canonical cm-s-dracula" data-shift-canonical></pre>
+        <div class="shift-hint">${escapeHtml(card.hint)}</div>
+        <textarea class="shift-editor" data-shift-editor></textarea>
+        <div class="shift-actions">
+          <button class="primary" data-action="shift-run">Run + check</button>
+          <button class="secondary" data-action="shift-skip">Skip → next</button>
+          <span class="shift-feedback" data-shift-feedback></span>
+        </div>
+      </div>
+    `;
+    const codeEl = shell.querySelector('[data-shift-canonical]');
+    if (codeEl && typeof colorizeInto === 'function') colorizeInto(codeEl, card.canonical);
+    else if (codeEl) codeEl.textContent = card.canonical;
+    const ta = shell.querySelector('[data-shift-editor]');
+    const isTouchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    const cm = CodeMirror.fromTextArea(ta, {
+      mode: 'javascript', theme: 'dracula', lineNumbers: true,
+      autoCloseBrackets: true, matchBrackets: true, indentUnit: 2, tabSize: 2,
+      lineWrapping: true, viewportMargin: Infinity,
+      inputStyle: isTouchDevice ? 'contenteditable' : 'textarea',
+      spellcheck: false, autocorrect: false, autocapitalize: false
+    });
+    const fb = shell.querySelector('[data-shift-feedback]');
+    shell.querySelector('[data-action="exit-shift"]').addEventListener('click', () => renderLesson());
+    shell.querySelector('[data-action="shift-skip"]').addEventListener('click', () => {
+      state.constraintShift.attempts++;
+      state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+      appendHistory(card.lessonId, 'L1-miss');
+      saveProgress();
+      idx++;
+      renderCard();
+    });
+    shell.querySelector('[data-action="shift-run"]').addEventListener('click', async () => {
+      const userCode = cm.getValue();
+      if (!userCode.trim()) {
+        fb.textContent = '✗ Editor empty — type your shifted solution first.';
+        fb.className = 'shift-feedback shift-feedback-warn';
+        return;
+      }
+      fb.textContent = 'Running…';
+      fb.className = 'shift-feedback';
+      const res = await runCode(userCode);
+      // Two-part grade: output must match AND structural regex must NOT match.
+      const outputMatches = res.ok && (res.output || '') === card.expectedOutput;
+      let regexCatchesAntipattern = false;
+      try {
+        const re = new RegExp(card.structuralCheck);
+        regexCatchesAntipattern = re.test(userCode);
+      } catch (_) { /* malformed regex in sidecar — treat as no-catch */ }
+      state.constraintShift.attempts++;
+      if (!res.ok) {
+        fb.innerHTML = `✗ Runtime error: ${escapeHtml((res.output || 'unknown').slice(0, 80))}`;
+        fb.className = 'shift-feedback shift-feedback-err';
+        state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+        appendHistory(card.lessonId, 'L1-miss');
+      } else if (!outputMatches) {
+        const got = (res.output || '(empty)').slice(0, 60);
+        fb.innerHTML = `✗ Output: <span class="mono">${escapeHtml(got)}</span> (expected <span class="mono">${escapeHtml(card.expectedOutput.slice(0, 40))}</span>)`;
+        fb.className = 'shift-feedback shift-feedback-warn';
+        state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+        appendHistory(card.lessonId, 'L1-miss');
+      } else if (regexCatchesAntipattern) {
+        fb.innerHTML = `✗ Output correct but you still used the original-constraint technique. ${escapeHtml(card.structuralCheckExplain)}`;
+        fb.className = 'shift-feedback shift-feedback-warn';
+        state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+        appendHistory(card.lessonId, 'L1-miss');
+      } else {
+        correct++;
+        state.constraintShift.correct++;
+        fb.textContent = '✓ Output matches AND structural check passes — constraint shift complete.';
+        fb.className = 'shift-feedback shift-feedback-pass';
+      }
+      saveProgress();
+      // Add Next button to the actions row so user can advance.
+      const actions = shell.querySelector('.shift-actions');
+      if (actions && !actions.querySelector('[data-action="shift-next"]')) {
+        const next = document.createElement('button');
+        next.className = 'primary';
+        next.dataset.action = 'shift-next';
+        next.textContent = 'Next card →';
+        next.addEventListener('click', () => { idx++; renderCard(); });
+        actions.appendChild(next);
+      }
+    });
+  }
+  function renderSummary() {
+    const pct = Math.round((correct / deck.length) * 100);
+    shell.innerHTML = `
+      <div class="recognize-shell shift-shell">
+        <div class="recognize-header"><span>🚧 Constraint-Shift · Session done</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${pct}%</div>
+          <div class="recognize-summary-line">${correct} of ${deck.length} shifts completed cleanly</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.constraintShift.correct} / ${state.constraintShift.attempts} (${state.constraintShift.attempts > 0 ? Math.round(state.constraintShift.correct / state.constraintShift.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="shift-again">🚧 Another session</button>
+            <button class="secondary" data-action="shift-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="shift-again"]').addEventListener('click', () => startConstraintShiftSession());
+    shell.querySelector('[data-action="shift-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
 // iter 47: per-section retention aggregation for the Stats modal. Walks every
 // lesson's state.history events, bins by day across lookbackDays, returns
 // sorted rows (worst retention first → drives "what needs attention" UX).
@@ -9936,6 +10141,16 @@ async function init() {
     startPhoneScreenSession();
   });
 
+  // iter 148: 🚧 Constraint-Shift Drill — Cat 9 §9C + Cat 4 sidecar hybrid.
+  // First §9C ship ever; 5th sidecar registry. Session shows canonical with
+  // a swapped constraint claim and prompts rewrite; grade = runCode output
+  // match + per-entry structural-fingerprint regex (must NOT match in user
+  // submission).
+  const constraintShiftBtn = document.getElementById('constraint-shift-btn');
+  if (constraintShiftBtn) constraintShiftBtn.addEventListener('click', () => {
+    startConstraintShiftSession();
+  });
+
   // iter 109: 🔖 Match — bidirectional title ↔ description matcher.
   // Cat 8 § Modalities first ship; trains the name-to-concept retrieval
   // direction the L1/L2/L3 ladder doesn't cover.
@@ -11712,7 +11927,7 @@ const TOPBAR_MENU_TAXONOMY = {
     items: [
       'crystal-btn', 'bug-hunt-btn', 'recognize-btn', 'reverse-btn',
       'match-btn', 'trace-hop-btn', 'reverse-walk-btn', 'whatif-btn',
-      'mutate-btn',
+      'mutate-btn', 'constraint-shift-btn',
       'notes-drill-btn', 'notes-locate-btn', 'claim-btn', 'gotcha-btn',
       'swap-btn', 'conv-drill-btn', 'constellation-btn',
       'clarify-ritual-btn', 'hotseat-btn'

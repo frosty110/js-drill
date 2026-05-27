@@ -159,6 +159,7 @@ const state = {
   hotseat: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 118: 🔥 Hot-Seat Follow-Up — lifetime stats (attempts = chip-taps; correct = right chips on first try; sessions = cards shown)
   whatif: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 122: 🧪 What-If Output Predictor — pick the output for a specific walkthrough-example input (additive, no `__v` bump)
   mutate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 142: 🔀 Mutate-and-Predict — 5-card session showing canonical with ONE line mutated; user picks consequence-class taxonomy (still-correct / wrong-content-same-shape / throws / different-type). §9B forward-simulation drill — distinct from iter-73 Bug-Hunt's locate-the-bug task
+  phoneScreen: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 147: 📞 Phone Screen Simulator — chained 3-card session (syntax warmup + pattern L3 + mechanic-related L2 follow-up) under ONE unbroken timer. Cat 2 Paths & Sessions; distinct from Mock (single lesson) + Gauntlet (same-section L1 chain, no timer) via chained-different-lesson-types + single-timer combination
   calibrateOn: false, // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
   timeCalibration: { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } }, // iter 119: byMechanic[id] = { predictions: [{bucket, actualMs, errorSec}], median errorSec computed on read }. meta tracks engagement separately (estimates = bucket taps; skips = skip taps; passes = passes-with-estimate)
   paceBarOn: false, // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF) surfaces a peripheral-vision width-growing bar above the L3 editor against user's OWN median time-to-solve. L75 anti-gamification mitigated: user's own median only (no global benchmark), no timer numerals, no streak, auto-hides when no data.
@@ -912,6 +913,14 @@ function loadProgress() {
           lastRunAt: +parsed.mutate.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter 147: 📞 Phone Screen Simulator lifetime stats. Legacy users get zeros.
+    state.phoneScreen = parsed.phoneScreen && typeof parsed.phoneScreen === 'object'
+      ? {
+          sessions: +parsed.phoneScreen.sessions || 0,
+          completions: +parsed.phoneScreen.completions || 0,
+          lastRunAt: +parsed.phoneScreen.lastRunAt || 0
+        }
+      : { sessions: 0, completions: 0, lastRunAt: 0 };
     // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle (default OFF).
     state.calibrateOn = !!parsed.calibrateOn;
     // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF).
@@ -1019,6 +1028,7 @@ function saveProgress() {
     hapticOn: state.hapticOn,
     whatif: state.whatif,
     mutate: state.mutate,
+    phoneScreen: state.phoneScreen,
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
@@ -5426,6 +5436,290 @@ async function startMutateSession() {
   renderCard();
 }
 
+// iter 147: 📞 Phone Screen Simulator — Cat 2 Paths & Sessions. Chains 3 cards
+// (1 syntax-track Reference-readonly warmup + 1 pattern-track L3 editor + 1
+// mechanic-related L2 fill follow-up) under ONE unbroken timer (~12-15 min
+// total). The unified clock is the load-bearing piece — Mock has a timer but
+// only over a single lesson; Gauntlet chains lessons but has no timer. This
+// surface combines both axes to reproduce the actual phone-screen shape:
+// cumulative pressure across lesson transitions. PROFILE L22-24 "interview-
+// format conditioning."
+//
+// Deck recipe is deterministic per-session (random within each card slot):
+//   - Card 1: any syntax-track full lesson (any has notes; iter-144 scan
+//     confirmed 100% reference.notes coverage).
+//   - Card 2: random pattern-track full lesson with ≥1 mechanic (72 / 79
+//     pattern lessons qualify per iter-147 pre-scan).
+//   - Card 3: a DIFFERENT lesson sharing ≥1 mechanic with card 2 (via
+//     existing MECHANIC_INDEX). Fallback: any random pattern lesson if no
+//     mechanic-overlap candidate exists (rare — 24 mechanics shared by ≥3
+//     lessons make the overlap pick reliable).
+async function _phoneScreenBuildDeck() {
+  // Force-load all content first so MECHANIC_INDEX is complete; reuses the
+  // same ensureMechanicIndex() helper Mechanics modal + Bridge use.
+  await ensureMechanicIndex();
+  const fullLessons = CURRICULUM.filter(l => l.status === 'full');
+  // Card 1: random syntax-track lesson with reference.code present (every
+  // full lesson has it per validator).
+  const syntaxPool = fullLessons.filter(l => l.track === 'syntax');
+  if (!syntaxPool.length) return null;
+  const card1Lesson = syntaxPool[Math.floor(Math.random() * syntaxPool.length)];
+  // Card 2: random pattern-track lesson with ≥1 mechanic. If no patterns
+  // have mechanics (impossible per pre-scan but guard anyway), fall back to
+  // any pattern lesson.
+  const patternPool = fullLessons.filter(l =>
+    l.track === 'patterns' &&
+    CONTENT[l.id]?.mechanics && CONTENT[l.id].mechanics.length > 0
+  );
+  if (!patternPool.length) return null;
+  const card2Lesson = patternPool[Math.floor(Math.random() * patternPool.length)];
+  // Card 3: a lesson sharing ≥1 mechanic with card 2. Walk card 2's mechanics
+  // in shuffled order; for each, find lessons in MECHANIC_INDEX excluding
+  // card 2; pick one at random. Fallback to any non-card-2 pattern lesson.
+  const card2Mechs = CONTENT[card2Lesson.id].mechanics || [];
+  let card3Lesson = null;
+  for (const mid of _bugHuntShuffle(card2Mechs)) {
+    const bucket = MECHANIC_INDEX.get(mid);
+    if (!bucket) continue;
+    const overlap = Array.from(bucket).filter(id => id !== card2Lesson.id);
+    if (overlap.length === 0) continue;
+    const pickedId = overlap[Math.floor(Math.random() * overlap.length)];
+    card3Lesson = CURRICULUM.find(l => l.id === pickedId);
+    if (card3Lesson && card3Lesson.status === 'full') break;
+    card3Lesson = null;
+  }
+  if (!card3Lesson) {
+    const fallbackPool = patternPool.filter(l => l.id !== card2Lesson.id);
+    if (!fallbackPool.length) return null;
+    card3Lesson = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+  }
+  // Ensure all 3 lessons' content is loaded. ensureMechanicIndex already
+  // calls ensureAllContentLoaded but be defensive.
+  for (const l of [card1Lesson, card2Lesson, card3Lesson]) {
+    if (!CONTENT[l.id]) {
+      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    }
+  }
+  return [
+    { lessonId: card1Lesson.id, title: card1Lesson.title, sectionName: card1Lesson.section, kind: 'warmup' },
+    { lessonId: card2Lesson.id, title: card2Lesson.title, sectionName: card2Lesson.section, kind: 'pattern' },
+    { lessonId: card3Lesson.id, title: card3Lesson.title, sectionName: card3Lesson.section, kind: 'followup' }
+  ];
+}
+
+async function startPhoneScreenSession() {
+  const deck = await _phoneScreenBuildDeck();
+  if (!deck || deck.length !== 3) {
+    alert('Phone Screen needs more lessons loaded. Try again after clicking around a few syntax + patterns lessons.');
+    return;
+  }
+  state.phoneScreen.sessions++;
+  state.phoneScreen.lastRunAt = Date.now();
+  saveProgress();
+  let idx = 0;
+  const outcomes = []; // {kind, lessonId, passed}
+  const shell = document.getElementById('lesson-shell');
+  const sessionStartMs = Date.now();
+  let tickHandle = null;
+  function startTimerTick() {
+    if (tickHandle) clearInterval(tickHandle);
+    tickHandle = setInterval(() => {
+      const el = document.getElementById('phone-screen-timer');
+      if (el) el.textContent = formatTime(Date.now() - sessionStartMs);
+    }, 250);
+  }
+  function stopTimerTick() {
+    if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+  }
+  function pipsHtml() {
+    return deck.map((_, i) => {
+      const cls = i < idx ? 'phone-pip-done' : (i === idx ? 'phone-pip-active' : 'phone-pip-pending');
+      return `<span class="phone-pip ${cls}" data-pip-idx="${i}"></span>`;
+    }).join('');
+  }
+  function renderShellChrome(bodyHtml) {
+    shell.innerHTML = `
+      <div class="recognize-shell phone-screen-shell">
+        <div class="recognize-header">
+          <span>📞 Phone Screen · <span id="phone-screen-timer" class="mono">0:00</span></span>
+          <button class="recognize-exit" data-action="exit-phone-screen">✕ End interview</button>
+        </div>
+        <div class="phone-pips" aria-label="3-card session progress">${pipsHtml()}</div>
+        <div class="phone-card-tag">Card ${idx + 1} of 3 · ${escapeHtml(deck[idx].title)} · ${escapeHtml(deck[idx].sectionName)}</div>
+        <div class="phone-card-body" data-phone-card-body>${bodyHtml}</div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-phone-screen"]').addEventListener('click', () => {
+      stopTimerTick();
+      renderLesson();
+    });
+    startTimerTick();
+  }
+  function renderCard() {
+    if (idx >= deck.length) return renderSummary();
+    const card = deck[idx];
+    const content = CONTENT[card.lessonId];
+    if (!content) {
+      renderShellChrome(`<div class="phone-card-error">Lesson content failed to load. Try again.</div>`);
+      return;
+    }
+    if (card.kind === 'warmup') {
+      renderShellChrome(`
+        <div class="phone-card-instructions">Warm-up: read the canonical + notes. Tap "Got it" when ready.</div>
+        <pre class="phone-warmup-code cm-s-dracula" data-phone-warmup-code></pre>
+        <div class="phone-card-notes-label">Notes:</div>
+        <ul class="phone-card-notes">${(content.reference.notes || []).map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>
+        <div class="phone-card-actions">
+          <button class="primary" data-action="phone-next">Got it →</button>
+        </div>
+      `);
+      const codeEl = shell.querySelector('[data-phone-warmup-code]');
+      if (codeEl && typeof colorizeInto === 'function') colorizeInto(codeEl, content.reference.code);
+      else if (codeEl) codeEl.textContent = content.reference.code;
+      shell.querySelector('[data-action="phone-next"]').addEventListener('click', () => {
+        outcomes.push({ kind: 'warmup', lessonId: card.lessonId, passed: true });
+        idx++;
+        renderCard();
+      });
+    } else if (card.kind === 'pattern') {
+      const drill = content.L3;
+      renderShellChrome(`
+        <div class="phone-card-instructions">Pattern L3 — type the canonical from scratch. Run to grade.</div>
+        <div class="phone-prompt-block">
+          <div class="phone-prompt-label">Prompt</div>
+          <div class="phone-prompt-text">${escapeHtml(drill.prompt)}</div>
+          <div class="phone-prompt-expected">Expected output: <span class="mono">${escapeHtml(drill.expectedOutput)}</span></div>
+        </div>
+        <textarea class="phone-l3-editor" data-phone-l3-editor></textarea>
+        <div class="phone-card-actions">
+          <button class="primary" data-action="phone-run">Run</button>
+          <button class="secondary" data-action="phone-give-up">Give up → next card</button>
+          <span class="phone-feedback" data-phone-feedback></span>
+        </div>
+      `);
+      const ta = shell.querySelector('[data-phone-l3-editor]');
+      const isTouchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      const cm = CodeMirror.fromTextArea(ta, {
+        mode: 'javascript', theme: 'dracula', lineNumbers: true,
+        autoCloseBrackets: true, matchBrackets: true, indentUnit: 2, tabSize: 2,
+        lineWrapping: true, viewportMargin: Infinity,
+        inputStyle: isTouchDevice ? 'contenteditable' : 'textarea',
+        spellcheck: false, autocorrect: false, autocapitalize: false
+      });
+      const fb = shell.querySelector('[data-phone-feedback]');
+      shell.querySelector('[data-action="phone-run"]').addEventListener('click', async () => {
+        const code = cm.getValue();
+        if (!code.trim()) { fb.textContent = '✗ Editor empty.'; fb.className = 'phone-feedback phone-feedback-warn'; return; }
+        fb.textContent = 'Running…'; fb.className = 'phone-feedback';
+        const res = await runCode(code);
+        if (!res.ok) {
+          fb.textContent = `✗ Error: ${(res.output || 'unknown').slice(0, 60)}`;
+          fb.className = 'phone-feedback phone-feedback-err';
+        } else if ((res.output || '') === drill.expectedOutput) {
+          fb.textContent = '✓ Pass — moving to follow-up';
+          fb.className = 'phone-feedback phone-feedback-pass';
+          outcomes.push({ kind: 'pattern', lessonId: card.lessonId, passed: true });
+          setTimeout(() => { idx++; renderCard(); }, 700);
+        } else {
+          const got = (res.output || '(empty)').slice(0, 60);
+          fb.textContent = `✗ Output: ${got} (expected: ${drill.expectedOutput.slice(0, 40)})`;
+          fb.className = 'phone-feedback phone-feedback-warn';
+        }
+      });
+      shell.querySelector('[data-action="phone-give-up"]').addEventListener('click', () => {
+        outcomes.push({ kind: 'pattern', lessonId: card.lessonId, passed: false });
+        idx++;
+        renderCard();
+      });
+    } else if (card.kind === 'followup') {
+      // L2 fill-in for the mechanic-overlap lesson. Pick the first L2
+      // exercise (every full lesson has at least one). Render template with
+      // blanks as <input> fields; Submit grades them server-side via the
+      // existing L2-runner pattern. Keep this minimal — full L2 surface
+      // lives on the lesson's L2 tab; the phone-screen card is intentionally
+      // a one-shot follow-up.
+      const l2 = content.L2.exercises[0];
+      const blanksHtml = l2.blanks.map((_, i) =>
+        `<input type="text" class="phone-l2-blank mono" data-phone-l2-blank="${i}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">`
+      ).join('  ');
+      renderShellChrome(`
+        <div class="phone-card-instructions">Follow-up L2 (shares a mechanic with the previous lesson) — fill the blanks from memory.</div>
+        <div class="phone-prompt-block">
+          <div class="phone-prompt-label">Prompt</div>
+          <div class="phone-prompt-text">${escapeHtml(l2.prompt)}</div>
+        </div>
+        <pre class="phone-l2-template cm-s-dracula" data-phone-l2-template></pre>
+        <div class="phone-l2-blanks">${blanksHtml}</div>
+        <div class="phone-card-actions">
+          <button class="primary" data-action="phone-submit-l2">Submit</button>
+          <button class="secondary" data-action="phone-skip-l2">Skip → finish</button>
+          <span class="phone-feedback" data-phone-feedback></span>
+        </div>
+      `);
+      const tplEl = shell.querySelector('[data-phone-l2-template]');
+      if (tplEl && typeof colorizeInto === 'function') colorizeInto(tplEl, l2.template);
+      else if (tplEl) tplEl.textContent = l2.template;
+      const fb = shell.querySelector('[data-phone-feedback]');
+      shell.querySelector('[data-action="phone-submit-l2"]').addEventListener('click', () => {
+        const inputs = shell.querySelectorAll('[data-phone-l2-blank]');
+        let allCorrect = true;
+        inputs.forEach((inp, i) => {
+          const expected = l2.blanks[i].answer || '';
+          if (inp.value.trim() === expected.trim()) {
+            inp.classList.add('phone-l2-blank-correct');
+            inp.classList.remove('phone-l2-blank-wrong');
+          } else {
+            inp.classList.add('phone-l2-blank-wrong');
+            inp.classList.remove('phone-l2-blank-correct');
+            allCorrect = false;
+          }
+        });
+        if (allCorrect) {
+          fb.textContent = '✓ All blanks correct — finishing';
+          fb.className = 'phone-feedback phone-feedback-pass';
+          outcomes.push({ kind: 'followup', lessonId: card.lessonId, passed: true });
+          setTimeout(() => { idx++; renderCard(); }, 700);
+        } else {
+          fb.textContent = '✗ One or more blanks wrong (red borders). Retry or Skip.';
+          fb.className = 'phone-feedback phone-feedback-warn';
+        }
+      });
+      shell.querySelector('[data-action="phone-skip-l2"]').addEventListener('click', () => {
+        outcomes.push({ kind: 'followup', lessonId: card.lessonId, passed: false });
+        idx++;
+        renderCard();
+      });
+    }
+  }
+  function renderSummary() {
+    stopTimerTick();
+    const totalMs = Date.now() - sessionStartMs;
+    const passedCount = outcomes.filter(o => o.passed).length;
+    state.phoneScreen.completions++;
+    saveProgress();
+    shell.innerHTML = `
+      <div class="recognize-shell phone-screen-shell">
+        <div class="recognize-header"><span>📞 Phone Screen · Done · ${formatTime(totalMs)}</span></div>
+        <div class="recognize-summary">
+          <div class="recognize-summary-pct">${passedCount} / 3</div>
+          <div class="recognize-summary-line">${passedCount} of 3 cards passed in ${formatTime(totalMs)} total time</div>
+          <ul class="phone-summary-list">
+            ${outcomes.map((o, i) => `<li class="phone-summary-row"><span class="phone-summary-kind">${o.kind}</span> · <span class="${o.passed ? 'phone-summary-pass' : 'phone-summary-fail'}">${o.passed ? '✓' : '✗'}</span> · <span class="phone-summary-lesson">${escapeHtml(deck[i].title)}</span></li>`).join('')}
+          </ul>
+          <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.phoneScreen.completions} completed sessions of ${state.phoneScreen.sessions} started</div>
+          <div class="recognize-summary-actions">
+            <button class="primary" data-action="phone-again">📞 Another session</button>
+            <button class="secondary" data-action="phone-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+    shell.querySelector('[data-action="phone-again"]').addEventListener('click', () => startPhoneScreenSession());
+    shell.querySelector('[data-action="phone-done"]').addEventListener('click', () => renderLesson());
+  }
+  renderCard();
+}
+
 // iter 47: per-section retention aggregation for the Stats modal. Walks every
 // lesson's state.history events, bins by day across lookbackDays, returns
 // sorted rows (worst retention first → drives "what needs attention" UX).
@@ -9633,6 +9927,15 @@ async function init() {
     startMutateSession();
   });
 
+  // iter 147: 📞 Phone Screen Simulator — Cat 2 Paths & Sessions. Chained
+  // 3-card session (syntax warmup + pattern L3 + mechanic-related L2
+  // follow-up) under ONE unbroken timer. First Cat 2 Active list refill
+  // since iter 125 Gauntlet.
+  const phoneScreenBtn = document.getElementById('phone-screen-btn');
+  if (phoneScreenBtn) phoneScreenBtn.addEventListener('click', () => {
+    startPhoneScreenSession();
+  });
+
   // iter 109: 🔖 Match — bidirectional title ↔ description matcher.
   // Cat 8 § Modalities first ship; trains the name-to-concept retrieval
   // direction the L1/L2/L3 ladder doesn't cover.
@@ -11418,7 +11721,7 @@ const TOPBAR_MENU_TAXONOMY = {
   train: {
     label: 'Train',
     blurb: 'Cross-lesson timed and coverage streams.',
-    items: ['rapid-fire-btn', 'big-o-btn', 'speedrun-btn', 'gauntlet-btn']
+    items: ['rapid-fire-btn', 'big-o-btn', 'speedrun-btn', 'gauntlet-btn', 'phone-screen-btn']
   },
   insights: {
     label: 'Insights',

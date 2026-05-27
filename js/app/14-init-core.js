@@ -251,206 +251,69 @@ async function initBootstrap() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-//  DRILL LAUNCHERS — 25 sidebar buttons that each open a drill session
+//  DRILL LAUNCHERS — 25 sidebar buttons that each open a drill session.
+//  Adding a new drill: append [btn-id, startSessionFn] to the registry
+//  and add the button markup in index.html. No code change in init() needed.
+//  Iter-history per drill lives in git log; the inline single-line tag is
+//  the breadcrumb. `?.addEventListener` no-ops on absent buttons.
 // ──────────────────────────────────────────────────────────────────────────
+const DRILL_LAUNCHERS = [
+  // iter 49 — 🔎 Recognize: diagnose the pattern from a problem prompt
+  ['recognize-btn',        startRecognizeSession],
+  // iter 76 — 🎯 Reverse: output → problem (sibling to Recognize)
+  ['reverse-btn',          startReverseSession],
+  // iter 77 — 🔮 Predict: mental-execution from same-type distractors
+  ['crystal-btn',          startCrystalSession],
+  // iter 79 — 📐 Claim: smell-test stated complexity vs the code
+  ['claim-btn',            startClaimSession],
+  // iter 83 — 🎰 Gotcha Roulette: reference.notes recall stream
+  ['gotcha-btn',           startGotchaSession],
+  // iter 86 — 🔀 Swap-Bench: pairwise idiom-equivalence ("same behavior?")
+  ['swap-btn',             startSwapBenchSession],
+  // iter 91 — 🎬 Conversation Drill: classify section by interview-arc phase
+  ['conv-drill-btn',       startConvDrillSession],
+  // iter 93 — 🧬 Trace-Hop: pick the middle state of 3 consecutive frames
+  ['trace-hop-btn',        startTraceHopSession],
+  // iter 97 — 📝 Notes Cloze: keyword-blank MC over reference.notes[]
+  ['notes-drill-btn',      startNotesDrillSession],
+  // iter 98 — 🪐 Mechanic Constellation: multi-select lessons by tag
+  ['constellation-btn',    startConstellationSession],
+  // iter 99 — ⏪ Reverse-Walkthrough: final state → which input produced it
+  ['reverse-walk-btn',     startReverseWalkSession],
+  // iter 102 — 🗂 Notes Locate: cross-corpus note → which lesson
+  ['notes-locate-btn',     startNotesLocateSession],
+  // iter 122 — 🧪 What-If: input → output prediction over walkthrough examples
+  ['whatif-btn',           startWhatifSession],
+  // iter 142 — 🔀 Mutate-and-Predict: name the failure class of a mutation
+  ['mutate-btn',           startMutateSession],
+  // iter 147 — 📞 Phone Screen: chained 3-card session under one timer
+  ['phone-screen-btn',     startPhoneScreenSession],
+  // iter 148 — 🚧 Constraint-Shift: rewrite under a swapped constraint
+  ['constraint-shift-btn', startConstraintShiftSession],
+  // iter 109 — 🔖 Match: bidirectional title ↔ description matcher
+  ['match-btn',            startMatchSession],
+  // iter 111 — 🌈 Sections: section mastery heatmap (28-cell grid)
+  ['sections-grid-btn',    startSectionGrid],
+  // iter 88 — 🤖 AI Coach Export: clipboard payload for paste-into-LLM tutoring
+  ['ai-coach-btn',         startAiCoachExport],
+  // iter 54 — ⚡ Rapid-Fire L1: cross-lesson interleaved tap stream
+  ['rapid-fire-btn',       startRapidFireSession],
+  // iter 75 — ⏱ Big-O: complexity-filtered L1 stream
+  ['big-o-btn',            startBigOSession],
+  // iter 57 — 🌅 Warmup: 3-card micro-session over Today's Plan mix
+  ['warmup-btn',           startWarmupSession],
+  // iter 71 — 🏁 Section Speedrun: pick a section, race its L1 stream
+  ['speedrun-btn',         startSpeedrunPicker],
+  // iter 125 — 🥊 Gauntlet: chained all-L1 untimed across one section
+  ['gauntlet-btn',         startGauntletPicker],
+  // iter 73 — 🪲 Bug-Hunt: tap the buggy line on a mutated canonical
+  ['bug-hunt-btn',         startBugHuntSession],
+];
+
 function initDrillLaunchers() {
-  // iter 49: Pattern Recognition Speed Drill — diagnose-the-pattern session.
-  // Reframe of iter-26 entry #1 (BLOCKED) using SECTION-name distractors
-  // (17 cross-cutting buckets) instead of per-lesson distractors — sidesteps
-  // iter-30 data-contamination concern. See roadmap.md iter-48.
-  document.getElementById('recognize-btn').addEventListener('click', () => {
-    startRecognizeSession();
-  });
-
-  // iter 76: 🎯 Reverse — output→problem direction. Sibling to Recognize
-  // (problem→pattern direction). §9B code-evaluation surface.
-  document.getElementById('reverse-btn').addEventListener('click', () => {
-    startReverseSession();
-  });
-
-  // iter 77: 🔮 Predict — mental-execution drill. Read code, predict output
-  // from 4 same-type distractors without running. Trains the foundational
-  // interview reflex "execute this code in your head" — first surface to
-  // drill mental simulation.
-  document.getElementById('crystal-btn').addEventListener('click', () => {
-    startCrystalSession();
-  });
-
-  // iter 79: 📐 Claim — Smell-test complexity claim. §9B code-evaluation
-  // drill that trains "does the stated complexity match the code?" reflex.
-  document.getElementById('claim-btn').addEventListener('click', () => {
-    startClaimSession();
-  });
-
-  // iter 83: 🎰 Gotcha Roulette — reference.notes recall stream. Surfaces
-  // the half-remembered traps without the cost of opening each lesson.
-  document.getElementById('gotcha-btn').addEventListener('click', () => {
-    startGotchaSession();
-  });
-
-  // iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill. Two snippets
-  // stacked vertically; user judges "same behavior?".
-  const swapBtn = document.getElementById('swap-btn');
-  if (swapBtn) swapBtn.addEventListener('click', () => {
-    startSwapBenchSession();
-  });
-
-  // iter 91: 🎬 Conversation Drill — interview-arc classifier over
-  // conversation.sections[]. First surface to test the 6-section interview
-  // arc on Patterns/Applied lessons. Reuses Gotcha card stack.
-  const convDrillBtn = document.getElementById('conv-drill-btn');
-  if (convDrillBtn) convDrillBtn.addEventListener('click', () => {
-    startConvDrillSession();
-  });
-
-  // iter 93: 🧬 Trace-Hop — middle-state recall over walkthrough.trace yields.
-  // Three consecutive frames with the middle state blanked; user picks
-  // which of 4 same-trace states fits. First surface drilling positional
-  // state recall (the mental model needed to write canonical from scratch).
-  const traceHopBtn = document.getElementById('trace-hop-btn');
-  if (traceHopBtn) traceHopBtn.addEventListener('click', () => {
-    startTraceHopSession();
-  });
-
-  // iter 97: 📝 Notes Cloze — keyword-blank recall over reference.notes[].
-  // Third recall direction over the notes corpus: Gotcha tests whole-note
-  // recognition; Flash tests code-token cloze; Notes Cloze tests note-
-  // keyword cloze with MC distractors.
-  const notesDrillBtn = document.getElementById('notes-drill-btn');
-  if (notesDrillBtn) notesDrillBtn.addEventListener('click', () => {
-    startNotesDrillSession();
-  });
-
-  // iter 98: 🪐 Mechanic Constellation — multi-select recall over mechanics[]
-  // tag. First surface drilling mechanics as a recall TARGET (vs Bridge/Matrix/
-  // modal which all USE mechanics as input). Pick the 3 lessons (of 6) tagged
-  // with the given mechanic.
-  const constellationBtn = document.getElementById('constellation-btn');
-  if (constellationBtn) constellationBtn.addEventListener('click', () => {
-    startConstellationSession();
-  });
-
-  // iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over
-  // walkthrough.examples. Shown final state, pick which of 3 inputs from
-  // the SAME lesson produced it. Complements Walkthrough (forward stepper)
-  // and Trace-Hop (mid-state recall).
-  const reverseWalkBtn = document.getElementById('reverse-walk-btn');
-  if (reverseWalkBtn) reverseWalkBtn.addEventListener('click', () => {
-    startReverseWalkSession();
-  });
-
-  // iter 102: 🗂 Notes Locate — cross-corpus localization over reference.notes[].
-  // Third recall direction over the notes corpus: Gotcha = recognition;
-  // Notes Cloze = intra-note keyword; Locate = note → which lesson.
-  const notesLocateBtn = document.getElementById('notes-locate-btn');
-  if (notesLocateBtn) notesLocateBtn.addEventListener('click', () => {
-    startNotesLocateSession();
-  });
-
-  // iter 122: 🧪 What-If Output Predictor — per-lesson input→output recall
-  // over walkthrough.examples. Trace-transfer cognitive direction PROFILE
-  // L22-24 names but no surface drills as pure prediction.
-  const whatifBtn = document.getElementById('whatif-btn');
-  if (whatifBtn) whatifBtn.addEventListener('click', () => {
-    startWhatifSession();
-  });
-
-  // iter 142: 🔀 Mutate-and-Predict — §9B consequence-class drill. Distinct
-  // from iter-73 Bug-Hunt: Bug-Hunt = locate the buggy line; Mutate = name
-  // the type of failure the mutation causes. Forward-simulation cognitive
-  // operation; first §9B ship since iter 81 Edge-case chips.
-  const mutateBtn = document.getElementById('mutate-btn');
-  if (mutateBtn) mutateBtn.addEventListener('click', () => {
-    startMutateSession();
-  });
-
-  // iter 147: 📞 Phone Screen Simulator — Cat 2 Paths & Sessions. Chained
-  // 3-card session (syntax warmup + pattern L3 + mechanic-related L2
-  // follow-up) under ONE unbroken timer. First Cat 2 Active list refill
-  // since iter 125 Gauntlet.
-  const phoneScreenBtn = document.getElementById('phone-screen-btn');
-  if (phoneScreenBtn) phoneScreenBtn.addEventListener('click', () => {
-    startPhoneScreenSession();
-  });
-
-  // iter 148: 🚧 Constraint-Shift Drill — Cat 9 §9C + Cat 4 sidecar hybrid.
-  // First §9C ship ever; 5th sidecar registry. Session shows canonical with
-  // a swapped constraint claim and prompts rewrite; grade = runCode output
-  // match + per-entry structural-fingerprint regex (must NOT match in user
-  // submission).
-  const constraintShiftBtn = document.getElementById('constraint-shift-btn');
-  if (constraintShiftBtn) constraintShiftBtn.addEventListener('click', () => {
-    startConstraintShiftSession();
-  });
-
-  // iter 109: 🔖 Match — bidirectional title ↔ description matcher.
-  // Cat 8 § Modalities first ship; trains the name-to-concept retrieval
-  // direction the L1/L2/L3 ladder doesn't cover.
-  const matchBtn = document.getElementById('match-btn');
-  if (matchBtn) matchBtn.addEventListener('click', () => {
-    startMatchSession();
-  });
-
-  // iter 111: 🌈 Sections — section mastery heatmap. Cat 7 spatial axis
-  // (the 5 existing Cat 7 surfaces are all temporal). 28-cell grid colored
-  // by mastery %; tap → drill the section's first not-mastered lesson.
-  const sectionsGridBtn = document.getElementById('sections-grid-btn');
-  if (sectionsGridBtn) sectionsGridBtn.addEventListener('click', () => {
-    startSectionGrid();
-  });
-
-  // iter 88: 🤖 AI Coach Export — clipboard export of weak-spots + revealed
-  // + overdue lessons for paste-into-LLM tutoring. Pure clipboard, no API.
-  const aiCoachBtn = document.getElementById('ai-coach-btn');
-  if (aiCoachBtn) aiCoachBtn.addEventListener('click', () => {
-    startAiCoachExport();
-  });
-
-  // iter 54: ⚡ Rapid-Fire L1 stream — cross-lesson interleaved tap surface.
-  // Closes iter-31 roadmap entry #4 (L1 Rapid-Fire Drill, unblocked). Uses
-  // existing L1 corpus across all tracks; integrates with weak-spot tracker
-  // on misses so the high-throughput stream feeds normal SR/weakness rotation.
-  document.getElementById('rapid-fire-btn').addEventListener('click', () => {
-    startRapidFireSession();
-  });
-
-  // iter 75: ⏱ Big-O — complexity-filtered L1 stream. Reuses Rapid-Fire's
-  // shell with a deck filtered to complexity-flavored q-text. Closes audit
-  // theme #4 (complexity-Q fatigue) by concentrating those Qs into a
-  // trainable surface instead of diluting them across normal lessons.
-  document.getElementById('big-o-btn').addEventListener('click', () => {
-    startBigOSession();
-  });
-
-  // iter 57: 🌅 Warmup — 3-card micro-session over Today's Plan's curated
-  // mix (due + path + weak). Closes iter-55 roadmap #3. The L1 interaction
-  // shell ships INSIDE the card so the user goes from idle to answering in
-  // ~3 taps vs Today's Plan's ~6+ nav-into-lesson flow.
-  document.getElementById('warmup-btn').addEventListener('click', () => {
-    startWarmupSession();
-  });
-
-  // iter 71: 🏁 Section Speedrun — pick a section, race its L1 stream.
-  // Closes iter-64 roadmap entry #2. Routes through picker (section list)
-  // not direct session-start; users see all sections + their PBs first.
-  document.getElementById('speedrun-btn').addEventListener('click', () => {
-    startSpeedrunPicker();
-  });
-
-  // iter 125: 🥊 Pattern-Family Gauntlet — chained all-L1 untimed session
-  // across every full lesson in one section. Cousin to Speedrun (1 L1/lesson
-  // + stopwatch); Gauntlet is deep-on-one-family. Closes iter-124 roadmap #1
-  // — first Cat 2 Active list refill since iter 45 (78+ iters stale).
-  document.getElementById('gauntlet-btn').addEventListener('click', () => {
-    startGauntletPicker();
-  });
-
-  // iter 73: 🪲 Bug-Hunt — §9B code-evaluation drill. Auto-mutator picks
-  // a breaking mutation on a real patterns canonical; user taps the buggy
-  // line. First §9B surface — closes the iter-36 cross-cutting gap.
-  document.getElementById('bug-hunt-btn').addEventListener('click', () => {
-    startBugHuntSession();
-  });
+  for (const [id, fn] of DRILL_LAUNCHERS) {
+    document.getElementById(id)?.addEventListener('click', fn);
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────

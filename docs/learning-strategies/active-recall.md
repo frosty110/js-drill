@@ -16,6 +16,23 @@ app's existence.
 
 ## How the app encodes it today
 
+- **📝 Notes→Code (iter 144).** Reference-tab toggle alongside 🃏 Flash +
+  🎬 Cinema. When ON: canonical `<pre>` hides, a CodeMirror editor + Run
+  button mount in its place; the user types the canonical from memory
+  using the still-visible Notes list (below the editor) as the only
+  prompt. Run grades via runCode against `L3.expectedOutput` — the same
+  grader the L3 drill uses. **Fills the documented L2→L3 cell gap**
+  ("see concept, recall code" direction). The L1→L2→L3 ladder gives the
+  user increasing prompt scaffolding: L1 = MC over concepts; L2 =
+  template + blanks given; L3 = problem prompt only. Notes→Code is the
+  missing cell BETWEEN L2 and L3: concept-bullets given, full-code
+  recall. Mutually exclusive with Flash + Cinema via the shared
+  `restoreCanonical()` helper. Desk-tier (toggle tooltip names this
+  explicitly so mobile users self-select); first Cat 1 Drilling Surfaces
+  ship since iter-122 What-If — 22-iter drought broken. The recall here
+  is the purest form in the app: nothing visible IS the canonical, and
+  the user produces every character from memory.
+
 - **🎤 Clarify-First Ritual (iter 117).** Opt-in pre-L3 gate (toggle in
   sidebar; default OFF). When ON, every Patterns/Applied L3 visit shows
   a chip-card BEFORE the editor unlocks. Correct chips are mined from

@@ -1,0 +1,96 @@
+{
+  "id": "a-eve-treatment-gaps",
+  "title": "Treatment Gap Detector",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Algorithm shape — sort the visit dates, then a single `for` loop comparing each visit to the previous one (i vs i-1) to flag any gap longer than a threshold.",
+  "mechanics": ["sort-then-sweep"],
+  "reference": {
+    "code": "function findGaps(dates, maxDays) {\n  // Sort first — gaps are measured between CONSECUTIVE visits, and the\n  // input may arrive unordered. Copy with [...dates] so we don't mutate the caller's array.\n  const sorted = [...dates].sort();\n  const gaps = [];\n  // Start at i=1 so each iteration can compare i to i-1 (adjacent pair).\n  for (let i = 1; i < sorted.length; i++) {\n    // Date.parse(ISO) gives UTC milliseconds; /86400000 (ms per day) yields whole days.\n    const days = (Date.parse(sorted[i]) - Date.parse(sorted[i - 1])) / 86400000;\n    if (days > maxDays) gaps.push(`${sorted[i - 1]} → ${sorted[i]}: ${days} days`);\n  }\n  return gaps;\n}",
+    "notes": [
+      "Sort BEFORE comparing — a gap is the distance between consecutive visits, so unsorted input would produce nonsense diffs (even negative ones).",
+      "`Date.parse(isoString)` returns UTC milliseconds since epoch; subtracting two and dividing by 86400000 (ms in a day) gives a whole number of days for date-only ISO strings.",
+      "The loop index starts at `i = 1` because the body reads `sorted[i]` and `sorted[i - 1]` together; starting at 0 would read `sorted[-1]` (undefined)."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why does `findGaps` sort the dates before the loop?",
+        "options": [
+          "Sorting removes duplicate visits",
+          "Gaps are measured between consecutive visits, so the dates must be in order or the diffs are meaningless",
+          "`Date.parse` requires sorted input",
+          "It makes the loop run faster"
+        ],
+        "answer": 1,
+        "explain": "A gap is the distance between adjacent visits. If the input isn't sorted, comparing position i to i-1 gives diffs that aren't real time gaps."
+      },
+      {
+        "q": "What does `(Date.parse(b) - Date.parse(a)) / 86400000` compute for two ISO date strings?",
+        "options": [
+          "The number of hours between them",
+          "The number of whole days between them (86400000 = ms per day)",
+          "The number of milliseconds, unscaled",
+          "A timestamp for the later date"
+        ],
+        "answer": 1,
+        "explain": "`Date.parse` returns UTC milliseconds; 86400000 is the milliseconds in one day, so the quotient is whole days for date-only strings."
+      },
+      {
+        "q": "Why does the loop start at `i = 1` instead of `i = 0`?",
+        "options": [
+          "To skip the first visit, which is always invalid",
+          "Because the body compares `sorted[i]` to `sorted[i - 1]`; starting at 0 would index `sorted[-1]`",
+          "Arrays in JS are 1-indexed",
+          "To avoid an off-by-one in the gap count"
+        ],
+        "answer": 1,
+        "explain": "Each iteration reads the current and previous element as a pair, so the earliest valid current index is 1."
+      },
+      {
+        "q": "Why is the input copied with `[...dates]` before sorting?",
+        "options": [
+          "`.sort()` only works on copies",
+          "`.sort()` mutates in place, so copying avoids reordering the caller's original array",
+          "To convert the array to a Set",
+          "It isn't necessary and is purely stylistic with no effect"
+        ],
+        "answer": 1,
+        "explain": "`Array.prototype.sort` sorts in place and returns the same array; spreading into a new array first protects the caller's data."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Compute the whole-day gap between two ISO dates. Fill the blank with the milliseconds-per-day divisor.",
+        "template": "const days = (Date.parse('2024-01-10') - Date.parse('2024-01-01')) / ___;\nconsole.log(days);",
+        "blanks": [
+          { "answer": "86400000", "hint": "1000 ms * 60 s * 60 min * 24 h" }
+        ],
+        "expectedOutput": "9"
+      },
+      {
+        "prompt": "Walk adjacent pairs with a `for` loop starting at index 1, flagging gaps over 5. Fill the blanks.",
+        "template": "const sorted = ['2024-01-01', '2024-01-04', '2024-01-20'];\nconst gaps = [];\nfor (let i = ___; i < sorted.length; i++) {\n  const days = (Date.parse(sorted[i]) - Date.parse(sorted[i - 1])) / 86400000;\n  if (days > 5) gaps.___(days);\n}\nconsole.log(gaps.join(','));",
+        "blanks": [
+          { "answer": "1", "hint": "compare i to i-1, so the first valid i" },
+          { "answer": "push", "hint": "append the gap to the result array" }
+        ],
+        "expectedOutput": "16"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Given treatment dates (ISO strings) and a max-gap threshold in days, return each gap LONGER than the threshold between consecutive visits, formatted `prev → next: N days`.",
+    "expectedOutput": "Gaps over 30 days:\n2024-01-10 → 2024-04-01: 82 days",
+    "canonical": "function findGaps(dates, maxDays) {\n  const sorted = [...dates].sort();\n  const gaps = [];\n  for (let i = 1; i < sorted.length; i++) {\n    const days = (Date.parse(sorted[i]) - Date.parse(sorted[i - 1])) / 86400000;\n    if (days > maxDays) gaps.push(`${sorted[i - 1]} → ${sorted[i]}: ${days} days`);\n  }\n  return gaps;\n}\nconst visits = ['2024-01-01', '2024-01-10', '2024-04-01', '2024-04-05'];\nconsole.log('Gaps over 30 days:');\nfindGaps(visits, 30).forEach(g => console.log(g));",
+    "hints": [
+      "Sort the dates first (copy with `[...dates]`), since gaps are between consecutive visits.",
+      "Loop from `i = 1` and compare `sorted[i]` to `sorted[i - 1]`.",
+      "Day count = `(Date.parse(later) - Date.parse(earlier)) / 86400000`; only push when it exceeds `maxDays`."
+    ]
+  }
+}

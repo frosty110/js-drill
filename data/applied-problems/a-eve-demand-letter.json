@@ -1,0 +1,97 @@
+{
+  "id": "a-eve-demand-letter",
+  "title": "Demand Letter Template Engine",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Render a demand-letter template in a single left-to-right `while` scan — string state-machine shape, because we handle `{{...}}` tokens, dotted keys, and missing keys without a naive global replace.",
+  "mechanics": ["text-scan"],
+  "reference": {
+    "code": "function renderTemplate(template, data) {\n  let out = '';\n  let i = 0;\n  while (i < template.length) {\n    const open = template.indexOf('{{', i);\n    if (open === -1) { out += template.slice(i); break; }\n    out += template.slice(i, open);\n    const close = template.indexOf('}}', open + 2);\n    if (close === -1) { out += template.slice(open); break; }\n    const key = template.slice(open + 2, close).trim();\n    // Dotted keys (client.name) resolve via reduce; null-guard each hop.\n    const val = key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), data);\n    // Missing key → placeholder, never a crash. A half-built letter beats an exception.\n    out += val === undefined ? `[MISSING:${key}]` : String(val);\n    i = close + 2;\n  }\n  return out;\n}\nconst tpl = 'Dear {{client.name}},\\nWe demand {{amount}} for injuries on {{date}}. Ref: {{caseId}}.';\nconst data = { client: { name: 'Jane Doe' }, amount: '$50,000', date: '2024-03-01' };\nconsole.log(renderTemplate(tpl, data));",
+    "notes": [
+      "A left-to-right scan beats chained `.replace` calls: it handles repeated/overlapping tokens correctly in one pass and won't re-substitute text a previous replace just inserted (template injection).",
+      "Dotted keys like `client.name` resolve by `key.split('.').reduce(...)`, null-guarding each hop so a missing intermediate object yields `undefined` instead of a 'cannot read property of undefined' throw.",
+      "A missing key becomes `[MISSING:key]`, not a crash — a paralegal can eyeball a half-rendered letter and fix the gap; an exception just loses the whole document."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why scan the template left-to-right instead of chaining `template.replace('{{amount}}', ...).replace('{{date}}', ...)`?",
+        "options": [
+          "Chained replace is slower on short strings",
+          "A single scan handles repeated/overlapping tokens in one pass and won't re-substitute text an earlier replace already inserted",
+          "`replace` can't handle newlines in the template",
+          "The keys aren't known ahead of time, so replace is impossible"
+        ],
+        "answer": 1,
+        "explain": "Each `{{key}}` is found and resolved exactly once as the cursor moves forward. Chained replaces re-scan the whole string per key and can accidentally substitute into text a prior replace produced — a template-injection footgun if a value itself contains `{{...}}`."
+      },
+      {
+        "q": "How does `key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), data)` resolve `client.name`?",
+        "options": [
+          "It joins the parts back with a dot and reads `data['client.name']`",
+          "It walks the path one key at a time — `data` → `data.client` → `data.client.name` — short-circuiting to undefined if any hop is null/undefined",
+          "It throws if `client` is missing",
+          "It only works for two-level keys"
+        ],
+        "answer": 1,
+        "explain": "`reduce` threads the object through each path segment. The `o == null ? undefined` guard means a missing intermediate (no `client`) produces `undefined` cleanly instead of throwing on `undefined.name`."
+      },
+      {
+        "q": "Why does a missing key render as `[MISSING:caseId]` instead of throwing?",
+        "options": [
+          "Throwing is slower",
+          "A partially-rendered letter is more useful to a paralegal than a crash that loses the whole document",
+          "JavaScript can't throw inside a string concat",
+          "The placeholder is required by the template syntax"
+        ],
+        "answer": 1,
+        "explain": "Graceful degradation: the operator sees exactly which field is unpopulated and can fill it, rather than getting an unhandled exception that discards everything rendered so far."
+      },
+      {
+        "q": "What does `template.slice(open + 2, close).trim()` extract for the token `{{ client.name }}`?",
+        "options": [
+          "`{{ client.name }}`",
+          "` client.name `",
+          "`client.name`",
+          "`client`"
+        ],
+        "answer": 2,
+        "explain": "`open + 2` skips past `{{` and `close` stops before `}}`, giving ` client.name `; `.trim()` removes the surrounding whitespace so the key lookup tolerates `{{ key }}` spacing."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Resolve a dotted key against a data object via reduce, null-guarding each hop. Fill the blanks so it logs the nested value.",
+        "template": "const data = { client: { name: 'Jane Doe' } };\nconst key = 'client.name';\nconst val = key.split('.').___((o, k) => (o == null ? undefined : o[k]), ___);\nconsole.log(val);",
+        "blanks": [
+          { "answer": "reduce", "hint": "fold the path segments into a single value" },
+          { "answer": "data", "hint": "the initial accumulator — the root object" }
+        ],
+        "expectedOutput": "Jane Doe"
+      },
+      {
+        "prompt": "Find a `{{...}}` token by index and slice out the key. Fill the blanks so it logs the key name only.",
+        "template": "const tpl = 'Ref: {{caseId}}.';\nconst open = tpl.indexOf('___');\nconst close = tpl.indexOf('}}', open + 2);\nconst key = tpl.slice(open + 2, ___).trim();\nconsole.log(key);",
+        "blanks": [
+          { "answer": "{{", "hint": "the token opener" },
+          { "answer": "close", "hint": "stop before the closing }}" }
+        ],
+        "expectedOutput": "caseId"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Render a demand-letter template: replace each `{{key}}` with its value from a data object (support dotted keys like `client.name`). A missing key becomes `[MISSING:key]`, never a crash.",
+    "expectedOutput": "Dear Jane Doe,\nWe demand $50,000 for injuries on 2024-03-01. Ref: [MISSING:caseId].",
+    "canonical": "function renderTemplate(template, data) {\n  let out = '';\n  let i = 0;\n  while (i < template.length) {\n    const open = template.indexOf('{{', i);\n    if (open === -1) { out += template.slice(i); break; }\n    out += template.slice(i, open);\n    const close = template.indexOf('}}', open + 2);\n    if (close === -1) { out += template.slice(open); break; }\n    const key = template.slice(open + 2, close).trim();\n    const val = key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), data);\n    out += val === undefined ? `[MISSING:${key}]` : String(val);\n    i = close + 2;\n  }\n  return out;\n}\nconst tpl = 'Dear {{client.name}},\\nWe demand {{amount}} for injuries on {{date}}. Ref: {{caseId}}.';\nconst data = { client: { name: 'Jane Doe' }, amount: '$50,000', date: '2024-03-01' };\nconsole.log(renderTemplate(tpl, data));",
+    "hints": [
+      "Scan with a cursor `i`: use `indexOf('{{', i)` to find the next token, append the literal text before it, then `indexOf('}}', open + 2)` for the close.",
+      "Resolve dotted keys with `key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), data)`.",
+      "If the resolved value is `undefined`, append `[MISSING:${key}]`; otherwise `String(val)`. Advance `i` past `}}`."
+    ]
+  }
+}

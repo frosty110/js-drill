@@ -1,0 +1,96 @@
+{
+  "id": "a-eve-medical-chronology",
+  "title": "Medical Chronology Builder",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Hash-group then sort — group medical records by date into a Map, then emit dates in sorted order with same-date events kept in input order.",
+  "mechanics": ["map-keyed-state"],
+  "reference": {
+    "code": "function buildChronology(records) {\n  // Group records by their date key. A Map preserves first-seen key order,\n  // but we sort the keys explicitly so output is chronological regardless of input.\n  const byDate = new Map();\n  for (const r of records) {\n    if (!byDate.has(r.date)) byDate.set(r.date, []);\n    // push keeps same-date events in the order they appeared in the input.\n    byDate.get(r.date).push(`${r.provider}: ${r.note}`);\n  }\n  // ISO dates (YYYY-MM-DD) sort chronologically as plain strings — no Date needed.\n  return [...byDate.keys()].sort().map(date => `${date} — ${byDate.get(date).join('; ')}`);\n}",
+    "notes": [
+      "ISO 8601 dates (YYYY-MM-DD) are lexicographically sortable: a plain string `.sort()` gives chronological order, so you never need to parse them into Date objects here.",
+      "`if (!byDate.has(r.date)) byDate.set(r.date, [])` lazily initializes the bucket; without it the first `.get(...).push` on a new date would throw on `undefined`.",
+      "Same-date records collapse in INPUT order because `.push` appends — sorting only reorders the date keys, never the events within a date."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why are the records grouped into a `Map` keyed by date before emitting?",
+        "options": [
+          "Maps are faster than arrays for all lookups",
+          "So that all events sharing a date land in one bucket, ready to collapse into a single output line",
+          "Because arrays cannot hold objects",
+          "To remove duplicate records automatically"
+        ],
+        "answer": 1,
+        "explain": "The group-then-emit shape collects same-date events into one bucket so each date produces exactly one collapsed line."
+      },
+      {
+        "q": "Why does `[...byDate.keys()].sort()` produce chronological order without parsing dates?",
+        "options": [
+          "`.sort()` detects date strings and parses them",
+          "ISO 8601 dates (YYYY-MM-DD) sort the same lexicographically as chronologically",
+          "Map keys are always pre-sorted",
+          "It doesn't — this is a latent bug"
+        ],
+        "answer": 1,
+        "explain": "Fixed-width YYYY-MM-DD strings compare character-by-character in the same order as the calendar, so a plain string sort is chronological."
+      },
+      {
+        "q": "Two records share the date 2024-02-01. What determines their order on the output line?",
+        "options": [
+          "Alphabetical by provider name",
+          "The order they appeared in the input (the `.push` order)",
+          "Reverse input order",
+          "Random — Maps don't preserve order"
+        ],
+        "answer": 1,
+        "explain": "Sorting only reorders the date keys. Within a date, `.push` keeps events in the order they were read from the input."
+      },
+      {
+        "q": "What is the purpose of `if (!byDate.has(r.date)) byDate.set(r.date, [])`?",
+        "options": [
+          "It skips duplicate dates",
+          "It lazily creates an empty array bucket the first time a date is seen, so the later `.get().push` won't throw",
+          "It validates the date format",
+          "It sorts the bucket"
+        ],
+        "answer": 1,
+        "explain": "Without initializing the bucket, `byDate.get(r.date)` would be `undefined` on a first-seen date and `.push` would throw."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Lazily initialize a Map bucket and push into it, then read it back. Fill the blanks so the output is the joined notes.",
+        "template": "const byDate = new Map();\nconst date = '2024-01-15';\nif (!byDate.___(date)) byDate.set(date, []);\nbyDate.get(date).___('PCP: visit');\nbyDate.get(date).push('Lab: bloodwork');\nconsole.log(byDate.get(date).join('; '));",
+        "blanks": [
+          { "answer": "has", "hint": "Map membership test" },
+          { "answer": "push", "hint": "append to the array bucket" }
+        ],
+        "expectedOutput": "PCP: visit; Lab: bloodwork"
+      },
+      {
+        "prompt": "ISO date strings sort chronologically as plain strings. Fill the blanks so the dates print earliest-first.",
+        "template": "const dates = ['2024-02-01', '2024-01-15', '2024-02-01'];\nconst ordered = [...new Set(dates)].___();\nconsole.log(ordered.join(', '));",
+        "blanks": [
+          { "answer": "sort", "hint": "default lexicographic sort works for ISO dates" }
+        ],
+        "expectedOutput": "2024-01-15, 2024-02-01"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Turn a list of medical records (`{date, provider, note}`) into a chronological timeline. Sort by date; records on the same date collapse into one line, joined by `; `.",
+    "expectedOutput": "2024-01-15 — PCP: Initial visit\n2024-02-01 — ER: Admitted; Radiology: CT scan",
+    "canonical": "function buildChronology(records) {\n  const byDate = new Map();\n  for (const r of records) {\n    if (!byDate.has(r.date)) byDate.set(r.date, []);\n    byDate.get(r.date).push(`${r.provider}: ${r.note}`);\n  }\n  return [...byDate.keys()].sort().map(date => `${date} — ${byDate.get(date).join('; ')}`);\n}\nconst records = [\n  { date: '2024-02-01', provider: 'ER', note: 'Admitted' },\n  { date: '2024-01-15', provider: 'PCP', note: 'Initial visit' },\n  { date: '2024-02-01', provider: 'Radiology', note: 'CT scan' },\n];\nbuildChronology(records).forEach(l => console.log(l));",
+    "hints": [
+      "Group first: a Map keyed by `r.date`, each value an array of `provider: note` strings.",
+      "Lazily create the bucket with `if (!byDate.has(r.date)) byDate.set(r.date, [])` before pushing.",
+      "Emit by sorting the keys (ISO dates sort chronologically as strings) and joining each bucket with `'; '`."
+    ]
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "id": "a-eve-citation-extract",
+  "title": "Date Normalizer & Extractor",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Multi-format parse — scan text for ISO, US-slash, and long-month dates with `matchAll`, normalize each to `YYYY-MM-DD`, dedupe via a Set, and sort (ISO strings sort lexicographically = chronologically).",
+  "mechanics": ["text-scan", "set-dedup"],
+  "reference": {
+    "code": "function extractDates(text) {\n  const months = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12, jan:1, feb:2, mar:3, apr:4, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12 };\n  const pad = n => String(n).padStart(2, '0');\n  // Set of normalized ISO strings — same date in two formats dedupes to one.\n  const found = new Set();\n  for (const m of text.matchAll(/\\b(\\d{4})-(\\d{2})-(\\d{2})\\b/g)) {\n    found.add(`${m[1]}-${m[2]}-${m[3]}`);\n  }\n  for (const m of text.matchAll(/\\b(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\b/g)) {\n    found.add(`${m[3]}-${pad(+m[1])}-${pad(+m[2])}`);\n  }\n  for (const m of text.matchAll(/\\b([A-Za-z]+)\\.?\\s+(\\d{1,2}),\\s+(\\d{4})\\b/g)) {\n    const mo = months[m[1].toLowerCase()];\n    if (mo) found.add(`${m[3]}-${pad(mo)}-${pad(+m[2])}`);\n  }\n  // ISO YYYY-MM-DD sorts chronologically with a plain string sort.\n  return [...found].sort();\n}\nconst note = 'Initial visit Jan 5, 2024. Follow-up 02/10/2024. MRI on 2024-01-05 confirmed. Discharged March 3, 2024.';\nconsole.log(extractDates(note).join('\\n'));",
+    "notes": [
+      "Normalizing every format to ISO `YYYY-MM-DD` and storing in a `Set` makes 'Jan 5, 2024' and '2024-01-05' dedupe automatically — they collapse to the same canonical string.",
+      "ISO `YYYY-MM-DD` is designed so lexicographic (plain string) sort equals chronological order; no Date parsing or custom comparator needed.",
+      "`matchAll` with the `/g` flag returns every match as an iterable of arrays where `m[1]`, `m[2]`, `m[3]` are the capture groups — unlike `match` with `/g`, which drops the groups."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why store normalized ISO strings in a `Set` rather than pushing to an array?",
+        "options": [
+          "A Set is faster to sort",
+          "The same calendar date written in two formats ('Jan 5, 2024' and '2024-01-05') normalizes to the same string, and the Set dedupes them automatically",
+          "Arrays can't hold strings",
+          "A Set preserves insertion order for free"
+        ],
+        "answer": 1,
+        "explain": "Both formats map to the canonical '2024-01-05'. Adding both to a Set keeps just one copy, so the multi-format extraction doesn't report the same date twice."
+      },
+      {
+        "q": "Why does `[...found].sort()` (a plain string sort) produce chronological order?",
+        "options": [
+          "Because .sort() detects dates automatically",
+          "ISO `YYYY-MM-DD` is fixed-width with the most-significant field (year) first, so lexicographic string order equals chronological order",
+          "Because the Set already stores them sorted",
+          "It doesn't — you must pass a comparator that parses Dates"
+        ],
+        "answer": 1,
+        "explain": "Year-month-day ordering with zero-padding means comparing the strings character-by-character compares year, then month, then day — exactly chronological. No Date objects or comparators required."
+      },
+      {
+        "q": "Why use `text.matchAll(/.../g)` instead of `text.match(/.../g)` here?",
+        "options": [
+          "matchAll is the only one that supports the /g flag",
+          "matchAll yields each match WITH its capture groups (m[1], m[2], m[3]); match with /g returns just the full matched strings and discards the groups",
+          "match can only find the first occurrence",
+          "matchAll automatically dedupes results"
+        ],
+        "answer": 1,
+        "explain": "The code needs the year/month/day capture groups to reassemble each date. `String.match` with `/g` throws the groups away and returns only full-match strings, so `matchAll` is required to get the parts."
+      },
+      {
+        "q": "For the US-slash format, why is the group order `${m[3]}-${pad(+m[1])}-${pad(+m[2])}`?",
+        "options": [
+          "The slashes reverse the order",
+          "The input is MM/DD/YYYY, so group 1 is month, group 2 is day, group 3 is year — reordered and zero-padded to YYYY-MM-DD",
+          "It's an arbitrary choice",
+          "JavaScript dates are always day-first"
+        ],
+        "answer": 1,
+        "explain": "`02/10/2024` is MM/DD/YYYY: m[1]='02' (month), m[2]='10' (day), m[3]='2024' (year). Emitting year-month-day with `pad` produces the ISO '2024-02-10'. The `+` coerces to number so `pad` re-pads consistently."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Dedupe two spellings of the same date by normalizing to ISO and using a Set. Fill the blanks so only one date prints.",
+        "template": "const found = new ___();\nfound.add('2024-01-05');\nfound.add('2024-01-05');\nconsole.log([...found].___().join('\\n'));",
+        "blanks": [
+          { "answer": "Set", "hint": "the collection that drops duplicates" },
+          { "answer": "sort", "hint": "ISO strings sort chronologically" }
+        ],
+        "expectedOutput": "2024-01-05"
+      },
+      {
+        "prompt": "Reorder an MM/DD/YYYY match into ISO with zero-padding. Fill the blanks.",
+        "template": "const pad = n => String(n).padStart(2, '0');\nconst m = '02/10/2024'.match(/(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);\nconst iso = `${m[3]}-${pad(+m[1])}-${pad(+m[___])}`;\nconsole.log(iso);",
+        "blanks": [
+          { "answer": "2", "hint": "the day capture group in MM/DD/YYYY" }
+        ],
+        "expectedOutput": "2024-02-10"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Extract every date from a medical note in three formats — `2024-01-05`, `01/05/2024` (MM/DD/YYYY), and `Jan 5, 2024` / `January 5, 2024` — normalize each to ISO `YYYY-MM-DD`, dedupe, and return sorted ascending.",
+    "expectedOutput": "2024-01-05\n2024-02-10\n2024-03-03",
+    "canonical": "function extractDates(text) {\n  const months = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12, jan:1, feb:2, mar:3, apr:4, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12 };\n  const pad = n => String(n).padStart(2, '0');\n  const found = new Set();\n  for (const m of text.matchAll(/\\b(\\d{4})-(\\d{2})-(\\d{2})\\b/g)) {\n    found.add(`${m[1]}-${m[2]}-${m[3]}`);\n  }\n  for (const m of text.matchAll(/\\b(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\b/g)) {\n    found.add(`${m[3]}-${pad(+m[1])}-${pad(+m[2])}`);\n  }\n  for (const m of text.matchAll(/\\b([A-Za-z]+)\\.?\\s+(\\d{1,2}),\\s+(\\d{4})\\b/g)) {\n    const mo = months[m[1].toLowerCase()];\n    if (mo) found.add(`${m[3]}-${pad(mo)}-${pad(+m[2])}`);\n  }\n  return [...found].sort();\n}\nconst note = 'Initial visit Jan 5, 2024. Follow-up 02/10/2024. MRI on 2024-01-05 confirmed. Discharged March 3, 2024.';\nconsole.log(extractDates(note).join('\\n'));",
+    "hints": [
+      "Run three `matchAll` passes — one per format — and `found.add(...)` a normalized ISO string from each.",
+      "Use a Set so a date written two ways ('Jan 5, 2024' and '2024-01-05') dedupes to one entry. Zero-pad month/day with `String(n).padStart(2, '0')`.",
+      "Return `[...found].sort()` — ISO strings sort chronologically with a plain string sort, no comparator needed."
+    ]
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "id": "a-eve-pii-redaction",
+  "title": "PII Redaction",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Redact a medical note with word-boundary regexes — string scan that replaces any SSN pattern and each sensitive term case-insensitively, counting replacements via a replacer callback.",
+  "mechanics": ["text-scan"],
+  "reference": {
+    "code": "function redact(text, terms) {\n  let count = 0;\n  // SSN pattern first; the replacer callback lets us count every hit.\n  let out = text.replace(/\\b\\d{3}-\\d{2}-\\d{4}\\b/g, () => { count++; return '[REDACTED]'; });\n  for (const term of terms) {\n    // Escape regex metacharacters so a term like 'Dr.' is treated literally.\n    const escaped = term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n    // \\b...\\b = whole word; g = all occurrences; i = case-insensitive.\n    const re = new RegExp('\\\\b' + escaped + '\\\\b', 'gi');\n    out = out.replace(re, () => { count++; return '[REDACTED]'; });\n  }\n  return { text: out, count };\n}\nconst note = 'Patient Jane Doe, SSN 123-45-6789, treated by Dr. Smith. Jane reported pain.';\nconst result = redact(note, ['Jane', 'Smith']);\nconsole.log(result.text);\nconsole.log('Redactions: ' + result.count);",
+    "notes": [
+      "`\\b` word boundaries make each term match whole words only — 'Smith' won't redact inside 'Smithson', and a short term won't hit substrings of unrelated words.",
+      "Each term is run through `.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')` to escape regex metacharacters, so a term like 'Dr.' or 'a+b' is matched literally instead of as a pattern.",
+      "Flags matter: `g` replaces every occurrence (not just the first) and `i` makes it case-insensitive. Using a replacer function `() => { count++; return '[REDACTED]' }` lets you tally hits while substituting."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why wrap each term in `\\b...\\b` word boundaries before building the regex?",
+        "options": [
+          "It makes the regex run faster",
+          "So a term matches only whole words — 'Smith' won't redact the 'Smith' inside 'Smithson', and short terms won't hit unrelated substrings",
+          "Word boundaries are required for case-insensitive matching",
+          "It prevents the regex from matching numbers"
+        ],
+        "answer": 1,
+        "explain": "Without `\\b`, redacting 'Jan' would also blank out the middle of 'January'. Word boundaries anchor the match to whole tokens, which is what redaction of names/terms requires."
+      },
+      {
+        "q": "Why escape the term with `term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')` before passing it to `new RegExp`?",
+        "options": [
+          "To make the term uppercase",
+          "To treat regex metacharacters in the term (like the dot in 'Dr.') as literal text instead of pattern syntax",
+          "To trim whitespace from the term",
+          "RegExp requires all input to be escaped or it throws"
+        ],
+        "answer": 1,
+        "explain": "A raw '.' in a regex matches any character; '+' or '(' have special meaning too. Escaping turns a user-supplied term into a literal pattern, so 'Dr.' matches only 'Dr.' and not 'Drx'."
+      },
+      {
+        "q": "In `new RegExp('\\\\b' + escaped + '\\\\b', 'gi')`, what do the `g` and `i` flags do?",
+        "options": [
+          "`g` = greedy, `i` = ignore newlines",
+          "`g` = replace every occurrence (not just the first), `i` = case-insensitive match",
+          "`g` = global capture group, `i` = integer mode",
+          "`g` = group, `i` = inline"
+        ],
+        "answer": 1,
+        "explain": "Without `g`, only the first 'Jane' would be redacted. Without `i`, 'jane' in lowercase would slip through. Both flags are needed to catch every occurrence regardless of case."
+      },
+      {
+        "q": "Given the note 'Jane Doe ... Dr. Smith. Jane reported pain.' redacting ['Jane', 'Smith'] plus one SSN, why is the count 4?",
+        "options": [
+          "SSN once + Jane once + Smith once = 3",
+          "SSN once + Jane twice + Smith once = 4",
+          "Jane twice + Smith twice = 4",
+          "Every word is counted"
+        ],
+        "answer": 1,
+        "explain": "'Jane' appears twice (start and in 'Jane reported'), 'Smith' once, and the SSN once. The replacer callback increments `count` on each substitution: 1 + 2 + 1 = 4."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Redact a US SSN pattern and count the hit using a replacer callback. Fill the blanks.",
+        "template": "let count = 0;\nconst text = 'SSN 123-45-6789 on file';\nconst out = text.replace(/\\b\\d{3}-\\d{2}-\\d{4}\\b/g, () => { ___; return '[REDACTED]'; });\nconsole.log(out);\nconsole.log(___);",
+        "blanks": [
+          { "answer": "count++", "hint": "increment the tally inside the replacer" },
+          { "answer": "count", "hint": "log the final count" }
+        ],
+        "expectedOutput": "SSN [REDACTED] on file\n1"
+      },
+      {
+        "prompt": "Build a case-insensitive, whole-word, global regex for a term and replace every match. Fill the flags and the boundary.",
+        "template": "const term = 'jane';\nconst re = new RegExp('\\\\b' + term + '\\\\b', '___');\nconst out = 'Jane saw Jane'.replace(re, '[REDACTED]');\nconsole.log(out);",
+        "blanks": [
+          { "answer": "gi", "hint": "global + case-insensitive" }
+        ],
+        "expectedOutput": "[REDACTED] saw [REDACTED]"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Redact a medical note: replace any SSN (`###-##-####`) and each sensitive term with `[REDACTED]` (case-insensitive, whole-word). Return the redacted text and the redaction count.",
+    "expectedOutput": "Patient [REDACTED] Doe, SSN [REDACTED], treated by Dr. [REDACTED]. [REDACTED] reported pain.\nRedactions: 4",
+    "canonical": "function redact(text, terms) {\n  let count = 0;\n  let out = text.replace(/\\b\\d{3}-\\d{2}-\\d{4}\\b/g, () => { count++; return '[REDACTED]'; });\n  for (const term of terms) {\n    const escaped = term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n    const re = new RegExp('\\\\b' + escaped + '\\\\b', 'gi');\n    out = out.replace(re, () => { count++; return '[REDACTED]'; });\n  }\n  return { text: out, count };\n}\nconst note = 'Patient Jane Doe, SSN 123-45-6789, treated by Dr. Smith. Jane reported pain.';\nconst result = redact(note, ['Jane', 'Smith']);\nconsole.log(result.text);\nconsole.log('Redactions: ' + result.count);",
+    "hints": [
+      "Match the SSN first with `/\\b\\d{3}-\\d{2}-\\d{4}\\b/g` and a replacer callback that increments a counter and returns '[REDACTED]'.",
+      "For each term, escape regex metacharacters, then build `new RegExp('\\\\b' + escaped + '\\\\b', 'gi')` for whole-word, case-insensitive, global matching.",
+      "Return `{ text, count }`; the replacer `() => { count++; return '[REDACTED]'; }` lets you tally while substituting."
+    ]
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "id": "a-eve-bates-numbering",
+  "title": "Bates Numbering",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Assign each produced document a Bates range with a `for...of` carrying a running counter — algorithm shape, because each doc's range depends on the cumulative page count of everything before it.",
+  "reference": {
+    "code": "function bates(docs, prefix = 'EVE', width = 6) {\n  // Fixed-width zero-padded labels sort and collate correctly in a legal production.\n  const label = n => prefix + String(n).padStart(width, '0');\n  const out = [];\n  let next = 1;\n  // The counter is stateful across docs — can't be a pure .map.\n  for (const d of docs) {\n    const start = next;\n    const end = next + d.pages - 1; // off-by-one: a 1-page doc spans start..start, not start..start+1\n    out.push(`${d.name}: ${d.pages === 1 ? label(start) : label(start) + '-' + label(end)}`);\n    next = end + 1;\n  }\n  return out;\n}\nconst docs = [{ name: 'Intake', pages: 2 }, { name: 'X-Ray', pages: 1 }, { name: 'ER Report', pages: 5 }];\nbates(docs).forEach(l => console.log(l));",
+    "notes": [
+      "`padStart(width, '0')` produces fixed-width labels (EVE000001) so the strings sort and collate in numeric order — essential when documents are produced and referenced by Bates number.",
+      "The `next` counter carries state across iterations, so this is a `for...of`, not a pure `.map`: each doc's range depends on the cumulative page count of all prior docs.",
+      "Off-by-one: `end = next + pages - 1`. A 2-page doc starting at 1 spans 1..2 (not 1..3), and the next doc starts at `end + 1`."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why use `String(n).padStart(6, '0')` instead of just `String(n)`?",
+        "options": [
+          "padStart is faster",
+          "Fixed-width zero-padded labels sort and collate in numeric order as strings — EVE000002 < EVE000010, which 'EVE2' vs 'EVE10' would get wrong",
+          "Bates numbers are required to be exactly 6 digits by law",
+          "It prevents negative numbers"
+        ],
+        "answer": 1,
+        "explain": "String sort is lexicographic: 'EVE10' sorts before 'EVE2'. Zero-padding to a fixed width makes lexicographic order match numeric order, which is what document-production tooling relies on."
+      },
+      {
+        "q": "Why is this a `for...of` with a `next` variable rather than `docs.map(d => ...)`?",
+        "options": [
+          "`.map` can't build template strings",
+          "Each doc's Bates range depends on the running page count of all prior docs — the iteration carries state that isn't a clean per-element transform",
+          "`.map` would skip the first document",
+          "`for...of` is faster on arrays of objects"
+        ],
+        "answer": 1,
+        "explain": "The start number for doc N is determined by how many pages docs 0..N-1 consumed. That cross-element accumulation is algorithm-shape; a `.map` would need to mutate an external counter, which is the anti-pattern."
+      },
+      {
+        "q": "A document starts at Bates 4 and has 5 pages. What is its `end`, computed as `next + pages - 1`?",
+        "options": [
+          "9",
+          "8",
+          "10",
+          "5"
+        ],
+        "answer": 1,
+        "explain": "Pages 4, 5, 6, 7, 8 — that's 5 pages ending at 8. `4 + 5 - 1 = 8`. Forgetting the `- 1` would claim the doc occupies page 9 too and shift every subsequent doc."
+      },
+      {
+        "q": "Why does the code special-case `d.pages === 1` to emit a single label instead of a range?",
+        "options": [
+          "A range with equal start and end (EVE000003-EVE000003) is redundant and not how single-page docs are cited",
+          "padStart fails on 1-page documents",
+          "The counter would break otherwise",
+          "It is purely a performance optimization"
+        ],
+        "answer": 0,
+        "explain": "A one-page document is cited by a single Bates number, not a degenerate range like EVE000003-EVE000003. The conditional keeps the output matching real legal-production convention."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Build a fixed-width Bates label. Fill the blanks so a page number renders as a 6-digit zero-padded string with the EVE prefix.",
+        "template": "const prefix = 'EVE';\nconst label = n => prefix + String(n).___(6, '0');\nconsole.log(label(42));",
+        "blanks": [
+          { "answer": "padStart", "hint": "pad on the left so the total width is fixed" }
+        ],
+        "expectedOutput": "EVE000042"
+      },
+      {
+        "prompt": "Advance a running Bates counter across two docs. Fill the blanks so the second doc's start is logged.",
+        "template": "let next = 1;\nconst pages1 = 2;\nconst end1 = next + pages1 - ___;\nnext = end1 + 1;\nconsole.log('Doc 2 starts at ' + ___);",
+        "blanks": [
+          { "answer": "1", "hint": "off-by-one — a 2-page doc spans start..start+1" },
+          { "answer": "next", "hint": "the counter after advancing past doc 1" }
+        ],
+        "expectedOutput": "Doc 2 starts at 3"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Assign each produced document a Bates range: prefix `EVE`, 6-digit zero-padded, starting at 1. A 1-page doc gets a single label; multi-page gets `start-end`.",
+    "expectedOutput": "Intake: EVE000001-EVE000002\nX-Ray: EVE000003\nER Report: EVE000004-EVE000008",
+    "canonical": "function bates(docs, prefix = 'EVE', width = 6) {\n  const label = n => prefix + String(n).padStart(width, '0');\n  const out = [];\n  let next = 1;\n  for (const d of docs) {\n    const start = next;\n    const end = next + d.pages - 1;\n    out.push(`${d.name}: ${d.pages === 1 ? label(start) : label(start) + '-' + label(end)}`);\n    next = end + 1;\n  }\n  return out;\n}\nconst docs = [{ name: 'Intake', pages: 2 }, { name: 'X-Ray', pages: 1 }, { name: 'ER Report', pages: 5 }];\nbates(docs).forEach(l => console.log(l));",
+    "hints": [
+      "Keep a `let next = 1` counter outside the loop; for each doc `start = next`, `end = next + d.pages - 1`, then `next = end + 1`.",
+      "Build labels with `prefix + String(n).padStart(6, '0')`.",
+      "If `d.pages === 1` emit just `label(start)`; otherwise `label(start) + '-' + label(end)`."
+    ]
+  }
+}

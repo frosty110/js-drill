@@ -1,0 +1,96 @@
+{
+  "id": "a-eve-damages-rollup",
+  "title": "Damages Roll-up",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Hash-fold then sort — total medical bills by category into a Map, sort the category entries by total descending, then append a grand total computed by folding the category totals.",
+  "mechanics": ["map-keyed-state"],
+  "reference": {
+    "code": "function rollup(bills) {\n  // Fold each bill into a running per-category total.\n  const totals = new Map();\n  for (const b of bills) {\n    // (totals.get(cat) || 0) seeds 0 the first time a category is seen.\n    totals.set(b.category, (totals.get(b.category) || 0) + b.amount);\n  }\n  // Sort entries by total descending: b[1] - a[1] compares the amounts (index 1 of each entry).\n  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);\n  const lines = sorted.map(([cat, amt]) => `${cat}: $${amt}`);\n  // Grand total = sum of the already-aggregated category totals.\n  const grand = sorted.reduce((s, [, amt]) => s + amt, 0);\n  lines.push(`TOTAL: $${grand}`);\n  return lines;\n}",
+    "notes": [
+      "`(totals.get(cat) || 0)` handles the first-seen category: `Map.get` returns `undefined` for a missing key, and `undefined + amount` is `NaN`, so the `|| 0` fallback is load-bearing.",
+      "Sorting `entries()` by `b[1] - a[1]` (not `a[1] - b[1]`) gives DESCENDING order — entries are `[category, total]` pairs, so index 1 is the amount.",
+      "Aggregate first, THEN total: the grand total folds the category totals (4 numbers), not the original bills — same result here, but it keeps the total consistent with the displayed category lines."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why is the accumulator written as `(totals.get(b.category) || 0) + b.amount`?",
+        "options": [
+          "To round the amount to an integer",
+          "`Map.get` returns `undefined` for a never-seen category, and `undefined + amount` is `NaN`; the `|| 0` seeds the first total",
+          "To convert the amount to a string",
+          "It guards against negative amounts"
+        ],
+        "answer": 1,
+        "explain": "On the first bill of a category there is no existing total, so the `|| 0` fallback provides the starting value instead of producing NaN."
+      },
+      {
+        "q": "The entries are sorted with `(a, b) => b[1] - a[1]`. What ordering does that produce and why index 1?",
+        "options": [
+          "Ascending by category name; index 1 is the name",
+          "Descending by total; entries are `[category, total]` pairs so index 1 is the amount",
+          "Ascending by total; index 1 is the amount",
+          "Random order"
+        ],
+        "answer": 1,
+        "explain": "Map entries are `[key, value]`. Index 1 is the total; `b[1] - a[1]` is the descending comparator."
+      },
+      {
+        "q": "The grand total is computed by folding the sorted category totals, not the raw bills. Why does that matter?",
+        "options": [
+          "It runs faster on large inputs",
+          "It keeps the TOTAL consistent with the category lines being displayed — they sum the same aggregated numbers",
+          "Raw bills cannot be summed with reduce",
+          "It rounds differently"
+        ],
+        "answer": 1,
+        "explain": "Summing the same aggregated category totals that are shown guarantees the displayed lines and the TOTAL always reconcile."
+      },
+      {
+        "q": "In `sorted.reduce((s, [, amt]) => s + amt, 0)`, what is the empty slot in `[, amt]`?",
+        "options": [
+          "A syntax error",
+          "A skipped destructuring position for the category key, which the sum doesn't need",
+          "The accumulator",
+          "The array index"
+        ],
+        "answer": 1,
+        "explain": "Each entry is `[category, total]`; the hole skips the category and binds only `amt`, since the grand total only needs the amounts."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Fold amounts into a per-category Map total. Fill the blanks so the Hospital total is 20000.",
+        "template": "const totals = new Map();\nconst bills = [{ category: 'Hospital', amount: 12000 }, { category: 'Hospital', amount: 8000 }];\nfor (const b of bills) {\n  totals.set(b.category, (totals.___(b.category) || 0) + b.___);\n}\nconsole.log(totals.get('Hospital'));",
+        "blanks": [
+          { "answer": "get", "hint": "read the current running total" },
+          { "answer": "amount", "hint": "the field holding the dollar value" }
+        ],
+        "expectedOutput": "20000"
+      },
+      {
+        "prompt": "Sort `[category, total]` entries by total descending. Fill the comparator so the highest prints first.",
+        "template": "const entries = [['Med', 500], ['Hospital', 20000], ['PT', 4500]];\nconst sorted = entries.sort((a, b) => b[1] - a[___]);\nconsole.log(sorted.map(e => e[0]).join(', '));",
+        "blanks": [
+          { "answer": "1", "hint": "compare the amount (index 1) of each entry" }
+        ],
+        "expectedOutput": "Hospital, PT, Med"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Aggregate medical bills by category, then output each category total (highest first) and a final `TOTAL` line. Each bill is `{category, amount}`; amounts are integers.",
+    "expectedOutput": "Hospital: $20000\nPhysical Therapy: $4500\nMedication: $500\nTOTAL: $25000",
+    "canonical": "function rollup(bills) {\n  const totals = new Map();\n  for (const b of bills) {\n    totals.set(b.category, (totals.get(b.category) || 0) + b.amount);\n  }\n  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);\n  const lines = sorted.map(([cat, amt]) => `${cat}: $${amt}`);\n  const grand = sorted.reduce((s, [, amt]) => s + amt, 0);\n  lines.push(`TOTAL: $${grand}`);\n  return lines;\n}\nconst bills = [\n  { category: 'Hospital', amount: 12000 },\n  { category: 'Physical Therapy', amount: 3000 },\n  { category: 'Hospital', amount: 8000 },\n  { category: 'Medication', amount: 500 },\n  { category: 'Physical Therapy', amount: 1500 },\n];\nrollup(bills).forEach(l => console.log(l));",
+    "hints": [
+      "Fold into a Map: `totals.set(cat, (totals.get(cat) || 0) + amount)`.",
+      "Sort `[...totals.entries()]` by `(a, b) => b[1] - a[1]` for descending totals.",
+      "Grand total folds the category totals with `reduce`; push a final `TOTAL: $...` line."
+    ]
+  }
+}

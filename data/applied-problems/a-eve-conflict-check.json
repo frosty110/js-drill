@@ -1,0 +1,97 @@
+{
+  "id": "a-eve-conflict-check",
+  "title": "Conflict-of-Interest Check",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Hash-map-of-sets adjacency lookup — build a Map of adverse-party -> matter-ids and a Set of our own clients from existing matters in one pass, then check a prospective client against both indexes in O(1).",
+  "mechanics": ["map-keyed-state"],
+  "reference": {
+    "code": "// We represent plaintiffs against defendants. A prospect conflicts if they are\n// an adverse party (a defendant) in any matter, or are already our client.\nfunction checkConflict(matters, prospect) {\n  // adverse: defendant name -> list of matter ids where they're opposed.\n  const adverse = new Map();\n  const ourClients = new Set();\n  for (const m of matters) {\n    ourClients.add(m.plaintiff);\n    for (const def of m.defendants) {\n      if (!adverse.has(def)) adverse.set(def, []);\n      adverse.get(def).push(m.id);   // one party can be adverse across many matters\n    }\n  }\n  const conflicts = [];\n  if (adverse.has(prospect)) {\n    for (const id of adverse.get(prospect)) conflicts.push(`adverse party in ${id}`);\n  }\n  if (ourClients.has(prospect)) conflicts.push('already a current client');\n  if (conflicts.length === 0) return `${prospect}: CLEAR`;\n  // Note the em-dash character — joins the conflict reasons.\n  return `${prospect}: CONFLICT — ${conflicts.join('; ')}`;\n}",
+    "notes": [
+      "Index defendant -> [matter ids] in a Map, because one party can be a defendant across multiple matters. A plain Set of defendant names would lose which matters they appear in.",
+      "Track our own plaintiffs in a separate Set too: we cannot represent someone we are already adverse to, AND we should not double-represent an existing client, so both indexes are checked.",
+      "The output uses a literal em-dash character (—, U+2014), not a hyphen-minus. The expected output will not match if you type a regular '-'."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why index defendants as a Map of name -> array-of-matter-ids rather than a plain Set of defendant names?",
+        "options": [
+          "A Set cannot store strings",
+          "One party can be a defendant across multiple matters, and we need to report which matter ids they appear in",
+          "Maps are faster than Sets for lookup",
+          "Arrays are required by the spec"
+        ],
+        "answer": 1,
+        "explain": "A Set would tell you only that someone is adverse, not in which matters. The Map preserves the matter ids so the conflict report can name them."
+      },
+      {
+        "q": "Why does the function also track our own plaintiffs in a separate Set?",
+        "options": [
+          "To count how many matters exist",
+          "We cannot represent both sides, so a prospect who is already our client is also a conflict — a different reason than being adverse",
+          "Plaintiffs and defendants share the same names",
+          "It is unused defensive code"
+        ],
+        "answer": 1,
+        "explain": "Two distinct conflict reasons: the prospect is on the other side of a matter (adverse), or we already represent them (current client). Both must be checked."
+      },
+      {
+        "q": "The CONFLICT output joins reasons with a special character. Which is it?",
+        "options": [
+          "A regular hyphen-minus '-'",
+          "An en-dash '–'",
+          "An em-dash '—' (U+2014)",
+          "An underscore '_'"
+        ],
+        "answer": 2,
+        "explain": "The format string uses a literal em-dash (—). Typing a plain hyphen would make the output fail an exact-match comparison."
+      },
+      {
+        "q": "What is the lookup cost of checking a single prospect after the indexes are built?",
+        "options": [
+          "O(n) — must rescan all matters",
+          "O(1) for the membership checks, plus O(k) to list the k matters they're adverse in",
+          "O(n^2) for the nested defendant loop",
+          "O(log n) via binary search"
+        ],
+        "answer": 1,
+        "explain": "Map/Set membership is constant time; the only extra work is iterating the (usually small) list of matter ids the prospect appears in."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Index defendant -> [matter ids] in a Map of arrays. Fill the lazy-init guard and the append so 'Globex' lists both matters.",
+        "template": "const matters = [\n  { id: 'M-1', defendants: ['Globex'] },\n  { id: 'M-2', defendants: ['Globex'] },\n];\nconst adverse = new Map();\nfor (const m of matters) {\n  for (const def of m.defendants) {\n    if (!adverse.___(def)) adverse.set(def, []);\n    adverse.get(def).___(m.id);\n  }\n}\nconsole.log(adverse.get('Globex').join(', '));",
+        "blanks": [
+          { "answer": "has", "hint": "only init the array the first time this key appears" },
+          { "answer": "push", "hint": "append this matter id" }
+        ],
+        "expectedOutput": "M-1, M-2"
+      },
+      {
+        "prompt": "Build the CONFLICT message. Fill the em-dash character and the separator used to join the reasons.",
+        "template": "const prospect = 'Globex';\nconst conflicts = ['adverse party in M-1', 'adverse party in M-2'];\nconsole.log(`${prospect}: CONFLICT ___ ${conflicts.join('___ ')}`);",
+        "blanks": [
+          { "answer": "—", "hint": "the em-dash character, U+2014" },
+          { "answer": ";", "hint": "reasons are joined by a semicolon and a space" }
+        ],
+        "expectedOutput": "Globex: CONFLICT — adverse party in M-1; adverse party in M-2"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "We represent plaintiffs against defendants. Given existing matters ({id, plaintiff, defendants[]}) and a prospective client name, flag a conflict if the prospect is an adverse party (a defendant) in any matter — list those matter ids — or is already a current client. Otherwise CLEAR. Print the result for an adverse party, a clear name, and an existing client.",
+    "expectedOutput": "Globex: CONFLICT — adverse party in M-1; adverse party in M-2\nStark Inc: CLEAR\nAcme Corp: CONFLICT — already a current client",
+    "canonical": "function checkConflict(matters, prospect) {\n  const adverse = new Map();\n  const ourClients = new Set();\n  for (const m of matters) {\n    ourClients.add(m.plaintiff);\n    for (const def of m.defendants) {\n      if (!adverse.has(def)) adverse.set(def, []);\n      adverse.get(def).push(m.id);\n    }\n  }\n  const conflicts = [];\n  if (adverse.has(prospect)) {\n    for (const id of adverse.get(prospect)) conflicts.push(`adverse party in ${id}`);\n  }\n  if (ourClients.has(prospect)) conflicts.push('already a current client');\n  if (conflicts.length === 0) return `${prospect}: CLEAR`;\n  return `${prospect}: CONFLICT — ${conflicts.join('; ')}`;\n}\nconst matters = [\n  { id: 'M-1', plaintiff: 'Acme Corp', defendants: ['Globex', 'Initech'] },\n  { id: 'M-2', plaintiff: 'Wayne LLC', defendants: ['Globex'] },\n];\nconsole.log(checkConflict(matters, 'Globex'));\nconsole.log(checkConflict(matters, 'Stark Inc'));\nconsole.log(checkConflict(matters, 'Acme Corp'));",
+    "hints": [
+      "First pass: build a Map of defendant -> [matter ids] and a Set of plaintiff names from the matters.",
+      "Collect conflict reasons into an array: one 'adverse party in <id>' per matter the prospect is a defendant in, plus 'already a current client' if they're a plaintiff.",
+      "If no reasons, return '<name>: CLEAR'; otherwise join the reasons with '; ' after a literal em-dash (—)."
+    ]
+  }
+}

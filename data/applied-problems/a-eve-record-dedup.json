@@ -1,0 +1,97 @@
+{
+  "id": "a-eve-record-dedup",
+  "title": "Medical Record Dedup",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Hash-set on a normalized fingerprint — a single `for` pass over discovery pages, keying a Set on lowercased/whitespace-collapsed text so duplicate pages in different casing or spacing collapse to one; keep first, count the rest.",
+  "mechanics": ["set-dedup"],
+  "reference": {
+    "code": "// Discovery dumps the same page repeatedly with inconsistent casing/whitespace.\n// Dedupe on a NORMALIZED fingerprint, not the raw text.\nfunction dedupe(pages) {\n  const seen = new Set();\n  const kept = [];\n  let dups = 0;\n  for (const p of pages) {\n    // Normalize: lowercase, collapse any run of whitespace to one space, trim.\n    const key = p.text.toLowerCase().replace(/\\s+/g, ' ').trim();\n    if (seen.has(key)) { dups++; continue; }   // already seen — count, skip\n    seen.add(key);\n    kept.push(p.id);                            // keep the FIRST occurrence's id\n  }\n  return { kept, dups };\n}",
+    "notes": [
+      "Normalize before comparing. Raw `===` treats 'Patient stable.' and 'patient   STABLE.' as different, so the duplicate slips through. The fingerprint folds casing and whitespace away first.",
+      "`replace(/\\s+/g, ' ')` collapses any run of spaces, tabs, or newlines into a single space; the trailing `.trim()` strips leading/trailing whitespace the collapse leaves behind.",
+      "Keep the FIRST occurrence: on a hit, `continue` past the page without overwriting `seen` or `kept`. Pushing on every miss (not every page) is what makes 'first wins' hold."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why normalize the text into a fingerprint before comparing pages?",
+        "options": [
+          "Normalized strings are shorter and use less memory",
+          "Raw equality (`===`) treats different casing/whitespace as distinct, so real duplicates would not be caught",
+          "The Set requires lowercase keys",
+          "Normalization sorts the pages"
+        ],
+        "answer": 1,
+        "explain": "'Patient stable.' and 'patient   STABLE.' are the same page; only after lowercasing and collapsing whitespace do they hash to the same key."
+      },
+      {
+        "q": "Why use a Set of fingerprints rather than re-scanning `kept` for each page?",
+        "options": [
+          "A Set keeps insertion order",
+          "Set membership (`has`) is O(1), so the whole dedup is O(n) instead of O(n^2)",
+          "A Set automatically lowercases its keys",
+          "Arrays cannot hold strings"
+        ],
+        "answer": 1,
+        "explain": "Scanning the kept list for every page is O(n^2). A Set gives constant-time membership, keeping the pass linear."
+      },
+      {
+        "q": "How does the code guarantee it keeps the FIRST occurrence of a duplicate?",
+        "options": [
+          "It sorts the pages by id first",
+          "On a Set hit it increments the count and `continue`s without overwriting `seen` or `kept`",
+          "It uses a Map keyed by id",
+          "It keeps the last occurrence, which happens to equal the first"
+        ],
+        "answer": 1,
+        "explain": "The first time a fingerprint is seen, its id is pushed. Every later match just counts and skips, so the original id stays."
+      },
+      {
+        "q": "What does `replace(/\\s+/g, ' ')` do to the text 'a\\t b\\n c'?",
+        "options": [
+          "Removes all whitespace, giving 'abc'",
+          "Collapses every run of whitespace to a single space, giving 'a b c'",
+          "Replaces only the first whitespace run",
+          "Leaves the string unchanged"
+        ],
+        "answer": 1,
+        "explain": "`\\s+` matches any run of one-or-more whitespace chars (spaces, tabs, newlines); the global flag replaces each run with one space."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Normalize a page's text into a fingerprint: lowercase, collapse whitespace runs to one space, trim. Fill the regex and the trim call.",
+        "template": "const text = '  Patient   STABLE. ';\nconst key = text.toLowerCase().replace(/___/g, ' ').___();\nconsole.log(key);",
+        "blanks": [
+          { "answer": "\\s+", "hint": "one-or-more whitespace characters" },
+          { "answer": "trim", "hint": "strip leading/trailing whitespace" }
+        ],
+        "expectedOutput": "patient stable."
+      },
+      {
+        "prompt": "Dedupe by fingerprint using a Set: on a hit, count and skip; otherwise record and keep. Fill the Set methods so the duplicate is counted and only the first id is kept.",
+        "template": "const pages = [{ id: 'p1', t: 'A' }, { id: 'p2', t: 'a' }];\nconst seen = new Set();\nconst kept = [];\nlet dups = 0;\nfor (const p of pages) {\n  const key = p.t.toLowerCase();\n  if (seen.___(key)) { dups++; continue; }\n  seen.___(key);\n  kept.push(p.id);\n}\nconsole.log(kept.join(',') + ' / ' + dups);",
+        "blanks": [
+          { "answer": "has", "hint": "test membership" },
+          { "answer": "add", "hint": "record this fingerprint" }
+        ],
+        "expectedOutput": "p1 / 1"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Discovery produced duplicate pages with inconsistent whitespace/casing. Dedupe by a normalized fingerprint (lowercase, collapse runs of whitespace to one space, trim). Keep the first occurrence's id; report kept ids and how many duplicates were removed.",
+    "expectedOutput": "Kept: p1, p3\nDuplicates removed: 2",
+    "canonical": "function dedupe(pages) {\n  const seen = new Set();\n  const kept = [];\n  let dups = 0;\n  for (const p of pages) {\n    const key = p.text.toLowerCase().replace(/\\s+/g, ' ').trim();\n    if (seen.has(key)) { dups++; continue; }\n    seen.add(key);\n    kept.push(p.id);\n  }\n  return { kept, dups };\n}\nconst pages = [\n  { id: 'p1', text: 'Patient stable.' },\n  { id: 'p2', text: 'patient   STABLE. ' },\n  { id: 'p3', text: 'MRI ordered.' },\n  { id: 'p4', text: 'Patient stable.' },\n];\nconst result = dedupe(pages);\nconsole.log('Kept: ' + result.kept.join(', '));\nconsole.log('Duplicates removed: ' + result.dups);",
+    "hints": [
+      "Build the fingerprint with `text.toLowerCase().replace(/\\s+/g, ' ').trim()` — that folds away casing and whitespace differences.",
+      "Track seen fingerprints in a Set; on a hit, increment a duplicate counter and `continue`.",
+      "On a miss, add the fingerprint to the Set and push the page id to the kept list — that keeps the first occurrence."
+    ]
+  }
+}

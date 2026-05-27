@@ -1,0 +1,95 @@
+{
+  "id": "a-eve-sol-deadline",
+  "title": "Statute-of-Limitations Deadline",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Date arithmetic + classify — compute each claim's filing deadline (incident date + statutory years, rebuilt by string) and days remaining vs a reference date, then bucket as EXPIRED / URGENT / OK.",
+  "reference": {
+    "code": "function checkDeadlines(claims, today) {\n  const limits = { 'personal injury': 2, 'medical malpractice': 3, 'property': 4 };\n  const nowMs = Date.parse(today);\n  return claims.map(c => {\n    const years = limits[c.type];\n    // Rebuild the deadline by adding to the YEAR component as a string —\n    // avoids Date-object month/leap-day drift from setFullYear etc.\n    const [y, m, d] = c.incident.split('-').map(Number);\n    const deadline = `${y + years}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;\n    const daysLeft = Math.round((Date.parse(deadline) - nowMs) / 86400000);\n    let status;\n    if (daysLeft < 0) status = 'EXPIRED';\n    else if (daysLeft <= 30) status = 'URGENT';\n    else status = 'OK';\n    return `${c.id} (${c.type}): deadline ${deadline}, ${daysLeft} days — ${status}`;\n  });\n}",
+    "notes": [
+      "The deadline is rebuilt by adding statutory years to the YEAR string component and re-padding month/day, NOT by mutating a Date object — `setFullYear`-style math can drift across leap days and month lengths.",
+      "Both sides of the day-diff use `Date.parse` on ISO strings, which parse as UTC midnight, so the subtraction is timezone-consistent and `/86400000` gives whole days.",
+      "Classification order matters: test `daysLeft < 0` (EXPIRED) first, then `<= 30` (URGENT); a deadline exactly 0 days out is URGENT, not EXPIRED."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why is the deadline rebuilt by adding years to the year string instead of mutating a Date object?",
+        "options": [
+          "Strings are faster than Dates",
+          "Adding to the year component as a string avoids the month/leap-day drift that Date mutation (e.g. setFullYear) can introduce",
+          "Date objects can't represent future dates",
+          "It's the only way to format the date"
+        ],
+        "answer": 1,
+        "explain": "Keeping the month and day fixed by reconstructing the string sidesteps the subtle drift Date arithmetic can cause across leap years and month boundaries."
+      },
+      {
+        "q": "Why does the function call `Date.parse` on both the deadline and `today` rather than mixing parsing styles?",
+        "options": [
+          "To support non-ISO formats",
+          "ISO date strings parse as UTC midnight, so both sides are on the same timezone basis and the day diff is consistent",
+          "Date.parse is required for subtraction",
+          "It converts the dates to local time intentionally"
+        ],
+        "answer": 1,
+        "explain": "Date-only ISO strings are interpreted as UTC; parsing both sides the same way keeps the millisecond subtraction timezone-consistent."
+      },
+      {
+        "q": "A claim's deadline is exactly 30 days out. How is it classified, and why does branch order matter?",
+        "options": [
+          "EXPIRED — past the threshold",
+          "URGENT — the check is `daysLeft < 0` first (not <0), then `daysLeft <= 30` catches 0..30 inclusive",
+          "OK — 30 is the safe boundary",
+          "URGENT only if exactly 0"
+        ],
+        "answer": 1,
+        "explain": "EXPIRED is tested first (`daysLeft < 0`); anything from 0 to 30 inclusive falls into the URGENT branch."
+      },
+      {
+        "q": "Why is `String(m).padStart(2, '0')` applied to the month and day when rebuilding the deadline?",
+        "options": [
+          "To convert the number to a date",
+          "To keep the YYYY-MM-DD width fixed (e.g. month 6 becomes '06') so the result is a valid ISO string and sorts correctly",
+          "To round the value",
+          "padStart is required by Date.parse"
+        ],
+        "answer": 1,
+        "explain": "ISO dates need zero-padded two-digit month and day; padStart restores the fixed width after `.map(Number)` stripped leading zeros."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Rebuild an ISO deadline by adding 2 years to the incident year. Fill the blanks.",
+        "template": "const incident = '2024-06-01';\nconst [y, m, d] = incident.split('-').map(___);\nconst deadline = `${y + 2}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;\nconsole.log(deadline);",
+        "blanks": [
+          { "answer": "Number", "hint": "convert each split piece to a number" }
+        ],
+        "expectedOutput": "2026-06-01"
+      },
+      {
+        "prompt": "Classify days-left into EXPIRED / URGENT / OK. Fill the comparisons so 5 days left is URGENT.",
+        "template": "const daysLeft = 5;\nlet status;\nif (daysLeft ___ 0) status = 'EXPIRED';\nelse if (daysLeft ___ 30) status = 'URGENT';\nelse status = 'OK';\nconsole.log(status);",
+        "blanks": [
+          { "answer": "<", "hint": "negative means past the deadline" },
+          { "answer": "<=", "hint": "0 through 30 inclusive is urgent" }
+        ],
+        "expectedOutput": "URGENT"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "For each claim, compute the filing deadline (incident date + statutory years for its type) and days remaining as of a reference date. Classify EXPIRED (past), URGENT (≤30 days left), or OK. Limits: personal injury 2yr, medical malpractice 3yr, property 4yr.",
+    "expectedOutput": "C-1 (personal injury): deadline 2026-06-01, 5 days — URGENT\nC-2 (medical malpractice): deadline 2026-05-15, -12 days — EXPIRED\nC-3 (property): deadline 2024-01-01, -877 days — EXPIRED",
+    "canonical": "function checkDeadlines(claims, today) {\n  const limits = { 'personal injury': 2, 'medical malpractice': 3, 'property': 4 };\n  const nowMs = Date.parse(today);\n  return claims.map(c => {\n    const years = limits[c.type];\n    const [y, m, d] = c.incident.split('-').map(Number);\n    const deadline = `${y + years}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;\n    const daysLeft = Math.round((Date.parse(deadline) - nowMs) / 86400000);\n    let status;\n    if (daysLeft < 0) status = 'EXPIRED';\n    else if (daysLeft <= 30) status = 'URGENT';\n    else status = 'OK';\n    return `${c.id} (${c.type}): deadline ${deadline}, ${daysLeft} days — ${status}`;\n  });\n}\nconst claims = [\n  { id: 'C-1', type: 'personal injury', incident: '2024-06-01' },\n  { id: 'C-2', type: 'medical malpractice', incident: '2023-05-15' },\n  { id: 'C-3', type: 'property', incident: '2020-01-01' },\n];\ncheckDeadlines(claims, '2026-05-27').forEach(l => console.log(l));",
+    "hints": [
+      "Look up statutory years per claim type from a `limits` object.",
+      "Rebuild the deadline string by adding years to the year component and re-padding month/day with `padStart(2, '0')`.",
+      "Days left = `Math.round((Date.parse(deadline) - Date.parse(today)) / 86400000)`; classify EXPIRED (<0), URGENT (<=30), else OK."
+    ]
+  }
+}

@@ -105,6 +105,134 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ## Queued
 
+## Meta-finding (iter 146 vision — seventeenth vision iter; iter-139 queue fully drained iter 140/141/142, iter-93 promotion shortlist fully drained iter 108/109/123/144/145, Cat 2/4-sidecar/7/9§9C push)
+
+**Seventeenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112/116/120/124/139).** Fires per § Next iteration's "GENUINELY drained" signal — iter-139 queue fully shipped across iter 140 Pace-Bar + iter 141 Haptic + iter 142 Mutate; iter-93 promotion shortlist fully drained across iter 108 Lucky + iter 109 Match + iter 111 Sections + iter 123 L3 chips + iter 144 Notes→Code + iter 145 PWA install (5 of 5 items + #3 already-shipped iter 117/118). Step 1B fires per "Shipping is genuinely blocked — Step 1A walked all three sources and surfaced nothing." First vision iter in 6 where the suggestion is GENUINELY earned, not procedural.
+
+**ONE constraint-aware subagent** (iter-100/103/108/112/116/120/124/139 cost-conservative precedent; 8th use). Explicit AVOID list (Cat 1 — fresh iter 144 Notes→Code; Cat 3 — fresh iter 140 Pace-Bar; Cat 5 — fresh iter 145 PWA; Cat 6 — fresh iter 145 PWA delivery; Cat 8 — fresh iter 141 Haptic; Cat 9 §9B — fresh iter 142/143 Mutate). Explicit STEER toward Cat 2 Paths & Sessions (21 iters since last Active ship iter 125 Gauntlet), Cat 4 NEW sidecar shapes (NOT bank-expansion — 4 existing banks exhausted), Cat 7 Metacognition measurement (NOT polish), Cat 9 §9A (28+ iters since iter 117/118), Cat 9 §9C (iter-139 bailed; explicit re-prompt "per-corpus/cross-lesson ideas, NO per-lesson authoring"). Subagent prompt asked for steering self-audit (8th use) + a special §9C bail-or-propose instruction requiring justification of 3 §9C alternatives if bailing.
+
+**Subagent returned 5 proposals + load-bearing self-audit + §9C bail-or-propose section:**
+- 2 Cat 2 (Mirror Mock / Phone Screen Simulator) — subagent self-flagged Mirror Mock as "better cell of Mock" + L75 anti-gamification adjacent.
+- 1 Cat 9 §9C + Cat 4 sidecar hybrid (Constraint-Shift Drill) — **DID NOT BAIL on §9C** per iter-139 critique. Constraint-Shift sidesteps per-lesson authoring via 25-entry sidecar registry pattern (5th sidecar bank, breaking the iter-136 "4-of-4 exhausted" framing — the iter-136 finding was about EXISTING bank expansion; NEW sidecar shapes are still in-bounds).
+- 1 Cat 7 Metacognition (Time-Invested Section Ledger) — derives session duration from existing state.history event pairs (within 5-min gap → infer session, cap each interval at 5min).
+- 1 Cat 9 §9A (Narrate-and-Review) — subagent self-flagged as borderline (MediaRecorder + IndexedDB significantly more engineering than ~200 LOC typical; mic permission UX friction).
+- Subagent §9C bail-or-propose section listed 3 §9C alternatives considered + REASONS each requires per-lesson authoring (re-derive lockout needs rederivable:bool; adversarial input gen needs mutableDims; sibling-pair drill needs siblings:[id]). This validates that Constraint-Shift IS the genuinely unblocked §9C surface via sidecar route, not a forced-fit proposal.
+
+**Heeded the self-audit per iter-120/124/139 precedent (promote ≤(N-2) when subagent flags overcorrection in N proposals): promoted 3 (not 5).** Subagent's own recommendation matched. Promoted:
+
+1. 📞 **Phone Screen Simulator** (Cat 2 — Paths & Sessions, last Active ship iter 125; 21-iter drought). Chains 3 lessons (1 syntax warm-up + 1 pattern + 1 mechanic-related follow-up) under ONE unbroken timer — the actual phone-screen shape that Mock (single-lesson) + Gauntlet (same-section L1 chain, no timer) don't drill. Distinct from existing surfaces via the chained-lesson-types + single-timer combination.
+2. 🚧 **Constraint-Shift Drill** (Cat 9 §9C + Cat 4 sidecar hybrid — first §9C ship ever; first NEW sidecar bank since iter-118 hotseat-followups). 5th sidecar registry: `data/constraint-shifts.json` (~25 entries: `{lessonId, originalClaim, shiftedClaim, hint}`). User must re-write canonical to satisfy a swapped constraint (O(n²) → O(n); extra-string → O(1) two-pointer). Senior-interview pivot the existing surfaces don't drill.
+3. ⏳ **Time-Invested Section Ledger** (Cat 7 Metacognition measurement — first per-section effort-allocation surface). Walks existing state.history event pairs (consecutive events on same lesson within 5-min gap → infer session duration; cap each interval at 5min). Stats modal gains a "⏳ Time invested" tile: horizontal bars per section (last 30d) with mastered_per_minute efficiency micro-number. Complements iter-66 Track Balance Compass (which shows % mastered) — Ledger shows EFFORT allocation. L75-respecting: no totals, no streaks, just allocation visibility.
+
+**Held with explicit re-promote conditions:**
+
+- 🪞 **Mirror Mock** (Cat 2) — HELD per subagent self-audit ("better cell of Mock" + L75 ghost-comparison gamification-adjacent). Re-promote condition: a frame iter examines whether ghost-comparison against user's OWN best time (not global benchmark) violates L75 — Pace-Bar (iter 140) already operates on this principle for live tempo, so Mirror Mock may be re-classifiable as L75-safe. OR a Cat 2 surface gap surfaces that's better-addressed by ghost-comparison than by Phone Screen Simulator.
+- 🎙 **Narrate-and-Review** (Cat 9 §9A) — HELD on engineering scope + mic permission UX friction. MediaRecorder + IndexedDB is meaningfully more LOC than typical sidecar ships; mic permission prompts cause meaningful drop-off. Re-promote condition: a smaller pilot ships first — transcript-only via Web Speech API (no recording stored, no IndexedDB, browser-native UI for permission) on a single mastered lesson; if engagement validates, scale to recording. Could also re-promote if PROFILE.md amendment ratifies eyes-free/voice-out modalities (Amendment C territory).
+
+**Meta-learning (iter 146):** the **steering self-audit pattern is now 7-time-validated** (iter-112 BS-10 + iter-115 sync sub-blob + iter-116 §9A content corpus + iter-120 §9C-bias-self-flag + iter-124 Cat-2-over-concentration + iter-139 Cat-3-over-concentration + iter-146 Cat-2-over-concentration + §9C-NOT-blocked-via-sidecar correction). Pattern is now load-bearing AND has corrected iter-139's "§9C blocked" framing — the §9C blocker was per-lesson-authoring at the LESSON grain, but a SIDECAR-grain entry table sidesteps it. Worth folding into SKILL.md vision-mode template alongside the other 3 queued meta-lessons.
+
+**Sidecar pattern "exhaustion" reframe (iter-136 finding corrected):** iter-136 concluded the 4 existing sidecar banks were exhausted — but that finding was about EXISTING-bank EXPANSION (host-drill staleness needs to re-accumulate). NEW sidecar SHAPES (registries that don't exist yet) are still in-bounds. Constraint-Shift would be the 5th sidecar bank. iter-136's framing should be narrowed: "existing 4 banks paused, new shapes still available."
+
+**§ Next nominates** 📞 Phone Screen Simulator ship for iter 147 (highest leverage of the 3 promotes — Cat 2 longest active drought; smallest data dependency; cleanest differentiator from existing surfaces; reuses Mock's timer infrastructure).
+
+---
+
+### 2026-05-26 iter 146 — 📞 Phone Screen Simulator
+
+**Status:** queued
+
+**Value claim** (one sentence): Reproduces the real phone-screen interview shape (1 warm-up syntax Q + 1 pattern + 1 mechanic-related follow-up under ONE unbroken timer) that Mock (single-lesson) + Gauntlet (same-section L1 chain, no timer) don't drill — closes PROFILE L22-24 ("interview-format conditioning") gap that the existing solo-Mock surface only partially addresses.
+
+**Mechanic** (one sentence): Sidebar 📞 Phone Screen button → picks 3 lessons via deterministic recipe (1 random syntax-track Reference-only "warm-up" card; 1 random pattern-track L3 with the lion's-share of the timer; 1 mechanic-related follow-up at L2 chosen via existing MECHANIC_INDEX overlap with the pattern). One unified clock (~12-15min total) that does NOT reset between cards — the user feels the cumulative pressure as the interviewer would.
+
+**Success criterion** (one falsifiable sentence): ≥30% of users who complete one Phone Screen session run a second within 7 days (the cadence shape sticks vs Mock's single-shot pattern).
+
+**Estimated scope:** single-iter ship ≤200 LOC (reuses Mock's timer + Gauntlet's session-walker patterns).
+
+**Data dependency:** existing CURRICULUM + manifest + MECHANIC_INDEX. Reuses Mock's timer infrastructure. New schema-additive `state.phoneScreen = {sessions, completions, lastRunAt}`.
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk (subagent-flagged + orchestrator-mitigated):** overlap with existing Mock + Gauntlet. **Orchestrator mitigation:** the chained-lesson-types + single-timer combination IS a new bucket. Probe asserts (a) deck contains exactly 3 cards from 3 different lessons, (b) at least 2 different tracks represented (syntax + pattern minimum), (c) timer continues across card transitions (not reset).
+
+**Why this is a "new bucket" not "better cell":** Mock = single lesson + timer. Gauntlet = same-section L1 chain (no timer). Today's Plan = mixed-section session (no timer). Phone Screen Simulator = chained-DIFFERENT-lesson-types + single timer — none of the existing surfaces combine both axes.
+
+**Subagent source:** iter-146 vision iter — ranked #2 by leverage-per-effort; promoted #1 by orchestrator (Cat 2 longest active drought + smallest data dep + cleanest differentiator + reuses Mock's timer infrastructure).
+
+---
+
+### 2026-05-26 iter 146 — 🚧 Constraint-Shift Drill
+
+**Status:** queued
+
+**Value claim** (one sentence): Drills the senior-interview follow-up pivot ("you wrote it O(n²); now do it O(n)" / "now O(1) extra space") that no existing surface drills — currently the L1→L2→L3 ladder + Mutate-and-Predict + Hot-Seat all stay on the ORIGINAL constraint; Constraint-Shift forces re-derivation under a SWAPPED constraint per PROFILE L20-21 ("pattern recall degraded ... can't produce canonical implementation").
+
+**Mechanic** (one sentence): New `data/constraint-shifts.json` sidecar registry (~25 entries: `{lessonId, originalClaim, shiftedClaim, hint}`); sidebar 🚧 Shift button → 5-card session shows the lesson's canonical with `originalClaim` badge, prompts "Re-write to satisfy `shiftedClaim`" in an L3-style editor, grades via runCode against expected output PLUS asserts a structural fingerprint via regex (e.g. "no nested loop" for O(n²)→O(n)).
+
+**Success criterion** (one falsifiable sentence): Users who complete ≥3 Shift sessions show measurably lower hint-cost-ladder ribbon (iter 101) on subsequent first-attempts of related lessons within 14 days (transfer to L3 recall is the load-bearing signal).
+
+**Estimated scope:** 2-iter scaffold+ship — iter 1: author the 25-entry sidecar + UI shell + validator hook; iter 2: ship the structural-fingerprint regex grader + mobile probe.
+
+**Data dependency:** NEW sidecar `data/constraint-shifts.json` (~25 cross-lesson entries — NOT per-lesson authoring; 5th sidecar bank after complexity-claims + idiom-pairs + clarify-distractor + hotseat-followups). New schema-additive `state.constraintShift = {attempts, correct, sessions, lastRunAt}`.
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk (subagent-flagged):** the structural-fingerprint regex is hard — a regex saying "no nested loop" could false-positive (legitimate single-loop code that LOOKS nested) or false-negative (nested loop that the regex misses). **Orchestrator mitigation:** v1 ships with a curated regex PER ENTRY in the sidecar — each constraint-shift specifies its own `structuralCheck` regex string (e.g. for O(n²)→O(n) on Two Sum, the check might be `/for\s*\([^)]*\)\s*{[^{}]*for\s*\(/` to fail nested for-loops). The 25-entry sidecar absorbs the regex authoring burden — author it ONCE per pair, not 154× per lesson.
+
+**Why this is a "new bucket" not "better cell":** **First §9C ship ever** — Cat 9 §9C Adaptation/transfer had ZERO ships pre-iter-146 (iter-122 What-If was Cat 1 + §9C hybrid, not pure §9C). 5th sidecar registry (NEW shape per the iter-136 reframe — sidecar exhaustion was about bank EXPANSION, not new shapes).
+
+**Subagent source:** iter-146 vision iter — ranked #3 by leverage-per-effort; promoted #2 by orchestrator (first §9C ship + sidecar shape extension + senior-interview pivot the loop has been missing).
+
+---
+
+### 2026-05-26 iter 146 — ⏳ Time-Invested Section Ledger
+
+**Status:** queued
+
+**Value claim** (one sentence): Surfaces per-section minutes-spent allocation ("4.2 hrs on Trees this month, 12 min on DP") so the rusty engineer can rebalance — Track Balance Compass (iter 66) shows % MASTERED but no surface shows EFFORT allocation per PROFILE L46-48 ("syntax re-memorization" needs allocation discipline) + L75 (allocation visibility as gamification-safe alternative to streak counts).
+
+**Mechanic** (one sentence): Stats modal gains a "⏳ Time invested" tile rendering horizontal bars per section (last 30d window); duration inferred from `state.history` event pairs (consecutive events on same lesson within 5-min gap → infer session, cap each interval at 5min); each bar shows minutes-spent + `mastered_per_minute` efficiency micro-number; no totals, no streaks, no daily-progress meter (L75-respecting).
+
+**Success criterion** (one falsifiable sentence): Top-spent section's share of total drill time decreases by ≥15% over 14 days after first Ledger view (users rebalance toward neglected sections when shown the asymmetry).
+
+**Estimated scope:** single-iter ship ≤200 LOC (helper + tile + mobile probe; reuses Stats modal mount pattern from iter-66/106/107).
+
+**Data dependency:** existing `state.history` (timestamps per event already captured since iter 32). No new fields.
+
+**PROFILE.md amendment proposed?** No.
+
+**Implementation risk (subagent-flagged):** L75 anti-gamification risk — any "time invested" surface risks becoming a daily-minutes meter that triggers PROFILE L75 "can't recover from broken streak" anxiety. **Orchestrator mitigation:** the surface is per-SECTION (not per-day, not per-week), shown only in Stats modal (opt-in surface), with NO totals shown across sections, NO daily progress meter, NO weekly delta. Pure allocation visibility. The framing in copy should be "where is your time going?" not "how much have you drilled?"
+
+**Why this is a "new bucket" not "better cell":** Track Balance Compass (iter 66) shows mastery-% per track (3 cells). Sections heatmap (iter 111) shows mastery-% per section (29 cells). Mastery Half-Life (iter 106) shows SR-cycle-personality per lesson. NONE of these show EFFORT allocation — the orthogonal dimension. First effort-allocation surface in the app's history.
+
+**Subagent source:** iter-146 vision iter — ranked #4 by leverage-per-effort; promoted #3 by orchestrator (Cat 7 measurement-not-polish steer; complements existing Cat 7 surfaces along orthogonal effort-allocation axis).
+
+---
+
+### 2026-05-26 iter 146 — HELD: 🪞 Mirror Mock (Cat 2; subagent self-audit + L75 risk)
+
+**Status:** HELD — heeded subagent self-audit ("better cell of Mock; ghost-comparison gamification-adjacent").
+
+**Value claim:** Reproduces "interviewer is watching the clock" pressure by splitting Mock's timer bar into two parallel rows — yours (live) + a ghost from `state.bestTimes[lessonId]` ticking against you.
+
+**Re-promote condition:** a frame iter examines whether ghost-comparison against user's OWN best time (not global benchmark) violates PROFILE L75 — iter-140 Pace-Bar operates on this exact principle (user's own median, no global benchmark) and shipped clean, so Mirror Mock may be re-classifiable as L75-safe by extension. OR a Cat 2 surface gap surfaces that's better-addressed by ghost-comparison than by Phone Screen Simulator.
+
+**Mechanic if promoted:** Mock Interview gains a "🪞 Mirror" opt-in toggle. When ON, timer bar splits horizontally: top row = live progress; bottom row = ghost ticking against user's previous best. At each 25%/50%/75% checkpoint, a chip nudges "ghost is reading line N of canonical now." Pure UI derivation from existing `state.bestTimes` + `state.mockHistory` + `L3.canonical.split('\n').length`.
+
+---
+
+### 2026-05-26 iter 146 — HELD: 🎙 Narrate-and-Review (Cat 9 §9A; engineering scope + mic-permission UX friction)
+
+**Status:** HELD — heeded subagent self-audit (MediaRecorder + IndexedDB significantly more engineering than typical sidecar ships; mic permission UX prompts cause meaningful drop-off; potential PROFILE L43-44 "sustained talking is deprioritized" violation).
+
+**Value claim:** Drills "talk through your code" — the narration skill recruiters grade but solo drillers never practice; post-L3 voice memo capture + transcript pin for self-review.
+
+**Re-promote condition:** a smaller pilot ships first — transcript-only via Web Speech API (no recording stored, no IndexedDB, browser-native UI for permission) on a single mastered lesson; if engagement validates AND the typical session yields a usable transcript, scale to recording. OR PROFILE.md amendment ratifies eyes-free / voice-out modalities (Amendment C territory).
+
+**Mechanic if promoted:** Opt-in sidebar 🎙 Narrate toggle. After L3 pass on Patterns/Applied lessons, modal appears with 45-sec MediaRecorder capture: "In 45 sec, walk through your solution as if reviewing with an interviewer." Saved to IndexedDB (NOT localStorage — recordings are large). Per-lesson "🎙 Last narration" tile in Reference tab lets user replay. NO grading, NO scoring — pure self-confrontation surface.
+
+---
+
 ## Meta-finding (iter 139 vision — sixteenth vision iter; iter-124 queue drained iter 125/126, 13 single-ship iters consumed it across iter 127-138 polish + sidecar)
 
 **Sixteenth vision iter (after 26/31/48/55/59/64/82/90/95/100/103/112/116/120/124).** Fires per § Next iteration's 10-defer-recommendation accumulation across iter 127-138 (10 single-ship iters past the iter-124 queue drain). Roadmap Queued empty post-iter-126; ideas-by-category.md shortlist consumption stalled (#1 shipped iter 123; remaining 3 have category-saturation or scope-reduction blockers); iter 132/134/135/136 exhausted the 4-of-4 sidecar-bank curation pattern; iter 127-130 epic + iter 137/138 polish all originated as direct user/UX nominations rather than vision-iter promotions. This iter fires the first vision pass in a fresh /clear-d session per § Next's STRONG recommendation.

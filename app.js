@@ -161,6 +161,7 @@ const state = {
   calibrateOn: false, // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
   timeCalibration: { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } }, // iter 119: byMechanic[id] = { predictions: [{bucket, actualMs, errorSec}], median errorSec computed on read }. meta tracks engagement separately (estimates = bucket taps; skips = skip taps; passes = passes-with-estimate)
   paceBarOn: false, // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF) surfaces a peripheral-vision width-growing bar above the L3 editor against user's OWN median time-to-solve. L75 anti-gamification mitigated: user's own median only (no global benchmark), no timer numerals, no streak, auto-hides when no data.
+  hapticOn: false, // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF) fires navigator.vibrate on L1 correct (30ms) / L1 miss (2×60ms) / L3 pass (120ms) / Rapid-Fire streak-of-5 (3-pulse roll). Toggle button auto-hides on platforms where the Vibration API is absent (iOS Safari, desktop without vibration motor). Tactile dual-coding channel for mobile-first audience.
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
@@ -247,6 +248,34 @@ function appendHistory(lessonId, event) {
   // iter 107: keep the Session Heatstrip live. Cheap (30-cell DOM rebuild
   // + ~50-event walk) and event-driven — no polling.
   if (typeof renderHeatstrip === 'function') renderHeatstrip();
+  // iter 141: 📳 Haptic Tap-Pulse — fire tactile feedback in tandem with the
+  // event-stream write. Choke-point design means every L1-pass / L1-miss /
+  // L3-pass call site (main L1 quiz, Gauntlet, What-If, Recognize, Bug-Hunt,
+  // Match, etc.) gets haptic for free. L3-enter (iter 140) deliberately
+  // omitted — instrumentation event, not user-graded. Rapid-Fire's L1-pass
+  // case is wired DIRECTLY at the wasCorrect branch (line ~4242) because
+  // Rapid-Fire intentionally skips appendHistory('L1-pass') to avoid
+  // polluting the sparkline.
+  _hapticPulse(event);
+}
+
+// iter 141: 📳 Haptic Tap-Pulse — single dispatch helper. All pulse patterns
+// live in one place so future tweaks don't require touching call sites.
+// Capability-guarded with try/catch so a partial-vibrate-implementation
+// browser (e.g. one that defines navigator.vibrate but throws on unusual
+// patterns) silently no-ops rather than breaking the calling drill-mode.
+function _hapticPulse(eventType) {
+  if (!state.hapticOn) return;
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+  let pattern;
+  switch (eventType) {
+    case 'L1-pass': pattern = 30; break;
+    case 'L1-miss': pattern = [60, 80, 60]; break; // 2× 60ms pulse with 80ms gap
+    case 'L3-pass': pattern = 120; break;
+    case 'streak-5': pattern = [25, 35, 25, 35, 25]; break; // subtle 3-pulse roll
+    default: return; // L3-enter / L2-pass / hint-tier-* / etc. — no haptic
+  }
+  try { navigator.vibrate(pattern); } catch (e) { /* graceful no-op */ }
 }
 
 // iter 107: ⏱ Session Heatstrip — per-minute activity timeline over the last
@@ -877,6 +906,8 @@ function loadProgress() {
     state.calibrateOn = !!parsed.calibrateOn;
     // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF).
     state.paceBarOn = !!parsed.paceBarOn;
+    // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF).
+    state.hapticOn = !!parsed.hapticOn;
     state.timeCalibration = parsed.timeCalibration && typeof parsed.timeCalibration === 'object'
       ? {
           byMechanic: (parsed.timeCalibration.byMechanic && typeof parsed.timeCalibration.byMechanic === 'object') ? parsed.timeCalibration.byMechanic : {},
@@ -975,6 +1006,7 @@ function saveProgress() {
     calibrateOn: state.calibrateOn,
     timeCalibration: state.timeCalibration,
     paceBarOn: state.paceBarOn,
+    hapticOn: state.hapticOn,
     whatif: state.whatif,
     commandUsage: state.commandUsage,
     misses: state.misses,
@@ -4242,6 +4274,16 @@ function _runRapidFireWithDeck(deck, opts = {}) {
         correct++;
         streak++;
         if (streak > bestStreak) bestStreak = streak;
+        // iter 141: 📳 Haptic Tap-Pulse — Rapid-Fire deliberately skips
+        // appendHistory('L1-pass') (would spam the sparkline across 20-card
+        // streams), so the per-card correct pulse is wired here directly.
+        // Streak-of-5 milestone fires the longer 3-pulse roll on top of the
+        // per-card pulse for 5/10/15/20 — gives the user a tactile "you're
+        // on a roll" without printing a count to the screen (L75 mitigation:
+        // no streak NUMBER visible in this haptic path; bestStreak is an
+        // existing post-session stat already visible in the Rapid summary).
+        _hapticPulse('L1-pass');
+        if (streak > 0 && streak % 5 === 0) _hapticPulse('streak-5');
       } else {
         streak = 0;
         // Feed weak-spot tracker (existing field; same semantics as in-lesson L1 miss).
@@ -9417,6 +9459,34 @@ async function init() {
     });
   }
 
+  // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF). Fuchsia-200
+  // hover when ON. Auto-hides on platforms without the Vibration API (iOS
+  // Safari, desktop without vibration motor) so the user never sees a toggle
+  // that does nothing. The capability check is at MOUNT time, not click time
+  // — the toggle is either present + functional or absent, never present-but-
+  // broken. Test pulse on enable confirms the channel works on this device.
+  const hapticBtn = document.getElementById('haptic-btn');
+  if (hapticBtn) {
+    const hapticSupported = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+    if (!hapticSupported) {
+      hapticBtn.style.display = 'none';
+    } else {
+      if (state.hapticOn) {
+        hapticBtn.classList.add('text-fuchsia-200');
+        hapticBtn.classList.remove('text-slate-500');
+      }
+      hapticBtn.addEventListener('click', () => {
+        state.hapticOn = !state.hapticOn;
+        hapticBtn.classList.toggle('text-fuchsia-200', state.hapticOn);
+        hapticBtn.classList.toggle('text-slate-500', !state.hapticOn);
+        saveProgress();
+        // Test pulse on enable so the user feels it work immediately —
+        // closes the "did I actually turn it on?" confirmation gap.
+        if (state.hapticOn) _hapticPulse('L1-pass');
+      });
+    }
+  }
+
   // Path View toggle — filters the sidebar to the subscribed path's lessons.
   document.getElementById('path-btn').addEventListener('click', () => {
     // No-op when the subscribed path has no drill-lesson sequence (button is
@@ -10965,7 +11035,7 @@ const TOPBAR_MENU_TAXONOMY = {
   settings: {
     label: 'Settings',
     blurb: 'Toggles, data, and account.',
-    items: ['hide-mastered-btn', 'path-btn', 'calibrate-btn', 'pace-bar-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
+    items: ['hide-mastered-btn', 'path-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
   }
 };
 
@@ -10979,6 +11049,12 @@ const TOPBAR_MENU_TAXONOMY = {
 function _topbarItemFromButton(btn) {
   if (!btn) return null;
   if (btn.classList.contains('hidden')) return null;
+  // iter 141: also respect style.display === 'none' so capability-gated
+  // buttons (e.g. #haptic-btn hidden on iOS Safari where navigator.vibrate
+  // is undefined) don't leak into the topbar menu. The .hidden class covers
+  // dynamic empty-state hides (Review/Weak/At-Risk); style.display covers
+  // permanent platform-capability hides.
+  if (btn.style.display === 'none') return null;
   const cloned = btn.cloneNode(true);
   // Strip count spans (e.g. <span id="review-count">0</span>) so the label
   // doesn't carry "Review (0)" into the menu.

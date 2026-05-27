@@ -1,0 +1,785 @@
+/* ────────────────────────────────────────────────────────────────────────
+   iter 127: top-bar shell (Phase 2 of the nav refactor epic, iters 127-130).
+   Frees the sidebar to be just the lesson list by relocating the ~30
+   mode-launcher buttons into 4 browsable dropdown menus (Practice / Drills
+   / Train / Insights), wired in Phase 3. Settings (⚙️) + Help (❓) + Cmd-K
+   (🔍) icons sit on the right. Sidebar buttons remain live this phase so
+   nothing breaks during the transition.
+
+   Layout: body becomes a column flex container so the topbar takes its 48px
+   and the existing sidebar+main flex stage gets the remaining height. The
+   previous `h-screen overflow-hidden` body + `h-screen flex` inner div were
+   swapped for `.app-shell` + `.app-stage` so the topbar isn't fighting
+   Tailwind utility-class height.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: #020617;
+}
+.app-stage {
+  flex: 1 1 0;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 48px;
+  flex: 0 0 48px;
+  background: #0a0f1f;
+  border-bottom: 1px solid #1e293b;
+  padding: 0 12px;
+  position: relative;
+  z-index: 50;
+}
+.topbar-left { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.surface-toggle { display: inline-flex; border: 1px solid #334155; border-radius: 9px; overflow: hidden; }
+.surface-seg { background: transparent; color: #94a3b8; border: 0; padding: 6px 12px; cursor: pointer; font: inherit; font-weight: 600; font-size: 13px; white-space: nowrap; }
+.surface-seg:hover { color: #e2e8f0; }
+.surface-seg.active { background: #0e2a47; color: #67e8f9; }
+.surface-seg.active[data-surface="reference"] { background: #2a1e3f; color: #e879f9; }
+@media (max-width: 767px) { .surface-seg { padding: 6px 9px; font-size: 12px; } }
+.topbar-navlink { background: transparent; color: #cbd5e1; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; font: inherit; font-weight: 600; white-space: nowrap; }
+.topbar-navlink:hover { background: #1e293b; color: #f8fafc; }
+.topbar-group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 700; padding: 9px 10px 3px; }
+/* Phase H: full-bleed Session shell — a self-contained drill/stream/sim owns the
+   screen. Hide the topbar + sidebar + mobile chrome; the session's own ✕ Exit is
+   the only nav. */
+body.in-session #topbar,
+body.in-session aside.app-sidebar,
+body.in-session #hamburger,
+body.in-session #sidebar-backdrop { display: none !important; }
+body.in-session main.app-main { padding-top: 0 !important; }
+body.in-session #lesson-shell { max-width: 760px; margin: 0 auto; }
+.topbar-wordmark {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: -0.01em;
+}
+
+.topbar-menus {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.topbar-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.topbar-menu:hover { background: #1e293b; color: #f8fafc; }
+.topbar-menu[aria-expanded="true"] {
+  background: #1e293b;
+  color: #f8fafc;
+  border-color: #334155;
+}
+.topbar-menu-caret { font-size: 10px; color: #64748b; line-height: 1; }
+.topbar-menu[aria-expanded="true"] .topbar-menu-caret { color: #cbd5e1; }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.topbar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid transparent;
+  font-size: 16px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.topbar-icon:hover { background: #1e293b; color: #f8fafc; }
+.topbar-icon[aria-expanded="true"] {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+/* Dropdown panel — single element repositioned/repopulated per menu open.
+   Anchored under the topbar so it spans the full width (large enough for
+   multi-column grid of items on desktop). Click outside / ESC closes. */
+.topbar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 49;
+}
+.topbar-dropdown.hidden { display: none; }
+.topbar-dropdown-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px;
+  padding: 14px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.topbar-dropdown-stub {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  padding: 24px 12px;
+  font-style: italic;
+}
+/* iter 128 Phase 3: per-menu blurb at the top of the dropdown — one-line
+   orientation ("Sessions + picks — what to drill next.") so the user
+   doesn't have to taxonomically reason about what each menu category
+   means. grid-column: 1/-1 spans the full grid width above the items. */
+.topbar-menu-blurb {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 2px 6px 10px 6px;
+  border-bottom: 1px solid #1e293b;
+  margin-bottom: 6px;
+}
+
+/* iter 130 — Phase 5 of the topbar nav refactor epic: mobile-only 📂
+   Browse button + category-picker rows. The Browse button is hidden on
+   desktop (the 4 .topbar-menu buttons are already visible there) and
+   visible only at ≤767px (where .topbar-menus is `display: none`).
+   The category-picker rows are visually distinct from the regular
+   .topbar-item rows — bigger touch targets, chevron indicator, no
+   emoji column (since the categories don't have a single emoji). */
+.topbar-icon-mobile-only { display: none; }
+.topbar-item-mobile-cat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #e2e8f0;
+  text-align: left;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  min-height: 56px;
+}
+.topbar-item-mobile-cat:hover { background: #1e293b; border-color: #334155; }
+.topbar-item-mobile-cat .topbar-item-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #f1f5f9;
+  line-height: 1.3;
+  margin-bottom: 2px;
+}
+.topbar-item-caret {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 400;
+}
+/* iter 133: "‹ Categories" back button prepended to drilled-in category
+   views in the mobile-browse flow. grid-column: 1/-1 spans the full
+   dropdown-body grid above the items. Visually distinct from
+   .topbar-item-mobile-cat (no chevron, lower contrast, smaller font) so
+   the user can scan past it when they want to engage with items, but
+   can find it easily when they want to switch categories. */
+.topbar-cat-back {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid #1e293b;
+  color: #94a3b8;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  text-align: left;
+  transition: color 0.12s, border-color 0.12s;
+}
+.topbar-cat-back:hover { color: #cbd5e1; border-color: #334155; }
+/* iter 137: category-name heading inside drilled-in mobile view.
+   Persistent orientation when the user scrolls past the back button. */
+.topbar-cat-heading {
+  grid-column: 1 / -1;
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+  padding: 4px 6px 2px 6px;
+  margin-bottom: 2px;
+}
+/* Per-item entries (Phase 3 will start using these). */
+.topbar-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #e2e8f0;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.topbar-item:hover { background: #1e293b; border-color: #334155; }
+.topbar-item-emoji { flex: 0 0 22px; font-size: 16px; line-height: 1.2; }
+.topbar-item-text { flex: 1 1 auto; min-width: 0; }
+.topbar-item-name {
+  font-weight: 600;
+  color: #f1f5f9;
+  line-height: 1.3;
+  margin-bottom: 2px;
+}
+.topbar-item-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+/* iter 129 — Phase 4 of the topbar nav refactor epic: visually hide the
+   sidebar's ~30 mode-launcher buttons. The topbar's 5 dropdowns + Cmd-K
+   palette are now the user-visible paths to launch these modes. Buttons
+   stay in the DOM (NOT deleted) so the topbar's synth-click bridge from
+   iter-128 + existing CDP probes that query by `document.getElementById(id)`
+   continue working unchanged — this is structural preservation with
+   visual cleanup. State-indicator chips (Review / Weak / At Risk /
+   Resurrect / Reveal Replay / Bridge / Offline) are deliberately NOT in
+   this list because they double as at-a-glance status badges (e.g. the
+   "Review (3)" pill tells the user they have 3 due reviews even without
+   clicking it) — that information value is independent of being a mode
+   launcher. Stats-btn IS hidden here even though it's not strictly a
+   mode launcher; Topbar Insights → Stats covers it cleanly.
+   When a new sidebar mode-launcher button ships, its ID must be added
+   here OR (preferred) ship it ONLY in the topbar from the start. */
+.app-sidebar #streak-map-btn,
+.app-sidebar #shuffle-btn,
+.app-sidebar #lucky-btn,
+.app-sidebar #mock-btn,
+.app-sidebar #recognize-btn,
+.app-sidebar #reverse-btn,
+.app-sidebar #crystal-btn,
+.app-sidebar #claim-btn,
+.app-sidebar #gotcha-btn,
+.app-sidebar #swap-btn,
+.app-sidebar #conv-drill-btn,
+.app-sidebar #trace-hop-btn,
+.app-sidebar #notes-drill-btn,
+.app-sidebar #constellation-btn,
+.app-sidebar #reverse-walk-btn,
+.app-sidebar #whatif-btn,
+.app-sidebar #notes-locate-btn,
+.app-sidebar #match-btn,
+.app-sidebar #sections-grid-btn,
+.app-sidebar #clarify-ritual-btn,
+.app-sidebar #hotseat-btn,
+.app-sidebar #calibrate-btn,
+.app-sidebar #ai-coach-btn,
+.app-sidebar #rapid-fire-btn,
+.app-sidebar #big-o-btn,
+.app-sidebar #warmup-btn,
+.app-sidebar #speedrun-btn,
+.app-sidebar #gauntlet-btn,
+.app-sidebar #bug-hunt-btn,
+.app-sidebar #mutate-btn,
+.app-sidebar #constraint-shift-btn,
+.app-sidebar #install-btn,
+.app-sidebar #pace-bar-btn,
+.app-sidebar #haptic-btn,
+.app-sidebar #phone-screen-btn,
+.app-sidebar #today-btn,
+.app-sidebar #mechanics-btn,
+.app-sidebar #export-btn,
+.app-sidebar #cram-cheat-btn,
+.app-sidebar #cram-glossary-btn,
+.app-sidebar #cram-behavior-btn,
+.app-sidebar #cram-shapes-btn,
+.app-sidebar #cram-review-btn,
+.app-sidebar #stats-btn { display: none !important; }
+
+/* The Sync chip (injected by js/sync.js as `position: fixed; top: 10px;
+   right: 12px;`) was authored before the topbar existed. With the topbar
+   now occupying the top 48px of the viewport, the chip would overlap the
+   right-side icons (palette/help/settings). Push it below the topbar so
+   the topbar owns the top strip cleanly. !important is intentional —
+   sync.js sets top: 10px via a `<style>` tag it injects at runtime, and
+   we don't want to fork that file just to relocate the chip. */
+#sync-chip { top: 56px !important; }
+@media (max-width: 767px) {
+  #sync-chip { top: 52px !important; right: 8px !important; }
+}
+
+/* Mobile collapse (≤767px — same breakpoint as the existing #hamburger media
+   query so the two stay in sync). The 4 menu buttons + wordmark + 3 icons
+   would horizontally overflow iPhone 390px (4×80 + 60 + 3×36 ≈ 500px just
+   for inline content, plus we need room for the hamburger). Phase 1 strategy:
+   HIDE the menus on mobile entirely. The 4 dropdowns are empty stubs at this
+   phase (Phase 3 fills them); on mobile the user still reaches every drill
+   via the existing sidebar buttons, which remain live per the no-breaking-
+   changes constraint. Phase 3 should introduce a single ☰-Menu trigger that
+   exposes the same dropdowns vertically. The right-side icons (🔍 / ❓ / ⚙️)
+   shrink slightly and stay visible — those are functional now and worth the
+   real estate even on mobile. The #hamburger (sidebar toggle) is nudged
+   below the topbar so the topbar always sits at viewport top. */
+@media (max-width: 767px) {
+  .topbar {
+    height: 44px;
+    flex: 0 0 44px;
+    gap: 8px;
+    padding: 0 8px 0 56px; /* left-pad reserves space for the #hamburger button */
+  }
+  .topbar-wordmark { font-size: 13px; }
+  .topbar-menus { display: none; }
+  /* When .topbar-menus is hidden, nothing flex-grows between .topbar-left
+     and .topbar-right; without this push, the icons cluster against the
+     wordmark on the left. */
+  .topbar-right { margin-left: auto; }
+  .topbar-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+  }
+  /* iter 130 Phase 5: surface the mobile-only Browse button (it's
+     `display: none` on desktop where the 4 .topbar-menu buttons are
+     visible — on mobile those menus are hidden, so Browse becomes
+     the category-pick entry point). */
+  .topbar-icon-mobile-only { display: inline-flex; }
+  /* Hamburger lives INSIDE the topbar visually — keep it fixed but at the
+     left edge of the topbar height-band, not at top: 12px (which would now
+     sit inside the topbar with no breathing room). */
+  .hamburger { top: 6px !important; left: 8px !important; }
+}
+
+/* Mobile (≤700px): the topbar stays but menus collapse their labels to icons.
+   Phase 4 may add a full hamburger-sheet pattern if labels-hidden proves
+   insufficient — but the sidebar drawer already handles lesson-list nav on
+   mobile, so the topbar's job here is just mode-launching, not navigation.
+   Keep mobile minimal until usage data tells us otherwise. */
+@media (max-width: 700px) {
+  .topbar { padding: 0 6px; gap: 6px; height: 44px; flex: 0 0 44px; }
+  .topbar-wordmark { font-size: 12px; }
+  .topbar-menu { padding: 6px 8px; font-size: 12px; }
+  .topbar-menu-caret { display: none; }
+  .topbar-icon { width: 32px; height: 32px; font-size: 14px; }
+  .topbar-dropdown-body {
+    grid-template-columns: 1fr;
+    padding: 8px;
+    gap: 2px;
+  }
+  .topbar-item { padding: 12px 10px; font-size: 14px; }
+  .topbar-item-emoji { font-size: 18px; flex-basis: 26px; }
+}
+/* Very narrow (≤480px): hide the wordmark to give menu labels room. */
+@media (max-width: 480px) {
+  .topbar-wordmark { display: none; }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   iter 129 (Phase 4 of the topbar nav refactor epic): sidebar slim-down.
+
+   The ~30 mode-launcher buttons in the sidebar were moved to the topbar's
+   Practice / Drills / Train / Insights / Settings dropdowns (Phase 3).
+   They remain in the sidebar HTML as the canonical click targets that
+   topbar items dispatch to via document.getElementById — so all existing
+   handlers keep working without a parallel-rewrite. This CSS hides them
+   visually so the sidebar shows only:
+
+     - Wordmark + progress + path chip
+     - Queue strip (Review / Weak / Reveal-Replay / At-Risk / Resurrect /
+       Bridge — STATUS pills only, kept visible because counts are
+       glanceable in-context)
+     - Search input + binder strip + lesson list
+
+   The bottom-bar container (📋 Prep link + Reset / Backup / Restore +
+   `?` shortcuts indicator) also hides — Prep is reachable through the
+   path picker (Path chip → "4-Day Interview Prep"), and Reset / Backup /
+   Restore live in the topbar ⚙️ Settings menu now. The `?` keypress
+   binding for the help modal still works (and the ❓ topbar icon opens
+   the same modal).
+   ──────────────────────────────────────────────────────────────────────── */
+
+aside.app-sidebar #shuffle-btn,
+aside.app-sidebar #lucky-btn,
+aside.app-sidebar #mock-btn,
+aside.app-sidebar #recognize-btn,
+aside.app-sidebar #reverse-btn,
+aside.app-sidebar #crystal-btn,
+aside.app-sidebar #claim-btn,
+aside.app-sidebar #gotcha-btn,
+aside.app-sidebar #swap-btn,
+aside.app-sidebar #conv-drill-btn,
+aside.app-sidebar #trace-hop-btn,
+aside.app-sidebar #notes-drill-btn,
+aside.app-sidebar #constellation-btn,
+aside.app-sidebar #reverse-walk-btn,
+aside.app-sidebar #whatif-btn,
+aside.app-sidebar #notes-locate-btn,
+aside.app-sidebar #match-btn,
+aside.app-sidebar #sections-grid-btn,
+aside.app-sidebar #offline-pack-btn,
+aside.app-sidebar #clarify-ritual-btn,
+aside.app-sidebar #hotseat-btn,
+aside.app-sidebar #calibrate-btn,
+aside.app-sidebar #ai-coach-btn,
+aside.app-sidebar #rapid-fire-btn,
+aside.app-sidebar #big-o-btn,
+aside.app-sidebar #warmup-btn,
+aside.app-sidebar #speedrun-btn,
+aside.app-sidebar #gauntlet-btn,
+aside.app-sidebar #bug-hunt-btn,
+aside.app-sidebar #mutate-btn,
+aside.app-sidebar #constraint-shift-btn,
+aside.app-sidebar #install-btn,
+aside.app-sidebar #pace-bar-btn,
+aside.app-sidebar #haptic-btn,
+aside.app-sidebar #phone-screen-btn,
+aside.app-sidebar #mechanics-btn,
+aside.app-sidebar #export-btn,
+aside.app-sidebar #stats-btn,
+aside.app-sidebar #streak-map-btn,
+aside.app-sidebar #today-btn {
+  display: none !important;
+}
+
+/* Bottom-bar container: 📋 Prep link + Reset/Backup/Restore + `?` indicator.
+   The container's distinguishing combination is `p-3 border-t border-slate-800
+   flex items-center justify-between text-xs` — selector targets only that
+   specific bottom-bar at the aside's tail, not any modal interior. */
+aside.app-sidebar > div.p-3.border-t.border-slate-800.flex.items-center.justify-between.text-xs {
+  display: none !important;
+}
+
+/* Restore visual breathing room at the top of the sidebar now that the
+   mode-launcher flex-wrap row is collapsed. The queue strip (status pills)
+   keeps its spacing; this just trims the empty residual margin. */
+aside.app-sidebar .flex.items-center.gap-3.mt-3.text-xs.flex-wrap {
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   iter 140: ⏲ Pace-Bar — peripheral-vision tempo cue above the L3 editor.
+   The track is a slim rounded rail; the fill grows from 0% → 100% width
+   over the user's median time-to-solve for that lesson. Color band keys
+   to the elapsed/median ratio (set via JS toggling .pace-bar-{green,amber,red}
+   on the fill — see renderL3 driver). No numerals are drawn on this element
+   by design — L75 anti-gamification mitigation. The bar auto-hides when the
+   driver computes a null median (insufficient per-lesson data).
+   ──────────────────────────────────────────────────────────────────────── */
+.pace-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12); /* slate-400 @ 12% — same family as the editor's surrounding chrome */
+  overflow: hidden;
+  margin: 0 0 14px 0;
+}
+.pace-bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  /* Width and color transitions are kept smooth so the 500ms tick interval
+     doesn't render as a stuttery staircase on the bar. */
+  transition: width 480ms linear, background-color 240ms ease-out;
+}
+.pace-bar-green { background-color: #10b981; }  /* emerald-500 */
+.pace-bar-amber { background-color: #f59e0b; }  /* amber-500 */
+.pace-bar-red   { background-color: #ef4444; }  /* red-500 */
+
+/* ────────────────────────────────────────────────────────────────────────
+   iter 142: 🔀 Mutate-and-Predict — §9B consequence-class drill. Inherits
+   .recognize-shell / .whatif-shell / .recognize-opt CSS from iter-49/122
+   so only the new bits (mutator name tag below the code block, mutated-
+   output reveal line in the feedback panel) need styles here.
+   ──────────────────────────────────────────────────────────────────────── */
+.mutate-mutator-tag {
+  font-size: 12px;
+  color: #94a3b8;             /* slate-400 — matches the existing recognize-shell hint copy */
+  margin: 8px 0 12px 0;
+  letter-spacing: 0.01em;
+}
+.mutate-mutator {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #fb923c;             /* orange-400 — matches the sidebar 🔀 hover accent */
+  background: rgba(251, 146, 60, 0.10);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+.mutate-observed {
+  font-size: 13px;
+  color: #cbd5e1;             /* slate-300 — readable against the reveal panel bg */
+  margin-top: 8px;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   iter 144: 📝 Notes→Code — Reference-tab toggle that hides the canonical
+   code block and mounts a CodeMirror editor in its place. The user types
+   the canonical from memory using the still-visible Notes list (below the
+   editor) as the prompt; Run grades via runCode against L3.expectedOutput
+   — the same grader the L3 drill uses. Desk-tier surface (positions
+   explicitly in the toggle tooltip) — first Cat 1 Drilling Surfaces ship
+   since iter-122 What-If (22-iter drought broken). Inherits the .primary
+   button style from elsewhere; everything else is local.
+   ──────────────────────────────────────────────────────────────────────── */
+.bullets-code-prompt {
+  font-size: 12px;
+  color: #94a3b8;              /* slate-400 — matches the other Reference-toolbar copy */
+  margin-bottom: 8px;
+  letter-spacing: 0.01em;
+}
+.bullets-code-editor {
+  /* The textarea is hidden by CodeMirror.fromTextArea; styling the
+     surrounding container is enough. The CodeMirror instance picks up the
+     dracula theme automatically. */
+}
+.bullets-code-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.bullets-code-feedback {
+  font-size: 13px;
+  color: #94a3b8;
+}
+.bullets-feedback-pass { color: #34d399; }   /* emerald-400 */
+.bullets-feedback-warn { color: #fbbf24; }   /* amber-400 */
+.bullets-feedback-err  { color: #f87171; }   /* red-400 */
+
+/* The three Reference toggles share a "pressed" visual state. Reuse the
+   .active class already styled for .flash-toggle + .cinema-toggle, but
+   make sure .bullets-toggle picks it up too. */
+.bullets-toggle.active {
+  background: rgba(34, 211, 238, 0.10);    /* cyan-400 @ 10% — distinct from Flash's amber + Cinema's violet */
+  color: #67e8f9;                          /* cyan-300 */
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   iter 147: 📞 Phone Screen Simulator — chained 3-card session shell with
+   one unbroken timer. Inherits .recognize-shell + .recognize-header +
+   .recognize-summary patterns (iter-49/122/etc). Card body swaps per card-
+   kind (warmup = readonly Reference; pattern = L3 editor + Run; followup =
+   L2 fill). Pip strip shows 3 dots — past = solid cyan, current = larger
+   ring, pending = hollow. Timer in monospace, cyan accent.
+   ──────────────────────────────────────────────────────────────────────── */
+.phone-screen-shell .recognize-header { color: #67e8f9; }   /* cyan-300 timer + label */
+.phone-pips {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 16px 0;
+  justify-content: center;
+}
+.phone-pip {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 2px solid #475569;            /* slate-600 hollow ring */
+}
+.phone-pip-pending { background: transparent; }
+.phone-pip-active  { width: 16px; height: 16px; border-color: #22d3ee; background: rgba(34, 211, 238, 0.20); }
+.phone-pip-done    { background: #22d3ee; border-color: #22d3ee; }   /* cyan-400 filled */
+
+.phone-card-tag {
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+  margin-bottom: 14px;
+}
+.phone-card-instructions {
+  font-size: 13px;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+.phone-card-error { color: #f87171; font-size: 14px; padding: 16px; text-align: center; }
+
+.phone-prompt-block {
+  background: #1e293b;                  /* slate-800 — matches the L3 prompt block */
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.phone-prompt-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.phone-prompt-text  { font-size: 14px; color: #e2e8f0; }
+.phone-prompt-expected { font-size: 12px; color: #94a3b8; margin-top: 8px; }
+
+.phone-warmup-code,
+.phone-l2-template {
+  background: #1e1e1e;                  /* matches CodeMirror dracula bg */
+  color: #f8f8f2;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+.phone-l3-editor {
+  /* CodeMirror replaces the textarea; container styling is enough. */
+}
+.phone-card-notes-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 12px 0 4px 0;
+}
+.phone-card-notes {
+  list-style: disc;
+  padding-left: 22px;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.phone-card-notes li { margin-bottom: 4px; }
+
+.phone-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.phone-feedback { font-size: 13px; color: #94a3b8; }
+.phone-feedback-pass { color: #34d399; }
+.phone-feedback-warn { color: #fbbf24; }
+.phone-feedback-err  { color: #f87171; }
+
+.phone-l2-blanks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+.phone-l2-blank {
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  min-width: 100px;
+}
+.phone-l2-blank-correct { border-color: #34d399; background: rgba(52, 211, 153, 0.08); }
+.phone-l2-blank-wrong   { border-color: #f87171; background: rgba(248, 113, 113, 0.08); }
+
+.phone-summary-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.phone-summary-row { font-size: 13px; padding: 4px 0; color: #cbd5e1; }
+.phone-summary-kind { color: #64748b; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+.phone-summary-pass { color: #34d399; }
+.phone-summary-fail { color: #f87171; }
+.phone-summary-lesson { color: #e2e8f0; }
+
+/* ────────────────────────────────────────────────────────────────────────
+   iter 148: 🚧 Constraint-Shift Drill — first Cat 9 §9C surface. Reuses
+   .recognize-shell + .whatif-canonical (read-only canonical pre). The
+   load-bearing visual is the two-claim block: ORIGINAL constraint label
+   (slate) + arrow + SHIFTED constraint label (amber — the active goal).
+   ──────────────────────────────────────────────────────────────────────── */
+.shift-claims-block {
+  background: #1e293b;        /* slate-800 — matches L3 prompt panel */
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-left: 3px solid #fbbf24;   /* amber accent — the shift is the active goal */
+}
+.shift-claim-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 4px 0;
+  font-size: 13px;
+}
+.shift-claim-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  min-width: 64px;
+  text-align: center;
+}
+.shift-claim-orig {
+  background: rgba(148, 163, 184, 0.12);   /* slate-400 @ 12% */
+  color: #94a3b8;
+}
+.shift-claim-shift {
+  background: rgba(251, 191, 36, 0.14);    /* amber-400 @ 14% */
+  color: #fcd34d;
+}
+.shift-claim-text { color: #cbd5e1; flex: 1; }
+.shift-claim-shift-text { color: #fde68a; font-weight: 500; }
+
+.shift-canonical-label {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+.shift-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 10px 0;
+  font-style: italic;
+  padding-left: 10px;
+  border-left: 2px solid #475569;   /* slate-600 */
+}
+.shift-editor {
+  /* CodeMirror replaces the textarea; container styling is enough. */
+}
+.shift-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.shift-feedback {
+  font-size: 13px;
+  color: #94a3b8;
+  flex-basis: 100%;
+}
+.shift-feedback-pass { color: #34d399; }
+.shift-feedback-warn { color: #fbbf24; }
+.shift-feedback-err  { color: #f87171; }

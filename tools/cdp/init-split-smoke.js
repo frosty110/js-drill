@@ -36,6 +36,28 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const exc = s.consoleMsgs.filter(m => m.type === 'exception');
   if (exc.length) fails.push('boot exceptions: ' + JSON.stringify(exc.slice(0, 3)));
 
+  // -1. CSS slices loaded — after the app.css → 5-file split, verify every
+  // expected stylesheet href is in the DOM and resolves to a non-empty rule
+  // set. Catches a "forgot to update index.html" regression cheaper than
+  // visual diffing every element.
+  const cssExpect = [
+    'css/01-base.css', 'css/02-sidebar.css', 'css/03-tabs.css',
+    'css/04-drills.css', 'css/05-shell-chrome.css', 'tokens.css'
+  ];
+  const cssLoaded = await s.eval(`JSON.stringify([...document.styleSheets].map(s=>s.href||'(inline)'))`);
+  for (const href of cssExpect) {
+    if (!cssLoaded.includes(href)) fails.push('CSS slice not loaded: ' + href + ' (have: ' + cssLoaded + ')');
+  }
+  // Body background should be a dark color (Tailwind preflight + tokens.css +
+  // css/01-base.css all contribute; specific RGB depends on which rule wins.
+  // We just check "no white flash" — luminance < 64 = dark enough for theme).
+  const bodyBg = await s.eval('getComputedStyle(document.body).backgroundColor');
+  const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(bodyBg);
+  if (m) {
+    const lum = 0.299 * +m[1] + 0.587 * +m[2] + 0.114 * +m[3];
+    if (lum > 64) fails.push('body background is light (lum=' + lum.toFixed(0) + ') — CSS likely not loading: ' + bodyBg);
+  }
+
   // 0. Level renderers — confirm renderL1/L2/L2Mobile/L3 still resolve as
   // top-level globals after 12-levels.js → 12a/12b/12c split. Then click
   // each level tab on the current lesson and assert active-tab + non-empty
@@ -180,6 +202,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   console.log('calibrate-btn flip    :', calBefore !== calAfter ? 'OK' : 'FAIL');
   console.log('navToLesson helper    :', navTarget ? 'invoked' : 'SKIPPED (no second lesson)');
   console.log('renderL1/L2/L2m/L3    :', renderers);
+  console.log('css slices loaded     :', cssExpect.every(h => cssLoaded.includes(h)) ? 'OK (' + cssExpect.length + '/' + cssExpect.length + ')' : 'FAIL');
+  console.log('body background       :', bodyBg);
   console.log('exceptions total      :', finalExc);
 
   if (fails.length) { console.log('\n❌ FAIL\n - ' + fails.join('\n - ')); process.exit(1); }

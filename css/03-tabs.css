@@ -1,0 +1,513 @@
+/* ── Conversation tab ────────────────────────────────────────────────────
+   Interview walk-through: collapsible sections (native <details>) with a
+   title + always-visible prompt. Click expands the body. Mobile-tuned:
+   tall tap targets, no nested scroll. */
+.conv-intro {
+  font-size: 13px;
+  color: #94a3b8;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-left: 3px solid #60a5fa;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.conv-list { display: flex; flex-direction: column; gap: 10px; }
+.conv-section {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.12s, background 0.12s;
+}
+.conv-section[open] { border-color: #334155; background: #111827; }
+.conv-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 4px;
+  align-items: center;
+  min-height: 56px;
+  user-select: none;
+}
+.conv-summary::-webkit-details-marker { display: none; }
+.conv-summary:hover { background: rgba(148, 163, 184, 0.04); }
+.conv-section[open] .conv-summary { border-bottom: 1px solid #1e293b; }
+.conv-title {
+  grid-column: 1;
+  grid-row: 1;
+  font-weight: 600;
+  font-size: 14px;
+  color: #f8fafc;
+  line-height: 1.3;
+}
+.conv-prompt {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 12.5px;
+  color: #94a3b8;
+  font-style: italic;
+  line-height: 1.4;
+}
+.conv-toggle {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: #475569;
+  font-size: 14px;
+  transition: transform 0.15s, color 0.12s;
+}
+.conv-section[open] .conv-toggle { transform: rotate(90deg); color: #60a5fa; }
+.conv-body {
+  padding: 10px 16px 16px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.conv-body p { margin: 6px 0; }
+.conv-body p:first-child { margin-top: 0; }
+.conv-body p:last-child { margin-bottom: 0; }
+.conv-body strong { color: #f1f5f9; }
+
+/* Two-color body blocks — SAY is the candidate's script voice; WHY is the
+   meta/coaching voice. Different left-border color + tinted background
+   makes the two scannable at a glance. */
+.conv-block {
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  padding: 10px 14px;
+}
+.conv-block-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  opacity: 0.85;
+}
+.conv-block-body { font-size: 13.5px; line-height: 1.6; }
+
+/* SAY — cool teal/cyan. The line you'd actually speak. */
+.conv-say {
+  background: rgba(34, 211, 238, 0.06);
+  border-left-color: #22d3ee;
+}
+.conv-say .conv-block-label { color: #67e8f9; }
+.conv-say .conv-block-body { color: #e2e8f0; }
+.conv-say .conv-block-body p { white-space: pre-wrap; }
+
+/* WHY — warm amber. The rationale. Lower-key than SAY so it reads as the
+   coaching footnote, not the main script. */
+.conv-why {
+  background: rgba(251, 191, 36, 0.05);
+  border-left-color: #f59e0b;
+}
+.conv-why .conv-block-label { color: #fcd34d; }
+.conv-why .conv-block-body { color: #cbd5e1; font-style: italic; }
+
+/* Legacy single-reveal blocks (old `reveal` field) — neutral slate. */
+.conv-legacy { background: rgba(148, 163, 184, 0.04); border-left-color: #475569; }
+
+/* In-section intro paragraph (sits between summary and the typed blocks) */
+.conv-intro-inline {
+  font-size: 13.5px;
+  color: #cbd5e1;
+  line-height: 1.55;
+  padding: 2px 2px 4px;
+}
+.conv-intro-inline p { margin: 0 0 8px 0; }
+.conv-intro-inline p:last-child { margin-bottom: 0; }
+
+/* Worked examples — nested <details> per input. Subtle violet/indigo
+   left-border to distinguish from SAY (teal) and WHY (amber). */
+.conv-examples-block {
+  background: rgba(167, 139, 250, 0.05);
+  border-left-color: #a78bfa;
+}
+.conv-examples-block .conv-block-label { color: #c4b5fd; }
+.conv-examples-list { display: flex; flex-direction: column; gap: 8px; }
+.conv-example {
+  background: #0b1226;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.conv-example[open] { border-color: #334155; }
+.conv-ex-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  user-select: none;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+.conv-ex-summary::-webkit-details-marker { display: none; }
+.conv-ex-summary:hover { background: rgba(148, 163, 184, 0.04); }
+.conv-example[open] .conv-ex-summary { border-bottom: 1px solid #1e293b; }
+.conv-ex-header { overflow-x: auto; white-space: nowrap; }
+.conv-ex-arrow { color: #64748b; margin: 0 4px; }
+.conv-ex-out { color: #67e8f9; font-weight: 600; }
+.conv-example[open] .conv-toggle { transform: rotate(90deg); color: #a78bfa; }
+.conv-ex-body { padding: 10px 12px 12px; }
+.conv-ex-note {
+  font-size: 12.5px;
+  color: #94a3b8;
+  font-style: italic;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.conv-ex-trace {
+  background: #020617;
+  color: #e2e8f0;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+}
+@media (max-width: 767px) {
+  .conv-ex-summary { font-size: 13.5px; padding: 12px 12px; min-height: 48px; }
+  .conv-ex-trace { font-size: 12px; padding: 10px; }
+}
+
+/* ── Walkthrough tab ───────────────────────────────────────────────────
+   Two-pane layout (code on left, state on right) on desktop; stacked on
+   mobile. Sticky controls at top so prev/next stay reachable while you
+   scroll through long code. Current-line highlight uses a translucent
+   amber band so the Dracula syntax colors stay readable underneath. */
+.walk-intro {
+  font-size: 13px;
+  color: #94a3b8;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-left: 3px solid #a78bfa;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.walk-controls {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #0b1020;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid #1e293b;
+  margin-bottom: 12px;
+}
+.walk-example-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.walk-example {
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: "SF Mono", Menlo, Monaco, monospace;
+  font-size: 13px;
+  min-width: 200px;
+  cursor: pointer;
+}
+.walk-example:focus { outline: none; border-color: #60a5fa; }
+.walk-step-controls { display: inline-flex; align-items: center; gap: 8px; }
+.walk-btn {
+  background: #1e293b;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 36px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.walk-btn:hover:not(:disabled) { background: #334155; border-color: #475569; }
+.walk-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.walk-btn-primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+.walk-btn-primary:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+.walk-btn-ghost { background: transparent; color: #94a3b8; }
+.walk-btn-ghost:hover:not(:disabled) { background: rgba(148,163,184,0.08); color: #cbd5e1; }
+.walk-step-counter {
+  font-family: "SF Mono", monospace;
+  font-size: 12.5px;
+  color: #94a3b8;
+  min-width: 100px;
+  text-align: center;
+}
+.walk-label-bar {
+  background: rgba(167, 139, 250, 0.08);
+  border-left: 3px solid #a78bfa;
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+  font-family: "SF Mono", monospace;
+  font-size: 13px;
+  color: #e2e8f0;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.walk-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.walk-code-pane, .walk-state-pane {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.walk-code {
+  background: #282a36;
+  margin: 0;
+  padding: 0;
+  font-family: "SF Mono", Menlo, Monaco, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  max-height: 480px;
+  overflow-y: auto;
+  white-space: pre;
+}
+.walk-line {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: baseline;
+  padding: 0;
+  border-left: 3px solid transparent;
+  transition: background 0.1s, border-left-color 0.1s;
+}
+.walk-line-no {
+  color: #6272a4;
+  font-size: 11.5px;
+  text-align: right;
+  padding: 2px 8px 2px 0;
+  user-select: none;
+  background: rgba(0,0,0,0.15);
+}
+.walk-line-code {
+  padding: 2px 10px;
+  white-space: pre;
+  overflow-x: auto;
+}
+.walk-line.active {
+  background: rgba(251, 191, 36, 0.13);
+  border-left-color: #fbbf24;
+}
+.walk-line.active .walk-line-no { color: #fbbf24; font-weight: 700; }
+.walk-state-pane { padding: 0; }
+.walk-state-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid #1e293b;
+  font-weight: 600;
+}
+.walk-state-table {
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 432px;
+  overflow-y: auto;
+}
+.walk-state-row {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  font-family: "SF Mono", Menlo, Monaco, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(148,163,184,0.1);
+}
+.walk-state-row:last-child { border-bottom: none; }
+.walk-state-key { color: #a78bfa; font-weight: 600; }
+.walk-state-val { color: #e2e8f0; word-break: break-all; }
+.walk-state-empty { color: #64748b; font-size: 12px; font-style: italic; padding: 8px 0; }
+
+/* Quiz mode — active-recall variant of Walkthrough scrub. Mobile-first
+   2-column option grid; widens to 4-column on desktop. See
+   ideas-by-category.md § Drilling Surfaces → "What comes next?" entry. */
+.walk-quiz { margin-top: 16px; padding: 14px; border-radius: 8px; background: rgba(148,163,184,0.04); border: 1px solid #1e293b; }
+.walk-quiz.hidden { display: none; }
+.walk-quiz-q { font-size: 13px; color: #cbd5e1; margin-bottom: 10px; font-weight: 600; }
+.walk-quiz-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.walk-quiz-opt {
+  text-align: left; padding: 10px 12px; border-radius: 6px;
+  background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1;
+  cursor: pointer; font-family: inherit; font-size: 13px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.walk-quiz-opt:hover:not(.locked) { background: #1e293b; border-color: #334155; }
+.walk-quiz-opt-line { font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 11px; color: #64748b; }
+.walk-quiz-opt-label { color: #e2e8f0; margin-top: 2px; }
+.walk-quiz-opt-state { font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 11px; color: #94a3b8; margin-top: 4px; word-break: break-all; }
+.walk-quiz-opt.locked { cursor: default; }
+.walk-quiz-opt.correct { background: rgba(80,250,123,0.15); border-color: #50fa7b; }
+.walk-quiz-opt.incorrect { background: rgba(255,85,85,0.15); border-color: #ff5555; }
+.walk-quiz-actions { display: flex; justify-content: flex-end; }
+.walk-btn.active { background: #44475a; border-color: #6272a4; color: #f8f8f2; }
+
+/* Track-picker chips above the sidebar lesson list when Starter Path
+   is ON. Lets the user scope the path to one track (Syntax / Patterns /
+   Applied) or keep "All". See ideas-by-category.md § Paths & Sessions →
+   "Per-track Starter Paths". */
+.path-track-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #1e293b;
+  background: rgba(96, 165, 250, 0.04);
+}
+.path-track-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.path-track-chip:hover:not(:disabled):not(.active) {
+  color: #cbd5e1;
+  border-color: #475569;
+  background: #1e293b;
+}
+.path-track-chip.active {
+  color: #f8fafc;
+  background: #1e3a8a;
+  border-color: #3b82f6;
+}
+.path-track-chip:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.path-track-count {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 400;
+}
+.path-track-chip.active .path-track-count { color: #bfdbfe; }
+@media (max-width: 767px) {
+  .path-track-chip { padding: 6px 10px; font-size: 13px; min-height: 32px; }
+}
+
+/* L3 hint ladder — graduated tap-to-reveal hints on the L3 tab. Each tier
+   stacks below the previous one, so the user sees the growing hint trail.
+   See ideas-by-category.md § Drilling Surfaces → "L3 hint ladder" entry. */
+.hint-stack { display: flex; flex-direction: column; gap: 8px; }
+.hint-stack.hidden { display: none; }
+.hint-tier {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.06);
+  border-left: 3px solid #f59e0b;
+}
+.hint-tier-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #fbbf24;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.hint-tier-text {
+  font-family: "SF Mono", Menlo, Monaco, monospace;
+  font-size: 13px;
+  color: #fef3c7;
+  word-break: break-word;
+}
+.hint-tier:first-child .hint-tier-text {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* iter 46: hint-frequency trend badge near the L3 hint stack. Closes the
+   iter-43 SR walkthrough gap #3 (criticalLines/hint-tier SR-tracking) +
+   retroactively reactivates the iter-37 Parking-lotted hints-used metric.
+   Trending DOWN over SR intervals = PROFILE 65/66 retention signal. */
+.hint-trend { font-size: 12px; }
+.hint-trend.hidden { display: none; }
+.hint-trend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-weight: 500;
+}
+.hint-trend-good { color: #34d399; border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.08); }
+.hint-trend-mid  { color: #94a3b8; border-color: rgba(148,163,184,0.4); background: rgba(148,163,184,0.06); }
+.hint-trend-warn { color: #fbbf24; border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.08); }
+.hint-trend strong { font-variant-numeric: tabular-nums; }
+
+/* iter 101: 🎯 Per-attempt hint-cost ribbon. Renders inline next to the
+   .hint-trend-pill on the L3 tab. One chip per recent attempt (oldest →
+   newest); chip color encodes hint count (0 = green ✓, 1-2 = amber, 3+ =
+   red). Quality-of-pass made visible per-attempt. */
+.hint-cost-ribbon {
+  display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle;
+}
+.hint-cost-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: 999px; border: 1px solid;
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.hint-cost-chip-good {
+  color: #86efac; background: rgba(134,239,172,0.12);
+  border-color: rgba(134,239,172,0.4);
+}
+.hint-cost-chip-mid {
+  color: #fcd34d; background: rgba(252,211,77,0.12);
+  border-color: rgba(252,211,77,0.4);
+}
+.hint-cost-chip-warn {
+  color: #fdba74; background: rgba(253,186,116,0.12);
+  border-color: rgba(253,186,116,0.4);
+}
+

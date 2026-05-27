@@ -14,11 +14,26 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v1-iter113';
+const CACHE_VERSION = 'jsdrill-v2-appsplit';
 const APP_SHELL = [
   './',
   './index.html',
-  './app.js',
+  // app.js was split into ordered slices (tools/split-app.py); precache them all.
+  './js/app/01-state-content.js',
+  './js/app/02-util-metrics.js',
+  './js/app/03-paths-cram.js',
+  './js/app/04-progress-sr.js',
+  './js/app/05-drills-recognize-trace.js',
+  './js/app/06-drills-constellation-grid.js',
+  './js/app/07-drills-swap-speedrun.js',
+  './js/app/08-drills-bughunt-constraint.js',
+  './js/app/09-stats-cheatsheet-mock.js',
+  './js/app/10-render-sidebar-lesson.js',
+  './js/app/11-tabs-ref-conv-walk.js',
+  './js/app/12-levels.js',
+  './js/app/13-mechanics-modal.js',
+  './js/app/14-init-core.js',
+  './js/app/15-init-features-boot.js',
   './app.css',
   './tokens.css',
   './js/storage.js',

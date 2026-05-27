@@ -7455,6 +7455,7 @@ function renderReference(body, content) {
       <div class="flex items-center gap-2">
         <button class="flash-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">🃏 Flash</button>
         <button class="cinema-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="cinema-toggle" title="Read+predict-then-verify — every line starts blurred, tap each to reveal in order">🎬 Cinema</button>
+        <button class="bullets-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="bullets-toggle" title="Hide canonical, type it from the notes below. Desk-tier 'see concept, recall code' recall direction the L1→L2→L3 ladder doesn't drill (L2 = template + blanks given; L3 = problem prompt only; Bullets→Code = notes-as-prompt, full code recall).">📝 Notes→Code</button>
       </div>
     </div>
     <pre class="code-block cm-s-dracula" data-ref-code></pre>
@@ -7474,19 +7475,24 @@ function renderReference(body, content) {
   colorizeInto(codeEl, ref.code);
   let flashOn = false;
   let cinemaOn = false;
+  let bulletsOn = false;
   const flashBtn = section.querySelector('[data-action="flash-toggle"]');
   const cinemaBtn = section.querySelector('[data-action="cinema-toggle"]');
+  const bulletsBtn = section.querySelector('[data-action="bullets-toggle"]');
   function restoreCanonical() {
     flashOn = false;
     cinemaOn = false;
+    bulletsOn = false;
     flashBtn.classList.remove('active');
     flashBtn.textContent = '🃏 Flash';
     cinemaBtn.classList.remove('active');
     cinemaBtn.textContent = '🎬 Cinema';
+    bulletsBtn.classList.remove('active');
+    bulletsBtn.textContent = '📝 Notes→Code';
     colorizeInto(codeEl, ref.code);
   }
   flashBtn.addEventListener('click', () => {
-    if (cinemaOn) restoreCanonical();
+    if (cinemaOn || bulletsOn) restoreCanonical();
     flashOn = !flashOn;
     flashBtn.classList.toggle('active', flashOn);
     flashBtn.textContent = flashOn ? '🃏 Reveal all' : '🃏 Flash';
@@ -7498,11 +7504,26 @@ function renderReference(body, content) {
   // token-cloze). Toggling Cinema off restores syntax-highlighted view;
   // toggling Flash on while Cinema is active resets to canonical first.
   cinemaBtn.addEventListener('click', () => {
-    if (flashOn) restoreCanonical();
+    if (flashOn || bulletsOn) restoreCanonical();
     cinemaOn = !cinemaOn;
     cinemaBtn.classList.toggle('active', cinemaOn);
     cinemaBtn.textContent = cinemaOn ? '🎬 Reveal all' : '🎬 Cinema';
     if (cinemaOn) _renderCinema(codeEl, ref.code);
+    else colorizeInto(codeEl, ref.code);
+  });
+  // iter 144: 📝 Notes→Code — hide canonical; mount a CodeMirror editor in
+  // its place; user types canonical from the still-visible Notes list below;
+  // Run grades against L3.expectedOutput. Fills the documented L2→L3 cell
+  // gap ("see concept, recall code" direction). Mutually exclusive with
+  // Flash + Cinema via restoreCanonical(). Desk-tier — tooltip names this
+  // explicitly so mobile users self-select. First Cat 1 Drilling Surfaces
+  // ship since iter 122 What-If (22-iter Cat 1 drought broken).
+  bulletsBtn.addEventListener('click', () => {
+    if (flashOn || cinemaOn) restoreCanonical();
+    bulletsOn = !bulletsOn;
+    bulletsBtn.classList.toggle('active', bulletsOn);
+    bulletsBtn.textContent = bulletsOn ? '📝 Reveal canonical' : '📝 Notes→Code';
+    if (bulletsOn) _renderBulletsCode(codeEl, content);
     else colorizeInto(codeEl, ref.code);
   });
   section.querySelector('[data-action="start-l1"]').addEventListener('click', () => selectTab('L1'));
@@ -7542,6 +7563,70 @@ function _renderCinema(codeEl, code) {
     });
     codeEl.appendChild(lineEl);
   }
+}
+
+// iter 144: 📝 Notes→Code — replace the canonical <pre> with a CodeMirror
+// editor + Run button. User types canonical from memory using the still-
+// visible Notes list (below) as the prompt. Run grades via runCode against
+// content.L3.expectedOutput — same runner semantics as the L3 drill itself,
+// so the comparison is byte-for-byte the same surface the user will face
+// in L3. Closes the documented L2→L3 cell gap ("see concept (notes-only),
+// recall code"). Mounts INSIDE the existing <pre data-ref-code> element so
+// the surrounding layout (mechanics chips + Notes list + Start drills CTA)
+// stays put — toggle off restores via colorizeInto(codeEl, ref.code).
+function _renderBulletsCode(codeEl, content) {
+  if (!codeEl) return;
+  const expected = content?.L3?.expectedOutput || '';
+  codeEl.innerHTML = `
+    <div class="bullets-code-prompt">Type the canonical from the notes below. Run when done — same grader as L3.</div>
+    <textarea class="bullets-code-editor" data-bullets-editor></textarea>
+    <div class="bullets-code-actions">
+      <button class="primary" data-bullets-run>Run</button>
+      <span class="bullets-code-feedback" data-bullets-feedback></span>
+    </div>
+  `;
+  const ta = codeEl.querySelector('[data-bullets-editor]');
+  const isTouchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const cm = CodeMirror.fromTextArea(ta, {
+    mode: 'javascript',
+    theme: 'dracula',
+    lineNumbers: true,
+    autoCloseBrackets: true,
+    matchBrackets: true,
+    indentUnit: 2,
+    tabSize: 2,
+    lineWrapping: true,
+    viewportMargin: Infinity,
+    inputStyle: isTouchDevice ? 'contenteditable' : 'textarea',
+    spellcheck: false,
+    autocorrect: false,
+    autocapitalize: false
+  });
+  const runBtn = codeEl.querySelector('[data-bullets-run]');
+  const fb = codeEl.querySelector('[data-bullets-feedback]');
+  runBtn.addEventListener('click', async () => {
+    const userCode = cm.getValue();
+    if (!userCode.trim()) {
+      fb.textContent = '✗ Editor is empty — type something first.';
+      fb.className = 'bullets-code-feedback bullets-feedback-warn';
+      return;
+    }
+    fb.textContent = 'Running…';
+    fb.className = 'bullets-code-feedback';
+    const res = await runCode(userCode);
+    if (!res.ok) {
+      fb.textContent = `✗ Error: ${res.output || 'unknown'}`;
+      fb.className = 'bullets-code-feedback bullets-feedback-err';
+    } else if ((res.output || '') === expected) {
+      fb.textContent = '✓ Output matches the canonical. Notes→Code recall succeeded.';
+      fb.className = 'bullets-code-feedback bullets-feedback-pass';
+    } else {
+      // Show first 80 chars of the wrong output for inline visibility.
+      const got = (res.output || '(empty)').slice(0, 80);
+      fb.textContent = `✗ Output: ${got}${(res.output || '').length > 80 ? '…' : ''} (expected: ${expected.slice(0, 80)})`;
+      fb.className = 'bullets-code-feedback bullets-feedback-warn';
+    }
+  });
 }
 
 function _renderReferenceMechanics(host, mechanicIds) {

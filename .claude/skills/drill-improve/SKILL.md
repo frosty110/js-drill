@@ -26,7 +26,7 @@ The 6 modes:
 
 ## Step 0 — Is the loop itself healthy? (15 seconds, every iter)
 
-Before picking a mode, scan the last 6 iters in `SELF-IMPROVE.md § Mode ledger`. Ask one question: **Is the loop shipping product, or shipping process?**
+Before picking a mode, scan the last 6 iters in `SELF-IMPROVE-LEDGER.md § Mode ledger`. Ask one question: **Is the loop shipping product, or shipping process?**
 
 Count: how many of the last 6 iters produced a `[product/*]` commit the drilling user can notice? If the answer is ≤2, the loop is over-indexed on meta-work — process, audits, framework changes, roadmap entries, vision iters — instead of doing what's best for the learner. Treat this as a hard signal.
 
@@ -57,7 +57,7 @@ Default mode is `ship`. To find what to ship, walk this list **in order** and st
 1. **`SELF-IMPROVE.md § Next iteration`** — if the previous iter nominated a target, that's the default unless a veto condition fires.
 2. **`iter-artifacts/roadmap.md`** — read the file. Check the "Queued" section for unblocked entries (skip any marked BLOCKED). If a queued entry is shippable in this iter, that's the target.
 3. **`iter-artifacts/ideas-by-category.md`** — **read the file in full.** This is the browsable catalog of where the loop should be shipping, organized by product surface (Drilling Surfaces, Paths & Sessions, Mechanics, Content, UI/UX, Persistence, Metacognition, Modalities). For each category:
-   - Check its **Review trigger** against the named rows in `SELF-IMPROVE.md § Last-touched index`.
+   - Check its **Review trigger** against the named rows in `SELF-IMPROVE-LEDGER.md § Last-touched index`.
    - If the trigger fires (rows are stale by the declared iter-count), that category is a candidate.
    - Within a triggered category, pick the highest-leverage idea — prefer Active ideas over Parking-lot ideas, and prefer mobile-L1/L2 surfaces over desktop-only ones (PROFILE.md 80%-phone).
    - **Name both the category and the specific idea** in your end-of-iter report and in the commit body's `## Product impact` section. This is how `ideas-by-category.md` stays accountable — every ship that came from it leaves a trace.
@@ -209,7 +209,7 @@ Update `iter-artifacts/ideas-by-category.md` ONLY if:
 - A parking-lot idea graduated to a roadmap entry — replace the bullet with a "→ see roadmap" link.
 - A new product category emerged that doesn't fit the existing 8 — flag in end-of-iter report; don't add it unilaterally (frame-iter decision).
 
-**Do NOT update timestamps in `ideas-by-category.md`** — there are no timestamps in that file by design (freshness derives from `SELF-IMPROVE.md § Last-touched index`). If you find yourself wanting to add one, you're recreating the coordinated-update bug the file was structured to avoid.
+**Do NOT update timestamps in `ideas-by-category.md`** — there are no timestamps in that file by design (freshness derives from `SELF-IMPROVE-LEDGER.md § Last-touched index`). If you find yourself wanting to add one, you're recreating the coordinated-update bug the file was structured to avoid.
 
 The point of Step 7 is to make iteration N+1's Step 1 a 60-second decision, not to author a process essay.
 
@@ -217,7 +217,7 @@ The point of Step 7 is to make iteration N+1's Step 1 a 60-second decision, not 
 
 - **Loop health** (1 line: "N of last 6 iters shipped product" — surfaces Step-0 signal even when nothing fired this iter)
 - **Mode + reason** (1 line including "Ship target sourced from {§ Next iteration | roadmap.md → ENTRY | ideas-by-category.md § CATEGORY → IDEA}")
-- **Category touched** (1 line: which category in `iter-artifacts/ideas-by-category.md` this iter touched, and which `SELF-IMPROVE.md § Last-touched index` row got bumped — makes the Review-trigger plumbing visible)
+- **Category touched** (1 line: which category in `iter-artifacts/ideas-by-category.md` this iter touched, and which `SELF-IMPROVE-LEDGER.md § Last-touched index` row got bumped — makes the Review-trigger plumbing visible)
 - **What shipped** (1 line — name the concrete change a drilling user would notice)
 - **Verification** (validator + CDP if relevant)
 - **Adversary** (only if Step 2.5 fired — 1 line: "pivot to X" or "rebut: Y")

@@ -14,11 +14,11 @@
 
 ## Design rule: low-dependency active reviews
 
-Each category declares a **Review trigger** — a one-line rule telling the loop when the category is overdue for attention. The rule references rows in [`SELF-IMPROVE.md § Last-touched index`](../SELF-IMPROVE.md), which agents already bump on every iter as part of Step 7 reflection. **This file does NOT carry its own timestamps** — that would create a coordinated-update dependency (every iter touching a category would need to remember to update two files, and forgetting one creates silent drift).
+Each category declares a **Review trigger** — a one-line rule telling the loop when the category is overdue for attention. The rule references rows in [`SELF-IMPROVE-LEDGER.md § Last-touched index`](../SELF-IMPROVE-LEDGER.md), which agents already bump on every iter as part of Step 7 reflection. **This file does NOT carry its own timestamps** — that would create a coordinated-update dependency (every iter touching a category would need to remember to update two files, and forgetting one creates silent drift).
 
 The convention:
 - This file declares categories + rules + entries.
-- `SELF-IMPROVE.md § Last-touched index` is the ground-truth for freshness.
+- `SELF-IMPROVE-LEDGER.md § Last-touched index` is the ground-truth for freshness.
 - `roadmap.md` is the ground-truth for in-flight status.
 - `shipped-by-category.md` is the ground-truth for "what got built where".
 - Anything derivable from those should NOT be duplicated here.
@@ -32,7 +32,7 @@ The convention:
 ### 1. Drilling Surfaces
 *The core L1 → L2 → L3 → Reference ladder + the per-lesson tab surfaces (Walkthrough, Conversation).*
 
-**Review trigger:** If `SELF-IMPROVE.md § Last-touched index` rows `L1 / L2 / L3 render state cache`, `Drilling surfaces (L1/L2/L3)`, or any per-tab row have not been bumped in 10+ iters, this category is stale.
+**Review trigger:** If `SELF-IMPROVE-LEDGER.md § Last-touched index` rows `L1 / L2 / L3 render state cache`, `Drilling surfaces (L1/L2/L3)`, or any per-tab row have not been bumped in 10+ iters, this category is stale.
 
 **Active ideas:** *(none currently active — vision iter should promote from parking-lot)*
 
@@ -317,7 +317,7 @@ If a future idea is purely tooling or purely meta, it belongs in SELF-IMPROVE.md
 
 1. **Pick a category.** If the idea doesn't fit any of the 9, the category list is wrong — open it as a question in your end-of-iter report.
 2. **Inline or roadmap?** If the idea is shippable in 1-3 iters AND has a falsifiable success criterion, promote it to `roadmap.md` (vision-iter mechanism). Otherwise it's a parking-lot entry — one bullet, one sentence.
-3. **No timestamps.** Freshness is derived from `SELF-IMPROVE.md § Last-touched index`. Do not add `last-reviewed:` fields.
+3. **No timestamps.** Freshness is derived from `SELF-IMPROVE-LEDGER.md § Last-touched index`. Do not add `last-reviewed:` fields.
 4. **Cross-link.** If the idea has a roadmap entry, link to it. If it's grounded in a SELF-IMPROVE blind spot, mention the BS-XX number.
 5. **Don't keep shipped ideas here.** When an idea ships, move its detail to `shipped-by-category.md` and leave at most a one-line summary in the category's "Shipped from this category" footer.
 
@@ -325,7 +325,7 @@ If a future idea is purely tooling or purely meta, it belongs in SELF-IMPROVE.md
 
 When the next ship target isn't obvious from `SELF-IMPROVE.md § Next iteration`:
 1. Scan each category's Review trigger.
-2. Cross-reference the named rows in `SELF-IMPROVE.md § Last-touched index`.
+2. Cross-reference the named rows in `SELF-IMPROVE-LEDGER.md § Last-touched index`.
 3. If a category's trigger fires (rows are stale), that category becomes the ship-search scope — pick the highest-leverage parking-lot or active idea from it.
 4. If multiple categories trigger, prefer the one whose triggered rows are closest to PROFILE.md's load-bearing claims (mobile L1/L2 > everything else).
 5. If no category triggers, fall through to the existing Step 1 mode-selection (likely vision).

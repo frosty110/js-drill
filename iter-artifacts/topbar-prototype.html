@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Problems⇄Reference Prototype — THROWAWAY</title>
+<style>
+  :root{
+    --bg:#020617;--panel:#0f172a;--panel2:#0b1220;--line:#1e293b;--line2:#334155;
+    --ink:#e2e8f0;--ink2:#cbd5e1;--mut:#94a3b8;--mut2:#64748b;--ink0:#f8fafc;
+    --emerald:#10b981;--emerald-d:#059669;--sky:#38bdf8;--cyan:#67e8f9;
+    --rose:#fb7185;--amber:#fbbf24;--violet:#a78bfa;--fuchsia:#e879f9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  .proto-bar{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:#111827;border-bottom:1px dashed #475569;font-size:13px;}
+  .proto-bar b{color:#fde68a;text-transform:uppercase;font-size:11px;letter-spacing:.02em}
+  .proto-bar label{color:var(--mut)}
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;color:var(--mut2);border:0;padding:5px 12px;cursor:pointer;font:inherit}
+  .seg button.on{background:#1e3a8a;color:#fff}
+  .hint{color:var(--mut2);font-size:12px}
+  .stage{padding:26px;display:flex;justify-content:center}
+  .frame{width:100%;max-width:1180px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg);box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+  .frame.phone{max-width:390px}
+  /* topbar */
+  .topbar{display:flex;align-items:center;gap:8px;height:54px;padding:0 12px;background:var(--panel2);border-bottom:1px solid var(--line);position:relative;z-index:6}
+  .word{font-weight:700;color:var(--ink0);white-space:nowrap}
+  .surfseg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden;margin-left:4px}
+  .surfseg button{background:transparent;color:var(--mut);border:0;padding:7px 14px;cursor:pointer;font:inherit;font-weight:600;display:flex;align-items:center;gap:6px}
+  .surfseg button.on{background:#0e2a47;color:var(--cyan)}
+  .surfseg button.on.ref{background:#2a1e3f;color:var(--fuchsia)}
+  .navlink{background:transparent;border:0;color:var(--ink2);border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit;font-weight:600;display:flex;align-items:center;gap:6px}
+  .navlink:hover,.navlink.on{background:var(--line);color:var(--ink0)}
+  .menus{display:flex;align-items:center;gap:2px;margin-left:2px}
+  .menu{display:inline-flex;align-items:center;gap:6px;background:transparent;color:var(--ink2);border:0;border-radius:8px;padding:8px 11px;cursor:pointer;font:inherit;white-space:nowrap}
+  .menu:hover,.menu.open{background:var(--line);color:var(--ink0)}
+  .menu .caret{font-size:9px;color:var(--mut2)}
+  .spacer{flex:1}
+  .icons{display:flex;gap:2px}
+  .icon{background:transparent;border:0;color:var(--mut);font-size:16px;padding:8px;border-radius:8px;cursor:pointer}
+  .icon:hover{background:var(--line);color:var(--ink0)}
+  .ham,.nav-intents{display:none;background:transparent;border:0;color:var(--ink2);font-size:18px;padding:6px;cursor:pointer}
+  .frame.phone .ham,.frame.phone .nav-intents{display:inline-flex}
+  .frame.phone .menus,.frame.phone .navlink-desk,.frame.phone .icon.help{display:none}
+  /* dropdown */
+  .dd{position:absolute;top:58px;min-width:300px;max-width:380px;background:var(--panel);border:1px solid var(--line2);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.6);padding:8px;z-index:30;display:none}
+  .dd.show{display:block}
+  .dd .blurb{color:var(--mut);font-size:12px;padding:6px 10px 8px}
+  .row{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:transparent;border:0;color:var(--ink);padding:9px 10px;border-radius:8px;cursor:pointer;font:inherit}
+  .row:hover{background:var(--line)}
+  .row .em{font-size:16px;width:22px;text-align:center;flex:0 0 auto}
+  .row .tx{flex:1;min-width:0}
+  .row .nm{font-weight:600;color:var(--ink0)}
+  .row .ds{font-size:12px;color:var(--mut)}
+  .row .more{color:var(--mut2);font-size:16px;padding:2px 6px;border-radius:6px}
+  .row .more:hover{background:var(--line2);color:var(--ink0)}
+  .note{margin:6px;padding:8px 10px;background:#0b1220;border:1px solid var(--line);border-radius:8px;color:var(--mut);font-size:12px}
+  .note b{color:var(--sky)}
+  /* body */
+  .appbody{display:flex;min-height:340px}
+  .sb{width:256px;border-right:1px solid var(--line);background:#0a0f1c;padding:12px;font-size:12px;position:relative}
+  .frame.phone .sb{display:none}
+  .planhead{display:flex;align-items:center;gap:6px;background:#0b1220;border:1px solid var(--line2);border-radius:999px;padding:6px 11px;cursor:pointer;color:var(--ink)}
+  .planhead .lbl{color:var(--mut)}.planhead b{color:var(--ink0)}
+  .planmenu{margin:6px 0 0;border:1px solid var(--line2);border-radius:10px;overflow:hidden;display:none}
+  .planmenu.show{display:block}
+  .planmenu button{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--ink2);padding:8px 11px;cursor:pointer;font:inherit}
+  .planmenu button:hover{background:var(--line)}
+  .planmenu button.on{color:var(--cyan)}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0 6px}
+  .chip{border:1px solid var(--line2);border-radius:999px;padding:3px 9px;font-size:11px;color:var(--ink2);cursor:pointer}
+  .chip.on{background:#1e3a8a;border-color:#3b82f6;color:#fff}
+  .chip.dis{opacity:.35}
+  .secthead{color:var(--mut2);text-transform:uppercase;font-size:10px;letter-spacing:.04em;margin:13px 0 5px;display:flex;justify-content:space-between}
+  .li{display:flex;align-items:center;gap:8px;color:var(--ink2);padding:5px 6px;border-radius:7px;cursor:pointer}
+  .li:hover{background:#0e1626}
+  .li.sel{background:#0e2a47;color:var(--ink0)}
+  .li .dot{width:7px;height:7px;border-radius:999px;background:var(--emerald);flex:0 0 auto}
+  .li .rep{margin-left:auto;font-size:12px}
+  .li .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .refgrp{margin-top:4px}
+  .main{flex:1;padding:22px;color:var(--mut2)}
+  .main h3{color:var(--ink0);margin:0 0 4px}
+  /* plan page (full-width) */
+  .planpage{padding:26px 30px;color:var(--ink2)}
+  .planpage .big{font-size:20px;font-weight:700;color:var(--ink0);margin-bottom:2px}
+  .planpage .pbar{height:8px;background:var(--line);border-radius:999px;overflow:hidden;margin:12px 0 4px;max-width:520px}
+  .planpage .pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--sky),var(--emerald))}
+  .daystrip{display:flex;gap:8px;margin:16px 0}
+  .daystrip .d{flex:1;border:1px solid var(--line2);border-radius:10px;padding:10px;background:#0b1220}
+  .daystrip .d.now{border-color:var(--sky)}
+  .cta{display:inline-flex;align-items:center;gap:8px;background:var(--emerald-d);color:#ecfdf5;border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer;margin-top:10px}
+  .quick{display:flex;gap:8px;margin-top:14px}
+  .quick button{background:#0b1220;border:1px solid var(--line2);border-radius:9px;padding:8px 12px;color:var(--ink2);cursor:pointer;font:inherit}
+  /* mobile sheet */
+  .sheet{position:absolute;inset:0;background:rgba(2,6,23,.55);z-index:40;display:none}
+  .sheet.show{display:block}
+  .sheet-card{position:absolute;left:0;right:0;bottom:0;top:46px;background:var(--panel2);border-radius:16px 16px 0 0;border-top:1px solid var(--line2);display:flex;flex-direction:column;overflow:hidden}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .sheet-head .h{font-weight:700;color:var(--ink0)}
+  .sheet-head .x,.sheet-head .bk{background:transparent;border:0;cursor:pointer}
+  .sheet-head .x{color:var(--mut);font-size:20px}.sheet-head .bk{color:var(--sky);font-size:13px}
+  .sheet-body{overflow:auto;padding:8px;flex:1}
+  .sheet-body .row{padding:13px 12px}.sheet-body .nm{font-size:15px}
+</style>
+</head>
+<body>
+<div class="proto-bar">
+  <b>Prototype</b>
+  <div style="display:flex;gap:6px;align-items:center"><label>Viewport</label>
+    <div class="seg" id="vp"><button data-vp="desktop" class="on">💻 Desktop</button><button data-vp="phone">📱 Phone</button></div>
+  </div>
+  <span class="hint">Switch <b style="color:#cbd5e1">Problems⇄Reference</b> (the toggle keeps each side's place). Tap <b style="color:#cbd5e1">Plan</b> for the full-page home. Switch Plan in the sidebar.</span>
+</div>
+
+<div class="stage">
+  <div class="frame" id="frame">
+    <div class="topbar">
+      <button class="ham" title="Lesson list">☰</button>
+      <span class="word">JS Drill</span>
+      <div class="surfseg" id="surfseg">
+        <button data-surf="problems" class="on">🧩 Problems</button>
+        <button data-surf="reference" class="ref">📖 Reference</button>
+      </div>
+      <button class="navlink navlink-desk" data-nav="plan">📋 Plan</button>
+      <nav class="menus" id="menus">
+        <button class="menu" data-menu="drill">Drill <span class="caret">▾</span></button>
+        <button class="menu" data-menu="simulate">Simulate <span class="caret">▾</span></button>
+        <button class="menu" data-menu="reflect">Reflect <span class="caret">▾</span></button>
+      </nav>
+      <span class="spacer"></span>
+      <div class="icons">
+        <button class="nav-intents" title="Plan & activities">🧭</button>
+        <button class="icon" title="Command palette ⌘K">🔍</button>
+        <button class="icon help" title="Shortcuts">❓</button>
+        <button class="icon" title="Settings">⚙️</button>
+      </div>
+    </div>
+
+    <div class="dd" id="dd"></div>
+    <div id="content"></div>
+
+    <div class="sheet" id="sheet"><div class="sheet-card">
+      <div class="sheet-head" id="sheethead"></div>
+      <div class="sheet-body" id="sheetbody"></div>
+    </div></div>
+  </div>
+</div>
+
+<script>
+const PLANS={
+ starter:{name:'Starter Plan',cont:'Two Pointers · 3Sum',pct:27,day:null,refs:['cheat','shapes','glossary'],
+  scope:'All 154 lessons, recommended order.',
+  secs:[{h:'Arrays & Hashing',n:'8/12',ls:[{t:'Two Sum'},{t:'Group Anagrams',r:'due'},{t:'Top K Frequent',r:'overdue'},{t:'Product of Array'}]},
+        {h:'Two Pointers',n:'3/6',ls:[{t:'Valid Palindrome',r:'weak'},{t:'3Sum'},{t:'Container Water'}]},
+        {h:'Sliding Window',n:'2/5',ls:[{t:'Best Time Buy/Sell'},{t:'Longest Substring',r:'reveal'}]},
+        {h:'Applied Problems',n:'4/20',ls:[{t:'LRU Cache'},{t:'Debounce',r:'bridge'}]}]},
+ cram:{name:'4-Day Cram',cont:'Day 2 · Pattern L3',pct:42,day:'Day 2 / 4',refs:['cheat','glossary','behavior','shapes'],
+  scope:'47 lessons across 4 days.',
+  secs:[{h:'Day 2 — Patterns',n:'4/9',ls:[{t:'Binary Search',r:'due'},{t:'Two Pointers'},{t:'BFS Levels',r:'weak'}]},
+        {h:'Day 2 — Applied',n:'2/3',ls:[{t:'Rate Limiter'}]}]},
+ eve:{name:'Eve-Legal',cont:'Bates Numbering',pct:33,day:null,refs:['eveflows','shapes'],
+  scope:'12 applied legal-tech problems.',
+  secs:[{h:'Applied — Legal',n:'4/12',ls:[{t:'Demand Letter'},{t:'Medical Chronology',r:'due'},{t:'Bates Numbering'},{t:'PII Redaction',r:'weak'},{t:'Conflict Check'}]}]},
+ all:{name:'All Lessons',cont:'Resume last',pct:27,day:null,refs:['cheat','shapes','glossary'],
+  scope:'Everything, unordered.',
+  secs:[{h:'Patterns',n:'48/79',ls:[{t:'Two Sum'},{t:'3Sum',r:'overdue'},{t:'Course Schedule',r:'bridge'}]},
+        {h:'Applied',n:'4/20',ls:[{t:'LRU Cache',r:'due'}]}]},
+};
+const REPICON={due:'🕒',weak:'⚠️',overdue:'💀',reveal:'🃏',bridge:'🧠'};
+const REPCOL={due:'var(--cyan)',weak:'var(--amber)',overdue:'var(--violet)',reveal:'var(--fuchsia)',bridge:'var(--fuchsia)'};
+const REF={cheat:{em:'⚡',nm:'Cheat',ds:'which-pattern-when'},glossary:{em:'🅰',nm:'Glossary',ds:'interview vocab'},
+  behavior:{em:'🎤',nm:'Behavior',ds:'say-this ritual'},shapes:{em:'〈〉',nm:'Code Shapes',ds:'must-know templates'},
+  eveflows:{em:'⚖️',nm:'Eve Workflows',ds:'workflow → pattern'}};
+const SYNTAX=['Basics','Arrays','Hash Structures','Modern Syntax','Iterators & Generators','JS Toolbox','Classes','Async','Advanced JS','JS Traps'];
+const FAMILIES=[{em:'🧠',nm:'Run it in your head',ds:'predict output / trace state',more:1},
+  {em:'🔧',nm:'Judge a code change',ds:'correct / equivalent?',more:1},
+  {em:'🧭',nm:'Name the pattern',ds:'which family is this?',more:1},
+  {em:'📝',nm:'Recall the traps',ds:'notes & gotchas',more:1},{em:'🎬',nm:'Interview meta',ds:'classify narration phase',more:0}];
+const SIM=[{em:'🎯',nm:'Mock Interview'},{em:'⚡',nm:'Rapid-Fire'},{em:'⏱',nm:'Big-O'},{em:'🏁',nm:'Speedrun'},{em:'🥊',nm:'Gauntlet'},{em:'📞',nm:'Phone Screen'}];
+const REFLECT=[{em:'📊',nm:'Insights dashboard',ds:'stats · streak · sections · mechanics (all-time)'},{em:'📋',nm:'Export cheatsheet',ds:'action'},{em:'🤖',nm:'AI Coach',ds:'action'}];
+
+let S={vp:'desktop',plan:'starter',surface:'problems',page:'lessons',open:null,planMenu:false,
+  sel:{problems:'Two Sum',reference:'Modern Syntax'}};
+
+function rowHtml(it){return `<button class="row"><span class="em">${it.em}</span><span class="tx"><span class="nm">${it.nm}</span>${it.ds?`<span class="ds">${it.ds}</span>`:''}</span>${it.more?'<span class="more" title="Pick a variant">⋯</span>':''}</button>`;}
+
+function sidebarHtml(){
+  if(S.surface==='reference'){
+    const refs=PLANS[S.plan].refs.map(r=>REF[r]);
+    return `<div style="color:var(--fuchsia);font-weight:700;margin-bottom:4px">📖 Reference</div>
+      <div class="hint" style="font-size:11px">Always available — not scoped by Plan.</div>
+      <div class="secthead">Quick refs <span style="text-transform:none;color:var(--mut2)">· adapts to ${PLANS[S.plan].name}</span></div>
+      <div class="refgrp">${refs.map(r=>`<div class="li ${S.sel.reference===r.nm?'sel':''}" data-sel="${r.nm}"><span style="width:18px">${r.em}</span><span class="nm">${r.nm}</span></div>`).join('')}</div>
+      <div class="secthead">Syntax fundamentals</div>
+      ${SYNTAX.map(s=>`<div class="li ${S.sel.reference===s?'sel':''}" data-sel="${s}"><span class="dot" style="background:var(--mut2)"></span><span class="nm">${s}</span></div>`).join('')}`;
+  }
+  const p=PLANS[S.plan];
+  return `<div class="planhead" data-planmenu><span class="lbl">Plan:</span> <b>${p.name}</b> <span style="color:var(--mut2)">▾</span></div>
+    <div class="planmenu ${S.planMenu?'show':''}" id="planmenu">${Object.entries(PLANS).map(([k,pp])=>`<button data-plan="${k}" class="${k===S.plan?'on':''}">${k===S.plan?'✓ ':''}${pp.name}</button>`).join('')}</div>
+    <div class="filters"><span class="chip on">🛠 Repair 7</span><span class="chip dis" title="Disabled while Repair filter is on">👁 Hide Mastered</span></div>
+    <div class="hint" style="font-size:11px">Repair icons show inline →. No “Path View” — switch Plan to see more.</div>
+    ${p.secs.map(sec=>`<div class="secthead">${sec.h}<span>${sec.n}</span></div>${sec.ls.map(l=>`<div class="li ${S.sel.problems===l.t?'sel':''}" data-sel="${l.t}"><span class="dot"></span><span class="nm">${l.t}</span>${l.r?`<span class="rep" title="${l.r}" style="color:${REPCOL[l.r]}">${REPICON[l.r]}</span>`:''}</div>`).join('')}`).join('')}`;
+}
+
+function mainHtml(){
+  if(S.page==='plan'){
+    const p=PLANS[S.plan];
+    return `<div class="planpage">
+      <div class="big">📋 ${p.name}</div>
+      <div style="color:var(--mut)">${p.scope} — ${p.pct}% mastered</div>
+      <div class="pbar"><i style="width:${p.pct}%"></i></div>
+      ${p.day?`<div class="daystrip">${[1,2,3,4].map(d=>`<div class="d ${('Day '+d+' / 4')===p.day?'now':''}"><b style="color:var(--ink0)">Day ${d}</b><div style="font-size:11px;color:var(--mut)">${d<2?'done':d===2?'in progress':'upcoming'}</div></div>`).join('')}</div>`:''}
+      <button class="cta">▶ Continue · ${p.cont}</button>
+      <div class="quick"><button>🌅 Warmup</button><button>🍀 Lucky</button><button>🎲 Shuffle</button></div>
+      <div class="note" style="max-width:520px">Plan-progress lives here. Cross-plan analytics (all-time stats, streak map) live in <b>Reflect</b>. Switch plan: <span style="color:var(--cyan)">${Object.values(PLANS).map(x=>x.name).join(' · ')}</span></div>
+    </div>`;
+  }
+  if(S.surface==='reference'){
+    return `<div class="main"><h3>📖 ${S.sel.reference}</h3><div>Reference content — read/scan. Flip back to <b style="color:var(--cyan)">🧩 Problems</b> (or press Tab) and you'll land exactly where you were.</div></div>`;
+  }
+  return `<div class="main"><h3>🧩 ${S.sel.problems}</h3><div>Problem workspace (Reference · L1 · L2 · L3 tabs). Flip to <b style="color:var(--fuchsia)">📖 Reference</b> to consult syntax, then flip back here — position preserved.</div></div>`;
+}
+
+function render(){
+  document.getElementById('frame').className='frame'+(S.vp==='phone'?' phone':'');
+  // surfseg active
+  document.querySelectorAll('#surfseg button').forEach(b=>{b.classList.toggle('on',b.dataset.surf===S.surface);});
+  document.querySelector('[data-nav="plan"]').classList.toggle('on',S.page==='plan');
+  document.querySelectorAll('#menus .menu').forEach(b=>b.classList.toggle('open',S.open===b.dataset.menu));
+  // content: plan page is full-width (no sidebar)
+  const content=document.getElementById('content');
+  if(S.page==='plan'){content.innerHTML=`<div class="appbody"><div style="flex:1">${mainHtml()}</div></div>`;}
+  else{content.innerHTML=`<div class="appbody"><div class="sb">${sidebarHtml()}</div>${mainHtml()}</div>`;}
+  renderDD(); renderSheet();
+}
+
+function renderDD(){
+  const dd=document.getElementById('dd');
+  if(!S.open||S.vp==='phone'){dd.classList.remove('show');return;}
+  const k=S.open, items={drill:FAMILIES,simulate:SIM,reflect:REFLECT}[k]||[];
+  const blurb={drill:'Pick a recall direction. Tap = mixed set · ⋯ = one variant.',simulate:'Interview-pressure, over your '+PLANS[S.plan].name+'.',reflect:'All-time, cross-plan analytics (plan-progress is on the Plan page).'}[k];
+  dd.innerHTML=`<div class="blurb">${blurb}</div>${items.map(rowHtml).join('')}`;
+  const btn=document.querySelector(`[data-menu="${k}"]`);
+  if(btn) dd.style.left=Math.min(btn.offsetLeft,document.getElementById('frame').clientWidth-360)+'px';
+  dd.classList.add('show');
+}
+
+function renderSheet(){
+  const sh=document.getElementById('sheet');
+  if(S.vp!=='phone'||S.open!=='__sheet__'){sh.classList.remove('show');return;}
+  document.getElementById('sheethead').innerHTML=`<span class="h">Plan & activities</span><button class="x" data-x>✕</button>`;
+  document.getElementById('sheetbody').innerHTML=
+    rowHtml({em:'📋',nm:'Plan',ds:'progress + start your '+PLANS[S.plan].name})
+    +rowHtml({em:'🎯',nm:'Drill',ds:'5 recall-direction families'})
+    +rowHtml({em:'🎤',nm:'Simulate',ds:'mock · rapid · phone-screen'})
+    +rowHtml({em:'📊',nm:'Reflect',ds:'all-time analytics'});
+  sh.classList.add('show');
+}
+
+document.getElementById('vp').onclick=e=>{const b=e.target.closest('[data-vp]');if(!b)return;
+  [...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===b));S.vp=b.dataset.vp;S.open=null;render();};
+document.getElementById('surfseg').onclick=e=>{const b=e.target.closest('[data-surf]');if(!b)return;
+  S.surface=b.dataset.surf;S.page='lessons';S.open=null;render();};
+document.querySelector('[data-nav="plan"]').onclick=()=>{S.page='plan';S.open=null;render();};
+document.getElementById('menus').onclick=e=>{const m=e.target.closest('[data-menu]');if(!m)return;
+  S.page='lessons';S.open=S.open===m.dataset.menu?null:m.dataset.menu;render();};
+document.querySelector('.nav-intents').onclick=()=>{S.open='__sheet__';render();};
+document.getElementById('content').addEventListener('click',e=>{
+  if(e.target.closest('[data-planmenu]')){S.planMenu=!S.planMenu;render();return;}
+  const pl=e.target.closest('[data-plan]'); if(pl){S.plan=pl.dataset.plan;S.planMenu=false;render();return;}
+  const li=e.target.closest('[data-sel]'); if(li){S.sel[S.surface]=li.dataset.sel;render();return;}
+});
+document.getElementById('sheet').addEventListener('click',e=>{
+  if(e.target.dataset.x!==undefined||e.target===e.currentTarget){S.open=null;render();return;}
+  const r=e.target.closest('.row'); if(r){const nm=r.querySelector('.nm').textContent;
+    if(nm==='Plan'){S.page='plan';}S.open=null;render();}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.metaKey){e.preventDefault();
+  S.surface=S.surface==='problems'?'reference':'problems';S.page='lessons';S.open=null;render();}});
+document.addEventListener('click',e=>{if(S.vp!=='phone'&&S.open&&S.open!=='__sheet__'&&!e.target.closest('#dd')&&!e.target.closest('[data-menu]')){S.open=null;render();}});
+render();
+</script>
+</body>
+</html>

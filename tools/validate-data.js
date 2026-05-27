@@ -409,41 +409,43 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     }
   }
 
-  // Prep-path sync check (hard failure). data/paths.json's `prep-4day` entry
-  // mirrors the drill lessons referenced in prep.html's PLAN. If someone edits
-  // the prep plan (adds/removes/reorders a `lesson.id`) without re-syncing
-  // data/paths.json, the 🧭 Path View filter for the prep path goes stale.
-  // Re-extract from prep.html and compare order-sensitively.
-  // iter 125: source moved from app.js (const PREP_4DAY_PATH = [...]) to
-  // data/paths.json (paths[].lessons for id === 'prep-4day').
+  // Cram-path internal-consistency check (hard failure). For every kind:'cram'
+  // path in data/paths.json, the deduped sequence of lessonIds referenced by
+  // days[].blocks[].tasks[] (in first-occurrence order) must equal path.lessons[].
+  // Drift means the day-by-day cram view and the 🧭 Path View filter would
+  // disagree about what's in the path.
   {
     const pathsSrc = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/paths.json'), 'utf8'));
-    const prepSrc = fs.readFileSync(path.join(ROOT, 'prep.html'), 'utf8');
-
-    const prepPath = Array.isArray(pathsSrc.paths)
-      ? pathsSrc.paths.find(p => p.id === 'prep-4day')
-      : null;
-    const appIds = prepPath && Array.isArray(prepPath.lessons) ? prepPath.lessons : null;
-
-    const prepIdsAll = [...prepSrc.matchAll(/lesson:\s*\{\s*id:\s*'([^']+)'/g)].map(x => x[1]);
-    const prepIds = [...new Set(prepIdsAll)]; // dedupe, preserve first-occurrence order
-
-    if (!appIds) {
-      console.log('\n✗ Prep-path sync: could not find prep-4day entry in data/paths.json.');
-      process.exit(1);
+    const cramPaths = Array.isArray(pathsSrc.paths) ? pathsSrc.paths.filter(p => p.kind === 'cram') : [];
+    if (!cramPaths.length) {
+      console.log('\n🧭 Cram-path sync: no kind:"cram" paths declared (skipping).');
     }
-    const sameOrder = appIds.length === prepIds.length && appIds.every((id, i) => id === prepIds[i]);
-    if (!sameOrder) {
-      const inPrepNotApp = prepIds.filter(id => !appIds.includes(id));
-      const inAppNotPrep = appIds.filter(id => !prepIds.includes(id));
-      console.log('\n✗ Prep-path drift — data/paths.json prep-4day.lessons is out of sync with prep.html PLAN.');
-      console.log(`  prep.html unique lessons: ${prepIds.length}, data/paths.json prep-4day.lessons: ${appIds.length}`);
-      if (inPrepNotApp.length) console.log(`  In prep.html but missing from data/paths.json: ${inPrepNotApp.join(', ')}`);
-      if (inAppNotPrep.length) console.log(`  In data/paths.json but missing from prep.html: ${inAppNotPrep.join(', ')}`);
-      if (!inPrepNotApp.length && !inAppNotPrep.length) console.log('  Same set, different order — re-copy in prep-day order.');
-      console.log('\n  Re-sync: copy the deduped lesson.id sequence from prep.html into data/paths.json (paths[].lessons for id "prep-4day").');
-      process.exit(1);
+    for (const cram of cramPaths) {
+      const appIds = Array.isArray(cram.lessons) ? cram.lessons : [];
+      const fromDays = [];
+      const seen = new Set();
+      for (const day of (cram.days || [])) {
+        for (const block of (day.blocks || [])) {
+          for (const task of (block.tasks || [])) {
+            if (task.lessonId && !seen.has(task.lessonId)) {
+              seen.add(task.lessonId);
+              fromDays.push(task.lessonId);
+            }
+          }
+        }
+      }
+      const sameOrder = appIds.length === fromDays.length && appIds.every((id, i) => id === fromDays[i]);
+      if (!sameOrder) {
+        const inDaysNotLessons = fromDays.filter(id => !appIds.includes(id));
+        const inLessonsNotDays = appIds.filter(id => !fromDays.includes(id));
+        console.log(`\n✗ Cram-path drift — ${cram.id}: days[].tasks[].lessonId sequence does not match lessons[].`);
+        console.log(`  days unique lessons: ${fromDays.length}, lessons[]: ${appIds.length}`);
+        if (inDaysNotLessons.length) console.log(`  In days but missing from lessons[]: ${inDaysNotLessons.join(', ')}`);
+        if (inLessonsNotDays.length) console.log(`  In lessons[] but missing from days: ${inLessonsNotDays.join(', ')}`);
+        if (!inDaysNotLessons.length && !inLessonsNotDays.length) console.log('  Same set, different order — re-copy lessons[] in first-occurrence order from days[].');
+        process.exit(1);
+      }
+      console.log(`\n🧭 Cram-path sync (${cram.id}): days[].tasks lessonIds match lessons[] (${appIds.length} lessons, in order).`);
     }
-    console.log(`\n🧭 Prep-path sync: data/paths.json prep-4day.lessons matches prep.html (${appIds.length} lessons, in order).`);
   }
 })();

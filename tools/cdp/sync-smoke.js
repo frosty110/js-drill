@@ -55,16 +55,6 @@ async function checkPage(s, label) {
   home.report();
   await home.close();
 
-  // --- prep.html ---
-  const prep = await connect({
-    url: 'http://localhost:8765/prep.html',
-    outDir: '/tmp/sync-smoke'
-  });
-  await checkPage(prep, 'prep');
-  await prep.snap('prep-chip');
-  prep.report();
-  await prep.close();
-
   // --- diagnostic.html ---
   const diag = await connect({
     url: 'http://localhost:8765/diagnostic.html',
@@ -75,7 +65,7 @@ async function checkPage(s, label) {
   diag.report();
   await diag.close();
 
-  const allFailed = [home, prep, diag].reduce((acc, s) =>
+  const allFailed = [home, diag].reduce((acc, s) =>
     acc + s.assertions.filter(a => !a.ok).length, 0);
   process.exit(allFailed === 0 ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(2); });

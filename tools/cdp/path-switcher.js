@@ -5,8 +5,8 @@
 //   A. Sidebar shows a "Path: <label> ▾" chip; default label is "Starter Path".
 //   B. Tapping the chip opens the switcher modal listing both paths, current marked.
 //   C. While subscribed to Starter, 📅 Today's Plan opens the in-app modal (no nav).
-//   D. Switching to "4-Day Interview Prep" updates the chip + persists to storage.
-//   E. While subscribed to Prep, 📅 Today's Plan navigates to prep.html.
+//   D. Switching to "4-Day Interview Cram" updates the chip + persists to storage.
+//   E. While subscribed to Cram, 📅 Today's Plan opens the in-app cram view (no nav).
 //   F. Subscription survives a reload (persisted in jsdrill.progress.v1).
 
 const { ensureServer, ensureChrome, connect } = require('./lib');
@@ -73,12 +73,12 @@ const OUT = process.argv[3] || '/tmp/jsdrill-path-switcher';
   await s.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
   await s.sleep(120);
 
-  // ── D: switch to Prep → chip updates + persists ──────────────────────
+  // ── D: switch to Cram → chip updates + persists ──────────────────────
   await s.click('#path-chip');
   await s.waitFor(`(() => document.getElementById('path-modal').style.display === 'block')()`, { timeoutMs: 3000 });
   await s.click(`[data-path-id="prep-4day"]`);
   await s.sleep(200);
-  await s.snap('D-switched-to-prep');
+  await s.snap('D-switched-to-cram');
   const afterSwitch = await s.eval(`(() => {
     const label = document.getElementById('path-chip-label')?.textContent?.trim();
     const modalClosed = document.getElementById('path-modal').style.display === 'none';
@@ -86,26 +86,36 @@ const OUT = process.argv[3] || '/tmp/jsdrill-path-switcher';
     return { label, modalClosed, stored };
   })()`);
   s.assert(/4-Day/.test(afterSwitch.label || ''),
-    `[D] chip label updates to the prep plan (got: ${afterSwitch.label})`);
+    `[D] chip label updates to the cram plan (got: ${afterSwitch.label})`);
   s.assert(afterSwitch.modalClosed, '[D] switcher closes after picking a path');
   s.assert(afterSwitch.stored === 'prep-4day',
     `[D] subscription persisted to storage (got: ${afterSwitch.stored})`);
 
-  // ── E: subscribed to Prep → Today's Plan navigates to prep.html ──────
+  // ── E: subscribed to Cram → Today's Plan opens the in-app cram view ──
   await s.click('#today-btn');
-  await s.waitFor(`(() => /prep\\.html/.test(location.href))()`, { timeoutMs: 4000 });
-  await s.snap('E-navigated-to-prep');
-  const eHref = await s.eval(`location.href`);
-  s.assert(/prep\.html/.test(eHref), `[E] Today's Plan navigated to prep.html (got: ${eHref})`);
+  await s.sleep(300);
+  await s.snap('E-cram-today-modal');
+  const eState = await s.eval(`(() => ({
+    display: document.getElementById('today-modal').style.display,
+    heading: document.getElementById('today-heading')?.textContent || '',
+    href: location.href,
+  }))()`);
+  s.assert(eState.display === 'block',
+    `[E] Today's Plan opens the in-app modal while on Cram (got display: ${eState.display})`);
+  s.assert(!/prep\.html/.test(eState.href), `[E] did not navigate to a separate page (href: ${eState.href})`);
+  s.assert(/Day\s*\d+\s*of\s*\d+/i.test(eState.heading) || /cram/i.test(eState.heading),
+    `[E] heading shows a Day N of M cram title (got: ${eState.heading})`);
+  await s.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await s.sleep(120);
 
-  // ── F: subscription survives a return + reload of the main app ───────
-  await s.eval(`location.href = '${URL}'`);
+  // ── F: subscription survives a reload of the main app ────────────────
+  await s.reload();
   await s.sleep(600);
   await s.click('#hamburger');
   await s.sleep(200);
   const persisted = await s.eval(`document.getElementById('path-chip-label')?.textContent?.trim()`);
   s.assert(/4-Day/.test(persisted || ''),
-    `[F] subscription survives reload — chip still shows prep plan (got: ${persisted})`);
+    `[F] subscription survives reload — chip still shows cram plan (got: ${persisted})`);
 
   // ── G: 🧭 button is renamed to "Path View" (unified, path-agnostic) ──
   const btnLabel = await s.eval(`document.getElementById('path-btn')?.textContent?.trim()`);

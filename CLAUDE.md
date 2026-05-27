@@ -106,10 +106,10 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `index.html` | Main drill app markup — ~140 lines |
 | `app.css` | Main app styles — ~280 lines |
 | `app.js` | Main app logic — ~3,400 lines |
-| `prep.html` | 4-day interview prep dashboard (standalone page) |
 | `diagnostic.html` | 43-question self-diagnostic (standalone page) |
-| `tokens.css` | **Single source of truth** for design tokens across all 3 pages (colors, radii, type). See `.claude/skills/ui-consistency/`. |
-| `js/storage.js` | **Single source of truth** for localStorage I/O across all 3 pages. Exposes `window.DrillStorage`. See `.claude/skills/ui-consistency/`. |
+| `data/paths.json` | Study-path registry. `kind:'lessons'` (Starter Path) drives the curated Today's Plan; `kind:'cram'` (e.g. 4-Day Interview Cram) carries `days[].blocks[].tasks[]` and `startIso` so Today's Plan renders a day-by-day acquisition view in the main app. |
+| `tokens.css` | **Single source of truth** for design tokens across the user-facing pages (colors, radii, type). See `.claude/skills/ui-consistency/`. |
+| `js/storage.js` | **Single source of truth** for localStorage I/O across pages. Exposes `window.DrillStorage`. See `.claude/skills/ui-consistency/`. |
 | `js/supabase-config.js` | Supabase project URL + anon key. Anon key is public-by-design; RLS protects data. |
 | `js/supabase-client.js` | Initializes `@supabase/supabase-js` v2 client. Exposes `window.SupabaseClient`. No-op if config missing. |
 | `js/sync.js` | Optional cross-device sync. Exposes `window.DrillSync` (auth + push/pull/per-field merge) + a fixed top-right Sync chip. Skipped at runtime if sync is unavailable. |
@@ -131,21 +131,24 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `docs/learning-strategies/` | Learning-science principles the app should encode. Co-evolves with features. |
 | `docs-archive/` | Older `claude.md`, `AGENTIC_*.md`, `ARCHITECTURE.md`, plus `old-scripts/` (broken pre-refactor helpers) — historical only |
 
-## Shared UI + storage contract (the three pages)
+## Shared UI + storage contract (the user-facing pages)
 
-The project ships **three** user-facing HTML pages — `index.html`, `prep.html`,
-`diagnostic.html`. They share an audience, a visual language, and a
-localStorage origin. To prevent drift (which bit us in iter-35):
+The project ships two user-facing HTML pages — `index.html` and
+`diagnostic.html`. (Pre-2026-05, a third page `prep.html` housed the 4-day
+interview prep dashboard; it was dissolved into the main app as a
+`kind:'cram'` study path consumed by Today's Plan.) They share an audience,
+a visual language, and a localStorage origin. To prevent drift (which bit us
+in iter-35):
 
 - **Colors / radii / type** → `tokens.css`. Don't redeclare tokens in a page's
   `:root`. Don't hard-code hex in component styles. Add new tokens here.
 - **localStorage I/O** → `js/storage.js`, exposed as `window.DrillStorage`.
   Don't call `localStorage.getItem/setItem` directly. Use `loadAppProgress`,
-  `savePrepState`, `loadDiagnostic`, the bridge helpers (`isLessonFullyDone`,
-  `setMainLastLessonId`), etc.
+  `loadDiagnostic`, the bridge helpers (`isLessonFullyDone`,
+  `setMainLastLessonId`), etc. `loadPrepState`/`savePrepState` are retained
+  for historical `jsdrill.prep.v1` blobs but no live page writes them anymore.
 - **Static code blocks** → CodeMirror `runMode` (Dracula theme). Same scripts
-  as `index.html` head. Use `renderCmInto(host, code)` (currently in
-  `prep.html`; hoist if a third caller appears).
+  as `index.html` head.
 - **Cross-device sync** → `js/sync.js`, exposed as `window.DrillSync`. Optional
   layer that mirrors all three localStorage blobs (`jsdrill.progress.v1`,
   `jsdrill.prep.v1`, `jsdrill.diagnostic.v1`) to Supabase when the user signs in

@@ -36,11 +36,10 @@ Pass L1 + L2 + L3 → the lesson dot turns green and enters spaced-repetition ro
 
 ## Companion pages
 
-- `index.html` — the main drill app
-- `prep.html` — 4-day interview prep dashboard (curated path through the drills)
+- `index.html` — the main drill app. Houses every study path; pick one from the in-app picker. Cram paths (e.g. the 4-Day Interview Cram) drive a day-by-day Today's Plan view inside the same app.
 - `diagnostic.html` — 43-question self-diagnostic to find your weak sections
 
-All three share the same `tokens.css` design tokens and `js/storage.js` localStorage layer.
+Both share the same `tokens.css` design tokens and `js/storage.js` localStorage layer.
 
 ## Features
 

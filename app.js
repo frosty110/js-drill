@@ -168,6 +168,7 @@ const state = {
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
+  cramTaskChecks: {},  // { taskId: true } — non-lesson task ticks for cram-kind paths (e.g. "write BFS on paper"). Lesson-linked tasks auto-check via isLessonFullyDone.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
   lastTab: null,
@@ -609,43 +610,90 @@ function subscribedPathHasLessons() {
   return Array.isArray(order) && order.length > 0;
 }
 
+// For kind:'cram' paths, returns the 0-based index of the day the user is on,
+// or -1 when the cycle has ended. Before-start clamps to 0 (preview Day 1);
+// after-end returns -1 so callers fall through to pure SR mode.
+function getCramDayIndex(path) {
+  if (!path || path.kind !== 'cram' || !Array.isArray(path.days) || !path.days.length) return -1;
+  if (!path.startIso) return 0;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  if (todayIso < path.startIso) return 0;
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const start = new Date(path.startIso + 'T00:00:00').getTime();
+  const today = new Date(todayIso + 'T00:00:00').getTime();
+  const diff = Math.floor((today - start) / msPerDay);
+  return diff >= path.days.length ? -1 : diff;
+}
+
+function isCramTaskDone(task) {
+  if (task.lessonId) {
+    return window.DrillStorage && window.DrillStorage.isLessonFullyDone(task.lessonId);
+  }
+  return !!state.cramTaskChecks[task.id];
+}
+
 function updatePathChip() {
   const label = document.getElementById('path-chip-label');
   if (label) label.textContent = getSubscribedPath().label;
 }
 
-function openPathModal() {
+function openPathModal(opts = {}) {
   const modal = document.getElementById('path-modal');
   const body = document.getElementById('path-body');
   if (!modal || !body) return;
+  const welcome = !!opts.welcome;
+  const heading = modal.querySelector('h2');
+  if (heading) heading.textContent = welcome ? '👋 Welcome to JS Drill' : 'Study plan';
+  const sub = modal.querySelector('[data-path-sub]');
+  if (sub) {
+    sub.textContent = welcome
+      ? `${CURRICULUM.filter(l => l.status === 'full').length} lessons across syntax, interview patterns, and applied problems. Pick a plan that fits your situation — you can switch any time.`
+      : `Pick the plan that drives your 📅 Today's Plan button. Switching is safe — your lesson progress is shared across every plan.`;
+  }
   const currentId = state.subscribedPathId;
-  body.innerHTML = PATHS.map(p => {
-    const active = p.id === currentId;
+  const cardsHtml = PATHS.map(p => {
+    const active = !welcome && p.id === currentId;
     const border = active ? '#34d399' : '#1e293b';
     const bg = active ? 'rgba(52,211,153,0.08)' : '#0b1220';
-    const check = active ? `<span style="color:#34d399;font-size:13px;">● Current</span>` : `<span style="color:#64748b;font-size:13px;">Switch →</span>`;
-    return `<button data-path-id="${escapeHtml(p.id)}" style="text-align:left;padding:12px 14px;border-radius:8px;background:${bg};border:1px solid ${border};color:#e2e8f0;cursor:pointer;display:flex;flex-direction:column;gap:4px;">
+    const tag = active
+      ? `<span style="color:#34d399;font-size:13px;">● Current</span>`
+      : (welcome
+          ? `<span style="color:#64748b;font-size:13px;">Pick →</span>`
+          : `<span style="color:#64748b;font-size:13px;">Switch →</span>`);
+    return `<button data-path-id="${escapeHtml(p.id)}" style="text-align:left;padding:14px 16px;border-radius:8px;background:${bg};border:1px solid ${border};color:#e2e8f0;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
       <span style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <span style="font-weight:600;font-size:14px;">${escapeHtml(p.icon || '')} ${escapeHtml(p.label)}</span>
-        ${check}
+        ${tag}
       </span>
-      <span style="color:#94a3b8;font-size:12px;">${escapeHtml(p.blurb)}</span>
+      <span style="color:#94a3b8;font-size:12px;line-height:1.5;">${escapeHtml(p.blurb)}</span>
     </button>`;
   }).join('');
+  const footerHtml = welcome
+    ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #1e293b;display:flex;flex-direction:column;gap:8px;">
+        <a href="diagnostic.html" style="color:#67e8f9;font-size:12px;text-decoration:none;">🩺 Or start with a 43-question diagnostic →</a>
+        <button data-action="browse-on-own" style="background:none;border:none;color:#64748b;font-size:12px;cursor:pointer;text-align:left;padding:0;">Browse on my own (no path)</button>
+      </div>`
+    : '';
+  body.innerHTML = cardsHtml + footerHtml;
   body.querySelectorAll('[data-path-id]').forEach(btn => {
     btn.addEventListener('click', () => {
       state.subscribedPathId = btn.getAttribute('data-path-id');
-      // The Path View filter base just changed — drop the cache and, if the
-      // new path has no drillable lessons, clear an active filter.
       _invalidateStarterPathCache();
       if (!subscribedPathHasLessons()) state.starterPath = false;
+      if (welcome) state.welcomed = true;
       saveProgress();
       updatePathChip();
       modal.style.display = 'none';
-      // Re-render the sidebar so the 🧭 button state + (if active) the filtered
-      // lesson list reflect the newly-subscribed path.
       if (typeof renderSidebar === 'function') renderSidebar();
+      if (welcome && typeof renderLesson === 'function') renderLesson();
     });
+  });
+  const browse = body.querySelector('[data-action="browse-on-own"]');
+  if (browse) browse.addEventListener('click', () => {
+    state.welcomed = true;
+    saveProgress();
+    modal.style.display = 'none';
+    if (typeof renderLesson === 'function') renderLesson();
   });
   modal.style.display = 'block';
 }
@@ -958,6 +1006,7 @@ function loadProgress() {
     // Validate against the registry so a stale/removed path id falls back gracefully.
     state.subscribedPathId = (typeof PATHS !== 'undefined' && PATHS.some(p => p.id === parsed.subscribedPathId))
       ? parsed.subscribedPathId : 'starter';
+    state.cramTaskChecks = parsed.cramTaskChecks && typeof parsed.cramTaskChecks === 'object' ? parsed.cramTaskChecks : {};
     state.welcomed = !!parsed.welcomed;
     state.hideMastered = !!parsed.hideMastered;
     state.reviews = parsed.reviews || {};
@@ -1043,6 +1092,7 @@ function saveProgress() {
     commandUsage: state.commandUsage,
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
+    cramTaskChecks: state.cramTaskChecks,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
     reviews: state.reviews,
@@ -7281,43 +7331,11 @@ function renderLesson() {
     return;
   }
 
-  // First-time welcome banner — shows once until dismissed or starter path engaged.
+  // First-time welcome — the path picker modal becomes the welcome surface
+  // (auto-opened once, exposes Starter / Cram / Diagnostic / Browse-on-own).
+  // The picker drives `state.welcomed` so the next renderLesson won't reopen it.
   if (!state.welcomed && Object.keys(state.progress).length === 0) {
-    const fullCount = CURRICULUM.filter(l => l.status === 'full').length;
-    const welcome = document.createElement('div');
-    welcome.className = 'mb-6 p-4 rounded-lg bg-blue-950/50 border border-blue-900';
-    welcome.innerHTML = `
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <div class="text-blue-200 font-semibold mb-1">👋 Welcome to JS Drill</div>
-          <div class="text-sm text-slate-300 leading-relaxed">
-            ${fullCount} lessons across <strong>syntax</strong>, <strong>interview patterns</strong>, and <strong>applied problems</strong>.
-            Each lesson has a <strong>Reference</strong> card, then <strong>L1</strong> (concept MC), <strong>L2</strong> (fill-in), and <strong>L3</strong> (type from memory).
-            <br><br>
-            Start with the <strong>🧭 Starter Path</strong> for a linear sequence, or hit <kbd>?</kbd> for keyboard shortcuts.
-          </div>
-          <div class="mt-3 flex gap-2 flex-wrap">
-            <button class="primary" data-action="start-path">🧭 Take the Starter Path</button>
-            <button class="secondary" data-action="dismiss-welcome">Browse on my own</button>
-          </div>
-        </div>
-        <button class="text-slate-500 hover:text-slate-200 text-xl leading-none" data-action="dismiss-welcome" aria-label="Dismiss">×</button>
-      </div>
-    `;
-    shell.appendChild(welcome);
-    welcome.querySelector('[data-action="start-path"]').addEventListener('click', () => {
-      state.welcomed = true;
-      state.starterPath = true;
-      const first = starterPathNextId();
-      saveProgress();
-      renderSidebar();
-      if (first) selectLesson(first); else renderLesson();
-    });
-    welcome.querySelectorAll('[data-action="dismiss-welcome"]').forEach(b => b.addEventListener('click', () => {
-      state.welcomed = true;
-      saveProgress();
-      renderLesson();
-    }));
+    setTimeout(() => { if (!state.welcomed) openPathModal({ welcome: true }); }, 0);
   }
 
   // header
@@ -11306,14 +11324,132 @@ async function init() {
     }
     todayModal.style.display = 'block';
   }
-  // Today's Plan routes by the subscribed study plan. A 'prep' path navigates
-  // to its standalone dashboard; a 'lessons' path opens the in-app curated modal.
+  function openCramToday(path) {
+    const dayIdx = getCramDayIndex(path);
+    if (dayIdx < 0) { openToday(); return; }
+    const day = path.days[dayIdx];
+    const totalDays = path.days.length;
+    const heading = document.getElementById('today-heading');
+    const sub = document.getElementById('today-sub');
+    const body = document.getElementById('today-body');
+    if (heading) heading.textContent = `⏱ Day ${dayIdx + 1} of ${totalDays} — ${day.title}`;
+    if (sub) sub.textContent = `${day.date}. Tasks auto-tick when you master the linked lesson. Earlier-day lessons resurface below as SR comes due.`;
+
+    let totalTasks = 0, doneTasks = 0;
+    for (const b of day.blocks) for (const t of b.tasks) { totalTasks++; if (isCramTaskDone(t)) doneTasks++; }
+    const pct = totalTasks ? Math.round(100 * doneTasks / totalTasks) : 0;
+
+    const blocksHtml = day.blocks.map(block => {
+      const blockDone = block.tasks.filter(isCramTaskDone).length;
+      const blockTotal = block.tasks.length;
+      const blockComplete = blockDone === blockTotal && blockTotal > 0;
+      const tasksHtml = block.tasks.map(t => {
+        const done = isCramTaskDone(t);
+        const lesson = t.lessonId ? findLesson(t.lessonId) : null;
+        const lessonTitle = lesson ? lesson.title : '';
+        const minsBadge = t.mins != null ? `<span style="font-size:11px;color:#64748b;">~${t.mins} min</span>` : '';
+        const checkAttr = t.lessonId ? 'disabled' : '';
+        const checkTitle = t.lessonId ? 'Ticks automatically when you master the linked lesson' : 'Tap to mark done';
+        const lessonBtn = t.lessonId
+          ? `<button data-cram-open="${escapeHtml(t.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;font-weight:500;">Open →</button>`
+          : '';
+        const lessonBadge = lessonTitle ? `: <strong style="color:#e2e8f0;">${escapeHtml(lessonTitle)}</strong>` : '';
+        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid #1e293b;${done ? 'opacity:0.55;' : ''}">
+          <input type="checkbox" data-cram-check="${escapeHtml(t.id)}" ${done ? 'checked' : ''} ${checkAttr} title="${escapeHtml(checkTitle)}" style="margin-top:3px;cursor:${t.lessonId ? 'default' : 'pointer'};" />
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;line-height:1.5;color:#cbd5e1;${done ? 'text-decoration:line-through;' : ''}">${escapeHtml(t.label)}${lessonBadge}</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">${minsBadge}${lessonBtn}</div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<details ${blockComplete ? '' : 'open'} style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;margin-bottom:8px;">
+        <summary style="padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;list-style:none;">
+          <span style="display:flex;flex-direction:column;min-width:0;">
+            <span style="font-size:14px;font-weight:600;color:#e2e8f0;">${escapeHtml(block.title)}</span>
+            <span style="font-size:11px;color:#64748b;">${escapeHtml(block.duration || '')}</span>
+          </span>
+          <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:${blockComplete ? '#34d399' : '#1e293b'};color:${blockComplete ? '#0f172a' : '#cbd5e1'};font-variant-numeric:tabular-nums;flex-shrink:0;">${blockDone}/${blockTotal}</span>
+        </summary>
+        <div style="padding:0 14px 12px;">${tasksHtml}</div>
+      </details>`;
+    }).join('');
+
+    const dueIds = dueReviewIds().slice(0, 6);
+    const cramLessonSet = new Set(path.lessons || []);
+    const reviewIds = dueIds.filter(id => cramLessonSet.has(id));
+    const reviewHtml = reviewIds.length
+      ? `<div style="margin-top:14px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#67e8f9;font-weight:600;margin-bottom:8px;">Review from earlier days · ${reviewIds.length} due</div>
+          ${reviewIds.map(id => {
+            const l = findLesson(id);
+            return `<button data-cram-open="${escapeHtml(id)}" style="text-align:left;padding:10px 12px;border-radius:6px;background:#0b1220;border:1px solid #1e293b;color:#e2e8f0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:6px;font-family:inherit;">
+              <span style="font-size:13px;">${escapeHtml(l?.title || id)}</span>
+              <span style="color:#67e8f9;font-size:11px;">SR due</span>
+            </button>`;
+          }).join('')}
+        </div>`
+      : '';
+
+    const weakId = (typeof topWeakLessonId === 'function') ? topWeakLessonId() : null;
+    const weakHtml = (weakId && !reviewIds.includes(weakId))
+      ? (() => { const l = findLesson(weakId); return `<div style="margin-top:14px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#fdba74;font-weight:600;margin-bottom:8px;">Weak spot</div>
+          <button data-cram-open="${escapeHtml(weakId)}" style="text-align:left;padding:10px 12px;border-radius:6px;background:#0b1220;border:1px solid #1e293b;color:#e2e8f0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;font-family:inherit;">
+            <span style="font-size:13px;">${escapeHtml(l?.title || weakId)}</span>
+            <span style="color:#fdba74;font-size:11px;">L1 miss</span>
+          </button>
+        </div>`; })()
+      : '';
+
+    const checkpointsHtml = (day.checkpoints && day.checkpoints.length)
+      ? `<div style="margin-top:14px;background:#0b1220;border-left:3px solid #34d399;border-radius:8px;padding:12px 14px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#34d399;font-weight:600;margin-bottom:6px;">End-of-day checkpoints</div>
+          <ul style="margin:0;padding-left:18px;color:#94a3b8;font-size:13px;line-height:1.5;">${day.checkpoints.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+        </div>`
+      : '';
+
+    body.innerHTML = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="flex:1;height:8px;background:#1e293b;border-radius:4px;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#38bdf8,#34d399);width:${pct}%;border-radius:4px;"></div></div>
+        <div style="font-size:12px;color:#94a3b8;font-variant-numeric:tabular-nums;min-width:60px;text-align:right;">${doneTasks}/${totalTasks} · ${pct}%</div>
+      </div>
+      ${blocksHtml}
+      ${reviewHtml}
+      ${weakHtml}
+      ${checkpointsHtml}`;
+
+    body.querySelectorAll('[data-cram-check]').forEach(cb => {
+      cb.addEventListener('click', (e) => {
+        const id = cb.getAttribute('data-cram-check');
+        if (cb.disabled) { e.preventDefault(); return; }
+        if (cb.checked) state.cramTaskChecks[id] = true;
+        else delete state.cramTaskChecks[id];
+        saveProgress();
+        openCramToday(path);
+      });
+    });
+    body.querySelectorAll('[data-cram-open]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-cram-open');
+        todayModal.style.display = 'none';
+        selectLesson(id);
+      });
+    });
+    todayModal.style.display = 'block';
+  }
+
+  // Today's Plan routes by the subscribed study plan. A 'cram' path renders a
+  // day-by-day acquisition view (with SR review of earlier days woven in); any
+  // other kind falls through to the curated due/path/weak modal.
   function openTodaysPlan() {
     const path = getSubscribedPath();
-    if (path.kind === 'prep' && path.url) {
-      window.location.href = path.url;
+    const heading = document.getElementById('today-heading');
+    const sub = document.getElementById('today-sub');
+    if (path && path.kind === 'cram') {
+      openCramToday(path);
       return;
     }
+    if (heading) heading.textContent = `📅 Today's session`;
+    if (sub) sub.textContent = `Curated from your due reviews, starter path, and weak spots. Click any item to start.`;
     openToday();
   }
   document.getElementById('today-btn').addEventListener('click', openTodaysPlan);

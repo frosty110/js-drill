@@ -187,7 +187,7 @@ So all 3 iter-26 entries are governance-blocked. They are NOT abandoned — they
 
 ### 2026-05-26 iter 146 — ⏳ Time-Invested Section Ledger
 
-**Status:** queued
+**Status:** SHIPPED iter 155 (after iter-149 BAIL at Step 3 + iter-150/151/152 alternate Constraint-Shift ships during context cliff + iter-153 second BAIL + iter-154 reciprocity backfill detour — the original target finally landed in a /clear-d session). New `_renderTimeInvestedTile()` (~50 LOC) injected into Stats modal stats-body immediately after `_renderCalibrationTile()`. Algorithm: per-lesson walk over `state.history`; sum consecutive-event gaps < 5min (each capped at 5min); group by `findLesson(lessonId).section`; sort desc; render top-8 as horizontal bars with cyan→purple gradient. Auto-hides on empty data. Schema-additive zero. Mobile probe `tools/cdp/time-invested-tile.js` 13/13 PASS (4 phases: clean-state auto-hide, single-section seed, multi-section mixed-gap sort + >5min exclusion, top-8 truncation at 10 seeded sections). Validator 698/0. Reciprocity follow-up commit created `docs/learning-strategies/metacognition.md` — first new strategy doc since the original 5, catalogs all 9 existing metacognitive surfaces. **iter-146 vision queue NOW FULLY DRAINED** (iter 147 + 148 + 155 shipped all 3 entries).
 
 **Value claim** (one sentence): Surfaces per-section minutes-spent allocation ("4.2 hrs on Trees this month, 12 min on DP") so the rusty engineer can rebalance — Track Balance Compass (iter 66) shows % MASTERED but no surface shows EFFORT allocation per PROFILE L46-48 ("syntax re-memorization" needs allocation discipline) + L75 (allocation visibility as gamification-safe alternative to streak counts).
 

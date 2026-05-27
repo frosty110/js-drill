@@ -169,6 +169,7 @@ const state = {
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   cramTaskChecks: {},  // { taskId: true } — non-lesson task ticks for cram-kind paths (e.g. "write BFS on paper"). Lesson-linked tasks auto-check via isLessonFullyDone.
+  cramView: { mode: 'today', dayIndex: -1 },  // active Cram Home view. mode: 'today' (live day) | 'day' (specific past/future day, dayIndex set) | 'all' (all days expanded) | 'open-from' (only !done items from dayIndex).
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
   lastTab: null,
@@ -632,6 +633,242 @@ function isCramTaskDone(task) {
   return !!state.cramTaskChecks[task.id];
 }
 
+function _cramDayProgress(day) {
+  let total = 0, done = 0;
+  for (const b of day.blocks) for (const t of b.tasks) { total++; if (isCramTaskDone(t)) done++; }
+  return { total, done, pct: total ? Math.round(100 * done / total) : 0 };
+}
+
+function _cramRenderTaskRow(task, opts = {}) {
+  const done = isCramTaskDone(task);
+  if (opts.openOnly && done) return '';
+  const lesson = task.lessonId ? findLesson(task.lessonId) : null;
+  const lessonTitle = lesson ? lesson.title : '';
+  const minsBadge = task.mins != null ? `<span style="font-size:11px;color:#64748b;">~${task.mins} min</span>` : '';
+  const checkAttr = task.lessonId ? 'disabled' : '';
+  const checkTitle = task.lessonId ? 'Ticks automatically when you master the linked lesson' : 'Tap to mark done';
+  const lessonBtn = task.lessonId
+    ? `<button data-cram-open="${escapeHtml(task.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;font-weight:500;">Open →</button>`
+    : '';
+  const redoBtn = (!task.lessonId && done)
+    ? `<button data-cram-redo="${escapeHtml(task.id)}" title="Re-open this task" style="background:none;border:none;color:#fdba74;cursor:pointer;font-size:11px;text-decoration:underline;">↻ redo</button>`
+    : '';
+  const lessonBadge = lessonTitle ? `: <strong style="color:#e2e8f0;">${escapeHtml(lessonTitle)}</strong>` : '';
+  return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid #1e293b;${done ? 'opacity:0.55;' : ''}">
+    <input type="checkbox" data-cram-check="${escapeHtml(task.id)}" ${done ? 'checked' : ''} ${checkAttr} title="${escapeHtml(checkTitle)}" style="margin-top:3px;cursor:${task.lessonId ? 'default' : 'pointer'};" />
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;line-height:1.5;color:#cbd5e1;${done ? 'text-decoration:line-through;' : ''}">${escapeHtml(task.label)}${lessonBadge}</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap;">${minsBadge}${lessonBtn}${redoBtn}</div>
+    </div>
+  </div>`;
+}
+
+function _cramRenderDayBody(day, dayIdx, opts = {}) {
+  const p = _cramDayProgress(day);
+  const openOnly = !!opts.openOnly;
+  const collapseDone = !!opts.collapseDone;
+  const blocksHtml = day.blocks.map(block => {
+    const blockDone = block.tasks.filter(isCramTaskDone).length;
+    const blockTotal = block.tasks.length;
+    const blockComplete = blockDone === blockTotal && blockTotal > 0;
+    const tasksHtml = block.tasks.map(t => _cramRenderTaskRow(t, { openOnly })).join('');
+    if (openOnly && blockDone === blockTotal) return '';
+    const expanded = !(collapseDone && blockComplete);
+    return `<details ${expanded ? 'open' : ''} style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;margin-bottom:8px;">
+      <summary style="padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;list-style:none;">
+        <span style="display:flex;flex-direction:column;min-width:0;">
+          <span style="font-size:14px;font-weight:600;color:#e2e8f0;">${escapeHtml(block.title)}</span>
+          <span style="font-size:11px;color:#64748b;">${escapeHtml(block.duration || '')}</span>
+        </span>
+        <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:${blockComplete ? '#34d399' : '#1e293b'};color:${blockComplete ? '#0f172a' : '#cbd5e1'};font-variant-numeric:tabular-nums;flex-shrink:0;">${blockDone}/${blockTotal}</span>
+      </summary>
+      <div style="padding:0 14px 12px;">${tasksHtml}</div>
+    </details>`;
+  }).join('');
+  const checkpoints = (day.checkpoints && day.checkpoints.length && !openOnly)
+    ? `<div style="margin-top:12px;background:#0b1220;border-left:3px solid #34d399;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#34d399;font-weight:600;margin-bottom:6px;">End-of-day checkpoints</div>
+        <ul style="margin:0;padding-left:18px;color:#94a3b8;font-size:13px;line-height:1.5;">${day.checkpoints.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+      </div>`
+    : '';
+  const header = `<div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:16px;font-weight:700;color:#e2e8f0;">Day ${day.day} — ${escapeHtml(day.title)}</div>
+        <div style="font-size:12px;color:#94a3b8;">${escapeHtml(day.date || '')}</div>
+      </div>
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;">
+        <div style="width:80px;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#38bdf8,#34d399);width:${p.pct}%;"></div></div>
+        <span style="font-size:12px;color:#94a3b8;font-variant-numeric:tabular-nums;">${p.done}/${p.total}</span>
+        ${opts.allowRedrill && !openOnly ? `<button data-cram-redrill-day="${dayIdx}" title="Reset this day's manual ticks (lesson mastery stays)" style="background:#1e293b;color:#fdba74;border:none;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer;">🎯 Re-drill</button>` : ''}
+      </div>
+    </div>`;
+  return `<div data-cram-day-section="${dayIdx}">${header}${blocksHtml}${checkpoints}</div>`;
+}
+
+function renderCramHome(path) {
+  const shell = document.getElementById('lesson-shell');
+  const view = state.cramView || { mode: 'today', dayIndex: -1 };
+  const todayIdx = getCramDayIndex(path);
+  const isPastEnd = todayIdx < 0;
+  const effectiveTodayIdx = isPastEnd ? path.days.length - 1 : todayIdx;
+  const focusIdx = (view.mode === 'today') ? effectiveTodayIdx
+    : (view.mode === 'day' || view.mode === 'open-from')
+      ? Math.max(0, Math.min(path.days.length - 1, view.dayIndex))
+      : effectiveTodayIdx;
+
+  const stripChips = path.days.map((d, i) => {
+    const p = _cramDayProgress(d);
+    const isToday = i === todayIdx;
+    const isActive = (view.mode === 'today' && i === effectiveTodayIdx) ||
+                     (view.mode === 'day' && i === view.dayIndex) ||
+                     (view.mode === 'open-from' && i === view.dayIndex);
+    const border = isActive ? '#34d399' : (isToday ? '#67e8f9' : '#1e293b');
+    const bg = isActive ? 'rgba(52,211,153,0.10)' : '#0b1220';
+    return `<button data-cram-day="${i}" style="flex-shrink:0;background:${bg};border:1.5px solid ${border};border-radius:8px;padding:8px 12px;cursor:pointer;color:#cbd5e1;font-family:inherit;text-align:left;min-width:84px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;font-weight:600;">Day ${i + 1}${isToday ? ' · today' : ''}</div>
+      <div style="font-size:12px;font-weight:600;color:#cbd5e1;margin-top:2px;">${escapeHtml(d.title.slice(0, 22))}</div>
+      <div style="font-size:11px;color:${p.done === p.total ? '#34d399' : '#94a3b8'};font-variant-numeric:tabular-nums;margin-top:3px;">${p.done}/${p.total} · ${p.pct}%</div>
+    </button>`;
+  }).join('');
+  const allActive = view.mode === 'all';
+  const allChip = `<button data-cram-all style="flex-shrink:0;background:${allActive ? 'rgba(52,211,153,0.10)' : '#0b1220'};border:1.5px solid ${allActive ? '#34d399' : '#1e293b'};border-radius:8px;padding:8px 12px;cursor:pointer;color:#cbd5e1;font-family:inherit;min-width:60px;">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;font-weight:600;">View</div>
+    <div style="font-size:12px;font-weight:600;margin-top:2px;">All days</div>
+  </button>`;
+  const stripHtml = `<div style="display:flex;gap:8px;overflow-x:auto;padding:6px 2px 14px;-webkit-overflow-scrolling:touch;">${stripChips}${allChip}</div>`;
+
+  let carryoverHtml = '';
+  if ((view.mode === 'today' || (view.mode === 'day' && view.dayIndex >= todayIdx)) && todayIdx > 0) {
+    const carryover = [];
+    for (let i = 0; i < todayIdx; i++) {
+      const d = path.days[i];
+      let open = 0;
+      for (const b of d.blocks) for (const t of b.tasks) { if (!isCramTaskDone(t)) open++; }
+      if (open) carryover.push({ idx: i, open, title: d.title });
+    }
+    if (carryover.length) {
+      carryoverHtml = `<div style="background:rgba(249,115,22,0.10);border:1px solid rgba(249,115,22,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#fdba74;font-weight:700;margin-bottom:8px;">⚠ Carryover · unfinished from earlier days</div>
+        ${carryover.map(c => `<button data-cram-open-from="${c.idx}" style="display:block;width:100%;text-align:left;background:#0b1220;border:1px solid #1e293b;border-radius:6px;padding:8px 12px;margin-top:6px;color:#e2e8f0;cursor:pointer;font-family:inherit;">
+          <span style="font-size:13px;">${c.open} open from <strong>Day ${c.idx + 1} — ${escapeHtml(c.title)}</strong></span>
+          <span style="float:right;color:#fdba74;font-size:11px;">Focus →</span>
+        </button>`).join('')}
+      </div>`;
+    }
+  }
+
+  let rocksHtml = '';
+  if (Array.isArray(path.bigRocks) && path.bigRocks.length && view.mode !== 'open-from') {
+    const openByDefault = todayIdx <= 0 && view.mode === 'today';
+    rocksHtml = `<details ${openByDefault ? 'open' : ''} style="background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.25);border-radius:10px;padding:8px 14px;margin-bottom:14px;">
+      <summary style="cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#fdba74;font-weight:700;list-style:none;">⚠ ${path.bigRocks.length} Big Rocks · the gaps to close</summary>
+      <ol style="margin:8px 0 4px;padding-left:22px;font-size:13px;color:#cbd5e1;line-height:1.6;">
+        ${path.bigRocks.map(r => `<li><strong style="color:#fdba74;">${escapeHtml(r.rock)}</strong> — ${escapeHtml(r.detail)}</li>`).join('')}
+      </ol>
+    </details>`;
+  }
+
+  let endedHtml = '';
+  if (isPastEnd && (view.mode === 'today' || view.mode === 'day')) {
+    endedHtml = `<div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#cbd5e1;">
+      ✓ Cram cycle complete. Spaced review keeps every lesson you covered alive — check 🕒 Review for what's due today.
+    </div>`;
+  }
+
+  let bodyHtml = '';
+  if (view.mode === 'all') {
+    bodyHtml = path.days.map((d, i) => _cramRenderDayBody(d, i, { allowRedrill: i < todayIdx, collapseDone: i < todayIdx })).join('');
+  } else if (view.mode === 'open-from') {
+    bodyHtml = `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#fdba74;font-weight:700;margin-top:8px;">Open items only · Day ${view.dayIndex + 1}</div>` +
+      _cramRenderDayBody(path.days[focusIdx], focusIdx, { openOnly: true });
+  } else {
+    bodyHtml = _cramRenderDayBody(path.days[focusIdx], focusIdx, { allowRedrill: focusIdx < todayIdx });
+  }
+
+  shell.innerHTML = `<div style="max-width:760px;margin:0 auto;padding:0;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px;">
+      <h1 style="font-size:20px;font-weight:700;color:#f8fafc;margin:0;">⏱ ${escapeHtml(path.label)}</h1>
+      <span style="font-size:12px;color:#94a3b8;">${isPastEnd ? 'cycle complete' : `Day ${todayIdx + 1} of ${path.days.length}`}</span>
+    </div>
+    <div style="font-size:13px;color:#94a3b8;margin-bottom:10px;">${escapeHtml(path.blurb || '')}</div>
+    ${stripHtml}
+    ${endedHtml}
+    ${rocksHtml}
+    ${carryoverHtml}
+    ${bodyHtml}
+  </div>`;
+
+  // Wire interactions
+  const rerender = () => renderCramHome(path);
+  shell.querySelectorAll('[data-cram-day]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = parseInt(btn.getAttribute('data-cram-day'), 10);
+      state.cramView = { mode: i === todayIdx ? 'today' : 'day', dayIndex: i };
+      saveProgress();
+      rerender();
+    });
+  });
+  const allBtn = shell.querySelector('[data-cram-all]');
+  if (allBtn) allBtn.addEventListener('click', () => {
+    state.cramView = { mode: 'all', dayIndex: -1 };
+    saveProgress();
+    rerender();
+  });
+  shell.querySelectorAll('[data-cram-open-from]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = parseInt(btn.getAttribute('data-cram-open-from'), 10);
+      state.cramView = { mode: 'open-from', dayIndex: i };
+      saveProgress();
+      rerender();
+    });
+  });
+  shell.querySelectorAll('[data-cram-check]').forEach(cb => {
+    cb.addEventListener('click', (e) => {
+      const id = cb.getAttribute('data-cram-check');
+      if (cb.disabled) { e.preventDefault(); return; }
+      if (cb.checked) state.cramTaskChecks[id] = true;
+      else delete state.cramTaskChecks[id];
+      saveProgress();
+      updateCramProgressStrip();
+      rerender();
+    });
+  });
+  shell.querySelectorAll('[data-cram-redo]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-cram-redo');
+      delete state.cramTaskChecks[id];
+      saveProgress();
+      updateCramProgressStrip();
+      rerender();
+    });
+  });
+  shell.querySelectorAll('[data-cram-redrill-day]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = parseInt(btn.getAttribute('data-cram-redrill-day'), 10);
+      if (!confirm(`Reset Day ${i + 1}'s manual ticks? (Lesson mastery stays put.)`)) return;
+      const day = path.days[i];
+      for (const b of day.blocks) for (const t of b.tasks) {
+        if (!t.lessonId) delete state.cramTaskChecks[t.id];
+      }
+      saveProgress();
+      updateCramProgressStrip();
+      rerender();
+    });
+  });
+  shell.querySelectorAll('[data-cram-open]').forEach(btn => {
+    btn.addEventListener('click', () => selectLesson(btn.getAttribute('data-cram-open')));
+  });
+}
+
+// Returns the user to the Cram Home view by clearing the active lesson.
+// Phase 2 entry point for the today-btn and topbar-strip clicks when on cram.
+function goToCramHome() {
+  state.currentLessonId = null;
+  saveProgress();
+  if (typeof renderSidebar === 'function') renderSidebar();
+  renderLesson();
+}
+
 function updatePathChip() {
   const label = document.getElementById('path-chip-label');
   if (label) label.textContent = getSubscribedPath().label;
@@ -1051,6 +1288,10 @@ function loadProgress() {
     state.subscribedPathId = (typeof PATHS !== 'undefined' && PATHS.some(p => p.id === parsed.subscribedPathId))
       ? parsed.subscribedPathId : 'starter';
     state.cramTaskChecks = parsed.cramTaskChecks && typeof parsed.cramTaskChecks === 'object' ? parsed.cramTaskChecks : {};
+    state.cramView = parsed.cramView && typeof parsed.cramView === 'object'
+      ? { mode: ['today','day','all','open-from'].includes(parsed.cramView.mode) ? parsed.cramView.mode : 'today',
+          dayIndex: Number.isInteger(parsed.cramView.dayIndex) ? parsed.cramView.dayIndex : -1 }
+      : { mode: 'today', dayIndex: -1 };
     state.welcomed = !!parsed.welcomed;
     state.hideMastered = !!parsed.hideMastered;
     state.reviews = parsed.reviews || {};
@@ -1137,6 +1378,7 @@ function saveProgress() {
     misses: state.misses,
     subscribedPathId: state.subscribedPathId,
     cramTaskChecks: state.cramTaskChecks,
+    cramView: state.cramView,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
     reviews: state.reviews,
@@ -7357,7 +7599,15 @@ function renderLesson() {
   shell.innerHTML = '';
   document.body.classList.remove('l2-mobile-active');
   if (typeof updateCramProgressStrip === 'function') updateCramProgressStrip();
-  if (!state.currentLessonId) { renderEmpty(shell); return; }
+  if (!state.currentLessonId) {
+    const subbed = typeof getSubscribedPath === 'function' ? getSubscribedPath() : null;
+    if (subbed && subbed.kind === 'cram' && Array.isArray(subbed.days) && subbed.days.length) {
+      renderCramHome(subbed);
+      return;
+    }
+    renderEmpty(shell);
+    return;
+  }
 
   const lesson = findLesson(state.currentLessonId);
   if (!lesson || lesson.status === 'stub') { renderEmpty(shell); return; }
@@ -11481,17 +11731,17 @@ async function init() {
     todayModal.style.display = 'block';
   }
 
-  // Today's Plan routes by the subscribed study plan. A 'cram' path renders a
-  // day-by-day acquisition view (with SR review of earlier days woven in); any
-  // other kind falls through to the curated due/path/weak modal.
+  // Today's Plan routes by the subscribed study plan. A 'cram' path navigates
+  // to the full Cram Home view (Phase 2); any other kind opens the modal.
   function openTodaysPlan() {
     const path = getSubscribedPath();
-    const heading = document.getElementById('today-heading');
-    const sub = document.getElementById('today-sub');
     if (path && path.kind === 'cram') {
-      openCramToday(path);
+      state.cramView = { mode: 'today', dayIndex: -1 };
+      goToCramHome();
       return;
     }
+    const heading = document.getElementById('today-heading');
+    const sub = document.getElementById('today-sub');
     if (heading) heading.textContent = `📅 Today's session`;
     if (sub) sub.textContent = `Curated from your due reviews, starter path, and weak spots. Click any item to start.`;
     openToday();

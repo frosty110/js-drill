@@ -6,7 +6,7 @@
 //   B. Tapping the chip opens the switcher modal listing both paths, current marked.
 //   C. While subscribed to Starter, 📅 Today's Plan opens the in-app modal (no nav).
 //   D. Switching to "4-Day Interview Cram" updates the chip + persists to storage.
-//   E. While subscribed to Cram, 📅 Today's Plan opens the in-app cram view (no nav).
+//   E. While subscribed to Cram, 📅 Today's Plan opens the full-window Cram Home (no modal, no nav).
 //   F. Subscription survives a reload (persisted in jsdrill.progress.v1).
 
 const { ensureServer, ensureChrome, connect } = require('./lib');
@@ -91,22 +91,29 @@ const OUT = process.argv[3] || '/tmp/jsdrill-path-switcher';
   s.assert(afterSwitch.stored === 'prep-4day',
     `[D] subscription persisted to storage (got: ${afterSwitch.stored})`);
 
-  // ── E: subscribed to Cram → Today's Plan opens the in-app cram view ──
+  // ── E: subscribed to Cram → Today's Plan opens the full-window Cram Home ──
   await s.click('#today-btn');
-  await s.sleep(300);
-  await s.snap('E-cram-today-modal');
-  const eState = await s.eval(`(() => ({
-    display: document.getElementById('today-modal').style.display,
-    heading: document.getElementById('today-heading')?.textContent || '',
-    href: location.href,
-  }))()`);
-  s.assert(eState.display === 'block',
-    `[E] Today's Plan opens the in-app modal while on Cram (got display: ${eState.display})`);
+  await s.sleep(400);
+  await s.snap('E-cram-home');
+  const eState = await s.eval(`(() => {
+    const shell = document.getElementById('lesson-shell');
+    return {
+      todayModalDisplay: document.getElementById('today-modal').style.display,
+      hasDayChips: shell.querySelectorAll('[data-cram-day]').length,
+      hasAllChip: !!shell.querySelector('[data-cram-all]'),
+      shellText: (shell.textContent || '').slice(0, 200),
+      href: location.href
+    };
+  })()`);
+  s.assert(eState.todayModalDisplay !== 'block',
+    `[E] Today's Plan does NOT open today-modal on Cram (got: ${eState.todayModalDisplay})`);
   s.assert(!/prep\.html/.test(eState.href), `[E] did not navigate to a separate page (href: ${eState.href})`);
-  s.assert(/Day\s*\d+\s*of\s*\d+/i.test(eState.heading) || /cram/i.test(eState.heading),
-    `[E] heading shows a Day N of M cram title (got: ${eState.heading})`);
-  await s.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
-  await s.sleep(120);
+  s.assert(eState.hasDayChips === 4,
+    `[E] Cram Home renders 4 day chips (got: ${eState.hasDayChips})`);
+  s.assert(eState.hasAllChip,
+    `[E] Cram Home renders the "All days" chip`);
+  s.assert(/4-Day Interview Cram/.test(eState.shellText),
+    `[E] Cram Home shows path label (got text snippet: ${eState.shellText.slice(0, 80)})`);
 
   // ── F: subscription survives a reload of the main app ────────────────
   await s.reload();

@@ -122,6 +122,8 @@ For ordinary single-iter ships (lesson batches, content fixes, UX polish, sub-10
 ### ship
 Load `PROFILE.md`, the relevant slice of `SELF-IMPROVE.md` (Current focus, Constraints, Avoid), `docs/learning-strategies/` index, and the roadmap entry if consuming one. Read targeted slices of `app.js` / `app.css` / `index.html`. Run `node tools/validate-data.js` to baseline. Don't read more than you need.
 
+**Empirical scan FIRST when reusing infrastructure** (9-time-validated, iter 99/122/140/141/142/144/145/147/155). Before designing the change, grep for the actual call sites + state-binding shape of any X you plan to reuse — not just X's existence. "Mock uses setInterval(250ms) updating #mock-timer" vs "Mock has a timer" is the difference between 5min reuse and 30min rewrite (iter-147 pattern). For state-across-renders reuse, also check lifecycle: where it's set / when it's reset / what re-renders trigger reset — capturing `sessionStartMs` outside `renderCard` is what kept the iter-147 timer ticking across card transitions. Output of the scan: file:line references + closest pattern-mirror function name. This is the load-bearing piece if the ship has to bail (see Step 5 bail contract).
+
 ### audit / coverage / frame
 Spawn 1–3 parallel `general-purpose` subagents (budget cap: 3). Each reads `PROFILE.md` + only the code/data they need; they **must NOT read `SELF-IMPROVE.md`, the iteration log, `docs-archive/`, or this SKILL.md** — that priming is the bias source.
 
@@ -139,6 +141,8 @@ Use `WebSearch` / `WebFetch` to pull ONE external reference. Extract the structu
 
 ### vision
 Spawn 1–2 fresh-eyes subagents: *"You are a product designer looking at the JS drill app for the first time. Read PROFILE.md, README.md, and `data/manifest.json` (titles only). Do NOT read SELF-IMPROVE.md, the iteration log, or `.claude/skills/`. Propose 5 hypothetical big features the app does NOT yet have that would materially improve the rusty-engineer experience. For each: one-sentence value claim, one-sentence mechanic, one-sentence falsifiable success criterion. Rank by leverage-per-effort. Prefer 'new bucket' ideas over 'better cell' ideas. Prefer recombining existing lesson data into new mobile-first surfaces (iter-31 meta-finding) over features requiring per-lesson authoring or PROFILE-amendment dependencies."*
+
+**Self-audit before promoting** (7-time-validated, iter 112/115/116/120/124/139/146). After the subagent reports, re-prompt with: *"What categories or shapes did you AVOID or BAIL on for this report, and would re-examining them surface a stronger entry than your top 3?"* This catches the loop's own steering bias — examples it has caught: Cat 9 §9C "blocked by per-lesson authoring" framing was actually sidecar-routable (iter 146); Cat 2 over-concentration in the active list (iter 124, again iter 146); §9C-bias self-flag (iter 120). The re-prompt is cheap (~5 min) and has pivoted the promotion order in ≥2 cases — explicit signal to keep it as a default step, not an opt-in.
 
 Integrate. Add the top 3 entries to `iter-artifacts/roadmap.md` under a dated section header. Mark any entry that contradicts current PROFILE.md as needing a frame iter before it can ship. Nominate the top roadmap entry as the next iter's ship target.
 
@@ -170,6 +174,14 @@ State in 2–3 sentences *before editing*:
 - **Push to remote** after every successful iteration commit. If `git push` fails, surface the error and stop — do NOT retry with `--force`, do NOT skip hooks.
 
 If anything fails: don't commit. Roll back. Log what blocked in `SELF-IMPROVE.md`. Stop.
+
+### Bail-at-Step-3 contract (when context budget is low before code edits start)
+
+If you reach Step 4 with the context budget already cliffed (≥75% used) AND no code has been edited yet, **bail the iter cleanly** rather than ship a partial implementation that risks an incomplete commit. Bailing is honest signal; scope-padding is debt.
+
+- **The carry-forward IS the recovery mechanism.** When bailing, the single most-valuable piece of state to preserve in `SELF-IMPROVE.md § Next iteration` is the **localized empirical-scan finding from Step 3** — file:line references + closest pattern-mirror function name. iter-155 landed the iter-149 BAILED ship within 5 minutes of session boot post-/clear by reading the bail note's carry-forward; without it, the empirical scan would have had to re-run from scratch.
+- **Pattern-level scope, not per-iter** (iter 153/155 meta-lesson). If iter N-1 bailed at Step 3 AND iter N would be the 3rd consecutive context-constrained alternate ship from the same alternative path, bail iter N too rather than scope-pad. Validated iter 149-155: 5 alternate ships (1 backfill + 3 corpus + 1 doc) before /clear+retry landed the original target. Residual was net-positive (5-entry sidecar bank + 1 backfilled strategy doc), but the discipline gap was real — bail discipline caught iter-153 by signal-detection, not by contract.
+- **Recommend /clear in the bail note**, especially after ≥4 iters in one conversation or context budget consistently entering the cliff zone. /clear is the recovery, not a failure mode.
 
 ## Step 6 — Strategy-doc reciprocity (ship mode only, when applicable)
 

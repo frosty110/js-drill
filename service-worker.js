@@ -14,7 +14,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v2-appsplit';
+const CACHE_VERSION = 'jsdrill-v3-12-split';
 const APP_SHELL = [
   './',
   './index.html',
@@ -30,7 +30,9 @@ const APP_SHELL = [
   './js/app/09-stats-cheatsheet-mock.js',
   './js/app/10-render-sidebar-lesson.js',
   './js/app/11-tabs-ref-conv-walk.js',
-  './js/app/12-levels.js',
+  './js/app/12a-l1.js',
+  './js/app/12b-l2.js',
+  './js/app/12c-l3.js',
   './js/app/13-mechanics-modal.js',
   './js/app/14-init-core.js',
   './js/app/15-init-features-boot.js',

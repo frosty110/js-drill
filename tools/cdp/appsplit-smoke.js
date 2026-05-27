@@ -47,6 +47,6 @@ const { ensureChrome, ensureServer, connect } = require('./lib');
   if (errs.length) console.log('  errors:', JSON.stringify(errs.slice(0, 8)));
 
   if (fails.length) { console.log('\n❌ FAIL\n - ' + fails.join('\n - ')); process.exit(1); }
-  console.log('\n✅ PASS — boots, 15 slices load, no exceptions/404s, CURRICULUM + DOM render');
+  console.log('\n✅ PASS — boots, all slices load, no exceptions/404s, CURRICULUM + DOM render');
   process.exit(0);
 })().catch(e => { console.error('smoke harness error:', e.message); process.exit(2); });

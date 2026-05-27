@@ -36,6 +36,32 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const exc = s.consoleMsgs.filter(m => m.type === 'exception');
   if (exc.length) fails.push('boot exceptions: ' + JSON.stringify(exc.slice(0, 3)));
 
+  // 0. Level renderers — confirm renderL1/L2/L2Mobile/L3 still resolve as
+  // top-level globals after 12-levels.js → 12a/12b/12c split. Then click
+  // each level tab on the current lesson and assert active-tab + non-empty
+  // shell (proves each renderer ran end-to-end). MUST run before any drill
+  // launcher click, which takes over lesson-shell with a deck UI.
+  const renderers = await s.eval(`JSON.stringify({
+    L1: typeof renderL1, L2: typeof renderL2,
+    L2m: typeof renderL2Mobile, L3: typeof renderL3
+  })`);
+  if (!/L1":"function"/.test(renderers))  fails.push('renderL1 not global: ' + renderers);
+  if (!/L2":"function"/.test(renderers))  fails.push('renderL2 not global: ' + renderers);
+  if (!/L2m":"function"/.test(renderers)) fails.push('renderL2Mobile not global: ' + renderers);
+  if (!/L3":"function"/.test(renderers))  fails.push('renderL3 not global: ' + renderers);
+
+  const clickTab = level => s.eval(`(()=>{const b=[...document.querySelectorAll('.tab-btn[data-level]')].find(x=>x.dataset.level===${JSON.stringify(level)});if(!b)return false;b.click();return true;})()`);
+
+  for (const level of ['L1', 'L2', 'L3']) {
+    const clicked = await clickTab(level);
+    if (!clicked) { fails.push(`${level} tab not found on current lesson`); continue; }
+    await sleep(400);
+    const activeLevel = await s.eval('document.querySelector(".tab-btn.active[data-level]")?.dataset.level');
+    if (activeLevel !== level) fails.push(`${level} click: active tab is ${activeLevel}, want ${level}`);
+    const shellLen = await s.eval('document.getElementById("lesson-shell").innerHTML.length');
+    if (!shellLen) fails.push(`${level} click: lesson-shell empty after render`);
+  }
+
   const click = id => s.eval(`(()=>{const b=document.getElementById(${JSON.stringify(id)});if(!b)return false;b.click();return true;})()`);
   const visible = id => s.eval(`(()=>{const m=document.getElementById(${JSON.stringify(id)});if(!m)return null;return m.style.display==='block';})()`);
   const close = id => s.eval(`(()=>{const m=document.getElementById(${JSON.stringify(id)});if(m)m.style.display='none';return true;})()`);
@@ -153,6 +179,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   console.log('rapid-fire-btn click  :', rapidExc === 0 ? 'no exceptions' : 'FAIL');
   console.log('calibrate-btn flip    :', calBefore !== calAfter ? 'OK' : 'FAIL');
   console.log('navToLesson helper    :', navTarget ? 'invoked' : 'SKIPPED (no second lesson)');
+  console.log('renderL1/L2/L2m/L3    :', renderers);
   console.log('exceptions total      :', finalExc);
 
   if (fails.length) { console.log('\n❌ FAIL\n - ' + fails.join('\n - ')); process.exit(1); }

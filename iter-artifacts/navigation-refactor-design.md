@@ -65,8 +65,9 @@ is gone entirely.
   the filter view — it reuses `renderSidebar()`'s predicate chain and the
   `buildRepairIndex()` union (resurrect→due→weak→reveal→bridge, deduped). At-Risk
   dissolves (it was already weak∪reveal). New state: `state.repairFilter` (additive).
-- **Filter chips:** `🛠 Repair N` (filter) · `👁 Hide Mastered`. Hide-Mastered
-  auto-disables (greyed) under the Repair filter.
+- **Filter chips:** `🛠 Repair N` (filter) · `👁 Hide Mastered` · **tag facets**
+  (`Type · Topic · Difficulty · Company` — see § Tags & faceted filtering).
+  Hide-Mastered auto-disables (greyed) under the Repair filter.
 
 **In REFERENCE context:**
 - Syntax fundamentals section list (Basics · Arrays · Hash Structures · Modern
@@ -74,6 +75,62 @@ is gone entirely.
   **Algorithms removed**, see migration) + a "Quick refs" group (⚡ Cheat · 🅰 Glossary
   · 〈〉 Code Shapes; plan-adaptive contents).
 - Not plan-scoped for Syntax; cheat/shapes adapt to the active Plan.
+
+## Tags & faceted filtering (the Problems filter dimension)
+
+Once Patterns + Applied are **one** Problems list, the way to find "the thing I
+want to drill right now" is faceted filtering. Tags are a cross-cutting axis
+*orthogonal* to both the section grouping and the `mechanics` idiom tags
+(mechanics = *technique*; tags = *provenance / level / kind*). Four facets:
+
+| Facet | Source | Cardinality | Authored? |
+|---|---|---|---|
+| **Type** (`source`) | derived from `track` (`patterns`→Pattern, `applied`→Applied) | 1 | **No** — recovers the pre-merge split as a chip |
+| **Topic** | derived from `section` (Arrays & Hashing, Trees, Graphs, DP…) | 1 | **No** — section *is* the topic |
+| **Difficulty** | per-lesson `tags.difficulty` | 1 (`easy`/`medium`/`hard`) | **Yes** |
+| **Company** | per-lesson `tags.company[]` | 0..many (`google`, `meta`, …) | **Yes** |
+
+**The burden-reducer:** two facets are *computed at load* (Type←track, Topic←
+section) and need zero authoring. Only **difficulty** and **company** are new
+hand-authored data, so the migration is "add two optional keys," not "retag 99
+lessons on four axes."
+
+### Data model
+
+- **Registry** `data/tags.json` (mirrors `mechanics.json`): declares each facet,
+  whether it's `derived` (and from which field) or `authored`, and the allowed
+  value list with display labels. The faceted UI renders straight off this — add
+  a company by appending one value entry, no code change.
+- **Authored facets live on the MANIFEST entry** (`data/manifest.json`), beside
+  `track`/`status` — NOT in the lazy-loaded lesson JSON. The sidebar filters at
+  boot before any lesson body is fetched, so the filterable metadata must be in
+  the index. `loadManifest()` copies `tags` into each `CURRICULUM` entry:
+  ```jsonc
+  // manifest lesson entry
+  { "id": "two-sum", "title": "...", "track": "patterns", "status": "full",
+    "tags": { "difficulty": "easy", "company": ["google", "meta"] } }
+  ```
+  Absent `tags`, or absent keys, mean "untagged on that facet" (the lesson still
+  shows under "no Difficulty / Company filter"). Forward-compatible — old entries
+  load unchanged. (As shipped, `iter-artifacts`/`build it`, 2026-05-27.)
+- **Validator gate:** every authored tag value must exist in `tags.json`;
+  `difficulty` is a single string; `company` is an array. Derived facets are
+  never authored (a `tags.source`/`tags.topic` key is a lint error → use
+  `track`/`section`).
+
+### Filter semantics & UX
+
+- Standard faceting: **AND across facets, OR within a facet**. E.g.
+  `Difficulty:medium AND (Company:google OR Company:meta)`.
+- New state: `state.tagFilter = { difficulty: [...], company: [...], source: [...], topic: [...] }`
+  (additive, forward-compat — load reads missing as `{}`). Persisted so a filter
+  survives reload like `hideMastered`.
+- A predicate folded into `renderSidebar()`'s existing chain alongside
+  `inStarter` / `hideMasteredOk` / `repairFilter` — **not** a new surface. Each
+  facet chip opens a small multi-select value sheet (mobile-friendly); an active
+  facet shows its count (`Company 2`). A "Clear" affordance appears when any
+  facet is active. Plan scope still applies first (tags filter *within* the
+  active Plan's Problems list; switch to "All Lessons" to tag-filter the corpus).
 
 ## The toggle (the one new interaction)
 
@@ -130,6 +187,11 @@ must be one atomic edit or they vanish).
   Touches: `manifest.json` (section move + slug), each lesson's `section`/`track`,
   `paths.json` (Starter sequence), `mechanics.json` tags. Other Syntax sections stay.
 - **Syntax track becomes the Reference surface's content** (minus Algorithms).
+- **Tags (additive, no migration of existing content).** New `data/tags.json`
+  registry + an optional per-lesson `tags: { difficulty, company[] }` key. Type
+  and Topic facets are derived (track / section) so no existing lesson is
+  rewritten; difficulty/company are backfilled incrementally. See § Tags &
+  faceted filtering.
 
 ## Cross-cutting contracts
 
@@ -155,6 +217,12 @@ must be one atomic edit or they vanish).
 8. **Reflect** = cross-plan analytics; plan-progress lives on the Plan page. ✓
 9. Toggle = **segmented Problems⇄Reference control + `Tab`**, lossless position memory. ✓
 10. Mock Interview enters the Session shell (frame) with a Study-L3 body. ✓
+11. **Patterns + Applied merge is UI-only** (Problems surface) — `track` stays in
+    the data; no patterns→applied collapse. The merge is delivered by the Surface
+    split, not a data migration. ✓
+12. **Faceted tag filter over Problems** — 4 facets (Type, Topic derived; Difficulty,
+    Company authored), `data/tags.json` registry, AND-across / OR-within semantics,
+    a `renderSidebar()` predicate (not a new surface). ✓
 
 ## Phasing impact
 
@@ -166,3 +234,6 @@ Re-anchors `navigation-refactor-phasing.md`:
   becomes the Plan home).
 - Repair phase becomes "inline icons + filter option" (lighter than a list-replacing mode).
 - Path View removal folds into the Plan-scoping work (implicit).
+- New phase after the Surface split: **Tags & faceted filter** (data registry +
+  authoring, then the sidebar facet chips). Depends on the merged Problems list
+  existing. See `navigation-refactor-phasing.md` Phase 11.

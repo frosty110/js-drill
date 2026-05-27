@@ -143,6 +143,42 @@ codebase divergence becomes a maintenance cost. Keep a back-compat read for the
 old `paths.json` filename if anything external references it.
 **Scope:** single-iter `[engineering/refactor]`, deferrable indefinitely.
 
+## Phase 11 — Tags & faceted filter over Problems
+
+> **SHIPPED 2026-05-27** (direct build, not staged). The Problems surface already
+> existed (`state.surface` + `tracksForSurface`), so the merge + filter landed in
+> one pass: `data/tags.json`, manifest difficulty backfill (122 lessons), the
+> `renderSidebar()` merge + `renderTagFacets()` panel, `tagMatch()` predicate,
+> validator gate, and `tools/cdp/tag-filter.js` (12/12 green). Company facet is
+> live but unpopulated — append `tags.company[]` on manifest entries to use it.
+
+**Depends on:** the **Surface split** (the merged Patterns+Applied "Problems"
+list must exist — there's nothing to faceted-filter until then). See
+`navigation-refactor-design.md` § Tags & faceted filtering for the model.
+**Goal:** find a problem fast across the merged list by Type / Topic /
+Difficulty / Company.
+**Mechanism:**
+- *Scaffold* `[product/feature-scaffold]`: add `data/tags.json` (facet registry:
+  `source`+`topic` derived, `difficulty`+`company` authored) + the validator gate
+  (authored values exist in the registry; `difficulty` string, `company` array;
+  no `tags.source`/`tags.topic` keys). No UI yet. Ships green = validator passes
+  with the new gate, zero lessons required to carry `tags`.
+- *Wire* `[product/feature-wire]`: backfill `tags.difficulty` (and `company`
+  where known) across the Problems lessons; derive `source`/`topic` at load;
+  build `state.tagFilter` + the `renderSidebar()` faceted predicate (AND-across /
+  OR-within) behind a flag. Still no chips.
+- *Ship* `[product/feature-ship]`: the facet chip row on the Problems sidebar —
+  each chip opens a multi-select value sheet, active facets show counts, a Clear
+  affordance, persisted filter. Mobile-probe the chip row + value sheets.
+**Why here:** the merge (a Surface-split deliverable) is what makes a single
+filterable list exist; tagging is the payoff that makes the larger list
+navigable. Adding companies later = appending registry values, no code change.
+**Ships green when:** every facet filters correctly; combining facets matches
+AND/OR semantics; clearing restores the full Plan list; validator green; probe
+green. **Reversibility:** flag flip hides the chip row; `tags.json` + `tags`
+keys are inert additive data.
+**Scope:** 3-iter scaffold→wire→ship.
+
 ---
 
 ## End-state checkpoint

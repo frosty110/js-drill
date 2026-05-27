@@ -64,6 +64,7 @@ Books, papers, or articles. Keep terse — we're not writing a literature review
 - [Desirable difficulty](desirable-difficulty.md) — calibrating friction to device + recall stage
 - [Interleaving](interleaving.md) — mixing idioms across topics (Mechanics modal, Today's plan, Mock)
 - [Dual coding](dual-coding.md) — ASCII diagrams alongside code (seeded by `s-index-math`)
+- [Metacognition](metacognition.md) — Stats-modal self-awareness surfaces (Track Balance, Time Invested, Mastery Half-Life, Calibration, etc.)
 
 ## Strategies to add when relevant
 *(parking lot — the loop should pick from here when a feature is a fit)*

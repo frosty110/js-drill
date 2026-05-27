@@ -115,6 +115,45 @@ if (missingFromDisk.length || missingFromManifest.length) {
   process.exit(1);
 }
 
+// ── Tag registry gate ─────────────────────────────────────────────────────
+// data/tags.json declares faceted-filter facets. Authored facets (difficulty,
+// company) are stored on manifest lesson entries under `tags`. Validate every
+// authored value against the registry; derived facets (source/topic) must never
+// be authored. Fail fast so a typo'd tag can't ship a dead filter chip.
+const TAGS_PATH = path.join(DATA, 'tags.json');
+if (fs.existsSync(TAGS_PATH)) {
+  const reg = JSON.parse(fs.readFileSync(TAGS_PATH, 'utf8'));
+  const facets = Array.isArray(reg.facets) ? reg.facets : [];
+  const byId = new Map(facets.map(f => [f.id, f]));
+  const valuesOf = (id) => new Set(((byId.get(id) || {}).values || []).map(v => v.id));
+  const difficulties = valuesOf('difficulty');
+  const companies = valuesOf('company');
+  const tagErrors = [];
+  for (const sec of manifest.sections) {
+    for (const l of sec.lessons) {
+      const t = l.tags;
+      if (t == null) continue;
+      if (typeof t !== 'object' || Array.isArray(t)) { tagErrors.push(`${l.id}: tags must be an object`); continue; }
+      if ('source' in t || 'topic' in t) tagErrors.push(`${l.id}: tags.source/tags.topic are derived (use track/section), not authored`);
+      if ('difficulty' in t) {
+        if (typeof t.difficulty !== 'string') tagErrors.push(`${l.id}: tags.difficulty must be a string`);
+        else if (!difficulties.has(t.difficulty)) tagErrors.push(`${l.id}: unknown difficulty "${t.difficulty}" (not in tags.json)`);
+      }
+      if ('company' in t) {
+        if (!Array.isArray(t.company)) tagErrors.push(`${l.id}: tags.company must be an array`);
+        else for (const c of t.company) {
+          if (!companies.has(c)) tagErrors.push(`${l.id}: unknown company "${c}" (not in tags.json)`);
+        }
+      }
+    }
+  }
+  if (tagErrors.length) {
+    console.error('TAG REGISTRY ERRORS');
+    for (const e of tagErrors) console.error('  - ' + e);
+    process.exit(1);
+  }
+}
+
 // ── Banned-syntax check ───────────────────────────────────────────────────
 // Per docs/canonical-style.md, a small set of JS constructs is rare-or-never
 // in modern code and shouldn't take up canonical real estate. The check

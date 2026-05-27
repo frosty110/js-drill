@@ -292,6 +292,15 @@ function loadProgress() {
     state.welcomed = !!parsed.welcomed;
     state.hideMastered = !!parsed.hideMastered;
     state.repairFilter = !!parsed.repairFilter;
+    // Faceted tag filter (additive). Keep only array-valued facets to harden
+    // against malformed/legacy blobs.
+    state.tagFilter = {};
+    if (parsed.tagFilter && typeof parsed.tagFilter === 'object') {
+      for (const k of Object.keys(parsed.tagFilter)) {
+        if (Array.isArray(parsed.tagFilter[k])) state.tagFilter[k] = parsed.tagFilter[k].slice();
+      }
+    }
+    state.tagFilterOpen = !!parsed.tagFilterOpen;
     state.reviews = parsed.reviews || {};
     state.weakness = parsed.weakness || {};
     state.history = parsed.history || {};
@@ -390,6 +399,8 @@ function saveProgress() {
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
     repairFilter: state.repairFilter,
+    tagFilter: state.tagFilter,
+    tagFilterOpen: state.tagFilterOpen,
     reviews: state.reviews,
     weakness: state.weakness,
     sidebarTrack: state.sidebarTrack,

@@ -38,6 +38,87 @@ function renderBinderTabs(tracks) {
   }
 }
 
+// ── Faceted tag filter (merged Problems list) ───────────────────────────────
+// Type/Topic are derived (track/section); Difficulty/Company are authored on the
+// manifest entry. Selecting values filters the merged list (AND across facets,
+// OR within one). 0-count values stay clickable-but-muted so a future-facing
+// facet (e.g. Company before any lesson is tagged) is still discoverable.
+function clearTagFilter() {
+  state.tagFilter = {};
+  saveProgress();
+  renderSidebar();
+}
+function toggleTagValue(facetId, valueId) {
+  const sel = state.tagFilter[facetId] ? state.tagFilter[facetId].slice() : [];
+  const i = sel.indexOf(valueId);
+  if (i === -1) sel.push(valueId); else sel.splice(i, 1);
+  if (sel.length) state.tagFilter[facetId] = sel; else delete state.tagFilter[facetId];
+  saveProgress();
+  renderSidebar();
+}
+function renderTagFacets(nav) {
+  if (!TAG_FACETS.length) return;
+  // Problems corpus drives per-value counts (stable: ignores the active filter).
+  const corpus = CURRICULUM.filter(l => l.track === 'patterns' || l.track === 'applied');
+  const countFor = (facet, valueId) => corpus.filter(l => {
+    const v = facetValueOf(facet, l);
+    return Array.isArray(v) ? v.includes(valueId) : v === valueId;
+  }).length;
+
+  const activeN = tagFilterActiveCount();
+  const wrap = document.createElement('div');
+  wrap.className = 'tag-facets';
+
+  const header = document.createElement('button');
+  header.className = 'tag-facets-toggle' + (activeN ? ' has-active' : '');
+  header.setAttribute('aria-expanded', state.tagFilterOpen ? 'true' : 'false');
+  header.innerHTML = `<span>🏷 Filter${activeN ? ` <span class="tag-facets-count">${activeN}</span>` : ''}</span>`
+    + `<span class="tag-facets-chevron">${state.tagFilterOpen ? '▾' : '▸'}</span>`;
+  header.addEventListener('click', () => {
+    state.tagFilterOpen = !state.tagFilterOpen;
+    saveProgress();
+    renderSidebar();
+  });
+  wrap.appendChild(header);
+
+  if (state.tagFilterOpen) {
+    const panel = document.createElement('div');
+    panel.className = 'tag-facets-panel';
+    for (const facet of TAG_FACETS) {
+      const values = facet.id === 'topic'
+        ? problemsTopics().map(s => ({ id: s, label: s }))
+        : (Array.isArray(facet.values) ? facet.values : []);
+      if (!values.length) continue;
+      const sel = state.tagFilter[facet.id] || [];
+      const chips = values.map(v => {
+        const n = countFor(facet, v.id);
+        const active = sel.includes(v.id) ? ' active' : '';
+        const muted = n === 0 ? ' muted' : '';
+        return `<button class="facet-chip${active}${muted}" data-facet="${escapeHtml(facet.id)}" data-value="${escapeHtml(String(v.id))}">${escapeHtml(v.label)}<span class="facet-chip-n">${n}</span></button>`;
+      }).join('');
+      const group = document.createElement('div');
+      group.className = 'facet-group';
+      group.innerHTML = `<div class="facet-label">${escapeHtml(facet.label)}</div><div class="facet-chips">${chips}</div>`;
+      panel.appendChild(group);
+    }
+    panel.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-facet]');
+      if (!btn) return;
+      toggleTagValue(btn.dataset.facet, btn.dataset.value);
+    });
+    if (activeN) {
+      const clear = document.createElement('button');
+      clear.className = 'tag-facets-clear';
+      clear.textContent = 'Clear all';
+      clear.addEventListener('click', clearTagFilter);
+      panel.appendChild(clear);
+    }
+    wrap.appendChild(panel);
+  }
+
+  nav.insertBefore(wrap, nav.firstChild);
+}
+
 function renderSidebar() {
   const nav = document.getElementById('sidebar-nav');
   nav.innerHTML = '';
@@ -116,7 +197,9 @@ function renderSidebar() {
   const tracks = _allTracks.filter(t => _surfIds.includes(t.id));
 
   // Render the binder tab strip (independent of which lessons are visible).
-  renderBinderTabs(tracks);
+  // On the PROBLEMS surface, Patterns + Applied are merged into one list, so
+  // there are no per-track sub-tabs — the Type tag facet recovers the split.
+  renderBinderTabs(state.surface === 'problems' ? [] : tracks);
 
   // When Plan View is on, surface a track-picker chip row above the lesson
   // list. Lets the user scope the active path to one track (Syntax-only,
@@ -165,35 +248,38 @@ function renderSidebar() {
     nav.appendChild(trackRow);
   }
 
-  // Search overrides the binder filter — if the user is searching, show
-  // matches across all tracks (and auto-switch the active tab if the active
-  // one has zero hits but another has some). Otherwise filter by active.
-  const tracksToRender = (() => {
-    if (!q) return tracks.filter(t => t.id === state.sidebarTrack);
-    // Search is global across ALL tracks — count per track, and if the active
-    // track has no hits, auto-flip to the first track that does (crossing the
-    // Problems⇄Reference surface if needed, so search never feels "stuck").
-    const counts = Object.fromEntries(_allTracks.map(t => [t.id,
-      CURRICULUM.filter(l => l.track === t.id && matches(l) && inStarter(l) && hideMasteredOk(l)).length
-    ]));
-    const activeHas = counts[state.sidebarTrack] > 0;
-    if (!activeHas) {
-      const other = _allTracks.find(t => t.id !== state.sidebarTrack && counts[t.id] > 0);
-      if (other) {
-        state.sidebarTrack = other.id;
-        state.surface = SURFACE_OF_TRACK[other.id];
-        saveProgress();
-        renderBinderTabs(_allTracks.filter(t => tracksForSurface(state.surface).includes(t.id)));
-      }
+  // Which tracks render? On the PROBLEMS surface, patterns + applied MERGE into
+  // one section-grouped list (the Type tag facet recovers the split); REFERENCE
+  // is the single Syntax track. Search is global: if the active surface has zero
+  // hits but the other does, flip surface so a query never feels "stuck". Tag
+  // facets only scope the Problems surface.
+  const _problemsTracks = () => _allTracks.filter(t => t.id === 'patterns' || t.id === 'applied');
+  const _surfaceHits = (surf) => CURRICULUM.filter(l =>
+    SURFACE_OF_TRACK[l.track] === surf && matches(l) && inStarter(l) && hideMasteredOk(l)
+    && (surf === 'problems' ? tagMatch(l) : true)
+  ).length;
+  if (q && _surfaceHits(state.surface) === 0) {
+    const other = state.surface === 'problems' ? 'reference' : 'problems';
+    if (_surfaceHits(other) > 0) {
+      state.surface = other;
+      state.sidebarTrack = tracksForSurface(other)[0];
+      saveProgress();
+      renderBinderTabs(other === 'problems' ? [] : _allTracks.filter(t => t.id === 'syntax'));
     }
-    return _allTracks.filter(t => t.id === state.sidebarTrack);
-  })();
+  }
+  const tracksToRender = state.surface === 'problems'
+    ? _problemsTracks()
+    : _allTracks.filter(t => t.id === 'syntax');
   updateSurfaceToggle();
+  // Faceted tag filter panel — only over the merged Problems list. Inserted at
+  // the top of the nav (above the lesson list / any Plan-View track row).
+  if (state.surface === 'problems') renderTagFacets(nav);
 
   let visibleCount = 0;
   for (const track of tracksToRender) {
     let lessons = CURRICULUM.filter(l => l.track === track.id && matches(l)
-      && (state.repairFilter ? _repairIdx.has(l.id) : (inStarter(l) && hideMasteredOk(l))));
+      && (state.repairFilter ? _repairIdx.has(l.id) : (inStarter(l) && hideMasteredOk(l)))
+      && (state.surface === 'problems' ? tagMatch(l) : true));
     if (!lessons.length) continue;
 
     // In path mode, sort by active-path index so the visible step numbers
@@ -294,9 +380,15 @@ function renderSidebar() {
   if (visibleCount === 0) {
     const empty = document.createElement('div');
     empty.className = 'text-xs text-slate-500 px-3 py-6 text-center';
-    empty.textContent = state.searchQuery
-      ? 'No lessons match “' + state.searchQuery + '”.'
-      : 'No lessons in this track yet.';
+    if (state.searchQuery) {
+      empty.textContent = 'No lessons match “' + state.searchQuery + '”.';
+    } else if (state.surface === 'problems' && tagFilterActiveCount() > 0) {
+      empty.innerHTML = 'No problems match the active tag filter. ' +
+        '<button id="tag-empty-clear" class="text-blue-300 underline">Clear filter</button>';
+      empty.querySelector('#tag-empty-clear').addEventListener('click', clearTagFilter);
+    } else {
+      empty.textContent = 'No lessons in this track yet.';
+    }
     nav.appendChild(empty);
   }
 

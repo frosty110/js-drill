@@ -33,7 +33,12 @@ async function loadManifest() {
     for (const l of section.lessons) {
       flat.push({
         id: l.id, title: l.title, track: l.track,
-        section: section.name, status: l.status
+        section: section.name, status: l.status,
+        // Faceted-filter tags live on the manifest entry (alongside track/status)
+        // so the sidebar can filter without lazy-loading each lesson body. Only
+        // authored facets are stored here (difficulty/company); source(track) +
+        // topic(section) are derived. See data/tags.json + tagMatch().
+        tags: l.tags || null
       });
     }
   }
@@ -113,6 +118,75 @@ async function ensureMechanicIndex() {
   }
 }
 // ──────────────────────────────────────────────────────────────────────────
+//  TAG REGISTRY (faceted filter over the merged Problems list)
+//  Loaded once from data/tags.json. Four facets: source(Type) + topic derived
+//  from track/section (no authoring); difficulty + company authored on the
+//  manifest entry's `tags`. Filter semantics: AND across facets, OR within one.
+// ──────────────────────────────────────────────────────────────────────────
+let TAG_FACETS = [];                   // [{id,label,derived?,authored?,single?,values?}]
+let _tagRegistryLoaded = false;
+
+async function loadTagRegistry() {
+  if (_tagRegistryLoaded) return;
+  try {
+    const res = await fetch('data/tags.json', { cache: 'no-cache' });
+    if (!res.ok) return;
+    const reg = await res.json();
+    TAG_FACETS = Array.isArray(reg.facets) ? reg.facets : [];
+    _tagRegistryLoaded = true;
+  } catch (e) {
+    TAG_FACETS = [];   // missing registry just hides the facet row; fail soft
+  }
+}
+
+// The value of a facet for one lesson. Derived facets read CURRICULUM fields;
+// authored facets read the manifest-copied `tags`. Returns a string (single) or
+// array (multi); null/[] means "untagged on this facet".
+function facetValueOf(facet, lesson) {
+  if (facet.id === 'source') return lesson.track;          // patterns | applied
+  if (facet.id === 'topic')  return lesson.section;        // section IS the topic
+  const t = lesson.tags || {};
+  if (facet.id === 'difficulty') return t.difficulty || null;
+  if (facet.id === 'company')    return Array.isArray(t.company) ? t.company : [];
+  return null;
+}
+
+// Distinct topic values present in the merged Problems corpus, in manifest order
+// (section is the topic; computed dynamically so it never drifts from content).
+function problemsTopics() {
+  const seen = new Set(), out = [];
+  for (const l of CURRICULUM) {
+    if (l.track !== 'patterns' && l.track !== 'applied') continue;
+    if (!seen.has(l.section)) { seen.add(l.section); out.push(l.section); }
+  }
+  return out;
+}
+
+// True if a lesson passes the active tag filter. AND across facets that have any
+// selection; OR within a facet's selected values. An untagged lesson is excluded
+// only by a facet it has no value for (e.g. filtering Company hides untagged).
+function tagMatch(lesson) {
+  const sel = state.tagFilter || {};
+  for (const facet of TAG_FACETS) {
+    const chosen = sel[facet.id];
+    if (!chosen || !chosen.length) continue;            // facet inactive
+    const v = facetValueOf(facet, lesson);
+    if (Array.isArray(v)) {
+      if (!v.some(x => chosen.includes(x))) return false;
+    } else {
+      if (!chosen.includes(v)) return false;
+    }
+  }
+  return true;
+}
+
+// Count of active facet selections across all facets (for the chip badge).
+function tagFilterActiveCount() {
+  const sel = state.tagFilter || {};
+  return Object.values(sel).reduce((n, arr) => n + (Array.isArray(arr) ? arr.length : 0), 0);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 //  STATE + LOCALSTORAGE
 // ──────────────────────────────────────────────────────────────────────────
 // Canonical key is owned by js/storage.js (DrillStorage.MAIN_APP_KEY). Mirror
@@ -177,6 +251,8 @@ const state = {
   welcomed: false,    // hide welcome panel after first dismissal
   hideMastered: false, // sidebar filter: when true, drop fully-mastered lessons
   repairFilter: false, // Phase E: when true, sidebar shows ONLY lessons needing work (due/weak/overdue/reveal)
+  tagFilter: {},      // faceted filter over the merged Problems list: { source:[], topic:[], difficulty:[], company:[] } (additive, no `__v` bump)
+  tagFilterOpen: false, // UI: whether the sidebar tag-facet panel is expanded (additive)
   reviews: {},        // { lessonId: { lastPassedAt: ms, interval: ms, dueAt: ms } }
   weakness: {},       // { lessonId: wrongL1Count } — tracks recurring L1 misses
   sidebarTrack: 'syntax', // 'syntax' | 'patterns' — which binder tab is active

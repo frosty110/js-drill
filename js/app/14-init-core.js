@@ -199,6 +199,9 @@ async function initBootstrap() {
     document.getElementById('lesson-shell').innerHTML = '<div class="p-6 text-red-300">Failed to load lesson data: ' + (e && e.message ? e.message : e) + '</div>';
     return false;
   }
+  // Tag registry is tiny and the sidebar facet row needs it on first paint —
+  // await it (vs the fire-and-forget mechanics modal which loads on demand).
+  await loadTagRegistry();
   // Fire-and-forget — modal will await its own load if user clicks before
   // this resolves. Keeps boot snappy on slow connections.
   loadMechanicsRegistry();

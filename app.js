@@ -9812,6 +9812,45 @@ async function init() {
     });
   }
 
+  // iter 145: 📲 PWA Install button. Hidden by default (.hidden class on
+  // the HTML element). Listens for the browser's `beforeinstallprompt` event
+  // (fires on Chrome/Edge/Android when the PWA install criteria are met:
+  // manifest present + service worker registered + valid scope). When the
+  // event fires, we (a) stash the deferred prompt for later, (b) unhide the
+  // sidebar button, (c) unhide the topbar Settings menu entry too (next
+  // topbar render picks it up via _topbarItemFromButton, which respects
+  // .hidden + style.display per iter-141 fix).
+  // iOS Safari and desktop browsers without PWA install heuristics never
+  // fire the event; the button stays hidden — users go through the native
+  // Share → Add to Home Screen flow there (no app surface needed). Once
+  // the user dismisses or accepts the prompt, the button re-hides (a
+  // second install prompt only fires after browser-defined cooldown).
+  let _deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();  // Suppress the browser's automatic mini-infobar.
+    _deferredInstallPrompt = e;
+    const btn = document.getElementById('install-btn');
+    if (btn) btn.classList.remove('hidden');
+  });
+  const installBtn = document.getElementById('install-btn');
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!_deferredInstallPrompt) return;
+      _deferredInstallPrompt.prompt();
+      try { await _deferredInstallPrompt.userChoice; } catch (_) { /* ignore */ }
+      _deferredInstallPrompt = null;
+      installBtn.classList.add('hidden');
+    });
+  }
+  // Capture the `appinstalled` event so we hide the button when install
+  // completes via a path other than our button (e.g. browser address-bar
+  // install icon on desktop). Belt + suspenders cleanup.
+  window.addEventListener('appinstalled', () => {
+    _deferredInstallPrompt = null;
+    const btn = document.getElementById('install-btn');
+    if (btn) btn.classList.add('hidden');
+  });
+
   // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF). Fuchsia-200
   // hover when ON. Auto-hides on platforms without the Vibration API (iOS
   // Safari, desktop without vibration motor) so the user never sees a toggle
@@ -11389,7 +11428,7 @@ const TOPBAR_MENU_TAXONOMY = {
   settings: {
     label: 'Settings',
     blurb: 'Toggles, data, and account.',
-    items: ['hide-mastered-btn', 'path-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
+    items: ['hide-mastered-btn', 'path-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
   }
 };
 

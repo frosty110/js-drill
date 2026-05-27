@@ -7698,6 +7698,14 @@ function renderSidebar() {
     }
   }
 
+  // Paint the 👁 Hide Mastered filter's active state on every render (not just
+  // on click) so a saved hideMastered:true shows as active on load.
+  const hideBtn = document.getElementById('hide-mastered-btn');
+  if (hideBtn) {
+    hideBtn.classList.toggle('text-emerald-300', state.hideMastered);
+    hideBtn.classList.toggle('text-slate-500', !state.hideMastered);
+  }
+
   const tracks = [
     { id: 'syntax',   label: 'Syntax Fundamentals' },
     { id: 'patterns', label: 'Canonical Patterns' },
@@ -12843,7 +12851,9 @@ const TOPBAR_MENU_TAXONOMY = {
   settings: {
     label: 'Settings',
     blurb: 'Toggles, data, and account.',
-    items: ['hide-mastered-btn', 'path-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
+    // 🧭 Path View + 👁 Hide Mastered are NOT here — they're view filters that
+    // live on the sidebar (under the Path chip), not in this menu.
+    items: ['calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
   }
 };
 

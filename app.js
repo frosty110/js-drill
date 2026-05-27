@@ -10980,13 +10980,22 @@ function initTopbarDropdowns() {
     // iter 133: prepend a `‹ Categories` back button so mobile users
     // can return to the category picker without re-tapping the 📂 Browse
     // button (1-tap instead of 2-tap).
+    // iter 137: also prepend a category-name heading between the back
+    // button and the blurb, so the user keeps visual orientation while
+    // scrolling items ("which category am I in?" — the back button hints
+    // it but a small bold heading is more readable when scrolled past).
     const catRow = e.target.closest('.topbar-item-mobile-cat');
     if (catRow) {
       e.stopPropagation();
       const key = catRow.dataset.mobileCat;
       if (key) {
+        const cat = TOPBAR_MENU_TAXONOMY[key];
+        const heading = cat
+          ? `<div class="topbar-cat-heading" data-cat-heading="${escapeHtml(key)}">${escapeHtml(cat.label)}</div>`
+          : '';
         body.innerHTML = `
           <button class="topbar-cat-back" data-cat-back type="button">‹ Categories</button>
+          ${heading}
           ${renderTopbarMenuContents(key)}
         `;
       }

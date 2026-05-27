@@ -399,6 +399,14 @@ const OUT = process.argv[3] || '/tmp/jsdrill-topbar-shell';
   }))()`);
   s.assert(backInDrillIn.backBtnPresent, 'iter 133: "‹ Categories" back button rendered in drilled-in category view');
   s.assert(/Categories/.test(backInDrillIn.backBtnLabel), `iter 133: back button label contains "Categories" (got "${backInDrillIn.backBtnLabel}")`);
+  // iter 137: category-name heading present in drilled-in view.
+  const heading = await s.evalAwait(`(() => {
+    const h = document.querySelector('[data-cat-heading]');
+    return { present: !!h, text: h?.textContent.trim() || '', key: h?.dataset.catHeading || '' };
+  })()`);
+  s.assert(heading.present, 'iter 137: category-name heading rendered in drilled-in view');
+  s.assert(heading.text === 'Train', `iter 137: heading text matches drilled-in category label (got "${heading.text}")`);
+  s.assert(heading.key === 'train', `iter 137: heading has data-cat-heading="train" attribute (got "${heading.key}")`);
   // Tap back → returns to 4-category picker (no dropdown close).
   await s.evalAwait(`document.querySelector('[data-cat-back]').click()`);
   await s.sleep(250);

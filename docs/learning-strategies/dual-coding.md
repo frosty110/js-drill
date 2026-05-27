@@ -27,6 +27,24 @@ string and gets the same monospace treatment.
 
 ## How the app encodes it today
 
+- **📳 Haptic Tap-Pulse (iter 141)** — first tactile encoding channel in
+  the app. Opt-in toggle wires `navigator.vibrate` to L1 correct (30ms) /
+  L1 miss (twin 60ms) / L3 pass (120ms) / Rapid-Fire streak-of-5 (3-pulse
+  roll). Where every prior surface has paired visual + textual encoding
+  (the dual-coding READ direction), Haptic adds the FEEDBACK direction's
+  second channel: the visual "correct"/"wrong" indication is now mirrored
+  by a tactile signal felt in the hand. PROFILE L26-28 (mobile-first) +
+  L42-44 ("30-second tap-and-recall sessions") — the rusty engineer
+  drilling head-down on a phone gets a second confirmation modality so
+  they can sustain attention without staring. Capability-gated (toggle
+  hidden on iOS Safari + desktop without vibration motors); test pulse
+  on enable so the user feels it work immediately. Cat 8 ship #2 (after
+  iter-109 Match).
+- **🔖 Match (iter 109)** — first Cat 8 ship; visual-pairing modality.
+  Bidirectional title ↔ description matcher drills the name-to-concept
+  retrieval direction; renders a card grid where the user taps to
+  pair, exercising the spatial-arrangement-as-recall surface
+  (complementary to text-only L1).
 - **`s-index-math` Reference** — first lesson to embed full ASCII diagrams
   alongside the canonical code. Each of the 6 idioms (inclusive length,
   midpoint, fixed-length slice, sliding window, circular indexing, nth-from-

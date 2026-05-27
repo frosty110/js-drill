@@ -170,6 +170,7 @@ const state = {
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   cramTaskChecks: {},  // { taskId: true } — non-lesson task ticks for cram-kind paths (e.g. "write BFS on paper"). Lesson-linked tasks auto-check via isLessonFullyDone.
   cramView: { mode: 'today', dayIndex: -1 },  // active Cram Home view. mode: 'today' (live day) | 'day' (specific past/future day, dayIndex set) | 'all' (all days expanded) | 'open-from' (only !done items from dayIndex).
+  cramReview: { items: {}, session: null },  // SR over cram glossary/cheat/behavior/code-shapes. items[itemId] = { familiarity 0-3, lastReviewedAt }. session = active queue { queue, index, revealed, gotIt, fuzzy } | null.
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
   lastTab: null,
@@ -1021,6 +1022,205 @@ function wireCramRefLessonBtns() {
   });
 }
 
+// Phase 4: Daily Review SR over cram reference content.
+const CRAM_SR_INTERVAL_DAYS = [0, 1, 2, 4];           // tier → days until next due
+const CRAM_SR_SAMPLE = { glossary: 5, cheat: 4, behavior: 2, code: 3 };
+
+function cramReviewableItems() {
+  const out = [];
+  if (CRAM_REFS.glossary) {
+    for (const g of CRAM_REFS.glossary) {
+      out.push({ id: 'g:' + g.term, type: 'glossary', prompt: g.term, answer: g.def, where: g.where });
+    }
+  }
+  if (CRAM_REFS.cheat) {
+    for (let i = 0; i < CRAM_REFS.cheat.length; i++) {
+      const r = CRAM_REFS.cheat[i];
+      out.push({ id: 'p:' + i, type: 'cheat', prompt: r.trigger, answer: r.pattern, lessonId: r.lessonId });
+    }
+  }
+  if (CRAM_REFS.behavior) {
+    for (let i = 0; i < CRAM_REFS.behavior.length; i++) {
+      const c = CRAM_REFS.behavior[i];
+      out.push({ id: 'b:' + i, type: 'behavior', prompt: c.title, answer: c.body, where: c.num });
+    }
+  }
+  for (let i = 0; i < CRAM_CODE_SHAPES.length; i++) {
+    const s = CRAM_CODE_SHAPES[i];
+    out.push({ id: 's:' + i, type: 'code', prompt: s.title, answer: s.note, lessonId: s.lessonId });
+  }
+  return out;
+}
+
+function cramReviewGet(id) {
+  return state.cramReview.items[id] || { familiarity: 0, lastReviewedAt: 0 };
+}
+function cramReviewSet(id, patch) {
+  state.cramReview.items[id] = Object.assign({}, cramReviewGet(id), patch);
+}
+
+function cramDueItems() {
+  const now = Date.now();
+  return cramReviewableItems().filter(it => {
+    const r = cramReviewGet(it.id);
+    const intervalMs = CRAM_SR_INTERVAL_DAYS[Math.min(r.familiarity, 3)] * 86400000;
+    return (now - r.lastReviewedAt) >= intervalMs;
+  });
+}
+
+function buildCramReviewQueue() {
+  const due = cramDueItems();
+  const buckets = { glossary: [], cheat: [], behavior: [], code: [] };
+  for (const it of due) buckets[it.type].push(it);
+  for (const t in buckets) buckets[t].sort(() => Math.random() - 0.5);
+  const picked = [];
+  for (const t in buckets) picked.push(...buckets[t].slice(0, CRAM_SR_SAMPLE[t] || 0));
+  picked.sort(() => Math.random() - 0.5);
+  return picked;
+}
+
+function updateCramReviewCount() {
+  const path = getSubscribedPath();
+  const onCram = path && path.kind === 'cram';
+  const countEl = document.getElementById('cram-review-count');
+  const btn = document.getElementById('cram-review-btn');
+  if (!btn || !countEl) return;
+  if (!onCram) { countEl.textContent = '0'; return; }
+  if (!CRAM_REFS.glossary && !CRAM_REFS.cheat && !CRAM_REFS.behavior) {
+    countEl.textContent = '?';
+    loadCramRefs().then(() => updateCramReviewCount());
+    return;
+  }
+  countEl.textContent = String(cramDueItems().length);
+}
+
+async function openCramReviewModal() {
+  await loadCramRefs();
+  if (!state.cramReview.session) {
+    const queue = buildCramReviewQueue();
+    if (!queue.length) {
+      _openCramRefModal({
+        title: '🔁 Cram Review · all caught up',
+        sub: 'No items due right now. Items resurface as their interval lapses (0 → 1 → 2 → 4 days).',
+        bodyHtml: `<div style="text-align:center;padding:24px;color:#94a3b8;font-size:13px;">✓ Nothing due — come back tomorrow.</div>`
+      });
+      return;
+    }
+    state.cramReview.session = { queue, index: 0, revealed: false, gotIt: 0, fuzzy: 0 };
+    saveProgress();
+  }
+  renderCramReviewSession();
+}
+
+function renderCramReviewSession() {
+  const sess = state.cramReview.session;
+  const modal = document.getElementById('cram-ref-modal');
+  const titleEl = document.getElementById('cram-ref-title');
+  const subEl = document.getElementById('cram-ref-sub');
+  const search = document.getElementById('cram-ref-search');
+  const body = document.getElementById('cram-ref-body');
+  if (!modal || !sess) return;
+  if (search) { search.hidden = true; search.value = ''; }
+  modal.style.display = 'block';
+
+  if (sess.index >= sess.queue.length) {
+    const total = sess.gotIt + sess.fuzzy;
+    const pct = total ? Math.round(100 * sess.gotIt / total) : 0;
+    titleEl.textContent = '🔁 Cram Review · session done';
+    subEl.textContent = 'Fuzzy items resurface tomorrow. Got-it items advance one tier (1 → 2 → 4 days).';
+    body.innerHTML = `<div style="text-align:center;padding:30px 12px;">
+      <div style="font-size:48px;font-weight:700;color:#34d399;font-variant-numeric:tabular-nums;line-height:1;">${pct}%</div>
+      <div style="color:#94a3b8;font-size:14px;margin-top:6px;">recalled</div>
+      <div style="display:flex;justify-content:center;gap:18px;margin:18px 0;">
+        <div style="text-align:center;"><div style="font-size:22px;color:#34d399;font-weight:600;">${sess.gotIt}</div><div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">got it</div></div>
+        <div style="text-align:center;"><div style="font-size:22px;color:#f87171;font-weight:600;">${sess.fuzzy}</div><div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">fuzzy</div></div>
+        <div style="text-align:center;"><div style="font-size:22px;font-weight:600;">${sess.queue.length}</div><div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">total</div></div>
+      </div>
+      <button data-cram-review-done style="background:#34d399;color:#0f172a;border:none;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Done</button>
+    </div>`;
+    body.querySelector('[data-cram-review-done]').addEventListener('click', () => {
+      state.cramReview.session = null;
+      saveProgress();
+      updateCramReviewCount();
+      modal.style.display = 'none';
+    });
+    return;
+  }
+
+  const it = sess.queue[sess.index];
+  const pct = Math.round(100 * sess.index / sess.queue.length);
+  const fam = cramReviewGet(it.id).familiarity;
+  const tierLabel = fam === 0 ? 'new' : `tier ${fam}`;
+  const typeLabel = ({ glossary: 'Glossary', cheat: 'Pattern trigger', behavior: 'Interview behavior', code: 'Code shape' })[it.type] || it.type;
+
+  titleEl.textContent = `🔁 Cram Review · ${sess.index + 1}/${sess.queue.length}`;
+  subEl.textContent = `${typeLabel} · ${tierLabel}`;
+
+  const promptSub = ({
+    glossary: 'Define this term in 1 sentence + name one place it shows up.',
+    cheat: "What's the first pattern you'd reach for?",
+    code: "Can you write this from memory? (Picture the code in your head before peeking.)",
+    behavior: "Why does this step matter in an interview?"
+  })[it.type] || '';
+
+  const answerHtml = sess.revealed
+    ? `<div style="background:#0b1220;border-left:3px solid #34d399;border-radius:8px;padding:14px;margin:12px 0;font-size:14px;color:#e2e8f0;line-height:1.6;">
+        <div style="font-size:11px;color:#34d399;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px;">Answer</div>
+        ${escapeHtml(it.answer)}
+        ${it.where ? `<div style="font-size:12px;color:#94a3b8;margin-top:8px;padding-top:8px;border-top:1px solid #1e293b;">${escapeHtml(it.where)}</div>` : ''}
+        ${it.lessonId ? `<div style="margin-top:10px;"><button data-cram-review-open="${escapeHtml(it.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:4px 12px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;">Open the lesson →</button></div>` : ''}
+      </div>`
+    : '';
+
+  body.innerHTML = `<div style="display:flex;flex-direction:column;min-height:280px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+      <div style="flex:1;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#67e8f9;width:${pct}%;transition:width .25s;"></div></div>
+      <div style="font-size:11px;color:#94a3b8;font-variant-numeric:tabular-nums;min-width:50px;text-align:right;">${sess.index + 1}/${sess.queue.length}</div>
+    </div>
+    <div style="font-size:17px;font-weight:600;color:#f8fafc;line-height:1.4;margin-bottom:10px;">${escapeHtml(it.prompt)}</div>
+    ${promptSub ? `<div style="font-size:12px;color:#94a3b8;margin-bottom:12px;line-height:1.5;">${escapeHtml(promptSub)}</div>` : ''}
+    ${answerHtml}
+    <div style="margin-top:auto;padding-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+      ${!sess.revealed
+        ? `<button data-cram-review-peek style="flex:1;min-width:140px;padding:12px;border-radius:8px;border:none;background:#1e293b;color:#e2e8f0;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Peek 👀</button>`
+        : `<button data-cram-review-fuzzy style="flex:1;min-width:120px;padding:12px;border-radius:8px;border:none;background:#7f1d1d;color:#fecaca;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Fuzzy ✗</button>
+           <button data-cram-review-gotit style="flex:1;min-width:120px;padding:12px;border-radius:8px;border:none;background:#34d399;color:#0f172a;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Got it ✓</button>`}
+    </div>
+  </div>`;
+
+  const peek = body.querySelector('[data-cram-review-peek]');
+  if (peek) peek.addEventListener('click', () => {
+    state.cramReview.session.revealed = true;
+    saveProgress();
+    renderCramReviewSession();
+  });
+  const fuzzy = body.querySelector('[data-cram-review-fuzzy]');
+  if (fuzzy) fuzzy.addEventListener('click', () => _gradeCramReview(false));
+  const got = body.querySelector('[data-cram-review-gotit]');
+  if (got) got.addEventListener('click', () => _gradeCramReview(true));
+  const openLessonBtn = body.querySelector('[data-cram-review-open]');
+  if (openLessonBtn) openLessonBtn.addEventListener('click', () => {
+    const id = openLessonBtn.getAttribute('data-cram-review-open');
+    modal.style.display = 'none';
+    selectLesson(id);
+  });
+}
+
+function _gradeCramReview(gotIt) {
+  const sess = state.cramReview.session;
+  if (!sess) return;
+  const it = sess.queue[sess.index];
+  const prev = cramReviewGet(it.id);
+  const nextFam = gotIt ? Math.min(3, prev.familiarity + 1) : 0;
+  cramReviewSet(it.id, { familiarity: nextFam, lastReviewedAt: Date.now() });
+  if (gotIt) sess.gotIt++; else sess.fuzzy++;
+  sess.index++;
+  sess.revealed = false;
+  saveProgress();
+  updateCramReviewCount();
+  renderCramReviewSession();
+}
+
 function updatePathChip() {
   const label = document.getElementById('path-chip-label');
   if (label) label.textContent = getSubscribedPath().label;
@@ -1128,6 +1328,7 @@ function openPathModal(opts = {}) {
       updatePathChip();
       applySidebarCuration();
       updateCramProgressStrip();
+      if (typeof updateCramReviewCount === 'function') updateCramReviewCount();
       modal.style.display = 'none';
       if (typeof renderSidebar === 'function') renderSidebar();
       if (welcome && typeof renderLesson === 'function') renderLesson();
@@ -1456,6 +1657,10 @@ function loadProgress() {
       ? { mode: ['today','day','all','open-from'].includes(parsed.cramView.mode) ? parsed.cramView.mode : 'today',
           dayIndex: Number.isInteger(parsed.cramView.dayIndex) ? parsed.cramView.dayIndex : -1 }
       : { mode: 'today', dayIndex: -1 };
+    state.cramReview = parsed.cramReview && typeof parsed.cramReview === 'object'
+      ? { items: (parsed.cramReview.items && typeof parsed.cramReview.items === 'object') ? parsed.cramReview.items : {},
+          session: parsed.cramReview.session || null }
+      : { items: {}, session: null };
     state.welcomed = !!parsed.welcomed;
     state.hideMastered = !!parsed.hideMastered;
     state.reviews = parsed.reviews || {};
@@ -1543,6 +1748,7 @@ function saveProgress() {
     subscribedPathId: state.subscribedPathId,
     cramTaskChecks: state.cramTaskChecks,
     cramView: state.cramView,
+    cramReview: state.cramReview,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
     reviews: state.reviews,
@@ -11932,8 +12138,10 @@ async function init() {
   document.getElementById('cram-glossary-btn')?.addEventListener('click', openCramGlossaryModal);
   document.getElementById('cram-behavior-btn')?.addEventListener('click', openCramBehaviorModal);
   document.getElementById('cram-shapes-btn')?.addEventListener('click', openCramShapesModal);
+  document.getElementById('cram-review-btn')?.addEventListener('click', openCramReviewModal);
   document.getElementById('cram-ref-close')?.addEventListener('click', () => cramRefModal.style.display = 'none');
   cramRefModal?.addEventListener('click', (e) => { if (e.target === cramRefModal) cramRefModal.style.display = 'none'; });
+  updateCramReviewCount();
   todayModal.addEventListener('click', (e) => {
     if (e.target === todayModal) todayModal.style.display = 'none';
   });

@@ -317,6 +317,37 @@ function initDrillLaunchers() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+//  NAV HELPER — used by the 5 sidebar buttons that jump to a specific
+//  (lessonId, tab) pair (review / weak / resurrect / bridge / reveal-replay).
+//  selectLesson() is the primary nav path elsewhere — it sets tab='auto' so
+//  the default-tab-per-track resolver picks. These 5 buttons land on a
+//  specific tab, so they bypass selectLesson and mutate currentTab directly.
+//
+//  Opts default to FALSE so callers are explicit about whether to push hash
+//  state and whether to collapse the mobile drawer; awaitContent gates a
+//  fetch of the lesson JSON before renderLesson (used by review-btn to
+//  avoid a flash-of-stub on slow connections).
+// ──────────────────────────────────────────────────────────────────────────
+async function navToLesson(id, opts = {}) {
+  const { tab, updateHash = false, collapseMobile = false, awaitContent = false } = opts;
+  state.currentLessonId = id;
+  if (tab) state.currentTab = tab;
+  syncBinderToLesson(id);
+  saveProgress();
+  renderSidebar();
+  if (awaitContent) {
+    await loadLessonContent(id);
+    // User may have navigated away while content was loading — bail.
+    if (state.currentLessonId !== id) return;
+  }
+  renderLesson();
+  if (updateHash) _updateHash();
+  if (collapseMobile && window.matchMedia('(max-width: 767px)').matches) {
+    document.body.classList.remove('sidebar-open');
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 //  SIDEBAR ACTIONS — non-drill buttons (reset, shuffle/lucky/mock,
 //  review/repair/weak/resurrect/bridge/reveal-replay, path, hide-mastered)
 // ──────────────────────────────────────────────────────────────────────────
@@ -378,13 +409,7 @@ function initSidebarActions() {
     const due = dueReviewIds();
     if (!due.length) return;
     const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    state.currentLessonId = due[0];
-    state.currentTab = coarse ? 'L2' : 'L3';
-    syncBinderToLesson(due[0]);
-    saveProgress();
-    renderSidebar();
-    await loadLessonContent(due[0]);
-    if (state.currentLessonId === due[0]) renderLesson();
+    await navToLesson(due[0], { tab: coarse ? 'L2' : 'L3', awaitContent: true });
   });
 
   // Hide-mastered toggle
@@ -428,14 +453,7 @@ function initSidebarActions() {
   // Weak-spot button — jump to the lesson with the most L1 misses
   document.getElementById('weak-btn').addEventListener('click', () => {
     const id = topWeakLessonId();
-    if (id) {
-      state.currentLessonId = id;
-      state.currentTab = 'L1';
-      syncBinderToLesson(id);
-      saveProgress();
-      renderSidebar();
-      renderLesson();
-    }
+    if (id) navToLesson(id, { tab: 'L1' });
   });
 
   // iter 65: 💀 Resurrect — jump to most-overdue mastered lesson at L1.
@@ -445,16 +463,7 @@ function initSidebarActions() {
     const ids = resurrectIds();
     if (!ids.length) return;
     const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    state.currentLessonId = ids[0];
-    state.currentTab = coarse ? 'L2' : 'L3';
-    syncBinderToLesson(ids[0]);
-    saveProgress();
-    renderSidebar();
-    renderLesson();
-    _updateHash();
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      document.body.classList.remove('sidebar-open');
-    }
+    navToLesson(ids[0], { tab: coarse ? 'L2' : 'L3', updateHash: true, collapseMobile: true });
   });
 
   // iter 94: 🧠 Bridge — route to a cross-track transfer-gap lesson. Picks
@@ -462,21 +471,11 @@ function initSidebarActions() {
   // deterministic by MECHANIC_INDEX iteration order). Lands on L1 with a
   // 2.2-sec fuchsia toast prefacing the transfer context. Closes iter-90
   // roadmap #3 (the last queued entry).
-  const bridgeBtnEl = document.getElementById('bridge-btn');
-  if (bridgeBtnEl) bridgeBtnEl.addEventListener('click', () => {
+  document.getElementById('bridge-btn')?.addEventListener('click', () => {
     const candidates = _bridgeCandidates();
     if (!candidates.length) return;
     const pick = candidates[0];
-    state.currentLessonId = pick.targetLessonId;
-    state.currentTab = 'L1';
-    syncBinderToLesson(pick.targetLessonId);
-    saveProgress();
-    renderSidebar();
-    renderLesson();
-    _updateHash();
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      document.body.classList.remove('sidebar-open');
-    }
+    navToLesson(pick.targetLessonId, { tab: 'L1', updateHash: true, collapseMobile: true });
     _showBridgeToast(pick);
   });
 
@@ -485,20 +484,12 @@ function initSidebarActions() {
     if (!queue.length) return;
     // Drop the current lesson's reveal tracker BEFORE routing so the user
     // gets a clean attempt window on arrival (lets the clean-pass invariant
-    // fire even if they were just on this lesson).
+    // fire even if they were just on this lesson). Also drop the arriving
+    // lesson's tracker so a stale flag doesn't pre-mark the new attempt.
     if (state.currentLessonId) delete _revealedInCurrentAttempt[state.currentLessonId];
     const next = queue[0];
-    state.currentLessonId = next.lessonId;
-    state.currentTab = next.level;
     delete _revealedInCurrentAttempt[next.lessonId];
-    syncBinderToLesson(next.lessonId);
-    saveProgress();
-    renderSidebar();
-    renderLesson();
-    _updateHash();
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      document.body.classList.remove('sidebar-open');
-    }
+    navToLesson(next.lessonId, { tab: next.level, updateHash: true, collapseMobile: true });
   });
 }
 

@@ -16,6 +16,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ensureServer({ port: 8765, dir: process.cwd() });
   const s = await connect({ url: 'http://localhost:8765/', waitForLoadMs: 3500 });
 
+  // Bust service-worker cache. Without this, a prior probe run's SW serves
+  // stale slices and edits to app code aren't reflected. Unregister all SWs,
+  // clear all caches, then force-reload with ignoreCache.
+  await s.eval(`(async () => {
+    if (navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  })()`, { awaitPromise: true }).catch(() => {});
+  await s.reload();
+  await sleep(500);
+
   const fails = [];
   const exc = s.consoleMsgs.filter(m => m.type === 'exception');
   if (exc.length) fails.push('boot exceptions: ' + JSON.stringify(exc.slice(0, 3)));
@@ -103,6 +119,24 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   if (calBefore === calAfter) fails.push('calibrate-btn did not flip state.calibrateOn');
   await click('calibrate-btn');  // restore
 
+  // 11. navToLesson() helper — directly invoke and assert state mutates.
+  // Covers review/weak/resurrect/bridge/reveal-replay button paths, which
+  // can't be exercised generically (they depend on per-user state).
+  const beforeNav = await s.eval('JSON.stringify({id:state.currentLessonId,tab:state.currentTab})');
+  const navTarget = await s.eval('CURRICULUM.find(l=>l.status==="full"&&l.id!==state.currentLessonId)?.id || null');
+  if (!navTarget) {
+    fails.push('navToLesson probe: no second full lesson available');
+  } else {
+    await s.eval(`navToLesson(${JSON.stringify(navTarget)}, {tab:'L1', updateHash:true})`);
+    await sleep(300);
+    const after = await s.eval('JSON.stringify({id:state.currentLessonId,tab:state.currentTab})');
+    const expected = JSON.stringify({ id: navTarget, tab: 'L1' });
+    if (after !== expected) fails.push('navToLesson did not mutate state: got ' + after + ' want ' + expected);
+    // Also confirm hash was pushed (updateHash:true).
+    const hash = await s.eval('location.hash');
+    if (!hash.includes(navTarget)) fails.push('navToLesson updateHash did not push lessonId into URL: ' + hash);
+  }
+
   // Confirm no new boot/runtime exceptions surfaced during the probe.
   const finalExc = s.consoleMsgs.filter(m => m.type === 'exception').length;
   if (finalExc > 0) fails.push('total exceptions during probe: ' + finalExc);
@@ -118,6 +152,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   console.log('Cmd-K palette         :', paletteOpen ? 'opened' : 'FAIL');
   console.log('rapid-fire-btn click  :', rapidExc === 0 ? 'no exceptions' : 'FAIL');
   console.log('calibrate-btn flip    :', calBefore !== calAfter ? 'OK' : 'FAIL');
+  console.log('navToLesson helper    :', navTarget ? 'invoked' : 'SKIPPED (no second lesson)');
   console.log('exceptions total      :', finalExc);
 
   if (fails.length) { console.log('\n❌ FAIL\n - ' + fails.join('\n - ')); process.exit(1); }

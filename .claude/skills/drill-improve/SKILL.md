@@ -120,7 +120,7 @@ For ordinary single-iter ships (lesson batches, content fixes, UX polish, sub-10
 ## Step 3 — Diagnose (mode-specific, brief)
 
 ### ship
-Load `PROFILE.md`, the relevant slice of `SELF-IMPROVE.md` (Current focus, Constraints, Avoid), `docs/learning-strategies/` index, and the roadmap entry if consuming one. Read targeted slices of `app.js` / `app.css` / `index.html`. Run `node tools/validate-data.js` to baseline. Don't read more than you need.
+Load `PROFILE.md`, the relevant slice of `SELF-IMPROVE.md` (Current focus, Constraints, Avoid), `docs/learning-strategies/` index, and the roadmap entry if consuming one. Read the relevant `js/app/NN-*.js` slice(s) (app.js was split into 15 read-whole-able slices — grep to find the right one) / `app.css` / `index.html`. Run `node tools/validate-data.js` to baseline. Don't read more than you need.
 
 **Empirical scan FIRST when reusing infrastructure** (9-time-validated, iter 99/122/140/141/142/144/145/147/155). Before designing the change, grep for the actual call sites + state-binding shape of any X you plan to reuse — not just X's existence. "Mock uses setInterval(250ms) updating #mock-timer" vs "Mock has a timer" is the difference between 5min reuse and 30min rewrite (iter-147 pattern). For state-across-renders reuse, also check lifecycle: where it's set / when it's reset / what re-renders trigger reset — capturing `sessionStartMs` outside `renderCard` is what kept the iter-147 timer ticking across card transitions. Output of the scan: file:line references + closest pattern-mirror function name. This is the load-bearing piece if the ship has to bail (see Step 5 bail contract).
 

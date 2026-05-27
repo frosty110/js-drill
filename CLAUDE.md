@@ -4,12 +4,17 @@
 > that split lesson content out of `index.html` and added mobile + syntax-highlight
 > work. The "How a lesson is structured" section below reflects the *new* layout.
 
-## Current state (snapshot — refreshed iter 115)
+## Current state (snapshot — refreshed 2026-05-27, app.js split)
 
-- **154 fully-authored lessons** (`status: 'full'`), 0 stubs
-- **698 verified L2+L3 exercises** (all pass via `node tools/validate-data.js`)
-- `index.html` is markup only (~140 lines); `app.css` (~430 lines) and `app.js` (~2,400 lines) load via `<link>` and `<script src>`
-- Lesson content lives in `data/<section-slug>/<lesson-id>.json` (154 files)
+- **166 fully-authored lessons** (`status: 'full'`), 0 stubs
+- **734 verified L2+L3 exercises** (all pass via `node tools/validate-data.js`)
+- `index.html` is markup only (~430 lines); `app.css` (~3,955 lines) loads via `<link>`
+- **`app.js` (13.3k lines) was split into 15 ordered slices `js/app/01..15-*.js`** that
+  share global scope and load in order (see § File layout). They are plain
+  `<script src>` files (NOT ES modules) — the split is byte-identical to the old
+  monolith, done to make each file small enough for an AI/human to read whole.
+  Regenerate with `tools/split-app.py`; verify with `tools/cdp/appsplit-smoke.js`.
+- Lesson content lives in `data/<section-slug>/<lesson-id>.json`
 - `data/manifest.json` is the sidebar index — loaded on boot, lessons lazy-load on click
 - Three tracks across 29 sections:
   - **Syntax (55)**: Basics · Arrays · Hash Structures · Modern Syntax · Iterators & Generators · JS Toolbox · Algorithms · Classes · Async · Advanced JS · JS Traps
@@ -103,9 +108,13 @@ based on what it learned — that's how the app keeps converging on the profile.
 
 | File / Dir | Role |
 |---|---|
-| `index.html` | Main drill app markup — ~140 lines |
-| `app.css` | Main app styles — ~280 lines |
-| `app.js` | Main app logic — ~3,400 lines |
+| `index.html` | Main drill app markup — ~430 lines; loads the 15 `js/app/*.js` slices in order |
+| `app.css` | Main app styles — ~3,955 lines |
+| `js/app/01..15-*.js` | Main app logic (~13.3k lines), split from the old `app.js` monolith into ordered, read-whole-able slices that share global scope. Load order matters; boot/`init()` is in slices 14–15. Named by concern (state-content, util-metrics, paths-cram, progress-sr, drills-*, stats-cheatsheet-mock, render-sidebar-lesson, tabs-ref-conv-walk, levels, mechanics-modal, init-*). |
+| `tools/split-app.py` | Regenerates the `js/app/*.js` slices from a monolith; asserts byte-identical concat. Historical/one-shot — kept for reference. |
+| `tools/analyze-tool-stats.py` | Mines Claude Code transcripts for per-file AI read/write/churn stats (drove the app.js split). `--json` for machine output. |
+| `tools/cdp/appsplit-smoke.js` | Browser smoke test: app boots, all slices load, no exceptions/404s. |
+| `SELF-IMPROVE-LEDGER.md` | Append-only history sidecar (Mode ledger + Last-touched index) extracted from `SELF-IMPROVE.md` to keep the active directive small. |
 | `diagnostic.html` | 43-question self-diagnostic (standalone page) |
 | `data/paths.json` | Study-path registry. `kind:'lessons'` (Starter Path) drives the curated Today's Plan; `kind:'cram'` (e.g. 4-Day Interview Cram) carries `days[].blocks[].tasks[]` and `startIso` so Today's Plan renders a day-by-day acquisition view in the main app. |
 | `tokens.css` | **Single source of truth** for design tokens across the user-facing pages (colors, radii, type). See `.claude/skills/ui-consistency/`. |
@@ -286,7 +295,7 @@ that ships, the laptop and phone are independent drill journeys.
 Current save version is `__v: 5`. The load handler accepts `__v` 2, 3, 4,
 or 5 — older shapes are backfilled (e.g. v<4 lessons with `L1+L2+L3=passed`
 get seeded with the first SR interval so spaced-rep works for legacy
-users). The save (`saveProgress` in `app.js`) writes:
+users). The save (`saveProgress` in `js/app/04-progress-sr.js`) writes:
 
 ```js
 {
@@ -312,7 +321,7 @@ adding a migration branch.
 ### When saves fire
 
 `saveProgress()` is called after every meaningful state change — 24+ call
-sites in `app.js`. Examples: L1 answer click, L2 fill submit, L3 pass,
+sites across the `js/app/*.js` slices. Examples: L1 answer click, L2 fill submit, L3 pass,
 reveal click, lesson nav, tab change, modal toggles, starter-path toggle,
 hide-mastered toggle, mock-interview start/end, progress restore.
 
@@ -332,7 +341,7 @@ JSON.parse(localStorage.getItem('jsdrill.progress.v1'))
 If the value changes between the before/after, persistence is fine —
 the bug is in the read/render path (e.g. UI not refreshing from state).
 If the value does NOT change, save isn't firing — grep for the action's
-handler in `app.js` and check whether it calls `saveProgress()`.
+handler across `js/app/*.js` and check whether it calls `saveProgress()`.
 
 Common false-alarm causes a user might report:
 - **Different origin between sessions** — they tested on

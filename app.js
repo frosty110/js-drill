@@ -13010,11 +13010,10 @@ function initTopbarDropdowns() {
     body.innerHTML = '';
   }
 
-  function open(menuButton) {
-    if (openMenu === menuButton) { close(); return; }
-    if (openMenu) {
-      openMenu.setAttribute('aria-expanded', 'false');
-    }
+  // show(): open or switch to a menu (no toggle). open(): click semantics —
+  // toggles closed when you click the already-open trigger.
+  function show(menuButton) {
+    if (openMenu && openMenu !== menuButton) openMenu.setAttribute('aria-expanded', 'false');
     openMenu = menuButton;
     menuButton.setAttribute('aria-expanded', 'true');
     const menuKey = menuButton.getAttribute('data-menu') || menuButton.id.replace(/^topbar-/, '') || 'settings';
@@ -13023,12 +13022,39 @@ function initTopbarDropdowns() {
     dropdown.setAttribute('aria-hidden', 'false');
   }
 
-  topbar.querySelectorAll('.topbar-menu').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); open(btn); });
-  });
+  function open(menuButton) {
+    if (openMenu === menuButton) { close(); return; }
+    show(menuButton);
+  }
+
+  // Desktop hover-to-open: pointer-enter on a trigger opens/switches; the menu
+  // closes a beat after the pointer leaves BOTH the trigger and the panel (the
+  // delay lets you cross any gap between them). Guarded to hover-capable +
+  // fine-pointer devices so touch keeps click-to-open (and .topbar-menu is
+  // display:none on mobile regardless). When hover is active a trigger CLICK
+  // just (re)opens instead of toggling, so you never land in the "hover opened
+  // it, click closed it, now it's stuck while my cursor sits on it" trap.
+  const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  let hoverCloseTimer = null;
+  const cancelHoverClose = () => { if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; } };
+  const scheduleHoverClose = () => { cancelHoverClose(); hoverCloseTimer = setTimeout(close, 220); };
+
   const settingsBtn = document.getElementById('topbar-settings');
-  if (settingsBtn) {
-    settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); open(settingsBtn); });
+  const hoverTriggers = [...topbar.querySelectorAll('.topbar-menu')];
+  if (settingsBtn) hoverTriggers.push(settingsBtn);
+  hoverTriggers.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (hoverCapable) show(btn); else open(btn);
+    });
+    if (hoverCapable) {
+      btn.addEventListener('mouseenter', () => { cancelHoverClose(); if (openMenu !== btn) show(btn); });
+      btn.addEventListener('mouseleave', scheduleHoverClose);
+    }
+  });
+  if (hoverCapable) {
+    dropdown.addEventListener('mouseenter', cancelHoverClose);
+    dropdown.addEventListener('mouseleave', scheduleHoverClose);
   }
 
   // iter 130 Phase 5: mobile-only 📂 Browse button — opens the dropdown

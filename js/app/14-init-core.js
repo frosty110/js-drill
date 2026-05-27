@@ -1,6 +1,195 @@
 //  INIT
 // ──────────────────────────────────────────────────────────────────────────
+// init() is the boot orchestrator. Every line below `await initBootstrap()`
+// wires one feature area; each sub-init owns its own DOM references and
+// listeners. Reading top-to-bottom = reading the boot sequence.
+//
+// Order rules:
+//   1. initBootstrap MUST be awaited first. It loads PATHS → progress →
+//      manifest → mechanics, GC's stale state, resolves the resume target,
+//      and paints the first render. If loadManifest fails it returns false
+//      and we abort — the UI shell already shows the error message.
+//   2. After bootstrap, the wiring sub-inits run in any order. They only
+//      add event listeners — no data mutations, no renders.
+//   3. initBootTail runs last. It paints initial badge counts, mounts
+//      cross-tab + interval + service-worker listeners, and reflects
+//      persisted toggle state onto already-wired buttons.
 async function init() {
+  if (!(await initBootstrap())) return;
+
+  initDrillLaunchers();
+  initSidebarActions();
+  initSettingsToggles();
+  initPwaInstall();
+  initSearchAndKeyboard();
+  initCommandPalette();
+  initMobileDrawer();
+  initAtRiskModal();
+  initStreakMapModal();
+  initHeatstrip();
+  initStatsModal();
+  initTodaysPlanModal();
+  initPathSwitcher();
+  initMechanicsWiring();
+  initHelpModal();
+  initBackupRestore();
+  initCheatsheetWiring();
+  initBootTail();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  COMMAND PALETTE — module-level state (cross-sub-init: the global keydown
+//  handler in initSearchAndKeyboard calls _paletteClose on Escape, and the
+//  Cmd-K binding in initCommandPalette calls _paletteOpen. Lexically hoisting
+//  these out of init() is what lets them live in separate sub-inits.)
+// ──────────────────────────────────────────────────────────────────────────
+let _paletteItems = [];     // [{ id, label, kind, hint?, action }]
+let _paletteFiltered = [];
+let _paletteCursor = 0;
+
+function _paletteBuildIndex() {
+  const items = [];
+  // (1) Sidebar buttons — synthetic click invokes existing handlers.
+  document.querySelectorAll('aside button[id], #sidebar-main-buttons button[id]').forEach(btn => {
+    const id = btn.id;
+    if (!id || id === 'palette-trigger' || id === 'hamburger') return;
+    const text = (btn.textContent || '').trim().replace(/\s+/g, ' ');
+    if (!text || text.length > 60) return;
+    const hint = btn.title || '';
+    items.push({
+      id: 'btn:' + id,
+      label: text,
+      kind: 'mode',
+      hint: hint.length > 80 ? hint.slice(0, 78) + '…' : hint,
+      action: () => btn.click()
+    });
+  });
+  // (2) Lessons — direct selectLesson.
+  for (const lesson of CURRICULUM) {
+    if (lesson.status !== 'full') continue;
+    items.push({
+      id: 'lesson:' + lesson.id,
+      label: lesson.title,
+      kind: 'lesson',
+      hint: lesson.section,
+      action: () => { if (typeof selectLesson === 'function') selectLesson(lesson.id); }
+    });
+  }
+  // (3) Sections — collect from manifest + jump-to-first-lesson-in-section.
+  const seenSections = new Set();
+  for (const lesson of CURRICULUM) {
+    if (seenSections.has(lesson.section)) continue;
+    seenSections.add(lesson.section);
+    const firstId = lesson.id;
+    items.push({
+      id: 'section:' + lesson.section,
+      label: lesson.section,
+      kind: 'section',
+      hint: 'jump to first lesson in section',
+      action: () => { if (typeof selectLesson === 'function') selectLesson(firstId); }
+    });
+  }
+  return items;
+}
+function _paletteScore(item, q) {
+  // Substring + use-count blend. Use-count breaks ties. Matches against
+  // BOTH the visible label AND the underlying id (so users who know
+  // lesson ids like "two-sum" can search by id). Treats hyphen / space /
+  // dot / underscore as word separators for normalization.
+  const usage = +(state.commandUsage[item.id] || 0);
+  if (!q) return usage; // empty query: rank purely by recent use
+  const norm = s => s.toLowerCase().replace(/[\s\-_.·:]+/g, ' ');
+  const label = norm(item.label);
+  const idStr = item.id ? norm(item.id) : '';
+  const qNorm = norm(q);
+  if (label.startsWith(qNorm)) return 1000 + usage;
+  if (idStr && idStr.includes(qNorm)) return 950 + usage;
+  if (label.includes(qNorm)) return 500 + usage;
+  // Match by token initials (e.g., "rwk" matches "Reverse-Walk")
+  const tokens = label.split(' ').filter(Boolean);
+  const initials = tokens.map(t => t[0] || '').join('');
+  if (initials.startsWith(qNorm.replace(/\s/g, ''))) return 200 + usage;
+  return 0;
+}
+function _paletteRender() {
+  const paletteInput = document.getElementById('palette-input');
+  const paletteResults = document.getElementById('palette-results');
+  const q = paletteInput.value.toLowerCase().trim();
+  if (!q) {
+    // Empty-query default: interleave kinds so the user sees a representative
+    // mix of modes + lessons + sections rather than 24 mode rows in a row.
+    // Within each kind, sort by recent-use (state.commandUsage). Caps: 12
+    // modes / 8 lessons / 4 sections = 24 total.
+    const byKind = { mode: [], lesson: [], section: [] };
+    for (const item of _paletteItems) {
+      if (byKind[item.kind]) byKind[item.kind].push(item);
+    }
+    const byUse = (a, b) => (+(state.commandUsage[b.id] || 0)) - (+(state.commandUsage[a.id] || 0));
+    _paletteFiltered = [
+      ...byKind.mode.sort(byUse).slice(0, 12),
+      ...byKind.lesson.sort(byUse).slice(0, 8),
+      ...byKind.section.sort(byUse).slice(0, 4)
+    ];
+    // Re-sort the combined 24 by score (use-count) so the most-recently-used
+    // items float to top regardless of kind.
+    _paletteFiltered.sort(byUse);
+  } else {
+    const scored = _paletteItems.map(item => ({ item, score: _paletteScore(item, q) }))
+      .filter(s => s.score > 0)
+      .sort((a, b) => b.score - a.score);
+    _paletteFiltered = scored.slice(0, 24).map(s => s.item);
+  }
+  if (_paletteCursor >= _paletteFiltered.length) _paletteCursor = 0;
+  paletteResults.innerHTML = _paletteFiltered.map((item, i) => `
+    <div class="palette-result ${i === _paletteCursor ? 'palette-result-active' : ''}" data-idx="${i}" role="option">
+      <span class="palette-result-kind palette-result-kind-${item.kind}">${item.kind}</span>
+      <span class="palette-result-label">${escapeHtml(item.label)}</span>
+      ${item.hint ? `<span class="palette-result-hint">${escapeHtml(item.hint)}</span>` : ''}
+    </div>
+  `).join('') || '<div class="palette-empty">No matches.</div>';
+  paletteResults.querySelectorAll('.palette-result').forEach(el => {
+    el.addEventListener('click', () => {
+      const i = +el.dataset.idx;
+      _paletteSelect(i);
+    });
+    el.addEventListener('mouseenter', () => {
+      _paletteCursor = +el.dataset.idx;
+      paletteResults.querySelectorAll('.palette-result').forEach((n, j) =>
+        n.classList.toggle('palette-result-active', j === _paletteCursor));
+    });
+  });
+}
+function _paletteSelect(i) {
+  const item = _paletteFiltered[i];
+  if (!item) return;
+  state.commandUsage[item.id] = (state.commandUsage[item.id] || 0) + 1;
+  saveProgress();
+  _paletteClose();
+  setTimeout(() => { try { item.action(); } catch (_) {} }, 0);
+}
+function _paletteOpen() {
+  const paletteOverlay = document.getElementById('palette-overlay');
+  const paletteInput = document.getElementById('palette-input');
+  if (!paletteOverlay || !paletteInput) return;
+  _paletteItems = _paletteBuildIndex();
+  paletteInput.value = '';
+  _paletteCursor = 0;
+  paletteOverlay.classList.remove('hidden');
+  _paletteRender();
+  setTimeout(() => paletteInput.focus(), 0);
+}
+function _paletteClose() {
+  const paletteOverlay = document.getElementById('palette-overlay');
+  const paletteInput = document.getElementById('palette-input');
+  if (paletteOverlay) paletteOverlay.classList.add('hidden');
+  if (paletteInput) paletteInput.value = '';
+  _paletteFiltered = [];
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  BOOTSTRAP — load data, GC stale state, resolve current lesson, first paint
+// ──────────────────────────────────────────────────────────────────────────
+async function initBootstrap() {
   // iter 125: load PATHS registry from data/paths.json BEFORE loadProgress —
   // loadProgress validates state.subscribedPathId against PATHS, so the registry
   // must be populated first. loadPaths() never throws (defensive fallback inside).
@@ -8,7 +197,7 @@ async function init() {
   loadProgress();
   try { await loadManifest(); } catch (e) {
     document.getElementById('lesson-shell').innerHTML = '<div class="p-6 text-red-300">Failed to load lesson data: ' + (e && e.message ? e.message : e) + '</div>';
-    return;
+    return false;
   }
   // Fire-and-forget — modal will await its own load if user clicks before
   // this resolves. Keeps boot snappy on slow connections.
@@ -58,69 +247,13 @@ async function init() {
   // (used internally by selectLesson/selectTab) does NOT fire this event, so
   // no infinite-loop risk.
   window.addEventListener('hashchange', _handleHashChange);
+  return true;
+}
 
-  document.getElementById('reset-btn').addEventListener('click', () => {
-    if (confirm('Reset ALL progress, reviews, best times, and weak-spot history? This cannot be undone (use Backup first if you want to save).')) {
-      state.progress = {};
-      state.streak = 0;
-      state.bestTimes = {};
-      state.mockHistory = {};
-      state.reviews = {};
-      state.revealed = {};
-      state.weakness = {};
-      state.lastLessonId = null;
-      state.lastTab = null;
-      saveProgress();
-      updateStreakUI();
-      updateReviewBadge();
-      renderSidebar();
-      renderLesson();
-    }
-  });
-
-  // Search input
-  const searchInput = document.getElementById('search-input');
-  searchInput.addEventListener('input', (e) => {
-    state.searchQuery = e.target.value;
-    renderSidebar();
-  });
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      searchInput.value = '';
-      state.searchQuery = '';
-      searchInput.blur();
-      renderSidebar();
-    }
-  });
-
-  // Shuffle button
-  document.getElementById('shuffle-btn').addEventListener('click', () => {
-    const id = pickShuffleReview();
-    if (id) selectLesson(id);
-  });
-
-  // iter 108: 🍀 Lucky — random not-yet-mastered lesson dropped at the first
-  // incomplete level so the user is drilling, not reading. Land on L1 by
-  // default; skip to L2/L3 if those earlier levels are already passed.
-  document.getElementById('lucky-btn').addEventListener('click', () => {
-    const id = pickLuckyUnmastered();
-    if (!id) return;
-    const lesson = findLesson(id);
-    let tab = 'L1';
-    if (levelStatus(id, 'L1') === 'passed') tab = 'L2';
-    if (levelStatus(id, 'L2') === 'passed') tab = 'L3';
-    selectLesson(id);
-    // selectLesson set currentTab='auto' (Conversation/Reference) — override
-    // to land on the drill tab; renderLesson handles cache-miss re-render.
-    selectTab(tab);
-    if (lesson) _showLuckyToast(lesson.title);
-  });
-
-  // Mock interview button
-  document.getElementById('mock-btn').addEventListener('click', () => {
-    startRandomMockInterview();
-  });
-
+// ──────────────────────────────────────────────────────────────────────────
+//  DRILL LAUNCHERS — 25 sidebar buttons that each open a drill session
+// ──────────────────────────────────────────────────────────────────────────
+function initDrillLaunchers() {
   // iter 49: Pattern Recognition Speed Drill — diagnose-the-pattern session.
   // Reframe of iter-26 entry #1 (BLOCKED) using SECTION-name distractors
   // (17 cross-cutting buckets) instead of per-lesson distractors — sidesteps
@@ -318,6 +451,59 @@ async function init() {
   document.getElementById('bug-hunt-btn').addEventListener('click', () => {
     startBugHuntSession();
   });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  SIDEBAR ACTIONS — non-drill buttons (reset, shuffle/lucky/mock,
+//  review/repair/weak/resurrect/bridge/reveal-replay, path, hide-mastered)
+// ──────────────────────────────────────────────────────────────────────────
+function initSidebarActions() {
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    if (confirm('Reset ALL progress, reviews, best times, and weak-spot history? This cannot be undone (use Backup first if you want to save).')) {
+      state.progress = {};
+      state.streak = 0;
+      state.bestTimes = {};
+      state.mockHistory = {};
+      state.reviews = {};
+      state.revealed = {};
+      state.weakness = {};
+      state.lastLessonId = null;
+      state.lastTab = null;
+      saveProgress();
+      updateStreakUI();
+      updateReviewBadge();
+      renderSidebar();
+      renderLesson();
+    }
+  });
+
+  // Shuffle button
+  document.getElementById('shuffle-btn').addEventListener('click', () => {
+    const id = pickShuffleReview();
+    if (id) selectLesson(id);
+  });
+
+  // iter 108: 🍀 Lucky — random not-yet-mastered lesson dropped at the first
+  // incomplete level so the user is drilling, not reading. Land on L1 by
+  // default; skip to L2/L3 if those earlier levels are already passed.
+  document.getElementById('lucky-btn').addEventListener('click', () => {
+    const id = pickLuckyUnmastered();
+    if (!id) return;
+    const lesson = findLesson(id);
+    let tab = 'L1';
+    if (levelStatus(id, 'L1') === 'passed') tab = 'L2';
+    if (levelStatus(id, 'L2') === 'passed') tab = 'L3';
+    selectLesson(id);
+    // selectLesson set currentTab='auto' (Conversation/Reference) — override
+    // to land on the drill tab; renderLesson handles cache-miss re-render.
+    selectTab(tab);
+    if (lesson) _showLuckyToast(lesson.title);
+  });
+
+  // Mock interview button
+  document.getElementById('mock-btn').addEventListener('click', () => {
+    startRandomMockInterview();
+  });
 
   // Review-Due button — jump to the most-overdue lesson.
   // On touch devices, land on L2 (cued recall via fill-in) — desirable
@@ -355,6 +541,110 @@ async function init() {
     renderSidebar();
   });
 
+  // Plan View toggle — filters the sidebar to the subscribed path's lessons.
+  document.getElementById('path-btn').addEventListener('click', () => {
+    // No-op when the subscribed path has no drill-lesson sequence (button is
+    // also visually disabled, but guard here too for keyboard/programmatic clicks).
+    if (!subscribedPathHasLessons()) return;
+    state.starterPath = !state.starterPath;
+    _invalidateStarterPathCache();
+    saveProgress();
+    // iter 45: review badge depends on path scope — refresh after toggle.
+    updateReviewBadge();
+    renderSidebar();
+    // If toggling ON and current lesson isn't in the path, jump to next un-mastered in path
+    if (state.starterPath && !getActiveStarterPath().includes(state.currentLessonId)) {
+      const next = starterPathNextId();
+      if (next) { selectLesson(next); return; }
+    }
+    // Toggled but stayed on the same lesson — re-render so the path-step
+    // pill in the header reflects the new state.
+    if (state.currentLessonId) renderLesson();
+  });
+
+  // Weak-spot button — jump to the lesson with the most L1 misses
+  document.getElementById('weak-btn').addEventListener('click', () => {
+    const id = topWeakLessonId();
+    if (id) {
+      state.currentLessonId = id;
+      state.currentTab = 'L1';
+      syncBinderToLesson(id);
+      saveProgress();
+      renderSidebar();
+      renderLesson();
+    }
+  });
+
+  // iter 65: 💀 Resurrect — jump to most-overdue mastered lesson at L1.
+  // On touch devices land on L2 (mirror Review-button pattern); on fine
+  // pointer land on L3 — same recall calibration the SR ladder uses.
+  document.getElementById('resurrect-btn').addEventListener('click', () => {
+    const ids = resurrectIds();
+    if (!ids.length) return;
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    state.currentLessonId = ids[0];
+    state.currentTab = coarse ? 'L2' : 'L3';
+    syncBinderToLesson(ids[0]);
+    saveProgress();
+    renderSidebar();
+    renderLesson();
+    _updateHash();
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      document.body.classList.remove('sidebar-open');
+    }
+  });
+
+  // iter 94: 🧠 Bridge — route to a cross-track transfer-gap lesson. Picks
+  // the first candidate from `_bridgeCandidates()` (one per gap-mechanic,
+  // deterministic by MECHANIC_INDEX iteration order). Lands on L1 with a
+  // 2.2-sec fuchsia toast prefacing the transfer context. Closes iter-90
+  // roadmap #3 (the last queued entry).
+  const bridgeBtnEl = document.getElementById('bridge-btn');
+  if (bridgeBtnEl) bridgeBtnEl.addEventListener('click', () => {
+    const candidates = _bridgeCandidates();
+    if (!candidates.length) return;
+    const pick = candidates[0];
+    state.currentLessonId = pick.targetLessonId;
+    state.currentTab = 'L1';
+    syncBinderToLesson(pick.targetLessonId);
+    saveProgress();
+    renderSidebar();
+    renderLesson();
+    _updateHash();
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      document.body.classList.remove('sidebar-open');
+    }
+    _showBridgeToast(pick);
+  });
+
+  document.getElementById('reveal-replay-btn').addEventListener('click', () => {
+    const queue = _revealedQueue();
+    if (!queue.length) return;
+    // Drop the current lesson's reveal tracker BEFORE routing so the user
+    // gets a clean attempt window on arrival (lets the clean-pass invariant
+    // fire even if they were just on this lesson).
+    if (state.currentLessonId) delete _revealedInCurrentAttempt[state.currentLessonId];
+    const next = queue[0];
+    state.currentLessonId = next.lessonId;
+    state.currentTab = next.level;
+    delete _revealedInCurrentAttempt[next.lessonId];
+    syncBinderToLesson(next.lessonId);
+    saveProgress();
+    renderSidebar();
+    renderLesson();
+    _updateHash();
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      document.body.classList.remove('sidebar-open');
+    }
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  SETTINGS TOGGLES — 5 opt-in feature toggles (Clarify, Hotseat, Calibrate,
+//  Pace-Bar, Haptic). Each mirrors state to button class on mount + toggles
+//  on click. Some force a render on flip to engage/disengage immediately.
+// ──────────────────────────────────────────────────────────────────────────
+function initSettingsToggles() {
   // iter 117: 🎤 Clarify-First Ritual — opt-in toggle (default OFF).
   // ON state painted sky-200 (matches button hover color). Toggling resets
   // the in-memory per-session completion set so flipping ON immediately
@@ -436,6 +726,39 @@ async function init() {
     });
   }
 
+  // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF). Fuchsia-200
+  // hover when ON. Auto-hides on platforms without the Vibration API (iOS
+  // Safari, desktop without vibration motor) so the user never sees a toggle
+  // that does nothing. The capability check is at MOUNT time, not click time
+  // — the toggle is either present + functional or absent, never present-but-
+  // broken. Test pulse on enable confirms the channel works on this device.
+  const hapticBtn = document.getElementById('haptic-btn');
+  if (hapticBtn) {
+    const hapticSupported = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+    if (!hapticSupported) {
+      hapticBtn.style.display = 'none';
+    } else {
+      if (state.hapticOn) {
+        hapticBtn.classList.add('text-fuchsia-200');
+        hapticBtn.classList.remove('text-slate-500');
+      }
+      hapticBtn.addEventListener('click', () => {
+        state.hapticOn = !state.hapticOn;
+        hapticBtn.classList.toggle('text-fuchsia-200', state.hapticOn);
+        hapticBtn.classList.toggle('text-slate-500', !state.hapticOn);
+        saveProgress();
+        // Test pulse on enable so the user feels it work immediately —
+        // closes the "did I actually turn it on?" confirmation gap.
+        if (state.hapticOn) _hapticPulse('L1-pass');
+      });
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  PWA INSTALL — beforeinstallprompt capture + button + appinstalled cleanup
+// ──────────────────────────────────────────────────────────────────────────
+function initPwaInstall() {
   // iter 145: 📲 PWA Install button. Hidden by default (.hidden class on
   // the HTML element). Listens for the browser's `beforeinstallprompt` event
   // (fires on Chrome/Edge/Android when the PWA install criteria are met:
@@ -474,231 +797,25 @@ async function init() {
     const btn = document.getElementById('install-btn');
     if (btn) btn.classList.add('hidden');
   });
+}
 
-  // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF). Fuchsia-200
-  // hover when ON. Auto-hides on platforms without the Vibration API (iOS
-  // Safari, desktop without vibration motor) so the user never sees a toggle
-  // that does nothing. The capability check is at MOUNT time, not click time
-  // — the toggle is either present + functional or absent, never present-but-
-  // broken. Test pulse on enable confirms the channel works on this device.
-  const hapticBtn = document.getElementById('haptic-btn');
-  if (hapticBtn) {
-    const hapticSupported = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
-    if (!hapticSupported) {
-      hapticBtn.style.display = 'none';
-    } else {
-      if (state.hapticOn) {
-        hapticBtn.classList.add('text-fuchsia-200');
-        hapticBtn.classList.remove('text-slate-500');
-      }
-      hapticBtn.addEventListener('click', () => {
-        state.hapticOn = !state.hapticOn;
-        hapticBtn.classList.toggle('text-fuchsia-200', state.hapticOn);
-        hapticBtn.classList.toggle('text-slate-500', !state.hapticOn);
-        saveProgress();
-        // Test pulse on enable so the user feels it work immediately —
-        // closes the "did I actually turn it on?" confirmation gap.
-        if (state.hapticOn) _hapticPulse('L1-pass');
-      });
-    }
-  }
-
-  // Plan View toggle — filters the sidebar to the subscribed path's lessons.
-  document.getElementById('path-btn').addEventListener('click', () => {
-    // No-op when the subscribed path has no drill-lesson sequence (button is
-    // also visually disabled, but guard here too for keyboard/programmatic clicks).
-    if (!subscribedPathHasLessons()) return;
-    state.starterPath = !state.starterPath;
-    _invalidateStarterPathCache();
-    saveProgress();
-    // iter 45: review badge depends on path scope — refresh after toggle.
-    updateReviewBadge();
+// ──────────────────────────────────────────────────────────────────────────
+//  SEARCH + GLOBAL KEYBOARD — sidebar search input + non-modifier keyboard
+//  nav (j/k/1-9/s/?/Escape, `/` to focus search). Cmd-K is in initCommandPalette.
+// ──────────────────────────────────────────────────────────────────────────
+function initSearchAndKeyboard() {
+  // Search input
+  const searchInput = document.getElementById('search-input');
+  searchInput.addEventListener('input', (e) => {
+    state.searchQuery = e.target.value;
     renderSidebar();
-    // If toggling ON and current lesson isn't in the path, jump to next un-mastered in path
-    if (state.starterPath && !getActiveStarterPath().includes(state.currentLessonId)) {
-      const next = starterPathNextId();
-      if (next) { selectLesson(next); return; }
-    }
-    // Toggled but stayed on the same lesson — re-render so the path-step
-    // pill in the header reflects the new state.
-    if (state.currentLessonId) renderLesson();
   });
-
-  // iter 104: 🗺 Command Palette — Cmd-K / Ctrl-K opens overlay with fuzzy
-  // search across sidebar buttons + lessons + sections. Closes the 33-button
-  // discoverability decay the recent ship-spree caused. First REORGANIZE-not-
-  // ADD surface. Results ranked by recent-use frequency from state.commandUsage.
-  const paletteOverlay = document.getElementById('palette-overlay');
-  const paletteInput = document.getElementById('palette-input');
-  const paletteResults = document.getElementById('palette-results');
-  const paletteTrigger = document.getElementById('palette-trigger');
-  let _paletteItems = []; // [{ id, label, kind, hint?, action }]
-  let _paletteFiltered = [];
-  let _paletteCursor = 0;
-  function _paletteBuildIndex() {
-    const items = [];
-    // (1) Sidebar buttons — synthetic click invokes existing handlers.
-    document.querySelectorAll('aside button[id], #sidebar-main-buttons button[id]').forEach(btn => {
-      const id = btn.id;
-      if (!id || id === 'palette-trigger' || id === 'hamburger') return;
-      const text = (btn.textContent || '').trim().replace(/\s+/g, ' ');
-      if (!text || text.length > 60) return;
-      const hint = btn.title || '';
-      items.push({
-        id: 'btn:' + id,
-        label: text,
-        kind: 'mode',
-        hint: hint.length > 80 ? hint.slice(0, 78) + '…' : hint,
-        action: () => btn.click()
-      });
-    });
-    // (2) Lessons — direct selectLesson.
-    for (const lesson of CURRICULUM) {
-      if (lesson.status !== 'full') continue;
-      items.push({
-        id: 'lesson:' + lesson.id,
-        label: lesson.title,
-        kind: 'lesson',
-        hint: lesson.section,
-        action: () => { if (typeof selectLesson === 'function') selectLesson(lesson.id); }
-      });
-    }
-    // (3) Sections — collect from manifest + jump-to-first-lesson-in-section.
-    const seenSections = new Set();
-    for (const lesson of CURRICULUM) {
-      if (seenSections.has(lesson.section)) continue;
-      seenSections.add(lesson.section);
-      const firstId = lesson.id;
-      items.push({
-        id: 'section:' + lesson.section,
-        label: lesson.section,
-        kind: 'section',
-        hint: 'jump to first lesson in section',
-        action: () => { if (typeof selectLesson === 'function') selectLesson(firstId); }
-      });
-    }
-    return items;
-  }
-  function _paletteScore(item, q) {
-    // Substring + use-count blend. Use-count breaks ties. Matches against
-    // BOTH the visible label AND the underlying id (so users who know
-    // lesson ids like "two-sum" can search by id). Treats hyphen / space /
-    // dot / underscore as word separators for normalization.
-    const usage = +(state.commandUsage[item.id] || 0);
-    if (!q) return usage; // empty query: rank purely by recent use
-    const norm = s => s.toLowerCase().replace(/[\s\-_.·:]+/g, ' ');
-    const label = norm(item.label);
-    const idStr = item.id ? norm(item.id) : '';
-    const qNorm = norm(q);
-    if (label.startsWith(qNorm)) return 1000 + usage;
-    if (idStr && idStr.includes(qNorm)) return 950 + usage;
-    if (label.includes(qNorm)) return 500 + usage;
-    // Match by token initials (e.g., "rwk" matches "Reverse-Walk")
-    const tokens = label.split(' ').filter(Boolean);
-    const initials = tokens.map(t => t[0] || '').join('');
-    if (initials.startsWith(qNorm.replace(/\s/g, ''))) return 200 + usage;
-    return 0;
-  }
-  function _paletteRender() {
-    const q = paletteInput.value.toLowerCase().trim();
-    if (!q) {
-      // Empty-query default: interleave kinds so the user sees a representative
-      // mix of modes + lessons + sections rather than 24 mode rows in a row.
-      // Within each kind, sort by recent-use (state.commandUsage). Caps: 12
-      // modes / 8 lessons / 4 sections = 24 total.
-      const byKind = { mode: [], lesson: [], section: [] };
-      for (const item of _paletteItems) {
-        if (byKind[item.kind]) byKind[item.kind].push(item);
-      }
-      const byUse = (a, b) => (+(state.commandUsage[b.id] || 0)) - (+(state.commandUsage[a.id] || 0));
-      _paletteFiltered = [
-        ...byKind.mode.sort(byUse).slice(0, 12),
-        ...byKind.lesson.sort(byUse).slice(0, 8),
-        ...byKind.section.sort(byUse).slice(0, 4)
-      ];
-      // Re-sort the combined 24 by score (use-count) so the most-recently-used
-      // items float to top regardless of kind.
-      _paletteFiltered.sort(byUse);
-    } else {
-      const scored = _paletteItems.map(item => ({ item, score: _paletteScore(item, q) }))
-        .filter(s => s.score > 0)
-        .sort((a, b) => b.score - a.score);
-      _paletteFiltered = scored.slice(0, 24).map(s => s.item);
-    }
-    if (_paletteCursor >= _paletteFiltered.length) _paletteCursor = 0;
-    paletteResults.innerHTML = _paletteFiltered.map((item, i) => `
-      <div class="palette-result ${i === _paletteCursor ? 'palette-result-active' : ''}" data-idx="${i}" role="option">
-        <span class="palette-result-kind palette-result-kind-${item.kind}">${item.kind}</span>
-        <span class="palette-result-label">${escapeHtml(item.label)}</span>
-        ${item.hint ? `<span class="palette-result-hint">${escapeHtml(item.hint)}</span>` : ''}
-      </div>
-    `).join('') || '<div class="palette-empty">No matches.</div>';
-    paletteResults.querySelectorAll('.palette-result').forEach(el => {
-      el.addEventListener('click', () => {
-        const i = +el.dataset.idx;
-        _paletteSelect(i);
-      });
-      el.addEventListener('mouseenter', () => {
-        _paletteCursor = +el.dataset.idx;
-        paletteResults.querySelectorAll('.palette-result').forEach((n, j) =>
-          n.classList.toggle('palette-result-active', j === _paletteCursor));
-      });
-    });
-  }
-  function _paletteSelect(i) {
-    const item = _paletteFiltered[i];
-    if (!item) return;
-    state.commandUsage[item.id] = (state.commandUsage[item.id] || 0) + 1;
-    saveProgress();
-    _paletteClose();
-    setTimeout(() => { try { item.action(); } catch (_) {} }, 0);
-  }
-  function _paletteOpen() {
-    _paletteItems = _paletteBuildIndex();
-    paletteInput.value = '';
-    _paletteCursor = 0;
-    paletteOverlay.classList.remove('hidden');
-    _paletteRender();
-    setTimeout(() => paletteInput.focus(), 0);
-  }
-  function _paletteClose() {
-    paletteOverlay.classList.add('hidden');
-    paletteInput.value = '';
-    _paletteFiltered = [];
-  }
-  if (paletteInput) {
-    paletteInput.addEventListener('input', _paletteRender);
-    paletteInput.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        _paletteCursor = Math.min(_paletteFiltered.length - 1, _paletteCursor + 1);
-        _paletteRender();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        _paletteCursor = Math.max(0, _paletteCursor - 1);
-        _paletteRender();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        _paletteSelect(_paletteCursor);
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        _paletteClose();
-      }
-    });
-  }
-  if (paletteOverlay) {
-    paletteOverlay.addEventListener('click', (e) => {
-      if (e.target === paletteOverlay) _paletteClose();
-    });
-  }
-  if (paletteTrigger) {
-    paletteTrigger.addEventListener('click', _paletteOpen);
-  }
-  // Cmd-K / Ctrl-K binding — modifier-required so bare `k` lesson-nav is preserved.
-  document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-      e.preventDefault();
-      _paletteOpen();
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      searchInput.value = '';
+      state.searchQuery = '';
+      searchInput.blur();
+      renderSidebar();
     }
   });
 
@@ -765,33 +882,73 @@ async function init() {
       if (id) { e.preventDefault(); selectLesson(id); }
     }
   });
+}
 
-  // Mobile drawer wiring
+// ──────────────────────────────────────────────────────────────────────────
+//  COMMAND PALETTE WIRING — connect the module-level _palette* functions
+//  to the palette DOM (input, overlay click, trigger button, Cmd-K binding).
+// ──────────────────────────────────────────────────────────────────────────
+function initCommandPalette() {
+  // iter 104: 🗺 Command Palette — Cmd-K / Ctrl-K opens overlay with fuzzy
+  // search across sidebar buttons + lessons + sections. Closes the 33-button
+  // discoverability decay the recent ship-spree caused. First REORGANIZE-not-
+  // ADD surface. Results ranked by recent-use frequency from state.commandUsage.
+  const paletteOverlay = document.getElementById('palette-overlay');
+  const paletteInput = document.getElementById('palette-input');
+  const paletteTrigger = document.getElementById('palette-trigger');
+  if (paletteInput) {
+    paletteInput.addEventListener('input', _paletteRender);
+    paletteInput.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        _paletteCursor = Math.min(_paletteFiltered.length - 1, _paletteCursor + 1);
+        _paletteRender();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        _paletteCursor = Math.max(0, _paletteCursor - 1);
+        _paletteRender();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        _paletteSelect(_paletteCursor);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        _paletteClose();
+      }
+    });
+  }
+  if (paletteOverlay) {
+    paletteOverlay.addEventListener('click', (e) => {
+      if (e.target === paletteOverlay) _paletteClose();
+    });
+  }
+  if (paletteTrigger) {
+    paletteTrigger.addEventListener('click', _paletteOpen);
+  }
+  // Cmd-K / Ctrl-K binding — modifier-required so bare `k` lesson-nav is preserved.
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      _paletteOpen();
+    }
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  MOBILE DRAWER — hamburger + backdrop
+// ──────────────────────────────────────────────────────────────────────────
+function initMobileDrawer() {
   document.getElementById('hamburger').addEventListener('click', () => {
     document.body.classList.toggle('sidebar-open');
   });
   document.getElementById('sidebar-backdrop').addEventListener('click', () => {
     document.body.classList.remove('sidebar-open');
   });
+}
 
-  // Weak-spot button — jump to the lesson with the most L1 misses
-  document.getElementById('weak-btn').addEventListener('click', () => {
-    const id = topWeakLessonId();
-    if (id) {
-      state.currentLessonId = id;
-      state.currentTab = 'L1';
-      syncBinderToLesson(id);
-      saveProgress();
-      renderSidebar();
-      renderLesson();
-    }
-  });
-
-  // iter 56: 🃏 Reveal Replay — route to the next revealed lesson + level.
-  // Closes iter-55 roadmap #2 (constraint-aware reframe from vision iter 55).
-  // The queue is just the surface that GUIDES the user; the clean-pass
-  // clear-flag invariant in markPassed works generally so clears also fire
-  // when the user finds a revealed lesson via normal navigation.
+// ──────────────────────────────────────────────────────────────────────────
+//  AT-RISK MODAL — decay-radar union of dueAt + weakness + revealed flags
+// ──────────────────────────────────────────────────────────────────────────
+function initAtRiskModal() {
   // iter 60: 📡 At Risk — opens decay-radar modal with union-of-3-signals
   // list. Closes iter-59 roadmap entry #1. The modal lists up to 7 rows;
   // each row is tap-to-jump to that lesson at the appropriate tab.
@@ -836,54 +993,17 @@ async function init() {
     }
     atRiskModal.style.display = 'block';
   }
-  // iter 65: 💀 Resurrect — jump to most-overdue mastered lesson at L1.
-  // On touch devices land on L2 (mirror Review-button pattern); on fine
-  // pointer land on L3 — same recall calibration the SR ladder uses.
-  document.getElementById('resurrect-btn').addEventListener('click', () => {
-    const ids = resurrectIds();
-    if (!ids.length) return;
-    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    state.currentLessonId = ids[0];
-    state.currentTab = coarse ? 'L2' : 'L3';
-    syncBinderToLesson(ids[0]);
-    saveProgress();
-    renderSidebar();
-    renderLesson();
-    _updateHash();
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      document.body.classList.remove('sidebar-open');
-    }
-  });
-
-  // iter 94: 🧠 Bridge — route to a cross-track transfer-gap lesson. Picks
-  // the first candidate from `_bridgeCandidates()` (one per gap-mechanic,
-  // deterministic by MECHANIC_INDEX iteration order). Lands on L1 with a
-  // 2.2-sec fuchsia toast prefacing the transfer context. Closes iter-90
-  // roadmap #3 (the last queued entry).
-  const bridgeBtnEl = document.getElementById('bridge-btn');
-  if (bridgeBtnEl) bridgeBtnEl.addEventListener('click', () => {
-    const candidates = _bridgeCandidates();
-    if (!candidates.length) return;
-    const pick = candidates[0];
-    state.currentLessonId = pick.targetLessonId;
-    state.currentTab = 'L1';
-    syncBinderToLesson(pick.targetLessonId);
-    saveProgress();
-    renderSidebar();
-    renderLesson();
-    _updateHash();
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      document.body.classList.remove('sidebar-open');
-    }
-    _showBridgeToast(pick);
-  });
-
   document.getElementById('at-risk-btn').addEventListener('click', openAtRisk);
   document.getElementById('at-risk-close').addEventListener('click', () => atRiskModal.style.display = 'none');
   atRiskModal.addEventListener('click', (e) => {
     if (e.target === atRiskModal) atRiskModal.style.display = 'none';
   });
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  STREAK MAP MODAL — 60-day calendar density heatmap
+// ──────────────────────────────────────────────────────────────────────────
+function initStreakMapModal() {
   // iter 62: 📅 Streak Map — 60-day calendar density heatmap. Closes iter-59
   // roadmap entry #3. The modal renders a 9-column grid of 60 day-cells
   // (oldest top-left → today bottom-right with empty padding cells where
@@ -942,7 +1062,12 @@ async function init() {
   streakMapModal.addEventListener('click', (e) => {
     if (e.target === streakMapModal) streakMapModal.style.display = 'none';
   });
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  HEATSTRIP — 30-minute activity timeline + modal + auto-tick
+// ──────────────────────────────────────────────────────────────────────────
+function initHeatstrip() {
   // iter 107: ⏱ Session Heatstrip — sidebar-top 4px activity timeline.
   // renderHeatstrip rebuilds the 30 minute-cells from state.history and
   // toggles the wrap visibility based on whether any non-idle cell exists.
@@ -1004,28 +1129,12 @@ async function init() {
   // event. 60-sec interval matches the cell-grain — never refreshes mid-cell.
   renderHeatstrip();
   setInterval(renderHeatstrip, HEATSTRIP_MINUTE_MS);
+}
 
-  document.getElementById('reveal-replay-btn').addEventListener('click', () => {
-    const queue = _revealedQueue();
-    if (!queue.length) return;
-    // Drop the current lesson's reveal tracker BEFORE routing so the user
-    // gets a clean attempt window on arrival (lets the clean-pass invariant
-    // fire even if they were just on this lesson).
-    if (state.currentLessonId) delete _revealedInCurrentAttempt[state.currentLessonId];
-    const next = queue[0];
-    state.currentLessonId = next.lessonId;
-    state.currentTab = next.level;
-    delete _revealedInCurrentAttempt[next.lessonId];
-    syncBinderToLesson(next.lessonId);
-    saveProgress();
-    renderSidebar();
-    renderLesson();
-    _updateHash();
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      document.body.classList.remove('sidebar-open');
-    }
-  });
-
+// ──────────────────────────────────────────────────────────────────────────
+//  STATS MODAL — track balance, drill lifetime tiles, retention, mock PBs
+// ──────────────────────────────────────────────────────────────────────────
+function initStatsModal() {
   // Stats modal
   const statsModal = document.getElementById('stats-modal');
   function openStats() {
@@ -1315,7 +1424,12 @@ async function init() {
   statsModal.addEventListener('click', (e) => {
     if (e.target === statsModal) statsModal.style.display = 'none';
   });
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  TODAY'S PLAN MODAL — daily plan view, cram-day routing, topbar progress click
+// ──────────────────────────────────────────────────────────────────────────
+function initTodaysPlanModal() {
   // Today's plan modal
   const todayModal = document.getElementById('today-modal');
   function openToday() {
@@ -1473,7 +1587,17 @@ async function init() {
   }
   document.getElementById('today-btn').addEventListener('click', openTodaysPlan);
   document.getElementById('today-close').addEventListener('click', () => todayModal.style.display = 'none');
+  document.getElementById('topbar-cram-progress').addEventListener('click', () => openTodaysPlan());
+  todayModal.addEventListener('click', (e) => {
+    if (e.target === todayModal) todayModal.style.display = 'none';
+  });
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  PATH SWITCHER + CRAM REFS — path modal, sidebar curation, cram reference
+//  modals (Cheat/Glossary/Behavior/Shapes/Review)
+// ──────────────────────────────────────────────────────────────────────────
+function initPathSwitcher() {
   // Path switcher — sidebar chip opens the modal; picking a path is handled
   // inside openPathModal (sets subscription, saves, updates chip, closes).
   const pathModal = document.getElementById('path-modal');
@@ -1485,7 +1609,6 @@ async function init() {
   updatePathChip();
   applySidebarCuration();
   updateCramProgressStrip();
-  document.getElementById('topbar-cram-progress').addEventListener('click', () => openTodaysPlan());
 
   // Phase 3 — cram reference modals
   const cramRefModal = document.getElementById('cram-ref-modal');
@@ -1497,10 +1620,12 @@ async function init() {
   document.getElementById('cram-ref-close')?.addEventListener('click', () => cramRefModal.style.display = 'none');
   cramRefModal?.addEventListener('click', (e) => { if (e.target === cramRefModal) cramRefModal.style.display = 'none'; });
   updateCramReviewCount();
-  todayModal.addEventListener('click', (e) => {
-    if (e.target === todayModal) todayModal.style.display = 'none';
-  });
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  MECHANICS MODAL WIRING — open/close/back + list/matrix view toggles
+// ──────────────────────────────────────────────────────────────────────────
+function initMechanicsWiring() {
   // Mechanics modal — cross-cutting drill surface
   const mechanicsModal = document.getElementById('mechanics-modal');
   document.getElementById('mechanics-btn').addEventListener('click', openMechanicsModal);
@@ -1530,14 +1655,24 @@ async function init() {
   mechanicsModal.addEventListener('click', (e) => {
     if (e.target === mechanicsModal) closeMechanicsModal();
   });
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  HELP MODAL — close + backdrop (open is in the `?` keydown handler)
+// ──────────────────────────────────────────────────────────────────────────
+function initHelpModal() {
   // Help modal close (open is wired in the keydown handler with `?`)
   const helpModal = document.getElementById('help-modal');
   document.getElementById('help-close').addEventListener('click', () => helpModal.style.display = 'none');
   helpModal.addEventListener('click', (e) => {
     if (e.target === helpModal) helpModal.style.display = 'none';
   });
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  BACKUP / RESTORE — JSON download + file-input replace
+// ──────────────────────────────────────────────────────────────────────────
+function initBackupRestore() {
   // Backup — JSON download of all progress / reviews / bestTimes
   document.getElementById('backup-btn').addEventListener('click', () => {
     const raw = localStorage.getItem(LS_KEY) || JSON.stringify({ __v: 4, progress: state.progress });
@@ -1577,7 +1712,12 @@ async function init() {
     // Reset the input so the same file can be picked again later
     e.target.value = '';
   });
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  CHEATSHEET WIRING — overlay open/close, search, expand-all, PDF export
+// ──────────────────────────────────────────────────────────────────────────
+function initCheatsheetWiring() {
   // Cheatsheet — in-app quick-reference overlay (no download).
   const cheatsheetModal = document.getElementById('cheatsheet-modal');
   document.getElementById('export-btn').addEventListener('click', openCheatsheetModal);
@@ -1593,7 +1733,15 @@ async function init() {
   // iter 126: 📱 Save — printable PDF export. window.open() must fire synchronously
   // from this click handler (no await before it) to preserve iOS Safari popup-allow.
   document.getElementById('cheatsheet-save-pdf').addEventListener('click', exportCheatsheetToPdf);
+}
 
+// ──────────────────────────────────────────────────────────────────────────
+//  BOOT TAIL — paint initial badge state, mount cross-tab + interval +
+//  service-worker listeners, reflect persisted hide-mastered onto the button.
+//  Runs LAST because some of these read state that initBootstrap loaded and
+//  paint UI that the wiring sub-inits attached handlers to.
+// ──────────────────────────────────────────────────────────────────────────
+function initBootTail() {
   updateStreakUI();
   updateReviewBadge();
 

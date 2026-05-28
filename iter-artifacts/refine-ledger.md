@@ -36,3 +36,4 @@ Step 0 of the skill scans the last 6 rows. Watch for:
 | 10 | today-plan | Primary "🎯 Start: <plan[0]>" autopilot CTA at top of Today modal — one tap = drilling the smartest pick; 6-card list remains as override | 11/21 → 15/21 (proj.) | shipped |
 | 11 | mock-interview | Smart selection — replace Math.random with weighted pool (BOTH weak+due ×5, either ×3, baseline ×1); biases toward gaps while preserving interleaving | 15/21 → 18/21 (proj.) | shipped |
 | 12 | L2 fill-in | Auto-scroll next un-passed exercise to viewport top after a Check pass — mobile drilling becomes tap-tap-tap instead of tap-pause-scroll-tap | 15/21 → 18/21 (proj.) | shipped |
+| 13 | Reference tab | Inline "🎯 Drill from blank →" CTA right after canonical code — desktop fully above fold; mobile 307px closer (full mobile fix queued: sticky CTA / header compaction) | 13/21 → 16/21 (proj.) | shipped |

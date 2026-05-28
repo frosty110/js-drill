@@ -585,6 +585,15 @@ function renderReference(body, content) {
       </div>
     </div>
     <pre class="code-block cm-s-dracula" data-ref-code></pre>
+    <!-- Iter 13: inline autopilot CTA right after the canonical so the user
+         can transition to drilling without scrolling past mechanics + notes
+         (PROFILE.md line 27 ~80% phone; line 76-78 "press one thing → drilling").
+         Bottom Start-drills primary stays untouched for the patient-reader path;
+         this is the second anchor for the same action. -->
+    <div class="mt-3 flex items-center justify-end gap-2 text-xs">
+      <span class="text-slate-500">Memorized? </span>
+      <button class="secondary px-3 py-1" data-action="start-l1" style="font-size:12px;padding:4px 12px;">🎯 Drill from blank →</button>
+    </div>
     <div class="mt-4" data-ref-mechanics></div>
     <div class="mt-6">
       <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Notes</div>
@@ -652,7 +661,11 @@ function renderReference(body, content) {
     if (bulletsOn) _renderBulletsCode(codeEl, content);
     else colorizeInto(codeEl, ref.code);
   });
-  section.querySelector('[data-action="start-l1"]').addEventListener('click', () => selectTab('L1'));
+  // Iter 13: querySelectorAll → forEach so the new inline top CTA AND the
+  // existing bottom primary both fire selectTab('L1') from the same wiring.
+  section.querySelectorAll('[data-action="start-l1"]').forEach(btn => {
+    btn.addEventListener('click', () => selectTab('L1'));
+  });
 
   // iter 72: 🧩 Mechanic Drilldown — inline mechanic chips on the Reference
   // tab. Surfaces this lesson's `content.mechanics` ids as tappable pills

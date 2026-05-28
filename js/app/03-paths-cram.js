@@ -984,16 +984,26 @@ function openPathModal(opts = {}) {
       : `Pick the plan that drives your 📅 Today's Plan button. Switching is safe — your lesson progress is shared across every plan.`;
   }
   const currentId = state.subscribedPathId;
+  // On welcome, mark the Starter Plan as the recommended default so a first-
+  // time ADHD user has an obvious one-tap entry instead of comparing 3 blurbs
+  // (PROFILE.md § Cognitive style — "Default actions matter more than option
+  // exhaustiveness — pick something reasonable, let them override").
+  const recommendedId = welcome ? 'starter' : null;
   const cardsHtml = PATHS.map(p => {
     const active = !welcome && p.id === currentId;
-    const border = active ? '#34d399' : '#1e293b';
-    const bg = active ? 'rgba(52,211,153,0.08)' : '#0b1220';
+    const recommended = !active && p.id === recommendedId;
+    const border = active ? '#34d399' : recommended ? '#34d399' : '#1e293b';
+    const bg = active ? 'rgba(52,211,153,0.08)' : recommended ? 'rgba(52,211,153,0.06)' : '#0b1220';
     const tag = active
       ? `<span style="color:#34d399;font-size:13px;">● Current</span>`
       : (welcome
           ? `<span style="color:#64748b;font-size:13px;">Pick →</span>`
           : `<span style="color:#64748b;font-size:13px;">Switch →</span>`);
+    const recommendedBanner = recommended
+      ? `<span data-recommended style="display:inline-block;align-self:flex-start;color:#34d399;background:rgba(52,211,153,0.14);font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;">⭐ Recommended — most users start here</span>`
+      : '';
     return `<button data-path-id="${escapeHtml(p.id)}" style="text-align:left;padding:14px 16px;border-radius:8px;background:${bg};border:1px solid ${border};color:#e2e8f0;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
+      ${recommendedBanner}
       <span style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <span style="font-weight:600;font-size:14px;">${escapeHtml(p.icon || '')} ${escapeHtml(p.label)}</span>
         ${tag}

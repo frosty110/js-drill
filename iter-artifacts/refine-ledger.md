@@ -29,3 +29,4 @@ Step 0 of the skill scans the last 6 rows. Watch for:
 | 3 | mechanics | Default to Matrix view when transfer gaps exist — diagnostic-aware view first | 13/21 → 16/21 (proj.) | shipped |
 | 4 | mock-interview | Restore + enrich post-mock win line (prior-best delta) — fixes latent detached-feedback bug | 11/21 → 14/21 (proj.) | shipped |
 | 5 | today-plan | Stack title + why-tag vertically — fixes mobile clipping of "review due"/"weak spot"/"next on plan" on 80%-phone surface | 7/21 → 11/21 (proj.) | shipped |
+| 6 | plan-picker-modal | Add ⭐ RECOMMENDED badge + emerald accent on Starter Plan card in welcome mode — gives first-time ADHD users an obvious default | 8/21 → 11/21 (proj.) | shipped |

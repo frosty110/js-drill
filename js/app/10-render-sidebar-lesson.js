@@ -655,6 +655,19 @@ function renderLesson() {
   }
   shell.appendChild(tabs);
 
+  // Auto-center the active tab inside the strip on mobile where 6 tabs
+  // (Conv/Walk/Ref/L1/L2/L3) overflow the 390px viewport — without this,
+  // landing on a tab past tab #2 leaves the active marker off-screen
+  // (PROFILE.md line 27, 80% phone). Desktop is a no-op since the strip
+  // doesn't scroll there. requestAnimationFrame ensures layout is settled
+  // before measuring.
+  requestAnimationFrame(() => {
+    const activeBtn = tabs.querySelector('.tab-btn.active');
+    if (!activeBtn || tabs.scrollWidth <= tabs.clientWidth) return;
+    const targetLeft = activeBtn.offsetLeft - (tabs.clientWidth - activeBtn.offsetWidth) / 2;
+    tabs.scrollLeft = Math.max(0, Math.min(targetLeft, tabs.scrollWidth - tabs.clientWidth));
+  });
+
   // body
   const body = document.createElement('div');
   body.className = 'fade-in';

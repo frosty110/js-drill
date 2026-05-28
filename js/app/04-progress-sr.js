@@ -259,6 +259,8 @@ function loadProgress() {
     state.paceBarOn = !!parsed.paceBarOn;
     // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF).
     state.hapticOn = !!parsed.hapticOn;
+    // 🖍 ADHD Mode — opt-in toggle (default OFF) restyles Conversation prose.
+    state.adhdMode = !!parsed.adhdMode;
     state.timeCalibration = parsed.timeCalibration && typeof parsed.timeCalibration === 'object'
       ? {
           byMechanic: (parsed.timeCalibration.byMechanic && typeof parsed.timeCalibration.byMechanic === 'object') ? parsed.timeCalibration.byMechanic : {},
@@ -289,6 +291,16 @@ function loadProgress() {
       ? { items: (parsed.cramReview.items && typeof parsed.cramReview.items === 'object') ? parsed.cramReview.items : {},
           session: parsed.cramReview.session || null }
       : { items: {}, session: null };
+    state.glossaryQuiz = parsed.glossaryQuiz && typeof parsed.glossaryQuiz === 'object'
+      ? {
+          sessions: +parsed.glossaryQuiz.sessions || 0,
+          attempts: +parsed.glossaryQuiz.attempts || 0,
+          correct: +parsed.glossaryQuiz.correct || 0,
+          lastRunAt: +parsed.glossaryQuiz.lastRunAt || 0,
+          perTerm: (parsed.glossaryQuiz.perTerm && typeof parsed.glossaryQuiz.perTerm === 'object') ? parsed.glossaryQuiz.perTerm : {},
+          session: parsed.glossaryQuiz.session || null
+        }
+      : { sessions: 0, attempts: 0, correct: 0, lastRunAt: 0, perTerm: {}, session: null };
     state.welcomed = !!parsed.welcomed;
     state.hideMastered = !!parsed.hideMastered;
     state.repairFilter = !!parsed.repairFilter;
@@ -386,6 +398,7 @@ function saveProgress() {
     timeCalibration: state.timeCalibration,
     paceBarOn: state.paceBarOn,
     hapticOn: state.hapticOn,
+    adhdMode: state.adhdMode,
     whatif: state.whatif,
     mutate: state.mutate,
     phoneScreen: state.phoneScreen,
@@ -396,6 +409,7 @@ function saveProgress() {
     cramTaskChecks: state.cramTaskChecks,
     cramView: state.cramView,
     cramReview: state.cramReview,
+    glossaryQuiz: state.glossaryQuiz,
     welcomed: state.welcomed,
     hideMastered: state.hideMastered,
     repairFilter: state.repairFilter,

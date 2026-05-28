@@ -550,25 +550,32 @@ const TOPBAR_MENU_TAXONOMY = {
     blurb: 'Toggles, data, and account.',
     // 🧭 Plan View + 👁 Hide Mastered are NOT here — they're view filters that
     // live on the sidebar (under the Path chip), not in this menu.
-    items: ['clarify-ritual-btn', 'hotseat-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
+    items: ['clarify-ritual-btn', 'hotseat-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'adhd-mode-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
   }
 };
 
 // Pull display data from the sidebar button itself so the taxonomy stays
 // DRY: button label is the source of truth, descriptions come from the
 // `title` attribute the sidebar buttons already populate for hover-help.
-// Returns null when the button is missing OR currently hidden (the
-// conditional sidebar buttons — Review/Weak/At Risk/etc. — use a `hidden`
-// class until the underlying state populates them; menu items follow the
-// same actionability gate so we don't list dead clicks).
+// Returns null when the button is missing OR currently unactionable. Three
+// hide channels exist, deliberately distinct:
+//
+//   .hidden class            → dynamic empty-state hide (Review/Weak/At-Risk
+//                              while count=0). Filter out — the action would
+//                              launch into nothing.
+//   inline style.display:none → context/capability hide (#haptic-btn on iOS,
+//                              cram-only buttons with no cram active). Filter
+//                              out — the surface genuinely can't act.
+//   .sidebar-curation-hidden  → plan UX-focus hide. KEEP. The button is fully
+//                              actionable; the active plan only chose not to
+//                              clutter the sidebar with it. Activities are
+//                              modality, not corpus — Drill/Train/Reflect
+//                              menus should expose every recall direction
+//                              regardless of plan. See applySidebarCuration
+//                              in js/app/03-paths-cram.js for the contract.
 function _topbarItemFromButton(btn) {
   if (!btn) return null;
   if (btn.classList.contains('hidden')) return null;
-  // iter 141: also respect style.display === 'none' so capability-gated
-  // buttons (e.g. #haptic-btn hidden on iOS Safari where navigator.vibrate
-  // is undefined) don't leak into the topbar menu. The .hidden class covers
-  // dynamic empty-state hides (Review/Weak/At-Risk); style.display covers
-  // permanent platform-capability hides.
   if (btn.style.display === 'none') return null;
   const cloned = btn.cloneNode(true);
   // Strip count spans (e.g. <span id="review-count">0</span>) so the label

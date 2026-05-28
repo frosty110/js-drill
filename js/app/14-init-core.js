@@ -610,6 +610,29 @@ function initSettingsToggles() {
       });
     }
   }
+
+  // 🖍 ADHD Mode — opt-in toggle (default OFF). Purple-200 hover when ON.
+  // Restyles the Conversation tab with bionic word-heads + marker highlight
+  // on backtick code terms + looser spacing. The body.adhd-mode class drives
+  // the CSS for marker + spacing; bionic markup is render-time gated, so we
+  // re-render the active lesson when toggled while on the Conversation tab
+  // (markup only emitted when ON, keeps off-users' DOM clean).
+  const adhdBtn = document.getElementById('adhd-mode-btn');
+  if (adhdBtn) {
+    if (state.adhdMode) {
+      adhdBtn.classList.add('text-purple-200');
+      adhdBtn.classList.remove('text-slate-500');
+      document.body.classList.add('adhd-mode');
+    }
+    adhdBtn.addEventListener('click', () => {
+      state.adhdMode = !state.adhdMode;
+      adhdBtn.classList.toggle('text-purple-200', state.adhdMode);
+      adhdBtn.classList.toggle('text-slate-500', !state.adhdMode);
+      document.body.classList.toggle('adhd-mode', state.adhdMode);
+      saveProgress();
+      if (state.currentLessonId && state.currentTab === 'conversation') renderLesson();
+    });
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────

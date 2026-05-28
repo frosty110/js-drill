@@ -9,18 +9,56 @@
 // Each section is collapsed by default. The title + prompt stay visible
 // (skim-able on mobile), and tapping expands the body. Uses native <details>
 // so there's no JS state to manage and accessibility / keyboard nav is free.
+//
+// Prose enrichment — `enrichConvText` is applied to all conv body text (say,
+// why, intro). Two layers:
+//   1. Always: convert backtick `code` spans → styled <code class="conv-code">.
+//      Authoring convention across all 99+ existing conversations puts code
+//      tokens (`nums`, `target`, `O(1)`) in backticks; this renders them as
+//      inline code instead of leaking literal backticks into the UI.
+//   2. ADHD Mode (when state.adhdMode): bionic word-heads — wrap the leading
+//      letters of each 2+ letter word in <b class="adhd-fix">. Splits on code
+//      blocks and HTML tags so we don't bionicize inside <code> or break
+//      <br> tags. HTML entities (&lt; etc.) are skipped by the word regex.
+//      The marker-highlight effect on .conv-code is CSS-only (driven by the
+//      body.adhd-mode class) — render-time output is identical for the code
+//      spans regardless of toggle, so toggling marker doesn't require a
+//      re-render; bionic markup IS render-gated.
+function _bionicizeConvSegment(seg) {
+  // Length-scaled prefix bold: short words get 1, medium 2, long ~40%.
+  // Matches HTML entities and skips them so &lt; etc. pass through intact.
+  return seg.replace(/&[a-zA-Z]+;|&#\d+;|[A-Za-zÀ-ÿ]{2,}/g, m => {
+    if (m[0] === '&') return m;
+    const L = m.length;
+    const n = L <= 3 ? 1 : L <= 7 ? Math.ceil(L * 0.5) : Math.ceil(L * 0.4);
+    return '<b class="adhd-fix">' + m.slice(0, n) + '</b>' + m.slice(n);
+  });
+}
+function enrichConvText(escaped) {
+  // Step 1: backtick spans → <code> (always-on baseline).
+  let html = escaped.replace(/`([^`]+)`/g, '<code class="conv-code">$1</code>');
+  // Step 2: bionic word-heads (ADHD only). Split keeps <code>…</code> blocks
+  // AND single tags (e.g. <br>) on odd indices so they pass through untouched.
+  if (typeof state !== 'undefined' && state.adhdMode) {
+    html = html.split(/(<code[^>]*>[\s\S]*?<\/code>|<[^>]+>)/)
+      .map((seg, i) => i % 2 === 1 ? seg : _bionicizeConvSegment(seg))
+      .join('');
+  }
+  return html;
+}
 function renderConversation(body, content) {
   const conv = content.conversation;
   const section = document.createElement('div');
   const intro = conv.intro
-    ? `<div class="conv-intro">${escapeHtml(conv.intro)}</div>`
+    ? `<div class="conv-intro">${enrichConvText(escapeHtml(conv.intro))}</div>`
     : '';
   // Multi-paragraph text → escaped <p> blocks. No markdown rendering — keep
   // authoring constraints simple (just \n\n for paragraph breaks, single \n
-  // for soft breaks).
+  // for soft breaks). enrichConvText layers in code spans + (when ADHD Mode
+  // is on) bionic word-heads.
   const paragraphsOf = (text) => (text || '')
     .split(/\n\s*\n/)
-    .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .map(p => `<p>${enrichConvText(escapeHtml(p).replace(/\n/g, '<br>'))}</p>`)
     .join('');
   const sectionsHtml = conv.sections.map((s) => {
     const promptHtml = s.prompt

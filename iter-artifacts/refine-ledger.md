@@ -26,3 +26,4 @@ Step 0 of the skill scans the last 6 rows. Watch for:
 - The user model: `PROFILE.md` (load-bearing — re-read every iter)
 | 1 | diagnostic-results | Add primary "🎯 Drill weakest: <section>" CTA — diagnostic→drilling autopilot bridge | 8/21 → 13/21 (proj.) | shipped |
 | 2 | reflect-dashboard | Constrain Stats modal to max-height:90vh + internal overflow-y — Track Balance no longer clipped off-viewport | 9/21 → 13/21 (proj.) | shipped |
+| 3 | mechanics | Default to Matrix view when transfer gaps exist — diagnostic-aware view first | 13/21 → 16/21 (proj.) | shipped |

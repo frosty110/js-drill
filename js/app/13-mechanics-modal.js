@@ -46,7 +46,30 @@ async function openMechanicsModal() {
   if (body) body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Loading mechanics…</div>`;
   modal.style.display = 'block';
   await ensureMechanicIndex();
+  // Diagnostic-aware default: when ≥1 transfer gap exists (mastered in one
+  // track but not another), open directly to Matrix view so the user lands
+  // on the actionable rows. Otherwise List view stays the default — for a
+  // new / no-progress / brand-balanced user the matrix is all "—" and the
+  // category-grouped list is more useful. PROFILE.md:67-68 — "Use recent
+  // diagnostic signal to bias the pick"; PROFILE.md:53-54 — "Default
+  // actions matter more than option exhaustiveness." Toggle still lets the
+  // user override one tap away.
+  if (_hasTransferGaps()) {
+    _mechanicsView = 'matrix';
+    _mechanicsPrevView = 'matrix';
+  }
   renderMechanicsModal();
+}
+
+// Diagnostic-aware view-picker helper. Returns true when there is at least
+// one mechanic with the transferGap flag set (mastered=full in ≥1 track
+// AND 0 mastered in ≥1 other track with non-zero coverage). Pure derivation
+// from MECHANICS × MECHANIC_INDEX × state.progress.
+function _hasTransferGaps() {
+  if (!MECHANICS || !MECHANICS.length) return false;
+  if (!MECHANIC_INDEX || MECHANIC_INDEX.size === 0) return false;
+  const rows = _mechanicsTrackMatrix();
+  return rows.some(r => r.transferGap);
 }
 
 // iter 72: open the mechanics modal directly to the detail view for a given

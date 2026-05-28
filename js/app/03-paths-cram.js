@@ -427,6 +427,17 @@ async function openCramCheatModal() {
 
 async function openCramGlossaryModal() {
   await loadCramRefs();
+  const total = CRAM_REFS.glossary.length;
+  const renderQuizCta = () => {
+    const sess = state.glossaryQuiz && state.glossaryQuiz.session;
+    if (sess && sess.queue && sess.index < sess.queue.length) {
+      return `<div style="position:sticky;top:0;background:#0f172a;z-index:1;display:flex;gap:8px;padding-bottom:6px;">
+        <button data-glossquiz-resume style="flex:1;background:#0e7490;color:#cffafe;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">▶ Resume quiz · ${sess.index + 1}/${sess.queue.length}</button>
+        <button data-glossquiz-restart title="Discard the in-progress quiz and start fresh" style="background:#1e293b;color:#94a3b8;border:none;border-radius:8px;padding:10px 12px;font-size:13px;cursor:pointer;font-family:inherit;">↻</button>
+      </div>`;
+    }
+    return `<button data-glossquiz-start style="position:sticky;top:0;z-index:1;width:100%;background:#0e7490;color:#cffafe;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🎯 Quiz me (${Math.min(GLOSSARY_QUIZ_LEN, total)} questions)</button>`;
+  };
   const renderTerms = (q) => CRAM_REFS.glossary
     .filter(t => _matchesSearch(q, t.term, t.def, t.where))
     .map(t => `<div style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;">
@@ -435,11 +446,191 @@ async function openCramGlossaryModal() {
       ${t.where ? `<div style="font-size:11px;color:#94a3b8;margin-top:8px;padding-top:8px;border-top:1px solid #1e293b;"><strong style="color:#64748b;">Where:</strong> ${escapeHtml(t.where)}</div>` : ''}
     </div>`).join('') || `<div style="color:#64748b;text-align:center;padding:24px;font-size:13px;">No terms match.</div>`;
   _openCramRefModal({
-    title: `🅰 Glossary — ${CRAM_REFS.glossary.length} interview terms`,
+    title: `🅰 Glossary — ${total} interview terms`,
     sub: 'Definitions and where each term shows up in problems.',
     searchPlaceholder: 'Filter terms or definitions…',
-    bodyHtml: renderTerms(''),
-    onSearch: (q, body) => { body.innerHTML = renderTerms(q); }
+    bodyHtml: renderQuizCta() + renderTerms(''),
+    onSearch: (q, body) => { body.innerHTML = renderQuizCta() + renderTerms(q); wireGlossaryQuizCta(); },
+    onBody: wireGlossaryQuizCta
+  });
+}
+
+function wireGlossaryQuizCta() {
+  const startBtn = document.querySelector('[data-glossquiz-start]');
+  if (startBtn) startBtn.addEventListener('click', startGlossaryQuiz);
+  const resumeBtn = document.querySelector('[data-glossquiz-resume]');
+  if (resumeBtn) resumeBtn.addEventListener('click', renderGlossaryQuizSession);
+  const restartBtn = document.querySelector('[data-glossquiz-restart]');
+  if (restartBtn) restartBtn.addEventListener('click', () => {
+    if (!confirm('Discard the in-progress quiz and start fresh?')) return;
+    state.glossaryQuiz.session = null;
+    saveProgress();
+    startGlossaryQuiz();
+  });
+}
+
+// MC quiz over cram glossary terms. Mixed direction: half the cards show the
+// term and ask for the definition; the other half show the definition and ask
+// for the term. Distractors are 3 random other entries from the glossary, in
+// the same field (defs for term→def cards, terms for def→term cards). Shares
+// the cram-ref-modal shell with the browse view; an in-progress session
+// resurfaces via a "Resume quiz" CTA at the top of the browse list.
+const GLOSSARY_QUIZ_LEN = 10;
+
+function _glossaryQuizShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function buildGlossaryQuizQueue(n) {
+  const terms = (CRAM_REFS.glossary || []).filter(t => t && t.term && t.def);
+  if (!terms.length) return [];
+  const picked = _glossaryQuizShuffle(terms).slice(0, Math.min(n, terms.length));
+  return picked.map((t, i) => {
+    const kind = i % 2 === 0 ? 'term2def' : 'def2term';
+    const others = terms.filter(o => o.term !== t.term);
+    const distractors = _glossaryQuizShuffle(others).slice(0, 3);
+    const correct = kind === 'term2def' ? t.def : t.term;
+    const distractorVals = distractors.map(d => kind === 'term2def' ? d.def : d.term);
+    const options = _glossaryQuizShuffle([correct, ...distractorVals]);
+    return {
+      kind,
+      term: t.term,
+      def: t.def,
+      where: t.where || '',
+      options,
+      correctIdx: options.indexOf(correct)
+    };
+  });
+}
+
+async function startGlossaryQuiz() {
+  await loadCramRefs();
+  const queue = buildGlossaryQuizQueue(GLOSSARY_QUIZ_LEN);
+  if (!queue.length) return;
+  state.glossaryQuiz.session = { queue, index: 0, picked: null, correctCount: 0 };
+  state.glossaryQuiz.sessions++;
+  state.glossaryQuiz.lastRunAt = Date.now();
+  saveProgress();
+  renderGlossaryQuizSession();
+}
+
+function renderGlossaryQuizSession() {
+  const sess = state.glossaryQuiz && state.glossaryQuiz.session;
+  const modal = document.getElementById('cram-ref-modal');
+  const titleEl = document.getElementById('cram-ref-title');
+  const subEl = document.getElementById('cram-ref-sub');
+  const search = document.getElementById('cram-ref-search');
+  const body = document.getElementById('cram-ref-body');
+  if (!modal || !sess) return;
+  if (search) { search.hidden = true; search.value = ''; search.oninput = null; }
+  modal.style.display = 'block';
+
+  if (sess.index >= sess.queue.length) {
+    const total = sess.queue.length;
+    const pct = total ? Math.round(100 * sess.correctCount / total) : 0;
+    titleEl.textContent = '🎯 Glossary Quiz · done';
+    subEl.textContent = `${sess.correctCount} / ${total} correct`;
+    body.innerHTML = `<div style="text-align:center;padding:30px 12px;">
+      <div style="font-size:48px;font-weight:700;color:${pct >= 70 ? '#34d399' : '#fbbf24'};font-variant-numeric:tabular-nums;line-height:1;">${pct}%</div>
+      <div style="color:#94a3b8;font-size:14px;margin-top:6px;">recall</div>
+      <div style="display:flex;justify-content:center;gap:10px;margin-top:22px;flex-wrap:wrap;">
+        <button data-glossquiz-retake style="background:#34d399;color:#0f172a;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Retake</button>
+        <button data-glossquiz-done style="background:#1e293b;color:#e2e8f0;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Back to glossary</button>
+      </div>
+    </div>`;
+    body.querySelector('[data-glossquiz-retake]').addEventListener('click', () => {
+      state.glossaryQuiz.session = null;
+      saveProgress();
+      startGlossaryQuiz();
+    });
+    body.querySelector('[data-glossquiz-done]').addEventListener('click', () => {
+      state.glossaryQuiz.session = null;
+      saveProgress();
+      openCramGlossaryModal();
+    });
+    return;
+  }
+
+  const card = sess.queue[sess.index];
+  const pct = Math.round(100 * sess.index / sess.queue.length);
+  const revealed = sess.picked !== null;
+  const isTerm2Def = card.kind === 'term2def';
+  const promptText = isTerm2Def ? card.term : card.def;
+  const promptSub = isTerm2Def ? 'Pick the definition.' : 'Which term does this define?';
+
+  titleEl.textContent = `🎯 Glossary Quiz · ${sess.index + 1}/${sess.queue.length}`;
+  subEl.textContent = `Score so far: ${sess.correctCount}/${sess.index}${sess.index ? ` (${Math.round(100*sess.correctCount/sess.index)}%)` : ''}`;
+
+  const optionsHtml = card.options.map((opt, i) => {
+    let bg = '#0b1220', border = '#1e293b', color = '#e2e8f0';
+    if (revealed) {
+      if (i === card.correctIdx) { bg = '#064e3b'; border = '#34d399'; color = '#d1fae5'; }
+      else if (i === sess.picked) { bg = '#7f1d1d'; border = '#f87171'; color = '#fecaca'; }
+    }
+    const letter = String.fromCharCode(65 + i);
+    return `<button data-glossquiz-pick="${i}" ${revealed ? 'disabled' : ''} style="display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;background:${bg};border:1px solid ${border};border-radius:8px;padding:12px 14px;color:${color};font-size:14px;line-height:1.5;cursor:${revealed ? 'default' : 'pointer'};font-family:inherit;">
+      <span style="font-weight:700;color:#67e8f9;font-size:13px;min-width:18px;">${letter}</span>
+      <span style="flex:1;">${escapeHtml(opt)}</span>
+    </button>`;
+  }).join('');
+
+  const feedbackHtml = revealed
+    ? `<div style="background:#0b1220;border-left:3px solid ${sess.picked === card.correctIdx ? '#34d399' : '#f87171'};border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:#e2e8f0;line-height:1.55;">
+        <div style="font-size:11px;color:${sess.picked === card.correctIdx ? '#34d399' : '#f87171'};text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px;">${sess.picked === card.correctIdx ? '✓ Correct' : '✗ Not quite'}</div>
+        <div><strong style="color:#67e8f9;">${escapeHtml(card.term)}</strong> — ${escapeHtml(card.def)}</div>
+        ${card.where ? `<div style="font-size:12px;color:#94a3b8;margin-top:8px;padding-top:8px;border-top:1px solid #1e293b;"><strong style="color:#64748b;">Where:</strong> ${escapeHtml(card.where)}</div>` : ''}
+      </div>`
+    : '';
+
+  body.innerHTML = `<div style="display:flex;flex-direction:column;min-height:280px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <button data-glossquiz-back title="Exit quiz" style="background:transparent;border:none;color:#64748b;font-size:18px;line-height:1;cursor:pointer;padding:0 6px;font-family:inherit;">←</button>
+      <div style="flex:1;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#67e8f9;width:${pct}%;transition:width .25s;"></div></div>
+      <div style="font-size:11px;color:#94a3b8;font-variant-numeric:tabular-nums;min-width:50px;text-align:right;">${sess.index + 1}/${sess.queue.length}</div>
+    </div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">${escapeHtml(promptSub)}</div>
+    <div style="font-size:${isTerm2Def ? '22px' : '14px'};font-weight:${isTerm2Def ? '700' : '500'};color:#f8fafc;line-height:1.4;margin-bottom:16px;">${escapeHtml(promptText)}</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">${optionsHtml}</div>
+    ${feedbackHtml}
+    ${revealed ? `<div style="margin-top:16px;"><button data-glossquiz-next style="width:100%;padding:12px;border-radius:8px;border:none;background:#34d399;color:#0f172a;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">${sess.index + 1 >= sess.queue.length ? 'See results →' : 'Next →'}</button></div>` : ''}
+  </div>`;
+
+  body.querySelectorAll('[data-glossquiz-pick]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (sess.picked !== null) return;
+      const i = +btn.getAttribute('data-glossquiz-pick');
+      const wasCorrect = i === card.correctIdx;
+      sess.picked = i;
+      if (wasCorrect) sess.correctCount++;
+      state.glossaryQuiz.attempts++;
+      if (wasCorrect) state.glossaryQuiz.correct++;
+      const pt = state.glossaryQuiz.perTerm[card.term] || { seen: 0, correct: 0 };
+      pt.seen++;
+      if (wasCorrect) pt.correct++;
+      state.glossaryQuiz.perTerm[card.term] = pt;
+      saveProgress();
+      renderGlossaryQuizSession();
+    });
+  });
+  const nextBtn = body.querySelector('[data-glossquiz-next]');
+  if (nextBtn) nextBtn.addEventListener('click', () => {
+    sess.index++;
+    sess.picked = null;
+    saveProgress();
+    renderGlossaryQuizSession();
+  });
+  const backBtn = body.querySelector('[data-glossquiz-back]');
+  if (backBtn) backBtn.addEventListener('click', () => {
+    if (sess.picked === null && sess.index === 0) {
+      state.glossaryQuiz.session = null;
+      saveProgress();
+    }
+    openCramGlossaryModal();
   });
 }
 
@@ -699,31 +890,59 @@ function updatePathChip() {
 
 // Buttons that should only ever surface when a cram-kind path is active.
 // On no-path / Starter / any path without sidebarButtons[], these stay hidden
-// (in topbar dropdowns too — _topbarItemFromButton filters display:none).
+// EVERYWHERE — sidebar, topbar dropdowns, and the ⌘K palette — because they
+// have no meaningful action without a cram context. Mechanism: inline
+// style.display:none, which _topbarItemFromButton filters out.
 const CRAM_ONLY_BUTTON_IDS = new Set([
   'cram-cheat-btn', 'cram-glossary-btn', 'cram-behavior-btn',
   'cram-shapes-btn', 'cram-review-btn'
 ]);
 
-// When a path declares `sidebarButtons[]`, hide every button NOT in the list
-// (and show every listed button that exists). Paths without the field render
-// the full power-user sidebar, EXCEPT the cram-only buttons which stay hidden
-// (their context-of-use is a cram path only).
+// Plan-based sidebar curation. Two distinct hide mechanisms, by design:
+//
+//   • .sidebar-curation-hidden (CSS class) — PLAN UX-FOCUS hide. Applied to
+//     buttons NOT in a curated path's `sidebarButtons[]` allowlist. The
+//     button is still ACTIONABLE: it stays available in the topbar Drill /
+//     Train / Reflect menus and the ⌘K palette, because activities are
+//     *modality* (how you recall), not *corpus* (which lessons). A plan
+//     should narrow the lesson corpus, not gate the recall directions.
+//
+//   • inline style.display:none — CONTEXT/CAPABILITY hide. Used for
+//     CRAM_ONLY_BUTTON_IDS (no cram active) and capability gates (e.g.
+//     #haptic-btn on iOS Safari where navigator.vibrate is absent). The
+//     button can't usefully act, so it disappears from every surface.
+//     _topbarItemFromButton's `btn.style.display === 'none'` check filters
+//     these from the topbar — that is the load-bearing reason this branch
+//     keeps using inline style instead of the class.
+//
+// Background (2026-05-27): the topbar Drill and Train menus silently went
+// empty on the prep-4day cram because every drill/train button was hidden
+// by the curation allowlist via inline display:none, which the topbar
+// reader read as "permanently unavailable." Splitting the two mechanisms
+// (class for plan-curation, inline-style for context-gating) decouples
+// sidebar UX-focus from topbar/palette discoverability without altering
+// the sidebar's visual result.
 function applySidebarCuration() {
   const path = getSubscribedPath();
   const list = path && Array.isArray(path.sidebarButtons) ? path.sidebarButtons : null;
   const candidates = document.querySelectorAll('[id$="-btn"], #streak-display');
   if (!list) {
+    // No allowlist: cram-only buttons hide everywhere (context-gated);
+    // everything else is fully visible.
     candidates.forEach(el => {
+      el.classList.remove('sidebar-curation-hidden');
       if (CRAM_ONLY_BUTTON_IDS.has(el.id)) el.style.display = 'none';
       else el.style.removeProperty('display');
     });
     return;
   }
+  // Allowlist present: listed buttons show; everything else gets the
+  // SIDEBAR-ONLY hide. Inline style.display is deliberately not touched
+  // here — capability hides own that channel.
   const set = new Set(list);
   candidates.forEach(el => {
-    if (set.has(el.id)) el.style.removeProperty('display');
-    else el.style.display = 'none';
+    if (set.has(el.id)) el.classList.remove('sidebar-curation-hidden');
+    else el.classList.add('sidebar-curation-hidden');
   });
 }
 

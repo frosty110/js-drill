@@ -199,6 +199,22 @@ must be one atomic edit or they vanish).
   the new spine; Plan scopes only the Problems surface.
 - **DOM-retention + synth-click:** launcher `<button>` nodes stay in the DOM (hidden);
   topbar activities + Cmd-K launch via synthetic-click. Don't delete them.
+- **Curation vs capability — two-channel hide contract** (2026-05-27, after the
+  prep-4day Drill/Train empty-menu regression). Sidebar buttons can be hidden
+  for two unrelated reasons, and the topbar/palette must distinguish them:
+  - **`.sidebar-curation-hidden`** (CSS class, set by `applySidebarCuration`):
+    plan UX-focus hide. Button stays *actionable* via topbar Drill / Train /
+    Reflect menus and the ⌘K palette. **Activities are modality, not corpus**
+    — a plan should narrow which lessons matter, not gate which recall
+    directions exist. Cram users still need Bug-Hunt / Recognize / Gotcha
+    over the cram's corpus.
+  - **inline `style.display:none`**: capability/context hide. Used for
+    `CRAM_ONLY_BUTTON_IDS` (no cram active) and platform-capability gates
+    (e.g. `#haptic-btn` on iOS Safari without `navigator.vibrate`). Button
+    has no useful action → hidden *everywhere*, including topbar and palette.
+  `_topbarItemFromButton` reads only the inline-style + `.hidden`-class
+  channels, so `.sidebar-curation-hidden` is invisible to the topbar by
+  design.
 - **One curation principle, three consumers:** `body.in-session` (hide all chrome),
   `plan.sidebarButtons[]` (plan-scoped problems), and surface-toggle (problems vs
   reference) are all specializations of the generalized `applySidebarCuration` (Phase 4).

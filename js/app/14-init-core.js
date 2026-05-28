@@ -633,6 +633,31 @@ function initSettingsToggles() {
       if (state.currentLessonId && state.currentTab === 'conversation') renderLesson();
     });
   }
+
+  // 🔠 Font scale — cycles md (1.0×) → lg (1.125×, default) → xl (1.25×) → md.
+  // The --font-scale CSS variable on :root drives html font-size so every
+  // rem-based value scales uniformly. Button label reflects the current step
+  // ("🔠 Font: M / L / XL") so users see the state without opening a menu.
+  // No re-render needed — CSS picks up the variable change instantly.
+  const fontBtn = document.getElementById('font-size-btn');
+  if (fontBtn) {
+    const FONT_SCALE_FACTOR = { md: 1.0, lg: 1.125, xl: 1.25 };
+    const FONT_SCALE_LABEL  = { md: 'M',  lg: 'L',     xl: 'XL'  };
+    const FONT_SCALE_NEXT   = { md: 'lg', lg: 'xl',    xl: 'md'  };
+    function _applyFontScale() {
+      const k = state.fontScale in FONT_SCALE_FACTOR ? state.fontScale : 'lg';
+      document.documentElement.style.setProperty('--font-scale', FONT_SCALE_FACTOR[k]);
+      fontBtn.textContent = '🔠 Font: ' + FONT_SCALE_LABEL[k];
+      fontBtn.classList.toggle('text-teal-200', k !== 'md');
+      fontBtn.classList.toggle('text-slate-500', k === 'md');
+    }
+    _applyFontScale();
+    fontBtn.addEventListener('click', () => {
+      state.fontScale = FONT_SCALE_NEXT[state.fontScale] || 'lg';
+      _applyFontScale();
+      saveProgress();
+    });
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────

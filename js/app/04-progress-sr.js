@@ -261,6 +261,10 @@ function loadProgress() {
     state.hapticOn = !!parsed.hapticOn;
     // 🖍 ADHD Mode — opt-in toggle (default OFF) restyles Conversation prose.
     state.adhdMode = !!parsed.adhdMode;
+    // 🔠 App-wide font scale. Legacy users get 'lg' (the new baseline) so the
+    // bump applies on first reload after this ships; explicit 'md' restores
+    // the original size.
+    state.fontScale = ['md','lg','xl'].includes(parsed.fontScale) ? parsed.fontScale : 'lg';
     state.timeCalibration = parsed.timeCalibration && typeof parsed.timeCalibration === 'object'
       ? {
           byMechanic: (parsed.timeCalibration.byMechanic && typeof parsed.timeCalibration.byMechanic === 'object') ? parsed.timeCalibration.byMechanic : {},
@@ -399,6 +403,7 @@ function saveProgress() {
     paceBarOn: state.paceBarOn,
     hapticOn: state.hapticOn,
     adhdMode: state.adhdMode,
+    fontScale: state.fontScale,
     whatif: state.whatif,
     mutate: state.mutate,
     phoneScreen: state.phoneScreen,

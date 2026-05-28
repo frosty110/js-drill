@@ -550,7 +550,7 @@ const TOPBAR_MENU_TAXONOMY = {
     blurb: 'Toggles, data, and account.',
     // 🧭 Plan View + 👁 Hide Mastered are NOT here — they're view filters that
     // live on the sidebar (under the Path chip), not in this menu.
-    items: ['clarify-ritual-btn', 'hotseat-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'adhd-mode-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
+    items: ['clarify-ritual-btn', 'hotseat-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'adhd-mode-btn', 'font-size-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
   }
 };
 

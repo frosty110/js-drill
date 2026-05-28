@@ -1321,9 +1321,15 @@ function initTodaysPlanModal() {
       body.innerHTML = plan.map(({ id, why }) => {
         const lesson = findLesson(id);
         const colors = { 'review due': '#67e8f9', 'next on plan': '#93c5fd', 'weak spot': '#fdba74' };
-        return `<button data-lesson-id="${escapeHtml(id)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-          <span><span style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-right:8px;">${escapeHtml((TRACK_PILLS[lesson?.track] || TRACK_PILLS.patterns).label)}</span>${escapeHtml(lesson?.title || id)}</span>
-          <span style="color:${colors[why] || '#94a3b8'}; font-size:11px;">${escapeHtml(why)}</span>
+        const tint =   { 'review due': 'rgba(103,232,249,0.12)', 'next on plan': 'rgba(147,197,253,0.12)', 'weak spot': 'rgba(253,186,116,0.14)' };
+        const tagColor = colors[why] || '#94a3b8';
+        const tagBg = tint[why] || 'rgba(148,163,184,0.10)';
+        // Stack title + why-tag vertically so the tag stays visible on mobile —
+        // the prior `flex justify-between` row clipped long titles' tags off
+        // the right edge on 375px viewports (PROFILE-stated 80% phone use).
+        return `<button data-lesson-id="${escapeHtml(id)}" data-why="${escapeHtml(why)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:pointer; display:flex; flex-direction:column; align-items:stretch; gap:6px;">
+          <span style="display:block;"><span style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-right:8px;">${escapeHtml((TRACK_PILLS[lesson?.track] || TRACK_PILLS.patterns).label)}</span>${escapeHtml(lesson?.title || id)}</span>
+          <span data-why-tag style="align-self:flex-start; color:${tagColor}; background:${tagBg}; font-size:11px; font-weight:500; padding:2px 8px; border-radius:999px; letter-spacing:0.01em;">${escapeHtml(why)}</span>
         </button>`;
       }).join('');
       body.querySelectorAll('[data-lesson-id]').forEach(btn => {

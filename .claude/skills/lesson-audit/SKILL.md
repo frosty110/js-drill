@@ -184,9 +184,48 @@ For each lesson, score every L1 question and every L2 exercise on a 1-3 scale.
 - Lesson mean = (L1 mean + L2 mean) / 2
 - **Bottom-quartile flag** if Lesson mean < 1.80
 
-### Rubric `distractor-plausibility` (placeholder — author when needed)
+### Rubric `distractor-plausibility` (authored 2026-05-27)
 
-Focused pass scoring only L1 distractor quality. Detects "throwaway distractor" anti-pattern. Not yet authored.
+**Authoritative reference**: `docs/l1-distractor-quality.md`. Load that doc verbatim into the subagent prompt before scoring.
+
+Focused pass scoring L1 wrong-answer quality. Detects the "throwaway distractor" anti-pattern that lets users eliminate options without engaging with the question's load-bearing idea.
+
+For each L1 question, score each of the 3 distractors (the options NOT at index `answer`) as 1 (strong) or 0 (weak), then sum.
+
+**Strong (1)** — matches one of the categories in `docs/l1-distractor-quality.md` § "Strong distractors":
+- Genuine misconception a half-remembering engineer would actually assert
+- Adjacent-concept confusion (Map vs Set, Symbol.iterator vs Symbol.asyncIterator, etc.)
+- Subtly wrong rule that breaks on an edge case
+- Plausible-sounding fake mechanism
+- Inverted condition
+- Right-answer-to-different-question
+
+**Weak (0)** — matches any pattern in `docs/l1-distractor-quality.md` § "Weak distractors":
+- Tautology / hand-wave ("Style", "Performance", "Premature optimization", "It depends")
+- Obvious nonsense ("Required by JavaScript", "Sets cannot hold numbers")
+- Invented APIs (`.error()`, `Symbol.awaitable`)
+- Restatement of the answer
+- Sandbag throwaway ("None of the above", "It throws" with no plausible throw)
+
+**Lesson aggregate:**
+- Distractor score = `sum(strong) / total_distractors` per question, averaged across questions
+- **Bottom-quartile flag** if score < 0.50
+- **[CRITICAL]** flag if any single question has 0/3 strong distractors
+
+**Output format per lesson:**
+```
+### <slug>/<id> — "<title>" (<L1count> L1)
+**Distractor scores per Q:** [3/3, 1/3, 2/3, 3/3] → mean 0.75
+- Q1: 3/3 strong — solid
+- Q2: 1/3 strong — weak: "Required by JavaScript" (obvious nonsense), "Style only" (tautology)
+- Q3: 2/3 strong — weak: "It is faster" (vague tautology)
+**Lesson distractor score: 0.75**
+**[BOTTOM-QUARTILE FLAG]** if < 0.50
+**[CRITICAL]** if any question scored 0/3
+**Rewrite candidates:** <questions where ≥2 distractors are weak>
+```
+
+Subagents running this rubric must ALSO note any draft replacement they'd consider that turns out to be actually TRUE — those are "second-correct-answer" traps and the most common slip per `docs/l1-distractor-quality.md` § "Domain accuracy".
 
 ### Rubric `l3-quality` (placeholder — author when needed)
 

@@ -13,7 +13,8 @@ This skill enforces the discipline. Follow the steps in order. Do **not** skip S
 
 1. `CLAUDE.md` — § "How a lesson is structured" + § "Adding a new lesson" + § "Runner semantics" + § "Common authoring pitfalls"
 2. `docs/canonical-style.md` — the entire doc. This is the load-bearing reference for the shape decision.
-3. One sample lesson JSON from the **same section** as the lesson you're authoring, to see the schema in context. If the section is empty, use any existing `data/<section-slug>/*.json` whose track matches.
+3. `docs/l1-distractor-quality.md` — the entire doc. Load-bearing for L1 `options` arrays.
+4. One sample lesson JSON from the **same section** as the lesson you're authoring, to see the schema in context. If the section is empty, use any existing `data/<section-slug>/*.json` whose track matches.
 
 ## Step 1 — Identify each lesson
 
@@ -61,7 +62,7 @@ Now write the lesson file at `data/<slug>/<id>.json` with `"status": "stub"`. Re
 - `description` (the one you justified in Step 2 Q3)
 - `reference.code` (canonical reference, using the idiom from Step 2 Q2)
 - `reference.notes` (2–4 gotchas / load-bearing points)
-- `L1.questions` — **≥3 multiple-choice questions** on load-bearing ideas (PROFILE.md says ≥3; the mobile loop needs the surface area)
+- `L1.questions` — **≥3 multiple-choice questions** on load-bearing ideas (PROFILE.md says ≥3; the mobile loop needs the surface area). **Every distractor must pass `docs/l1-distractor-quality.md`** — no tautologies ("Style"/"Performance"), no obvious nonsense ("Required by JavaScript"), no invented APIs, no restatement of the answer. Strong distractors are real misconceptions, adjacent-concept confusions, subtly wrong rules, or plausible-sounding fake mechanisms.
 - `L2.exercises` — **≥2 fill-in exercises** with `template` (`___` for blanks), `blanks[*].answer`, `expectedOutput`
 - `L3` — `prompt`, `expectedOutput`, `canonical` (same idiom as `reference.code`), `hints`
 
@@ -125,5 +126,6 @@ If the user asks for **5+ lessons at once**, follow CLAUDE.md § "Sub-agent work
 
 - Every new lesson's `description` names the shape and explains the idiom choice in one sentence.
 - Every `reference.code` and `L3.canonical` uses the same idiom (don't reference `for` but canonical `.reduce`).
+- Every L1 question's wrong options pass `docs/l1-distractor-quality.md` — a diligent engineer has to think to eliminate them.
 - Validator output: `N passed, 0 failed.` with no banned-syntax hits (or exemptions you can defend in one line).
 - A reader of the lesson learns *both* the technique *and* the shape-recognition skill — they know why this problem gets `for` instead of `.reduce`, or vice versa.

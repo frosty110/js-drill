@@ -139,6 +139,7 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `PROFILE.md` | Target user profile — drives every product decision |
 | `SELF-IMPROVE.md` | Self-improve loop directive — evolves with each iteration |
 | `docs/canonical-style.md` | **Authoring style guide** — which idiom (`for` vs `.map`/`.reduce` vs …) belongs in `reference.code` / `L3.canonical` for each problem shape. Read before writing a new lesson canonical. |
+| `docs/l1-distractor-quality.md` | **L1 wrong-answer guide** — rubric for strong vs weak multiple-choice distractors, with before/after exemplars. Read before authoring or rewriting any `L1.questions[*].options`. |
 | `docs/learning-strategies/` | Learning-science principles the app should encode. Co-evolves with features. |
 | `docs-archive/` | Older `claude.md`, `AGENTIC_*.md`, `ARCHITECTURE.md`, plus `old-scripts/` (broken pre-refactor helpers) — historical only |
 
@@ -219,6 +220,7 @@ A lesson is **authored** (`status: "full"`) only when:
 1. The `L2.exercises[*].template` filled with each `blanks[*].answer` produces the `expectedOutput` exactly.
 2. The `L3.canonical` produces the `L3.expectedOutput` exactly.
 3. The `reference.code`, every `L2.exercises[*].template`, and `L3.canonical` use idioms matching the problem shape per [`docs/canonical-style.md`](docs/canonical-style.md) — the validator enforces the banned-syntax list (`do/while`, `with`, `var`, labeled break, comma operator, `void`); idiom-shape choices are reviewer-enforced.
+4. Every `L1.questions[*].options` wrong answer passes [`docs/l1-distractor-quality.md`](docs/l1-distractor-quality.md) — no tautology distractors ("Style", "Performance"), no obvious nonsense ("Required by JavaScript"), no invented APIs, no restatement of the answer. Reviewer-enforced.
 
 **For Patterns/Applied lessons with `conversation` and/or `walkthrough` blocks**, additional validator gates fire:
 4. Conversation: `sections.length >= 3`, every section has a `title` and at least one body field (`say` | `why` | `reveal` | `examples`). Voice quality is reviewer-enforced.
@@ -511,7 +513,7 @@ git log --grep="^\[product" --grep="iter " --all-match --oneline
 
 When asked to author multiple lessons at once, spawn parallel `general-purpose`
 Agent calls — one per batch of 4-5 lessons. Each agent:
-1. Reads `CLAUDE.md` + [`docs/canonical-style.md`](docs/canonical-style.md) + a sample `data/<slug>/<sample>.json` for the schema
+1. Reads `CLAUDE.md` + [`docs/canonical-style.md`](docs/canonical-style.md) + [`docs/l1-distractor-quality.md`](docs/l1-distractor-quality.md) + a sample `data/<slug>/<sample>.json` for the schema
 2. **Decides the problem shape (collection-transform vs algorithm) before writing the canonical** — per `docs/canonical-style.md`. The `description` field should name the shape and the idiom choice.
 3. Authors lesson JSON files into the right section folder
 4. **Verifies via `node tools/validate-data.js`** (which also enforces the banned-syntax list) before reporting back

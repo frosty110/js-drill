@@ -31,11 +31,11 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  height: 48px;
-  flex: 0 0 48px;
+  height: calc(48px + env(safe-area-inset-top));
+  flex: 0 0 calc(48px + env(safe-area-inset-top));
   background: #0a0f1f;
   border-bottom: 1px solid #1e293b;
-  padding: 0 12px;
+  padding: env(safe-area-inset-top) 12px 0 12px;
   position: relative;
   z-index: 50;
 }
@@ -339,9 +339,15 @@ body.in-session #lesson-shell { max-width: 760px; margin: 0 auto; }
    the topbar owns the top strip cleanly. !important is intentional —
    sync.js sets top: 10px via a `<style>` tag it injects at runtime, and
    we don't want to fork that file just to relocate the chip. */
-#sync-chip { top: 56px !important; }
+#sync-chip { top: calc(56px + env(safe-area-inset-top)) !important; }
 @media (max-width: 767px) {
-  #sync-chip { top: 52px !important; right: 8px !important; }
+  /* Sync chip sits just below the (safe-area-aware) topbar; without the
+     env() addend, in PWA mode the chip would render BEHIND the iOS status
+     bar at the page's top edge (2026-05-28 mobile-nav review). */
+  #sync-chip {
+    top: calc(52px + env(safe-area-inset-top)) !important;
+    right: 8px !important;
+  }
   /* 2026-05-28 mobile-nav review — the Sync chip floats at right: 8px; with
      the sidebar drawer at 86vw it overlaps the drawer's top-right corner on
      mobile, and it also overlaps topbar-dropdown body copy. Hide it when
@@ -366,10 +372,14 @@ body.in-session #lesson-shell { max-width: 760px; margin: 0 auto; }
    below the topbar so the topbar always sits at viewport top. */
 @media (max-width: 767px) {
   .topbar {
-    height: 44px;
-    flex: 0 0 44px;
+    height: calc(44px + env(safe-area-inset-top));
+    flex: 0 0 calc(44px + env(safe-area-inset-top));
     gap: 6px;
-    padding: 0 6px 0 52px; /* left-pad reserves space for the #hamburger button */
+    /* left-pad reserves space for the #hamburger button; top-pad is the iOS
+       status-bar safe area so the topbar's controls render BELOW the iPhone
+       notch/Dynamic Island when running as installed PWA (per 2026-05-28
+       mobile-nav review). */
+    padding: env(safe-area-inset-top) 6px 0 52px;
   }
   .topbar-wordmark { font-size: 13px; }
   .topbar-menus { display: none; }
@@ -377,10 +387,14 @@ body.in-session #lesson-shell { max-width: 760px; margin: 0 auto; }
      390px viewport (4-icon right strip needs ~150px too — the math didn't
      balance). Drop the labels at the iPhone tier; the emojis carry recognition
      and `title` attributes carry the accessible name. The active state stays
-     readable via the bg color. */
-  .surface-toggle { border-radius: 8px; }
-  .surface-seg { padding: 7px 10px; font-size: 14px; }
+     readable via the bg color. Bump the border so the inactive segment is
+     legible against the topbar's bg. */
+  .surface-toggle { border-radius: 8px; border-color: #475569; }
+  .surface-seg { padding: 7px 10px; font-size: 14px; min-height: 32px; }
   .surface-seg .surface-seg-label { display: none; }
+  /* The inactive segment was nearly invisible against the topbar — give it a
+     subtle bg so users can see BOTH segments and know it's a 2-way toggle. */
+  .surface-seg:not(.active) { background: rgba(148,163,184,0.06); }
   /* When .topbar-menus is hidden, nothing flex-grows between .topbar-left
      and .topbar-right; without this push, the icons cluster against the
      wordmark on the left. */
@@ -418,8 +432,14 @@ body.in-session #lesson-shell { max-width: 760px; margin: 0 auto; }
   .topbar-icon-mobile-only { display: inline-flex; }
   /* Hamburger lives INSIDE the topbar visually — keep it fixed but at the
      left edge of the topbar height-band, not at top: 12px (which would now
-     sit inside the topbar with no breathing room). */
-  .hamburger { top: 4px !important; left: 6px !important; }
+     sit inside the topbar with no breathing room). The `top` math adds
+     env(safe-area-inset-top) so on iOS PWA mode (status bar overlapping
+     content) the button isn't hidden BEHIND the iOS status bar — that was
+     the "hamburger covered by topbar" report from the 2026-05-28 review. */
+  .hamburger {
+    top: calc(4px + env(safe-area-inset-top)) !important;
+    left: 6px !important;
+  }
 }
 
 /* Mobile (≤700px): the topbar stays but menus collapse their labels to icons.

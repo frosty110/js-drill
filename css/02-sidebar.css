@@ -422,22 +422,30 @@
      topbar so it reads as a button, not a flat tile. */
   .hamburger {
     display: flex; align-items: center; justify-content: center;
-    position: fixed; top: 6px; left: 8px; z-index: 60;
-    width: 36px; height: 36px;
+    /* z-index: 70 → 100 to ensure the hamburger is ALWAYS above any topbar
+       stacking context. The topbar (z-index 50) creates its own stacking
+       context, but the hamburger is a body-level sibling, so it competes at
+       the root context — 70 was enough in lab, 100 leaves no room for a
+       deployed-mode regression to hide the only mobile menu toggle. */
+    position: fixed; top: 6px; left: 8px; z-index: 100;
+    width: 38px; height: 38px;
     background: #334155; color: #f8fafc;
-    border: 1px solid #475569; border-radius: 8px;
+    border: 1px solid #64748b; border-radius: 10px;
     cursor: pointer;
-    font-size: 18px; line-height: 1;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    font-size: 19px; line-height: 1;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
   }
   .hamburger:active { background: #475569; }
   /* 2026-05-28 mobile-nav review — slide the drawer in BELOW the topbar, not under it. Previously
      `top: 0` + z-index 45 put the sidebar's first 44px UNDER the topbar
      (topbar is z-index 50), so the "JS Drill" header was clipped. Anchor the
      drawer at the topbar's bottom edge instead — the topbar stays a stable
-     navigation surface while the lesson drawer slides up from below it. */
+     navigation surface while the lesson drawer slides up from below it.
+     Mobile topbar's effective height is `44px + env(safe-area-inset-top)`. */
   aside.app-sidebar {
-    position: fixed; top: 44px; left: 0; bottom: 0;
+    position: fixed;
+    top: calc(44px + env(safe-area-inset-top));
+    left: 0; bottom: 0;
     width: 86vw; max-width: 360px;
     z-index: 45;
     transform: translateX(-100%);
@@ -445,20 +453,23 @@
     box-shadow: 4px 0 18px rgba(0,0,0,0.4);
   }
   body.sidebar-open aside.app-sidebar { transform: translateX(0); }
-  body.sidebar-open .sidebar-backdrop { display: block; top: 44px; }
-  main.app-main { padding-top: 56px; }
+  body.sidebar-open .sidebar-backdrop {
+    display: block;
+    top: calc(44px + env(safe-area-inset-top));
+  }
+  main.app-main { padding-top: calc(56px + env(safe-area-inset-top)); }
   #lesson-shell { padding: 18px 14px 96px !important; } /* bottom pad clears sticky action bar */
   /* Long prompts/identifiers wrap instead of breaking the layout on narrow screens. */
   #lesson-shell h2, #lesson-shell p, #lesson-shell .ref-note { word-break: break-word; overflow-wrap: anywhere; }
-  /* L3 action bar sticks to the bottom of the viewport so Run is always reachable. */
+  /* L3 action bar sticks to the bottom of the viewport so Run is always reachable.
+     padding-bottom honors safe-area-inset-bottom so the Run button isn't
+     hidden under the iPhone home indicator in PWA mode (2026-05-28 review). */
   .l3-actions {
     position: sticky;
     bottom: 0;
     background: #0b1020;
-    padding: 10px 0;
     margin: 0 -14px;
-    padding-left: 14px;
-    padding-right: 14px;
+    padding: 10px 14px max(10px, env(safe-area-inset-bottom)) 14px;
     z-index: 5;
     border-top: 1px solid #1e293b;
   }

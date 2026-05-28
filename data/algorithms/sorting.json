@@ -6,6 +6,103 @@
   "status": "full",
   "description": "`.sort()` MUTATES and defaults to STRING comparison. Always pass a comparator for numbers.",
   "mechanics": [],
+  "conversation": {
+    "intro": "How an interview about `.sort()` would actually play out. Each section has two parts: what you'd say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before reaching for `.sort()` — pin down the contract.",
+        "say": "\"Let me restate: I have an array and I want it sorted. A couple of quick questions before I write the call:\"\n\n• Are these numbers, strings, or objects? It changes the comparator.\n• Do I need ascending or descending order?\n• Am I allowed to mutate the input, or do I need a fresh array?\n• If two items compare equal, does original order matter (i.e. do I need stable sort)?",
+        "why": "These are not pedantic questions — each one decides a different line of code. 'Numbers vs strings' is the canonical interview gotcha (`[10, 2, 1].sort()` returns `[1, 10, 2]`); 'mutate or not' decides between `arr.sort(...)` and `[...arr].sort(...)`; 'stable' matters when chaining secondary keys. Asking signals you've been bitten by `.sort()` before."
+      },
+      {
+        "title": "2. Why this template?",
+        "prompt": "Name the trap the default `.sort()` walks straight into.",
+        "say": "\"The default `.sort()` with no comparator coerces every element to a string and sorts lexicographically. So `[10, 2, 1].sort()` is `[1, 10, 2]` — because `'10' < '2'` as strings. That's almost never what you want for numbers, so the template is: always pass a comparator. `(a, b) => a - b` for numbers ascending, `(a, b) => b - a` for descending, `(a, b) => a.localeCompare(b)` for strings, and `(a, b) => a.key - b.key` to sort objects by a numeric key.\"",
+        "why": "The comparator-always-on-numbers rule is muscle memory. Saying it unprompted before writing the call inoculates against the most-cited JS interview trap. Naming both `a - b` and `localeCompare` shows you know strings have their own canonical path — naive `a < b ? -1 : 1` works but loses locale collation."
+      },
+      {
+        "title": "3. Spot the pattern — comparator contract",
+        "prompt": "What does the comparator actually return, and why subtraction?",
+        "say": "\"The comparator is a function `(a, b) => number` with three legal outcomes:\"\n\n• Negative → `a` comes before `b`\n• Positive → `b` comes before `a`\n• Zero → they're equal (relative order preserved on stable sort)\n\n\"That's why `a - b` works for ascending numbers: if `a < b`, `a - b` is negative, so `a` lands first. For descending, flip to `b - a`. The crucial bug to avoid: writing `(a, b) => a > b` looks intuitive but returns true/false → 1/0, never a negative number, so the sort is wrong.\"",
+        "why": "Naming the three-valued contract is what distinguishes a candidate from someone who copy-pastes the idiom. The `a > b` boolean-returning bug is the exact thing senior interviewers probe for — they want to see you know WHY subtraction works, not just THAT it does."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the call.",
+        "intro": "Three cases cover the interesting behaviors — the textbook ascending-numbers case, the descending flip, and the objects-by-key case which is the L3 prompt.",
+        "examples": [
+          {
+            "input": "[3, 1, 4, 1, 5].sort((a, b) => a - b)",
+            "output": "[1, 1, 3, 4, 5]",
+            "note": "Numbers ascending — `a - b` puts smaller first.",
+            "trace": "comparator picks pairs:\n  3 vs 1 → 3-1=2 positive → 1 before 3\n  4 vs 1 → 4-1=3 positive → 1 before 4\n  5 vs 4 → 5-4=1 positive → 4 before 5\nresult: [1,1,3,4,5] (stable — the two 1s keep their original order)"
+          },
+          {
+            "input": "[3, 1, 4, 1, 5].sort((a, b) => b - a)",
+            "output": "[5, 4, 3, 1, 1]",
+            "note": "Same array, flipped comparator → descending.",
+            "trace": "comparator picks pairs:\n  3 vs 1 → 1-3=-2 negative → 3 before 1\n  4 vs 3 → 3-4=-1 negative → 4 before 3\n  5 vs 4 → 4-5=-1 negative → 5 before 4\nresult: [5,4,3,1,1]"
+          },
+          {
+            "input": "[{age:30},{age:25}].sort((a,b)=>a.age-b.age)",
+            "output": "[{age:25},{age:30}]",
+            "note": "Objects-by-key — the L3 pattern. Subtract on the key, not the object.",
+            "trace": "comparator picks pair:\n  {age:30} vs {age:25} → 30-25=5 positive → {age:25} before {age:30}\nresult: [{age:25},{age:30}]\n(input array is MUTATED — same reference, new order)"
+          }
+        ],
+        "why": "The third example is the load-bearing one to mention out loud — `(a, b) => a.age - b.age` is the same template applied to a projection. The interviewer is checking whether you know the comparator can project into any numeric field. The mutation note on example 3 is also worth flagging: if the caller still holds the original reference, they'll see it re-ordered."
+      },
+      {
+        "title": "5. Edge cases & pitfalls",
+        "prompt": "What inputs or comparators would trip up a careless implementation?",
+        "say": "\"Edges and pitfalls worth flagging:\"\n\n• Forgot the comparator on numbers → string sort: `[10, 2, 1].sort()` = `[1, 10, 2]`.\n• Returned a boolean from the comparator: `(a, b) => a > b` is wrong; coerces to 1/0, never negative.\n• Mutates in place → if the caller needs the original, copy first: `[...arr].sort(...)` or `arr.slice().sort(...)`.\n• Empty or single-element array → no-op, no error.\n• `NaN` values → comparator with `NaN` always returns NaN, which the sort treats as 0 (equal); your NaNs can land anywhere. Worth flagging if floats are in play.\n• Strings with mixed locale → use `localeCompare` not `<`, otherwise accented chars sort oddly.",
+        "why": "The `(a, b) => a > b` bug is the one that catches careless candidates — it's the boolean-coerces-to-0/1 trap that looks right but isn't. Calling it out unprompted is a senior-tier tell. The mutation flag is also high-signal — most candidates forget that `arr.sort()` returns the SAME array, not a new one."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n log n) — V8 uses TimSort, an adaptive merge-insertion hybrid that's stable. The comparator runs O(n log n) times, so the comparator should itself be O(1) — `a - b` and `a.key - b.key` qualify; something like `(a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))` would secretly make each comparison O(k) where k is the serialized length.\n\nSpace is O(log n) auxiliary (TimSort's run stack), but you should treat it as O(n) for safety since engines vary.\n\nThe template generalizes: any time you need ordered iteration, sort with a comparator FIRST, then iterate. It's the prep step for two-pointer problems on sorted arrays (3Sum, container-with-most-water) — sorting trades one O(n log n) up front for O(n) sweeps after.\"",
+        "why": "Naming TimSort and the comparator-cost gotcha is a senior touch — it shows you think about what the comparator costs PER call, not just the overall sort. The 'sort first, then two-pointer' generalization proves transfer: you see sorting as a primitive that unlocks downstream linear algorithms."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through `.sort()` with a comparator on a small array. The trace simulates which pairs the comparator visits and how each return value places the elements. Use ◀ Prev / ▶ Next, or pick a different example.",
+    "examples": [
+      { "label": "[3,1,4,1,5] asc (a-b) → [1,1,3,4,5]", "input": { "arr": [3, 1, 4, 1, 5], "dir": "asc" },   "expected": "[1,1,3,4,5]" },
+      { "label": "[3,1,4,1,5] desc (b-a) → [5,4,3,1,1]", "input": { "arr": [3, 1, 4, 1, 5], "dir": "desc" }, "expected": "[5,4,3,1,1]" },
+      { "label": "[{age:30},{age:25}] by age → [{age:25},{age:30}]", "input": { "arr": [{ "age": 30 }, { "age": 25 }], "dir": "byAge" }, "expected": "[{\"age\":25},{\"age\":30}]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const dir = input.dir;",
+      "  const arr = input.arr.map(x => (x && typeof x === 'object') ? { ...x } : x);",
+      "  yield { line: 1, label: `enter — arr=${JSON.stringify(arr)}, dir=${dir}`, state: { arr: JSON.stringify(arr), dir } };",
+      "  let cmp, lineForCall;",
+      "  if (dir === 'asc') { cmp = (a, b) => a - b; lineForCall = 2; }",
+      "  else if (dir === 'desc') { cmp = (a, b) => b - a; lineForCall = 5; }",
+      "  else { cmp = (a, b) => a.age - b.age; lineForCall = 11; }",
+      "  yield { line: lineForCall, label: `pick comparator for dir='${dir}'`, state: { arr: JSON.stringify(arr), dir } };",
+      "  for (let i = 1; i < arr.length; i++) {",
+      "    const cur = arr[i];",
+      "    let j = i - 1;",
+      "    const curShow = (cur && typeof cur === 'object') ? JSON.stringify(cur) : String(cur);",
+      "    yield { line: lineForCall, label: `outer step i=${i} — pick cur=${curShow} to insert into sorted prefix`, state: { arr: JSON.stringify(arr), i, cur: curShow } };",
+      "    while (j >= 0 && cmp(arr[j], cur) > 0) {",
+      "      const cmpVal = cmp(arr[j], cur);",
+      "      const ajShow = (arr[j] && typeof arr[j] === 'object') ? JSON.stringify(arr[j]) : String(arr[j]);",
+      "      yield { line: lineForCall, label: `cmp(${ajShow}, ${curShow}) = ${cmpVal} > 0 → ${ajShow} comes AFTER ${curShow}; shift right`, state: { arr: JSON.stringify(arr), i, j, cmpVal } };",
+      "      arr[j + 1] = arr[j];",
+      "      j--;",
+      "    }",
+      "    arr[j + 1] = cur;",
+      "    yield { line: lineForCall, label: `place cur at index ${j + 1} — arr=${JSON.stringify(arr)}`, state: { arr: JSON.stringify(arr), i, placedAt: j + 1 } };",
+      "  }",
+      "  yield { line: lineForCall, label: `sort complete — arr=${JSON.stringify(arr)}`, state: { arr: JSON.stringify(arr), returns: JSON.stringify(arr) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// Numbers ascending\narr.sort((a, b) => a - b);\n\n// Numbers descending\narr.sort((a, b) => b - a);\n\n// Strings (locale-aware)\narr.sort((a, b) => a.localeCompare(b));\n\n// Objects by key\narr.sort((a, b) => a.age - b.age);\n\n// Non-mutating copy\nconst sorted = [...arr].sort((a, b) => a - b);",
     "notes": [
@@ -31,9 +128,9 @@
         "q": "Does `.sort()` mutate?",
         "options": [
           "Yes",
-          "No",
-          "Only without a comparator",
-          "Only on primitives"
+          "No — returns a new sorted array, like `.map`",
+          "Only when the comparator returns 0 for some pair (otherwise it sorts a copy)",
+          "Mutates only if the array has more than 10 elements (V8 picks insertion-sort-on-copy below that threshold)"
         ],
         "answer": 0
       },
@@ -50,10 +147,10 @@
       {
         "q": "A comparator returning a negative number means:",
         "options": [
-          "Throw",
+          "Skip this pair — the sort tries again with a different pivot",
           "a comes before b",
           "b comes before a",
-          "They are equal"
+          "Sorts in descending order, regardless of which arg is bigger"
         ],
         "answer": 1
       },
@@ -82,10 +179,10 @@
       {
         "q": "Two objects compare equal under your comparator. A 'stable' sort guarantees what about them?",
         "options": [
-          "They are removed as duplicates",
+          "They are coalesced — only the first instance is kept, the rest are dropped",
           "Their relative order from the input is preserved",
-          "They are placed at the end",
-          "Their order is randomized"
+          "They are grouped together but their internal order depends on the sort algorithm chosen at runtime",
+          "Stability only applies when sorting primitives; objects always sort in unspecified order"
         ],
         "answer": 1,
         "explain": "Stability means equal elements keep their original relative order — modern V8 `.sort()` is stable, which matters when sorting by a secondary key after a primary one."

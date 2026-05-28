@@ -6,6 +6,104 @@
   "status": "full",
   "description": "The three boilerplate walks every LL problem uses: single walk, parallel walk, and dummy-head builder.",
   "mechanics": ["linked-list-walk"],
+  "conversation": {
+    "intro": "This is a syntax-template lesson — three almost-identical linked-list loops. The interview script focuses on which template fits which job and the small idioms that prevent off-by-one bugs. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. When do you reach for each walk?",
+        "prompt": "Three boilerplate walks, three jobs.",
+        "say": "\"Three linked-list loop shapes, three jobs:\n\n• SINGLE WALK — `let curr = head; while (curr) { ...; curr = curr.next; }`. Use for any one-list operation: count, search, find-Nth, reverse, sum, print. The loop guard `while (curr)` terminates safely on null and handles the empty list without a special case.\n\n• PARALLEL WALK — `let a = h1, b = h2; while (a && b) { ...; a = a.next; b = b.next; }`. Use for two-list operations: merge, compare, intersection, zip. The `&&` stops the loop the instant either list runs out, then you handle the remainder afterward.\n\n• DUMMY-HEAD BUILDER — `const dummy = { val: 0, next: null }; let tail = dummy; while (...) { tail.next = newNode; tail = tail.next; } return dummy.next;`. Use whenever you're CONSTRUCTING a new list. The sentinel removes the 'is this the first node?' branch — you always just do `tail.next = newNode`.\n\nMost real LL problems combine two of these: e.g. 'merge two sorted lists' = parallel walk + dummy-head builder. 'Reverse list' = single walk with a three-pointer dance. 'Add two numbers' = parallel walk + dummy-head builder + carry.\"",
+        "why": "Naming the three templates as templates — and pointing out that real problems COMPOSE them — is the fluency move. Most candidates write the loop fresh for each problem; the candidate who's drilled the family writes 'OK, this is parallel walk + dummy-head builder' and the code falls out in 30 seconds. Interviewers grade on that recognition speed."
+      },
+      {
+        "title": "2. Why these shapes, not other loop forms?",
+        "prompt": "Defend the loop guards.",
+        "say": "\"Why `while (curr)` instead of `while (curr.next)`? Because the second form skips the LAST node and crashes if `head` is null. `while (curr)` walks all the way to null and terminates cleanly — handles the empty list `head === null` without a special case, because the loop just never enters.\n\nWhy `while (a && b)` for the parallel walk? Because the moment EITHER list runs out, you should stop the lockstep advance. If you wrote `while (a || b)` you'd dereference null on whichever ran out first. The standard pattern is: stop the lockstep on `&&`, then handle the leftover with `tail.next = a || b` outside the loop.\n\nWhy the dummy sentinel? Without it, the first append is a special case — `if (!head) head = newNode; else tail.next = newNode`. With the sentinel, the first append is `tail.next = newNode` just like every subsequent one. One branch removed, one source of off-by-one removed.\"",
+        "why": "Defending the loop guards is the fluency signal — anyone who's debugged a linked-list problem has hit the 'while (curr.next) skips the last node' bug or the 'first-node special case' bug. Calling out WHY each guard is shaped the way it is shows you've earned the boilerplate, not memorized it. The 'tail.next = a || b' trick for the leftover is the senior touch — most candidates write an `if (a) tail.next = a; else tail.next = b;` block that's correct but bulky."
+      },
+      {
+        "title": "3. Spot the pattern: combining two templates",
+        "prompt": "How real problems compose the building blocks.",
+        "say": "\"When you read a new LL problem, decompose it into the building blocks:\n\n• Need to read ONE list and produce a scalar (count, sum, find) → SINGLE WALK.\n• Need to read ONE list and BUILD a new list (copy, double, filter) → SINGLE WALK + DUMMY-HEAD BUILDER.\n• Need to read TWO lists and produce a scalar (compare, intersect) → PARALLEL WALK.\n• Need to read TWO lists and BUILD a new list (merge, zip, add two numbers) → PARALLEL WALK + DUMMY-HEAD BUILDER.\n• Need to MUTATE in place (reverse, swap pairs, remove duplicates) → SINGLE WALK with extra pointers (prev/next) cached per iteration.\n\nThe L3 prompt for this lesson — `doubleList` — is the 'single walk + dummy-head builder' shape: walk the input with `curr = curr.next`, and on each step attach a brand-new `{val: curr.val * 2, next: null}` to the builder's tail.\"",
+        "why": "Decomposing problems into the building blocks BEFORE writing code is the move that prevents 'where do I start?' freezes. Once you've named 'this is parallel walk + dummy-head builder', the structure is forced — you write the scaffold first, then fill in the per-iteration logic. Interviewers love this because the candidate doesn't have to think; they just instantiate."
+      },
+      {
+        "title": "4. Trace through a tiny example",
+        "prompt": "Walk the L3 doubleList canonical (single-walk + dummy-head builder) on a small input.",
+        "intro": "\"Let me trace `doubleList([1,2,3])` to make sure the dummy-head builder is doing what I think.\"",
+        "examples": [
+          {
+            "input": "[1, 2, 3]",
+            "output": "[2, 4, 6]",
+            "note": "Standard case — single walk reads input nodes, dummy-head builder constructs the output.",
+            "trace": "init: dummy={val:0,next:null}, tail=dummy, curr=node(1)\niter1: tail.next={val:2}, tail=node(2), curr=node(2)  → builtSoFar=[2]\niter2: tail.next={val:4}, tail=node(4), curr=node(3)  → builtSoFar=[2,4]\niter3: tail.next={val:6}, tail=node(6), curr=null     → builtSoFar=[2,4,6]\nloop exits (curr=null), return dummy.next = node(2) → [2,4,6]"
+          },
+          {
+            "input": "[] (empty)",
+            "output": "[]",
+            "note": "Empty input — single walk never enters, dummy.next stays null, return null → empty list.",
+            "trace": "init: dummy={val:0,next:null}, tail=dummy, curr=null\nloop check: curr is null → never enter\nreturn dummy.next = null → []"
+          },
+          {
+            "input": "[42] (one node)",
+            "output": "[84]",
+            "note": "Single node — one iteration of the builder. Confirms there's no first-node special case.",
+            "trace": "init: dummy={val:0,next:null}, tail=dummy, curr=node(42)\niter1: tail.next={val:84}, tail=node(84), curr=null  → builtSoFar=[84]\nloop exits, return dummy.next = node(84) → [84]"
+          }
+        ],
+        "why": "Tracing the empty-input case is the move — `while (curr)` returning immediately means the empty list works WITHOUT a `if (head === null) return null` guard. That's the whole point of the loop guard shape. Tracing single-node confirms there's no first-node special case in the builder either — the sentinel pattern means iteration 1 is mechanically the same as iteration N."
+      },
+      {
+        "title": "5. Edge cases & pitfalls",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Pitfalls when you drop these templates into a real problem:\n• Empty list (head = null) → `while (curr)` skips the loop, returns the right default (0 for count, null/empty for builder). ✓ No special case needed.\n• Single node → loop runs exactly once, then `curr.next` is null and the loop exits. ✓\n• Forgetting to advance `tail = tail.next` after `tail.next = newNode` → you overwrite the same slot every iteration and the builder produces a 1-node list. Classic off-by-one.\n• Returning `dummy` instead of `dummy.next` → the sentinel itself leaks into the output, with `val: 0` (or whatever placeholder) at the front. Always `return dummy.next`.\n• Parallel walk: forgetting to attach the remainder (`tail.next = a || b`) after the `while (a && b)` loop — the longer list's tail gets dropped silently.\n• Using `while (curr.next)` instead of `while (curr)` for a single walk — skips the last node, crashes on empty.\n• Mutating the input list when the problem expects an immutable read — always read into a copy if the contract is unclear.\n• Cycle in the input → `while (curr)` never terminates. Worth flagging that the single walk assumes acyclic input; if cycles are possible, use Floyd's detection first or cap iterations.\"",
+        "why": "The 'forgetting to advance tail' bug is the canonical builder gotcha — every junior writes it once. Naming it before you write the code is cheap insurance. The 'return dummy not dummy.next' bug is the other classic — the sentinel pattern is great until you forget the sentinel itself isn't part of the output. The cycle-detection callout is the senior touch: most candidates assume acyclic silently, and an interviewer either nods or says 'assume acyclic for now' — both fine."
+      },
+      {
+        "title": "6. Complexity & common follow-ups",
+        "prompt": "What do these templates cost, and what problems use them?",
+        "say": "\"Each template is O(n) time and O(1) extra space if you're walking in place; O(n) extra space if you're building a new list via the dummy-head builder (one node per input node). Per-iteration work is constant — one pointer dereference, one pointer assignment, optionally one node allocation. No nested loops, no amortization argument needed.\n\nCommon follow-ups that use one or more of these templates as the SKELETON:\n• SINGLE WALK → Count nodes, Find Middle (with fast/slow), Linked List Cycle (with fast/slow), Remove Nth From End, Reverse Linked List (single walk + 3-pointer dance), Palindrome Linked List.\n• PARALLEL WALK → Merge Two Sorted Lists, Add Two Numbers, Intersection of Two Linked Lists, Compare Lists.\n• DUMMY-HEAD BUILDER → Merge Two Sorted Lists, Remove Duplicates From Sorted List, Partition List, Remove Linked List Elements, Add Two Numbers (carry-as-you-build).\n\nWhen you see ANY of those, the first thing on the whiteboard is one of these three templates.\"",
+        "why": "Listing the follow-up family for each template is what shows you see them as REUSABLE PRIMITIVES, not standalone tricks. The 'first thing on the whiteboard' phrasing also signals fluency — you're not deriving these per-problem, you're instantiating known boilerplate. Interviewers love this because it means the candidate will pattern-match the next LL problem instead of solving from scratch."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical `doubleList(head)` — the L3 of this lesson — which combines a single walk on the input with the dummy-head builder pattern. Watch curr advance one node per step while tail and dummy.next grow on the output side.",
+    "examples": [
+      { "label": "[1,2,3] → [2,4,6]", "input": [1, 2, 3], "expected": "[2,4,6]" },
+      { "label": "[] → []",            "input": [],        "expected": "[]" },
+      { "label": "[42] → [84]",        "input": [42],      "expected": "[84]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const toArr = (n) => { const out = []; while (n) { out.push(n.val); n = n.next; } return out; };",
+      "  const dummyIn = { val: null, next: null };",
+      "  let tailIn = dummyIn;",
+      "  for (const v of input) { tailIn.next = { val: v, next: null }; tailIn = tailIn.next; }",
+      "  let head = dummyIn.next;",
+      "  yield { line: 1, label: `enter doubleList — input list ${JSON.stringify(input)}`, state: { input, list: toArr(head) } };",
+      "  const dummy = { val: 0, next: null };",
+      "  yield { line: 2, label: 'create dummy sentinel { val:0, next:null } — eliminates first-node special case', state: { input, list: toArr(head), dummy: dummy.val, built: [] } };",
+      "  let tail = dummy;",
+      "  yield { line: 3, label: 'init tail = dummy (builder pointer starts at sentinel)', state: { input, list: toArr(head), built: [] } };",
+      "  let curr = head;",
+      "  yield { line: 4, label: `init curr = head (= ${curr ? curr.val : 'null'}) — input walker`, state: { input, remaining: toArr(curr), curr: curr ? curr.val : null, built: [] } };",
+      "  let iter = 0;",
+      "  while (curr) {",
+      "    iter++;",
+      "    yield { line: 5, label: `loop entry iter ${iter} — curr=${curr.val}, will create new node with val=${curr.val * 2}`, state: { remaining: toArr(curr), curr: curr.val, built: toArr(dummy.next) } };",
+      "    tail.next = { val: curr.val * 2, next: null };",
+      "    yield { line: 6, label: `tail.next = { val: ${curr.val * 2} } — attach new node to builder`, state: { remaining: toArr(curr), curr: curr.val, built: toArr(dummy.next), tailVal: tail.val } };",
+      "    tail = tail.next;",
+      "    yield { line: 7, label: `tail = tail.next — advance builder pointer to ${tail.val}`, state: { remaining: toArr(curr), curr: curr.val, built: toArr(dummy.next), tailVal: tail.val } };",
+      "    curr = curr.next;",
+      "    yield { line: 8, label: `curr = curr.next → ${curr ? curr.val : 'null'} (advance input walker)`, state: { remaining: toArr(curr), curr: curr ? curr.val : null, built: toArr(dummy.next), tailVal: tail.val } };",
+      "  }",
+      "  const result = toArr(dummy.next);",
+      "  yield { line: 10, label: `loop done — return dummy.next (skip sentinel) → ${JSON.stringify(result)}`, state: { built: result, returns: JSON.stringify(result) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// 1) SINGLE WALK — visit every node in one list\nlet curr = head;\nwhile (curr) {\n  // visit curr\n  curr = curr.next;\n}\n\n// 2) PARALLEL WALK — step two lists in lockstep (compare / merge)\nlet a = h1, b = h2;\nwhile (a && b) {\n  // compare a.val vs b.val\n  a = a.next;\n  b = b.next;\n}\n// one (or both) of a, b is null here — handle the remainder\n\n// 3) DUMMY-HEAD BUILDER — assemble a new list with no first-node special case\nconst dummy = { val: 0, next: null };\nlet tail = dummy;\nwhile (/* more to append */ false) {\n  tail.next = { val: 0, next: null }; // attach new node\n  tail = tail.next;                   // advance the tail\n}\nreturn dummy.next;                    // skip the sentinel",
     "notes": [
@@ -22,8 +120,8 @@
         "options": [
           "while (curr.next)",
           "while (curr)",
-          "while (curr !== head)",
-          "while (curr.next !== null)"
+          "while (curr && curr.next)",
+          "while (curr !== undefined)"
         ],
         "answer": 1,
         "explain": "while(curr) terminates cleanly when curr becomes null; while(curr.next) would skip the last node and throw if head is null."
@@ -31,10 +129,10 @@
       {
         "q": "What does a dummy-head sentinel buy you when building a new list?",
         "options": [
-          "Lower memory usage",
+          "Lets you return the head pointer without walking back through the list",
           "Removes the special case for inserting the first node",
-          "Makes the walk O(1) instead of O(n)",
-          "Lets you skip the null check"
+          "Reduces traversal cost from O(n) to O(n/2) by skipping the sentinel slot",
+          "Lets you delete from the front of the list in O(1) without losing the head reference"
         ],
         "answer": 1,
         "explain": "With a sentinel you can always do tail.next = newNode without branching on 'is this the very first append?'."

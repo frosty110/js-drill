@@ -6,6 +6,98 @@
   "status": "full",
   "description": "Recursive tree walk — a nested required-field schema (true = required leaf, object = required subtree); recurse to collect every missing required leaf as a dotted path, recursing into {} when a whole parent subtree is missing so its leaves still surface.",
   "mechanics": ["tree-recursion"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the schema language and what 'missing' means.",
+        "say": "\"Let me restate: I get a `required` schema and a submitted `data` object. The schema is a nested object where `true` marks a required leaf and a nested object marks a required subtree. I need to return the dotted path of every required leaf that's missing from `data`. A few clarifying questions:\"\n\n• What counts as 'missing'? Undefined and null are obvious, but is `''` (an empty form field) missing too? What about `0` or `false`?\n• If a whole parent subtree is missing (`insurance: null`), do I report just `insurance` or each leaf underneath — `insurance.carrier`, `insurance.policyNumber`?\n• Can the schema nest to arbitrary depth, or is it capped at one level?\n• Output format — dotted paths in a flat array, or grouped by parent?",
+        "why": "The 'whole subtree missing' question is the load-bearing one — it decides whether this is a shallow walk that bails at the first null, or a recursion that keeps descending into a synthetic `{}` so every required leaf gets named. The product answer is almost always 'name every leaf' — the user needs to know which fields to fill, not which group. Asking it upfront also surfaces the empty-string question, which prevents the classic truthiness bug where `0` (a valid value on some field types) gets flagged as missing."
+      },
+      {
+        "title": "2. Spot the shape",
+        "prompt": "What's the data-structure pattern, and what makes recursion the natural fit?",
+        "say": "\"This is structural recursion over a tree-shaped schema. At each schema key: if the spec is `true`, it's a leaf — check the value and push the path if it's empty. If the spec is an object, it's a subtree — recurse with the value as the new `data` and an extended prefix.\"\n\n\"The wrinkle is the missing-subtree branch. If `data.insurance` is `null` but the schema says `insurance: { carrier: true, policyNumber: true }`, naïvely recursing would crash on `null.carrier`. The fix: recurse into `{}` instead of the missing value. The recursion then sees `data[key]` as undefined for every leaf, and each one reports as missing — which is exactly the behavior we want. One function, one branch, every required field surfaces.\"",
+        "why": "Naming both 'recurse on subtree' AND 'recurse into {} when parent missing' is what distinguishes this from a generic tree walk. The {} substitution is the elegant move — it lets the same leaf-detection code handle both 'parent present, child empty' and 'parent absent entirely' without a second code path. Calling that out shows you see recursion not as a control-flow trick but as a way to collapse two cases into one."
+      },
+      {
+        "title": "3. Walk a tiny example",
+        "prompt": "Trace one input end-to-end to confirm the model.",
+        "intro": "\"Let me run a small case — a schema with one flat required field and one required subtree where the parent is missing entirely.\"",
+        "examples": [
+          {
+            "input": "required={ name: true, insurance: { carrier: true, policy: true } }, data={ name: '', insurance: null }",
+            "output": "['name', 'insurance.carrier', 'insurance.policy']",
+            "note": "Empty string on name + missing parent on insurance — both surface as leaves.",
+            "trace": "findMissing(required, data, '')\n  key='name', path='name', spec=true, val='' → push 'name'\n  key='insurance', path='insurance', spec={carrier:true, policy:true}, val=null\n    val is null → recurse with data={} instead\n    findMissing({carrier:true, policy:true}, {}, 'insurance')\n      key='carrier', path='insurance.carrier', spec=true, val=undefined → push 'insurance.carrier'\n      key='policy', path='insurance.policy', spec=true, val=undefined → push 'insurance.policy'\nreturn ['name', 'insurance.carrier', 'insurance.policy'] ✓"
+          }
+        ],
+        "why": "Walking this case on the whiteboard surfaces the recurse-into-{} discipline before you write the loop. If you tried to short-circuit ('parent is null → push parent path, done') you'd report just 'insurance' and the user has no idea which two fields to fill. The trace makes the leaf-naming behavior concrete instead of theoretical."
+      },
+      {
+        "title": "4. Edge cases & failure modes",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• Empty string vs. zero/false — `''` is missing (blank form field), but `0` and `false` are valid on numeric/boolean fields. Use `=== ''`, not truthiness.\n• Whole subtree missing (`insurance: null`) — recurse into `{}`, not skip; otherwise the user sees one parent path instead of the concrete leaves.\n• `data` itself being null/undefined — the guard `data == null ? undefined : data[key]` prevents a TypeError when a missing subtree leads to the leaf read.\n• Top-level vs. nested paths — top-level keys have no dot prefix; the ternary `prefix ? \\`${prefix}.${key}\\` : key` handles that without a leading dot.\n• Schema with extra keys in data — by design, ignored. We only validate what the schema declares required; bonus fields in data don't affect the report.\n• Deeply nested schemas (4+ levels) — works without changes; the recursion is depth-agnostic, which is the whole point of using recursion over hard-coded loops.",
+        "why": "The truthiness-vs-equality bug is the one that bites everyone — `!val` would reject `0` and `false`, which are valid values on numeric/boolean fields. Calling that out unprompted shows you're thinking about real form data, not just the happy-path strings. The `data == null` guard is the senior-tier signal — most candidates remember it only after their code crashes."
+      },
+      {
+        "title": "5. Complexity & memory",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) where n is the total number of required leaves and subtrees in the schema — each schema node is visited exactly once. We don't revisit because the recursion descends, never backtracks across siblings.\n\nSpace is O(d + m) where d is the schema depth (recursion stack) and m is the number of missing fields (the `missing` array). For typical intake forms d is small (2–4 levels), so it's effectively O(m).\n\nThe interesting note: we never walk the `data` object's own keys — only the schema's. That means a huge `data` object with a tiny schema is still cheap. The schema is the work driver, not the submission.\"",
+        "why": "The 'schema drives the walk, not data' observation is the structural insight — it tells you this scales with what the product team declares required, not with how much the user typed. Most candidates conflate the two and over-estimate the cost. The depth-vs-misses split for space is also worth saying out loud: it's not 'O(n) extra space', it's 'O(d) stack + O(m) report', which is much tighter."
+      },
+      {
+        "title": "6. Robustness & tests",
+        "prompt": "What would you write to lock this in?",
+        "say": "\"Test cases I'd want before shipping:\"\n\n• All-filled happy path — every required leaf present, returns `[]`.\n• Single missing top-level leaf — returns `['dob']`.\n• Missing parent subtree — `insurance: null` returns both leaves (`insurance.carrier`, `insurance.policy`), proving the {} recursion fires.\n• Empty string treated as missing — `{ name: '' }` returns `['name']`.\n• `0` and `false` treated as PRESENT — `{ count: 0, active: false }` returns `[]`. The negative test that locks down the truthiness bug.\n• Deep nesting (3+ levels) — proves the recursion isn't accidentally one-level.\n• `data` is `null` or `undefined` entirely — every required leaf surfaces.\n\n\"Beyond tests: if this ships to production, the dotted-path output should probably be paired with human-readable labels from a separate schema layer ('insurance.policyNumber' → 'Policy Number') so the form UI can show meaningful errors. The validator is the kernel; the label resolver is a separate concern.\"",
+        "why": "The `0` / `false` test is the highest-value one — it's the regression test against the most common bug. Saying you'd write it unprompted signals you understand the gap between 'works on the example' and 'works on the field types'. The label-resolver note at the end is the senior-tier extension: it shows you see the validator as one layer of a larger form system, not a self-contained answer."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through findMissing on a nested intake schema. The trace simulates the recursion as an explicit stack, yielding once per schema key visit so you can watch the dotted path build up and the missing[] array grow.",
+    "examples": [
+      { "label": "{name, dob, incident:{...}, insurance:{...}} → 4 missing", "input": { "required": { "name": true, "dob": true, "incident": { "date": true, "location": true }, "insurance": { "carrier": true, "policyNumber": true } }, "data": { "name": "Jane Doe", "dob": "", "incident": { "date": "2024-03-01" }, "insurance": null } }, "expected": "[\"dob\",\"incident.location\",\"insurance.carrier\",\"insurance.policyNumber\"]" },
+      { "label": "all-filled happy path → []", "input": { "required": { "name": true, "dob": true }, "data": { "name": "Jane", "dob": "1990-01-01" } }, "expected": "[]" },
+      { "label": "0 and false are NOT missing → []", "input": { "required": { "count": true, "active": true }, "data": { "count": 0, "active": false } }, "expected": "[]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { required, data } = input;",
+      "  const missing = [];",
+      "  yield { line: 1, label: `enter findMissing — required keys=${JSON.stringify(Object.keys(required))}`, state: { required, data, missing: [...missing] } };",
+      "  function* walk(req, dat, prefix) {",
+      "    yield { line: 4, label: `visit subtree at prefix='${prefix || '(root)'}'`, state: { prefix, dat, missing: [...missing] } };",
+      "    for (const key of Object.keys(req)) {",
+      "      const path = prefix ? prefix + '.' + key : key;",
+      "      const spec = req[key];",
+      "      const val = dat == null ? undefined : dat[key];",
+      "      yield { line: 6, label: `key='${key}', path='${path}', specType=${spec === true ? 'leaf' : 'subtree'}, val=${JSON.stringify(val)}`, state: { path, spec: spec === true ? 'true' : '{...}', val, missing: [...missing] } };",
+      "      if (spec === true) {",
+      "        if (val === undefined || val === null || val === '') {",
+      "          missing.push(path);",
+      "          yield { line: 9, label: `leaf '${path}' is missing (val=${JSON.stringify(val)}) → push`, state: { path, val, missing: [...missing] } };",
+      "        } else {",
+      "          yield { line: 9, label: `leaf '${path}' is filled (val=${JSON.stringify(val)}) → skip`, state: { path, val, missing: [...missing] } };",
+      "        }",
+      "      } else if (typeof spec === 'object') {",
+      "        if (val === undefined || val === null) {",
+      "          yield { line: 12, label: `subtree '${path}' parent missing → recurse into {} so leaves still surface`, state: { path, val, missing: [...missing] } };",
+      "          yield* walk(spec, {}, path);",
+      "        } else {",
+      "          yield { line: 14, label: `subtree '${path}' parent present → recurse into val`, state: { path, val, missing: [...missing] } };",
+      "          yield* walk(spec, val, path);",
+      "        }",
+      "      }",
+      "    }",
+      "    yield { line: 18, label: `done with subtree '${prefix || '(root)'}'`, state: { prefix, missing: [...missing] } };",
+      "  }",
+      "  yield* walk(required, data, '');",
+      "  yield { line: 20, label: `return missing=${JSON.stringify(missing)}`, state: { missing: [...missing], returns: JSON.stringify(missing) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// required: true = a required leaf; object = a required subtree.\n// Return dotted paths of every missing required field.\n// Missing = undefined, null, or '' (a blank form field is not filled).\nfunction findMissing(required, data, prefix = '') {\n  const missing = [];\n  for (const key of Object.keys(required)) {\n    const path = prefix ? `${prefix}.${key}` : key;\n    const spec = required[key];\n    const val = data == null ? undefined : data[key];\n    if (spec === true) {\n      // Leaf: required and empty -> report this path.\n      if (val === undefined || val === null || val === '') missing.push(path);\n    } else if (typeof spec === 'object') {\n      // Subtree: if the whole parent is missing, recurse into {} so every\n      // required leaf underneath still gets reported (not just the parent).\n      if (val === undefined || val === null) {\n        missing.push(...findMissing(spec, {}, path));\n      } else {\n        missing.push(...findMissing(spec, val, path));\n      }\n    }\n  }\n  return missing;\n}",
     "notes": [
@@ -19,10 +111,10 @@
       {
         "q": "Why is recursion the right tool for validating this schema?",
         "options": [
-          "Recursion is always faster than loops",
+          "An iterative loop can't preserve the dotted prefix across nested levels",
           "The schema nests subtrees to arbitrary depth, and one recursive function walks any depth without hardcoding the levels",
-          "It avoids using any variables",
-          "Object.keys only works recursively"
+          "`Object.keys` returns values in random order, so a recursive call is the only way to enforce a deterministic walk",
+          "A loop would have to mutate `required` in place to descend, which would corrupt the schema for the next call"
         ],
         "answer": 1,
         "explain": "A subtree can contain subtrees; recursion descends each level uniformly instead of writing a fixed number of nested loops."
@@ -30,10 +122,10 @@
       {
         "q": "When `insurance: null` (a whole required subtree is missing), why recurse into `{}` instead of just reporting `insurance`?",
         "options": [
-          "To avoid a crash from reading properties of null",
+          "Because the spec object isn't `true`, the leaf branch can't fire — pushing `insurance` directly would mis-tag a subtree as a leaf",
           "So every required leaf under it (carrier, policyNumber) is reported individually, telling the user exactly which fields to fill",
-          "Because `{}` is faster to traverse",
-          "It is a no-op; the recursion returns nothing"
+          "Recursing into `null` would corrupt the path prefix with a literal 'null' segment",
+          "`{}` resets `data == null` to false so the guard stops firing on subsequent siblings"
         ],
         "answer": 1,
         "explain": "Recursing into {} makes each child read as missing, so the report names every concrete field the user must supply, not just the group."
@@ -41,10 +133,10 @@
       {
         "q": "Why does the validator treat an empty string `''` as missing?",
         "options": [
-          "Empty strings break JSON parsing",
+          "`''` is coerced to `null` by `JSON.stringify`, so it would round-trip as missing anyway",
           "A blank form field is not a filled field, so a required field left empty must be flagged",
-          "All falsy values should be rejected",
-          "Strings cannot be required"
+          "All falsy values must be rejected — `''`, `0`, `false`, and `NaN` all signal an unfilled field",
+          "`Object.keys` would skip a property whose value is `''`, so the schema would never reach it"
         ],
         "answer": 1,
         "explain": "The user typed nothing into a required box. Note it checks `=== ''` explicitly rather than truthiness, so valid `0`/`false` values on other field types are not wrongly flagged."
@@ -52,10 +144,10 @@
       {
         "q": "Why does the code read `data == null ? undefined : data[key]` instead of just `data[key]`?",
         "options": [
-          "To convert the value to a number",
+          "`data[key]` returns the prototype value on missing own-keys; the guard suppresses inherited properties",
           "When recursing into a missing subtree, `data` is `{}` (safe) — but the guard also prevents a TypeError if a null/undefined ever reaches the read",
-          "`data[key]` is slower",
-          "It uppercases the key"
+          "`data == null` only fires for `undefined`, so the branch lets `null` pass through as a falsy leaf value",
+          "Optional chaining `data?.[key]` was added in ES2020 and isn't backward compatible"
         ],
         "answer": 1,
         "explain": "Reading a property off null/undefined throws. The guard short-circuits to undefined so the leaf is reported as missing rather than crashing."

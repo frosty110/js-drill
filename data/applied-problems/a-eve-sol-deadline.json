@@ -5,6 +5,108 @@
   "track": "applied",
   "status": "full",
   "description": "Date arithmetic + classify — compute each claim's filing deadline (incident date + statutory years, rebuilt by string) and days remaining vs a reference date, then bucket as EXPIRED / URGENT / OK.",
+  "conversation": {
+    "intro": "How a conversation about a statute-of-limitations dashboard would actually play out — a paralegal hands you a CSV of open claims and asks 'which ones are about to time out?'. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down what 'deadline' and 'days left' mean precisely.",
+        "say": "\"Let me restate: each claim has an incident date, a claim type (personal injury, med-mal, property, …), and the statute of limitations is a fixed number of years per type. The filing deadline is incident-date + statutory-years. Given a reference 'today' I need to compute, for each claim, the deadline date, the days remaining, and a bucket — EXPIRED if past, URGENT if within 30 days, OK otherwise.\"\n\nClarifiers first:\n• What's the SoL per type? I'd ask for an authoritative table — different states have different limits, and using the wrong number is a malpractice exposure, not a code bug.\n• 'Days left' — calendar days, or business days? Calendar days is the standard for SoL; business days would need a holiday calendar.\n• Incident date format — strictly YYYY-MM-DD? Anything else needs explicit parsing.\n• Is 'today' a parameter or `new Date()`? Parameterizing is testable; using `new Date()` makes the function non-deterministic and breaks tests across day boundaries.\n• What counts as 'exactly on the deadline' — URGENT or EXPIRED? Most jurisdictions: you can file on the deadline day, so day 0 is URGENT, day -1 is EXPIRED. Worth pinning down with the lawyer.\n• Tolling events (military service, mental incapacity, …) — out of scope here, but I'd flag that the real legal calc has exceptions.",
+        "why": "The 'parameterize today' question is the load-bearing one for testability — every senior developer has been burned by a function that called `new Date()` internally and produced different test results on Tuesday vs Wednesday. Pinning down the day-0 boundary is the kind of business-rule clarifier that an interview about a real spec rewards. Naming tolling unprompted shows domain awareness; the interviewer either says 'ignore tolling' (fine) or says 'good — we'd flag those manually' (also fine), but in both cases you've demonstrated you know what the simplified problem is missing."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "What's the obvious-but-wrong way to do the date math?",
+        "say": "\"The temptation is to use a Date object: `new Date(incident).setFullYear(year+years)`. That looks right, and it works on most inputs — but it has a notorious bug on Feb 29. If the incident is 2020-02-29 and SoL is 2 years, `setFullYear(2022)` gives March 1, 2022, because Feb 29 doesn't exist in non-leap years. The Date constructor silently rolls the date forward. Worse, `setFullYear` returns the new timestamp but mutates the original Date in place, which is its own footgun.\n\nThe safer approach: rebuild the deadline as a STRING. Split the ISO date on `-`, add years to the year component, re-pad month/day, concatenate back. The deadline always has the same month and day as the incident — no Date-object month/leap-day drift. Then parse both `deadline` and `today` with `Date.parse` (which interprets date-only ISO strings as UTC midnight) and divide the ms-diff by 86_400_000 for whole days.\"",
+        "why": "The Feb 29 bug is the classic interview gotcha for date arithmetic — it catches candidates who reach for Date methods without thinking about the calendar. Naming it unprompted is the senior move. Even if the interviewer waves it off ('assume no Feb 29 incidents'), you've demonstrated you know why the string-rebuild is the conservative choice. The 'setFullYear mutates the original' point is a JS-specific footgun worth flagging — it's why React-shaped code that holds dates in state tends to bug out when you call mutation methods on them."
+      },
+      {
+        "title": "3. Spot the pattern — date math + classify",
+        "prompt": "What are the two phases and why is the classify branch order load-bearing?",
+        "say": "\"This is a two-phase per-row transformation: (1) compute the deadline + days-left from the incident date, (2) classify days-left into a bucket. Both phases run inside a `.map` over claims — no shared state across claims, so it's embarrassingly parallel.\n\nPhase 1 — rebuild deadline:\n• Look up statutory years from a `limits` table keyed by claim type.\n• Split incident `YYYY-MM-DD` on `-`, map each piece to Number, destructure into `[y, m, d]`.\n• Build deadline string `${y+years}-${pad(m)}-${pad(d)}` — pad with `String(x).padStart(2, '0')` to keep ISO width fixed (month 6 → '06').\n• Parse both deadline and today with `Date.parse`, subtract ms, divide by 86_400_000 (ms per day), round to whole days.\n\nPhase 2 — classify with branch order:\n• `if (daysLeft < 0) EXPIRED` first — anything past the deadline.\n• `else if (daysLeft <= 30) URGENT` — 0 through 30 inclusive falls here.\n• `else OK` — more than 30 days out.\n\nThe order matters: a deadline exactly 0 days out (today is the deadline) must be URGENT, not EXPIRED. Testing `< 0` first then `<= 30` enforces that. If you reversed and tested `<= 30` first, the 0-case would still be URGENT — but a negative `daysLeft` would also satisfy `<= 30` and you'd misclassify EXPIRED claims as URGENT. So `< 0` MUST be checked first.\"",
+        "why": "The 'pad with leading zero' detail is what makes the rebuilt string a valid ISO date — without it, month 6 becomes '2026-6-01' which `Date.parse` may handle inconsistently across engines. Spelling out the branch order with the failure mode ('reverse and EXPIRED claims become URGENT') is the kind of explanation interviewers grade — it proves you actually traced the predicate, not just copy-pasted the structure. The 'embarrassingly parallel' comment is also a useful framing: it tells the interviewer you see why `.map` is the right control structure (no shared state, no reduce needed)."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few claims through both phases.",
+        "intro": "\"Let me trace a couple of claims so the date math and the classify branches are concrete.\" Three cases cover the three buckets — URGENT (5 days left), EXPIRED (-12 days), and OK (far in the future).",
+        "examples": [
+          {
+            "input": "C-1 personal injury, incident 2024-06-01, today 2026-05-27",
+            "output": "C-1 (personal injury): deadline 2026-06-01, 5 days — URGENT",
+            "note": "URGENT case. Personal injury → 2yr → deadline 2026-06-01. From today 2026-05-27, that's 5 days out. Branch: 5 is not < 0, 5 <= 30 → URGENT.",
+            "trace": "claim.type = 'personal injury' → years = 2\nsplit '2024-06-01' on '-' → ['2024','06','01'] → map Number → [2024, 6, 1]\ndeadline = `${2024+2}-${'6'.padStart(2,'0')}-${'1'.padStart(2,'0')}` = '2026-06-01'\nnowMs = Date.parse('2026-05-27'), deadlineMs = Date.parse('2026-06-01')\ndaysLeft = round((deadlineMs - nowMs) / 86400000) = round(432000000 / 86400000) = 5\nbranch: 5 < 0? no. 5 <= 30? yes → status = 'URGENT'\nreturn 'C-1 (personal injury): deadline 2026-06-01, 5 days — URGENT' ✓"
+          },
+          {
+            "input": "C-2 medical malpractice, incident 2023-05-15, today 2026-05-27",
+            "output": "C-2 (medical malpractice): deadline 2026-05-15, -12 days — EXPIRED",
+            "note": "EXPIRED case. Med-mal → 3yr → deadline 2026-05-15. Today is 2026-05-27 (12 days past). Branch: -12 < 0 → EXPIRED. Branch order matters here — if we tested `<= 30` first, -12 also satisfies that and we'd misclassify.",
+            "trace": "claim.type = 'medical malpractice' → years = 3\nsplit '2023-05-15' → [2023, 5, 15]\ndeadline = `${2023+3}-${'5'.padStart(2,'0')}-${'15'.padStart(2,'0')}` = '2026-05-15'\ndeadlineMs - nowMs = negative\ndaysLeft = round(neg_ms / 86400000) = -12\nbranch: -12 < 0? YES → status = 'EXPIRED' (short-circuits before the <=30 branch)\nreturn 'C-2 (medical malpractice): deadline 2026-05-15, -12 days — EXPIRED' ✓"
+          },
+          {
+            "input": "C-3 property, incident 2020-01-01, today 2026-05-27",
+            "output": "C-3 (property): deadline 2024-01-01, -877 days — EXPIRED",
+            "note": "Deeply EXPIRED case. Property → 4yr → deadline 2024-01-01, which was 877 days ago. Proves the math is straight subtraction in ms — works on arbitrarily-large gaps without overflow concerns.",
+            "trace": "claim.type = 'property' → years = 4\nsplit '2020-01-01' → [2020, 1, 1]\ndeadline = '2024-01-01'\ndaysLeft = round((Date.parse('2024-01-01') - Date.parse('2026-05-27')) / 86400000) = -877\nbranch: -877 < 0 → status = 'EXPIRED'\nreturn 'C-3 (property): deadline 2024-01-01, -877 days — EXPIRED' ✓"
+          }
+        ],
+        "why": "The C-2 trace is the one to narrate out loud — it's the test of the branch order. -12 satisfies BOTH `< 0` and `<= 30`; the only thing keeping it out of URGENT is that `< 0` is tested first. Reversing the order would silently misclassify, and the interviewer is grading whether you noticed. C-3 with -877 days is a sanity check that the day-diff math doesn't break on large spans — useful because some candidates assume `Date.parse` does something exotic with old dates."
+      },
+      {
+        "title": "5. Edge cases / failure modes",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges and failure modes worth flagging:\n• Feb 29 leap-day incident (2020-02-29, SoL 2yr) → string-rebuild gives '2022-02-29', which `Date.parse` interprets as 2022-03-01. Mathematically the deadline IS March 1 in non-leap years (Feb 29 doesn't exist), but the displayed deadline string lies. If accuracy on Feb 29 matters, normalize to 'Feb 28 in non-leap years' or 'Mar 1' explicitly per jurisdiction.\n• Malformed incident strings — '2024-6-1' (missing zero pad), '2024/06/01' (wrong separator), '06-01-2024' (US order). The `split('-').map(Number)` is permissive on missing pad ('6' → 6 works) but the `padStart` on output normalizes it. Wrong separator: split yields a 1-element array and the destructure fills `m` and `d` with undefined. Would want a validation step in production.\n• Unknown claim type — `limits[c.type]` returns `undefined`, and `y + undefined` is `NaN`. Deadline becomes 'NaN-06-01', `Date.parse` returns NaN, daysLeft is NaN, and `NaN < 0` is false, `NaN <= 30` is false → status falls through to 'OK'. That's a silent malclassification. Defend with `if (!(c.type in limits)) throw` at the top of the map callback, or default to a conservative SoL.\n• Timezone confusion — `Date.parse('2026-05-27')` is UTC midnight. If 'today' was constructed in local time you'd get a fractional-day skew. Parsing both sides the same way (date-only ISO → UTC) is what makes the diff timezone-consistent.\n• Daylight-saving boundary — 86_400_000 ms/day is exact for UTC, but local-time days around a DST shift are 23 or 25 hours. The `Math.round` covers most cases, but a `Math.floor` would shift the boundary by a day for some claims twice a year. Using `Date.parse` on date-only strings (which goes to UTC) sidesteps DST entirely.\n• Day-0 (today IS the deadline) — `daysLeft = 0`, branch `< 0` is false, `<= 30` is true → URGENT. Confirmed correct per the spec (you can still file on day 0).\n• Negative SoL? Nonsensical, but defensive code would refuse a negative `years` from the limits table.\"",
+        "why": "The 'unknown claim type → silent OK' point is the senior call-out — it's the kind of bug where the function 'works' (no exception) but produces a wrong-and-confidently-labeled answer. In a legal-tech context, that's a malpractice trap. Naming Feb 29 and DST shows you've thought about calendar reality, not just abstract date math. The interviewer is testing whether you can map a domain spec to its failure modes."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n) over n claims — each claim is constant work: a dictionary lookup, a string split + 3-element parse, a string rebuild, a single Date.parse on each side, an integer divide and round, and a 3-way classify. No nested loops, no sort, no cross-claim state.\n\nSpace is O(n) for the output array — each claim produces one formatted string. Beyond that, O(1) per claim of intermediate state.\n\nIf you wanted me to extend this:\n• Group the output by status — wrap with a group-by reduce keyed on status. That's the same pattern as the damages-rollup sibling lesson.\n• Sort EXPIRED first, then URGENT by daysLeft ascending, then OK by daysLeft ascending — gives a 'most urgent on top' dashboard view. One pass, then `.sort()` with a 3-tier comparator.\n• Filing-fee estimation — multiply daysLeft by an interest-accrual rate, embed in the row.\n• Email-when-URGENT — same predicate, fired from a daily cron rather than rendered to a list. The classify branch is the seed of an alert system.\n\nThe template here is per-row enrichment + bucket-by-predicate. Anywhere you'd write SQL `SELECT col, CASE WHEN ... THEN ... END AS bucket FROM table`, this is the in-memory equivalent.\"",
+        "why": "Connecting the classify branch to a future cron-driven alert is the unprompted-extension move that shows scope thinking — interviewers grade whether you see this as a one-off function or as a building block. The SQL-CASE analogy is the right framing for the rusty-engineer audience: anyone who's written `CASE WHEN days_left < 0 THEN 'EXPIRED' WHEN days_left <= 30 THEN 'URGENT' ELSE 'OK' END` recognizes this immediately, which makes that the durable handle for recall."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the SoL deadline calculation for a list of claims. The state panel shows the running output array, the current claim's split date components, the rebuilt deadline string, the daysLeft computation, and the classified bucket. Watch how branch order matters — `daysLeft < 0` is tested before `<= 30` so that EXPIRED short-circuits before URGENT can claim it.",
+    "examples": [
+      { "label": "C-1 URGENT, C-2 EXPIRED, C-3 EXPIRED (full L3 input)", "input": { "claims": [ { "id": "C-1", "type": "personal injury", "incident": "2024-06-01" }, { "id": "C-2", "type": "medical malpractice", "incident": "2023-05-15" }, { "id": "C-3", "type": "property", "incident": "2020-01-01" } ], "today": "2026-05-27" }, "expected": "[\"C-1 (personal injury): deadline 2026-06-01, 5 days — URGENT\",\"C-2 (medical malpractice): deadline 2026-05-15, -12 days — EXPIRED\",\"C-3 (property): deadline 2024-01-01, -877 days — EXPIRED\"]" },
+      { "label": "Single OK claim — property, 4yr out", "input": { "claims": [ { "id": "C-9", "type": "property", "incident": "2024-12-01" } ], "today": "2026-05-27" }, "expected": "[\"C-9 (property): deadline 2028-12-01, 919 days — OK\"]" },
+      { "label": "Day-0 boundary — exactly on the deadline → URGENT", "input": { "claims": [ { "id": "C-0", "type": "personal injury", "incident": "2024-05-27" } ], "today": "2026-05-27" }, "expected": "[\"C-0 (personal injury): deadline 2026-05-27, 0 days — URGENT\"]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const claims = input.claims;",
+      "  const today = input.today;",
+      "  const limits = { 'personal injury': 2, 'medical malpractice': 3, 'property': 4 };",
+      "  const nowMs = Date.parse(today);",
+      "  yield { line: 3, label: `init — today=${today} (nowMs=${nowMs}), limits=${JSON.stringify(limits)}, ${claims.length} claims to process`, state: { claims, today, nowMs, results: [] } };",
+      "  const results = [];",
+      "  for (let i = 0; i < claims.length; i++) {",
+      "    const c = claims[i];",
+      "    const years = limits[c.type];",
+      "    yield { line: 5, label: `claim#${i} ${c.id} type='${c.type}' → years=${years} (SoL lookup)`, state: { claims, today, nowMs, results: [...results], i, claim: c, years } };",
+      "    const parts = c.incident.split('-').map(Number);",
+      "    const y = parts[0], m = parts[1], d = parts[2];",
+      "    yield { line: 6, label: `split incident '${c.incident}' → [y=${y}, m=${m}, d=${d}]`, state: { claims, today, nowMs, results: [...results], i, claim: c, years, y, m, d } };",
+      "    const deadline = (y + years) + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');",
+      "    yield { line: 7, label: 'rebuild deadline (year+' + years + ', pad m/d) = \\'' + deadline + '\\'', state: { claims, today, nowMs, results: [...results], i, claim: c, years, y, m, d, deadline } };",
+      "    const deadlineMs = Date.parse(deadline);",
+      "    const daysLeft = Math.round((deadlineMs - nowMs) / 86400000);",
+      "    yield { line: 8, label: 'daysLeft = round((' + deadlineMs + ' - ' + nowMs + ') / 86400000) = ' + daysLeft, state: { claims, today, nowMs, results: [...results], i, claim: c, years, deadline, deadlineMs, daysLeft } };",
+      "    let status;",
+      "    let branch;",
+      "    if (daysLeft < 0) { status = 'EXPIRED'; branch = '< 0'; }",
+      "    else if (daysLeft <= 30) { status = 'URGENT'; branch = '<= 30 (after failing < 0)'; }",
+      "    else { status = 'OK'; branch = '> 30 (fell through)'; }",
+      "    yield { line: status === 'EXPIRED' ? 10 : status === 'URGENT' ? 11 : 12, label: 'classify ' + daysLeft + ' → ' + status + ' (branch matched: ' + branch + ')', state: { claims, today, nowMs, results: [...results], i, claim: c, deadline, daysLeft, status, branch } };",
+      "    const line = c.id + ' (' + c.type + '): deadline ' + deadline + ', ' + daysLeft + ' days — ' + status;",
+      "    results.push(line);",
+      "    yield { line: 13, label: 'push formatted line: \\'' + line + '\\'', state: { claims, today, nowMs, results: [...results], i, claim: c, deadline, daysLeft, status } };",
+      "  }",
+      "  yield { line: 14, label: 'all ' + claims.length + ' claims processed — return ' + results.length + ' lines', state: { claims, today, nowMs, results: [...results], returns: JSON.stringify(results) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function checkDeadlines(claims, today) {\n  const limits = { 'personal injury': 2, 'medical malpractice': 3, 'property': 4 };\n  const nowMs = Date.parse(today);\n  return claims.map(c => {\n    const years = limits[c.type];\n    // Rebuild the deadline by adding to the YEAR component as a string —\n    // avoids Date-object month/leap-day drift from setFullYear etc.\n    const [y, m, d] = c.incident.split('-').map(Number);\n    const deadline = `${y + years}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;\n    const daysLeft = Math.round((Date.parse(deadline) - nowMs) / 86400000);\n    let status;\n    if (daysLeft < 0) status = 'EXPIRED';\n    else if (daysLeft <= 30) status = 'URGENT';\n    else status = 'OK';\n    return `${c.id} (${c.type}): deadline ${deadline}, ${daysLeft} days — ${status}`;\n  });\n}",
     "notes": [
@@ -18,10 +120,10 @@
       {
         "q": "Why is the deadline rebuilt by adding years to the year string instead of mutating a Date object?",
         "options": [
-          "Strings are faster than Dates",
+          "`setFullYear` returns the new timestamp but does not mutate the original Date, so the new year is silently discarded",
           "Adding to the year component as a string avoids the month/leap-day drift that Date mutation (e.g. setFullYear) can introduce",
-          "Date objects can't represent future dates",
-          "It's the only way to format the date"
+          "Date constructors interpret a four-digit year as a Unix epoch offset, shifting deadlines into 1970",
+          "Date arithmetic on years that span a daylight-saving boundary returns a fractional result that cannot be re-stringified"
         ],
         "answer": 1,
         "explain": "Keeping the month and day fixed by reconstructing the string sidesteps the subtle drift Date arithmetic can cause across leap years and month boundaries."
@@ -29,10 +131,10 @@
       {
         "q": "Why does the function call `Date.parse` on both the deadline and `today` rather than mixing parsing styles?",
         "options": [
-          "To support non-ISO formats",
+          "`Date.parse` strips the timezone offset before returning a millisecond value, so any input format produces a consistent UTC result",
           "ISO date strings parse as UTC midnight, so both sides are on the same timezone basis and the day diff is consistent",
-          "Date.parse is required for subtraction",
-          "It converts the dates to local time intentionally"
+          "Subtracting two `Date` objects requires both sides to come from `Date.parse` rather than `new Date()`",
+          "Mixing `new Date(str)` with `Date.parse(str)` returns objects with different epoch origins and silently corrupts the diff"
         ],
         "answer": 1,
         "explain": "Date-only ISO strings are interpreted as UTC; parsing both sides the same way keeps the millisecond subtraction timezone-consistent."
@@ -40,10 +142,10 @@
       {
         "q": "A claim's deadline is exactly 30 days out. How is it classified, and why does branch order matter?",
         "options": [
-          "EXPIRED — past the threshold",
+          "EXPIRED — the `<= 30` branch is inclusive of the threshold, which the spec treats as already lapsed",
           "URGENT — the check is `daysLeft < 0` first (not <0), then `daysLeft <= 30` catches 0..30 inclusive",
-          "OK — 30 is the safe boundary",
-          "URGENT only if exactly 0"
+          "OK — `<= 30` is checked with `<` semantics in JavaScript when one operand is a string-cast comparison, so exactly 30 falls through",
+          "URGENT, but only because the branches are reordered at runtime by V8's predicate optimizer"
         ],
         "answer": 1,
         "explain": "EXPIRED is tested first (`daysLeft < 0`); anything from 0 to 30 inclusive falls into the URGENT branch."
@@ -51,10 +153,10 @@
       {
         "q": "Why is `String(m).padStart(2, '0')` applied to the month and day when rebuilding the deadline?",
         "options": [
-          "To convert the number to a date",
+          "`String(m)` returns the numeric Unicode code point unless padded, so single-digit months render as control characters",
           "To keep the YYYY-MM-DD width fixed (e.g. month 6 becomes '06') so the result is a valid ISO string and sorts correctly",
-          "To round the value",
-          "padStart is required by Date.parse"
+          "Without padStart, the `+` operator in the template literal would treat month as a numeric add and produce `${y+years+m}` style collisions",
+          "`Date.parse` rejects any month value below 10 unless it is explicitly cast to a two-character string"
         ],
         "answer": 1,
         "explain": "ISO dates need zero-padded two-digit month and day; padStart restores the fixed width after `.map(Number)` stripped leading zeros."

@@ -6,6 +6,110 @@
   "status": "full",
   "description": "Algorithm shape — sort the visit dates, then a single `for` loop comparing each visit to the previous one (i vs i-1) to flag any gap longer than a threshold.",
   "mechanics": ["sort-then-sweep"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Treatment-gap detection is bread-and-butter legal-tech work — opposing counsel uses gaps in treatment to argue the injury wasn't serious — so the interviewer probes date robustness and edge-case handling. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Spec-heavy problem — clarifying questions are the signal.",
+        "say": "\"Let me restate: `findGaps(dates, maxDays)` — given an array of treatment dates and a threshold, return every gap between consecutive visits that exceeds `maxDays`, formatted as `'prev → next: N days'`. Before I code:\"\n\n• Is the input sorted, or could it arrive in arbitrary order? If unsorted I sort it first; if sorted I save the cost.\n• Date format — ISO `YYYY-MM-DD` strings (which I can subtract via Date.parse), or `Date` objects, or `MM/DD/YYYY`?\n• Is `maxDays` strict — `>` (gap longer than 30 means 31+) or `>=` (gap of exactly 30 also counts)? Spec usually says 'longer than', so `>`.\n• Should I include the first visit's lead-time from injury date? Or only between-visit gaps? The problem says 'between consecutive visits', so first-visit lead-time is out of scope.\n• Should the caller's array be preserved? `.sort()` mutates, so I'd copy with `[...dates]` if so.\n• Edge: zero visits, one visit — return `[]` either way (no consecutive pairs to compare).\n• Same-date duplicates — gap of 0 days, never exceeds threshold, but they still count as 'consecutive visits' for this scan. Fine.",
+        "why": "The strict-vs-non-strict comparison is the off-by-one trap that costs you the problem if you get it wrong silently. Asking 'longer than maxDays — strict?' makes the contract explicit. The 'should I preserve the input' question is the senior touch: `.sort()` mutates and a junior implementation that doesn't copy can silently corrupt the caller's data. Mentioning the input-sorted assumption matters because if the interviewer says 'assume sorted' you skip the sort and the complexity drops to O(n)."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious version before discarding it.",
+        "say": "\"The brute force is two nested loops: for every pair (i, j) with i < j, compute the date diff and if it's the gap between *consecutive* visits, check it. But 'consecutive' only makes sense relative to sort order — so I need to sort first, and once it's sorted, the consecutive pairs are exactly (i-1, i). That's a single pass, not a nested loop.\n\nSo the brute force COLLAPSES once I realize 'consecutive in time' = 'adjacent after sorting'. The shape is: sort, then sweep with a `for` from i=1 comparing sorted[i] to sorted[i-1]. That's the sort-then-sweep template — every interval / adjacent-pair problem has this shape.\"",
+        "why": "Saying 'the brute force collapses once I sort' is the right framing — it's not that we're being clever, it's that the SORT does the work of finding 'consecutive in time'. After sorting, adjacent indices are by definition consecutive. This framing earns you the right to claim O(n log n) — the n log n is the sort, not anything inherent to the problem."
+      },
+      {
+        "title": "3. Spot the shape — sort then sweep",
+        "prompt": "What's the structural property that makes this an adjacent-pair scan?",
+        "say": "\"This is the sort-then-sweep template. Adjacent-pair problems — gaps between consecutive items, merge-overlapping-intervals, max-difference-in-sorted-array — all have this shape:\n\n```\nconst sorted = [...dates].sort();\nconst gaps = [];\nfor (let i = 1; i < sorted.length; i++) {            // start at 1 so i-1 is valid\n  const days = (Date.parse(sorted[i]) - Date.parse(sorted[i - 1])) / 86400000;\n  if (days > maxDays) gaps.push(`${sorted[i-1]} → ${sorted[i]}: ${days} days`);\n}\nreturn gaps;\n```\n\n\"Four load-bearing pieces. (1) `[...dates]` clones because `.sort()` mutates — protect the caller. (2) `.sort()` defaults to lexicographic, which is chronological for ISO `YYYY-MM-DD` because every component is fixed-width big-endian. (3) `i = 1` is the off-by-one — every iteration reads `sorted[i-1]` AND `sorted[i]`, so the earliest valid i is 1. Starting at 0 would index `sorted[-1] = undefined`. (4) `(Date.parse(b) - Date.parse(a)) / 86400000` converts millisecond difference to whole days; `86400000` is `1000 * 60 * 60 * 24` — milliseconds in a day.\"",
+        "why": "Naming sort-then-sweep as a TEMPLATE matters because it generalizes. The same shape appears in 'merge overlapping intervals' (sort by start, sweep checking overlap), 'minimum-difference pair' (sort, sweep minimum of adjacent diffs), 'meeting-rooms' (sort by time, sweep counting active). Pointing out '86400000 = 1000*60*60*24' isn't pedantry — it's defending the magic number so the interviewer doesn't have to ask, and it surfaces that you know the unit math."
+      },
+      {
+        "title": "4. Trace through a tiny example",
+        "prompt": "Walk a concrete input through sort + sweep.",
+        "intro": "\"Let me run the L3 input — 4 visits, one big gap (Jan 10 → Apr 1 is 82 days), threshold 30 days.\"",
+        "examples": [
+          {
+            "input": "dates=['2024-01-01', '2024-01-10', '2024-04-01', '2024-04-05'], maxDays=30",
+            "output": "['2024-01-10 → 2024-04-01: 82 days']",
+            "note": "One gap (Jan 10 → Apr 1) exceeds 30 days. The other three intervals (9, 4) are under threshold. Input happens to already be sorted, but the canonical sorts regardless.",
+            "trace": "sorted = [...dates].sort() = ['2024-01-01', '2024-01-10', '2024-04-01', '2024-04-05']  (already sorted)\ni=1: a='2024-01-01' b='2024-01-10' → (Date.parse(b)-Date.parse(a))/86400000 = 9 days → 9 > 30 false → skip\ni=2: a='2024-01-10' b='2024-04-01' → 82 days → 82 > 30 TRUE → push '2024-01-10 → 2024-04-01: 82 days'\ni=3: a='2024-04-01' b='2024-04-05' → 4 days → 4 > 30 false → skip\nreturn ['2024-01-10 → 2024-04-01: 82 days']"
+          },
+          {
+            "input": "dates=['2024-02-01', '2024-01-01'] (unsorted), maxDays=20",
+            "output": "['2024-01-01 → 2024-02-01: 31 days']",
+            "note": "Unsorted input — proves the [...dates].sort() prep step earns its keep. Without sorting, the diff would be -31 days (negative!) and the comparison would be meaningless.",
+            "trace": "sorted = [...dates].sort() = ['2024-01-01', '2024-02-01']  (sorted ascending)\ni=1: a='2024-01-01' b='2024-02-01' → 31 days → 31 > 20 TRUE → push '2024-01-01 → 2024-02-01: 31 days'\nreturn ['2024-01-01 → 2024-02-01: 31 days']"
+          },
+          {
+            "input": "dates=['2024-03-10'], maxDays=30",
+            "output": "[]",
+            "note": "Single visit — no consecutive pairs, loop doesn't fire, return []. The i=1 start handles this gracefully.",
+            "trace": "sorted = ['2024-03-10']\nLoop condition: i=1 < sorted.length(1) → false → loop body never executes\nreturn []"
+          }
+        ],
+        "why": "The second trace (unsorted input) is the one to narrate — it shows why `[...dates].sort()` isn't ceremony but a correctness requirement. Without it, the diff could be negative and you'd silently miss real gaps (negative number is < maxDays). The single-visit trace proves the i=1 start isn't a bug — it's the off-by-one that lets the canonical handle 0-visit and 1-visit inputs without a special case."
+      },
+      {
+        "title": "5. Edge cases & failure modes",
+        "prompt": "Real-world inputs are messy — what would trip up a careless implementation?",
+        "say": "\"Edges worth flagging — most come from real treatment-record data:\"\n\n• Empty input `[]` → no pairs, return `[]`. ✓\n• Single visit `['2024-01-01']` → loop doesn't fire (i=1 < length=1 is false), return `[]`. ✓\n• Two visits, gap below threshold → return `[]`. ✓\n• All visits same day — series of 0-day gaps, none exceed threshold, return `[]`. ✓\n• Negative `maxDays` — every gap qualifies. Probably a caller bug; defensively, if `maxDays < 0` I'd throw or clamp to 0. Worth asking.\n• Duplicate dates → 0-day gap, doesn't exceed any positive threshold, ignored. Fine.\n• Mixed time-of-day (`'2024-01-15T08:00:00Z'` vs `'2024-01-15T20:00:00Z'`) — `Date.parse` handles ISO timestamps and divides correctly to fractional days. For date-only ISO (`YYYY-MM-DD`), Date.parse treats as midnight UTC, so diffs are exact whole days.\n• Non-ISO format (`'01/15/2024'`) — `.sort()` lex-sorts as `'01/15/2024' < '02/01/2024'` correctly but `'12/31/2023' > '01/15/2024'` wrongly. Pre-normalize to ISO or use a Date-based comparator.\n• Daylight-saving-time crossing — `Date.parse('2024-03-10') - Date.parse('2024-03-09')` is exactly 86400000 if you stick to date-only ISO (UTC interpretation). If you used local-tz `new Date('2024-03-10 12:00')` you'd get 23 or 25 hours on DST days. Date-only ISO sidesteps this.\n• Floating-point — `86400000` is small enough that integer division stays exact. No epsilon needed for date-only inputs.\n• Gap formula precision — `(Date.parse(b) - Date.parse(a)) / 86400000` is an integer for date-only ISO; for timestamped input you'd want `Math.floor` or `Math.round` depending on whether 'gap of 1.5 days' should display as 1 or 2.",
+        "why": "The DST call-out is the one that catches careless candidates — naive `new Date()` parsing in local time gives wrong diffs on spring-forward and fall-back days, and the bug is invisible until late March or early November. Saying 'date-only ISO sidesteps this because everything is UTC midnight' shows you know WHY the canonical works. The non-ISO date-format trap connects back to the medical-chronology lesson — same lex-sort pitfall."
+      },
+      {
+        "title": "6. Complexity & memory",
+        "prompt": "Defend the bounds.",
+        "say": "\"Time is O(n log n) — the sort dominates. The sweep is O(n). If the input is already sorted (e.g., it came from a database query with `ORDER BY date`), the sort is amortized near-O(n) but you still pay the comparison cost; if you can skip it entirely, the whole thing drops to O(n).\n\nSpace is O(n) for the cloned/sorted copy + O(g) for the gaps array where g ≤ n-1. The clone is the protect-the-caller cost — could be avoided if you're willing to mutate.\n\n\"For extensions: streaming version. If treatment dates arrive sorted from a database cursor, you don't need to materialize the array — just track `prev` and emit gaps on the fly. That's O(1) extra space, no array allocation. The shape is the same — `for each row, if row.date - prev > maxDays, emit; prev = row.date` — just consuming a stream instead of an array.\n\n\"At true scale (millions of treatments across thousands of patients per case), this is a SQL window function: `SELECT date, date - LAG(date) OVER (ORDER BY date) AS gap FROM visits HAVING gap > 30`. Same shape, delegated to the storage layer.\"",
+        "why": "The streaming-extension is the senior touch — you're recognizing that the sort-then-sweep shape has a streaming dual when input is pre-sorted, and stating it without the interviewer having to pull it out. The SQL `LAG` equivalent connects the algorithm to the production system — most legal-tech treatment data lives in a relational DB and the window-function form is the obvious implementation in practice."
+      },
+      {
+        "title": "7. Robustness & tests",
+        "prompt": "Legal docs care about correctness — how would you add tests?",
+        "say": "\"Tests I'd write, in order from easy to subtle:\"\n\n• Happy path — multiple visits, one big gap, threshold splits them.\n• Empty input → `[]`.\n• Single visit → `[]`.\n• Unsorted input → same output as the sorted version (the sort guarantee).\n• Exactly-threshold gap — confirm strict `>` not `>=` (or whichever the spec said). This is the off-by-one test that catches the most bugs.\n• All-same-date — N copies of one date → `[]` (no positive gaps).\n• Two visits with gap exactly equal to threshold — does NOT appear in output (strict greater-than).\n• Two visits with gap one day over threshold — DOES appear, formatted exactly as `'prev → next: N days'`.\n• Property test — for random inputs, assert (a) output is a subset of the consecutive pairs, (b) every emitted gap actually exceeds threshold, (c) sorting input doesn't change output.\n\n\"In production I'd also add a contract test: the gap value in the formatted string matches the actual date diff. Easy to introduce a typo where you log `prev → next: ${maxDays}` instead of `${days}` — interview-grade code wouldn't have that bug but real codebases do, and the test catches it.\n\n\"Snapshot tests on a known real-world chronology (anonymized) are gold here — they catch regressions across format changes (`'prev → next'` vs `'prev to next'`) without needing to enumerate every case.\"",
+        "why": "The exactly-threshold case is THE test — it's the off-by-one that ships and embarrasses you. Calling it out unprompted shows you know which test catches which bug. Property-based testing for 'sorting-doesn't-change-output' is the strong claim about the algorithm's structural correctness; suggesting it shows you're thinking about the SHAPE of correctness, not just specific cases. The 'gap value matches the formatted string' contract test is the production-engineer move — real bugs hide in format-string drift."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through sort-then-sweep on a treatment timeline. State panel shows the `sorted` array, the current `i`, the adjacent pair `(prev, curr)`, the computed `days`, and the growing `gaps` output. Watch how the loop starts at i=1 so the i-1 read is always valid, and how `(Date.parse(b) - Date.parse(a)) / 86400000` produces whole days for ISO date-only strings.",
+    "examples": [
+      { "label": "4 visits, one 82-day gap > 30 threshold", "input": { "dates": ["2024-01-01", "2024-01-10", "2024-04-01", "2024-04-05"], "maxDays": 30 }, "expected": "[\"2024-01-10 → 2024-04-01: 82 days\"]" },
+      { "label": "unsorted input — sort prep step kicks in", "input": { "dates": ["2024-02-01", "2024-01-01"], "maxDays": 20 }, "expected": "[\"2024-01-01 → 2024-02-01: 31 days\"]" },
+      { "label": "single visit → no pairs → []", "input": { "dates": ["2024-03-10"], "maxDays": 30 }, "expected": "[]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { dates, maxDays } = input;",
+      "  yield { line: 1, label: `enter — dates=${JSON.stringify(dates)}, maxDays=${maxDays}`, state: { dates, maxDays } };",
+      "  const sorted = [...dates].sort();",
+      "  yield { line: 2, label: `sorted = [...dates].sort() = ${JSON.stringify(sorted)} (clone protects caller; ISO lex = chronological)`, state: { dates, maxDays, sorted } };",
+      "  const gaps = [];",
+      "  yield { line: 3, label: `init gaps=[] (will collect over-threshold pairs)`, state: { dates, maxDays, sorted, gaps: [...gaps] } };",
+      "  if (sorted.length < 2) {",
+      "    yield { line: 4, label: `sorted.length=${sorted.length} < 2 — no consecutive pairs, loop won't fire`, state: { dates, maxDays, sorted, gaps: [...gaps] } };",
+      "  }",
+      "  for (let i = 1; i < sorted.length; i++) {",
+      "    const prev = sorted[i - 1];",
+      "    const curr = sorted[i];",
+      "    yield { line: 5, label: `iter i=${i}: prev=${prev}, curr=${curr}`, state: { dates, maxDays, sorted, gaps: [...gaps], i, prev, curr } };",
+      "    const ms = Date.parse(curr) - Date.parse(prev);",
+      "    const days = ms / 86400000;",
+      "    yield { line: 6, label: `days = (Date.parse(${curr}) - Date.parse(${prev})) / 86400000 = ${days}`, state: { dates, maxDays, sorted, gaps: [...gaps], i, prev, curr, days } };",
+      "    if (days > maxDays) {",
+      "      const entry = `${prev} → ${curr}: ${days} days`;",
+      "      gaps.push(entry);",
+      "      yield { line: 7, label: `${days} > ${maxDays} → push ${JSON.stringify(entry)}`, state: { dates, maxDays, sorted, gaps: [...gaps], i, prev, curr, days } };",
+      "    } else {",
+      "      yield { line: 7, label: `${days} > ${maxDays} → false, skip`, state: { dates, maxDays, sorted, gaps: [...gaps], i, prev, curr, days } };",
+      "    }",
+      "  }",
+      "  yield { line: 8, label: `return gaps — ${gaps.length} over-threshold gap(s)`, state: { dates, maxDays, sorted, gaps: [...gaps], returns: JSON.stringify(gaps) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function findGaps(dates, maxDays) {\n  // Sort first — gaps are measured between CONSECUTIVE visits, and the\n  // input may arrive unordered. Copy with [...dates] so we don't mutate the caller's array.\n  const sorted = [...dates].sort();\n  const gaps = [];\n  // Start at i=1 so each iteration can compare i to i-1 (adjacent pair).\n  for (let i = 1; i < sorted.length; i++) {\n    // Date.parse(ISO) gives UTC milliseconds; /86400000 (ms per day) yields whole days.\n    const days = (Date.parse(sorted[i]) - Date.parse(sorted[i - 1])) / 86400000;\n    if (days > maxDays) gaps.push(`${sorted[i - 1]} → ${sorted[i]}: ${days} days`);\n  }\n  return gaps;\n}",
     "notes": [
@@ -19,10 +123,10 @@
       {
         "q": "Why does `findGaps` sort the dates before the loop?",
         "options": [
-          "Sorting removes duplicate visits",
+          "`Date.parse` returns NaN for any date that is earlier than the previous call, so sorting prevents NaN diffs",
           "Gaps are measured between consecutive visits, so the dates must be in order or the diffs are meaningless",
-          "`Date.parse` requires sorted input",
-          "It makes the loop run faster"
+          "Sorting collapses duplicate visit dates into a single entry, which the gap formula relies on",
+          "Array iteration in JS is undefined order unless the array has been sorted first"
         ],
         "answer": 1,
         "explain": "A gap is the distance between adjacent visits. If the input isn't sorted, comparing position i to i-1 gives diffs that aren't real time gaps."
@@ -30,10 +134,10 @@
       {
         "q": "What does `(Date.parse(b) - Date.parse(a)) / 86400000` compute for two ISO date strings?",
         "options": [
-          "The number of hours between them",
+          "The number of seconds between them — 86400000 is the seconds-per-day divisor",
           "The number of whole days between them (86400000 = ms per day)",
-          "The number of milliseconds, unscaled",
-          "A timestamp for the later date"
+          "The number of days since the Unix epoch for date `b`, with `a` ignored",
+          "The fractional difference normalized to a 0..1 day-of-year scale"
         ],
         "answer": 1,
         "explain": "`Date.parse` returns UTC milliseconds; 86400000 is the milliseconds in one day, so the quotient is whole days for date-only strings."
@@ -41,10 +145,10 @@
       {
         "q": "Why does the loop start at `i = 1` instead of `i = 0`?",
         "options": [
-          "To skip the first visit, which is always invalid",
+          "The first visit is the baseline 'no-gap' anchor and is excluded from every adjacent-pair scan by convention",
           "Because the body compares `sorted[i]` to `sorted[i - 1]`; starting at 0 would index `sorted[-1]`",
-          "Arrays in JS are 1-indexed",
-          "To avoid an off-by-one in the gap count"
+          "`for` loops in JavaScript treat `i = 0` as a guard value that aborts on the first iteration when the array contains dates",
+          "Starting at 1 keeps the gap count equal to the visit count, which the formatted output depends on"
         ],
         "answer": 1,
         "explain": "Each iteration reads the current and previous element as a pair, so the earliest valid current index is 1."
@@ -52,10 +156,10 @@
       {
         "q": "Why is the input copied with `[...dates]` before sorting?",
         "options": [
-          "`.sort()` only works on copies",
+          "`.sort()` requires an iterable, and a plain array argument is rejected without spreading first",
           "`.sort()` mutates in place, so copying avoids reordering the caller's original array",
-          "To convert the array to a Set",
-          "It isn't necessary and is purely stylistic with no effect"
+          "Spreading materializes any lazy Date proxies in the array so the comparator sees concrete values",
+          "Without the copy, the loop closure would capture a stale reference to the pre-sort length"
         ],
         "answer": 1,
         "explain": "`Array.prototype.sort` sorts in place and returns the same array; spreading into a new array first protects the caller's data."

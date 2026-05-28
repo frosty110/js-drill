@@ -6,6 +6,100 @@
   "status": "full",
   "description": "Hash-fold then sort — total medical bills by category into a Map, sort the category entries by total descending, then append a grand total computed by folding the category totals.",
   "mechanics": ["map-keyed-state"],
+  "conversation": {
+    "intro": "How a conversation about a damages roll-up would actually play out with a paralegal handing you a stack of bills. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the input shape and the output contract.",
+        "say": "\"Let me make sure I have this right: I'm given a list of medical bills, each with a `category` (Hospital, PT, Medication, etc.) and an `amount`. I need to produce a per-category total, sorted from largest to smallest, plus a grand `TOTAL` line at the end. Indices are not relevant — the output is human-readable text lines.\"\n\nThen the clarifiers:\n• Is the amount always an integer (cents or whole dollars)? Floats would push me toward a different rounding/format approach.\n• Are category names already canonicalized — 'Hospital' vs 'hospital ' vs 'HOSPITAL'? If discovery is messy I should normalize first.\n• What format does the output need to be in — array of strings, joined string, or printed? Affects whether I `return lines` or `console.log` each one.\n• Stable sort across ties? If two categories tie at $4500, does it matter which prints first? Modern JS `Array.sort` is stable since ES2019, but worth confirming the expectation.\n• Should an empty bill list return `['TOTAL: $0']` or `[]`?",
+        "why": "The category-normalization question is the one that decides whether you need a `.toLowerCase()` step before the Map.set. In a real legal-tech setting, bills come from different providers with inconsistent casing/spacing — exactly the dedup problem from a sibling lesson. Asking it unprompted shows you're thinking about the data, not just the algorithm. The stable-sort question seems pedantic but it's a real bug-source: if you sort then later add a deterministic tie-break, the test suite that was passing on Node 18 can fail on a different engine. The empty-input clarifier is the 5-second one that prevents an off-by-one on `reduce` with no initial value."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious O(n·k) solution before you discard it.",
+        "say": "\"The brute force is: for each unique category, scan the whole bills list and sum everything matching that category. If there are n bills and k distinct categories, that's O(n·k) — fine when k is tiny, but it re-scans the input k times. We can do it in one pass with a Map keyed by category, then sort the entries at the end. That's O(n) for the fold plus O(k log k) for the sort over k entries — dominated by the fold for any realistic bill count.\"",
+        "why": "Saying the brute force out loud anchors the optimization story: the Map isn't magic, it's 'remember the running total per key so we don't re-scan'. It also signals you can do the dumb version if asked. In an interview about a domain problem like this, the interviewer is partially testing whether you can map a business spec ('total damages by category') to a hash-fold pattern without flailing — naming the brute force first is what proves you did the translation."
+      },
+      {
+        "title": "3. Spot the pattern — group-by reduce + sort",
+        "prompt": "Why a Map keyed by category, and what makes this a group-by?",
+        "say": "\"This is a classic group-by reduce. Each bill contributes to exactly one bucket (its category), and the bucket's value is a running sum. Map keyed by category, value is the running total — `totals.set(cat, (totals.get(cat) || 0) + amount)`. The `|| 0` is load-bearing: `Map.get` returns `undefined` for a never-seen key, and `undefined + amount` is `NaN`, so without the fallback the first bill of every category silently corrupts the total.\n\nAfter the fold, sort `[...totals.entries()]` by the amount descending — entries are `[category, amount]` pairs, so `(a, b) => b[1] - a[1]` compares the amount (index 1) and the `b - a` direction is what makes it descending. Then format each entry into a string, and append a `TOTAL` line whose value is `reduce((s, [, amt]) => s + amt, 0)` over the already-aggregated category totals.\n\nThe subtle choice: grand total folds the category totals, not the raw bills. Same number either way, but folding the aggregated values means the displayed lines and the TOTAL always reconcile — if you ever change the aggregation rule (drop categories under $100, say), the TOTAL automatically follows.\"",
+        "why": "Naming this as 'group-by reduce' is the senior move — it puts the problem in the family of SQL `GROUP BY`, Pandas `groupby().sum()`, and the LeetCode 'Group Anagrams' pattern. Once you see it as that family, the next question is just 'what's the key?' and 'what's the aggregate?'. Mentioning the `|| 0` seed unprompted is what tells the interviewer you've actually written this loop and hit the NaN bug. The 'fold the totals, not the raw bills' point is the senior-tier touch — it surfaces an invariant (displayed lines and TOTAL always reconcile) that most candidates would never name."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a few inputs to confirm the model before writing the loop.",
+        "intro": "\"Let me run a couple of inputs through.\" Three cases cover the typical multi-category fold, a single-bill degenerate case, and the full L3 prompt input as a final sanity check.",
+        "examples": [
+          {
+            "input": "[{Hospital,5000},{Hospital,3000},{PT,2000}]",
+            "output": "[\"Hospital: $8000\",\"PT: $2000\",\"TOTAL: $10000\"]",
+            "note": "Typical case — two bills collapse into Hospital, PT is its own bucket. Sort puts Hospital first, TOTAL is sum of category totals (8000+2000=10000), not a re-sum of the raw bills.",
+            "trace": "totals = {} (empty Map)\nb=Hospital/5000 → get returns undefined → (undefined || 0) + 5000 = 5000 → totals = {Hospital:5000}\nb=Hospital/3000 → get returns 5000 → 5000+3000 = 8000 → totals = {Hospital:8000}\nb=PT/2000       → get returns undefined → 0+2000 = 2000 → totals = {Hospital:8000, PT:2000}\nentries = [['Hospital',8000],['PT',2000]]\nsort by b[1]-a[1] desc → [['Hospital',8000],['PT',2000]] (already desc)\nlines = ['Hospital: $8000','PT: $2000']\ngrand = reduce 0 + 8000 + 2000 = 10000\nlines.push('TOTAL: $10000') → ['Hospital: $8000','PT: $2000','TOTAL: $10000'] ✓"
+          },
+          {
+            "input": "[{Med,100}] — degenerate single bill",
+            "output": "[\"Med: $100\",\"TOTAL: $100\"]",
+            "note": "Single bill, single category. Worth tracing because the sort over a 1-element array is a no-op, and the grand total = the only category total — proves the `|| 0` seed works on the first-and-only bill.",
+            "trace": "totals = {}\nb=Med/100 → get returns undefined → (undefined || 0) + 100 = 100 → totals = {Med:100}\nentries = [['Med',100]]\nsort → [['Med',100]] (no-op)\nlines = ['Med: $100']\ngrand = 0 + 100 = 100\nlines.push('TOTAL: $100') ✓"
+          },
+          {
+            "input": "L3 input — 5 bills across Hospital, PT, Medication",
+            "output": "[\"Hospital: $20000\",\"Physical Therapy: $4500\",\"Medication: $500\",\"TOTAL: $25000\"]",
+            "note": "The L3 prompt's full input. Hospital aggregates two bills (12000+8000=20000), Physical Therapy aggregates two (3000+1500=4500), Medication is a single $500. Sort orders by amount descending; grand TOTAL = 25000 is the sum of the three category totals.",
+            "trace": "Folds: {Hospital:12000} → {Hospital:12000, PT:3000} → {Hospital:20000, PT:3000} → {…,Medication:500} → {Hospital:20000, PT:4500, Medication:500}\nSorted entries (desc by amount): [['Hospital',20000],['PT',4500],['Medication',500]]\nlines = ['Hospital: $20000','Physical Therapy: $4500','Medication: $500']\ngrand = 20000+4500+500 = 25000\nfinal = lines + 'TOTAL: $25000' ✓"
+          }
+        ],
+        "why": "The single-bill case is the one to mention out loud — it's where you prove the `|| 0` seed actually fires. Without it, on the very first put the running total is `undefined + 100 = NaN` and every subsequent bill of that category adds to NaN. The second example also demonstrates that the algorithm is robust to a 'never sees a duplicate category' input — no degenerate path. The third example is the proof point that the aggregation step is the work; the sort and the format pass are trivially small once k categories have replaced n bills."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges I'd flag:\n• Empty bills array → fold contributes nothing, `sorted` is empty, `lines` is empty, `grand` is `reduce(..., 0)` = 0. Returns `['TOTAL: $0']`. Cheap and works without special-casing.\n• First-seen category with the NaN trap — `(totals.get(cat) || 0)` is the guard. Without it, every first bill of every category silently corrupts.\n• Negative amounts (refunds, write-offs) — the `||` short-circuit is fine for any nonzero amount, but a category whose running total hits exactly 0 will then re-trigger the `|| 0` fallback on the next add. That's mathematically still correct (0+x=x), but you'd want to switch to `totals.has(cat) ? totals.get(cat) : 0` if you cared about distinguishing 'never seen' from 'sums to zero'. Worth flagging.\n• Float amounts → JS float math: `0.1 + 0.2 = 0.30000000000000004`. For dollars/cents, store as integer cents internally and divide by 100 on display. If the input is in dollars-with-cents, you'd round to cents at the very end.\n• Category-name normalization → 'Hospital' vs 'hospital' vs ' Hospital ' as separate keys is almost certainly a bug from upstream. I'd `key = b.category.trim().toLowerCase()` at the fold site if I had any doubt — same fingerprint trick as the dedup lesson.\n• Sort stability across ties → if two categories tie at the same amount, modern V8 keeps insertion order. If determinism matters, add a tie-break: `(a, b) => b[1] - a[1] || a[0].localeCompare(b[0])`.\"",
+        "why": "The 'amount that sums to zero re-triggers the fallback' point is the kind of subtle hazard that catches careful candidates off-guard — the fallback is technically wrong here (it can't distinguish missing from zero), but it doesn't matter for sums. Naming it shows you actually thought about the predicate rather than copy-pasting the pattern. The float-cents point is the senior-tier domain awareness — anyone who's worked on a billing system has been bitten by `0.1 + 0.2`. The trim-and-lowercase normalization step is what bridges this lesson to the dedup lesson next to it on the sidebar."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O(n + k log k) where n is the number of bills and k is the number of distinct categories. The fold over n bills is O(n) with O(1) Map ops per bill. The sort is over k entries — typically k << n in this domain (10 categories, thousands of bills), so the sort is essentially free. Format + final reduce are O(k).\n\nSpace is O(k) — the Map holds one entry per distinct category. The `sorted` array and the `lines` array are also O(k). The grand-total fold is O(1) extra.\n\nIf you wanted me to extend this — same template applies to: deposition word counts grouped by witness, billable hours grouped by attorney/matter, settlement allocations grouped by claim type. Anywhere you'd write SQL `GROUP BY` over a flat list, this is the in-memory equivalent. The only variation is what the aggregate is (sum, max, count, list-of-ids) — the structure stays Map-keyed fold + sort entries + format.\"",
+        "why": "Separating n from k in the complexity statement is what separates this from a 'one-pass O(n)' bound — the sort is over k, not n, and naming that distinction is what proves you saw it. Connecting the template to attorney/matter billing or deposition aggregation is the unprompted-extension move that shows transfer; the rusty-engineer audience for this app should recognize the SQL `GROUP BY` analogy on sight, which makes that the load-bearing handle for future recall."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical damages roll-up on real bill inputs. The state panel shows the running `totals` Map, the `sorted` entries after sort, the formatted `lines` array, and the final `grand` total. Watch how the `(totals.get(cat) || 0)` seed handles first-seen categories, and how the sort over k entries is small even when n bills is large.",
+    "examples": [
+      { "label": "[Hospital:5000, Hospital:3000, PT:2000] → 3 lines + TOTAL", "input": [ { "category": "Hospital", "amount": 5000 }, { "category": "Hospital", "amount": 3000 }, { "category": "PT", "amount": 2000 } ], "expected": "[\"Hospital: $8000\",\"PT: $2000\",\"TOTAL: $10000\"]" },
+      { "label": "[Med:100] degenerate single bill → 2 lines", "input": [ { "category": "Med", "amount": 100 } ], "expected": "[\"Med: $100\",\"TOTAL: $100\"]" },
+      { "label": "L3 input: 5 bills across 3 categories → 4 lines", "input": [ { "category": "Hospital", "amount": 12000 }, { "category": "Physical Therapy", "amount": 3000 }, { "category": "Hospital", "amount": 8000 }, { "category": "Medication", "amount": 500 }, { "category": "Physical Therapy", "amount": 1500 } ], "expected": "[\"Hospital: $20000\",\"Physical Therapy: $4500\",\"Medication: $500\",\"TOTAL: $25000\"]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const bills = input;",
+      "  const totals = new Map();",
+      "  yield { line: 2, label: `init totals (empty Map: category → running sum) — ${bills.length} bills to fold`, state: { bills, totals: [], step: 'init' } };",
+      "  for (let i = 0; i < bills.length; i++) {",
+      "    const b = bills[i];",
+      "    const prev = totals.get(b.category);",
+      "    const seed = prev || 0;",
+      "    const next = seed + b.amount;",
+      "    const seenBefore = prev !== undefined;",
+      "    totals.set(b.category, next);",
+      "    yield { line: 4, label: `bill#${i} ${b.category}/$${b.amount} — prev=${seenBefore ? prev : 'undefined (|| 0 seeded)'} + ${b.amount} = ${next}`, state: { bills, totals: [...totals.entries()], i, bill: b, prev: seenBefore ? prev : null, seeded: !seenBefore, next } };",
+      "  }",
+      "  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);",
+      "  yield { line: 6, label: `sort ${totals.size} entries by amount desc — sorted=${JSON.stringify(sorted)}`, state: { bills, totals: [...totals.entries()], sorted } };",
+      "  const lines = sorted.map(([cat, amt]) => `${cat}: $${amt}`);",
+      "  yield { line: 7, label: `format each entry — lines=${JSON.stringify(lines)}`, state: { bills, totals: [...totals.entries()], sorted, lines: [...lines] } };",
+      "  const grand = sorted.reduce((s, [, amt]) => s + amt, 0);",
+      "  yield { line: 8, label: `fold category totals into grand = ${sorted.map(e => e[1]).join(' + ')} = ${grand}`, state: { bills, totals: [...totals.entries()], sorted, lines: [...lines], grand } };",
+      "  lines.push(`TOTAL: $${grand}`);",
+      "  yield { line: 9, label: `push 'TOTAL: $${grand}' — final lines length=${lines.length}`, state: { bills, totals: [...totals.entries()], sorted, lines: [...lines], grand } };",
+      "  yield { line: 10, label: `return lines — ${JSON.stringify(lines)}`, state: { bills, totals: [...totals.entries()], sorted, lines: [...lines], grand, returns: JSON.stringify(lines) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function rollup(bills) {\n  // Fold each bill into a running per-category total.\n  const totals = new Map();\n  for (const b of bills) {\n    // (totals.get(cat) || 0) seeds 0 the first time a category is seen.\n    totals.set(b.category, (totals.get(b.category) || 0) + b.amount);\n  }\n  // Sort entries by total descending: b[1] - a[1] compares the amounts (index 1 of each entry).\n  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);\n  const lines = sorted.map(([cat, amt]) => `${cat}: $${amt}`);\n  // Grand total = sum of the already-aggregated category totals.\n  const grand = sorted.reduce((s, [, amt]) => s + amt, 0);\n  lines.push(`TOTAL: $${grand}`);\n  return lines;\n}",
     "notes": [
@@ -19,10 +113,10 @@
       {
         "q": "Why is the accumulator written as `(totals.get(b.category) || 0) + b.amount`?",
         "options": [
-          "To round the amount to an integer",
+          "`Map.get` throws on a missing key unless wrapped in a truthy-check fallback",
           "`Map.get` returns `undefined` for a never-seen category, and `undefined + amount` is `NaN`; the `|| 0` seeds the first total",
-          "To convert the amount to a string",
-          "It guards against negative amounts"
+          "Without `|| 0`, the running total would be coerced to a string via concatenation",
+          "`Map.set` rejects values that aren't pre-initialized via a get-first pattern"
         ],
         "answer": 1,
         "explain": "On the first bill of a category there is no existing total, so the `|| 0` fallback provides the starting value instead of producing NaN."
@@ -30,10 +124,10 @@
       {
         "q": "The entries are sorted with `(a, b) => b[1] - a[1]`. What ordering does that produce and why index 1?",
         "options": [
-          "Ascending by category name; index 1 is the name",
+          "Ascending by category name; entries from `Map.entries()` are `[index, [key, value]]`, so index 1 is the value-pair",
           "Descending by total; entries are `[category, total]` pairs so index 1 is the amount",
-          "Ascending by total; index 1 is the amount",
-          "Random order"
+          "Ascending by total; subtracting `a` from `b` reverses the conventional descending sense",
+          "Stable insertion order; `b[1] - a[1]` always returns 0 because both equal the position in the Map"
         ],
         "answer": 1,
         "explain": "Map entries are `[key, value]`. Index 1 is the total; `b[1] - a[1]` is the descending comparator."
@@ -41,10 +135,10 @@
       {
         "q": "The grand total is computed by folding the sorted category totals, not the raw bills. Why does that matter?",
         "options": [
-          "It runs faster on large inputs",
+          "The raw bills array has already been consumed by the for-loop and would re-iterate empty",
           "It keeps the TOTAL consistent with the category lines being displayed — they sum the same aggregated numbers",
-          "Raw bills cannot be summed with reduce",
-          "It rounds differently"
+          "Folding aggregated values avoids floating-point accumulation error that would compound over n raw bills",
+          "Raw bills include refunds that have already been netted out of the category totals"
         ],
         "answer": 1,
         "explain": "Summing the same aggregated category totals that are shown guarantees the displayed lines and the TOTAL always reconcile."
@@ -52,10 +146,10 @@
       {
         "q": "In `sorted.reduce((s, [, amt]) => s + amt, 0)`, what is the empty slot in `[, amt]`?",
         "options": [
-          "A syntax error",
+          "A rest position — it captures everything before `amt` into an unnamed array",
           "A skipped destructuring position for the category key, which the sum doesn't need",
-          "The accumulator",
-          "The array index"
+          "A default-value marker — `amt` falls back to whatever the first element holds",
+          "An array hole, which makes the destructure throw on undefined entries"
         ],
         "answer": 1,
         "explain": "Each entry is `[category, total]`; the hole skips the category and binds only `amt`, since the grand total only needs the amounts."

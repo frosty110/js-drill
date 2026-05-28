@@ -6,6 +6,96 @@
   "status": "full",
   "description": "The dirs-array idiom for iterating a cell's 4 orthogonal neighbors with a bounds check — the scaffold every grid DFS/BFS starts from.",
   "mechanics": ["four-dir-neighbors"],
+  "conversation": {
+    "intro": "This is a boilerplate template, not a problem — so the interview script is about WHEN to reach for it and HOW to drop it into a larger algorithm. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. When do you reach for this template?",
+        "prompt": "Spot the signal in a grid problem that says 'iterate 4 neighbors'.",
+        "say": "\"Any time a problem hands me a 2D grid and asks about connectivity, reachability, flood-fill, shortest-path, or 'cells adjacent to X' — the very first thing I write is the `dirs` array and the bounds check. It's the scaffold every grid DFS/BFS sits on top of. Number of Islands, Rotting Oranges, Walls and Gates, Surrounded Regions, Pacific Atlantic, Shortest Path in Binary Matrix — they all start with the same six lines: `const rows = grid.length; const cols = grid[0].length; const dirs = [[-1,0],[1,0],[0,-1],[0,1]]; for (const [dr, dc] of dirs) { const nr = r + dr, nc = c + dc; if (out of bounds) continue; ... }`.\"",
+        "why": "Naming the template as a TEMPLATE — not a problem-specific construct — is what separates someone who's drilled the family from someone solving each grid problem from scratch. Interviewers grade on 'did this candidate immediately reach for the boilerplate' because that's the signal they know the family. Mumbling about 'walking up, then down, then left, then right' with four hardcoded `if`s is the opposite signal."
+      },
+      {
+        "title": "2. Why the dirs-array, not 4 hardcoded ifs?",
+        "prompt": "Name the naive alternative and why the array form wins.",
+        "say": "\"The naive version is to write four separate branches: `if (r > 0 && grid[r-1][c] === ...) visit(r-1, c)`, then repeat for `r+1`, `c-1`, `c+1`. That works, but you've now duplicated the bounds check four times — each one is its own off-by-one waiting to happen — and adding diagonals later means doubling to eight copies. The `dirs` array collapses all four cases into one loop with one bounds check. Same work, one source of truth.\"",
+        "why": "The duplication argument is the load-bearing one — anyone who's debugged a grid problem at 2am has seen the `r-1` check accidentally written as `r >= 0` (correct) or `r > 0` (off by one) and only on one of the four branches. One bounds expression that runs in a loop is mechanically less buggy. The 4-vs-8 extension argument is the bonus point: when the problem switches connectivity, you change the array, not the algorithm."
+      },
+      {
+        "title": "3. The shape: row-delta first, column-delta second",
+        "prompt": "Spell out the convention so the off-by-ones don't bite.",
+        "say": "\"`dirs` is an array of `[dr, dc]` pairs — row delta first, column delta second. `[-1, 0]` is UP because rows numerically decrease as you move up the grid. `[1, 0]` is DOWN. `[0, -1]` is LEFT, `[0, 1]` is RIGHT. The y-axis flip — `[-1, 0]` meaning UP not DOWN — is the part that catches you out if you're thinking in math-graph coordinates. After that, dimensions: `rows = grid.length`, `cols = grid[0].length`. The trailing `[0]` assumes the grid is rectangular, which is true for every interview grid problem I've seen. And `nr`/`nc` for 'new row, new column' is the standard naming so you can `continue` on the bounds check before indexing `grid[nr][nc]`.\"",
+        "why": "Calling out the convention out loud — row first, y-axis flipped — saves you from the bug where you write `dirs = [[0,-1],[0,1],[-1,0],[1,0]]` and reason about it as `[dx, dy]` then mix up which axis is which mid-recursion. Interviewers ALSO grade on naming: `nr`/`nc` reads, `newR`/`newC` reads, `x`/`y`/`i`/`j` for grid coordinates is asking for the row-vs-column confusion."
+      },
+      {
+        "title": "4. Trace through a tiny example",
+        "prompt": "Walk a 3x3 grid neighbor visit so the indices are concrete.",
+        "intro": "\"Let me walk through the canonical neighbor walk from the center of a 3x3 grid to make sure my model is right.\" Then a corner case to confirm the bounds check earns its keep.",
+        "examples": [
+          {
+            "input": "grid = [[1,2,3],[4,5,6],[7,8,9]], (r,c) = (1,1)",
+            "output": "visits 2, 8, 4, 6",
+            "note": "Center of a 3x3 — all four neighbors are in bounds, so every iteration visits.",
+            "trace": "rows=3, cols=3\ndir=[-1, 0]: nr=0, nc=1 → in bounds → visit grid[0][1] = 2\ndir=[ 1, 0]: nr=2, nc=1 → in bounds → visit grid[2][1] = 8\ndir=[ 0,-1]: nr=1, nc=0 → in bounds → visit grid[1][0] = 4\ndir=[ 0, 1]: nr=1, nc=2 → in bounds → visit grid[1][2] = 6"
+          },
+          {
+            "input": "grid = [[1,2,3],[4,5,6],[7,8,9]], (r,c) = (0,0)",
+            "output": "visits 4 and 2 only",
+            "note": "Top-left corner — UP and LEFT are off-grid, the bounds check catches them.",
+            "trace": "rows=3, cols=3\ndir=[-1, 0]: nr=-1, nc=0 → nr < 0 → continue (would have been UP)\ndir=[ 1, 0]: nr=1,  nc=0 → in bounds → visit grid[1][0] = 4\ndir=[ 0,-1]: nr=0,  nc=-1 → nc < 0 → continue (would have been LEFT)\ndir=[ 0, 1]: nr=0,  nc=1 → in bounds → visit grid[0][1] = 2"
+          }
+        ],
+        "why": "The corner trace is the one that defends the bounds check — if you skipped it and just indexed `grid[-1][0]`, JS doesn't throw, it returns `undefined`, and any downstream `if (grid[nr][nc] === something)` silently evaluates false. The bug doesn't crash; it just under-counts. Tracing the corner case makes that danger concrete."
+      },
+      {
+        "title": "5. Edge cases & pitfalls",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Pitfalls worth flagging when you drop this template into a real problem:\n• Empty grid `[]` → `grid[0]` throws. Guard at the top: `if (!grid.length || !grid[0].length) return ...`.\n• Single-row or single-column grid → still works because the bounds check handles both axes independently, but worth tracing once to convince yourself.\n• Out-of-bounds indexing in JS does NOT throw — it returns `undefined`, which silently breaks equality checks and recursion guards. Bounds check BEFORE indexing, every time.\n• Mixing up `[dr, dc]` order so `[1, 0]` accidentally means 'right' instead of 'down' — a debugging nightmare because the algorithm still 'works', just on a rotated grid.\n• Non-rectangular grid (jagged arrays) → `grid[0].length` is wrong on rows that are longer or shorter. Interview grids are always rectangular; assume that unless told otherwise.\n• Diagonal-connectivity required (e.g. king moves, Game of Life) → swap to the 8-direction array: `[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]`. Same scaffold, different array.\"",
+        "why": "The JS-doesn't-throw-on-OOB pitfall is the one most candidates don't know about — they assume out-of-bounds is loud (like Java/Python) when it's silent (returns `undefined`). Naming it unprompted shows you've actually shipped JS grid code. The `[dr, dc]` order callout is the boilerplate-as-foot-gun signal: once you've debugged this once you never get it wrong again, but the first time it bites you spend an hour wondering why your DFS visits cells in the wrong sequence."
+      },
+      {
+        "title": "6. Complexity & how this composes",
+        "prompt": "What does the template cost, and what does it slot into?",
+        "say": "\"The template itself is O(1) per cell — four iterations, a constant-time bounds check, one neighbor visit per pass. The interesting complexity comes from the algorithm wrapping it. Inside a DFS/BFS over an R×C grid where each cell is visited once, the total cost is O(R*C) because every cell pays O(4) = O(1) for its neighbor sweep. Same bound for BFS-shortest-path on a grid, flood fill, perimeter counting, etc.\n\nThe template composes into three classic shapes:\n• `for each cell → if interesting → DFS/BFS from it`: Number of Islands, Surrounded Regions, Pacific Atlantic.\n• `multi-source BFS from a set of starting cells`: Rotting Oranges, Walls and Gates, 01-Matrix.\n• `single-source shortest path with a visited set`: Shortest Path in Binary Matrix, Walls and Gates again.\n\nWhen you see ANY of those shapes, this scaffold is the first six lines on the whiteboard.\"",
+        "why": "Tying the template to the three composition shapes — single-source, multi-source, scan-all — is what shows you see the FAMILY, not just this one piece of boilerplate. Interviewers love when a candidate hands them a mental map of which template slots into which problem class, because it means the candidate will pattern-match the next problem they're handed instead of solving from scratch. The 'first six lines on the whiteboard' phrasing also signals fluency — this is muscle memory, not derivation."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the canonical 4-direction neighbor walk on a 3x3 grid. Pick a starting cell and watch each [dr, dc] in dirs produce an (nr, nc), get bounds-checked, and either visit or skip.",
+    "examples": [
+      { "label": "3x3, start at (1,1) → visit 2,8,4,6", "input": { "grid": [[1,2,3],[4,5,6],[7,8,9]], "r": 1, "c": 1 }, "expected": "[2,8,4,6]" },
+      { "label": "3x3, start at (0,0) → visit 4,2",     "input": { "grid": [[1,2,3],[4,5,6],[7,8,9]], "r": 0, "c": 0 }, "expected": "[4,2]" },
+      { "label": "3x3, start at (2,2) → visit 6,8",     "input": { "grid": [[1,2,3],[4,5,6],[7,8,9]], "r": 2, "c": 2 }, "expected": "[6,8]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const grid = input.grid.map(row => row.slice());",
+      "  const r = input.r;",
+      "  const c = input.c;",
+      "  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];",
+      "  const dirName = (dr, dc) => dr === -1 ? 'UP' : dr === 1 ? 'DOWN' : dc === -1 ? 'LEFT' : 'RIGHT';",
+      "  yield { line: 1, label: `enter — grid is ${grid.length}x${grid[0].length}, start (r,c)=(${r},${c})`, state: { grid, r, c } };",
+      "  const rows = grid.length;",
+      "  const cols = grid[0].length;",
+      "  yield { line: 5, label: `derive rows=${rows}, cols=${cols}`, state: { grid, r, c, rows, cols } };",
+      "  yield { line: 3, label: `dirs = [[-1,0],[1,0],[0,-1],[0,1]] — UP, DOWN, LEFT, RIGHT`, state: { grid, r, c, rows, cols, dirs } };",
+      "  const visited = [];",
+      "  for (const [dr, dc] of dirs) {",
+      "    const nr = r + dr;",
+      "    const nc = c + dc;",
+      "    yield { line: 10, label: `try ${dirName(dr, dc)} [dr=${dr}, dc=${dc}] → (nr,nc)=(${nr},${nc})`, state: { grid, r, c, dr, dc, nr, nc, visited: visited.slice() } };",
+      "    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) {",
+      "      yield { line: 13, label: `(${nr},${nc}) out of bounds → continue`, state: { grid, r, c, dr, dc, nr, nc, visited: visited.slice() } };",
+      "      continue;",
+      "    }",
+      "    visited.push(grid[nr][nc]);",
+      "    yield { line: 14, label: `(${nr},${nc}) in bounds → visit grid[${nr}][${nc}] = ${grid[nr][nc]}`, state: { grid, r, c, dr, dc, nr, nc, visited: visited.slice() } };",
+      "  }",
+      "  yield { line: 14, label: `loop done — visited cells in order: ${JSON.stringify(visited)}`, state: { grid, r, c, visited: visited.slice(), returns: JSON.stringify(visited) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// 4 orthogonal directions: up, down, left, right.\n// Row delta first, column delta second.\nconst dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];\n\n// Standard dimensions — derive these ONCE at the top.\nconst rows = grid.length;\nconst cols = grid[0].length;\n\n// Canonical neighbor walk from cell (r, c):\nfor (const [dr, dc] of dirs) {\n  const nr = r + dr;\n  const nc = c + dc;\n  // Bounds check BEFORE indexing grid[nr][nc] — otherwise you crash on edges.\n  if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;\n  // visit (nr, nc) — recurse, enqueue, count, etc.\n}\n\n// Diagonal version (8-way) just adds the corners:\n//   [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]\n// Most interview problems are 4-directional unless they say \"king moves\".",
     "notes": [
@@ -42,10 +132,10 @@
       {
         "q": "How are `rows` and `cols` standardly derived from a 2D `grid`?",
         "options": [
-          "rows = grid.size, cols = grid[0].size",
+          "rows = grid.length, cols = grid.length - 1",
           "rows = grid.length, cols = grid[0].length",
-          "rows = grid.width, cols = grid.height",
-          "rows = grid.rows, cols = grid.cols"
+          "rows = grid[0].length, cols = grid.length",
+          "rows = grid.length - 1, cols = grid[0].length - 1"
         ],
         "answer": 1,
         "explain": "JS arrays expose .length, and grid[0].length is the width of the first row."
@@ -53,10 +143,10 @@
       {
         "q": "Why must the bounds check happen BEFORE indexing `grid[nr][nc]`?",
         "options": [
-          "Style only — JS throws on out-of-bounds anyway",
+          "Negative indices wrap to the end of the row (like Python), so grid[-1][c] reads the bottom row by mistake",
           "JS returns undefined for out-of-bounds, which silently breaks comparisons and recursion",
-          "It's faster",
-          "Required by strict mode"
+          "Reading grid[nr][nc] when nr is out of range allocates a sparse hole, mutating the input grid",
+          "V8 throws a RangeError on the SECOND out-of-bounds read but not the first, leading to flaky tests"
         ],
         "answer": 1,
         "explain": "Unlike many languages, JS doesn't throw on array[oob] — it quietly returns undefined, leading to subtle bugs."

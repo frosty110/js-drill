@@ -5,6 +5,95 @@
   "track": "patterns",
   "status": "full",
   "description": "Read time complexity off the code shape — what loop and recursion structures map to O(1), O(log n), O(n), O(n log n), and O(n²). Meta-lesson: the canonical is a recognition checklist, not one algorithm.",
+  "conversation": {
+    "intro": "How you'd justify a Big-O claim in an interview — not 'recite the answer' but 'derive it out loud from the code shape'. Each section: what you'd say, then why that move matters.",
+    "sections": [
+      {
+        "title": "1. Why drill this?",
+        "prompt": "Every interview ends with 'what's the complexity?' — be ready.",
+        "say": "\"Every algorithm question I've had ends with the interviewer asking 'and what's the time and space complexity?'. They're not testing whether I memorized the answer for THIS problem — they're testing whether I can READ a piece of code and derive O(...) from its shape. So this is the recognition skill: see a single loop → O(n); see a halving loop → O(log n); see two nested loops over the same input → O(n²); see a sort followed by anything → O(n log n) until something blows past it.\"\n\n\"My script for any complexity question is the same: name the shape, count the work per element, multiply, then add the secondary costs and drop them if they're smaller.\"",
+        "why": "Frame the lesson as a *technique* (read-off-the-shape) rather than memorization. Interviewers can tell when a candidate has memorized 'two-sum is O(n)' vs when they can defend any algorithm's complexity by pointing at the lines. The recognition-from-shape skill is the transferable one — it works on problems you haven't seen before."
+      },
+      {
+        "title": "2. The common mistakes first",
+        "prompt": "What goes wrong in candidate complexity answers?",
+        "say": "\"Three failure modes I'd guard against:\"\n\n• \"Calling nested loops O(n²) without checking whether the inner is bounded by n. `for j in 0..k` with k a constant gives O(n·k) = O(n), not O(n²). The inner has to depend on n for the outer multiplication to compound.\"\n\n• \"Confusing O(n log n) for any sort — quicksort's WORST case is O(n²), and counting sort / radix sort can do O(n) for bounded keys. The default for `arr.sort()` in JS is O(n log n) (TimSort), but flagging the assumption is the senior move.\"\n\n• \"Reporting `O(n + 5)` or `O(2n)` instead of `O(n)`. Big-O drops constants and lower-order terms — `O(2n + 100) = O(n)`. Reporting the raw expression in an interview is a tell that you've memorized the form, not the meaning.\"\n\n• \"Confusing time with space. An algorithm can be O(n) time but O(n²) space (e.g. building a distance matrix), or O(n) time AND O(1) space (sliding window). Always name both.\"",
+        "why": "The 'inner-loop-not-actually-bounded-by-n' point is the one most worth flagging — it's where candidates get O(n²) wrong in BOTH directions (claiming O(n²) when it's O(n), or claiming O(n) when nested-over-i means it's actually O(n²)). Calling the bound out explicitly — 'inner runs O(n) per outer iteration, so n·n = n²' — is the structural argument the interviewer wants to hear."
+      },
+      {
+        "title": "3. Spot the math — the recognition checklist",
+        "prompt": "What shapes give what complexity?",
+        "say": "\"My read-off-the-shape table:\"\n\n• \"No loop, no recursion → O(1). Bracket access, hash lookup, arithmetic — work independent of input size.\"\n\n• \"Loop that HALVES the problem each step (`n = n/2`, or binary-search `l..r` shrinks by half) → O(log n). After k halvings the size is n/2^k; loop ends when 2^k ≥ n, so k ≈ log₂(n).\"\n\n• \"Single loop, one O(1) operation per element → O(n). Sum, max, hash-map first pass, single-pass two-pointer.\"\n\n• \"Sort step + single pass → O(n log n). The sort dominates; addition rule says we keep the largest term.\"\n\n• \"Two nested loops, BOTH bounded by n → O(n²). Even if the inner shrinks (`j = i+1..n`), the sum 1+2+...+n = n(n-1)/2 ≈ n²/2 is still O(n²) after dropping constants.\"\n\n• \"Recursion that splits the input in half AND does O(n) work per level → O(n log n) (merge sort). Recursion that branches twice per call with O(1) work → O(2ⁿ) (naive fib).\"\n\n\"Then the two arithmetic rules: ADD sequential costs and KEEP the largest term; MULTIPLY nested costs.\"",
+        "why": "Having a tight mental table is what lets you answer complexity questions fast — you read the code, match against the shape list, and apply the addition/multiplication rules. The shape-matching skill is also what lets you ESTIMATE complexity for problems you've never seen: the interviewer doesn't care about the answer in the abstract, they care that you have a procedure for arriving at it."
+      },
+      {
+        "title": "4. Walk through examples",
+        "prompt": "Run the recognition checklist on three different code shapes.",
+        "intro": "\"Let me apply the read-off-the-shape rules to a few concrete loops.\"",
+        "examples": [
+          {
+            "input": "while (n > 0) { n = Math.floor(n / 2); steps++; }  with n=64",
+            "output": "7",
+            "note": "Halving loop — the canonical log-n shape. Doubling n adds exactly 1 step.",
+            "trace": "n=64  →  step 1: n=32\nn=32  →  step 2: n=16\nn=16  →  step 3: n=8\nn=8   →  step 4: n=4\nn=4   →  step 5: n=2\nn=2   →  step 6: n=1\nn=1   →  step 7: n=0   (loop exits)\n7 steps  =  ⌊log₂(64)⌋ + 1  =  6 + 1\nThis is O(log n) by definition."
+          },
+          {
+            "input": "for i in 0..n: for j in i+1..n: count++  with n=4",
+            "output": "6 pairs, O(n²)",
+            "note": "Triangular inner shape — still O(n²) after dropping constants.",
+            "trace": "i=0: j=1,2,3   → 3 inner steps\ni=1: j=2,3     → 2 inner steps\ni=2: j=3       → 1 inner step\ni=3: (none)    → 0 inner steps\nTotal: 3+2+1+0 = 6 = n(n-1)/2\nFor n=4: 6.  For n=100: ~5000.  For n=1000: ~500,000.\nLeading term ≈ n²/2 → O(n²) after dropping the 1/2 constant."
+          },
+          {
+            "input": "arr.sort() + single for loop  with arr.length = n",
+            "output": "O(n log n)",
+            "note": "Addition rule with sort dominating.",
+            "trace": "sort step:    O(n log n)  ← TimSort on V8\nscan step:    O(n)\nTotal:        O(n log n) + O(n)\nLargest term: O(n log n)  ← keep\nDrop O(n):    O(n log n)  ✓"
+          }
+        ],
+        "why": "Walking through the halving loop on concrete numbers — going 64 → 32 → 16 → ... → 0 — is what makes log n feel TANGIBLE. Most candidates can recite 'binary search is log n' but never traced the halvings; once you have, the intuition that 'doubling n adds one step' sticks for life. The triangular-inner trace is the second load-bearing one: it shows WHY a shrinking inner loop is still O(n²)."
+      },
+      {
+        "title": "5. Edges + pitfalls",
+        "prompt": "Where does naive complexity analysis go wrong?",
+        "say": "\"Edges where the obvious answer is wrong:\"\n\n• \"Hash-map ops are O(1) AVERAGE but O(n) worst case (collisions). For interview analysis, ALWAYS state 'average O(1) assuming good hash distribution' — the pathological case requires adversarial input.\"\n\n• \"Amortized analysis. Pushing onto a dynamic array is O(1) amortized: most pushes are O(1), occasional resizes are O(n), but the rare resizes spread out over many cheap pushes average to O(1) per push. Same with Union-Find with path compression — individual op can be O(log n), but n ops total are O(n α(n)) ≈ O(n).\"\n\n• \"`arr.includes(x)` inside a loop is sneaky O(n²). Each `includes` is O(n); calling it for each element gives n × O(n) = O(n²). Replace with `Set.has` for O(n) total.\"\n\n• \"Recursive Fibonacci `fib(n) = fib(n-1) + fib(n-2)` is O(2ⁿ), NOT O(n). The recursion tree branches twice per call, depth n, so 2ⁿ nodes. Memoization brings it down to O(n).\"\n\n• \"Space complexity for recursion includes the call stack — depth-n recursion is O(n) space even if it does no allocation. Tail-call optimization isn't reliable in JS, so always count the stack.\"",
+        "why": "The `arr.includes` inside a loop case is the most common silent quadratic — it's the bug pattern that gets candidates 'wrong' on a 'right' algorithm. The amortization point is worth raising on any dynamic-array or hash-resize problem; saying 'amortized O(1)' shows you've seen real systems analysis, not just textbook complexity. Stack-as-space-cost is the one most candidates forget on recursive solutions."
+      },
+      {
+        "title": "6. How I'd justify it in an interview",
+        "prompt": "Closing the loop — say it out loud, defend the bound.",
+        "say": "\"My script for stating complexity:\"\n\n1. \"Name the dominating shape. 'The outer loop is O(n), the inner is O(log n) — so each outer iteration does log n work.'\"\n\n2. \"Multiply or add. 'Nested → multiply: n × log n = O(n log n). Sequential → add and keep largest: O(n) + O(log n) = O(n).'\"\n\n3. \"Drop constants and lower-order terms. 'That's O(n log n), not O(2 n log n + 100).'\"\n\n4. \"State time AND space separately. 'Time O(n log n) from the sort, space O(1) because the sort is in-place — but if I use `[...arr].sort()` instead, space becomes O(n) for the copy.'\"\n\n5. \"Flag any assumption. 'Assuming hash ops are O(1) average — adversarial keys would make this O(n) per op.'\"\n\n\"If you want me to extend: the classic interview MOVE is recognizing an O(n²) brute force and replacing it with O(n) via a hash map (Two Sum), or O(n²) → O(n log n) via sort + two-pointer (3Sum). The bound improvement is what the interviewer is grading.\"",
+        "why": "The script-it-out approach is what makes complexity claims feel REASONED rather than recited. Saying 'I'm assuming hash ops are O(1) average' is the senior-tier move — it shows you know complexity is conditional on the underlying data structure's guarantees, and you're not blindly applying textbook bounds. Naming the brute-force-to-optimized recognition pattern as the extension proves transfer: this lesson isn't just about reading complexity, it's about USING the recognition to drive optimization."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through `countHalvings(n)` — the L3 canonical — to make the log-n shape tangible. Each step halves n and increments the step count. Pick different inputs to see how doubling n adds exactly one iteration.",
+    "examples": [
+      { "label": "countHalvings(64) → 7 (L3 case)", "input": 64, "expected": 7 },
+      { "label": "countHalvings(8) → 4 (small case)", "input": 8, "expected": 4 },
+      { "label": "countHalvings(1000) → 10 (doubling n adds ~1 step)", "input": 1000, "expected": 10 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  let n = input;",
+      "  const initial = input;",
+      "  yield { line: 1, label: `enter countHalvings(${initial}) — expect ≈ log₂(${initial}) + 1 steps`, state: { n, initial } };",
+      "  let steps = 0;",
+      "  yield { line: 2, label: `init steps = 0`, state: { n, steps, initial } };",
+      "  let safety = 0;",
+      "  while (n > 0 && safety++ < 200) {",
+      "    yield { line: 3, label: `loop check: n=${n} > 0 ✓ — enter body`, state: { n, steps, initial } };",
+      "    const prev = n;",
+      "    n = Math.floor(n / 2);",
+      "    yield { line: 4, label: `halve: n = Math.floor(${prev} / 2) = ${n}  (size ${n === 0 ? 'dropped to 0' : 'now ' + n})`, state: { n, steps, initial, prev } };",
+      "    steps++;",
+      "    yield { line: 5, label: `steps++ → steps=${steps}  (running operation count)`, state: { n, steps, initial } };",
+      "  }",
+      "  yield { line: 3, label: `loop check: n=${n} > 0 ✗ — exit loop`, state: { n, steps, initial } };",
+      "  yield { line: 7, label: `return steps = ${steps}  (= ⌈log₂(${initial})⌉ + 1 — proof O(log n))`, state: { n, steps, initial, returns: steps } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// ────────────────────────────────────────────────────────────\n// 1. O(1) — CONSTANT TIME\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: no loop. No recursion. Direct lookups, arithmetic,\n//   hash-table read/write — work that doesn't depend on input size.\n//\nconst first = arr => arr[0];                  // bracket access\nconst last  = arr => arr[arr.length - 1];     // .length is O(1) too\nconst has   = (set, key) => set.has(key);     // Map/Set ops O(1) avg\n//\n//   n=10 → 1 step.  n=10,000,000 → 1 step.  Input size doesn't matter.\n\n\n// ────────────────────────────────────────────────────────────\n// 2. O(log n) — LOGARITHMIC: HALVE EACH STEP\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: each iteration discards HALF the remaining problem.\n//   Binary search, balanced-tree descent, heap sift, repeated halving.\n//\nfunction binarySearch(arr, target) {\n  let l = 0, r = arr.length - 1;\n  while (l <= r) {\n    const m = (l + r) >> 1;\n    if (arr[m] === target) return m;\n    if (arr[m] < target) l = m + 1;          // discard LEFT half\n    else                 r = m - 1;          // discard RIGHT half\n  }\n  return -1;\n}\n//\n//   Why \"log\"?  After k halvings the size is n / 2^k.\n//   Loop ends when size ≤ 1, i.e. 2^k ≥ n, i.e. k ≥ log₂(n).\n//\n//   n=1,024            → ~10 steps\n//   n=1,000,000        → ~20 steps\n//   n=1,000,000,000    → ~30 steps\n//\n//   Logs grow GLACIALLY. Doubling n adds ONE step, not double the steps.\n//   This is why binary search feels like cheating: 10 billion elements\n//   take ~33 comparisons.\n\n\n// ────────────────────────────────────────────────────────────\n// 3. O(n) — LINEAR: ONE PASS\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: one loop over the input doing O(1) work per element.\n//   Sum, count, max, single-pass two-pointer, hash-map first pass.\n//\nfunction maxOf(arr) {\n  let best = -Infinity;\n  for (const x of arr) {                     // ← one pass\n    if (x > best) best = x;                  // ← O(1) per element\n  }\n  return best;\n}\n//\n//   Doubling n doubles the time. Often optimal — you can't beat O(n)\n//   for anything that has to LOOK AT every input element.\n\n\n// ────────────────────────────────────────────────────────────\n// 4. O(n log n) — LINEAR × LOG: SORT, MERGE, DIVIDE-AND-CONQUER\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: a sort step, or recursion that halves the input AND\n//   does O(n) work at each level. Merge sort, heap sort, JS .sort().\n//\nfunction distinctCount(arr) {\n  arr.sort((a, b) => a - b);                 // ← O(n log n) — dominates\n  let runs = 1;\n  for (let i = 1; i < arr.length; i++) {     // ← O(n) — dominated\n    if (arr[i] !== arr[i - 1]) runs++;\n  }\n  return runs;\n}\n//\n//   Big-O addition rule: O(n log n) + O(n) = O(n log n).\n//   Keep the biggest term, drop the rest.\n//\n//   This is the floor for any comparison-based sort.\n\n\n// ────────────────────────────────────────────────────────────\n// 5. O(n²) — QUADRATIC: NESTED LOOPS OVER THE SAME INPUT\n// ────────────────────────────────────────────────────────────\n//\n//   The tell: two nested loops, BOTH bounded by input size.\n//   Pair brute force, naive substring search, distance matrix build.\n//\nfunction hasPairSum(arr, target) {\n  for (let i = 0; i < arr.length; i++) {\n    for (let j = i + 1; j < arr.length; j++) {   // ← inner ALSO ∝ n\n      if (arr[i] + arr[j] === target) return true;\n    }\n  }\n  return false;\n}\n//\n//   Even though the inner only runs n-i times, the SUM\n//   1 + 2 + ... + (n-1) = n(n-1)/2 ≈ n²/2 — still O(n²).\n//\n//   Doubling n QUADRUPLES the time.\n//   The canonical interview move is replacing an O(n²) brute force\n//   with an O(n) single pass + hash map. Two Sum is the textbook case.\n\n\n// ────────────────────────────────────────────────────────────\n// THE RECOGNITION CHECKLIST\n// ────────────────────────────────────────────────────────────\n//\n//   No loop at all? ............................. O(1)\n//   Single loop, halving each step? ............. O(log n)\n//   Single loop, one pass over n? ............... O(n)\n//   Sort + single pass? ......................... O(n log n)\n//   Two nested loops over the same input? ....... O(n²)",
     "notes": [
@@ -96,10 +185,10 @@
       {
         "q": "Pushing n items onto a dynamic array is O(n) total even though an occasional push triggers an O(n) resize. What is this called?",
         "options": [
-          "Worst-case O(n) per push",
+          "Probabilistic O(1) — assumes uniform hash distribution across capacity",
           "Amortized O(1) per push — rare costly resizes spread out over many cheap pushes",
-          "O(log n) per push",
-          "Best-case analysis"
+          "Asymptotic O(log n) — the resize threshold doubles each time, so resizes are log n total",
+          "Aggregate O(n²) — n pushes can each trigger O(n) work, so the total is O(n²)"
         ],
         "answer": 1,
         "explain": "Doubling-on-resize makes the expensive operations rare enough that the AVERAGE cost per push is O(1) — that averaged-over-a-sequence cost is the amortized cost."

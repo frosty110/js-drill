@@ -5,6 +5,104 @@
   "track": "patterns",
   "status": "full",
   "description": "The +1 / -1 / midpoint / modulo idioms behind sliding windows, binary search, fixed-length slices, and circular indexing — the arithmetic you reach for before the algorithm.",
+  "conversation": {
+    "intro": "How you'd talk through index arithmetic in an interview when it's the load-bearing detail (off-by-one bugs, sliding-window bounds, midpoint overflow). Each section: what you'd say, then why that move matters.",
+    "sections": [
+      {
+        "title": "1. Why drill this?",
+        "prompt": "Index math is the silent killer of interview problems.",
+        "say": "\"Index arithmetic is what trips me up under time pressure — `r - l` vs `r - l + 1`, slice's exclusive end vs inclusive, midpoint formulas, negative-index wrapping. None of it is hard, but ALL of it is load-bearing: a one-off on the window length and the sliding-window solution silently returns the wrong answer for half the inputs. I want the five formulas in my hands so I spend interview time on the algorithm, not the arithmetic.\"\n\n\"The five idioms I'd memorize: inclusive length `r - l + 1`, midpoint `(lo + hi) >> 1`, fixed-length slice `arr.slice(start, start + n)`, circular index `((i % n) + n) % n`, nth-from-end `arr[arr.length - n]` (or `arr.at(-n)`).\"",
+        "why": "Most interview bugs aren't conceptual — they're off-by-one. Frame this lesson as a memorized toolkit, not 'derive it on the spot', and you avoid the classic disaster: candidate has the right algorithm shape but the window length is `r - l` instead of `r - l + 1`, every test fails, panic ensues. Saying 'I always reach for `r - l + 1` for inclusive length' moves a class of bugs from 'might happen' to 'won't happen'."
+      },
+      {
+        "title": "2. The common mistakes first",
+        "prompt": "What's the actual bug each formula prevents?",
+        "say": "\"Three bugs I want to head off:\"\n\n• \"`r - l` for window length. Subtraction undercounts: `arr[2..6]` has 5 elements (indices 2,3,4,5,6), but `6 - 2 = 4`. The +1 IS the left endpoint. Drop it and your sliding-window sums are systematically too small.\"\n\n• \"`Math.floor((lo + hi) / 2)` for midpoint — correct but verbose, and on very large arrays the sum can overflow in languages with fixed ints. JS won't overflow at typical interview sizes, but `(lo + hi) >> 1` reads as 'the idiom' and avoids the issue. The bit-shift right by 1 is integer floor-divide by 2 for non-negative integers.\"\n\n• \"`arr.slice(start, start + n - 1)` thinking the second arg is inclusive. It's NOT. slice's end is EXCLUSIVE — `arr.slice(2, 5)` yields indices 2, 3, 4 (three items). For exactly n items from start, the second arg is `start + n`.\"\n\n• \"`arr[i % n]` for circular access where `i` could be negative. JS `%` keeps the sign of the dividend: `-1 % 4 === -1`, not 3. So `arr[-1]` is undefined, not the last element. The fix is the double modulo: `((i % n) + n) % n` always lands in `[0, n)`.\"",
+        "why": "These bugs are all silent — the code runs, just returns wrong answers. Pointing them out unprompted shows the interviewer you've shipped this code, hit these bugs, and remember the fixes. The `%` sign-preservation point in particular is one most candidates don't know — JS borrowed it from C, and it bites every time someone implements a ring buffer naively."
+      },
+      {
+        "title": "3. Spot the math",
+        "prompt": "What's the unifying mental model?",
+        "say": "\"All five formulas come from one principle: arrays are 0-indexed half-open intervals, but humans think in closed intervals. The +1, -1, and modulo dances are all translations between 'count of items' (closed) and 'index positions' (0-indexed).\"\n\n• \"Inclusive length `r - l + 1`: closing the interval. There are `r - l` GAPS between l and r, plus 1 to count the left endpoint.\"\n\n• \"Midpoint `(lo + hi) >> 1`: arithmetic mean, floor toward 0. The `>> 1` only works because `lo + hi` is non-negative — for general integers you'd want `Math.floor((lo + hi) / 2)`.\"\n\n• \"Fixed-length slice `slice(start, start + n)`: slice takes a half-open interval `[start, end)`, so `end - start` IS the count.\"\n\n• \"Sliding window of size k: when r advances and the window is full, l = r - k + 1, and the element leaving the window on the next slide is `arr[r - k]` (the one just before the new left edge).\"\n\n• \"Circular `((i % n) + n) % n`: first `%` folds magnitude into `[-(n-1), n-1]`; `+n` shifts to `[1, 2n-1]`; second `%` folds to `[0, n)`. The double-modulo is the cheapest way to guarantee a valid index.\"",
+        "why": "Naming the underlying principle — 'half-open intervals + 0-indexed positions' — is what shows you understand the FAMILY of bugs, not just one formula. If the interviewer pivots to a related problem (say, a different language with 1-indexed arrays, or a half-open vs closed range), you can re-derive on the spot instead of being stuck."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a sliding window using the inclusive-length invariant.",
+        "intro": "\"Let me trace `maxWindowSum([2,1,5,1,3,2], 3)` — the L3 case. The invariant: window covers `[r-k+1, r]` inclusive, length k. Element leaving on slide is `arr[r-k]`.\"",
+        "examples": [
+          {
+            "input": "arr=[2,1,5,1,3,2], k=3",
+            "output": "9",
+            "note": "Three slides after the seed; max is at the second slide (window [5,1,3]).",
+            "trace": "SEED:  i=0..2  sum = 2+1+5 = 8  best=8\nSLIDE: r=3  sum += arr[3]-arr[0] = 1-2 = -1  sum=7  best=8\nSLIDE: r=4  sum += arr[4]-arr[1] = 3-1 = +2  sum=9  best=9  ★\nSLIDE: r=5  sum += arr[5]-arr[2] = 2-5 = -3  sum=6  best=9\nreturn 9  ✓"
+          },
+          {
+            "input": "midpoint(lo=3, hi=10)",
+            "output": "6",
+            "note": "Bit-shift floor — `(3 + 10) >> 1 = 13 >> 1 = 6`. Same as `Math.floor(13/2)`.",
+            "trace": "lo + hi = 3 + 10 = 13\n13 in binary = 1101\n1101 >> 1 = 0110 = 6  ✓"
+          },
+          {
+            "input": "circ([a,b,c,d], i=-1)",
+            "output": "d",
+            "note": "Negative-index wrap — JS `arr[-1]` is undefined, but the double-modulo dance lands on the last element.",
+            "trace": "n=4, i=-1\nstep 1: -1 % 4 = -1     (JS keeps sign of dividend)\nstep 2: -1 + 4 = 3\nstep 3: 3 % 4 = 3\narr[3] = 'd'  ✓"
+          }
+        ],
+        "why": "The sliding-window trace is the load-bearing one — it surfaces the `arr[r-k]` formula for the element leaving the window. Most candidates either re-derive that bound mid-solution or guess wrong; tracing once on numbers makes it stick. The circular-index trace is the one to keep ready for any 'ring buffer / round robin' follow-up — the formula looks arcane until you see the three steps."
+      },
+      {
+        "title": "5. Edges + pitfalls",
+        "prompt": "What inputs would trip up the formulas?",
+        "say": "\"Edges to flag:\"\n\n• \"Empty array — `arr.slice(0, 0)` and `arr.slice(0, n)` for `n=0` are both empty, which is the right answer. Inclusive length on `l=0, r=-1` would give 0, also right. The formulas degrade gracefully.\"\n\n• \"Single-element array — `r - l + 1` with `l = r` gives 1. `arr.slice(0, 1)` gives one item. Midpoint of `lo=0, hi=0` is 0. All sane.\"\n\n• \"Negative slice second arg — `arr.slice(0, -1)` drops the LAST element (slice treats negative end as `length + end`). Useful for 'all but last', but a common confusion: it does NOT throw, it silently returns a shorter array.\"\n\n• \"`arr.at(-1)` vs `arr[arr.length - 1]` — both work, but `at` is the modern idiom and handles negative indices natively. `arr[-1]` is the trap that returns undefined.\"\n\n• \"Midpoint overflow — at typical interview sizes JS numbers handle `lo + hi` fine (Number.MAX_SAFE_INTEGER is ~9 quadrillion). The defensive idiom `lo + ((hi - lo) >> 1)` is worth knowing but overkill in JS interviews.\"",
+        "why": "The negative-slice-end behavior is the one to mention if asked to write a 'drop the last element' helper — most candidates write `arr.slice(0, arr.length - 1)` and miss that `arr.slice(0, -1)` is shorter and idiomatic. Showing that you know JS's slice semantics on negative ends signals you've actually read the MDN docs at least once."
+      },
+      {
+        "title": "6. Complexity",
+        "prompt": "How would you justify the operation costs?",
+        "say": "\"Each formula is O(1) on its own — pure arithmetic. The complexity shows up in how they're USED:\"\n\n• \"Sliding window with the `arr[r] - arr[r-k]` slide: O(n) total. You touch each element exactly twice (once on entry, once on exit), so the sum across all slides is 2n = O(n). Without the slide formula you'd recompute the window sum every step, which would be O(n·k).\"\n\n• \"Midpoint `(lo + hi) >> 1` enables O(log n) binary search by halving the range each step. The bit-shift itself is O(1); the halving structure is what gives the log.\"\n\n• \"Circular indexing is O(1) read/write on a fixed-size ring buffer — that's the whole reason ring buffers exist, vs growing an array and paying O(n) on shift.\"\n\n• \"`slice` returns a NEW array — O(k) time and space for k items. If you only need to ITERATE the slice, a `for` loop with `start..start+n` indices is O(k) time but O(1) extra space.\"\n\n\"If you want me to extend: the sliding-window slide formula is the building block for the longest-substring-without-repeats and minimum-window-substring patterns — both use the same `arr[r] - arr[r-k]` arithmetic but with a hash-counter playing the role of the running sum.\"",
+        "why": "Tying each formula to the O(...) cost of the pattern that USES it is what turns 'memorized arithmetic' into 'understood tool'. The slice-allocation point in particular is the kind of constant-factor awareness that distinguishes a 3-year engineer from a 1-year one: anyone can write `arr.slice(...)`, but knowing it allocates is what stops you from using it inside a tight loop."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through `maxWindowSum([2,1,5,1,3,2], 3)` — the L3 canonical. The window-length invariant is `k = r - l + 1`, and on each slide the element leaving is `arr[r - k]`. Two examples vary k and the input to show the invariant holds.",
+    "examples": [
+      { "label": "maxWindowSum([2,1,5,1,3,2], 3) → 9 (L3 case)", "input": { "arr": [2, 1, 5, 1, 3, 2], "k": 3 }, "expected": 9 },
+      { "label": "maxWindowSum([4,4,4,4,4], 2) → 8 (uniform)", "input": { "arr": [4, 4, 4, 4, 4], "k": 2 }, "expected": 8 },
+      { "label": "maxWindowSum([10,1,1,1,1], 1) → 10 (k=1 degenerate)", "input": { "arr": [10, 1, 1, 1, 1], "k": 1 }, "expected": 10 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const arr = input.arr;",
+      "  const k = input.k;",
+      "  yield { line: 1, label: `enter — arr=${JSON.stringify(arr)}, k=${k}`, state: { arr, k } };",
+      "  let sum = 0;",
+      "  yield { line: 2, label: `init sum = 0`, state: { arr, k, sum } };",
+      "  for (let i = 0; i < k; i++) {",
+      "    sum += arr[i];",
+      "    yield { line: 3, label: `seed: sum += arr[${i}]=${arr[i]} → sum=${sum}`, state: { arr, k, sum, i, window: arr.slice(0, i + 1) } };",
+      "  }",
+      "  let best = sum;",
+      "  yield { line: 4, label: `best = sum = ${best} (seed window covers indices 0..${k - 1}, length ${k} = r-l+1)`, state: { arr, k, sum, best, window: arr.slice(0, k) } };",
+      "  for (let r = k; r < arr.length; r++) {",
+      "    const leaving = arr[r - k];",
+      "    const entering = arr[r];",
+      "    yield { line: 7, label: `slide r=${r}: entering arr[${r}]=${entering}, leaving arr[${r - k}]=${leaving} (window now [${r - k + 1}..${r}])`, state: { arr, k, sum, best, r, entering, leaving, window: arr.slice(r - k + 1, r + 1) } };",
+      "    sum += entering - leaving;",
+      "    yield { line: 8, label: `sum += ${entering} - ${leaving} = ${entering - leaving} → sum=${sum}`, state: { arr, k, sum, best, r, window: arr.slice(r - k + 1, r + 1) } };",
+      "    if (sum > best) {",
+      "      best = sum;",
+      "      yield { line: 9, label: `sum=${sum} > prev best → best=${best} ★`, state: { arr, k, sum, best, r, window: arr.slice(r - k + 1, r + 1) } };",
+      "    } else {",
+      "      yield { line: 9, label: `sum=${sum} ≤ best=${best} → keep best`, state: { arr, k, sum, best, r, window: arr.slice(r - k + 1, r + 1) } };",
+      "    }",
+      "  }",
+      "  yield { line: 11, label: `return best = ${best}`, state: { arr, k, sum, best, returns: best } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// ────────────────────────────────────────────────────────────\n// 1. INCLUSIVE INTERVAL LENGTH:  r - l + 1\n// ────────────────────────────────────────────────────────────\n//\n//   arr  =  [ a , b , c , d , e ]\n//   idx     0   1   2   3   4\n//               ↑       ↑\n//               l       r        l=1, r=3\n//               └───┬───┘\n//                  3 items       r - l + 1 = 3\n//\n//   Drop the +1 to get the GAP (steps from l to r):\n//                                 r - l     = 2\nconst inclusiveLen = (l, r) => r - l + 1;\nconst gap          = (l, r) => r - l;\n\n\n// ────────────────────────────────────────────────────────────\n// 2. MIDPOINT:  (lo + hi) >> 1     ← integer floor-divide\n// ────────────────────────────────────────────────────────────\n//\n//   lo                            hi\n//    ▼                            ▼\n//   [ _ , _ , _ , _ , _ , _ , _ , _ ]\n//     3   4   5   6   7   8   9   10\n//                  ▲\n//                 mid = (3 + 10) >> 1 = 6\n//\n//   `>> 1` is a faster `Math.floor((a+b)/2)` and the idiomatic\n//   write-up interviewers expect.\nconst mid = (lo, hi) => (lo + hi) >> 1;\n\n\n// ────────────────────────────────────────────────────────────\n// 3. FIXED-LENGTH SLICE:  arr.slice(start, start + n)\n//    slice's 2nd arg is EXCLUSIVE → start + n yields n items.\n// ────────────────────────────────────────────────────────────\n//\n//   [10, 20, 30, 40, 50].slice(1, 1 + 3)\n//          ┌──────────────┐\n//          │   take 3     │\n//          ▼              ▼\n//   [10,  20, 30, 40,  50 ]   →   [20, 30, 40]\n//\n//   Shorthand for last n:\n//   [10, 20, 30, 40, 50].slice(-2)   →   [40, 50]\n\n\n// ────────────────────────────────────────────────────────────\n// 4. SLIDING WINDOW OF SIZE k:   k = r - l + 1\n// ────────────────────────────────────────────────────────────\n//\n//   arr = [2, 1, 5, 1, 3, 2]   k=3\n//          0  1  2  3  4  5\n//\n//         [────────]                sum=8    (l=0, r=2)\n//            [────────]             sum=7    -arr[0] +arr[3]\n//               [────────]   ★      sum=9    -arr[1] +arr[4]\n//                  [────────]       sum=6    -arr[2] +arr[5]\n//\n//   When r advances and length > k, shrink:   l = r - k + 1\n//   Element LEAVING the window:               arr[r - k]\n\n\n// ────────────────────────────────────────────────────────────\n// 5. CIRCULAR INDEXING:  ((i % n) + n) % n\n//    JS arr[-1] is undefined — NOT the last element.\n// ────────────────────────────────────────────────────────────\n//\n//   arr = [a, b, c, d]   n=4\n//          0  1  2  3\n//\n//   i = -1  →  ((-1 % 4) + 4) % 4 = 3  →  'd'   ← wraps left\n//   i =  5  →  (( 5 % 4) + 4) % 4 = 1  →  'b'   ← wraps right\n//\n//   The double modulo handles negative i (JS `%` keeps the sign\n//   of the dividend, so -1 % 4 === -1, not 3).\nconst circ = (arr, i) => arr[((i % arr.length) + arr.length) % arr.length];\n\n\n// ────────────────────────────────────────────────────────────\n// 6. NTH FROM END:  arr[arr.length - n]   (or arr.at(-n))\n// ────────────────────────────────────────────────────────────\n//\n//   arr = [a, b, c, d, e]    length=5\n//                       ▲\n//                       n=1  →  arr[5-1] = 'e'   (last)\n//                    ▲\n//                    n=2  →  arr[5-2] = 'd'\n//\n//   Off-by-one trap: n must be ≥ 1.\n//   arr[arr.length - 0] = arr[5] = undefined.",
     "notes": [

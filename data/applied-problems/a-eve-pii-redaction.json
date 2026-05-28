@@ -6,6 +6,100 @@
   "status": "full",
   "description": "Redact a medical note with word-boundary regexes — string scan that replaces any SSN pattern and each sensitive term case-insensitively, counting replacements via a replacer callback.",
   "mechanics": ["text-scan"],
+  "conversation": {
+    "intro": "How a conversation about PII redaction would actually play out — a paralegal needs to send a medical narrative to opposing counsel and wants names + SSNs scrubbed before it goes out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down what counts as PII and what 'redact' means.",
+        "say": "\"Let me restate: I'm given a body of free text plus a list of sensitive terms (names of people, places, etc.). I need to produce the same text with two kinds of patterns replaced by `[REDACTED]`: (1) US SSN patterns like `###-##-####`, and (2) any whole-word occurrence of a sensitive term, case-insensitive. Output is the redacted text plus a count of how many redactions fired.\"\n\nClarifiers first:\n• What PII patterns are in scope? SSN definitely; what about emails, phone numbers, MRNs (medical record numbers), DOBs, addresses? Each has its own regex and its own false-positive profile.\n• Strict SSN format `###-##-####` only, or also `#########` (no dashes) and `### ## ####` (spaces)? More permissive = more catches AND more false positives.\n• Whole word matching for terms — what's a word? `\\b` in JS uses ASCII word chars, so 'O'Brien' would split at the apostrophe; for European names that's wrong. Worth flagging.\n• Case-insensitive on terms — `Jane`, `JANE`, `jane`, `JaNe` all redact. Good default.\n• If a term contains regex metacharacters (a doctor's name like 'Dr.' or a hyphenated 'Anne-Marie') — treat as literal? Yes; escape before building the regex.\n• Overlapping patterns — what if a term is itself a substring of an SSN? `\\b...\\b` prevents that, but worth confirming the spec.\n• What's the output on no-redactions — same text, count 0? Or some signal that the doc was checked? Probably just the same text + 0.\n• Logging the redactions — needed for chain-of-custody? Out of scope for the function, but the count is a foothold for that audit trail.",
+        "why": "The 'what's a word' clarifier is the load-bearing one — `\\b` in JS regex is ASCII-only, so 'café' would have a word boundary between 'caf' and 'é' depending on the engine. For European names that's a real bug. The 'escape regex metacharacters' question is the one that distinguishes 'works on Jane and Smith' from 'works on Dr. Smith' — if you don't escape the `.`, the regex matches any char in that position and produces wrong redactions. Naming the false-positive profile (permissive SSN catches more but also bites '555-12-3456' inside an unrelated case-number) shows you've thought about the tradeoff."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "What's the obvious-but-fragile way to do this?",
+        "say": "\"The brute force is `text.split(' ').map(token => sensitiveSet.has(token) ? '[REDACTED]' : token).join(' ')`. Looks O(n) and simple — but it's broken in three ways. (1) Punctuation: 'Jane,' is one token, doesn't match 'Jane'. (2) Case: 'JANE' is a different string from 'Jane'. (3) Word-internal matches: it can't redact 'Jane' inside '...Jane reported pain.' because the tokenization is wrong relative to what's actually a word boundary in English.\n\nThe right approach is regex with word boundaries: `\\b...\\b` anchors the match to whole words regardless of surrounding punctuation. `g` flag for all occurrences. `i` flag for case-insensitive. And a replacer CALLBACK so we can both substitute AND count — `text.replace(re, () => { count++; return '[REDACTED]'; })`. That gives us the count for audit purposes 'for free' as part of the same scan.\n\nFor the SSN, the regex is `/\\b\\d{3}-\\d{2}-\\d{4}\\b/g` — literal pattern, no user input, so no escaping needed. For each sensitive TERM, we have to escape regex metacharacters first because the term comes from user input.\"",
+        "why": "Naming all three failure modes of the split-and-check brute force is what proves you've actually thought about why regex is necessary — interview candidates who jump straight to regex often can't articulate what regex gives them that simpler code doesn't. The replacer-callback insight is the senior touch: it threads a side-effect counter through what is otherwise a pure-function call, which is exactly the technique you'd use for logging hits in a production redactor."
+      },
+      {
+        "title": "3. Spot the pattern — regex scan with escape + counted replacer",
+        "prompt": "What are the load-bearing pieces and why?",
+        "say": "\"This is a multi-pattern regex scan over a single string. Two patterns: one hardcoded (SSN), one parameterized (each user term). Both use the same template:\n• `\\b...\\b` word boundaries — anchor to whole tokens. 'Smith' doesn't match inside 'Smithson'. 'Jan' doesn't match inside 'January'.\n• `g` flag — replace every occurrence, not just the first. Without it, 'Jane saw Jane' only redacts the first Jane.\n• `i` flag — case-insensitive. Catches 'JANE', 'jane', 'Jane'.\n• Replacer callback `() => { count++; return '[REDACTED]'; }` — increments the counter on every hit AND returns the replacement string. The callback fires per match, so the count is exact.\n\nThe ONE extra step for user terms: escape regex metacharacters before building the RegExp. `term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')` — for each metacharacter in the term, prepend a backslash. So 'Dr.' becomes 'Dr\\\\.' which the RegExp constructor sees as literal 'Dr.'. The `$&` in the replacement string is 'the matched character'. Without this step, a term like 'a+b' would parse as 'one-or-more a followed by b' rather than the literal string 'a+b'.\n\nProcessing order: SSN first, then each term in input order. Doesn't actually matter for correctness here (they're all on disjoint word boundaries normally), but it's stable — the same input produces the same redacted output every time.\"",
+        "why": "Spelling out what each regex feature buys you (`\\b` → whole-word, `g` → all-occurrences, `i` → case-insensitive) is what proves you didn't just memorize the flags. The replacer-callback explanation is the senior move: most candidates use the string-substitution form `text.replace(re, '[REDACTED]')` and lose the count. The escape step is the security/correctness call-out — passing user input directly into a RegExp constructor without escaping is a regex-injection bug, and naming it shows you'd defend against malformed inputs."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a couple of inputs to confirm the model.",
+        "intro": "\"Let me trace.\" Three cases — the L3 note with two distinct names and one SSN, a clean no-PII text where count must be 0, and a multi-SSN-only case to prove the SSN regex catches multiple hits.",
+        "examples": [
+          {
+            "input": "'Patient Jane Doe, SSN 123-45-6789, treated by Dr. Smith. Jane reported pain.', terms=['Jane','Smith']",
+            "output": "'Patient [REDACTED] Doe, SSN [REDACTED], treated by Dr. [REDACTED]. [REDACTED] reported pain.' count=4",
+            "note": "The L3 input. One SSN (1 hit), 'Jane' appears twice (2 hits), 'Smith' once (1 hit) → count = 4. Note 'Smith' redacts inside 'Dr. Smith' because the period and space are word boundaries; if the text said 'Smithson' it would NOT redact, thanks to `\\b` after 'Smith'.",
+            "trace": "out = original text, count = 0\nStep 1 — SSN sweep: /\\b\\d{3}-\\d{2}-\\d{4}\\b/g finds '123-45-6789' (1 hit) → replace with [REDACTED], count=1\n  out: 'Patient Jane Doe, SSN [REDACTED], treated by Dr. Smith. Jane reported pain.'\nStep 2 — term 'Jane': escape (no metachars) → /\\bJane\\b/gi finds 2 hits → count=3\n  out: 'Patient [REDACTED] Doe, SSN [REDACTED], treated by Dr. Smith. [REDACTED] reported pain.'\nStep 3 — term 'Smith': escape (no metachars) → /\\bSmith\\b/gi finds 1 hit → count=4\n  out: 'Patient [REDACTED] Doe, SSN [REDACTED], treated by Dr. [REDACTED]. [REDACTED] reported pain.'\nreturn { text: out, count: 4 } ✓"
+          },
+          {
+            "input": "'Plain text no PII.', terms=['Foo']",
+            "output": "'Plain text no PII.' count=0",
+            "note": "No-PII case — proves that 0-hit sweeps are no-ops. SSN regex matches nothing, 'Foo' regex matches nothing, count stays 0, text unchanged.",
+            "trace": "out = 'Plain text no PII.', count = 0\nSSN sweep: 0 hits, count=0, out unchanged\nterm 'Foo' sweep: 0 hits, count=0, out unchanged\nreturn { text: 'Plain text no PII.', count: 0 } ✓"
+          },
+          {
+            "input": "'Two SSNs: 111-22-3333 and 444-55-6666.', terms=[]",
+            "output": "'Two SSNs: [REDACTED] and [REDACTED].' count=2",
+            "note": "Multi-SSN, empty-terms case. The `g` flag is what catches both SSNs in one scan. Empty terms list means the for-loop body never runs — count stays at whatever the SSN sweep produced.",
+            "trace": "out = original text, count = 0\nSSN sweep: /\\b\\d{3}-\\d{2}-\\d{4}\\b/g finds 2 hits (111-22-3333, 444-55-6666). Each fires the callback: count++ then return [REDACTED]. After scan, count=2.\n  out: 'Two SSNs: [REDACTED] and [REDACTED].'\nterm loop: terms=[] — body doesn't execute\nreturn { text: out, count: 2 } ✓"
+          }
+        ],
+        "why": "The L3 trace is the proof that the count arithmetic works — 1 SSN + 2 Janes + 1 Smith = 4, and the replacer fires once per match by design. The no-PII case is the boring sanity check that 0-hit sweeps don't break anything (some careless implementations return undefined or NaN for count). The multi-SSN case isolates the `g` flag — without it, only the first SSN would redact and count would be 1, which is the most common 'this looks like a bug to me' regex mistake."
+      },
+      {
+        "title": "5. Edge cases / failure modes / partial PII",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges and failure modes worth flagging:\n• Partial PII — '12-345-6789' (off by one in the format) → SSN regex doesn't match. False NEGATIVE. If the spec is 'catch anything that looks like an SSN, even malformed', we'd loosen the regex (e.g. `\\d{3}[- ]?\\d{2}[- ]?\\d{4}`) and accept more false positives.\n• Phone number that looks like an SSN — '800-12-3456' is a real-format phone number, matches the SSN regex. False positive. The same regex over-matches anything that fits the digit-count-and-dash shape. For high-precision redaction, you'd validate the area-of-document context first.\n• Term that's a substring of another word — 'Cat' in 'catastrophe'. `\\b` prevents this: 'cat' inside 'catastrophe' has 'c' (word char) on both sides at the boundary, no `\\b` match.\n• Term that's at string boundaries — 'Jane' at the very start of the text. `\\b` matches the start-of-string as a word boundary too, so the leading 'Jane' redacts.\n• Term with regex metacharacters — 'Dr.', 'a+b', 'O'Brien' (apostrophe). The escape step `term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')` neutralizes the metacharacters. Without escape, 'Dr.' would match 'Drx', 'Dry', etc.\n• Unicode names — 'José', 'O'Brien'. `\\b` is ASCII-only in JS regex (unless you use the `u` flag with `\\p{L}` classes). For multilingual support you'd switch to `/\\p{L}+/gu` style boundaries.\n• Empty terms list → for-loop is a no-op, only SSN sweep runs. Returns the SSN-redacted text + the SSN count. Cheap and works.\n• Empty input text → both sweeps replace nothing, returns `{ text: '', count: 0 }`.\n• Term that already IS '[REDACTED]' → if a user passes 'REDACTED' as a sensitive term, the second pass over already-redacted text would re-process them. Not a correctness bug (idempotent), but the count would inflate. Defensively, you could skip the brackets in the redaction tag.\n• Order-dependence within terms — if term A's match overlaps with term B's, the order of the for-loop matters. With `\\b` boundaries this is rare, but worth mentioning.\n• Performance on huge text + huge term list — each term builds a new RegExp and scans the whole text. That's O(text * terms). For a 1MB text with 1000 terms, you'd want to combine all terms into one alternation regex `/(term1|term2|...)/gi`, scanning once.\"",
+        "why": "The 'phone that looks like SSN' false-positive is the kind of domain insight that distinguishes pattern matching from real PII detection — a junior candidate says 'we use a regex' and a senior says 'and here's the false-positive profile we accept'. The Unicode call-out and the alternation-regex optimization are both unprompted senior touches that show scope thinking. The 'already-redacted text re-processing' point is the kind of subtle idempotency question that interviewers love when they want to push beyond the happy path."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "How would you defend the complexity claim?",
+        "say": "\"Time is O((1 + k) * L) where L is the text length and k is the number of sensitive terms. One SSN sweep over the text (O(L)), then k term sweeps each O(L) — for k terms total. Each sweep is linear because regex matching with a non-pathological pattern is linear in input length, and the replace returns a fresh string but only walks the input once.\n\nSpace is O(L) for the output string — strings are immutable in JS so each `replace` returns a new one (the old `out` reference gets garbage collected after the assignment). Plus O(k * E) for the escaped term regexes, where E is the average term length — basically negligible.\n\nIf you wanted me to extend this:\n• Single combined regex — `new RegExp('\\\\b(?:' + terms.map(escape).join('|') + ')\\\\b', 'gi')` collapses k sweeps into 1. Now O(L) total instead of O(k * L). Win for large term lists.\n• Per-term hit count — replace the scalar `count` with a `Map<term, count>` (or `Map<pattern, count>`) and capture the match in the callback: `re.replace(re, (match) => { counts[term]++; return '[REDACTED]'; })`. Useful for audit reports.\n• Reversible redaction — store `[REDACTED:abc123]` with a random token, plus an aside-map from token → original text. Decrypt back to original by replacing tokens. Different threat model.\n• Differential privacy / hashed redaction — instead of `[REDACTED]`, replace with `[PERSON_001]`, `[PERSON_002]` with a stable hash. Preserves 'this is the same person referenced again' across the doc.\n• Other PII patterns — credit cards (Luhn-validated), emails (`/\\S+@\\S+\\.\\S+/`), phone numbers (NANP regex), MRNs (org-specific).\n• Multi-pass NER — beyond regex, a named-entity-recognition model would catch names that aren't in the term list. The regex+terms approach is the precision-only baseline; NER trades precision for recall.\n\nThe template here is: scan + escape user input + replacer-callback for side-effecting counts. Any 'find these patterns and do X' problem maps to the same shape.\"",
+        "why": "The single-combined-regex optimization is the right unprompted extension — it shows you see the k-term loop as the bottleneck and know how to collapse it. The reversible / hashed-redaction extension shows threat-model awareness; redaction in legal tech often needs to be reversible by the producing side. The NER mention is the right humility move — regex is a precision tool, not a recall tool; flagging that you know the limit shows the interviewer you wouldn't ship the regex-only redactor as a complete PII solution."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the PII redactor on a real medical note. The state panel shows the running `out` string, the `count` of redactions, the current term being processed, and the regex being built. Watch how the SSN sweep runs first (one scan, multiple hits via `g`), then each term gets its own escaped, word-boundary-anchored, case-insensitive regex.",
+    "examples": [
+      { "label": "L3 note: 1 SSN + 'Jane' x2 + 'Smith' x1 = 4 redactions", "input": { "text": "Patient Jane Doe, SSN 123-45-6789, treated by Dr. Smith. Jane reported pain.", "terms": ["Jane", "Smith"] }, "expected": "{\"text\":\"Patient [REDACTED] Doe, SSN [REDACTED], treated by Dr. [REDACTED]. [REDACTED] reported pain.\",\"count\":4}" },
+      { "label": "no PII: text unchanged, count=0", "input": { "text": "Plain text no PII.", "terms": ["Foo"] }, "expected": "{\"text\":\"Plain text no PII.\",\"count\":0}" },
+      { "label": "two SSNs, no terms: g-flag catches both in one sweep", "input": { "text": "Two SSNs: 111-22-3333 and 444-55-6666.", "terms": [] }, "expected": "{\"text\":\"Two SSNs: [REDACTED] and [REDACTED].\",\"count\":2}" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const text = input.text;",
+      "  const terms = input.terms;",
+      "  let out = text;",
+      "  let count = 0;",
+      "  yield { line: 2, label: 'init — count=0, out=original text (' + text.length + ' chars), ' + terms.length + ' sensitive term(s)', state: { text, terms, out, count, phase: 'init' } };",
+      "  const ssnRe = /\\b\\d{3}-\\d{2}-\\d{4}\\b/g;",
+      "  const ssnMatches = out.match(ssnRe) || [];",
+      "  out = out.replace(ssnRe, function() { count++; return '[REDACTED]'; });",
+      "  yield { line: 4, label: 'SSN sweep /\\\\b\\\\d{3}-\\\\d{2}-\\\\d{4}\\\\b/g — ' + ssnMatches.length + ' hit(s): ' + JSON.stringify(ssnMatches) + ' → count=' + count, state: { text, terms, out, count, phase: 'ssn', ssnHits: ssnMatches } };",
+      "  for (let i = 0; i < terms.length; i++) {",
+      "    const term = terms[i];",
+      "    const escaped = term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');",
+      "    yield { line: 7, label: 'term#' + i + \" '\" + term + \"' → escape metachars → '\" + escaped + \"' (no-op if no special chars)\", state: { text, terms, out, count, phase: 'escape', i, term, escaped } };",
+      "    const re = new RegExp('\\\\b' + escaped + '\\\\b', 'gi');",
+      "    const matches = out.match(re) || [];",
+      "    yield { line: 9, label: 'build regex /\\\\b' + escaped + '\\\\b/gi — preview: ' + matches.length + ' match(es) in current out: ' + JSON.stringify(matches), state: { text, terms, out, count, phase: 'build-re', i, term, escaped, matches } };",
+      "    out = out.replace(re, function() { count++; return '[REDACTED]'; });",
+      "    yield { line: 10, label: 'replace ' + matches.length + \" hit(s) with [REDACTED] for term '\" + term + \"' → count=' + count\", state: { text, terms, out, count, phase: 'replaced', i, term, hits: matches.length } };",
+      "  }",
+      "  const result = { text: out, count: count };",
+      "  yield { line: 12, label: 'return { text, count: ' + count + ' } — total redactions=' + count, state: { text, terms, out, count, returns: JSON.stringify(result) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function redact(text, terms) {\n  let count = 0;\n  // SSN pattern first; the replacer callback lets us count every hit.\n  let out = text.replace(/\\b\\d{3}-\\d{2}-\\d{4}\\b/g, () => { count++; return '[REDACTED]'; });\n  for (const term of terms) {\n    // Escape regex metacharacters so a term like 'Dr.' is treated literally.\n    const escaped = term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n    // \\b...\\b = whole word; g = all occurrences; i = case-insensitive.\n    const re = new RegExp('\\\\b' + escaped + '\\\\b', 'gi');\n    out = out.replace(re, () => { count++; return '[REDACTED]'; });\n  }\n  return { text: out, count };\n}\nconst note = 'Patient Jane Doe, SSN 123-45-6789, treated by Dr. Smith. Jane reported pain.';\nconst result = redact(note, ['Jane', 'Smith']);\nconsole.log(result.text);\nconsole.log('Redactions: ' + result.count);",
     "notes": [
@@ -19,10 +113,10 @@
       {
         "q": "Why wrap each term in `\\b...\\b` word boundaries before building the regex?",
         "options": [
-          "It makes the regex run faster",
+          "`\\b` anchors the regex to the start and end of the string, so the term only matches at the very beginning or end of `text`",
           "So a term matches only whole words — 'Smith' won't redact the 'Smith' inside 'Smithson', and short terms won't hit unrelated substrings",
-          "Word boundaries are required for case-insensitive matching",
-          "It prevents the regex from matching numbers"
+          "Without `\\b`, the `g` flag would only fire once per word and silently skip later occurrences",
+          "`\\b` is the only way to make the regex emit `[REDACTED]` instead of the raw match into the output"
         ],
         "answer": 1,
         "explain": "Without `\\b`, redacting 'Jan' would also blank out the middle of 'January'. Word boundaries anchor the match to whole tokens, which is what redaction of names/terms requires."
@@ -30,10 +124,10 @@
       {
         "q": "Why escape the term with `term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')` before passing it to `new RegExp`?",
         "options": [
-          "To make the term uppercase",
+          "To normalize Unicode combining marks so accented names match their canonical form",
           "To treat regex metacharacters in the term (like the dot in 'Dr.') as literal text instead of pattern syntax",
-          "To trim whitespace from the term",
-          "RegExp requires all input to be escaped or it throws"
+          "To prevent `new RegExp` from parsing the term as a regex literal `/.../` instead of a string source",
+          "To strip the backslashes that JS auto-inserts when reading the term from JSON"
         ],
         "answer": 1,
         "explain": "A raw '.' in a regex matches any character; '+' or '(' have special meaning too. Escaping turns a user-supplied term into a literal pattern, so 'Dr.' matches only 'Dr.' and not 'Drx'."
@@ -41,10 +135,10 @@
       {
         "q": "In `new RegExp('\\\\b' + escaped + '\\\\b', 'gi')`, what do the `g` and `i` flags do?",
         "options": [
-          "`g` = greedy, `i` = ignore newlines",
+          "`g` = greedy (consume the longest match), `i` = ignore newlines",
           "`g` = replace every occurrence (not just the first), `i` = case-insensitive match",
-          "`g` = global capture group, `i` = integer mode",
-          "`g` = group, `i` = inline"
+          "`g` = group the captures, `i` = include surrounding whitespace in the match",
+          "`g` = use ASCII mode, `i` = use Unicode (icu) mode"
         ],
         "answer": 1,
         "explain": "Without `g`, only the first 'Jane' would be redacted. Without `i`, 'jane' in lowercase would slip through. Both flags are needed to catch every occurrence regardless of case."
@@ -52,10 +146,10 @@
       {
         "q": "Given the note 'Jane Doe ... Dr. Smith. Jane reported pain.' redacting ['Jane', 'Smith'] plus one SSN, why is the count 4?",
         "options": [
-          "SSN once + Jane once + Smith once = 3",
+          "SSN once + Jane once + Smith once = 3 (the `g` flag dedupes repeated terms across one scan)",
           "SSN once + Jane twice + Smith once = 4",
-          "Jane twice + Smith twice = 4",
-          "Every word is counted"
+          "SSN once + each distinct redacted token = 4 ('[REDACTED]' itself, Jane, Smith, the SSN pattern)",
+          "Two terms × two passes + SSN sweep + initial baseline = 4"
         ],
         "answer": 1,
         "explain": "'Jane' appears twice (start and in 'Jane reported'), 'Smith' once, and the SSN once. The replacer callback increments `count` on each substitution: 1 + 2 + 1 = 4."

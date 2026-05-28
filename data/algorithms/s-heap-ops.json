@@ -6,6 +6,157 @@
   "status": "full",
   "description": "The whiteboard boilerplate for a 0-indexed array heap: parent/child index math plus sift-up and sift-down loops.",
   "mechanics": ["heap-sift"],
+  "conversation": {
+    "intro": "How you'd walk through heap mechanics in an interview when the heap shows up as a subroutine (top-K, median stream, Dijkstra). Each section: what you'd say, then why that move matters. Tap to expand.",
+    "sections": [
+      {
+        "title": "1. Why drill this?",
+        "prompt": "When does heap math actually show up?",
+        "say": "\"A heap is the data structure I reach for whenever I need 'the smallest (or largest) so far' on a stream — top-K, median, Dijkstra's frontier, scheduling. JS has no built-in heap, so in a real interview I'd either write the index math from memory or ask 'can I assume a min-heap helper?'. I want both options ready, so this lesson is the index math (parent / left / right) plus the two sift loops (up for insert, down for pop-root) — the skeleton I'd reproduce on a whiteboard.\"",
+        "why": "Most candidates blank on heap mechanics the moment a problem needs more than `arr.sort()`. Treating the three index formulas + two sift loops as ONE memorized unit — not five things — turns 'I forget the parent formula' into 'I have a 25-line block I write down'. That confidence frees attention for the actual problem (which heap, what comparator, when to extract)."
+      },
+      {
+        "title": "2. The common mistakes first",
+        "prompt": "What goes wrong before you get the canonical right?",
+        "say": "\"Three failures I'd flag before I start writing:\"\n\n• \"Mixing up 1-indexed and 0-indexed math. The classic textbook formulas are `parent = i/2`, `left = 2i`, `right = 2i+1` — but those are for **1-indexed** heaps. JS arrays are 0-indexed, so I use `parent = (i-1) >> 1`, `left = 2i+1`, `right = 2i+2`. Different by exactly one.\"\n\n• \"On sift-DOWN, swapping with the WRONG child. If I swap with the larger child of a min-heap, the smaller one stays trapped below — heap property broken. Always swap with the smaller (for min-heap) or larger (for max-heap) child.\"\n\n• \"Forgetting the bounds check on sift-down. The current node might have only a left child, or no children at all. `l < heap.length && heap[l] < heap[s]` covers both: the AND short-circuits if the child slot doesn't exist.\"",
+        "why": "Surfacing these failures unprompted signals you've HIT them — interviewers can tell the difference between memorized code and lived code. The 1- vs 0-indexed point is the one most candidates miss because they learned heaps from a textbook diagram that used 1-indexed nodes; saying 'in JS I use the 0-indexed form' shows you've translated the abstraction to your tools."
+      },
+      {
+        "title": "3. Spot the math",
+        "prompt": "Why does index arithmetic encode a tree?",
+        "say": "\"A complete binary tree laid out level-by-level into a flat array makes the parent/child relationship pure arithmetic. Level 0 is index 0 (one node). Level 1 is indices 1, 2 (two nodes). Level 2 is indices 3-6 (four nodes). At every level, a node at index `i` has children at `2i+1` and `2i+2`, and its parent is at `(i-1) >> 1`. No pointers, no allocation per node — the tree shape is implied.\"\n\n\"For the sift loops: sift-UP fires after a push. The new item sits at the tail, possibly smaller than its parent, so I bubble it upward swapping with its parent until either the parent is smaller (heap property restored) or I hit the root (`i === 0`). Sift-DOWN fires after a pop-root: I swap root with the tail, shrink the array, then bubble the now-root downward, always picking the smaller child to swap with — until both children are larger or I run out of children.\"",
+        "why": "Naming the structural property — 'complete binary tree → contiguous array' — is what shows you understand WHY the formulas work, not just THAT they do. If the interviewer asks 'what if the tree isn't complete?', you can answer: 'then this representation breaks; you'd need pointers or sparse indices.' Heaps are complete BY CONSTRUCTION (we always fill left-to-right), which is what makes the index math correctness-preserving."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk a sift-up and a sift-down on concrete numbers.",
+        "intro": "\"Let me run a push-then-sift-up and a pop-root-then-sift-down through the formulas.\"",
+        "examples": [
+          {
+            "input": "heap=[1,5,3,10,8,7] then push(2)",
+            "output": "[1,5,2,10,8,7,3]",
+            "note": "Sift-up: 2 lands at index 6, parent at index 2 is 3, 3 > 2 so swap; new index 2, parent at index 0 is 1, 1 < 2 so stop.",
+            "trace": "push 2 → heap=[1,5,3,10,8,7,2]\ni=6  parent=(6-1)>>1=2  heap[2]=3 > heap[6]=2 → swap → [1,5,2,10,8,7,3]  i=2\ni=2  parent=(2-1)>>1=0  heap[0]=1 < heap[2]=2 → STOP  ✓"
+          },
+          {
+            "input": "heap=[1,5,3,10,8,7] then pop-root",
+            "output": "[3,5,7,10,8]",
+            "note": "Pop-root: swap 1↔7, shrink to [7,5,3,10,8], then sift-down 7 from index 0 — swap with smaller child 3.",
+            "trace": "swap heap[0]↔heap[5]=7  pop → heap=[7,5,3,10,8]\nj=0  l=1, r=2  smaller child = heap[2]=3 < heap[0]=7 → swap → [3,5,7,10,8]  j=2\nj=2  l=5, r=6  both out of bounds → STOP  ✓"
+          },
+          {
+            "input": "heap=[1,5,3,10,8,7], parent(4)=?",
+            "output": "5",
+            "note": "L3 case — pure parent lookup, no sift needed.",
+            "trace": "parent(4) = (4 - 1) >> 1 = 3 >> 1 = 1\nheap[1] = 5  ✓"
+          }
+        ],
+        "why": "The sift-down example is the one to narrate aloud — picking the SMALLER child between 3 (index 2) and 5 (index 1) is the load-bearing move. Choose 5 instead and 3 stays trapped below a 7, violating the invariant. Tracing it on numbers surfaces that decision in a way the code alone doesn't."
+      },
+      {
+        "title": "5. Edges + pitfalls",
+        "prompt": "What inputs would trip up a careless sift implementation?",
+        "say": "\"Edges I'd think through:\"\n\n• \"Heap of size 0 or 1 — push into empty heap: tail is at index 0, the `i > 0` guard stops sift-up immediately. Pop-root on size 1: swap with self, pop, sift-down on empty — bounds check `l < heap.length` blocks both child checks.\"\n\n• \"Equal values — comparison is `>` not `>=`, so equal-value parent/child means no swap. That's correct: equal values trivially satisfy the heap property and unnecessary swaps cost time.\"\n\n• \"Sift-down with only a LEFT child — common when the heap has an odd number of nodes. The `r < heap.length` check on the right guards it; we'd compare against left only.\"\n\n• \"Duplicates — heaps handle duplicates fine; the only catch is that a custom comparator must be a total order (no `a == b` returning ambiguous), otherwise sift loops may bounce.\"\n\n• \"Forgetting to `break` when `s === j` on sift-down — without it the loop is infinite. The `break` is what says 'this node is already smaller than both children — stop'.\"",
+        "why": "The size-1 pop-root edge is the one that bites under timing pressure: you swap root with tail, then your shrink is `heap.pop()`, leaving an empty array — and sift-down on index 0 of an empty array would NaN-compare against `heap[l]` (undefined). The two `l < heap.length` / `r < heap.length` guards are not paranoia, they're the empty-heap correctness proof. Calling that out shows you've thought past the happy path."
+      },
+      {
+        "title": "6. Complexity",
+        "prompt": "What's the cost of these operations and how would you defend it?",
+        "say": "\"Per operation:\"\n\n• \"Sift-up: at most one swap per tree level, and a complete binary tree of n nodes has ⌊log₂(n)⌋ + 1 levels. So sift-up is O(log n) — the level count grows logarithmically with size.\"\n\n• \"Sift-down: same argument from the root downward — at most one swap per level, so O(log n) as well.\"\n\n• \"Push and pop-root are O(log n) each. `peek` (read heap[0]) is O(1).\"\n\n• \"Building a heap from n elements via repeated push is O(n log n), but bottom-up `heapify` — sift-down from index `(n/2)-1` down to 0 — is O(n). The trick is that half the nodes are leaves with 0 work, a quarter sift at most 1 level, an eighth at most 2 levels, and the weighted sum converges to O(n). Worth flagging if the problem builds a heap from a known list.\"\n\n\"If you want me to extend: kth-largest uses this directly — keep a min-heap of size k, push every element, pop when size exceeds k. Final root is the kth largest. O(n log k) total.\"",
+        "why": "The bottom-up heapify O(n) result is the one that earns the senior-tier nod — most candidates know push/pop are log n but recite 'building a heap is n log n' by reflex. Knowing the weighted-sum argument shows you've actually done the analysis. Naming kth-largest as the unprompted extension is the standard 'where does this template fire?' move."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through heap operations on concrete arrays. Pick an example to see sift-up after a push, sift-down after a pop-root, or the L3 parent-lookup case. The state panel shows the heap array, the current index i (or j for sift-down), and the parent/child indices being compared.",
+    "examples": [
+      { "label": "sift-up after push(2) into [1,5,3,10,8,7] → [1,5,2,10,8,7,3]", "input": { "op": "sift-up", "heap": [1, 5, 3, 10, 8, 7], "value": 2 }, "expected": "[1,5,2,10,8,7,3]" },
+      { "label": "sift-down after pop-root on [1,5,3,10,8,7] → [3,5,7,10,8]", "input": { "op": "sift-down", "heap": [1, 5, 3, 10, 8, 7] }, "expected": "[3,5,7,10,8]" },
+      { "label": "parent(4) on [1,5,3,10,8,7] → 5 (L3 case)", "input": { "op": "parent-lookup", "heap": [1, 5, 3, 10, 8, 7], "i": 4 }, "expected": 5 }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const heap = input.heap.slice();",
+      "  const parent = i => (i - 1) >> 1;",
+      "  const left   = i => 2 * i + 1;",
+      "  const right  = i => 2 * i + 2;",
+      "  yield { line: 1, label: `enter — op=${input.op}, heap=${JSON.stringify(heap)}`, state: { op: input.op, heap: [...heap] } };",
+      "  if (input.op === 'parent-lookup') {",
+      "    const i = input.i;",
+      "    yield { line: 2, label: `parent(${i}) — apply formula (${i} - 1) >> 1`, state: { heap: [...heap], i } };",
+      "    const p = parent(i);",
+      "    yield { line: 2, label: `p = (${i} - 1) >> 1 = ${i - 1} >> 1 = ${p}`, state: { heap: [...heap], i, p } };",
+      "    const value = heap[p];",
+      "    yield { line: 2, label: `heap[${p}] = ${value}`, state: { heap: [...heap], i, p, value, returns: value } };",
+      "    return;",
+      "  }",
+      "  if (input.op === 'sift-up') {",
+      "    heap.push(input.value);",
+      "    yield { line: 8, label: `push(${input.value}) at tail → heap=${JSON.stringify(heap)}`, state: { heap: [...heap], pushed: input.value } };",
+      "    let i = heap.length - 1;",
+      "    yield { line: 8, label: `i = heap.length - 1 = ${i}`, state: { heap: [...heap], i } };",
+      "    while (i > 0) {",
+      "      const p = parent(i);",
+      "      yield { line: 9, label: `loop check: i=${i} > 0 ✓, parent(${i})=${p}, heap[${p}]=${heap[p]} vs heap[${i}]=${heap[i]}`, state: { heap: [...heap], i, p, parentVal: heap[p], childVal: heap[i] } };",
+      "      if (heap[p] > heap[i]) {",
+      "        [heap[i], heap[p]] = [heap[p], heap[i]];",
+      "        yield { line: 10, label: `parent ${heap[i]} (was ${heap[p]}) > child — swap → heap=${JSON.stringify(heap)}`, state: { heap: [...heap], i, p } };",
+      "        i = p;",
+      "        yield { line: 11, label: `i = parent → i=${i}, keep bubbling`, state: { heap: [...heap], i } };",
+      "      } else {",
+      "        yield { line: 9, label: `heap[${p}]=${heap[p]} ≤ heap[${i}]=${heap[i]} → heap property holds, STOP`, state: { heap: [...heap], i, p } };",
+      "        break;",
+      "      }",
+      "    }",
+      "    if (i === 0) {",
+      "      yield { line: 9, label: `i=0 → at root, sift-up done`, state: { heap: [...heap], i } };",
+      "    }",
+      "    yield { line: 13, label: `return — final heap=${JSON.stringify(heap)}`, state: { heap: [...heap], returns: JSON.stringify(heap) } };",
+      "    return;",
+      "  }",
+      "  if (input.op === 'sift-down') {",
+      "    [heap[0], heap[heap.length - 1]] = [heap[heap.length - 1], heap[0]];",
+      "    yield { line: 17, label: `pop-root: swap heap[0] with heap[${heap.length - 1}] → heap=${JSON.stringify(heap)}`, state: { heap: [...heap] } };",
+      "    heap.pop();",
+      "    yield { line: 17, label: `pop() — discard old root → heap=${JSON.stringify(heap)}`, state: { heap: [...heap] } };",
+      "    let j = 0;",
+      "    yield { line: 17, label: `j = 0 — start sift-down from root`, state: { heap: [...heap], j } };",
+      "    let safety = 0;",
+      "    while (safety++ < 50) {",
+      "      const l = left(j), r = right(j);",
+      "      let s = j;",
+      "      yield { line: 19, label: `compute children: l=${l}, r=${r}; s starts at ${j}`, state: { heap: [...heap], j, l, r, s } };",
+      "      if (l < heap.length && heap[l] < heap[s]) {",
+      "        s = l;",
+      "        yield { line: 21, label: `heap[l]=${heap[l]} < heap[j]=${heap[j]} → s = l = ${l}`, state: { heap: [...heap], j, l, r, s } };",
+      "      } else if (l < heap.length) {",
+      "        yield { line: 21, label: `heap[l]=${heap[l]} ≥ heap[j]=${heap[j]} → s unchanged`, state: { heap: [...heap], j, l, r, s } };",
+      "      } else {",
+      "        yield { line: 21, label: `l=${l} out of bounds — skip left check`, state: { heap: [...heap], j, l, r, s } };",
+      "      }",
+      "      if (r < heap.length && heap[r] < heap[s]) {",
+      "        s = r;",
+      "        yield { line: 22, label: `heap[r]=${heap[r]} < heap[s]=${heap[s]} (current smallest) → s = r = ${r}`, state: { heap: [...heap], j, l, r, s } };",
+      "      } else if (r < heap.length) {",
+      "        yield { line: 22, label: `heap[r]=${heap[r]} ≥ heap[s] → s stays ${s}`, state: { heap: [...heap], j, l, r, s } };",
+      "      } else {",
+      "        yield { line: 22, label: `r=${r} out of bounds — skip right check`, state: { heap: [...heap], j, l, r, s } };",
+      "      }",
+      "      if (s === j) {",
+      "        yield { line: 23, label: `s === j → no smaller child, heap property holds, STOP`, state: { heap: [...heap], j } };",
+      "        break;",
+      "      }",
+      "      [heap[j], heap[s]] = [heap[s], heap[j]];",
+      "      yield { line: 24, label: `swap heap[${j}]↔heap[${s}] → heap=${JSON.stringify(heap)}`, state: { heap: [...heap], j, s } };",
+      "      j = s;",
+      "      yield { line: 25, label: `j = s → j=${j}, keep sinking`, state: { heap: [...heap], j } };",
+      "    }",
+      "    yield { line: 27, label: `return — final heap=${JSON.stringify(heap)}`, state: { heap: [...heap], returns: JSON.stringify(heap) } };",
+      "    return;",
+      "  }",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// 0-indexed array heap — index math\nconst parent = i => (i - 1) >> 1;   // floor((i-1) / 2)\nconst left   = i => 2 * i + 1;\nconst right  = i => 2 * i + 2;\n\n// Sift UP — used after appending a new element at the tail (push)\n//   bubble the new item upward while it is smaller than its parent\nlet i = heap.length - 1;\nwhile (i > 0 && heap[parent(i)] > heap[i]) {\n  [heap[i], heap[parent(i)]] = [heap[parent(i)], heap[i]];\n  i = parent(i);\n}\n\n// Sift DOWN — used after moving the last element to index 0 (pop-root)\n//   bubble it downward, always swapping with the SMALLER child\nlet j = 0;\nwhile (true) {\n  const l = left(j), r = right(j);\n  let s = j;\n  if (l < heap.length && heap[l] < heap[s]) s = l;\n  if (r < heap.length && heap[r] < heap[s]) s = r;\n  if (s === j) break;\n  [heap[j], heap[s]] = [heap[s], heap[j]];\n  j = s;\n}",
     "notes": [
@@ -42,10 +193,10 @@
       {
         "q": "Why is a heap implemented over an array instead of with node objects?",
         "options": [
-          "Arrays are faster to iterate in JS",
+          "Arrays give O(1) random access to any tree level, which a linked tree can't",
           "Index math (parent/left/right) encodes the tree shape compactly with no pointers",
-          "Node objects can't hold numbers",
-          "Arrays auto-sort their contents"
+          "A complete binary tree's traversal order is the same as array iteration, so iteration is free",
+          "Arrays guarantee cache locality of sibling nodes, which is what makes sift-down O(log n)"
         ],
         "answer": 1,
         "explain": "The complete binary tree shape maps perfectly onto contiguous array indices — no parent/child pointers needed."
@@ -64,10 +215,10 @@
       {
         "q": "On a MIN-heap sift-DOWN, you swap the node with the LARGER of its two children. What breaks?",
         "options": [
-          "Nothing — either child works",
+          "Nothing — the heap re-balances on the next pop because sift-down is idempotent",
           "The smaller child stays below a larger value, violating the heap property at that subtree",
-          "It becomes a max-heap",
-          "The array length changes"
+          "Only the root invariant breaks; the rest of the tree stays valid because each subtree is independent",
+          "The traversal cost flips from O(log n) to O(n) but the values stay heap-ordered"
         ],
         "answer": 1,
         "explain": "Promoting the larger child leaves the smaller child sitting under a bigger parent — the min-heap invariant (parent ≤ both children) is violated. Always swap with the SMALLER child."
@@ -86,10 +237,10 @@
       {
         "q": "To turn the min-heap code into a MAX-heap, what's the minimal change?",
         "options": [
-          "Swap the parent/child index formulas",
+          "Swap the parent/child index formulas — the tree shape inverts for max-heaps",
           "Flip the comparisons (use `>` where it used `<`) so larger values bubble toward the root",
-          "Reverse the array first",
-          "Use sift-up only, never sift-down"
+          "Negate every value on push and re-negate on pop — keeps the min-heap logic intact",
+          "Sift-up on extract-max instead of sift-down — only the operation, not the comparators, changes"
         ],
         "answer": 1,
         "explain": "The index math is identical; only the ordering comparisons flip — a max-heap keeps the largest at the root by reversing every `<`/`>` in the sift logic."
@@ -97,10 +248,10 @@
       {
         "q": "You need repeated 'give me the current min, then add more items' on a changing dataset. Why a heap over a sorted array?",
         "options": [
-          "A heap keeps everything fully sorted, which a sorted array can't",
+          "A heap keeps the full ordering of all n elements, while a sorted array only orders adjacent pairs",
           "Insert is O(log n) on a heap vs O(n) to keep a sorted array sorted; you only pay for the min you actually extract",
-          "A sorted array can't return the minimum",
-          "Heaps use less memory than arrays"
+          "Binary search on a sorted array is O(log n), but it can't locate the insertion point in less than O(n) due to shifting — and a heap avoids the shift entirely with O(1) access",
+          "A heap's extract-min is O(1) since the min is at heap[0], whereas a sorted array's first-element removal is O(n)"
         ],
         "answer": 1,
         "explain": "A heap gives O(log n) insert and O(log n) extract-min without maintaining a total order; inserting into a sorted array to stay sorted is O(n) per insert."

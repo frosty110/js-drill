@@ -6,6 +6,159 @@
   "status": "full",
   "description": "Graph problem — when a source doc changes, regenerate every downstream doc in dependency (topological) order with a DFS-based topo sort, bailing out via 3-color cycle detection if the dependency graph has a cycle.",
   "mechanics": ["dfs-graph-adjacency"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Before touching code — pin down the dependency direction and the failure mode for cycles.",
+        "say": "\"Let me restate: I get a list of dependency edges in the form `[dependent, dependsOn]` — e.g. `['demand-letter', 'chronology']` means the demand letter reads from the chronology. When one node changes, I need to regenerate every transitively-dependent node, in an order where each node fires only AFTER everything it depends on has finished. If the graph has a cycle, return a sentinel. Quick clarifying questions:\"\n\n• Edge direction — is `[dep, on]` 'dep depends on on' (my read) or 'dep feeds into on'? The naming `[dependent, dependsOn]` confirms my read but it's worth re-stating because the wrong interpretation reverses the whole solution.\n• Tie-breaking — when multiple nodes are ready at the same time (in-degree zero), is any order fine, or do you want a deterministic one (alphabetical)?\n• Cycle output — single sentinel string in the array, or throw an error? Are partial orders acceptable on cycle?\n• Do I regenerate the changed node itself, or only downstream nodes? My read is downstream-only; the changed node was just edited and doesn't need to be regenerated.\n• Affected scope — every transitive dependent, or just direct dependents one level out? Full transitive closure is the harder, more useful answer.",
+        "why": "The edge-direction question is the foot-gun — it's the kind of thing that compiles and runs but produces the reverse order, and you only catch it by tracing an example. Asking upfront forces both you and the interviewer to commit to a direction before code is written. The tie-breaking question matters because deterministic order is what makes tests reproducible — if you don't ask, you'll either ship non-deterministic output and get caught later, or you'll over-engineer with alphabetical sort that wasn't required."
+      },
+      {
+        "title": "2. Spot the shape",
+        "prompt": "What's the data-structure pattern, and why are TWO graphs needed?",
+        "say": "\"This is a graph problem with three sub-pieces: cycle detection, transitive-closure reachability, and topological sort. The structural decision is to maintain two adjacency representations:\"\n\n• `dependents`: reverse edges — `on → [dep, dep, …]`. Used for forward walking ('who do I need to regenerate next when I change?').\n• `deps`: forward edges — `dep → Set<on>`. Used for in-degree counting in Kahn's algorithm.\n\n\"You need both because the walk goes one way (downstream from the changed node) but the in-degree constraint counts the other way (how many upstream inputs am I still waiting on?). One adjacency list can't serve both purposes without doing the equivalent work twice.\"\n\n\"Then three phases:\"\n\n1. **Cycle detection** via 3-color DFS — `WHITE=0` (unseen), `GRAY=1` (on the current recursion stack), `BLACK=2` (finished). A back-edge to a GRAY node is a cycle.\n2. **Reachability** — DFS/BFS from the changed node along `dependents` to collect the affected subset.\n3. **Topological sort** via Kahn's algorithm over only the affected subset — count in-degree from inputs that are themselves affected (unchanged upstream inputs are already current).",
+        "why": "Naming the two-adjacency choice AND defending it is the move that separates 'I've seen topo sort' from 'I understand why this problem needs the structure it does'. The 3-color framing is also load-bearing: a plain visited-set false-positives on cross-edges in a DAG (a node reachable by two paths), so naïvely 'if visited, cycle' would crash on valid acyclic graphs. The three-phase decomposition signals you can take a tangled algorithm and explain it in clean stages — exactly what the interviewer is grading."
+      },
+      {
+        "title": "3. Walk a tiny example",
+        "prompt": "Trace a small graph end-to-end — first the happy path, then the cycle case.",
+        "intro": "\"Let me run two graphs: a 4-node legal-doc chain, then a 3-node cycle.\"",
+        "examples": [
+          {
+            "input": "edges=[['chronology','records'], ['demand','chronology'], ['demand','intake'], ['complaint','demand']], changed='records'",
+            "output": "['chronology', 'demand', 'complaint']",
+            "note": "records → chronology → demand → complaint, with intake as an independent dep of demand (unaffected by the change to records).",
+            "trace": "Build:\n  dependents: records→[chronology], chronology→[demand], intake→[demand], demand→[complaint]\n  deps: chronology→{records}, demand→{chronology,intake}, complaint→{demand}\nCycle check (3-color DFS): no back-edges → safe.\nReachability from 'records':\n  stack=[chronology] → affected={chronology}; push demand\n  stack=[demand] → affected={chronology,demand}; push complaint\n  stack=[complaint] → affected={chronology,demand,complaint}\nKahn over affected:\n  indeg(chronology) = |{records} ∩ affected| = 0\n  indeg(demand) = |{chronology,intake} ∩ affected| = 1 (chronology only — intake is unchanged)\n  indeg(complaint) = |{demand} ∩ affected| = 1\n  ready=[chronology] → emit chronology; demand.indeg→0 → ready=[demand]\n  → emit demand; complaint.indeg→0 → ready=[complaint]\n  → emit complaint\norder = ['chronology', 'demand', 'complaint'] ✓"
+          },
+          {
+            "input": "edges=[['a','b'],['b','c'],['c','a']], changed='a'",
+            "output": "['CYCLE DETECTED']",
+            "note": "a depends on b, b on c, c on a — no node can go first.",
+            "trace": "Build: dependents: b→[a], c→[b], a→[c]\n3-color DFS starting from 'a':\n  color[a]=GRAY; walk dependents[a]=[c]; color[c]=WHITE → recurse\n    color[c]=GRAY; walk dependents[c]=[b]; color[b]=WHITE → recurse\n      color[b]=GRAY; walk dependents[b]=[a]; color[a]=GRAY → BACK-EDGE → return true\n    propagate true\n  return true\nreturn ['CYCLE DETECTED'] ✓"
+          }
+        ],
+        "why": "The intake-as-unaffected-input detail in example 1 is the load-bearing trace — it shows why Kahn's in-degree counts ONLY inputs that are themselves in the affected set. If you counted intake (which isn't being regenerated), demand would never reach in-degree zero and the algorithm would deadlock. The cycle trace earns its keep by showing where the GRAY back-edge fires — most candidates can describe 3-color DFS in the abstract but stumble walking the actual state transitions."
+      },
+      {
+        "title": "4. Edge cases & failure modes",
+        "prompt": "What inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging:\"\n\n• **Cycle that doesn't include the changed node** — say `a→b→a` exists but we changed an unrelated `c`. Do we still bail with CYCLE DETECTED? The canonical does — we scan the whole graph for cycles before reachability — and that's the right call: a cycle anywhere is a structural defect that the operator needs to know about, not something to paper over.\n• **Self-loop** — `[x, x]` (x depends on itself). 3-color DFS catches it immediately when it hits its own GRAY mark. Worth testing as a degenerate case of cycle.\n• **Disconnected graphs** — the outer `for (const n of nodes)` in the cycle check ensures we start a DFS from every unvisited node, so a cycle in one component is still detected even if another component is fine.\n• **Changed node has no dependents** — `dependents.get(changed)` returns undefined; the `|| []` guard makes the affected-set start empty and the function returns `[]`. The no-op case works by construction.\n• **Cross-edges in a DAG** — `a→b`, `a→c`, `b→c`. When DFS from `a` finishes `c` (BLACK), then from `b` re-encounters `c`, a plain visited-set would false-positive a cycle. 3-color correctly identifies BLACK as 'already finished, not a cycle'. This is why we don't use a visited Set.\n• **Tie-breaking in Kahn's** — the canonical sorts `ready` alphabetically each time a new node enters. Without it, traversal order would depend on Map insertion order — works but non-deterministic across runs in some engines.\n• **Edges referencing nodes that only appear on one side** — `nodes` is built from BOTH endpoints of every edge, so a leaf-only node (no dependents) still gets a color entry and isn't missed by the outer DFS loop.",
+        "why": "The cross-edges-in-a-DAG point is the highest-value teaching — it's the reason 3-color exists instead of plain visited-set. Most candidates implement visited-set, fail on a benign DAG with two paths to the same node, and have to debug. Calling this out unprompted is the senior-tier signal. The 'cycle that doesn't include the changed node' question is the product question: in a real document-regeneration system, you wouldn't want to silently propagate updates through a graph that has a cycle elsewhere — you want a hard stop."
+      },
+      {
+        "title": "5. Complexity & memory",
+        "prompt": "How would you defend the bounds?",
+        "say": "\"Time is O(V + E) for each of the three phases — 3-color DFS over the full graph, reachability DFS from the changed node, and Kahn's over the affected subset. Total is O(V + E) since the phases are sequential, not nested. The `ready.sort()` adds an O(A log A) factor where A is the affected-set size; if you don't need deterministic tie-breaking you can drop it and get pure O(V + E).\n\nSpace is O(V + E) for the two adjacency maps, O(V) for the color map and affected set. Recursion depth in cycle detection can hit O(V) on a linear chain; on adversarial deep graphs you'd convert the DFS to iterative with an explicit stack to avoid blowing the JS call stack (~10k frames in V8).\n\nThe interesting tradeoff: we run cycle detection over the FULL graph before doing reachability. Alternative — run cycle detection only over the affected subset. That would be cheaper but would let cycles elsewhere fester. For a document-regen system that's the wrong tradeoff; for a build system shipping artifacts under deadline pressure, you might accept it.\"",
+        "why": "The full-graph-cycle-check vs. affected-only-cycle-check tradeoff is the product call — saying it out loud shows you see this as a system that has to live with operator data, not just an algorithm exercise. The recursion-depth caveat is the production-tier signal: most candidates don't think about call-stack overflow for problems labeled O(V+E), and on adversarial inputs JS will fail before the algorithm does."
+      },
+      {
+        "title": "6. Robustness & tests",
+        "prompt": "What would you write to lock this in?",
+        "say": "\"Test cases I'd want before shipping:\"\n\n• **Happy linear chain** — `a→b→c→d`, change `a`, expect `[b, c, d]` in order.\n• **Branching DAG** — `a→{b,c}`, both `b` and `c` depend on `a`. Change `a`, expect both downstream nodes in any topo-valid order (alphabetical with the canonical's tie-breaker).\n• **Diamond DAG** — `a→b`, `a→c`, `b→d`, `c→d`. The cross-edges-in-DAG test. Should NOT report a cycle.\n• **Self-loop cycle** — `[x, x]`, expect `['CYCLE DETECTED']`.\n• **Three-node cycle** — `a→b→c→a`, expect sentinel.\n• **Cycle in a different component** — change `c`, but `a→b→a` exists. Expect sentinel (operator must fix the cycle).\n• **No-op change** — change a node with no dependents, expect `[]`.\n• **Unaffected-upstream-input** — the chronology/intake case from the walkthrough. Proves the affected-set-aware in-degree count works.\n• **Empty edges** — returns `[]`, no crash.\n\n\"Beyond tests: in production this would log every CYCLE DETECTED with the path that closed the cycle so an operator can fix it (just the sentinel string isn't actionable). And the affected set should be size-capped — if you change a node with thousands of transitive dependents, you don't want to regenerate them all in one blocking call; you'd enqueue them. The kernel here is fine; the operational wrapper is where the production work goes.\"",
+        "why": "The unaffected-upstream-input test is the highest-coverage regression — it's the test that catches the off-by-one where someone 'simplifies' Kahn's to count ALL inputs instead of only-affected ones, deadlocking the algorithm on any partial-update. The 'log the cycle path' production note shows you understand that a sentinel by itself is debugger-hostile; the operator needs the offending edges to fix the data. That's the senior-tier closing move."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through regenerationOrder on a 4-node legal-doc chain. The trace yields once per build step, once per 3-color DFS state transition, once per reachability push, and once per Kahn's emit — so you can see all three phases unfold.",
+    "examples": [
+      { "label": "records → chronology → demand → complaint", "input": { "edges": [["chronology", "records"], ["demand-letter", "chronology"], ["demand-letter", "intake"], ["complaint", "demand-letter"]], "changed": "records" }, "expected": "[\"chronology\",\"demand-letter\",\"complaint\"]" },
+      { "label": "a → b → c → a (cycle)", "input": { "edges": [["a", "b"], ["b", "c"], ["c", "a"]], "changed": "a" }, "expected": "[\"CYCLE DETECTED\"]" },
+      { "label": "leaf with no dependents → []", "input": { "edges": [["chronology", "records"]], "changed": "chronology" }, "expected": "[]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { edges, changed } = input;",
+      "  const dependents = new Map();",
+      "  const deps = new Map();",
+      "  const nodes = new Set();",
+      "  yield { line: 1, label: `enter regenerationOrder — edges=${edges.length}, changed='${changed}'`, state: { edges, changed } };",
+      "  for (const [dep, on] of edges) {",
+      "    nodes.add(dep);",
+      "    nodes.add(on);",
+      "    if (!dependents.has(on)) dependents.set(on, []);",
+      "    dependents.get(on).push(dep);",
+      "    if (!deps.has(dep)) deps.set(dep, new Set());",
+      "    deps.get(dep).add(on);",
+      "    yield { line: 6, label: `edge [${dep} ← ${on}] — dependents[${on}] += ${dep}; deps[${dep}] += ${on}`, state: { dependents: [...dependents.entries()].map(([k, v]) => [k, [...v]]), deps: [...deps.entries()].map(([k, v]) => [k, [...v]]) } };",
+      "  }",
+      "  const color = new Map([...nodes].map(n => [n, 0]));",
+      "  yield { line: 12, label: `init color map — all ${nodes.size} nodes WHITE(0)`, state: { color: [...color.entries()] } };",
+      "  let cycleFound = false;",
+      "  function* hasCycle(n) {",
+      "    color.set(n, 1);",
+      "    yield { line: 13, label: `DFS visit '${n}' → mark GRAY(1)`, state: { n, color: [...color.entries()] } };",
+      "    for (const d of dependents.get(n) || []) {",
+      "      if (color.get(d) === 1) {",
+      "        yield { line: 15, label: `back-edge '${n}' → '${d}' (GRAY) — CYCLE`, state: { n, d, color: [...color.entries()] } };",
+      "        return true;",
+      "      }",
+      "      if (color.get(d) === 0) {",
+      "        yield { line: 15, label: `'${n}' → '${d}' (WHITE) — recurse`, state: { n, d, color: [...color.entries()] } };",
+      "        const sub = yield* hasCycle(d);",
+      "        if (sub) return true;",
+      "      } else {",
+      "        yield { line: 15, label: `'${n}' → '${d}' (BLACK) — cross-edge, safe`, state: { n, d, color: [...color.entries()] } };",
+      "      }",
+      "    }",
+      "    color.set(n, 2);",
+      "    yield { line: 17, label: `done with '${n}' → mark BLACK(2)`, state: { n, color: [...color.entries()] } };",
+      "    return false;",
+      "  }",
+      "  for (const n of nodes) {",
+      "    if (color.get(n) === 0) {",
+      "      const result = yield* hasCycle(n);",
+      "      if (result) { cycleFound = true; break; }",
+      "    }",
+      "  }",
+      "  if (cycleFound) {",
+      "    yield { line: 20, label: `cycle found → return ['CYCLE DETECTED']`, state: { returns: JSON.stringify(['CYCLE DETECTED']) } };",
+      "    return;",
+      "  }",
+      "  yield { line: 20, label: `no cycles — proceed to reachability from '${changed}'`, state: { color: [...color.entries()] } };",
+      "  const affected = new Set();",
+      "  const stack = [...(dependents.get(changed) || [])];",
+      "  yield { line: 22, label: `init reachability stack = dependents['${changed}'] = [${stack.join(', ')}]`, state: { stack: [...stack], affected: [...affected] } };",
+      "  while (stack.length) {",
+      "    const n = stack.pop();",
+      "    if (affected.has(n)) {",
+      "      yield { line: 24, label: `pop '${n}' — already affected, skip`, state: { n, stack: [...stack], affected: [...affected] } };",
+      "      continue;",
+      "    }",
+      "    affected.add(n);",
+      "    const push = [...(dependents.get(n) || [])];",
+      "    for (const d of push) stack.push(d);",
+      "    yield { line: 26, label: `pop '${n}' → add to affected; push children [${push.join(', ')}]`, state: { n, push, stack: [...stack], affected: [...affected] } };",
+      "  }",
+      "  yield { line: 28, label: `affected = {${[...affected].join(', ')}} — start Kahn's`, state: { affected: [...affected] } };",
+      "  const indeg = new Map();",
+      "  for (const n of affected) {",
+      "    let cnt = 0;",
+      "    for (const dep of deps.get(n) || []) if (affected.has(dep)) cnt++;",
+      "    indeg.set(n, cnt);",
+      "  }",
+      "  yield { line: 32, label: `in-degree per affected node (counting only inputs in affected) = ${JSON.stringify([...indeg.entries()])}`, state: { indeg: [...indeg.entries()] } };",
+      "  const ready = [...affected].filter(n => indeg.get(n) === 0).sort();",
+      "  const order = [];",
+      "  yield { line: 34, label: `ready (indeg=0) = [${ready.join(', ')}]`, state: { ready: [...ready], order: [...order] } };",
+      "  while (ready.length) {",
+      "    const n = ready.shift();",
+      "    order.push(n);",
+      "    const newReady = [];",
+      "    for (const d of dependents.get(n) || []) {",
+      "      if (!affected.has(d)) continue;",
+      "      indeg.set(d, indeg.get(d) - 1);",
+      "      if (indeg.get(d) === 0) { ready.push(d); newReady.push(d); }",
+      "    }",
+      "    ready.sort();",
+      "    yield { line: 36, label: `emit '${n}' → order=[${order.join(', ')}]${newReady.length ? '; newly ready: ' + newReady.join(', ') : ''}`, state: { emitted: n, ready: [...ready], indeg: [...indeg.entries()], order: [...order] } };",
+      "  }",
+      "  yield { line: 42, label: `return order=${JSON.stringify(order)}`, state: { order, returns: JSON.stringify(order) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// Docs depend on each other: edge [dependent, dependsOn].\n// A doc may only regenerate AFTER every input it depends on.\nfunction regenerationOrder(edges, changed) {\n  // dependents: who reads me (reverse edges); deps: who I read (forward edges).\n  const dependents = new Map();\n  const deps = new Map();\n  const nodes = new Set();\n  for (const [dep, on] of edges) {\n    nodes.add(dep);\n    nodes.add(on);\n    if (!dependents.has(on)) dependents.set(on, []);\n    dependents.get(on).push(dep);\n    if (!deps.has(dep)) deps.set(dep, new Set());\n    deps.get(dep).add(on);\n  }\n  // 3-color DFS: 0=white (unseen), 1=gray (on stack), 2=black (done).\n  // A back-edge to a GRAY node is a cycle — the timeline can never settle.\n  const color = new Map([...nodes].map(n => [n, 0]));\n  const hasCycle = n => {\n    color.set(n, 1);\n    for (const d of dependents.get(n) || []) {\n      if (color.get(d) === 1) return true;\n      if (color.get(d) === 0 && hasCycle(d)) return true;\n    }\n    color.set(n, 2);\n    return false;\n  };\n  for (const n of nodes) {\n    if (color.get(n) === 0 && hasCycle(n)) return ['CYCLE DETECTED'];\n  }\n  // Collect everything transitively downstream of the changed node.\n  const affected = new Set();\n  const stack = [...(dependents.get(changed) || [])];\n  while (stack.length) {\n    const n = stack.pop();\n    if (affected.has(n)) continue;\n    affected.add(n);\n    for (const d of dependents.get(n) || []) stack.push(d);\n  }\n  // Kahn's algorithm over the affected subgraph: count only in-affected inputs.\n  const indeg = new Map();\n  for (const n of affected) {\n    let cnt = 0;\n    for (const dep of deps.get(n) || []) if (affected.has(dep)) cnt++;\n    indeg.set(n, cnt);\n  }\n  const ready = [...affected].filter(n => indeg.get(n) === 0).sort();\n  const order = [];\n  while (ready.length) {\n    const n = ready.shift();\n    order.push(n);\n    for (const d of dependents.get(n) || []) {\n      if (!affected.has(d)) continue;\n      indeg.set(d, indeg.get(d) - 1);\n      if (indeg.get(d) === 0) { ready.push(d); ready.sort(); }\n    }\n  }\n  return order;\n}",
     "notes": [
@@ -19,10 +172,10 @@
       {
         "q": "Why must the output be in topological order rather than any order of downstream docs?",
         "options": [
-          "To minimize the number of regenerations",
+          "Topological order deduplicates nodes reachable by two paths, which any-order traversal would regenerate twice",
           "A doc can only regenerate after the docs it depends on, or it would embed stale upstream content",
-          "Alphabetical order is required by the spec",
-          "Topological order makes the graph traversal faster"
+          "Any other order would violate the BFS visitation guarantee that the affected-set was built with",
+          "Topological order is what allows Kahn's algorithm to skip the cycle-detection pass entirely"
         ],
         "answer": 1,
         "explain": "If the demand letter regenerates before the chronology it cites, it pulls in the old chronology text. Inputs must be rebuilt first."
@@ -30,10 +183,10 @@
       {
         "q": "What does a cycle in the dependency graph mean for this problem?",
         "options": [
-          "Two docs are identical and can be merged",
+          "Two docs share a common input, so the regeneration would repeat that input twice and waste work",
           "A depends on B which depends on A — there is no valid regeneration order, so it can never settle",
-          "The changed doc has no dependents",
-          "The graph is disconnected"
+          "The graph has more edges than nodes, exceeding the in-degree budget Kahn's algorithm allows",
+          "A node is reachable from itself by a path of length > 1 through unrelated docs"
         ],
         "answer": 1,
         "explain": "A circular dependency has no node that can go first, so any rebuild would loop forever. The function returns a sentinel instead."
@@ -41,10 +194,10 @@
       {
         "q": "In the 3-color DFS, what specifically signals a cycle?",
         "options": [
-          "Reaching any node that was visited before",
-          "Reaching a BLACK (fully-finished) node",
+          "Reaching any node that was visited before — a plain visited-set check is sufficient and equivalent",
+          "Reaching a BLACK (fully-finished) node — a back-edge always targets a finished node",
           "Reaching a GRAY node — one still on the current recursion stack (a back-edge)",
-          "Running out of WHITE nodes"
+          "Finishing the outer DFS loop with at least one node still WHITE"
         ],
         "answer": 2,
         "explain": "GRAY means 'currently being explored, still on the stack.' An edge back to a GRAY node is a back-edge = a cycle. A BLACK node is finished and safe to re-encounter as a cross-edge."
@@ -52,10 +205,10 @@
       {
         "q": "Why count only inputs that are themselves in the `affected` set when computing in-degree (Kahn's algorithm)?",
         "options": [
-          "To save memory on large graphs",
+          "Including unaffected inputs would double-count edges shared by two affected nodes and inflate the in-degree past the edge count",
           "Inputs outside the affected set are unchanged and already current, so they impose no ordering constraint",
-          "Nodes outside affected do not exist in the graph",
-          "Because in-degree must always be zero to start"
+          "Unaffected inputs may not yet exist when Kahn's runs, so referencing them would throw a ReferenceError on `indeg.get`",
+          "Kahn's algorithm requires that in-degree reflect the full graph; the `affected` filter is applied later, on the output"
         ],
         "answer": 1,
         "explain": "An untouched upstream doc is already up to date; it does not need to be rebuilt first, so it should not block its dependent's readiness."

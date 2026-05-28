@@ -6,6 +6,138 @@
   "status": "full",
   "description": "Three recursive tree-traversal shapes side-by-side — only the position of visit(n) moves between them.",
   "mechanics": ["tree-recursion"],
+  "conversation": {
+    "intro": "This is a syntax-template lesson — three traversal shapes side-by-side. The interview script focuses on WHICH traversal fits WHICH task, not on solving a single problem. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. When do you reach for each traversal?",
+        "prompt": "Three almost-identical templates — only the position of visit(n) moves. Match each to its natural use.",
+        "say": "\"Three recursive shapes, three jobs:\n\n• PREORDER — `visit(n); preorder(n.left); preorder(n.right)`. Root FIRST. Natural for SERIALIZING or CLONING a tree top-down, because the parent is emitted before its subtrees, so a recursive deserializer reads parent then reconstructs left then right.\n\n• INORDER — `inorder(n.left); visit(n); inorder(n.right)`. Root MIDDLE. The killer use: on a BST, inorder visits values in SORTED ASCENDING order. That's the one-line BST invariant.\n\n• POSTORDER — `postorder(n.left); postorder(n.right); visit(n)`. Root LAST. Natural for BOTTOM-UP aggregation: subtree sum, height, safe delete, max-path-sum — anything where the parent's answer depends on both children's answers being ready first.\n\nThe code is almost identical — only the position of `visit(n)` moves between the two recursive calls. That's it.\"",
+        "why": "Naming each traversal AND the structural reason it fits its use case is the fluency signal. 'Use inorder for BSTs' is folklore; 'inorder visits left-then-self-then-right which is exactly the BST ordering invariant' is a derivation. Interviewers grade on the second — it means you can derive the right traversal for a problem they haven't seen, not just recall the canonical."
+      },
+      {
+        "title": "2. Why recursion, and what's the alternative?",
+        "prompt": "Name the iterative version before defaulting to recursion.",
+        "say": "\"The recursive version is three lines and reads like the definition: 'visit current, recurse left, recurse right' (modulo where `visit` sits). The iterative alternative uses an EXPLICIT STACK to simulate the call stack — push the root, pop, push children in reverse order, repeat. Iterative is more bookkeeping but it's the right call when the tree might be deep enough to blow the JS recursion stack — typically around 10k-15k frames. For a typical interview tree (a few hundred nodes), recursion is cleaner.\n\nUsing a QUEUE instead of a stack would give you LEVEL-ORDER (BFS), which is a fourth traversal shape with its own use cases (printing by level, computing tree width, shortest path from root). Stack = depth-first, queue = breadth-first — the data structure determines the family.\"",
+        "why": "Stating the iterative alternative unprompted shows you know recursion isn't the only option, which is the senior signal — most candidates default to recursion without acknowledging it could blow the stack. The stack-vs-queue equivalence is the bonus: BFS isn't a different algorithm, it's the same template with a FIFO swapped in for the LIFO. Interviewers love hearing that connection."
+      },
+      {
+        "title": "3. Spot the pattern: which traversal fits this task?",
+        "prompt": "How to decide, given a new tree problem.",
+        "say": "\"The decision rule I run:\n\n1. Does the answer depend on visiting nodes in SORTED ORDER on a BST? → inorder.\n2. Does the parent's answer DEPEND on its children's results (subtree sum, height, validate-BST with helper, lowest-common-ancestor)? → postorder, because children must finish first.\n3. Do I need to emit the PARENT BEFORE its children (serialize, deep-clone, print tree structure top-down)? → preorder.\n4. Do I need LEVEL-BY-LEVEL processing (right side view, level averages, zigzag)? → BFS, not DFS at all.\n\nIf two traversals seem to work, pick the one whose `visit` position matches the data dependency — that minimizes the bookkeeping you need to thread through the recursion.\"",
+        "why": "Walking through the decision tree out loud is what makes the FAMILY visible, not just the three templates. Most candidates pick a traversal by gut feel; running the dependency check ('does the parent depend on children?') is what makes the choice principled and defensible if the interviewer asks 'why postorder?'. The fourth bullet (BFS) closes the family — every standard tree traversal is either DFS-with-stack-position-choice or BFS-with-queue."
+      },
+      {
+        "title": "4. Trace through a tiny example",
+        "prompt": "Three traversals, one tiny BST — confirm the outputs.",
+        "intro": "\"Let me trace each traversal on the same 3-node BST `{val:2, left:{val:1}, right:{val:3}}` so the differences land.\"",
+        "examples": [
+          {
+            "input": "tree = {val:2, left:{val:1}, right:{val:3}}",
+            "output": "preorder [2,1,3], inorder [1,2,3], postorder [1,3,2]",
+            "note": "Same tree, same three nodes — only the position of visit moves between the calls.",
+            "trace": "PREORDER(2): visit 2 → out=[2]; preorder(1) → visit 1 → out=[2,1]; preorder(3) → visit 3 → out=[2,1,3]\nINORDER(2): inorder(1) → visit 1 → out=[1]; visit 2 → out=[1,2]; inorder(3) → visit 3 → out=[1,2,3]\nPOSTORDER(2): postorder(1) → visit 1 → out=[1]; postorder(3) → visit 3 → out=[1,3]; visit 2 → out=[1,3,2]"
+          },
+          {
+            "input": "tree = null (empty)",
+            "output": "all three produce []",
+            "note": "Empty tree — base case `if (!n) return` fires immediately, no recursion. Same answer for all three.",
+            "trace": "PREORDER(null): !n is true → return → out=[]\nINORDER(null):  !n is true → return → out=[]\nPOSTORDER(null):!n is true → return → out=[]"
+          }
+        ],
+        "why": "Running all three traversals on the SAME tree side-by-side is what makes the 'only visit position moves' point concrete. The candidate who's drilled this will draw the tree once on the whiteboard and walk all three orderings in 30 seconds; the candidate who hasn't will trace each one from scratch. The empty-tree trace defends the base case — without `if (!n) return`, you'd crash on `null.left`."
+      },
+      {
+        "title": "5. Edge cases & pitfalls",
+        "prompt": "What trips up a careless implementation?",
+        "say": "\"Pitfalls when you drop one of these into a real problem:\n• Empty tree (root=null) → base case `if (!n) return` handles it without a special case. ✓\n• Single node → one visit, no recursion fires below. All three traversals emit `[val]`. ✓\n• Skewed tree (left-only or right-only) → recursion depth equals node count. For a 50k-node skewed tree, this blows the JS stack. Switch to iterative-explicit-stack if the input could be that deep.\n• Forgetting the base case → recursing on `null.left` throws a TypeError. The `if (!n) return` is non-negotiable.\n• Mixing up left/right order — inorder on the right-first variant `inorder(n.right); visit(n); inorder(n.left)` gives you REVERSE sorted order. Sometimes useful (e.g. Kth Largest in BST), but only if you meant it.\n• On a non-BST, inorder does NOT give sorted output. The 'inorder = sorted' shortcut is BST-specific — don't claim it on a general binary tree.\n• If you're aggregating bottom-up (postorder), make sure the recursive call RETURNS the value rather than just visiting — a 'visit' that pushes into an output array is different from a recursive function whose return value the parent reads.\"",
+        "why": "The skewed-tree call-out is the senior signal — recursion depth is O(h), and on adversarial input h = n. Most candidates write the recursive version and stop; flagging the stack risk shows you've thought about scale. The 'inorder on a non-BST isn't sorted' point is the bug that catches people who memorized 'inorder = sorted' without understanding it relies on the BST invariant left.val < node.val < right.val."
+      },
+      {
+        "title": "6. Complexity & common follow-ups",
+        "prompt": "What does each cost, and what problems use this template?",
+        "say": "\"All three traversals are O(n) time and O(h) recursion-stack space, where n is the node count and h is the tree height. O(h) is O(log n) for a balanced tree and O(n) for a skewed one. Every node is visited exactly once — the work per node is constant (one `visit` call), so the total time is linear in node count regardless of which traversal you pick.\n\nCommon follow-ups that use one of these templates as the SKELETON:\n• Preorder → Serialize/Deserialize Binary Tree, Construct Binary Tree from Preorder + Inorder.\n• Inorder → Validate BST, Kth Smallest in BST, Convert BST to Sorted Doubly Linked List.\n• Postorder → Binary Tree Maximum Path Sum, Diameter of Binary Tree, Balanced Binary Tree, Lowest Common Ancestor.\n• BFS (related but uses a queue) → Right Side View, Level Order Traversal, Zigzag, Tree Width.\n\nIf the interviewer asks for the iterative version of any DFS traversal, the trick is to use an EXPLICIT STACK and push children in REVERSE order (right then left for left-first traversal), so popping gives the right order.\"",
+        "why": "Listing the follow-up family for each traversal is the move that proves you see these as REUSABLE SKELETONS, not standalone tricks. Interviewers love this because it means you'll pattern-match the next tree problem instead of solving from scratch. The 'push children in reverse order' iterative trick is the canonical gotcha — calling it out unprompted signals you've actually written the iterative version, not just the recursive one."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through all three recursive traversals on the same small BST. The trace simulates each traversal with an explicit stack (so the generator can yield each step) and produces three output arrays — pre, in, post — for comparison. Pick an example and scrub.",
+    "examples": [
+      { "label": "{2, left:1, right:3} → pre [2,1,3], in [1,2,3], post [1,3,2]", "input": [2, 1, 3], "expected": "[[2,1,3],[1,2,3],[1,3,2]]" },
+      { "label": "{1, left:2, right:3, left.left:4, left.right:5} → pre [1,2,4,5,3], in [4,2,5,1,3], post [4,5,2,3,1]", "input": [1, 2, 3, 4, 5], "expected": "[[1,2,4,5,3],[4,2,5,1,3],[4,5,2,3,1]]" },
+      { "label": "[] empty → all three []", "input": [], "expected": "[[],[],[]]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  function buildTree(arr) {",
+      "    if (!arr || arr.length === 0 || arr[0] == null) return null;",
+      "    const root = { val: arr[0], left: null, right: null };",
+      "    const q = [root];",
+      "    let i = 1;",
+      "    while (q.length && i < arr.length) {",
+      "      const node = q.shift();",
+      "      if (i < arr.length && arr[i] != null) { node.left = { val: arr[i], left: null, right: null }; q.push(node.left); }",
+      "      i++;",
+      "      if (i < arr.length && arr[i] != null) { node.right = { val: arr[i], left: null, right: null }; q.push(node.right); }",
+      "      i++;",
+      "    }",
+      "    return root;",
+      "  }",
+      "  const root = buildTree(input);",
+      "  yield { line: 1, label: `enter — tree level-order ${JSON.stringify(input)}`, state: { treeShape: input } };",
+      "  if (!root) {",
+      "    yield { line: 4, label: 'root is null — every traversal returns []', state: { treeShape: input, pre: [], in: [], post: [], returns: JSON.stringify([[],[],[]]) } };",
+      "    return;",
+      "  }",
+      "  // ---- PREORDER (root, left, right) ----",
+      "  const pre = [];",
+      "  const preStack = [root];",
+      "  yield { line: 4, label: 'begin PREORDER (root, left, right) — push root onto stack', state: { treeShape: input, pre: pre.slice() } };",
+      "  while (preStack.length) {",
+      "    const n = preStack.pop();",
+      "    pre.push(n.val);",
+      "    yield { line: 5, label: `preorder visit ${n.val} — root FIRST`, state: { treeShape: input, current: n.val, pre: pre.slice() } };",
+      "    if (n.right) preStack.push(n.right);",
+      "    if (n.left)  preStack.push(n.left);",
+      "  }",
+      "  yield { line: 5, label: `preorder done — out=${JSON.stringify(pre)}`, state: { treeShape: input, pre: pre.slice() } };",
+      "  // ---- INORDER (left, root, right) ----",
+      "  const inOut = [];",
+      "  const inStack = [];",
+      "  let curr = root;",
+      "  yield { line: 12, label: 'begin INORDER (left, root, right) — walk down left chain first', state: { treeShape: input, pre: pre.slice(), in: inOut.slice() } };",
+      "  while (curr || inStack.length) {",
+      "    while (curr) {",
+      "      inStack.push(curr);",
+      "      curr = curr.left;",
+      "    }",
+      "    curr = inStack.pop();",
+      "    inOut.push(curr.val);",
+      "    yield { line: 14, label: `inorder visit ${curr.val} — root MIDDLE (after left subtree, before right)`, state: { treeShape: input, current: curr.val, pre: pre.slice(), in: inOut.slice() } };",
+      "    curr = curr.right;",
+      "  }",
+      "  yield { line: 14, label: `inorder done — out=${JSON.stringify(inOut)}`, state: { treeShape: input, pre: pre.slice(), in: inOut.slice() } };",
+      "  // ---- POSTORDER (left, right, root) — two-stack trick ----",
+      "  const post = [];",
+      "  const postStack = [root];",
+      "  const outStack = [];",
+      "  yield { line: 20, label: 'begin POSTORDER (left, right, root) — collect via two-stack reversal', state: { treeShape: input, pre: pre.slice(), in: inOut.slice(), post: post.slice() } };",
+      "  while (postStack.length) {",
+      "    const n = postStack.pop();",
+      "    outStack.push(n);",
+      "    if (n.left)  postStack.push(n.left);",
+      "    if (n.right) postStack.push(n.right);",
+      "  }",
+      "  while (outStack.length) {",
+      "    const n = outStack.pop();",
+      "    post.push(n.val);",
+      "    yield { line: 22, label: `postorder visit ${n.val} — root LAST (after both subtrees)`, state: { treeShape: input, current: n.val, pre: pre.slice(), in: inOut.slice(), post: post.slice() } };",
+      "  }",
+      "  yield { line: 22, label: `all three done`, state: { treeShape: input, pre: pre.slice(), in: inOut.slice(), post: post.slice(), returns: JSON.stringify([pre, inOut, post]) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "// Three recursive traversal shapes — only visit(n) moves\n\nfunction preorder(n) {\n  if (!n) return;\n  visit(n);                 // root FIRST\n  preorder(n.left);\n  preorder(n.right);\n}\n\nfunction inorder(n) {\n  if (!n) return;\n  inorder(n.left);\n  visit(n);                 // root MIDDLE\n  inorder(n.right);\n}\n\nfunction postorder(n) {\n  if (!n) return;\n  postorder(n.left);\n  postorder(n.right);\n  visit(n);                 // root LAST\n}\n\n// Classic uses:\n//   preorder  -> serialize a tree, clone, print structure top-down\n//   inorder   -> BST scan in SORTED order\n//   postorder -> bottom-up aggregation (subtree sum, height, safe delete)",
     "notes": [
@@ -34,7 +166,7 @@
           "After both children",
           "Between the two children",
           "Before either child",
-          "Only at leaves"
+          "After the left child but before the right child"
         ],
         "answer": 2
       },
@@ -52,10 +184,10 @@
       {
         "q": "Across all three traversals, what changes between them?",
         "options": [
-          "The base case",
-          "The recursion order (which subtree first)",
+          "The recursion order (left-then-right vs right-then-left)",
+          "Whether the function returns a value or accumulates into an output array",
           "Only the position of visit(n)",
-          "The time complexity"
+          "The base case — postorder returns at internal nodes, preorder returns at leaves"
         ],
         "answer": 2,
         "explain": "Left-then-right order is identical; only where visit(n) sits relative to the two recursive calls changes."

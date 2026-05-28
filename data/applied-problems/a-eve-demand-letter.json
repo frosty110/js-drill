@@ -6,6 +6,129 @@
   "status": "full",
   "description": "Render a demand-letter template in a single left-to-right `while` scan — string state-machine shape, because we handle `{{...}}` tokens, dotted keys, and missing keys without a naive global replace.",
   "mechanics": ["text-scan"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Legal-tech engineers see template-render problems weekly — demand letters, settlement offers, intake forms — and the interview probe is always about robustness. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Spec-heavy problem — clarifying questions are the signal.",
+        "say": "\"Let me make sure I have this right: I'm writing `renderTemplate(template, data)` for legal documents. Tokens look like `{{client.name}}` — double braces, possibly dotted paths. I substitute each token with its value from `data`. Before I code, the questions that actually change the implementation:\"\n\n• Are dotted keys supported (`client.name`, `incident.date`)? Or only flat (`name`)?\n• What's the contract on a MISSING key — throw, render empty, or a sentinel like `[MISSING:key]`? In legal docs the answer is almost always 'never throw, render a sentinel a paralegal can eyeball'.\n• Whitespace inside the braces — should `{{ client.name }}` work the same as `{{client.name}}`?\n• Can a value contain `{{...}}` itself? Are we re-rendering recursively or treating values as literal?\n• Are there escape sequences (`\\{{literal}}`)? Usually no for demand letters, but worth asking.\n• Malformed templates — an `{{` with no closing `}}` — what should happen? Crash? Pass through literally?",
+        "why": "The missing-key contract is the load-bearing clarifying question. If the interviewer says 'throw on missing', the implementation collapses to a one-liner with `.replace` + a callback. If the answer is 'sentinel' — which is what legal-tech always wants — the implementation has to keep going past the gap, which is why this is a left-to-right scan rather than chained replaces. Asking 'can values contain `{{...}}`?' is the senior-tier question: it surfaces template injection. If you naively `.replace` and a user-provided value happens to be `{{password}}`, a second replace pass would substitute it — that's the kind of bug a senior engineer flags before writing code."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious version before discarding it.",
+        "say": "\"The brute force is `Object.keys(data).reduce((s, k) => s.replaceAll(\\`{{${k}}}\\`, data[k]), template)`. One line, looks clever. The problems show up fast:\"\n\n• Dotted keys don't work — `data` doesn't have a key literally named `'client.name'`; it has `data.client.name`.\n• Missing keys aren't detected — if `data` has no `caseId`, the `{{caseId}}` token just stays in the output as-is. The reader sees raw template syntax in their demand letter. Embarrassing.\n• Template injection — if `data.name = 'Bob {{amount}}'`, the next replace pass turns that into Bob's name AND the amount. You don't want a user-supplied value to control template behavior.\n• Repeated tokens (same key twice) work, but order-dependence on `Object.keys` ordering is a latent bug.\n\n\"So I'll abandon the global-replace approach and do a single left-to-right scan: walk a cursor `i` through the template, find the next `{{`, copy literal text up to it, find the matching `}}`, resolve the key, append the value (or `[MISSING:key]`), advance past `}}`, repeat.\"",
+        "why": "Saying the brute-force out loud proves you're not just reaching for a fancier pattern because it sounds smarter. The template-injection point is the killer — most candidates never raise it, and an interviewer can immediately tell you've thought about adversarial input. Naming the four concrete problems with `.replace` also sets up the single-scan approach as the *inevitable* fix, not just a stylistic preference."
+      },
+      {
+        "title": "3. Spot the shape — string state-machine",
+        "prompt": "What's the structural property that picks the scan over replace?",
+        "say": "\"This is a string state-machine. The template has two modes — LITERAL (copy chars to output) and TOKEN (collect a key, then resolve it). I move forward through the string and switch modes when I hit `{{` or `}}`. That's exactly what `while + indexOf` gives me:\n\n```\nwhile (i < template.length) {\n  const open = template.indexOf('{{', i);\n  if (open === -1) { out += template.slice(i); break; }   // no more tokens — copy the tail\n  out += template.slice(i, open);                          // copy the literal chunk before {{\n  const close = template.indexOf('}}', open + 2);\n  if (close === -1) { out += template.slice(open); break; }  // malformed — copy as literal, don't crash\n  const key = template.slice(open + 2, close).trim();\n  const val = key.split('.').reduce((o, k) => o == null ? undefined : o[k], data);\n  out += val === undefined ? `[MISSING:${key}]` : String(val);\n  i = close + 2;\n}\n```\n\n\"Three load-bearing pieces: (1) `indexOf` chases forward — cursor `i` only ever advances, so we visit every char exactly once. (2) `key.split('.').reduce(...)` walks dotted paths with a null-guard at each hop, so `client.name` doesn't crash if `client` is missing. (3) Missing → `[MISSING:${key}]`, never a throw. The next paralegal sees exactly which field broke.\"",
+        "why": "Naming the shape — string state-machine with a cursor that only moves forward — is what distinguishes this from 'I'm using a regex'. The cursor-only-advances property is the O(n) defense and also the no-template-injection guarantee: we never re-read what we already wrote. The null-guard inside the reduce is the dotted-key insight that catches careless implementations — a flat `data[key]` would just return undefined for `'client.name'` because no key with that literal string exists. Spelling out the THREE pieces (forward cursor, null-guarded path walk, sentinel-on-miss) is what the interviewer is grading."
+      },
+      {
+        "title": "4. Trace through a tiny example",
+        "prompt": "Walk a concrete template through the scan to confirm the model.",
+        "intro": "\"Let me run the L3 input through the scan. Template is `'Dear {{client.name}}, We demand {{amount}}. Ref: {{caseId}}.'` with `data = { client: { name: 'Jane Doe' }, amount: '$50,000' }` — note `caseId` is deliberately missing so we see the sentinel fire.\"",
+        "examples": [
+          {
+            "input": "tpl='Dear {{client.name}}, ...', data={client:{name:'Jane Doe'}, amount:'$50,000'} — caseId missing",
+            "output": "Dear Jane Doe, We demand $50,000. Ref: [MISSING:caseId].",
+            "note": "Shows the three behaviors: dotted-key resolution (client.name), straight-key resolution (amount), and missing-key sentinel (caseId).",
+            "trace": "i=0  open=5 (`{{` after 'Dear ')  → out='Dear '\n     close=18, key='client.name' → split=['client','name'] → reduce: data → data.client → 'Jane Doe'\n     out='Dear Jane Doe', i=20\ni=20 open=32 (`{{` after ', We demand ') → out='Dear Jane Doe, We demand '\n     close=40, key='amount' → reduce: data.amount → '$50,000'\n     out='Dear Jane Doe, We demand $50,000', i=42\ni=42 open=49 (`{{` after '. Ref: ') → out='Dear Jane Doe, We demand $50,000. Ref: '\n     close=58, key='caseId' → reduce: data.caseId → undefined\n     out='Dear Jane Doe, We demand $50,000. Ref: [MISSING:caseId]', i=60\ni=60 open=-1 (no more `{{`) → out += '.' (the trailing literal)\nreturn 'Dear Jane Doe, We demand $50,000. Ref: [MISSING:caseId].'"
+          },
+          {
+            "input": "tpl='Hi {{name}}!', data={name:'Eve'}",
+            "output": "Hi Eve!",
+            "note": "Smallest happy path — single flat token, no edges.",
+            "trace": "i=0 open=3 → out='Hi ', close=11, key='name' → 'Eve' → out='Hi Eve', i=13\ni=13 open=-1 → out += '!' → return 'Hi Eve!'"
+          },
+          {
+            "input": "tpl='{{a}} and {{a}}', data={a:1}",
+            "output": "1 and 1",
+            "note": "Repeated token — each `{{a}}` is found and resolved independently as the cursor moves forward. No re-scan needed.",
+            "trace": "i=0  open=0, close=4, key='a' → 1 → out='1', i=6\ni=6  open=10, close=14, key='a' → 1 → out='1 and 1', i=16\ni=16 open=-1, out += '' → return '1 and 1'"
+          }
+        ],
+        "why": "The first trace is the one to narrate out loud — it shows all three behaviors (dotted, flat, missing) in one pass. The third example (repeated token) is the one that proves single-scan vs chained-replace gives the same answer on happy paths but stays linear-time and injection-safe. The cursor positions are the teaching: notice that `i` only moves forward, never backward, so we can't accidentally re-process inserted text. That's the structural guarantee the global-replace approach silently violates."
+      },
+      {
+        "title": "5. Edge cases & failure modes",
+        "prompt": "Real-world inputs are messy — what would trip up a careless implementation?",
+        "say": "\"Edges worth flagging — most of these come from real legal-data uglies:\"\n\n• Missing intermediate object — `{{client.name}}` but `data.client` is undefined. The null-guard `(o, k) => o == null ? undefined : o[k]` catches this; without it, the second reduce step crashes on `undefined.name`.\n• Whitespace in token — `{{ client.name }}`. The `.trim()` on the extracted key handles it. Paralegals who hand-edit templates will insert spaces; the renderer should tolerate them.\n• Unclosed `{{` with no matching `}}` — malformed template. The `close === -1` branch copies the rest as literal and breaks the loop — no crash, no infinite scan, just visible garbage in the output that someone can fix.\n• Token containing `{{` itself — like `{{outer{{inner}}}}`. The `indexOf('}}', open + 2)` finds the FIRST `}}`, which closes at `inner`. So the key becomes `outer{{inner`, which won't resolve, so we render `[MISSING:outer{{inner]`. Not pretty but predictable and not a crash. If you needed nested templates you'd use a real parser.\n• Empty template `''` — `indexOf` returns -1 immediately, loop exits, returns ''. ✓\n• Value of `0` or `false` or empty string `''` — these MUST render, not trigger the missing-key sentinel. The check is `val === undefined`, not `!val` — falsy-but-defined values like `0` go through `String(val)` and render correctly.\n• PII inside template — the renderer doesn't inspect values, so SSNs / DOBs flow straight through. That's correct behavior at this layer; redaction is a separate pass. Worth flagging.\n• Adversarial input — value contains `{{caseId}}`. Because the cursor only moves forward, this is rendered as a literal `{{caseId}}` in the output, NOT re-substituted. The single-scan structure is itself the injection-safety guarantee.",
+        "why": "The `val === undefined` vs `!val` distinction is the kind of bug that ships and embarrasses you six months later when someone's settlement amount of `0` renders as `[MISSING:amount]`. Calling out PII at this layer (and saying redaction is separate) is the legal-tech-aware signal — you're not pretending one function does everything. The injection-safety call-out tying back to the cursor-only-advances property is the senior move that closes the loop with section 2."
+      },
+      {
+        "title": "6. Complexity & memory",
+        "prompt": "Defend the bounds with the actual amortization.",
+        "say": "\"Time is O(n + k·d) where n = template length, k = number of tokens, d = max dotted-path depth. The cursor visits each char of the template exactly once via `indexOf` jumps. For each token, the dotted-path reduce walks d steps. In practice d is 1-3, so this is effectively O(n + k) — linear in template size.\n\nSpace is O(n + m) where n is the template and m is the rendered output. We could try to render in-place but strings are immutable in JS, so accumulating into `out` is the standard. Honestly for a demand letter this is trivial — templates are <10KB, output is <50KB. The interesting scaling question is per-document-times-millions for a bulk-send pipeline.\n\n\"For extensions: precompile if you're rendering the same template 1M times. Run the scan once, produce an array of `{type:'literal', text}` and `{type:'token', key}` segments, then per-data-instance just iterate the segments and resolve keys. Turns the per-render cost from O(n) to O(k), and you parse the template exactly once. Same template approach as Handlebars.\"",
+        "why": "The amortization argument is short for this problem — there's no nested loop to defend — so the wrap-up's job is to show you see the precompile optimization that production template engines use. Naming Handlebars (or Mustache) unprompted shows you know the production version exists and you've made a deliberate choice to write the simpler one for the interview. The bulk-pipeline framing also surfaces that you're thinking about how this lives in a real system, not as a one-off function."
+      },
+      {
+        "title": "7. Robustness & tests",
+        "prompt": "Legal docs care about correctness — how would you add tests?",
+        "say": "\"Tests I'd write before declaring this done — and the order matters, easy-to-hard:\"\n\n• Happy path — flat keys, dotted keys, mixed (the L3 example).\n• Missing key — produces `[MISSING:key]` for every missing field, never throws.\n• Falsy-but-defined values — `0`, `false`, `''` render as `'0'`, `'false'`, `''` (NOT as `[MISSING:...]`).\n• Whitespace tolerance — `{{ name }}` matches `{{name}}`.\n• Empty template, empty data — both return `''` cleanly.\n• Repeated tokens — same key appears twice, both resolve.\n• Malformed — `'{{unclosed'` and `'closed}}only'` both don't crash.\n• Adversarial — `data.name = '{{ssn}}'`, output should literally contain `{{ssn}}` not re-substitute.\n• Snapshot test — render a known demand letter against a fixture data object, compare to a checked-in golden output. Catches drift in any of the above without enumerating cases.\n\n\"In a real legal-tech codebase I'd also add a lint pass: scan the template for `{{key}}` tokens and warn if any key wouldn't resolve against the supplied data — surfaces missing-data bugs at author time rather than rendering [MISSING:...] at send time. That's the kind of belt-and-suspenders an audit-driven domain wants.\"",
+        "why": "Legal-tech interviewers always probe robustness because the cost of a bad demand letter is real — wrong amount, wrong client name, missing case ID. The lint-at-author-time idea is the senior touch: it acknowledges that a `[MISSING:key]` rendered in production is already too late, and shifts the check left. Snapshot testing as the catch-all is the framework-aware move — explicitly choosing it over enumerated cases shows you know which tool fits which problem."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the demand-letter renderer character by character. Watch the cursor `i` advance, the `out` buffer grow, and the missing-key sentinel fire for `caseId`. State panel shows `i`, `open`, `close`, the extracted `key`, and the running `out`.",
+    "examples": [
+      { "label": "demand letter (caseId missing → sentinel)", "input": { "template": "Dear {{client.name}}, owe {{amount}}. Ref: {{caseId}}.", "data": { "client": { "name": "Jane Doe" }, "amount": "$50,000" } }, "expected": "Dear Jane Doe, owe $50,000. Ref: [MISSING:caseId]." },
+      { "label": "smallest happy path", "input": { "template": "Hi {{name}}!", "data": { "name": "Eve" } }, "expected": "Hi Eve!" },
+      { "label": "repeated token + missing intermediate", "input": { "template": "{{a}} and {{a}} and {{x.y}}", "data": { "a": 1 } }, "expected": "1 and 1 and [MISSING:x.y]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { template, data } = input;",
+      "  let out = '';",
+      "  let i = 0;",
+      "  yield { line: 1, label: `enter — template=${JSON.stringify(template)}, data=${JSON.stringify(data)}`, state: { template, data, i, out } };",
+      "  yield { line: 2, label: `init out='' (will accumulate rendered text)`, state: { template, data, i, out } };",
+      "  yield { line: 3, label: `init cursor i=0 (only ever advances)`, state: { template, data, i, out } };",
+      "  let safety = 0;",
+      "  while (i < template.length) {",
+      "    if (++safety > 200) { yield { line: 4, label: 'safety stop', state: { template, data, i, out, returns: out } }; return; }",
+      "    yield { line: 4, label: `loop iter — i=${i}, scanning forward for next \\`{{\\``, state: { template, data, i, out } };",
+      "    const open = template.indexOf('{{', i);",
+      "    yield { line: 5, label: `indexOf('{{', ${i}) → ${open}`, state: { template, data, i, out, open } };",
+      "    if (open === -1) {",
+      "      const tail = template.slice(i);",
+      "      out += tail;",
+      "      yield { line: 6, label: `no more tokens — append tail ${JSON.stringify(tail)} and break`, state: { template, data, i, out, open } };",
+      "      break;",
+      "    }",
+      "    const literal = template.slice(i, open);",
+      "    out += literal;",
+      "    yield { line: 7, label: `copy literal chunk before \\`{{\\`: ${JSON.stringify(literal)}`, state: { template, data, i, out, open } };",
+      "    const close = template.indexOf('}}', open + 2);",
+      "    yield { line: 8, label: `indexOf('}}', ${open + 2}) → ${close}`, state: { template, data, i, out, open, close } };",
+      "    if (close === -1) {",
+      "      const rest = template.slice(open);",
+      "      out += rest;",
+      "      yield { line: 9, label: `malformed — no matching \\`}}\\`, copy rest as literal and break`, state: { template, data, i, out, open, close } };",
+      "      break;",
+      "    }",
+      "    const key = template.slice(open + 2, close).trim();",
+      "    yield { line: 10, label: `extract key = ${JSON.stringify(key)} (trimmed)`, state: { template, data, i, out, open, close, key } };",
+      "    const val = key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), data);",
+      "    yield { line: 11, label: `resolve via reduce — split=${JSON.stringify(key.split('.'))} → val=${JSON.stringify(val)}`, state: { template, data, i, out, open, close, key, val } };",
+      "    if (val === undefined) {",
+      "      out += `[MISSING:${key}]`;",
+      "      yield { line: 12, label: `MISSING — append [MISSING:${key}] sentinel (no throw)`, state: { template, data, i, out, open, close, key, val } };",
+      "    } else {",
+      "      out += String(val);",
+      "      yield { line: 12, label: `append String(val) = ${JSON.stringify(String(val))}`, state: { template, data, i, out, open, close, key, val } };",
+      "    }",
+      "    i = close + 2;",
+      "    yield { line: 13, label: `advance cursor past \\`}}\\` — i = ${close} + 2 = ${i}`, state: { template, data, i, out, open, close, key, val } };",
+      "  }",
+      "  yield { line: 14, label: `done — out=${JSON.stringify(out)}`, state: { template, data, i, out, returns: out } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function renderTemplate(template, data) {\n  let out = '';\n  let i = 0;\n  while (i < template.length) {\n    const open = template.indexOf('{{', i);\n    if (open === -1) { out += template.slice(i); break; }\n    out += template.slice(i, open);\n    const close = template.indexOf('}}', open + 2);\n    if (close === -1) { out += template.slice(open); break; }\n    const key = template.slice(open + 2, close).trim();\n    // Dotted keys (client.name) resolve via reduce; null-guard each hop.\n    const val = key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), data);\n    // Missing key → placeholder, never a crash. A half-built letter beats an exception.\n    out += val === undefined ? `[MISSING:${key}]` : String(val);\n    i = close + 2;\n  }\n  return out;\n}\nconst tpl = 'Dear {{client.name}},\\nWe demand {{amount}} for injuries on {{date}}. Ref: {{caseId}}.';\nconst data = { client: { name: 'Jane Doe' }, amount: '$50,000', date: '2024-03-01' };\nconsole.log(renderTemplate(tpl, data));",
     "notes": [
@@ -19,10 +142,10 @@
       {
         "q": "Why scan the template left-to-right instead of chaining `template.replace('{{amount}}', ...).replace('{{date}}', ...)`?",
         "options": [
-          "Chained replace is slower on short strings",
+          "`String.replace` without `/g` only swaps the first occurrence, so repeated `{{key}}` tokens would be silently skipped",
           "A single scan handles repeated/overlapping tokens in one pass and won't re-substitute text an earlier replace already inserted",
-          "`replace` can't handle newlines in the template",
-          "The keys aren't known ahead of time, so replace is impossible"
+          "Chained replace mutates the original `template` parameter, which would corrupt subsequent renders",
+          "`replace` would coerce the data values to RegExp objects, breaking on values containing `(` or `?`"
         ],
         "answer": 1,
         "explain": "Each `{{key}}` is found and resolved exactly once as the cursor moves forward. Chained replaces re-scan the whole string per key and can accidentally substitute into text a prior replace produced — a template-injection footgun if a value itself contains `{{...}}`."
@@ -41,10 +164,10 @@
       {
         "q": "Why does a missing key render as `[MISSING:caseId]` instead of throwing?",
         "options": [
-          "Throwing is slower",
+          "`String(undefined)` returns `'undefined'`, and rendering that into a demand letter is worse than the sentinel",
           "A partially-rendered letter is more useful to a paralegal than a crash that loses the whole document",
-          "JavaScript can't throw inside a string concat",
-          "The placeholder is required by the template syntax"
+          "Throwing would leave the cursor mid-token, so the next call would resume in the wrong state",
+          "Legal-doc templates contractually disallow exceptions in render — a sentinel is the audit-trail-friendly alternative"
         ],
         "answer": 1,
         "explain": "Graceful degradation: the operator sees exactly which field is unpopulated and can fill it, rather than getting an unhandled exception that discards everything rendered so far."

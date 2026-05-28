@@ -6,6 +6,116 @@
   "status": "full",
   "description": "Hash-group then sort — group medical records by date into a Map, then emit dates in sorted order with same-date events kept in input order.",
   "mechanics": ["map-keyed-state"],
+  "conversation": {
+    "intro": "How an interview about this problem would actually play out. Building a medical chronology is something legal-tech engineers see weekly — every personal-injury case needs one — and the interviewer probes ordering, duplicate handling, and date robustness. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Spec-heavy problem — clarifying questions are the signal.",
+        "say": "\"Let me restate: I'm building `buildChronology(records)` where each record is `{date, provider, note}`. Output is one line per date, chronological, with same-date events collapsed onto that one line separated by `'; '`. Before I code, the questions that actually decide the implementation:\"\n\n• What format are dates in? If they're ISO 8601 (`YYYY-MM-DD`), I can sort them as plain strings — no Date parsing. If they're `MM/DD/YYYY` or mixed, I need to parse first.\n• Within a date, what order — input order, alphabetical by provider, or some other stable rule? Input order is the usual answer because it preserves the source's intent.\n• Duplicates — two records with the same date, provider, AND note. Collapse to one line item or keep both? Usually keep both verbatim; dedup is a separate pass.\n• Timezone — do I care? For medical records `YYYY-MM-DD` is date-only, no TZ; for incident times that span midnight, it matters.\n• What about records with no date — drop, group under `'unknown'`, or throw? Defensively, I'd group under `'unknown'` and put it at the end, never throw.\n• Scale — am I building one chronology (1000 records) or a million? Determines whether I need streaming.",
+        "why": "The ISO-vs-non-ISO date question is the load-bearing one. If dates are ISO, the implementation is dramatically simpler — `String.prototype.sort()` is chronological. If not, you're parsing every date into a `Date` object and writing a comparator. Most candidates skip this clarification and write the harder version unnecessarily. The within-date ordering question is the second-most-important: input order means `.push` into the bucket; alphabetical means sort the bucket. The legal-tech context strongly suggests input-order — the source document already has the intent."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the obvious version before discarding it.",
+        "say": "\"The brute force is: sort the full records array by date, then iterate and emit each record on its own line. That gives me chronological output but doesn't COLLAPSE same-date events — `2024-02-01 ER admitted` and `2024-02-01 Radiology CT` would be two lines instead of one combined.\n\nTo collapse, I'd need a 'previous date' tracker in the loop: emit a new line if `r.date !== prevDate`, otherwise append to the current buffer. That works but it mixes two concerns — sorting and grouping — and gets brittle when records on the same date arrive out of order in the input.\n\n\"Cleaner: separate the two phases. First, GROUP by date into a Map. Second, EMIT sorted by date key. Two passes, but each one is doing one thing. Now within-date ordering is just whatever order I pushed (input order), and chronological output is just sorting the date keys.\"",
+        "why": "The brute-force-then-refactor walk is the right way to land on group-then-sort — saying 'sort then iterate' first and then noticing 'oh, that gets brittle when same-date records aren't adjacent in the input' makes the Map feel like a derivation, not a magic trick. Splitting the two concerns (group + sort) is a senior-tier code-design move that an interviewer notices."
+      },
+      {
+        "title": "3. Spot the shape — hash-group then sort",
+        "prompt": "What's the structural property that picks Map-keyed-state?",
+        "say": "\"This is hash-group-then-sort: one Map keyed by the natural grouping field (date), values are arrays in input order. Emit by sorting keys.\n\n```\nconst byDate = new Map();\nfor (const r of records) {\n  if (!byDate.has(r.date)) byDate.set(r.date, []);   // lazy bucket init\n  byDate.get(r.date).push(`${r.provider}: ${r.note}`);\n}\nreturn [...byDate.keys()].sort().map(d => `${d} — ${byDate.get(d).join('; ')}`);\n```\n\n\"Three load-bearing pieces. (1) Map (not Object) — preserves insertion order, accepts non-string keys if dates were ever Dates, and `.has`/`.get`/`.set` semantics are clearer than `hasOwnProperty` dances. (2) Lazy init — `if (!has) set([])` before the push, otherwise the first `.get(...).push` on a new date throws on `undefined.push`. (3) ISO-string sort — `YYYY-MM-DD` is lexicographically chronological because every component is fixed-width and the most-significant comes first. No Date parsing needed.\"",
+        "why": "Naming the shape — hash-group-then-sort — is what distinguishes this from 'I used a Map'. The 'ISO is lex-chronological' observation is the load-bearing insight that lets you skip Date parsing; without naming it, you'd reach for `new Date(a) - new Date(b)` in the sort comparator and ship slower, error-prone code. The Map-vs-Object choice is the JS-specific signal an interviewer notices — Object keys are always strings and don't preserve numeric insertion order; Map sidesteps both."
+      },
+      {
+        "title": "4. Trace through a tiny example",
+        "prompt": "Walk a 3-record input through the two phases.",
+        "intro": "\"Let me run the L3 input — three records, deliberately out of date order, with two sharing 2024-02-01.\"",
+        "examples": [
+          {
+            "input": "records=[{date:'2024-02-01', provider:'ER', note:'Admitted'}, {date:'2024-01-15', provider:'PCP', note:'Initial visit'}, {date:'2024-02-01', provider:'Radiology', note:'CT scan'}]",
+            "output": "[\"2024-01-15 — PCP: Initial visit\", \"2024-02-01 — ER: Admitted; Radiology: CT scan\"]",
+            "note": "Out-of-order input with two same-date records — proves the group-then-sort approach is order-independent in the input.",
+            "trace": "Phase 1 — GROUP:\n  r=ER/Admitted/2024-02-01     byDate={'2024-02-01':['ER: Admitted']}\n  r=PCP/Initial/2024-01-15    byDate={'2024-02-01':['ER: Admitted'], '2024-01-15':['PCP: Initial visit']}\n  r=Radiology/CT/2024-02-01   byDate={'2024-02-01':['ER: Admitted', 'Radiology: CT scan'], '2024-01-15':['PCP: Initial visit']}\nPhase 2 — SORT + EMIT:\n  keys = [...byDate.keys()] = ['2024-02-01', '2024-01-15']   (Map insertion order)\n  keys.sort() = ['2024-01-15', '2024-02-01']                  (ISO lex = chronological)\n  emit '2024-01-15 — PCP: Initial visit'\n  emit '2024-02-01 — ER: Admitted; Radiology: CT scan'         (input order preserved within date)"
+          },
+          {
+            "input": "records=[{date:'2024-03-10', provider:'PT', note:'session 1'}]",
+            "output": "[\"2024-03-10 — PT: session 1\"]",
+            "note": "Single record — confirms the happy path doesn't depend on having duplicates.",
+            "trace": "Phase 1: byDate={'2024-03-10':['PT: session 1']}\nPhase 2: keys=['2024-03-10'], sorted same, emit one line."
+          },
+          {
+            "input": "records=[] (empty)",
+            "output": "[]",
+            "note": "Empty input — both phases no-op cleanly, return [].",
+            "trace": "Phase 1: loop doesn't fire, byDate stays empty Map.\nPhase 2: [...byDate.keys()] = [], .sort() = [], .map(...) = [] → return []."
+          }
+        ],
+        "why": "The first trace is the one to narrate out loud — same-date records arriving non-adjacent in the input is the most common gotcha. A naive `if (r.date === prevDate) appendToCurrentLine else newLine` would emit THREE lines instead of two on this input, because the ER record and Radiology record aren't adjacent. The group-into-Map first ELIMINATES that ordering dependency. The empty-input case isn't padding — it's confirming the canonical's two phases each no-op gracefully, which is what the interviewer asks about under 'edge cases'."
+      },
+      {
+        "title": "5. Edge cases & failure modes",
+        "prompt": "Medical records are dirty — what real-world inputs would trip up a careless implementation?",
+        "say": "\"Edges worth flagging — most come from real medical data uglies:\"\n\n• Empty input — return `[]`. The two phases both no-op; the canonical handles it without a special case. ✓\n• Single record — one bucket, one output line. ✓\n• All records on one date — one bucket of N events, one output line with N events joined. The grouping shape gets stress-tested but doesn't change.\n• Same date, same provider, same note (true duplicate) — current code keeps both, which is probably what you want (the medical record was filed twice). If dedup is wanted, that's a pre-pass — call it out as a separate concern.\n• Missing/null date — `r.date` is undefined. The Map key becomes `undefined`, which `.sort()` puts at the end of the string sort. Defensively, I'd group under `'unknown'` and append after the dated section. Worth confirming with the interviewer.\n• Non-ISO date format — `'01/15/2024'`. Lex sort would put `'01/15/2024'` before `'02/01/2024'` correctly but `'12/31/2023'` AFTER `'01/15/2024'` because `'1'` > `'0'`. Catches you blind. Pre-normalize to ISO or comparator-based sort.\n• Mixed timezones — `'2024-01-15T08:00:00-05:00'` vs `'2024-01-15T13:00:00Z'`. As date-only strings, they sort by the prefix only, but if you start using `new Date()` you'd see them at different times. For chronology that says 'on this date' the date prefix is enough; for time-of-day matters (incident timing) you'd switch to full timestamps.\n• PII in note text — SSNs, DOBs, address strings. The chronology builder doesn't redact; that's a downstream pass. Worth flagging that you'd run the output through a redactor before sharing.\n• Provider name containing `';'` — would break the `.split('; ')` of consumers who try to undo the join. Edge case; usually handled by escaping or by using a structured output format (array of arrays).",
+        "why": "The non-ISO date trap is the one that catches careless candidates — `MM/DD/YYYY` looks sortable but isn't, and the bug only shows up when months cross a 10-boundary. Naming this unprompted shows you know WHY ISO-lex works (fixed-width, big-endian) and what breaks it. The PII separation-of-concerns call-out is the legal-tech-aware signal — you're not pretending one function does everything. The provider-with-semicolon edge is the test-of-test thinking: who consumes this output? If it's a downstream `.split('; ')`, you're vulnerable."
+      },
+      {
+        "title": "6. Complexity & memory",
+        "prompt": "Defend the bounds with the actual amortization.",
+        "say": "\"Time is O(n + k log k) where n = number of records, k = number of distinct dates. Phase 1 (group) is O(n) — each record is one Map operation and one push, both amortized O(1). Phase 2 (sort) is O(k log k) — sorting the distinct date keys, where k ≤ n. The emit pass is O(n) because every record gets joined into exactly one bucket.\n\nSpace is O(n) — the Map holds one entry per record across all its buckets. Plus the output array which is O(k) lines, each containing a slice of the n events.\n\n\"For extensions: if dates are sortable on read (you control the input), you could skip the explicit sort and just iterate records once, maintaining a 'last-seen date' running max. But that only works if input is monotonically increasing — fragile. The group-then-sort approach is the robust default and the cost is negligible at typical chronology sizes (≤10K records per case).\n\n\"At true scale — millions of records across thousands of cases — you'd shift this to a database query: `SELECT date, GROUP_CONCAT(provider || ': ' || note ORDER BY id SEPARATOR '; ') FROM records GROUP BY date ORDER BY date`. The shape's identical; you're just delegating the group + sort to the storage layer that's optimized for it.\"",
+        "why": "The k log k vs n distinction matters — if a candidate says 'O(n)' without acknowledging the sort, the interviewer probes. The 'monotonically-increasing-input' extension is the prove-you-thought-about-it move: you considered the streaming optimization and discarded it as fragile. Naming the SQL equivalent unprompted is the senior-tier signal — you see this pattern as language-agnostic group-by, not as a JS-specific Map trick."
+      },
+      {
+        "title": "7. Robustness & tests",
+        "prompt": "Legal docs care about correctness — how would you add tests?",
+        "say": "\"Tests I'd write, in order:\"\n\n• Happy path — multiple dates with multiple records per date, output exactly chronological.\n• Out-of-order input — same records in random order produces same output (the group-then-sort guarantee).\n• Single date — N records on one day collapse to one line with N events joined by `'; '`.\n• Empty input → `[]`.\n• Within-date ordering — two records on same date in input order A then B emit `A; B`, not `B; A`.\n• Missing date — `{provider, note}` with no `date`. Confirm the contract with interviewer; if 'unknown' group, assert it appears at the end.\n• Non-ISO date — if you support `MM/DD/YYYY`, test that 12/31/2023 sorts BEFORE 01/15/2024 (the lex-trap).\n• True duplicate records — both rendered, no silent dedup.\n• Property test — generate random shuffles of a known-chronology input, assert output is invariant under shuffling. Strong test for the order-independence claim.\n\n\"In a real legal-tech codebase I'd also add a contract test: feed the output of `buildChronology` back into a parser that reconstructs `{date, provider, note}` records, assert round-trip identity. Catches join-character collisions (provider containing `';'`) before they hit production. The shape is symmetrical — group-then-sort is the inverse of split-then-merge.\"",
+        "why": "Property-based testing for 'order independence' is the senior touch — most candidates write a few example tests; suggesting a property test for the structural claim of the algorithm shows you're thinking about the SHAPE of the correctness, not just specific inputs. The round-trip contract test is the legal-tech-aware move: in production you care that no information was silently lost or corrupted, and a parse-then-format round-trip is the cheapest way to catch it."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the two-phase chronology builder: Phase 1 groups records into a Map by date (note how out-of-order input doesn't matter), Phase 2 sorts the date keys (ISO lex = chronological) and emits one line per date. State panel shows the growing `byDate` Map, then the sorted keys, then the emitted `out` array.",
+    "examples": [
+      { "label": "3 records, out of order, 2 share a date", "input": [ { "date": "2024-02-01", "provider": "ER", "note": "Admitted" }, { "date": "2024-01-15", "provider": "PCP", "note": "Initial visit" }, { "date": "2024-02-01", "provider": "Radiology", "note": "CT scan" } ], "expected": "[\"2024-01-15 — PCP: Initial visit\",\"2024-02-01 — ER: Admitted; Radiology: CT scan\"]" },
+      { "label": "single record", "input": [ { "date": "2024-03-10", "provider": "PT", "note": "session 1" } ], "expected": "[\"2024-03-10 — PT: session 1\"]" },
+      { "label": "empty input", "input": [], "expected": "[]" }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const records = input;",
+      "  const byDate = new Map();",
+      "  yield { line: 1, label: `enter — ${records.length} records`, state: { records, byDate: [...byDate.entries()] } };",
+      "  yield { line: 2, label: `Phase 1: GROUP into Map keyed by date`, state: { records, byDate: [...byDate.entries()] } };",
+      "  for (let k = 0; k < records.length; k++) {",
+      "    const r = records[k];",
+      "    yield { line: 3, label: `record#${k}: date=${r.date}, provider=${r.provider}, note=${JSON.stringify(r.note)}`, state: { records, byDate: [...byDate.entries()], r, k } };",
+      "    if (!byDate.has(r.date)) {",
+      "      byDate.set(r.date, []);",
+      "      yield { line: 4, label: `new date — lazy init byDate.set(${JSON.stringify(r.date)}, [])`, state: { records, byDate: [...byDate.entries()], r, k } };",
+      "    } else {",
+      "      yield { line: 4, label: `date already has bucket — skip init`, state: { records, byDate: [...byDate.entries()], r, k } };",
+      "    }",
+      "    const entry = `${r.provider}: ${r.note}`;",
+      "    byDate.get(r.date).push(entry);",
+      "    yield { line: 5, label: `push ${JSON.stringify(entry)} into bucket for ${r.date}`, state: { records, byDate: [...byDate.entries()], r, k } };",
+      "  }",
+      "  yield { line: 6, label: `Phase 1 done — ${byDate.size} distinct date(s) grouped`, state: { records, byDate: [...byDate.entries()] } };",
+      "  const insertionKeys = [...byDate.keys()];",
+      "  yield { line: 7, label: `Phase 2: SORT keys — insertion order = ${JSON.stringify(insertionKeys)}`, state: { records, byDate: [...byDate.entries()], insertionKeys } };",
+      "  const sortedKeys = insertionKeys.slice().sort();",
+      "  yield { line: 8, label: `keys.sort() = ${JSON.stringify(sortedKeys)} (ISO lex = chronological)`, state: { records, byDate: [...byDate.entries()], insertionKeys, sortedKeys } };",
+      "  const out = [];",
+      "  for (let k = 0; k < sortedKeys.length; k++) {",
+      "    const date = sortedKeys[k];",
+      "    const bucket = byDate.get(date);",
+      "    const line = `${date} — ${bucket.join('; ')}`;",
+      "    out.push(line);",
+      "    yield { line: 9, label: `emit ${JSON.stringify(line)}`, state: { records, byDate: [...byDate.entries()], sortedKeys, out: [...out] } };",
+      "  }",
+      "  yield { line: 10, label: `return out — ${out.length} chronology line(s)`, state: { records, byDate: [...byDate.entries()], out: [...out], returns: JSON.stringify(out) } };",
+      "}"
+    ]
+  },
   "reference": {
     "code": "function buildChronology(records) {\n  // Group records by their date key. A Map preserves first-seen key order,\n  // but we sort the keys explicitly so output is chronological regardless of input.\n  const byDate = new Map();\n  for (const r of records) {\n    if (!byDate.has(r.date)) byDate.set(r.date, []);\n    // push keeps same-date events in the order they appeared in the input.\n    byDate.get(r.date).push(`${r.provider}: ${r.note}`);\n  }\n  // ISO dates (YYYY-MM-DD) sort chronologically as plain strings — no Date needed.\n  return [...byDate.keys()].sort().map(date => `${date} — ${byDate.get(date).join('; ')}`);\n}",
     "notes": [
@@ -19,10 +129,10 @@
       {
         "q": "Why are the records grouped into a `Map` keyed by date before emitting?",
         "options": [
-          "Maps are faster than arrays for all lookups",
+          "Sorting `records` directly would shuffle same-date entries because `.sort()` isn't stable on equal keys",
           "So that all events sharing a date land in one bucket, ready to collapse into a single output line",
-          "Because arrays cannot hold objects",
-          "To remove duplicate records automatically"
+          "An Object keyed by date would coerce ISO dates to milliseconds, breaking the prefix sort",
+          "Map iteration runs in parallel via web workers, which speeds up the emit phase"
         ],
         "answer": 1,
         "explain": "The group-then-emit shape collects same-date events into one bucket so each date produces exactly one collapsed line."
@@ -30,10 +140,10 @@
       {
         "q": "Why does `[...byDate.keys()].sort()` produce chronological order without parsing dates?",
         "options": [
-          "`.sort()` detects date strings and parses them",
+          "`Map.prototype.keys()` returns keys in sorted order; the explicit `.sort()` is a defensive no-op",
           "ISO 8601 dates (YYYY-MM-DD) sort the same lexicographically as chronologically",
-          "Map keys are always pre-sorted",
-          "It doesn't — this is a latent bug"
+          "The hyphen character has a numeric collation weight that aligns string and date order",
+          "`.sort()` falls back to `Date.parse` when every element passes a date-shape heuristic"
         ],
         "answer": 1,
         "explain": "Fixed-width YYYY-MM-DD strings compare character-by-character in the same order as the calendar, so a plain string sort is chronological."
@@ -43,8 +153,8 @@
         "options": [
           "Alphabetical by provider name",
           "The order they appeared in the input (the `.push` order)",
-          "Reverse input order",
-          "Random — Maps don't preserve order"
+          "Whichever record's `.join('; ')` call fired first during the emit pass",
+          "The order matching the buckets' sort by event count, ascending"
         ],
         "answer": 1,
         "explain": "Sorting only reorders the date keys. Within a date, `.push` keeps events in the order they were read from the input."
@@ -52,10 +162,10 @@
       {
         "q": "What is the purpose of `if (!byDate.has(r.date)) byDate.set(r.date, [])`?",
         "options": [
-          "It skips duplicate dates",
+          "It overwrites any existing bucket so repeated dates don't accumulate stale events from a prior call",
           "It lazily creates an empty array bucket the first time a date is seen, so the later `.get().push` won't throw",
-          "It validates the date format",
-          "It sorts the bucket"
+          "It registers the date with the Map's internal sort index so the later `[...keys()].sort()` is O(1)",
+          "It prevents `byDate.get` from returning the Map's default value of `null` instead of `undefined`"
         ],
         "answer": 1,
         "explain": "Without initializing the bucket, `byDate.get(r.date)` would be `undefined` on a first-seen date and `.push` would throw."

@@ -566,10 +566,28 @@ function renderL3(body, lesson, content) {
       const tries = attempts === 1 ? 'first try' : `${attempts} tries`;
       const srBadge = srBadgeHtml(lesson.id, 'pass');
       if (wasMock) {
+        // Capture priorBest BEFORE endMockInterview overwrites state.bestTimes
+        // when this attempt is a new PB. Used to compute the delta line below.
+        const priorBest = state.bestTimes[lesson.id];
         const elapsed = endMockInterview(true);
-        const prevBest = state.bestTimes[lesson.id];
-        const isNewBest = elapsed === prevBest;
-        feedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Solved in ${formatTime(elapsed)} (${tries})${isNewBest ? ' — new personal best!' : ''}</span>` + srBadge;
+        let bestMsg;
+        if (priorBest == null) {
+          bestMsg = ' — first mock pass for this lesson';
+        } else if (elapsed < priorBest) {
+          bestMsg = ` — new personal best (was ${formatTime(priorBest)}, ${formatTime(priorBest - elapsed)} faster)`;
+        } else if (elapsed === priorBest) {
+          bestMsg = ` — matched your best (${formatTime(priorBest)})`;
+        } else {
+          bestMsg = ` — ${formatTime(elapsed - priorBest)} off your best (${formatTime(priorBest)})`;
+        }
+        // endMockInterview() above called renderLesson(), which fully replaced
+        // the L3 body — the `feedback` closure variable now points at a
+        // detached node. Re-acquire from the live DOM so the win line is
+        // actually visible to the user.
+        const liveFeedback = document.querySelector('#lesson-shell .feedback');
+        if (liveFeedback) {
+          liveFeedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Solved in ${formatTime(elapsed)} (${tries})${bestMsg}</span>` + srBadge;
+        }
       } else {
         feedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Output matches — L3 passed (${tries}).</span>` + srBadge;
       }

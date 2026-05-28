@@ -87,6 +87,12 @@
   .pill.good{background:#14532d;color:#bbf7d0}
   .pill.warn{background:#713f12;color:#fde68a}
   .pill.bad{background:#7f1d1d;color:#fecaca}
+  /* iter 20 (refine): visually corroborate the "🎯 Drill weakest" CTA's pick
+     IN the breakdown table — the ADHD/phone user shouldn't have to scan
+     six pills to confirm which row the CTA is pointing at. */
+  .summary-table tr.weakest-row td{background:rgba(217,70,239,0.06);
+    border-left:3px solid #d946ef}
+  .summary-table tr.weakest-row td:first-child{font-weight:600;color:#f5d0fe}
   .question-jumper{display:flex;flex-wrap:wrap;gap:4px;margin:14px 0}
   .jump-btn{width:28px;height:28px;border-radius:4px;background:var(--panel-2);
     color:var(--muted);border:1px solid transparent;cursor:pointer;font-size:11px;
@@ -744,13 +750,19 @@ function renderPost() {
 
 function renderDone() {
   const stats = computeStats();
+  // Identify weakest section by MC% (skip sections with no MC scored).
+  // This is the autopilot bias — diagnostic → drilling default.
+  // The user just spent 20-30+ minutes producing this signal; honor it.
+  // Computed BEFORE rows so the matching row can be flagged in the table.
+  const weakest = pickWeakestSection(stats.bySection);
   const rows = Object.entries(stats.bySection).map(([sec, s]) => {
     const pct = s.mcTotal > 0 ? Math.round(100 * s.mcCorrect / s.mcTotal) : null;
     const pill = pct === null ? '<span class="pill">—</span>'
       : pct >= 75 ? `<span class="pill good">${pct}%</span>`
       : pct >= 50 ? `<span class="pill warn">${pct}%</span>`
       : `<span class="pill bad">${pct}%</span>`;
-    return `<tr>
+    const trCls = weakest && sec === weakest.section ? ' class="weakest-row"' : '';
+    return `<tr${trCls}>
       <td>${escapeHtml(sec)}</td>
       <td>${s.mcCorrect}/${s.mcTotal} MC</td>
       <td>${s.shortAnswered}/${s.shortTotal} short</td>
@@ -758,11 +770,6 @@ function renderDone() {
       <td>${pill}</td>
     </tr>`;
   }).join('');
-
-  // Identify weakest section by MC% (skip sections with no MC scored).
-  // This is the autopilot bias — diagnostic → drilling default.
-  // The user just spent 20-30+ minutes producing this signal; honor it.
-  const weakest = pickWeakestSection(stats.bySection);
 
   $content.innerHTML = `
     <h2 style="margin-top:0">Done — ${stats.answered}/${QUESTIONS.length} answered, ${formatTime(stats.totalSeconds)}</h2>

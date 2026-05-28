@@ -167,6 +167,24 @@ async function seedAndSnap({ mobile, label }) {
   s.assert(existingCtas.copy, 'Copy JSON button preserved');
   s.assert(existingCtas.restart, 'Restart button preserved');
 
+  // 5. iter-20 invariant: the breakdown table marks the weakest row with
+  //    class="weakest-row", and that row's section name matches the CTA's
+  //    named weakest section. Visually corroborates the autopilot pick.
+  // NOTE: this assertion runs after the drill-weakest-btn click above, which
+  // calls window.stop() but the DOM is preserved. Re-read both.
+  const weakestRow = await s.eval(`(() => {
+    const tr = document.querySelector('.summary-table tr.weakest-row');
+    if (!tr) return null;
+    const section = tr.querySelector('td')?.textContent.trim();
+    const styles = getComputedStyle(tr.querySelector('td'));
+    return { section, borderLeft: styles.borderLeftWidth, hasBg: styles.backgroundColor !== 'rgba(0, 0, 0, 0)' };
+  })()`);
+  s.assert(!!weakestRow, 'Weakest row should be marked with class="weakest-row"');
+  s.assert(weakestRow && weakestRow.section === handoff?.diagnosticHandoff?.weakestSection,
+    `weakest-row section "${weakestRow?.section}" should match CTA's pick "${handoff?.diagnosticHandoff?.weakestSection}"`);
+  s.assert(weakestRow && parseInt(weakestRow.borderLeft || '0', 10) >= 2,
+    `weakest-row should have left-border accent (got ${weakestRow?.borderLeft})`);
+
   const { failed, errors, networkErrors } = s.report();
   await s.close();
   return { failed, errors, networkErrors };

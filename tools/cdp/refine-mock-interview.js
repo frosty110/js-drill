@@ -106,6 +106,18 @@ async function captureWinState(s, scenario) {
   console.log('\n[3] off-best feedback:');
   console.log('   ', JSON.stringify(fb3));
 
+  // Iter 7: post-win "Mock another" CTA + click-to-restart assertion.
+  // Use the off-best scenario state we're already in; assert the button
+  // exists on the feedback element AND clicking it flips state.mock.active
+  // back to true (a new mock started).
+  const ctaPresent = await s.eval(`!!document.querySelector('#lesson-shell .feedback [data-action="mock-again"]')`);
+  s.assert(ctaPresent, `[mock-again] CTA button present in feedback after a mock win`);
+  await s.eval(`document.querySelector('#lesson-shell .feedback [data-action="mock-again"]').click()`);
+  await s.waitFor(`window.__jsdrillState.mock.active === true`, { timeoutMs: 5000 });
+  const newMockLessonId = await s.eval(`window.__jsdrillState.mock.lessonId`);
+  s.assert(!!newMockLessonId, `[mock-again] clicking the CTA started a new mock (lessonId=${newMockLessonId})`);
+  await s.snap('04-after-mock-again-click');
+
   s.report();
   await s.close();
 })().catch(e => { console.error('PROBE ERROR:', e.message); process.exit(1); });

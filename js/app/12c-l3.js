@@ -586,7 +586,16 @@ function renderL3(body, lesson, content) {
         // actually visible to the user.
         const liveFeedback = document.querySelector('#lesson-shell .feedback');
         if (liveFeedback) {
-          liveFeedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Solved in ${formatTime(elapsed)} (${tries})${bestMsg}</span>` + srBadge;
+          // Inline "Mock another" CTA — desktop-only by PROFILE.md line 43;
+          // lowers friction for the repeat-mocks PROFILE's "personal-bests
+          // trend down over weeks" success criterion structurally requires.
+          // Random selection is preserved here (smart-pick is queued backlog).
+          liveFeedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Solved in ${formatTime(elapsed)} (${tries})${bestMsg}</span>` + srBadge +
+            ` <button class="secondary" data-action="mock-again" style="margin-left:10px;font-size:12px;padding:3px 10px;">🎯 Mock another</button>`;
+          const againBtn = liveFeedback.querySelector('[data-action="mock-again"]');
+          if (againBtn) againBtn.addEventListener('click', () => {
+            if (typeof startRandomMockInterview === 'function') startRandomMockInterview();
+          });
         }
       } else {
         feedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Output matches — L3 passed (${tries}).</span>` + srBadge;

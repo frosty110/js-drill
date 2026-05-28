@@ -759,8 +759,25 @@ function renderDone() {
     </tr>`;
   }).join('');
 
+  // Identify weakest section by MC% (skip sections with no MC scored).
+  // This is the autopilot bias — diagnostic → drilling default.
+  // The user just spent 20-30+ minutes producing this signal; honor it.
+  const weakest = pickWeakestSection(stats.bySection);
+
   $content.innerHTML = `
-    <h2 style="margin-top:0">Done — export and send to me</h2>
+    <h2 style="margin-top:0">Done — ${stats.answered}/${QUESTIONS.length} answered, ${formatTime(stats.totalSeconds)}</h2>
+
+    ${weakest ? `
+      <button class="btn primary drill-cta" id="drill-weakest-btn"
+        style="display:block;width:100%;padding:16px 18px;font-size:16px;margin:6px 0 18px;text-align:left">
+        🎯 Drill weakest: <strong>${escapeHtml(weakest.section)}</strong> (${weakest.pct}%) →
+      </button>
+      <p class="hint" style="margin:-12px 0 16px">
+        Opens the main app with the Patterns track ready to drill.
+        Want to send results for a custom plan? Use the JSON buttons below.
+      </p>
+    ` : ''}
+
     <p>Auto-scored MC results (short-answer needs me to grade):</p>
     <table class="summary-table">
       <thead><tr><th>Section</th><th>MC</th><th>Short</th><th>Skipped</th><th>MC %</th></tr></thead>
@@ -780,6 +797,27 @@ function renderDone() {
       combine with the MC scores, and write the 4-day plan from there.
     </p>
   `;
+  if (weakest) {
+    document.getElementById('drill-weakest-btn').onclick = () => {
+      // Bridge into main app: stamp sidebar onto Patterns track + L1 tab (the
+      // mobile-throughput surface per PROFILE.md), then navigate. The main
+      // app already restores both fields on boot — no new code needed there.
+      // Also record the diagnostic handoff so future iters can wire a banner.
+      try {
+        const raw = localStorage.getItem('jsdrill.progress.v1');
+        const parsed = raw ? JSON.parse(raw) : { __v: 6 };
+        parsed.sidebarTrack = 'patterns';
+        parsed.lastTab = 'L1';
+        parsed.diagnosticHandoff = {
+          weakestSection: weakest.section,
+          weakestPct: weakest.pct,
+          completedAt: new Date().toISOString(),
+        };
+        localStorage.setItem('jsdrill.progress.v1', JSON.stringify(parsed));
+      } catch (e) { console.warn('handoff stamp failed', e); }
+      location.href = 'index.html';
+    };
+  }
   document.getElementById('export-btn').onclick = exportJson;
   document.getElementById('copy-btn').onclick = copyJson;
   document.getElementById('restart-btn').onclick = () => {
@@ -887,6 +925,20 @@ function computeStats() {
     }
   }
   return { bySection, answered, skipped, totalSeconds: totalElapsedSeconds() };
+}
+
+// Pick the section the user did worst on by MC %. Returns null if no
+// section has any MC scored (e.g., everything skipped or all sections are
+// short-answer-only). Used to drive the "🎯 Drill weakest" CTA on the
+// results page — the diagnostic→drilling autopilot bridge.
+function pickWeakestSection(bySection) {
+  let worst = null;
+  for (const [sec, s] of Object.entries(bySection)) {
+    if (s.mcTotal === 0) continue;
+    const pct = Math.round(100 * s.mcCorrect / s.mcTotal);
+    if (!worst || pct < worst.pct) worst = { section: sec, pct };
+  }
+  return worst;
 }
 
 function buildExport() {

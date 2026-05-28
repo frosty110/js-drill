@@ -43,6 +43,40 @@ meetings, on the couch. This shapes everything:
   Mock interview is desktop-only by nature — that's fine, don't try to mobilify
   it. Polish the mobile L1/L2 loop instead.
 
+## Cognitive style (load-bearing)
+
+- **ADHD.** Limited working memory for parallel decisions; benefits from
+  single-focus surfaces, not menus-of-menus. A 5-button card stack costs more
+  than a 1-button "Begin" with overflow tucked behind a `[more ▾]`.
+- **Low overwhelm tolerance.** A surface that presents 6 study options
+  simultaneously and asks the user to pick is friction, not flexibility.
+  Default actions matter more than option exhaustiveness — pick something
+  reasonable, let them override.
+- **Limited study time.** Sessions are minutes, not hours (often a single
+  bus ride or wait in a queue). Every surface — including dashboards and
+  meta-screens — should deliver value in <5 minutes.
+
+## Study intent — "autopilot"
+
+The user's stated mental model: **"Pick a plan, go on autopilot."** Once
+they've subscribed to a plan, the app's job is to:
+1. Surface **one** next action. Sometimes that's a lesson (problem),
+   sometimes it's a drill (recall direction). The app decides which; the
+   user doesn't have to choose between modalities.
+2. Use **recent diagnostic signal** to bias the pick. The diagnostic
+   (`diagnostic.html` results) reveals concept-level gaps — if the last
+   one showed complexity-pricing weak (heapify, `indexOf` cost,
+   `O(N+M)` vs `O(N×M)`), today's autopilot weights complexity-heavy
+   lessons + the 🧮 Big-O drill higher.
+3. Show **progress + scores at a glance** — without the user having to
+   navigate to find them. A streak count, a today-vs-yesterday delta, a
+   diagnostic-gap chip — visible on the surface they already opened.
+4. **Get out of the way** the rest of the time.
+
+This implies a hard rule for any new surface: **if it adds a decision the
+user has to make BEFORE they can start drilling, justify it loudly.** The
+default posture is "press one thing → you're drilling."
+
 ## What they need from this app
 1. **Syntax re-memorization.** Fast loops of "see canonical → recall → type from
    blank" across the JS surface area that comes up in interviews.

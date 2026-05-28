@@ -1318,7 +1318,26 @@ function initTodaysPlanModal() {
     if (!plan.length) {
       body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Nothing queued — you're caught up! 🎉<br><br>Pick a lesson from the sidebar or try Mock Interview.</div>`;
     } else {
-      body.innerHTML = plan.map(({ id, why }) => {
+      // Iter 10: PRIMARY autopilot CTA. Surfaces the smartest pick (plan[0]
+      // — dailyPlan ranks SR-due first, then weak, then path) as a single
+      // emerald button above the 6-card list. PROFILE.md line 76-78 ("press
+      // one thing → drilling") + line 48-50 (ADHD single-focus surfaces) +
+      // line 53-54 ("Default actions matter more than option exhaustiveness").
+      const first = plan[0];
+      const firstLesson = findLesson(first.id);
+      const firstTitle = firstLesson?.title || first.id;
+      const primaryCta = `
+        <button data-action="start-first" data-lesson-id="${escapeHtml(first.id)}" style="text-align:left;width:100%;padding:14px 16px;border-radius:8px;background:rgba(52,211,153,0.14);border:1px solid rgba(52,211,153,0.55);color:#ecfdf5;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:inherit;margin-bottom:14px;">
+          <span style="display:flex;flex-direction:column;gap:3px;min-width:0;">
+            <span style="font-size:11px;color:#34d399;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">🎯 Start</span>
+            <span style="font-size:15px;font-weight:600;color:#f0fdf4;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(firstTitle)}</span>
+            <span style="font-size:11px;color:#86efac;">${escapeHtml(first.why)}</span>
+          </span>
+          <span style="color:#34d399;font-size:18px;flex-shrink:0;">➜</span>
+        </button>
+        <div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:0.08em;text-align:center;margin:0 0 8px;">— Or pick another —</div>
+      `;
+      body.innerHTML = primaryCta + plan.map(({ id, why }) => {
         const lesson = findLesson(id);
         const colors = { 'review due': '#67e8f9', 'next on plan': '#93c5fd', 'weak spot': '#fdba74' };
         const tint =   { 'review due': 'rgba(103,232,249,0.12)', 'next on plan': 'rgba(147,197,253,0.12)', 'weak spot': 'rgba(253,186,116,0.14)' };
@@ -1332,6 +1351,10 @@ function initTodaysPlanModal() {
           <span data-why-tag style="align-self:flex-start; color:${tagColor}; background:${tagBg}; font-size:11px; font-weight:500; padding:2px 8px; border-radius:999px; letter-spacing:0.01em;">${escapeHtml(why)}</span>
         </button>`;
       }).join('');
+      // Iter 10: PRIMARY autopilot CTA click handler. The same data-lesson-id
+      // selector catches BOTH the primary [data-action="start-first"] button
+      // AND the existing 6-card list — both have data-lesson-id, so the
+      // single forEach below wires them all.
       body.querySelectorAll('[data-lesson-id]').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = btn.getAttribute('data-lesson-id');

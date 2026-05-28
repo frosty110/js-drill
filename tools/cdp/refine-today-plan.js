@@ -65,11 +65,36 @@ async function capture(s, label) {
   await sd.seedLocalStorage('jsdrill.progress.v1', MIDFLIGHT_SEED);
   await sd.waitFor(`typeof CURRICULUM !== 'undefined' && CURRICULUM.length > 0`, { timeoutMs: 15000 });
   await capture(sd, '02-midflight-desktop');
-  const planSize = await sd.eval(`document.querySelectorAll('#today-body [data-lesson-id]').length`);
-  const planEntries = await sd.eval(`Array.from(document.querySelectorAll('#today-body [data-lesson-id]')).map(b => b.innerText.trim().replace(/\\s+/g, ' '))`);
-  console.log('Mid-flight desktop plan count:', planSize);
-  for (const e of planEntries) console.log('  -', e);
-  sd.assert(planSize >= 3, `mid-flight plan has ≥3 entries (got ${planSize})`);
+  // Iter-10 primary-CTA assertions (mid-flight, plan has items).
+  const ctaReport = await sd.eval(`(() => {
+    const cta = document.querySelector('#today-body [data-action="start-first"]');
+    if (!cta) return { error: 'no [data-action=start-first] button — iter-10 fix not in place' };
+    const cards = document.querySelectorAll('#today-body [data-lesson-id]');
+    const firstCardId = cards.length > 1 ? cards[1].getAttribute('data-lesson-id') : null;
+    return {
+      ctaPresent: true,
+      ctaText: cta.innerText.replace(/\\s+/g, ' ').trim(),
+      ctaLessonId: cta.getAttribute('data-lesson-id'),
+      // The CTA is at position 0; first regular list card is at position 1 — should match.
+      firstListCardLessonId: firstCardId,
+      totalLessonIdElements: cards.length, // primary + 6 list items = 7
+    };
+  })()`);
+  console.log('\nDesktop mid-flight primary-CTA report:');
+  console.log(JSON.stringify(ctaReport, null, 2));
+  sd.assert(ctaReport.ctaPresent === true, `[desktop] primary [data-action=start-first] CTA exists`);
+  sd.assert(/🎯 Start/.test(ctaReport.ctaText || ''), `[desktop] CTA text contains "🎯 Start"`);
+  sd.assert(ctaReport.ctaLessonId === ctaReport.firstListCardLessonId, `[desktop] CTA points at plan[0] (same lesson as first list card)`);
+  sd.assert(ctaReport.totalLessonIdElements === 7, `[desktop] CTA + 6 list cards = 7 [data-lesson-id] elements (got ${ctaReport.totalLessonIdElements})`);
+  // Click the CTA — assert state.currentLessonId flips to the CTA's lessonId.
+  const ctaLessonId = ctaReport.ctaLessonId;
+  await sd.eval(`document.querySelector('#today-body [data-action="start-first"]').click()`);
+  await sd.sleep(400);
+  const navLessonId = await sd.eval(`window.__jsdrillState.currentLessonId`);
+  sd.assert(navLessonId === ctaLessonId, `[desktop] clicking CTA navigated to lesson "${ctaLessonId}" (got "${navLessonId}")`);
+  // Verify modal closed after the click.
+  const modalDisplay = await sd.eval(`document.getElementById('today-modal').style.display`);
+  sd.assert(modalDisplay === 'none', `[desktop] modal closed after CTA click (display="${modalDisplay}")`);
   await sd.close();
 
   // Mobile pass

@@ -1,6 +1,26 @@
 // ──────────────────────────────────────────────────────────────────────────
 //  L2 — FILL IN THE BLANK
 // ──────────────────────────────────────────────────────────────────────────
+
+// Iter 12: after a Check pass, smoothly scroll the next un-passed exercise
+// into view so the mobile drilling loop becomes tap-tap-tap instead of
+// tap-pause-scroll-tap (PROFILE 80%-phone, autopilot, ADHD single-focus).
+// Used by BOTH renderL2 and renderL2Mobile — same DOM shape (cards as
+// direct children of `wrap`), same logic. Skips focus-stealing to avoid
+// popping the mobile keyboard unexpectedly.
+function _scrollNextUnpassedL2(currentExi, wrap, exerciseState) {
+  for (let i = currentExi + 1; i < exerciseState.length; i++) {
+    if (exerciseState[i].passed) continue;
+    const cards = wrap.querySelectorAll('.mb-6.p-5');
+    const target = cards[i];
+    if (target && typeof target.scrollIntoView === 'function') {
+      // requestAnimationFrame so the feedback's ✓ Pass paint lands first.
+      requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+    return;
+  }
+}
+
 function renderL2(body, lesson, content) {
   // Mobile users get a tap-to-fill experience — see renderL2Mobile. The cramped
   // inline-input layout only makes sense on a real keyboard.
@@ -114,10 +134,12 @@ function renderL2(body, lesson, content) {
         feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
         exerciseState[exi].passed = true;
         checkL2Overall();
+        _scrollNextUnpassedL2(exi, wrap, exerciseState);
       } else if (matched) {
         feedback.innerHTML = '<span class="text-amber-400">Output matches, but one or more blanks doesn’t match the canonical answer.</span>';
         exerciseState[exi].passed = true;
         checkL2Overall();
+        _scrollNextUnpassedL2(exi, wrap, exerciseState);
       } else if (!result.ok) {
         // Runtime error — likely a blank caused a ReferenceError / SyntaxError
         // because a downstream identifier expects a specific name.
@@ -299,10 +321,12 @@ function renderL2Mobile(body, lesson, content) {
         feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
         exerciseState[exi].passed = true;
         checkL2Overall();
+        _scrollNextUnpassedL2(exi, wrap, exerciseState);
       } else if (matched) {
         feedback.innerHTML = '<span class="text-amber-400">Output matches, but one or more blanks doesn’t match the canonical answer.</span>';
         exerciseState[exi].passed = true;
         checkL2Overall();
+        _scrollNextUnpassedL2(exi, wrap, exerciseState);
       } else if (!result.ok) {
         feedback.innerHTML = '<span class="text-rose-400">Runtime error — a blank may not match an identifier used later. Check the output and red chips.</span>';
       } else {

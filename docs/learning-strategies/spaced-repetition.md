@@ -165,6 +165,16 @@ specifically toward lessons their memory is currently weakest on.
   visible" lever, this time applied to PROFILE.md success criterion #3
   ("Mock interview personal-bests trend down over weeks"). A trend can't
   trend if you only see the best.
+- **Mock Interview smart selection (iter 11).** `startRandomMockInterview`
+  no longer picks uniformly across 79 Patterns lessons. It builds a
+  weighted pool — lessons in `state.weakness` AND `dueReviewIds()` get
+  weight 5, either-alone gets weight 3, all others weight 1 — then draws
+  uniformly from the pool. So the SR-due signal directly biases which
+  lesson you mock next, while baseline lessons still appear (~85% of mocks
+  for a user with one active gap) so interleaving across the curriculum
+  is preserved. The SR engine isn't just deciding *when* lessons resurface
+  — it's now also influencing *which* lesson the mock-interview surface
+  reaches for.
 - **Due-lessons surfacing** in Today's plan — the curated daily session pulls
   from `dueLessons` first. Additionally, when the user is on a mastered
   lesson and due reviews exist, the lesson-header CTA promotes "🕒 Review

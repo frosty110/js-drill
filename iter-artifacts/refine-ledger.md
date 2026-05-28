@@ -37,3 +37,4 @@ Step 0 of the skill scans the last 6 rows. Watch for:
 | 11 | mock-interview | Smart selection — replace Math.random with weighted pool (BOTH weak+due ×5, either ×3, baseline ×1); biases toward gaps while preserving interleaving | 15/21 → 18/21 (proj.) | shipped |
 | 12 | L2 fill-in | Auto-scroll next un-passed exercise to viewport top after a Check pass — mobile drilling becomes tap-tap-tap instead of tap-pause-scroll-tap | 15/21 → 18/21 (proj.) | shipped |
 | 13 | Reference tab | Inline "🎯 Drill from blank →" CTA right after canonical code — desktop fully above fold; mobile 307px closer (full mobile fix queued: sticky CTA / header compaction) | 13/21 → 16/21 (proj.) | shipped |
+| 14 | — | Diminishing returns: 12 product ships across 7/11 registry surfaces this session; 4 remaining surfaces WIP-blocked; queued backlog items now smaller-than-typical iter wins. Bailing rather than shipping process. Next /loop should re-survey after user WIP clears. | — | bailed |

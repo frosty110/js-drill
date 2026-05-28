@@ -120,26 +120,26 @@
     "questions": [
       {
         "q": "Calling a memoized fn with the same args three times calls the underlying fn how many times?",
-        "options": ["3", "0", "1", "2"],
+        "options": ["3 — memoize records calls but still invokes the body each time", "0 — the wrapper short-circuits before reaching the underlying fn even on the first call", "1", "2 — the cache stores at most one value, so every other call has to recompute"],
         "answer": 2
       },
       {
         "q": "Why is the default key `JSON.stringify(args)` insufficient for some inputs?",
         "options": [
-          "It's too slow",
+          "`JSON.stringify` on an args array always returns `'[]'` because rest-parameter arrays aren't iterable in serialization",
           "Functions, undefined, Symbols, and circular refs don't serialize cleanly — also two distinct objects with the same shape collide",
-          "It returns the wrong type",
-          "JSON.stringify is not part of ES"
+          "Each call to `JSON.stringify` allocates a new string identity, so cache keys never compare equal across calls",
+          "`JSON.stringify` strips numeric precision past 6 digits, so two close-but-distinct numeric args collapse to one cache entry"
         ],
         "answer": 1
       },
       {
         "q": "When is memoization unsafe?",
         "options": [
-          "Whenever the function takes more than one argument",
+          "Whenever the function takes more than one argument — the default key only captures the first",
           "When the function isn't pure — same args may legitimately need different outputs",
-          "When using Map instead of Object",
-          "Memoization is always safe"
+          "When the function returns an object — Map values must be primitives to be cached",
+          "When the wrapped function is recursive — the cache breaks the base-case detection"
         ],
         "answer": 1
       },
@@ -147,9 +147,9 @@
         "q": "What benefit does an explicit keyFn provide over the default?",
         "options": [
           "Avoids the cost of JSON.stringify and lets you collapse equivalent-but-not-identical inputs to one key",
-          "It makes the cache larger",
-          "It allows mutation",
-          "It enables async support"
+          "It tracks the key insertion order so the cache can be replayed in call order during hot-reload",
+          "It lets the cache hold non-string keys directly (Map can otherwise only store stringified keys)",
+          "It enables async support — the default keyFn does not await Promise-typed arguments"
         ],
         "answer": 0
       }

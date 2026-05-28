@@ -118,16 +118,16 @@
     "questions": [
       {
         "q": "Three calls within one ms window to a leading-edge throttled fn invoke the underlying fn how many times?",
-        "options": ["3", "0", "1 — the first one", "1 — the last one"],
+        "options": ["3 — throttle records the calls but defers their firing to a single batched flush", "0 — the gate is closed on the first call until one full window has elapsed", "1 — the first one", "1 — the last one (trailing-edge default)"],
         "answer": 2
       },
       {
         "q": "What is the key difference between debounce and throttle?",
         "options": [
-          "Throttle uses promises; debounce does not",
+          "Throttle resolves a Promise per window; debounce returns the underlying fn's value synchronously",
           "Debounce delays until quiet; throttle caps the rate (at most one per window)",
-          "Throttle queues calls; debounce drops them",
-          "They are synonyms"
+          "Throttle queues calls in a buffer and replays them after the window; debounce discards everything but the first",
+          "Throttle requires a real timer; debounce works purely off comparisons of call timestamps"
         ],
         "answer": 1
       },
@@ -135,19 +135,19 @@
         "q": "Why initialize lastFired to -Infinity?",
         "options": [
           "To make `_now - lastFired >= ms` true on the very first call",
-          "JavaScript requires sentinel values for numbers",
-          "It's faster than 0",
-          "It hides the variable from the closure"
+          "`-Infinity` is the only numeric value JavaScript treats as 'unset' in arithmetic comparisons against integers",
+          "Initializing to 0 would cause the first call at _now=0 to silently coerce ms to a negative value via the subtraction",
+          "It prevents the closure variable from being collapsed by V8's constant-folding optimization"
         ],
         "answer": 0
       },
       {
         "q": "If the underlying fn is called inside the cool-down window, what happens to its args?",
         "options": [
-          "Queued and applied at window end",
-          "Stored as `lastArgs` and fired later",
+          "Queued and applied in order once the window elapses, the same behavior as `Promise.allSettled` with a delay",
+          "Stored as `lastArgs` and fired automatically when the next call passes the gate",
           "Dropped — leading-edge throttle does not buffer",
-          "Throws an error"
+          "Merged into the previous fire's args via `Object.assign` so the most recent args win"
         ],
         "answer": 2
       }

@@ -133,10 +133,10 @@
       {
         "q": "Why must you put the clone in the map BEFORE recursing into neighbors?",
         "options": [
-          "Performance only",
+          "So the neighbor recursion can mutate the parent's copy via the shared Map reference",
           "Otherwise a cycle re-enters dfs on a node that is not yet recorded and recurses forever",
-          "JavaScript requires it",
-          "To save memory"
+          "Map.set assigns a stable identity hash that neighbor recursions rely on for ordering",
+          "The Map's insertion order determines the clone's neighbor order in the result"
         ],
         "answer": 1
       },
@@ -146,7 +146,7 @@
           "Node values (.val)",
           "Original node object references",
           "Clone references",
-          "Indices"
+          "A tuple of (original, clone) pairs, with the original side compared by identity"
         ],
         "answer": 1
       },
@@ -163,7 +163,7 @@
       {
         "q": "For a null input, the function returns:",
         "options": [
-          "{}",
+          "An empty node `{ val: null, neighbors: [] }` to preserve the deep-copy contract",
           "null",
           "undefined",
           "throws"
@@ -174,10 +174,10 @@
       {
         "q": "Why is a plain visited SET insufficient here, requiring a MAP instead?",
         "options": [
-          "A Set cannot store objects",
+          "Set.has takes O(n) on objects while Map.has is O(1), so cycles would be too slow with a Set",
           "You need the original->clone mapping to wire each clone's neighbors to the right clone objects",
-          "A Set is slower than a Map",
-          "A Set cannot detect cycles"
+          "Set iteration order isn't insertion-preserving, which would scramble the neighbor order in the clones",
+          "A Set can only break cycles for directed graphs; undirected graphs need a Map's bidirectional lookup"
         ],
         "answer": 1,
         "explain": "A Set only answers 'seen this?'; cloning needs to fetch the EXISTING clone for an already-seen original so neighbors point at shared clones, which requires the value side of a Map."
@@ -185,10 +185,10 @@
       {
         "q": "Besides breaking cycles, what second problem does the visited Map solve?",
         "options": [
-          "It sorts the neighbors",
+          "It guarantees the clone's neighbor lists are in the same insertion order as the original",
           "It ensures a neighbor shared by multiple nodes (e.g. a diamond) is cloned exactly once",
-          "It reduces time to O(V)",
-          "It makes the graph directed"
+          "It records the depth of each node so the recursion knows when to terminate",
+          "It distinguishes nodes with equal .val by appending a unique tag to each clone"
         ],
         "answer": 1,
         "explain": "Without the Map, a node reachable via two paths (diamond A->B->D, A->C->D) would be cloned twice, producing two distinct D-copies and a wrong structure."
@@ -196,10 +196,10 @@
       {
         "q": "Could you solve Clone Graph with BFS instead of DFS?",
         "options": [
-          "No, only DFS works for cloning",
+          "No — BFS would clone nodes level-by-level, but cycles span levels and would be cloned twice",
           "Yes — use a queue plus the same original->clone Map; both traverse every node once",
-          "Yes, but only for acyclic graphs",
-          "No, BFS cannot break cycles"
+          "Yes, but the clones must be wired up in a second pass after BFS finishes enumerating all originals",
+          "No — BFS visits each node before its neighbors are cloned, so neighbor pointers would be null"
         ],
         "answer": 1,
         "explain": "BFS with an explicit queue and the identical visited Map clones correctly and avoids deep recursion; the Map (set-before-enqueue) is what handles cycles in either traversal."
@@ -207,10 +207,10 @@
       {
         "q": "Why MUST the Map key be the original node OBJECT, not node.val?",
         "options": [
-          "Objects hash faster",
+          "Map.get(val) does linear scan on numeric keys; object keys hash in O(1)",
           "If two distinct nodes share a val, keying on val would alias them into one clone — wrong graph",
-          "JavaScript Maps reject number keys",
-          "val might be undefined"
+          "Map keys must be reference types — primitives are silently converted to Object wrappers that lose equality",
+          "node.val could be mutated during traversal, invalidating prior Map entries"
         ],
         "answer": 1,
         "explain": "Map uses identity for object keys, so distinct originals stay distinct even with equal vals; keying on val collapses different nodes when values repeat."

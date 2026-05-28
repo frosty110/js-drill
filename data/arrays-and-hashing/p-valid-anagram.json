@@ -124,30 +124,30 @@
       {
         "q": "Why is the length check at the top important?",
         "options": [
-          "Style only",
+          "Without it, iterating over the longer string would index past the end of the shorter one and throw",
           "Different lengths cannot be anagrams, and skipping it would force a final scan for non-zero counts",
-          "Required by the language",
-          "Pure microoptimization with no semantic impact"
+          "It prevents `s` and `t` from being implicitly coerced to numbers during the loop",
+          "The Map throws when its internal load factor exceeds the size hint passed at construction"
         ],
         "answer": 1
       },
       {
         "q": "What does it mean if a counter goes BELOW zero during the t scan?",
         "options": [
-          "t is a prefix of s",
+          "t is a prefix of s, so the remaining s chars are unmatched",
           "t contains a character that s did not — not an anagram",
-          "They are anagrams",
-          "Undefined behavior"
+          "We've already matched every occurrence of that char and should switch to comparing the next one",
+          "It indicates a hash collision in the Map and the count for that key should be reset"
         ],
         "answer": 1
       },
       {
         "q": "Why is the space complexity considered O(1) here?",
         "options": [
-          "The Map is reused across calls",
+          "Counts are decremented to zero, so the Map ends empty regardless of input size",
           "The alphabet is bounded, so the Map has a fixed maximum size independent of n",
-          "Maps are free",
-          "It is not — it is O(n)"
+          "The Map is allocated once at module-load time and reused across all calls",
+          "Map entries with value 0 are garbage-collected during iteration, bounding live size to O(1)"
         ],
         "answer": 1
       },
@@ -164,10 +164,10 @@
       {
         "q": "The counter approach beats the 'sort both strings and compare' approach because:",
         "options": [
-          "Sorting gives the wrong answer",
+          "Sorting allocates a new string per comparison; the counter mutates in place, avoiding GC pressure",
           "Counting is O(n) while sorting both is O(n log n)",
-          "Sorting cannot handle repeats",
-          "They are identical in cost"
+          "Sorting both strings then comparing requires O(n²) char-by-char equality checks",
+          "Sort is non-deterministic in V8 for equal-length strings, so it can return the wrong answer"
         ],
         "answer": 1,
         "explain": "Sorting each string costs O(n log n); the frequency-counter does it in a single linear pass, so it is asymptotically faster (sorting is still correct, just slower)."
@@ -175,10 +175,10 @@
       {
         "q": "If you increment for every char in s and decrement for every char in t, two strings are anagrams exactly when:",
         "options": [
-          "Some count is positive",
+          "At least one count is positive, indicating s contributed something",
           "Every count ends at zero",
-          "The first count is zero",
-          "The map is empty"
+          "The sum of all counts equals the length of s",
+          "Every count in the map matches the count of the most-frequent character"
         ],
         "answer": 1,
         "explain": "Equal counts mean each character appeared the same number of times in both; every entry nets to zero only when the multisets match."
@@ -186,10 +186,10 @@
       {
         "q": "Why does counting handle repeated characters correctly where a plain Set would fail?",
         "options": [
-          "Sets are slower",
+          "A Set's `.has` returns false on the second occurrence of a value, so duplicates would be silently dropped during the s scan",
           "A Set only records presence, losing multiplicity — `aab` vs `abb` look identical to a Set",
-          "Sets reorder characters",
-          "Counting ignores repeats"
+          "Set iteration ordering is undefined, so comparing the s-set to the t-set requires sorting first",
+          "Set membership is checked by `==` not `===`, so `'a'` and a boxed `String('a')` would be conflated"
         ],
         "answer": 1,
         "explain": "Anagram validity depends on HOW MANY of each char; a Set collapses duplicates, so it cannot distinguish two a's from one, but a count map tracks the exact quantity."
@@ -197,10 +197,10 @@
       {
         "q": "What does `isAnagram(\"\", \"\")` return with this canonical?",
         "options": [
-          "false",
+          "false — empty strings have no characters to be anagrams of",
           "true",
-          "undefined",
-          "It throws"
+          "undefined — neither loop runs, so the function never reaches a return statement",
+          "0 — the empty Map's size is returned implicitly"
         ],
         "answer": 1,
         "explain": "Lengths match (0 === 0), both loops are no-ops, and control reaches `return true` — two empty strings share the empty multiset, so they are anagrams."

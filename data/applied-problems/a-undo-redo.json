@@ -140,40 +140,40 @@
       {
         "q": "Why does `do(cmd)` clear `this.undone`?",
         "options": [
-          "Performance — large undone stacks are slow",
+          "Otherwise the next `redo` would re-apply both the new command and the stale undone commands as a batch",
           "A fresh action creates a new branch; the previously-undone commands are no longer reachable",
-          "Required by the spec for memory safety",
-          "It doesn't — that's a bug"
+          "Without it, `cmd.apply()` would compose with the undone stack's pending reverts and cancel itself out",
+          "Clearing `undone` is what triggers the `done.push(cmd)` to fire — otherwise `do` is a no-op"
         ],
         "answer": 1
       },
       {
         "q": "What pair of operations must each command expose?",
         "options": [
-          "run / cancel",
+          "execute / cancel — `cancel` aborts an in-flight command but cannot reverse a completed one",
           "apply / revert (inverses of each other)",
-          "start / stop",
-          "commit / rollback"
+          "forward / backward — both run the same logic but with a direction flag passed in",
+          "commit / rollback — borrowed from transaction APIs, mapping `commit` to do and `rollback` to undo"
         ],
         "answer": 1
       },
       {
         "q": "Where do commands sit after `undo()`?",
         "options": [
-          "Deleted",
+          "Garbage-collected — once reverted, the command object has no remaining references",
           "Moved from `done` to `undone` so redo can replay them",
-          "Stay in `done` but marked inactive",
-          "Pushed to a third stack"
+          "Stay in `done` but flagged with an `inverted: true` property; redo unsets the flag",
+          "Pushed to a third `redoQueue` that decouples reapplication from the original do/undo stacks"
         ],
         "answer": 1
       },
       {
         "q": "What does `redo()` do when `undone` is empty?",
         "options": [
-          "Throws",
-          "Replays the last `done` command",
+          "Throws an `EmptyHistoryError` — the caller must check `canRedo()` before calling",
+          "Replays the last `done` command as a fallback, treating redo as a `repeat-last-action` shortcut",
           "Returns early — it's a no-op",
-          "Resets both stacks"
+          "Returns `undefined` and silently re-applies the most recently undone command from a prior session"
         ],
         "answer": 2
       }

@@ -121,28 +121,28 @@
         "options": [
           "An index into the piles array",
           "The answer space: candidate eating speeds k from 1..max(piles)",
-          "The hours h",
-          "The pile sizes after sorting"
+          "The hours h, looking for the smallest h that admits a feasible k",
+          "The pile sizes after sorting, looking for the median pile"
         ],
         "answer": 1
       },
       {
         "q": "Why does this work — what property must the predicate have?",
         "options": [
-          "It must be O(1)",
+          "It must be O(1) so the inner loop doesn't dominate",
           "It must be monotonic: once k is fast enough, every larger k also works",
-          "It must be even",
-          "The piles must be sorted"
+          "It must be symmetric — `canFinish(k) === canFinish(max-k+1)` — so midpoint reflection is valid",
+          "The piles must be sorted so canFinish can short-circuit on the largest pile first"
         ],
         "answer": 1
       },
       {
         "q": "Why `Math.ceil(p / k)` instead of `Math.floor`?",
         "options": [
-          "Style preference",
+          "`floor` would round 1.0 down to 0 due to JS float drift, undercounting hours on exactly-divisible piles",
           "A partial pile still takes a full hour to finish",
-          "JavaScript division returns float; ceil avoids precision bugs only",
-          "It doesn't matter for the result"
+          "`ceil` matches the C++/Java integer division semantics the problem assumes",
+          "`floor` would count the FIRST hour of each pile as 0, off-by-one across all piles"
         ],
         "answer": 1
       },
@@ -170,10 +170,10 @@
       {
         "q": "The loop uses the half-open form `while (l < r)` with `r = m` on success and `l = m + 1` on failure. Why not `r = m - 1` on success?",
         "options": [
-          "It would be faster",
+          "`r = m - 1` would make the range `[l, m-1)` half-open the wrong way — it must be closed on the right",
           "Because m itself might be the minimum feasible speed; `r = m` keeps m as a candidate, while `r = m - 1` could skip the answer",
-          "To avoid overflow",
-          "Because m is never feasible"
+          "`r = m - 1` paired with `while (l < r)` can cause `r` to go below `l` on small ranges, terminating before convergence",
+          "Because m is computed via `floor` and is always one less than the true midpoint, so `m - 1` double-decrements"
         ],
         "answer": 1,
         "explain": "We're finding the leftmost true; a feasible m must stay in the range, so we shrink to [l, m], not [l, m-1]."
@@ -181,10 +181,10 @@
       {
         "q": "What does it mean to 'binary search the answer' here, as opposed to ordinary binary search?",
         "options": [
-          "You sort the piles first, then search them",
+          "You sort the piles first, then binary search them as the input array",
           "You search over candidate ANSWERS (eating speeds) using a monotone feasibility predicate, instead of searching for a value inside the input array",
-          "You search the hours array",
-          "It is the same thing"
+          "You binary search the hours array — bisect on h until the predicate flips",
+          "You binary-search a precomputed hours-per-speed lookup table built in one pass"
         ],
         "answer": 1,
         "explain": "The 'array' is the implicit conceptual range of speeds 1..max(piles); the predicate canFinish(k) supplies the monotone ordering BS needs."
@@ -192,10 +192,10 @@
       {
         "q": "If you replaced `canFinish` to return whether hours `< h` instead of `<= h`, what breaks?",
         "options": [
-          "Nothing",
+          "Nothing — the loop converges to the same answer because `r = m` on success absorbs the off-by-one",
           "Speeds that finish in exactly h hours would be rejected, so the returned minimum speed would be too large (or no answer found when h is tight)",
-          "It becomes O(n^2)",
-          "The loop never terminates"
+          "The returned speed would be too SMALL by exactly 1 — you'd need to add 1 at the end",
+          "The loop would no longer terminate when `l + 1 === r`"
         ],
         "answer": 1,
         "explain": "Finishing in exactly h hours is allowed, so the predicate must use <=; using < discards valid speeds and inflates the answer."
@@ -203,10 +203,10 @@
       {
         "q": "Which OTHER problem uses this identical 'binary search on the answer' template?",
         "options": [
-          "Two Sum",
+          "Two Sum — binary search for `target - nums[i]` in the sorted-array variant",
           "Capacity To Ship Packages Within D Days — search the answer space of ship capacities with a 'finishes in <= D days' predicate",
-          "Merge Intervals",
-          "Valid Parentheses"
+          "Merge Intervals — binary search for the insertion point of each new interval",
+          "Search in Rotated Sorted Array — binary search the answer space of pivot positions"
         ],
         "answer": 1,
         "explain": "Capacity To Ship, Split Array Largest Sum, and Aggressive Cows all share the monotone-predicate-on-the-answer skeleton."

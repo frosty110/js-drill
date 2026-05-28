@@ -118,10 +118,10 @@
       {
         "q": "Why move the SHORTER side inward instead of the taller?",
         "options": [
-          "Style choice",
+          "The shorter side is more likely to be next to a taller bar, raising the height bound on the next step",
           "Water is bounded by the shorter wall; moving the taller side only shrinks width",
-          "It is faster",
-          "It avoids overflow"
+          "Moving the taller side is safe but redundant — both sides converge to the same answer; we pick the shorter for cache locality",
+          "It keeps the two pointers in sorted order, which the area formula assumes"
         ],
         "answer": 1
       },
@@ -148,20 +148,20 @@
       {
         "q": "Why `while (l < r)` and not `l <= r`?",
         "options": [
-          "Performance",
+          "`l <= r` would attempt to read height[r] after r decremented past zero, causing a TypeError",
           "When l === r width is 0 — no container to measure",
-          "JavaScript requires it",
-          "Avoids an off-by-one"
+          "`l <= r` would double-count the diagonal pair (i, i), inflating the best answer",
+          "Strict-less is faster than less-or-equal on V8 because it avoids a branch on the equality check"
         ],
         "answer": 1
       },
       {
         "q": "What is the precise reason moving the TALLER pointer inward can never improve the answer?",
         "options": [
-          "It always lands on a shorter bar next",
+          "It always lands on a strictly shorter bar next, so height drops on every taller-side move",
           "Width strictly shrinks by 1, and the height is still capped by the unchanged shorter side, so the new area can only be smaller or equal",
-          "It causes an integer overflow",
-          "It would skip the optimal pair"
+          "Moving the taller side abandons the current shorter side, and that shorter side may have been the global optimum's partner",
+          "Both pointers must move toward each other in lockstep for the search invariant to hold"
         ],
         "answer": 1,
         "explain": "The shorter side still bounds the height after the move, but width dropped by 1, so the area cannot increase — moving the taller side is provably useless."
@@ -169,10 +169,10 @@
       {
         "q": "Why is the brute force O(n^2) while the two-pointer solution is O(n)?",
         "options": [
-          "The two-pointer version uses a faster min() call",
+          "The two-pointer version uses a SIMD min() instruction that evaluates all pairs in parallel",
           "Brute force checks every pair (i, j); the two-pointer version advances exactly one pointer per step, so it does ~n total iterations instead of ~n^2",
-          "Brute force re-sorts the array each time",
-          "The two-pointer version caches results in a hash map"
+          "The two-pointer version sorts the input first, dropping the inner loop to O(log n)",
+          "Brute force evaluates each pair twice (once forward, once backward), and the two-pointer fix halves that"
         ],
         "answer": 1,
         "explain": "Brute force evaluates all O(n^2) pairs; the two-pointer scan moves one pointer inward each iteration and finishes in n-1 steps because each move prunes a whole class of dominated pairs."
@@ -180,10 +180,10 @@
       {
         "q": "When `height[l] === height[r]` (the two sides are equal), what does the canonical `if (height[l] < height[r]) l++; else r--;` do, and is it safe?",
         "options": [
-          "It moves l, which is a bug",
+          "It moves l because `<` falls through to the truthy branch on equality — this is a subtle correctness bug",
           "The condition is false, so it moves r; safe, because either move gives a symmetric result and any container through the side we keep can't beat the current width",
-          "It throws because of the tie",
-          "It moves both pointers"
+          "It moves r, but is unsafe — discarding either side could lose a future container of equal area but greater width",
+          "It moves neither; the loop stalls until a tiebreak rule outside the if changes the heights"
         ],
         "answer": 1,
         "explain": "On a tie the `<` is false so r-- runs; moving either side is equivalent here, and discarding one of two equal walls loses no better container since width only shrinks from now on."
@@ -191,10 +191,10 @@
       {
         "q": "A candidate writes `area = max(height[l], height[r]) * (r - l)`. Why is this wrong?",
         "options": [
-          "max is slower than min",
+          "Math.max returns the second argument on ties, so the formula picks the wrong height when the walls are equal",
           "Water cannot rise above the SHORTER wall — using max would count water that would spill over the shorter side",
-          "It should be the sum of heights, not the max",
-          "It is correct, just less efficient"
+          "The width should be (r - l + 1), not (r - l) — the off-by-one swamps the max-vs-min question",
+          "max breaks the loop invariant that areas are monotonically non-increasing, so the early-termination guard would fire too early"
         ],
         "answer": 1,
         "explain": "The container holds water only up to the shorter of the two walls; min(h[l], h[r]) is the true height, so max overstates the area."

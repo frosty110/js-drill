@@ -132,40 +132,40 @@
       {
         "q": "Why preallocate `out = new Array(arr.length)` instead of pushing as each resolves?",
         "options": [
-          "Push is slower",
+          "`new Array(n)` allocates a contiguous buffer that the engine fills atomically — `.push` would tear under concurrent then-handlers",
           "Promises may resolve out of order — assigning by index preserves input order",
-          "new Array fills with zeros",
-          "Push throws inside a Promise constructor"
+          "`.push` inside a `.then` callback executes on a different microtask queue than the constructor, so it skips the outer Promise's resolve",
+          "Preallocating sets `out.length` upfront, which is what makes the `done === out.length` completion check valid"
         ],
         "answer": 1
       },
       {
         "q": "What happens when one input rejects?",
         "options": [
-          "Other inputs are cancelled and the outer promise rejects",
+          "Other inputs are cancelled via `AbortSignal` and the outer promise rejects with an AggregateError",
           "Other inputs keep running, but the outer promise rejects with the first error and ignores later results",
-          "It waits for all to settle, then collects errors",
-          "It silently resolves with undefined at that index"
+          "It waits for all to settle, then collects errors into a `.errors` array on the rejection reason",
+          "It silently resolves with `undefined` at the rejected index and keeps the other resolutions"
         ],
         "answer": 1
       },
       {
         "q": "Why wrap each item in `Promise.resolve(item)`?",
         "options": [
-          "It deep-clones the item",
+          "`.then` directly on a non-thenable returns `undefined`, silently dropping the value from the output",
           "Items may be plain values; Promise.resolve normalizes them to thenables",
-          "It speeds up the event loop",
-          "It rejects non-promise items"
+          "It defers the value to a different microtask queue so the outer Promise constructor's resolve can complete first",
+          "`Promise.resolve` triggers internal reference-counting so the runtime can GC each input once it settles"
         ],
         "answer": 1
       },
       {
         "q": "What must `promiseAll([])` resolve to?",
         "options": [
-          "undefined",
-          "null",
+          "`undefined` — there are no results to package into an array",
+          "A forever-pending Promise — `done === length` is `0 === 0` which never re-fires",
           "[] — an empty array",
-          "It should reject — nothing to wait for"
+          "It should reject with a TypeError — an empty iterable is invalid input by the spec"
         ],
         "answer": 2
       }

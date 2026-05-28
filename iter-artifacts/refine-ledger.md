@@ -31,3 +31,4 @@ Step 0 of the skill scans the last 6 rows. Watch for:
 | 5 | today-plan | Stack title + why-tag vertically — fixes mobile clipping of "review due"/"weak spot"/"next on plan" on 80%-phone surface | 7/21 → 11/21 (proj.) | shipped |
 | 6 | plan-picker-modal | Add ⭐ RECOMMENDED badge + emerald accent on Starter Plan card in welcome mode — gives first-time ADHD users an obvious default | 8/21 → 11/21 (proj.) | shipped |
 | 7 | mock-interview | Inline "🎯 Mock another" CTA on post-win feedback — lowers repeat-mock friction, directly serves "PBs trend down over weeks" metric | 14/21 → 15/21 (proj.) | shipped |
+| 8 | — | No clean target: every registry surface either refined this session OR blocked by user's in-flight Font Scale feature WIP (~8 files). Re-refining would cluster; touching WIP files risks collision. Wait for next /loop fire with cleared WIP. | — | bailed |

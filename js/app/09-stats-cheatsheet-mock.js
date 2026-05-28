@@ -666,14 +666,51 @@ function endMockInterview(passed) {
   renderLesson();
   return elapsed;
 }
-function startRandomMockInterview() {
+// Iter 11: smart selection. Replaces uniform-random over 79 patterns with
+// a weighted pool that biases toward the user's active gaps — lessons in
+// state.weakness (recent L1 misses) and lessons whose SR review is due.
+// PROFILE.md line 66-69 mandates this ("Use recent diagnostic signal to
+// bias the pick"). Variety preserved — baseline patterns still in pool.
+// Returns the lesson ID; exposed as a separate helper so probes can call
+// it 100s of times to verify the weighting distribution without paying
+// the cost of starting an actual mock each time.
+function _pickMockLessonId() {
   const patternLessons = CURRICULUM.filter(l => l.status === 'full' && l.track === 'patterns');
-  if (!patternLessons.length) {
+  if (!patternLessons.length) return null;
+  // Restrict diagnostic signals to the Patterns track so the picker doesn't
+  // try to pick a Syntax lesson for a mock (mock is Patterns-only).
+  const dueSet = new Set(
+    dueReviewIds().filter(id => {
+      const l = findLesson(id);
+      return l && l.track === 'patterns';
+    })
+  );
+  const weakSet = new Set(
+    Object.keys(state.weakness || {}).filter(id => {
+      const l = findLesson(id);
+      return l && l.track === 'patterns';
+    })
+  );
+  // Weighted pool: BOTH weak AND due = 5×, either alone = 3×, neither = 1×.
+  // For a user with one active gap, the gap lesson appears 3× and the other
+  // 78 patterns appear 1× each — ~3.6% pick rate vs ~1.2% baseline. Heavy
+  // enough to bias toward gaps; light enough that interleaving still works.
+  const pool = [];
+  for (const lesson of patternLessons) {
+    const weak = weakSet.has(lesson.id);
+    const due = dueSet.has(lesson.id);
+    const weight = (weak && due) ? 5 : (weak || due) ? 3 : 1;
+    for (let i = 0; i < weight; i++) pool.push(lesson.id);
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function startRandomMockInterview() {
+  const id = _pickMockLessonId();
+  if (!id) {
     alert('Author some pattern lessons first.');
     return;
   }
-  const pick = patternLessons[Math.floor(Math.random() * patternLessons.length)];
-  startMockInterview(pick.id);
+  startMockInterview(id);
 }
 function starterPathNextId() {
   // First lesson in the active (track-scoped) starter path that is full

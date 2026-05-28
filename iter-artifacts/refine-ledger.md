@@ -34,3 +34,4 @@ Step 0 of the skill scans the last 6 rows. Watch for:
 | 8 | — | No clean target: every registry surface either refined this session OR blocked by user's in-flight Font Scale feature WIP (~8 files). Re-refining would cluster; touching WIP files risks collision. Wait for next /loop fire with cleared WIP. | — | bailed |
 | 9 | lesson-tabs | Auto-scroll active tab into view in renderLesson tab strip — mobile 6-tab strip no longer leaves users on a tab whose marker is off-screen | 13/21 → 15/21 (proj.) | shipped |
 | 10 | today-plan | Primary "🎯 Start: <plan[0]>" autopilot CTA at top of Today modal — one tap = drilling the smartest pick; 6-card list remains as override | 11/21 → 15/21 (proj.) | shipped |
+| 11 | mock-interview | Smart selection — replace Math.random with weighted pool (BOTH weak+due ×5, either ×3, baseline ×1); biases toward gaps while preserving interleaving | 15/21 → 18/21 (proj.) | shipped |

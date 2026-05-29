@@ -95,6 +95,11 @@ async function shot({ mobile, label }) {
   const arrowCount = await s.eval(`document.querySelectorAll('[data-action="prev-lesson"], [data-action="next-lesson"]').length`);
   s.assert(arrowCount === 0, `[${label}] prev/next arrows should be absent during active mock (got ${arrowCount})`);
 
+  // iter-32 invariant: journey-context pills (.pill-mastered + .pill-path)
+  // absent during active mock.
+  const pillCount = await s.eval(`document.querySelectorAll('#lesson-shell .pill-mastered, #lesson-shell .pill-path').length`);
+  s.assert(pillCount === 0, `[${label}] ✓ Mastered + 🧭 Step pills should be absent during active mock (got ${pillCount})`);
+
   s.report();
   await s.close();
   return s;

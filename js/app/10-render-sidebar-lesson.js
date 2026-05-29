@@ -581,8 +581,11 @@ function renderLesson() {
       <div class="flex items-center gap-2 flex-wrap">
         <span class="pill ${pill}">${pillText}</span>
         <span class="text-xs text-slate-500">${escapeHtml(lesson.section)}</span>
-        ${masteredPill}
-        ${pathPill}
+        <!-- iter 32 (refine): suppress journey-context metadata pills (✓ Mastered
+             + 🧭 Step path) during an active mock — neither is actionable mid-
+             attempt; sidebar status dots carry the same per-lesson mastery
+             signal. Same broken-context-affordance pattern as iters 24/27/29. -->
+        ${(state.mock.active && state.mock.lessonId === lesson.id) ? '' : `${masteredPill}${pathPill}`}
       </div>
       ${(state.mock.active && state.mock.lessonId === lesson.id) ? '' : `
       <!-- iter 29 (refine): prev/next arrows suppressed during active mock —

@@ -617,6 +617,13 @@ function renderLesson() {
   const shuffleHere = header.querySelector('[data-action="shuffle-here"]');
   if (shuffleHere) shuffleHere.addEventListener('click', () => { const r = pickShuffleReview(); if (r) selectLesson(r); });
 
+  // iter 27 (refine): tabs suppressed during an active mock — the surface is
+  // L3-locked by the timer's framing; tabs LOOK like nav but actually break
+  // mock state if used (state.currentTab changes, banner stays, editor
+  // disappears). Returns automatically once the mock ends because
+  // endMockInterview's renderLesson() call re-fires this whole render.
+  const _isMockHere = state.mock.active && state.mock.lessonId === lesson.id;
+  if (!_isMockHere) {
   // tabs
   const tabs = document.createElement('div');
   // overflow-x-auto so the 5-tab row (Conversation + Ref + L1 + L2 + L3)
@@ -680,6 +687,7 @@ function renderLesson() {
     const targetLeft = activeBtn.offsetLeft - (tabs.clientWidth - activeBtn.offsetWidth) / 2;
     tabs.scrollLeft = Math.max(0, Math.min(targetLeft, tabs.scrollWidth - tabs.clientWidth));
   });
+  } // end if (!_isMockHere) — tabs suppressed during mock
 
   // body
   const body = document.createElement('div');

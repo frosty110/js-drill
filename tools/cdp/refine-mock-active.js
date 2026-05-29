@@ -87,6 +87,10 @@ async function shot({ mobile, label }) {
   s.assert(Array.isArray(info.actions) && info.actions.includes('run'), `[${label}] Run action preserved`);
   s.assert(info.editorTop !== null, `[${label}] L3 editor still in DOM`);
 
+  // iter-27 invariant: tab strip should be absent during active mock.
+  const tabCount = await s.eval(`document.querySelectorAll('#lesson-shell .tab-btn').length`);
+  s.assert(tabCount === 0, `[${label}] tab strip should be empty during active mock (got ${tabCount})`);
+
   s.report();
   await s.close();
   return s;

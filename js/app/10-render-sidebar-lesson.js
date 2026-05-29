@@ -591,7 +591,10 @@ function renderLesson() {
     </div>
     <h2 class="text-2xl font-bold text-white">${escapeHtml(lesson.title)}</h2>
     <p class="text-slate-400 mt-1 text-sm">${escapeHtml(content.description)}</p>
-    ${content.L3?.prompt ? `
+    ${content.L3?.prompt && state.currentTab !== 'L3' ? `
+    <!-- iter 26 (refine): suppressed on the L3 tab — the L3 body has its own
+         PROMPT box (with expected-output cue) covering the same content;
+         showing both pushes the mobile editor ~100px farther below the fold. -->
     <div class="lesson-prompt mt-3 p-3 rounded-md bg-slate-900/70 border border-slate-800">
       <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Problem</div>
       <div class="text-slate-200 text-sm leading-snug">${escapeHtml(content.L3.prompt)}</div>

@@ -1351,6 +1351,19 @@ function initTodaysPlanModal() {
       const first = plan[0];
       const firstLesson = findLesson(first.id);
       const firstTitle = firstLesson?.title || first.id;
+      // iter 22: inventory of today's session — converts the modal from
+      // "unknown queue" to "named bundle" for the ADHD/phone user. Counts
+      // are derived from plan[].why; only renders when ≥2 buckets are active
+      // (a single-bucket plan's CTA tag already tells the story). Colors
+      // match the per-card why-tag pills below for cross-visual consistency.
+      const whyCounts = plan.reduce((acc, p) => { acc[p.why] = (acc[p.why] || 0) + 1; return acc; }, {});
+      const invParts = [];
+      if (whyCounts['review due']) invParts.push(`<span style="color:#67e8f9;">${whyCounts['review due']} due</span>`);
+      if (whyCounts['weak spot'])  invParts.push(`<span style="color:#fdba74;">${whyCounts['weak spot']} weak</span>`);
+      if (whyCounts['next on plan']) invParts.push(`<span style="color:#93c5fd;">${whyCounts['next on plan']} on path</span>`);
+      const inventoryHtml = invParts.length >= 2
+        ? `<div data-today-inventory style="display:flex;justify-content:center;gap:10px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin:-8px 0 10px;color:#94a3b8;">${invParts.join(`<span style="color:#475569;">·</span>`)}</div>`
+        : '';
       const primaryCta = `
         <button data-action="start-first" data-lesson-id="${escapeHtml(first.id)}" style="text-align:left;width:100%;padding:14px 16px;border-radius:8px;background:rgba(52,211,153,0.14);border:1px solid rgba(52,211,153,0.55);color:#ecfdf5;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:inherit;margin-bottom:14px;">
           <span style="display:flex;flex-direction:column;gap:3px;min-width:0;">
@@ -1360,6 +1373,7 @@ function initTodaysPlanModal() {
           </span>
           <span style="color:#34d399;font-size:18px;flex-shrink:0;">➜</span>
         </button>
+        ${inventoryHtml}
         <div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:0.08em;text-align:center;margin:0 0 8px;">— Or pick another —</div>
       `;
       body.innerHTML = primaryCta + plan.map(({ id, why }) => {

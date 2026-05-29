@@ -86,6 +86,25 @@ async function capture(s, label) {
   sd.assert(/🎯 Start/.test(ctaReport.ctaText || ''), `[desktop] CTA text contains "🎯 Start"`);
   sd.assert(ctaReport.ctaLessonId === ctaReport.firstListCardLessonId, `[desktop] CTA points at plan[0] (same lesson as first list card)`);
   sd.assert(ctaReport.totalLessonIdElements === 7, `[desktop] CTA + 6 list cards = 7 [data-lesson-id] elements (got ${ctaReport.totalLessonIdElements})`);
+
+  // iter-22 invariant: an inventory row [data-today-inventory] sits between
+  // the CTA and the "Or pick another" divider, summarizing what's in today's
+  // session (e.g. "3 due · 1 weak · 2 on path"). It renders only when ≥2
+  // why-buckets are populated; the MIDFLIGHT seed has all three.
+  const invReport = await sd.eval(`(() => {
+    const inv = document.querySelector('#today-body [data-today-inventory]');
+    if (!inv) return { exists: false };
+    const text = inv.textContent.replace(/\\s+/g, ' ').trim();
+    return { exists: true, text };
+  })()`);
+  console.log('\nDesktop inventory report:', JSON.stringify(invReport));
+  sd.assert(invReport.exists, `[desktop] [data-today-inventory] row should render with 3+ buckets active`);
+  sd.assert(invReport.exists && /\d+ DUE/i.test(invReport.text || ''),
+    `[desktop] inventory should include "N DUE" (got "${invReport.text}")`);
+  sd.assert(invReport.exists && /\d+ WEAK/i.test(invReport.text || ''),
+    `[desktop] inventory should include "N WEAK" (got "${invReport.text}")`);
+  sd.assert(invReport.exists && /\d+ ON PATH/i.test(invReport.text || ''),
+    `[desktop] inventory should include "N ON PATH" (got "${invReport.text}")`);
   // Click the CTA — assert state.currentLessonId flips to the CTA's lessonId.
   const ctaLessonId = ctaReport.ctaLessonId;
   await sd.eval(`document.querySelector('#today-body [data-action="start-first"]').click()`);

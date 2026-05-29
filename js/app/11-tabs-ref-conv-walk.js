@@ -596,7 +596,11 @@ function renderReference(body, content) {
     </div>
     <div class="mt-4" data-ref-mechanics></div>
     <div class="mt-6">
-      <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Notes</div>
+      <!-- iter 28 (refine): promote the Notes section header (matching iter-21's
+           mechanics-list category divider) so the rusty engineer's highest-value
+           refresh-cues (the gotchas) read as a clear section rather than footer
+           noise. Appended "· N" announces scope before the user scrolls. -->
+      <div data-ref-notes-header style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#a5b4fc;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(165,180,252,0.4);">Notes · ${ref.notes.length}</div>
       <ul class="space-y-2">
         ${ref.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600">▸</span><span>${escapeHtml(n)}</span></li>`).join('')}
       </ul>

@@ -871,7 +871,22 @@ function initAtRiskModal() {
     if (!rows.length) {
       body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">All clear — no wobbly or revealed lessons! 🎉</div>`;
     } else {
-      body.innerHTML = rows.map(r => {
+      // iter 33 (refine): urgency-shape inventory above the cards. ADHD/phone
+      // user sees the distribution upfront ("2 DUE NOW · 1 SOON · 1 NO-SR")
+      // instead of constructing it from per-card pills. Only non-zero buckets
+      // render. Same iter-21/iter-28/iter-30 section-divider hex palette as
+      // the codebase's other in-context inventory rows (iter-22 today-plan).
+      const dueNow = rows.filter(r => r.isDue).length;
+      const soon   = rows.filter(r => !r.isDue && r.daysTilDue !== null).length;
+      const noSr   = rows.filter(r => r.daysTilDue === null).length;
+      const invParts = [];
+      if (dueNow) invParts.push(`<span style="color:#fca5a5;">${dueNow} DUE NOW</span>`);
+      if (soon)   invParts.push(`<span style="color:#fdba74;">${soon} SOON</span>`);
+      if (noSr)   invParts.push(`<span style="color:#94a3b8;">${noSr} NO-SR</span>`);
+      const inventoryHtml = invParts.length >= 1
+        ? `<div data-at-risk-inventory style="display:flex;gap:10px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:12px;padding:6px 0 6px 10px;border-left:2px solid rgba(165,180,252,0.4);color:#a5b4fc;">${invParts.join(`<span style="color:#475569;">·</span>`)}</div>`
+        : '';
+      body.innerHTML = inventoryHtml + rows.map(r => {
         const dueChip = r.isDue
           ? `<span style="color:#fca5a5; font-size:11px; background:rgba(248,113,113,0.12); border:1px solid rgba(248,113,113,0.3); border-radius:999px; padding:2px 8px; font-weight:600;">DUE NOW</span>`
           : r.daysTilDue !== null

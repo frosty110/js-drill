@@ -624,13 +624,15 @@ function renderTopbarMenuContents(menuKey) {
   if (!cat) {
     return `<div class="topbar-dropdown-stub">Menu "${escapeHtml(menuKey)}" not configured.</div>`;
   }
+  // 2026-05-29 hybrid dropdown: single-line items, descriptions move to the
+  // title attribute. Native browser tooltip shows the desc on desktop hover
+  // (touch devices have no hover, so descriptions are silently dropped on
+  // mobile — that's the intent, descriptions reappear on the destination
+  // modal). Cuts each row's height by ~2 lines and ~28px.
   const _itemRow = (it) => `
-    <button class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}">
+    <button class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
       <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
-      <div class="topbar-item-text">
-        <div class="topbar-item-name">${escapeHtml(it.label)}</div>
-        ${it.desc ? `<div class="topbar-item-desc">${escapeHtml(it.desc)}</div>` : ''}
-      </div>
+      <span class="topbar-item-name">${escapeHtml(it.label)}</span>
     </button>`;
   // Grouped menus (Drill's 5 recall-direction families) render a labelled
   // sub-header per group so 19 surfaces stay scannable.
@@ -650,15 +652,7 @@ function renderTopbarMenuContents(menuKey) {
   const blurb = cat.blurb
     ? `<div class="topbar-menu-blurb">${escapeHtml(cat.blurb)}</div>`
     : '';
-  const rows = items.map(it => `
-    <button class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}">
-      <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
-      <div class="topbar-item-text">
-        <div class="topbar-item-name">${escapeHtml(it.label)}</div>
-        ${it.desc ? `<div class="topbar-item-desc">${escapeHtml(it.desc)}</div>` : ''}
-      </div>
-    </button>
-  `).join('');
+  const rows = items.map(_itemRow).join('');
   return blurb + rows;
 }
 

@@ -194,7 +194,7 @@ function _renderMechanicsListHtml() {
     const items = byCat.get(cat.id) || [];
     items.sort((a, b) => b.total - a.total || a.m.label.localeCompare(b.m.label));
     if (!items.length) continue;
-    html += `<div data-mech-cat="${escapeHtml(cat.id)}" style="font-size:10.5px;text-transform:uppercase;letter-spacing:0.07em;color:#64748b;margin-top:10px;margin-bottom:4px;">${escapeHtml(cat.label)}</div>`;
+    html += `<div data-mech-cat="${escapeHtml(cat.id)}" style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#a5b4fc;margin-top:14px;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(165,180,252,0.4);">${escapeHtml(cat.label)}</div>`;
     for (const { m, total, mastered } of items) {
       const empty = total === 0;
       const masteredAll = total > 0 && mastered === total;

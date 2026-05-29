@@ -711,6 +711,13 @@ function initPwaInstall() {
 function initSearchAndKeyboard() {
   // Search input
   const searchInput = document.getElementById('search-input');
+  // iter 31 (refine): drop the "(press /)" keyboard-shortcut cue on coarse-
+  // pointer (touch) devices where there's no / key. Same matchMedia idiom
+  // used by review-btn's L2-vs-L3 tab routing. The global / hotkey handler
+  // (below) stays wired in case the device somehow delivers it.
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+    searchInput.placeholder = 'Search lessons…';
+  }
   searchInput.addEventListener('input', (e) => {
     state.searchQuery = e.target.value;
     renderSidebar();

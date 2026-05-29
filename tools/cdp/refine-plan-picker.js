@@ -53,6 +53,37 @@ async function openWelcome(s) {
   console.log('\nDesktop welcome — path cards:');
   for (const c of cards) console.log(`  [${c.id}] h=${Math.round(c.height)}px · ${c.text}`);
   sd.assert(cards.length === 3, `[desktop] modal shows all 3 paths (got ${cards.length})`);
+
+  // iter-23 invariant: every plan card renders a [data-blurb-lead] span with
+  // a brighter computed color than the muted tail. Lead carries the first
+  // sentence of the blurb; rest carries the remainder.
+  const leadReport = await sd.eval(`(() => {
+    const cards = Array.from(document.querySelectorAll('#path-body [data-path-id]'));
+    return cards.map(card => {
+      const lead = card.querySelector('[data-blurb-lead]');
+      const leadText = lead?.textContent.trim();
+      const leadColor = lead ? getComputedStyle(lead).color : null;
+      const tail = card.querySelector('[data-blurb-lead] ~ span');
+      const tailColor = tail ? getComputedStyle(tail).color : null;
+      const leadWeight = lead ? getComputedStyle(lead).fontWeight : null;
+      return { id: card.getAttribute('data-path-id'), hasLead: !!lead, leadText, leadColor, tailColor, leadWeight };
+    });
+  })()`);
+  console.log('\nDesktop iter-23 blurb-lead report:');
+  console.log(JSON.stringify(leadReport, null, 2));
+  // Lighten-check: parse "rgb(r, g, b)" — sum of channels should be HIGHER for the lead.
+  const channelSum = (rgb) => {
+    if (!rgb) return 0;
+    const m = rgb.match(/rgb\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+    return m ? parseInt(m[1])+parseInt(m[2])+parseInt(m[3]) : 0;
+  };
+  for (const r of leadReport) {
+    sd.assert(r.hasLead, `[desktop] card "${r.id}" has [data-blurb-lead]`);
+    sd.assert(r.leadText && r.leadText.length > 5, `[desktop] card "${r.id}" lead has meaningful text (got "${r.leadText}")`);
+    sd.assert(channelSum(r.leadColor) > channelSum(r.tailColor),
+      `[desktop] card "${r.id}" lead color brighter than tail (lead=${r.leadColor} tail=${r.tailColor})`);
+  }
+
   await sd.close();
 
   // Mobile pass

@@ -1002,13 +1002,25 @@ function openPathModal(opts = {}) {
     const recommendedBanner = recommended
       ? `<span data-recommended style="display:inline-block;align-self:flex-start;color:#34d399;background:rgba(52,211,153,0.14);font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;">⭐ Recommended — most users start here</span>`
       : '';
+    // iter 23: promote the blurb's lead sentence to a brighter weight so the
+    // ADHD/phone user scans 3 differentiated lines instead of 3 paragraphs.
+    // First "." (or "?"/"!") followed by whitespace is the boundary; if no
+    // boundary exists the whole blurb stays in the muted tail (no lead).
+    const blurb = p.blurb || '';
+    const splitIdx = (() => { const m = blurb.match(/[.!?]\s+/); return m ? m.index + m[0].length : -1; })();
+    const lead = splitIdx > 0 ? blurb.slice(0, splitIdx).trim() : '';
+    const tail = splitIdx > 0 ? blurb.slice(splitIdx).trim() : blurb;
+    const blurbHtml = lead
+      ? `<span data-blurb-lead style="color:#cbd5e1;font-size:12px;font-weight:500;line-height:1.5;">${escapeHtml(lead)}</span>
+         <span style="color:#94a3b8;font-size:12px;line-height:1.5;">${escapeHtml(tail)}</span>`
+      : `<span style="color:#94a3b8;font-size:12px;line-height:1.5;">${escapeHtml(blurb)}</span>`;
     return `<button data-path-id="${escapeHtml(p.id)}" style="text-align:left;padding:14px 16px;border-radius:8px;background:${bg};border:1px solid ${border};color:#e2e8f0;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
       ${recommendedBanner}
       <span style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <span style="font-weight:600;font-size:14px;">${escapeHtml(p.icon || '')} ${escapeHtml(p.label)}</span>
         ${tag}
       </span>
-      <span style="color:#94a3b8;font-size:12px;line-height:1.5;">${escapeHtml(p.blurb)}</span>
+      ${blurbHtml}
     </button>`;
   }).join('');
   const footerHtml = welcome

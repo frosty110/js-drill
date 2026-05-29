@@ -66,6 +66,19 @@ async function shot({ mobile, label }) {
   `);
   console.log(`[${label}]`, JSON.stringify(info, null, 2));
 
+  // iter-36 invariant: .section-header renders at ≥12px lavender + ≥2px left-border.
+  const sh = await s.eval(`
+    (() => {
+      const el = document.querySelector('.section-header');
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return { fontSize: cs.fontSize, color: cs.color, borderLeftWidth: cs.borderLeftWidth };
+    })()
+  `);
+  s.assert(!!sh, `[${label}] .section-header should render`);
+  s.assert(sh && parseFloat(sh.fontSize) >= 12, `[${label}] section-header font-size >=12px (got ${sh?.fontSize})`);
+  s.assert(sh && parseFloat(sh.borderLeftWidth) >= 2, `[${label}] section-header left-border >=2px (got ${sh?.borderLeftWidth})`);
+
   s.report();
   await s.close();
   return s;

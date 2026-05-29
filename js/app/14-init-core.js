@@ -808,6 +808,15 @@ function initCommandPalette() {
   const paletteOverlay = document.getElementById('palette-overlay');
   const paletteInput = document.getElementById('palette-input');
   const paletteTrigger = document.getElementById('palette-trigger');
+  // iter 34 (refine): touch-aware palette footer. Default footer is keyboard-
+  // only ("↑↓ navigate ↵ open Esc close") — none of those work on touch.
+  // Replace with tap-equivalents on coarse-pointer. Same matchMedia idiom as
+  // iter 31's search-input placeholder fix. Arrow/Enter/Esc handlers below
+  // stay wired in case a touch device delivers those events.
+  if (paletteOverlay && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+    const footer = paletteOverlay.querySelector('.palette-footer');
+    if (footer) footer.innerHTML = '<span>Tap a row to open · Tap outside to close</span>';
+  }
   if (paletteInput) {
     paletteInput.addEventListener('input', _paletteRender);
     paletteInput.addEventListener('keydown', (e) => {

@@ -571,6 +571,11 @@ function renderLesson() {
   } else if (overall === 'mastered' && nextLessonObj) {
     nextCta = `<div class="mt-3 flex items-center gap-2" data-cta-row><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">🎲 Shuffle review</button></div>`;
   }
+  // iter 22 (refine — iter 24 of the refine loop): suppress the abandonment
+  // CTAs while a mock interview is active on THIS lesson. The next-lesson /
+  // shuffle row is a "go elsewhere" affordance — contradictory above a timed
+  // interview banner. Returns automatically once the mock ends.
+  if (state.mock.active && state.mock.lessonId === lesson.id) nextCta = '';
   header.innerHTML = `
     <div class="flex items-center justify-between gap-3 mb-1">
       <div class="flex items-center gap-2 flex-wrap">

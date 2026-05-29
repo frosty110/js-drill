@@ -1093,7 +1093,7 @@ function initStatsModal() {
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Mastered</div>
-          <div style="font-size: 28px; color: #10b981; font-weight: 700;">${mastered} / ${fullLessons.length}</div>
+          <div style="font-size: 28px; color: #10b981; font-weight: 700;">${mastered} / ${fullLessons.length}<span style="font-size: 14px; color: #6ee7b7; font-weight: 500; margin-left: 6px;">· ${fullLessons.length ? Math.round(mastered / fullLessons.length * 100) : 0}%</span></div>
         </div>
         <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">In Progress</div>

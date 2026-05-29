@@ -584,10 +584,16 @@ function renderLesson() {
         ${masteredPill}
         ${pathPill}
       </div>
+      ${(state.mock.active && state.mock.lessonId === lesson.id) ? '' : `
+      <!-- iter 29 (refine): prev/next arrows suppressed during active mock —
+           clicking them mid-mock calls selectLesson() which silently breaks
+           state (currentLessonId changes; banner stays; timer ticks against
+           the wrong content). Same broken-affordance pattern as iters 24
+           (next-CTA) and 27 (tab strip). j/k keyboard shortcuts unaffected. -->
       <div class="flex items-center gap-1 text-slate-500 text-xs">
         <button class="hover:text-slate-300 px-1" data-action="prev-lesson" title="Previous (k)">◀</button>
         <button class="hover:text-slate-300 px-1" data-action="next-lesson" title="Next (j)">▶</button>
-      </div>
+      </div>`}
     </div>
     <h2 class="text-2xl font-bold text-white">${escapeHtml(lesson.title)}</h2>
     <p class="text-slate-400 mt-1 text-sm">${escapeHtml(content.description)}</p>
@@ -603,8 +609,10 @@ function renderLesson() {
     ${nextCta}
   `;
   shell.appendChild(header);
-  header.querySelector('[data-action="prev-lesson"]').addEventListener('click', () => { const p = prevLessonId(lesson.id); if (p) selectLesson(p); });
-  header.querySelector('[data-action="next-lesson"]').addEventListener('click', () => { const n = nextLessonId(lesson.id); if (n) selectLesson(n); });
+  // iter 29 (refine): optional-chained because the prev/next arrow buttons
+  // are suppressed during an active mock (see title-row template above).
+  header.querySelector('[data-action="prev-lesson"]')?.addEventListener('click', () => { const p = prevLessonId(lesson.id); if (p) selectLesson(p); });
+  header.querySelector('[data-action="next-lesson"]')?.addEventListener('click', () => { const n = nextLessonId(lesson.id); if (n) selectLesson(n); });
   const nextBtn = header.querySelector('[data-action="goto-next"]');
   if (nextBtn) nextBtn.addEventListener('click', () => selectLesson(nextId));
   // "Review N due" — jump to the top due lesson via the same sidebar-button

@@ -91,6 +91,10 @@ async function shot({ mobile, label }) {
   const tabCount = await s.eval(`document.querySelectorAll('#lesson-shell .tab-btn').length`);
   s.assert(tabCount === 0, `[${label}] tab strip should be empty during active mock (got ${tabCount})`);
 
+  // iter-29 invariant: prev/next-lesson arrow buttons absent during active mock.
+  const arrowCount = await s.eval(`document.querySelectorAll('[data-action="prev-lesson"], [data-action="next-lesson"]').length`);
+  s.assert(arrowCount === 0, `[${label}] prev/next arrows should be absent during active mock (got ${arrowCount})`);
+
   s.report();
   await s.close();
   return s;

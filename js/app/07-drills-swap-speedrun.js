@@ -232,8 +232,17 @@ async function startClaimSession() {
         answered = true;
         const said = btn.dataset.pick === 'correct'; // user's claim
         const wasRight = said === card.isCorrect;
-        if (wasRight) correct++;
-        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        if (wasRight) {
+          correct++;
+          // Hold-but-reset-dueAt SR on a recognition-tier win. Guarded
+          // to mastered+due lessons only — mirrors the L2 pattern in
+          // markPassed() (slice 09:791). Binary forced choice is even
+          // shallower than Predict's 4-MC, so we keep the SR cycle
+          // moving without falsely advancing the bucket.
+          if (state.reviews[card.lessonId] && isDueForReview(card.lessonId)) {
+            scheduleReview(card.lessonId, { advance: false });
+          }
+        } else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
         state.claim.attempts++;
         if (wasRight) state.claim.correct++;
         saveProgress();

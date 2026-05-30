@@ -562,12 +562,10 @@ async function _traceHopBuildDeck() {
   const candidates = CURRICULUM.filter(l =>
     l.status === 'full' && (l.track === 'patterns' || l.track === 'applied')
   );
-  // Fisher-Yates shuffle so each session pulls a different sample.
-  const shuffled = candidates.slice();
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
+  // SR/weakness-weighted shuffle — lessons the user owes attention
+  // (overdue SR or weakness > 0) surface first within a session. See
+  // `_srPriorityShuffle` in slice 04 for bucketing rules.
+  const shuffled = _srPriorityShuffle(candidates, l => l.id);
   // Try lessons one by one until we've built enough cards.
   const deck = [];
   for (const lesson of shuffled) {

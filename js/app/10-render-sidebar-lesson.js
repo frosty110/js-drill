@@ -616,7 +616,7 @@ function renderLesson() {
       <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Problem</div>
       <div class="text-slate-200 text-sm leading-snug">${escapeHtml(content.L3.prompt)}</div>
     </div>` : ''}
-    <div data-sparkline-slot class="mt-1">${renderSparkline(lesson.id)}</div>
+    ${(state.mock.active && state.mock.lessonId === lesson.id) ? '' : `<div data-sparkline-slot class="mt-1">${renderSparkline(lesson.id)}</div>`}
     ${nextCta}
   `;
   shell.appendChild(header);

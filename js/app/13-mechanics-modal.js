@@ -189,10 +189,30 @@ function _renderMechanicsListHtml() {
     const arr = byCat.get(m.category);
     if (arr) arr.push({ m, total, mastered });
   }
+  // iter 45 (refine): within-category sort gets a STATE-PRIORITY primary
+  // dimension so in-progress mechanics float above untouched + complete.
+  // The autopilot user's "what should I drill next?" question gets answered
+  // by the visually-first row instead of by scanning every card to find the
+  // one with a non-zero, non-100% percent. Tier order:
+  //   0 = in-progress (0 < mastered < total)
+  //   1 = untouched   (total > 0, mastered == 0)
+  //   2 = complete    (total > 0, mastered == total)
+  //   3 = empty       (total == 0, no lessons tagged)
+  // Existing `total DESC, then alpha` becomes the tiebreaker within each tier.
+  const _tier = ({ total, mastered }) => {
+    if (total === 0) return 3;
+    if (mastered === 0) return 1;
+    if (mastered === total) return 2;
+    return 0;
+  };
   let html = '';
   for (const cat of MECHANIC_CATEGORIES) {
     const items = byCat.get(cat.id) || [];
-    items.sort((a, b) => b.total - a.total || a.m.label.localeCompare(b.m.label));
+    items.sort((a, b) => {
+      const aT = _tier(a), bT = _tier(b);
+      if (aT !== bT) return aT - bT;
+      return b.total - a.total || a.m.label.localeCompare(b.m.label);
+    });
     if (!items.length) continue;
     html += `<div data-mech-cat="${escapeHtml(cat.id)}" style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#a5b4fc;margin-top:14px;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(165,180,252,0.4);">${escapeHtml(cat.label)}</div>`;
     for (const { m, total, mastered } of items) {

@@ -124,6 +124,61 @@ async function seedAndSnap({ mobile, label }) {
   })()`);
   console.log(`[${label}] List view survey:`, JSON.stringify(listSurvey, null, 2));
 
+  // iter 45 invariant: within each category, in-progress mechanics
+  // (0 < mastered < total) sort FIRST. We scan all mechanic buttons in
+  // document order; for every category whose first mechanic has mastery
+  // status data, that mechanic must be in-progress if ANY in-progress
+  // mechanic exists in that category.
+  const sortReport = await s.eval(`(() => {
+    const body = document.getElementById('mechanics-body');
+    if (!body) return null;
+    // Walk children top-to-bottom: each category header is followed by N mechanic buttons.
+    const kids = Array.from(body.children);
+    const groups = [];
+    let cur = null;
+    for (const el of kids) {
+      if (el.hasAttribute && el.hasAttribute('data-mech-cat')) {
+        cur = { cat: el.textContent.trim(), items: [] };
+        groups.push(cur);
+      } else if (cur && el.hasAttribute && el.hasAttribute('data-mech-id')) {
+        // Parse the chip "M/T · P%" → tier
+        const chipText = el.querySelector('span:last-child')?.textContent || '';
+        const m = chipText.match(/(\\d+)\\/(\\d+)/);
+        const mastered = m ? parseInt(m[1], 10) : 0;
+        const total = m ? parseInt(m[2], 10) : 0;
+        let tier;
+        if (total === 0) tier = 3;
+        else if (mastered === 0) tier = 1;
+        else if (mastered === total) tier = 2;
+        else tier = 0;
+        cur.items.push({ label: el.querySelector('span:first-child')?.textContent.trim() || '?', mastered, total, tier });
+      }
+    }
+    return groups.filter(g => g.items.length).map(g => ({
+      cat: g.cat,
+      tiers: g.items.map(i => i.tier),
+      hasInProgress: g.items.some(i => i.tier === 0),
+      firstTier: g.items[0].tier,
+      firstLabel: g.items[0].label,
+    }));
+  })()`);
+  console.log(`[${label}] iter-45 sort survey:`, JSON.stringify(sortReport, null, 2));
+  if (Array.isArray(sortReport)) {
+    for (const g of sortReport) {
+      if (g.hasInProgress) {
+        s.assert(g.firstTier === 0,
+          `[${label}] iter 45: category "${g.cat}" has in-progress mechanics → first row should be tier 0 (got tier ${g.firstTier} "${g.firstLabel}")`);
+      }
+      // Tiers should be monotonically non-decreasing within a category.
+      let monotonic = true;
+      for (let i = 1; i < g.tiers.length; i++) {
+        if (g.tiers[i] < g.tiers[i - 1]) { monotonic = false; break; }
+      }
+      s.assert(monotonic,
+        `[${label}] iter 45: category "${g.cat}" tiers should be monotonic non-decreasing (got [${g.tiers.join(',')}])`);
+    }
+  }
+
   // Switch back to Matrix view via toggle (already-default behavior preserved)
   await s.click('#mechanics-view-matrix');
   await s.sleep(400);

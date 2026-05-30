@@ -195,6 +195,42 @@
     </div>
   </div>
 
+  <!-- Audio episodes — two-voice podcast playback over the Conversation tab
+       content. Two surfaces, one persistent state:
+       (1) Modal playlist — entry point to pick an episode.
+       (2) Bottom dock — persists across tab + lesson navigation while audio
+           plays, so the user can read along on the Conversation tab (or any
+           other tab) without the player blocking the content.
+       Defaults to SpeechSynthesis with two distinct voices (works on-screen
+       immediately). Prefers pre-generated audio at audio/<lessonId>/s<N>-
+       <say|why>.{wav,mp3} when present (lock-screen + offline via Media
+       Session). -->
+  <div id="audio-modal" style="position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.6); display: none;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 520px; width: 92vw; max-height: 80vh; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 24px; display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <h2 style="font-size: 18px; font-weight: 700; color: #f8fafc;">🎧 Audio episodes</h2>
+        <button id="audio-modal-close" style="color: #94a3b8; font-size: 22px; line-height: 1;" aria-label="Close">×</button>
+      </div>
+      <div style="font-size: 12px; color: #94a3b8; margin-bottom: 14px;">Two-voice walkthrough of the Conversation tab. Picks a lesson and plays as a podcast — read along or pocket-listen. Controls dock at the bottom of the screen.</div>
+      <div id="audio-playlist" style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1;"></div>
+    </div>
+  </div>
+
+  <!-- Audio dock — fixed bottom bar shown while audio is playing/paused.
+       Persists across tab and lesson navigation; closing the dock stops
+       playback and clears state. Tap the title strip to re-open the
+       playlist modal (switch episodes). -->
+  <div id="audio-dock" style="display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 55; background: #0b1220; border-top: 1px solid #1e293b; padding: 10px 12px; align-items: center; gap: 10px;">
+    <button id="audio-dock-meta" style="flex: 1; min-width: 0; text-align: left; background: none; padding: 0; color: #f1f5f9;" aria-label="Open audio playlist">
+      <div id="audio-dock-title" style="font-size: 13px; font-weight: 600; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🎧 …</div>
+      <div id="audio-dock-section" style="font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">…</div>
+    </button>
+    <button id="audio-dock-prev" style="background: #1e293b; color: #f1f5f9; border-radius: 8px; padding: 8px 10px; font-size: 14px;" aria-label="Previous clip">⏮</button>
+    <button id="audio-dock-playpause" style="background: #fbbf24; color: #0f172a; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600;" aria-label="Play or pause">▶</button>
+    <button id="audio-dock-next" style="background: #1e293b; color: #f1f5f9; border-radius: 8px; padding: 8px 10px; font-size: 14px;" aria-label="Next clip">⏭</button>
+    <button id="audio-dock-close" style="color: #94a3b8; font-size: 18px; padding: 4px 8px;" aria-label="Stop and close">×</button>
+  </div>
+
   <!-- iter 60: Weak-Spot Decay Radar modal — union of weakness ∪ revealed,
        sorted by urgency. Closes iter-59 roadmap entry #1. -->
   <div id="at-risk-modal" style="position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.6); display: none;">
@@ -299,7 +335,6 @@
           <h1 class="text-xl font-bold text-white tracking-tight">JS Drill</h1>
           <span class="text-xs text-slate-500">v1</span>
         </div>
-        <p class="text-xs text-slate-400 mt-1">Memorize JavaScript syntax & canonical patterns.</p>
         <div class="mt-3">
           <div class="flex justify-between text-xs text-slate-500 mb-1">
             <span id="progress-summary">0 / 10 lessons mastered</span>
@@ -368,6 +403,7 @@
             <button id="rapid-fire-btn" class="text-slate-500 hover:text-yellow-300 transition" title="Cross-lesson L1 tap-stream — 20 questions, 7s soft timer, streak counter">⚡ Rapid</button>
             <button id="big-o-btn" class="text-slate-500 hover:text-sky-300 transition" title="Complexity-only L1 stream — 12 Big-O questions from across patterns, 7s timer">⏱ Big-O</button>
             <button id="warmup-btn" class="text-slate-500 hover:text-orange-300 transition" title="3-card mobile warmup over Today's Plan — due + path + weak in ~60 sec">🌅 Warmup</button>
+            <button id="audio-btn" class="text-slate-500 hover:text-amber-300 transition" title="Audio episodes — listen to the Conversation tab as a two-voice podcast. Pre-generated MP3s where available; browser TTS fallback otherwise.">🎧 Audio</button>
             <button id="speedrun-btn" class="text-slate-500 hover:text-lime-300 transition" title="Pick a section, race the first L1 of every lesson against a stopwatch — per-section best time saved">🏁 Speedrun</button>
             <button id="gauntlet-btn" class="text-slate-500 hover:text-indigo-300 transition" title="Pattern-Family Gauntlet — pick a section, drill EVERY L1 question across EVERY lesson back-to-back. No timer. Deep-on-one-family interleaving (Today's Plan = broad sample, Speedrun = first-L1 sprint, Gauntlet = deep run-through)">🥊 Gauntlet</button>
             <button id="phone-screen-btn" class="text-slate-500 hover:text-cyan-300 transition" title="Phone Screen Simulator — chained 3-card session under ONE unbroken timer (~12-15 min): syntax warmup (read a Reference card) → pattern L3 (full editor, lion's share of timer) → mechanic-related L2 follow-up (fill the blanks). Reproduces the real phone-screen shape that Mock (single lesson) and Gauntlet (same-section L1 chain, no timer) don't drill. The unbroken timer is the point — cumulative pressure across lesson transitions is what interview format adds.">📞 Phone Screen</button>

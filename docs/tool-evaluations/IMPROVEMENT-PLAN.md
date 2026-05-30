@@ -119,7 +119,7 @@ Highest-impact-per-edit ratio. Each is a single ~3-line change with a meaningful
 
 **Group C — Custom per-pair SR (new schema):** +3 Spacing. Multi-edit; treat as its own mini-phase.
 
-- [x] **swap-bench** — extend `state.swapBench` shape to track per-pair `{ dueAt, interval }` (`js/app/01-state-content.js:221`); on win double interval (1d→2d→4d), on miss reset to 1d; build deck preferring overdue pairs in `_swapBuildDeck` at `js/app/07-drills-swap-speedrun.js:12`. Lifts Spacing 0→3 (+3) — 📄 `audits/swap-bench.md` → awaiting commit
+- [x] **swap-bench** — extend `state.swapBench` shape to track per-pair `{ dueAt, interval }` (`js/app/01-state-content.js:221`); on win double interval (1d→2d→4d), on miss reset to 1d; build deck preferring overdue pairs in `_swapBuildDeck` at `js/app/07-drills-swap-speedrun.js:12`. Lifts Spacing 0→3 (+3) — 📄 `audits/swap-bench.md` → commit `33a69be`
 
 **Cumulative Spacing lift across drill family (Group A + B + C):** ≈4×1 + 3×2 + 1×3 = **+13 Spacing points** across 8 tools. Plus the Closed-loop / Encoding / Interleaving / Feedback side-edits bundled into each audit (read each audit for the full +N projection per tool).
 

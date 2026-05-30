@@ -84,6 +84,27 @@ async function openWelcome(s) {
       `[desktop] card "${r.id}" lead color brighter than tail (lead=${r.leadColor} tail=${r.tailColor})`);
   }
 
+  // iter-43 invariants: welcome subhead drops the corpus-stat first sentence;
+  // switch subhead is unchanged.
+  // Both modes are visited above (welcome opened second). Capture both texts now.
+  const welcomeSub = await sd.eval(`
+    document.querySelector('#path-modal [data-path-sub]')?.textContent.trim()
+  `);
+  sd.assert(welcomeSub && !/lessons across syntax/i.test(welcomeSub),
+    `[desktop] iter 43: welcome subhead should NOT contain "lessons across syntax" corpus-stat (got "${welcomeSub}")`);
+  sd.assert(welcomeSub && !/166 lessons|\\d+ lessons across/i.test(welcomeSub),
+    `[desktop] iter 43: welcome subhead should NOT lead with a corpus-count`);
+  sd.assert(welcomeSub && /Pick a plan that fits your situation/i.test(welcomeSub),
+    `[desktop] iter 43: welcome subhead should still contain the instruction (got "${welcomeSub}")`);
+  // Switch-mode subhead unchanged: re-open in switch mode and verify.
+  await sd.eval(`document.getElementById('path-modal').style.display = 'none'; openPathModal({})`);
+  await sd.waitFor(`document.getElementById('path-modal').style.display === 'block'`, { timeoutMs: 5000 });
+  const switchSub = await sd.eval(`
+    document.querySelector('#path-modal [data-path-sub]')?.textContent.trim()
+  `);
+  sd.assert(switchSub && /drives your.*Today's Plan/i.test(switchSub),
+    `[desktop] iter 43: switch-mode subhead unchanged (got "${switchSub}")`);
+
   await sd.close();
 
   // Mobile pass

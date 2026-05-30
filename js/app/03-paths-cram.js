@@ -979,8 +979,13 @@ function openPathModal(opts = {}) {
   if (heading) heading.textContent = welcome ? '👋 Welcome to JS Drill' : 'Study plan';
   const sub = modal.querySelector('[data-path-sub]');
   if (sub) {
+    // iter 43 (refine): welcome subhead drops the corpus-stat first
+    // sentence ("N lessons across syntax, interview patterns, and applied
+    // problems.") — it's decision-time stats the user doesn't need at the
+    // moment of picking, and on mobile 375x667 it pushed the recommended
+    // banner + cards + secondary CTAs further below the fold.
     sub.textContent = welcome
-      ? `${CURRICULUM.filter(l => l.status === 'full').length} lessons across syntax, interview patterns, and applied problems. Pick a plan that fits your situation — you can switch any time.`
+      ? `Pick a plan that fits your situation — you can switch any time.`
       : `Pick the plan that drives your 📅 Today's Plan button. Switching is safe — your lesson progress is shared across every plan.`;
   }
   const currentId = state.subscribedPathId;

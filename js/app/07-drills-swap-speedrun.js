@@ -484,14 +484,35 @@ function _reverseExtractInvocation(canonical) {
   return null;
 }
 
+// iter eval-2026-05-30: surface a one-line I/O-shape tell on reveal so
+// the user learns the diagnostic heuristic that pointed to the family,
+// not just the answer. Heuristic and honest — covers the common
+// canonical-output shapes; falls back to a generic line for unknown
+// shapes so we never claim a signal we can't justify.
+function _reverseIOSignalHint(output) {
+  if (typeof output !== 'string' || !output.length) return null;
+  const trimmed = output.trim();
+  if (trimmed === 'true' || trimmed === 'false') return 'Tell: boolean output → predicate / validation family';
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return 'Tell: single numeric output → counting / index / aggregate family';
+  if (/^\[\s*\[/.test(trimmed)) return 'Tell: array-of-arrays output → grouping / partitioning family';
+  if (/^\[/.test(trimmed)) return 'Tell: array output → return-the-collection family (filter / map / collect)';
+  if (/^\{/.test(trimmed)) return 'Tell: object/map output → frequency / lookup-table family';
+  if (trimmed === 'null' || trimmed === 'undefined') return 'Tell: nullish output → side-effect / in-place mutation family';
+  if (/^["']/.test(trimmed)) return 'Tell: string output → string-construction family';
+  return null;
+}
 function _reverseBuildDeck() {
-  const candidates = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full');
-  // Shuffle then take the first N parseable lessons.
-  const shuffled = candidates.slice();
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
+  // iter eval-2026-05-30: include applied track. Applied lessons (decks,
+  // throttle/debounce, undo-redo) have distinctive I/O shapes that are
+  // high-signal for diagnose-from-output reasoning; excluding them
+  // capped Interleaving at 2/3. Per recognize.md/reverse.md audits.
+  const candidates = CURRICULUM.filter(l =>
+    (l.track === 'patterns' || l.track === 'applied') && l.status === 'full'
+  );
+  // SR/weakness-weighted shuffle — lessons the user owes attention
+  // (overdue SR or weakness > 0) surface first. See
+  // `_srPriorityShuffle` in slice 04.
+  const shuffled = _srPriorityShuffle(candidates, l => l.id);
   const cards = [];
   // Build a pool of all loaded patterns lessons with parseable invocations,
   // so we can draw distractors from it without re-checking each.
@@ -537,9 +558,12 @@ function _reverseBuildDeck() {
 }
 
 async function startReverseSession() {
-  // Preload broad sample of patterns lessons so the pool has variety.
-  const patternsLessons = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full').slice(0, 30);
-  for (const l of patternsLessons) {
+  // Preload broad sample of patterns + applied lessons so the pool has
+  // variety. Applied I/O shapes added per eval-2026-05-30 salvage.
+  const preloadable = CURRICULUM
+    .filter(l => (l.track === 'patterns' || l.track === 'applied') && l.status === 'full')
+    .slice(0, 30);
+  for (const l of preloadable) {
     if (!CONTENT[l.id]) {
       try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
       if (Object.keys(CONTENT).length >= 18) break;
@@ -592,8 +616,19 @@ async function startReverseSession() {
           else if (b === btn) b.classList.add('recognize-opt-wrong');
         });
         const fb = shell.querySelector('[data-reverse-feedback]');
-        if (fb) fb.innerHTML = wasCorrect ? `<span class="recognize-good">✓</span>` : `<span class="recognize-bad">✗ Correct shown above</span>`;
-        setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 700 : 1500);
+        if (fb) {
+          // I/O-signal tell — teach the diagnostic heuristic, not just
+          // the answer. Heuristic; null for unknown shapes.
+          const tell = _reverseIOSignalHint(card.output);
+          const tellHtml = tell ? `<div class="reverse-tell">${escapeHtml(tell)}</div>` : '';
+          fb.innerHTML = wasCorrect
+            ? `<span class="recognize-good">✓</span>${tellHtml}`
+            : `<span class="recognize-bad">✗ Correct shown above</span>${tellHtml}`;
+        }
+        // Hold longer when a tell is shown so the user has time to read.
+        const tellShown = _reverseIOSignalHint(card.output) != null;
+        const delay = wasCorrect ? (tellShown ? 1400 : 700) : (tellShown ? 2200 : 1500);
+        setTimeout(() => { idx++; renderCard(); }, delay);
       });
     });
   }

@@ -39,3 +39,4 @@ Ordered by leverage. Each edit names file:line + dim it lifts.
 
 ## Action log
 - 2026-05-30 Scored at 14/21 by `/eval-learning-tool --all`.
+- 2026-05-30 Salvage edits 1+2+3 applied — (1) I/O-shape tell on reveal via new `_reverseIOSignalHint(output)` helper at `js/app/07-drills-swap-speedrun.js:487-503`, surfaced under ✓/✗ at `:618-630` (+1 Feedback); (2) include `applied` track in candidate filter + preload at `:506-512, 561-565` (+1 Interleaving); (3) SR-weighted shuffle via `_srPriorityShuffle` at `:515-518` (+1 Spacing). New `.reverse-tell` style at `css/04-drills.css:792-797`. Projected 14→17. Validator: 810 passed, 0 failed.

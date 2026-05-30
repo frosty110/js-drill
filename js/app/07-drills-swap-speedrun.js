@@ -9,15 +9,55 @@ async function _loadSwapPairsRegistry() {
   } catch (_) { /* fail soft — button stays but session won't open */ }
 }
 
+// iter eval-2026-05-30: per-pair SR for Swap-Bench. Win doubles
+// interval (1d → 2d → 4d, capped at 30d); miss resets to 1d. Deck
+// builder prefers overdue pairs first, then new (unscheduled) pairs,
+// then non-overdue tracked pairs. Within each bucket, Fisher-Yates.
+// Pair-grain because the corpus is shape-curated, not lesson-grain;
+// `state.swapBench.pairs[pairId] = { dueAt, interval }`.
+const SWAP_PAIR_INTERVALS = [
+  1 * 24 * 60 * 60 * 1000,   //  1 day
+  2 * 24 * 60 * 60 * 1000,   //  2 days
+  4 * 24 * 60 * 60 * 1000,   //  4 days
+  8 * 24 * 60 * 60 * 1000,   //  8 days
+  16 * 24 * 60 * 60 * 1000,  // 16 days
+  30 * 24 * 60 * 60 * 1000   // 30 days (cap)
+];
+function _swapSchedulePair(pairId, wasRight) {
+  if (!state.swapBench.pairs) state.swapBench.pairs = {};
+  const now = Date.now();
+  const prev = state.swapBench.pairs[pairId];
+  let nextIntervalIdx = 0;
+  if (wasRight && prev && prev.interval) {
+    const curIdx = SWAP_PAIR_INTERVALS.indexOf(prev.interval);
+    nextIntervalIdx = curIdx >= 0 ? Math.min(curIdx + 1, SWAP_PAIR_INTERVALS.length - 1) : 1;
+  }
+  // Miss → bucket 0 (1d). New pair → bucket 0 too.
+  const interval = SWAP_PAIR_INTERVALS[nextIntervalIdx];
+  state.swapBench.pairs[pairId] = { dueAt: now + interval, interval };
+}
 function _swapBuildDeck() {
   if (!SWAP_PAIRS || SWAP_PAIRS.length < 3) return null;
-  // Fisher-Yates shuffle a copy.
-  const pool = SWAP_PAIRS.slice();
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
+  const now = Date.now();
+  const tracked = state.swapBench && state.swapBench.pairs ? state.swapBench.pairs : {};
+  // 3 buckets: overdue (dueAt <= now), new (no SR entry yet),
+  // not-overdue (tracked + dueAt > now).
+  const overdue = [], fresh = [], later = [];
+  for (const pair of SWAP_PAIRS) {
+    const rec = pair.id ? tracked[pair.id] : null;
+    if (!rec) fresh.push(pair);
+    else if (rec.dueAt <= now) overdue.push(pair);
+    else later.push(pair);
   }
-  return pool.slice(0, Math.min(SWAP_DECK_LEN, pool.length));
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+  const ordered = [...shuffle(overdue), ...shuffle(fresh), ...shuffle(later)];
+  return ordered.slice(0, Math.min(SWAP_DECK_LEN, ordered.length));
 }
 
 async function startSwapBenchSession() {
@@ -78,6 +118,9 @@ async function startSwapBenchSession() {
           state.weakness[card.sourceLessonId] = (state.weakness[card.sourceLessonId] || 0) + 1;
           appendHistory(card.sourceLessonId, 'L1-miss');
         }
+        // Per-pair SR — win doubles interval, miss resets to 1d. Tracks
+        // per-pair due dates so a bombed pair resurfaces sooner.
+        if (card.id) _swapSchedulePair(card.id, wasRight);
         state.swapBench.attempts++;
         if (wasRight) state.swapBench.correct++;
         saveProgress();

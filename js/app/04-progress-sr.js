@@ -111,14 +111,18 @@ function loadProgress() {
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
     // iter 86: 🔀 Swap-Bench lifetime stats. Legacy users get zeros.
+    // iter eval-2026-05-30: per-pair SR. `pairs[pairId] = { dueAt, interval }`
+    // tracks per-pair due dates so a bombed pair resurfaces sooner and a
+    // mastered pair drops out of next session. Legacy users → empty {}.
     state.swapBench = parsed.swapBench && typeof parsed.swapBench === 'object'
       ? {
           attempts: +parsed.swapBench.attempts || 0,
           correct: +parsed.swapBench.correct || 0,
           sessions: +parsed.swapBench.sessions || 0,
-          lastRunAt: +parsed.swapBench.lastRunAt || 0
+          lastRunAt: +parsed.swapBench.lastRunAt || 0,
+          pairs: parsed.swapBench.pairs && typeof parsed.swapBench.pairs === 'object' ? parsed.swapBench.pairs : {}
         }
-      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+      : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0, pairs: {} };
     // iter 91: 🎬 Conversation Drill lifetime stats. Legacy users get zeros.
     state.convDrill = parsed.convDrill && typeof parsed.convDrill === 'object'
       ? {

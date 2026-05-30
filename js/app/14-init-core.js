@@ -1407,7 +1407,12 @@ function initTodaysPlanModal() {
         ${inventoryHtml}
         <div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:0.08em;text-align:center;margin:0 0 8px;">— Or pick another —</div>
       `;
-      body.innerHTML = primaryCta + plan.map(({ id, why }) => {
+      // iter 42 (refine): start the "OR PICK ANOTHER" list at plan[1] —
+      // plan[0] is already represented by the green START CTA above, so
+      // listing it again created a working-memory duplicate ("same lesson
+      // appears twice"). Inventory counts (computed from full plan above)
+      // are unchanged; click-handlers still wire to data-lesson-id.
+      body.innerHTML = primaryCta + plan.slice(1).map(({ id, why }) => {
         const lesson = findLesson(id);
         const colors = { 'review due': '#67e8f9', 'next on plan': '#93c5fd', 'weak spot': '#fdba74' };
         const tint =   { 'review due': 'rgba(103,232,249,0.12)', 'next on plan': 'rgba(147,197,253,0.12)', 'weak spot': 'rgba(253,186,116,0.14)' };

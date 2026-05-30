@@ -75,17 +75,19 @@ async function capture(s, label) {
       ctaPresent: true,
       ctaText: cta.innerText.replace(/\\s+/g, ' ').trim(),
       ctaLessonId: cta.getAttribute('data-lesson-id'),
-      // The CTA is at position 0; first regular list card is at position 1 — should match.
+      // iter 42: list now starts at plan[1], so first list card should be DIFFERENT from the CTA.
       firstListCardLessonId: firstCardId,
-      totalLessonIdElements: cards.length, // primary + 6 list items = 7
+      totalLessonIdElements: cards.length, // primary + 5 alt list items = 6
     };
   })()`);
   console.log('\nDesktop mid-flight primary-CTA report:');
   console.log(JSON.stringify(ctaReport, null, 2));
   sd.assert(ctaReport.ctaPresent === true, `[desktop] primary [data-action=start-first] CTA exists`);
   sd.assert(/🎯 Start/.test(ctaReport.ctaText || ''), `[desktop] CTA text contains "🎯 Start"`);
-  sd.assert(ctaReport.ctaLessonId === ctaReport.firstListCardLessonId, `[desktop] CTA points at plan[0] (same lesson as first list card)`);
-  sd.assert(ctaReport.totalLessonIdElements === 7, `[desktop] CTA + 6 list cards = 7 [data-lesson-id] elements (got ${ctaReport.totalLessonIdElements})`);
+  sd.assert(ctaReport.ctaLessonId !== ctaReport.firstListCardLessonId,
+    `[desktop] iter 42: CTA's plan[0] ("${ctaReport.ctaLessonId}") should NOT appear as first list card ("${ctaReport.firstListCardLessonId}")`);
+  sd.assert(ctaReport.totalLessonIdElements === 6,
+    `[desktop] iter 42: CTA + 5 alt list cards = 6 [data-lesson-id] elements (got ${ctaReport.totalLessonIdElements})`);
 
   // iter-22 invariant: an inventory row [data-today-inventory] sits between
   // the CTA and the "Or pick another" divider, summarizing what's in today's
@@ -151,7 +153,7 @@ async function capture(s, label) {
     for (const t of clipReport) {
       sm.assert(t.withinBody, `[mobile] tag "${t.text}" stays inside modal body (right=${Math.round(t.right)})`);
     }
-    sm.assert(clipReport.length === 6, `[mobile] all 6 plan items have why-tags`);
+    sm.assert(clipReport.length === 5, `[mobile] iter 42: 5 alt list items (plan[1..]) have why-tags (got ${clipReport.length})`);
   } else {
     sm.assert(false, `[mobile] expected tags array, got: ${JSON.stringify(clipReport)}`);
   }

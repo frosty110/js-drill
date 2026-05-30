@@ -6,7 +6,10 @@ function _recognizeBuildDeck() {
   for (const l of pool) sectionCounts[l.section] = (sectionCounts[l.section] || 0) + 1;
   const eligibleSections = Object.keys(sectionCounts).filter(s => sectionCounts[s] >= 1);
   if (eligibleSections.length < 4) return null;  // need at least 4 sections for 4-option MC
-  const shuffled = pool.slice().sort(() => Math.random() - 0.5);
+  // SR/weakness-weighted lesson pick — lessons the user owes attention
+  // (overdue SR or weakness > 0) surface preferentially. See
+  // `_srPriorityShuffle` in slice 04.
+  const shuffled = _srPriorityShuffle(pool, l => l.id);
   const cards = [];
   for (const lesson of shuffled) {
     if (cards.length >= RECOGNIZE_SESSION_LEN) break;
@@ -65,6 +68,13 @@ async function startRecognizeSession() {
         const picked = btn.dataset.opt;
         const wasCorrect = picked === card.correct;
         if (wasCorrect) correct++;
+        else {
+          // Per-lesson weakness signal + history event so a missed
+          // diagnose-the-pattern card surfaces in Today's Plan, At-Risk,
+          // and downstream weak-spot queries — mirrors Reverse `:585`.
+          state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+          appendHistory(card.lessonId, 'L1-miss');
+        }
         times.push(Date.now() - cardStarted);
         state.recognize.attempts++;
         if (wasCorrect) state.recognize.correct++;

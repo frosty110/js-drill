@@ -39,3 +39,4 @@ Ordered by leverage. Each edit names file:line + dim it lifts.
 
 ## Action log
 - 2026-05-30 Scored at 13/21 by `/eval-learning-tool --all`.
+- 2026-05-30 Salvage edits 3+4 applied — SR-weighted lesson pick via `_srPriorityShuffle` at `js/app/05-drills-recognize-trace.js:9-12`; per-lesson `state.weakness` increment + `appendHistory('L1-miss')` on wrong pick at `:71-77`. Projected 13→15 (Spacing 0→1 + Closed-loop bumps via per-lesson coupling). Validator: 810 passed, 0 failed.

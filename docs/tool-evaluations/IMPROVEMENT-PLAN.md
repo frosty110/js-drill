@@ -106,8 +106,8 @@ Highest-impact-per-edit ratio. Each is a single ~3-line change with a meaningful
 
 **Group A — SR-weighted READ (bias card pick from existing signals):** +1 Spacing each. Lowest-risk, smallest-edit.
 
-- [~] **notes-drill** — replace Fisher-Yates with SR-weighted pull biased toward `state.weakness` lessons or overdue `state.reviews[lessonId]` at `js/app/05-drills-recognize-trace.js:832-835` (+1 Spacing) — 📄 `audits/notes-drill.md` — edits applied, awaiting commit
-- [ ] **recognize** — SR-weighted shuffle (mirrors Reverse pattern at `:585`) at `js/app/05-drills-recognize-trace.js:9-21` (+1 Spacing); **also** feed `state.weakness[card.lessonId]++` + `appendHistory(... 'L1-miss')` on miss at `:62-71` (+1 Closed-loop) — 📄 `audits/recognize.md`
+- [x] **notes-drill** — replace Fisher-Yates with SR-weighted pull biased toward `state.weakness` lessons or overdue `state.reviews[lessonId]` at `js/app/05-drills-recognize-trace.js:832-835` (+1 Spacing) — 📄 `audits/notes-drill.md` → commit `69ba011`
+- [x] **recognize** — SR-weighted shuffle (mirrors Reverse pattern at `:585`) at `js/app/05-drills-recognize-trace.js:9-21` (+1 Spacing); **also** feed `state.weakness[card.lessonId]++` + `appendHistory(... 'L1-miss')` on miss at `:62-71` (+1 Closed-loop) — 📄 `audits/recognize.md` → awaiting commit
 - [ ] **trace** — SR-weighted shuffle at `js/app/05-drills-recognize-trace.js:551-572` (+1 Spacing) — 📄 `audits/trace.md`
 - [ ] **reverse** — SR-weighted shuffle at `js/app/07-drills-swap-speedrun.js:489-510` (+1 Spacing); audit also bundles Interleaving +1 (include `applied` track) and Feedback +1 — see audit for the full +3 — 📄 `audits/reverse.md`
 

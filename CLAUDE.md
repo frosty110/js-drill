@@ -194,7 +194,16 @@ Each lesson is a standalone JSON file at `data/<section-slug>/<id>.json`:
   "description": "One sentence describing the lesson.",
   "reference": {
     "code": "// canonical code as a string\n...",
-    "notes": ["Gotcha 1", "Gotcha 2"]
+    "notes": ["Gotcha 1", "Gotcha 2"],
+    "alternates": [                  // OPTIONAL — see § Alternate solutions below
+      {
+        "label": "Min-heap (k-way merge)",
+        "when": "If your language ships a heap (Python heapq, Java PriorityQueue)…",
+        "complexity": "O(N log k) / O(k)",
+        "code": "// full runnable snippet ending in console.log(...) matching L3.expectedOutput",
+        "notes": ["…", "…"]
+      }
+    ]
   },
   "L1": { "questions": [
     { "q": "Question?", "options": ["a","b","c","d"], "answer": 1, "explain": "optional" }
@@ -225,6 +234,22 @@ A lesson is **authored** (`status: "full"`) only when:
 **For Patterns/Applied lessons with `conversation` and/or `walkthrough` blocks**, additional validator gates fire:
 4. Conversation: `sections.length >= 3`, every section has a `title` and at least one body field (`say` | `why` | `reveal` | `examples`). Voice quality is reviewer-enforced.
 5. Walkthrough: `trace` (stored as array of source lines) must compile via `new Function`; must run on every example without throwing; if `expected` is declared on an example, the final `state.returns` must match (string-compare). See [`docs/conversation-walkthrough.md`](docs/conversation-walkthrough.md) for the full schema, input-shape patterns (multi-arg, class-based, linked-list, tree, async), and per-shape pattern library.
+
+**For lessons with `reference.alternates`** (optional):
+6. Each alternate must have `label` + `code`; `when`, `complexity`, `notes` are optional but recommended.
+7. The validator runs each alternate via `runCode` and asserts its output matches `L3.expectedOutput` — alternates solve the same problem with a different idiom, so the contract is identical to L3.
+8. Banned-syntax scan extends to `alternates[*].code`.
+
+### When to add an alternate
+
+Add a `reference.alternates` entry only when **the conversation tab already names a second pattern as a real interview choice** (e.g. min-heap vs pairwise divide-and-conquer for merge-k-lists; recursive vs iterative for reverse-linked-list; bucket sort vs heap for top-k-frequent). The rule: an alternate must be something the user would write as their primary interview answer in a different setting, *not* a worse-version-shown-pedagogically (brute force solutions belong in the conversation prose, not in alternates).
+
+Schema notes:
+- `complexity` renders as a one-line chip badge. Use the shorthand `"O(Time) / O(Space)"` (e.g. `"O(N log k) / O(k)"`). Keep it under ~25 chars so it fits without truncating the label on desktop.
+- `when` is a 1-2 sentence prose context — when would a candidate pick this over the primary canonical. This is where language-ergonomics or input-shape signals belong (e.g. "If your language ships a heap…", "Streaming input or `k << N`…").
+- `notes` are 3 short bullets, each a specific insight the user wants at the moment they're scanning the alternate (not a restatement of the prose `when`).
+
+The alternate's `code` must end with a `console.log(...)` matching `L3.expectedOutput` — the validator runs it like L3.canonical.
 
 ## Adding a new lesson — the workflow
 

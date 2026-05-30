@@ -298,6 +298,26 @@ function renderCheatsheetBody() {
       const notesHtml = (c.reference && c.reference.notes && c.reference.notes.length)
         ? `<ul style="margin:6px 0 0 0;padding-left:18px;color:#cbd5e1;font-size:12px;">${c.reference.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
         : '';
+      // Alternates surface — collapsed by default so the primary canonical
+      // stays the readable thing; users opt in to compare approaches.
+      const altHtml = (c.reference && Array.isArray(c.reference.alternates) && c.reference.alternates.length)
+        ? `<details style="margin-top:8px;border-left:2px solid rgba(251,191,36,0.35);padding-left:8px;">
+            <summary style="cursor:pointer;color:#fbbf24;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;padding:2px 0;">Alternates · ${c.reference.alternates.length}</summary>
+            <div style="margin-top:6px;display:flex;flex-direction:column;gap:8px;">
+              ${c.reference.alternates.map(alt => `
+                <div style="border:1px solid #1e293b;border-radius:6px;padding:8px 10px;background:#020617;">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+                    <strong style="color:#f1f5f9;font-size:12.5px;">${escapeHtml(alt.label || '')}</strong>
+                    ${alt.complexity ? `<span style="color:#fbbf24;font-size:10.5px;font-family:ui-monospace,monospace;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);padding:1px 6px;border-radius:999px;white-space:nowrap;">${escapeHtml(alt.complexity)}</span>` : ''}
+                  </div>
+                  ${alt.when ? `<div style="color:#94a3b8;font-size:11.5px;font-style:italic;margin:4px 0 6px 0;">${escapeHtml(alt.when)}</div>` : ''}
+                  <pre style="margin:0;padding:6px 8px;background:#020617;border:1px solid #1e293b;border-radius:4px;overflow-x:auto;font-size:11px;line-height:1.4;white-space:pre;color:#cbd5e1;">${escapeHtml(alt.code || '')}</pre>
+                  ${Array.isArray(alt.notes) && alt.notes.length ? `<ul style="margin:6px 0 0 0;padding-left:16px;color:#cbd5e1;font-size:11.5px;">${alt.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </details>`
+        : '';
       html += `<details data-cs-lesson="${escapeHtml(lesson.id)}"${lessonOpen ? ' open' : ''} class="cs-lesson" style="border-left:2px solid #1e293b;padding:2px 0 2px 8px;">
         <summary style="cursor:pointer;color:#e2e8f0;font-weight:600;font-size:13px;padding:4px 0;">
           ${escapeHtml(lesson.title)}
@@ -306,6 +326,7 @@ function renderCheatsheetBody() {
           ${desc}
           <pre class="cm-s-dracula" data-cs-code="${escapeHtml(lesson.id)}" style="margin:0;padding:8px 10px;background:#020617;border:1px solid #1e293b;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.45;white-space:pre;"></pre>
           ${notesHtml}
+          ${altHtml}
           <button data-cs-goto="${escapeHtml(lesson.id)}" style="background:none;border:1px solid #1e293b;color:#67e8f9;font-size:11px;cursor:pointer;padding:4px 8px;border-radius:4px;margin-top:8px;">Open lesson →</button>
         </div>
       </details>`;
@@ -423,6 +444,18 @@ async function generateCheatsheet() {
           for (const note of c.reference.notes) md += `- ${note}\n`;
           md += `\n`;
         }
+        if (Array.isArray(c.reference.alternates) && c.reference.alternates.length) {
+          md += `**Alternates:**\n\n`;
+          for (const alt of c.reference.alternates) {
+            md += `#### ${alt.label}${alt.complexity ? ` — \`${alt.complexity}\`` : ''}\n\n`;
+            if (alt.when) md += `*${alt.when}*\n\n`;
+            md += '```js\n' + alt.code + '\n```\n\n';
+            if (Array.isArray(alt.notes) && alt.notes.length) {
+              for (const n of alt.notes) md += `- ${n}\n`;
+              md += `\n`;
+            }
+          }
+        }
         md += `---\n\n`;
       }
     }
@@ -479,6 +512,12 @@ function _buildPrintableCheatsheetHtml() {
     }
     ul.notes { margin: 4px 0 8px 0; padding-left: 18px; font-size: 10pt; }
     ul.notes li { margin: 1px 0; color: #333; }
+    /* Alternate solutions: subordinate to primary canonical; amber accent
+       mirrors the in-app reference-tab treatment. */
+    .alt { margin: 8px 0 8px 0; padding: 6px 0 4px 10px; border-left: 2px solid #e8a800; page-break-inside: avoid; }
+    h4.alt-label { font-size: 11pt; margin: 0 0 4px 0; color: #3a3000; font-weight: 600; }
+    .alt-comp { font-size: 8.5pt; font-family: "SF Mono", "Menlo", "Consolas", monospace; color: #5a4a00; background: #fffae6; padding: 1px 6px; border-radius: 999px; border: 1px solid #e6c200; white-space: nowrap; }
+    .alt-when { font-size: 9.5pt; color: #555; font-style: italic; margin: 0 0 4px 0; }
     hr.div { border: 0; border-top: 1px dashed #ccc; margin: 12px 0; }
     /* Page breaks: each Track starts a new page; section never split from its
        first lesson; long code blocks stay together when feasible. */

@@ -122,6 +122,19 @@
       "Use a dummy head in mergeTwo so you never special-case the first append.",
       "Attach the trailing tail with `tail.next = a || b` — the surviving list is already sorted.",
       "A min-heap of (val, listIndex) also achieves O(N log k); pairwise merge avoids importing a heap."
+    ],
+    "alternates": [
+      {
+        "label": "Min-heap (k-way merge)",
+        "when": "If your language ships a heap (Python `heapq`, Java `PriorityQueue`), prefer this — each node moves exactly once and the constant factor is lower than pairwise. In JS the heap is a ~25-line detour, so pairwise usually wins for the interview.",
+        "complexity": "O(N log k) / O(k)",
+        "code": "class MinHeap {\n  constructor() { this.a = []; }\n  size() { return this.a.length; }\n  push(n) {\n    this.a.push(n);\n    let i = this.a.length - 1;\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (this.a[p].val <= this.a[i].val) break;\n      [this.a[p], this.a[i]] = [this.a[i], this.a[p]];\n      i = p;\n    }\n  }\n  pop() {\n    const top = this.a[0];\n    const last = this.a.pop();\n    if (this.a.length) {\n      this.a[0] = last;\n      let i = 0;\n      const n = this.a.length;\n      while (true) {\n        const l = 2 * i + 1;\n        const r = 2 * i + 2;\n        let s = i;\n        if (l < n && this.a[l].val < this.a[s].val) s = l;\n        if (r < n && this.a[r].val < this.a[s].val) s = r;\n        if (s === i) break;\n        [this.a[s], this.a[i]] = [this.a[i], this.a[s]];\n        i = s;\n      }\n    }\n    return top;\n  }\n}\nfunction mergeKLists(lists) {\n  // Seed: push each non-null head — heap holds ≤ k entries.\n  const heap = new MinHeap();\n  for (const h of lists) if (h) heap.push(h);\n  const dummy = { next: null };\n  let tail = dummy;\n  while (heap.size()) {\n    // Pop smallest head → splice onto output → push its successor (if any).\n    const node = heap.pop();\n    tail.next = node;\n    tail = node;\n    if (node.next) heap.push(node.next);\n  }\n  return dummy.next;\n}\nfunction toList(arr) { let d = { next: null }, c = d; for (const v of arr) { c.next = { val: v, next: null }; c = c.next; } return d.next; }\nfunction toArr(h) { const o = []; while (h) { o.push(h.val); h = h.next; } return o; }\nconsole.log(JSON.stringify(toArr(mergeKLists([toList([1, 4, 5]), toList([1, 3, 4]), toList([2, 6])]))));",
+        "notes": [
+          "Each node is pushed and popped exactly once → 2N heap operations × O(log k) each.",
+          "Heap holds at most k entries: every pop is replaced by the popped node's successor (or nothing if the list is exhausted).",
+          "Equal-val heads from different lists pop in unspecified order — fine for merge correctness; we're not stable-sorting."
+        ]
+      }
     ]
   },
   "L1": {

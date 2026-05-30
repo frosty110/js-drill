@@ -605,6 +605,33 @@ function renderReference(body, content) {
         ${ref.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600">▸</span><span>${escapeHtml(n)}</span></li>`).join('')}
       </ul>
     </div>
+    ${Array.isArray(ref.alternates) && ref.alternates.length ? `
+    <div class="mt-6" data-ref-alternates>
+      <!-- Alternate solutions: same problem, different idiom (e.g. min-heap
+           vs pairwise divide-and-conquer). Conversation tab often names a
+           second pattern in prose; this surface ships the code. Validator
+           runs each alternate and asserts the output matches L3.expectedOutput. -->
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#fbbf24;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(251,191,36,0.4);">Alternate solutions · ${ref.alternates.length}</div>
+      <div class="ref-alternates-list">
+        ${ref.alternates.map((alt, i) => `
+          <details class="ref-alternate">
+            <summary class="ref-alt-summary">
+              <span class="ref-alt-label">${escapeHtml(alt.label || '')}</span>
+              ${alt.complexity ? `<span class="ref-alt-complexity">${escapeHtml(alt.complexity)}</span>` : ''}
+              <span class="ref-alt-toggle" aria-hidden="true">▸</span>
+            </summary>
+            <div class="ref-alt-body">
+              ${alt.when ? `<div class="ref-alt-when">${escapeHtml(alt.when)}</div>` : ''}
+              <pre class="code-block cm-s-dracula" data-ref-alt-code="${i}"></pre>
+              ${Array.isArray(alt.notes) && alt.notes.length ? `
+              <ul class="ref-alt-notes">
+                ${alt.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600">▸</span><span>${escapeHtml(n)}</span></li>`).join('')}
+              </ul>` : ''}
+            </div>
+          </details>
+        `).join('')}
+      </div>
+    </div>` : ''}
     <div class="mt-8 flex justify-end">
       <button class="primary" data-action="start-l1">Start drills →</button>
     </div>
@@ -612,6 +639,12 @@ function renderReference(body, content) {
   body.appendChild(section);
   const codeEl = section.querySelector('[data-ref-code]');
   colorizeInto(codeEl, ref.code);
+  if (Array.isArray(ref.alternates)) {
+    ref.alternates.forEach((alt, i) => {
+      const el = section.querySelector(`[data-ref-alt-code="${i}"]`);
+      if (el) colorizeInto(el, alt.code || '');
+    });
+  }
   let flashOn = false;
   let cinemaOn = false;
   let bulletsOn = false;

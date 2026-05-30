@@ -99,6 +99,30 @@
       "`(a, b) => b - a` sorts DESCENDING; `a - b` ascends.",
       "For the optimal interview answer, drill the MinHeap lesson — then this becomes a 4-line streaming solution.",
       "Quickselect averages O(n) and is what staff-level interviewers expect; min-heap is the safe middle ground."
+    ],
+    "alternates": [
+      {
+        "label": "Min-heap of size k",
+        "when": "Streaming input, or `k << N` and you want bounded memory. Pushes/pops cost O(log k) instead of O(log N), and you never have to hold the whole input in memory at once.",
+        "complexity": "O(N log k) / O(k)",
+        "code": "class MinHeap {\n  constructor() { this.a = []; }\n  size() { return this.a.length; }\n  peek() { return this.a[0]; }\n  push(n) {\n    this.a.push(n);\n    let i = this.a.length - 1;\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (this.a[p] <= this.a[i]) break;\n      [this.a[p], this.a[i]] = [this.a[i], this.a[p]];\n      i = p;\n    }\n  }\n  pop() {\n    const top = this.a[0];\n    const last = this.a.pop();\n    if (this.a.length) {\n      this.a[0] = last;\n      let i = 0;\n      const n = this.a.length;\n      while (true) {\n        const l = 2 * i + 1;\n        const r = 2 * i + 2;\n        let s = i;\n        if (l < n && this.a[l] < this.a[s]) s = l;\n        if (r < n && this.a[r] < this.a[s]) s = r;\n        if (s === i) break;\n        [this.a[s], this.a[i]] = [this.a[i], this.a[s]];\n        i = s;\n      }\n    }\n    return top;\n  }\n}\nfunction findKthLargest(nums, k) {\n  // Min-heap of size k: root is the smallest of the k largest seen → kth largest.\n  const heap = new MinHeap();\n  for (const n of nums) {\n    if (heap.size() < k) heap.push(n);\n    // Beat the worst keeper? Evict it and admit the newcomer.\n    else if (n > heap.peek()) { heap.pop(); heap.push(n); }\n  }\n  return heap.peek();\n}\nconsole.log(findKthLargest([3, 2, 3, 1, 2, 4, 5, 5, 6], 4));",
+        "notes": [
+          "Heap holds at most k entries — the k LARGEST seen so far; root (peek) is the smallest of those, i.e. the kth largest.",
+          "Skip the push entirely when `n <= heap.peek()` once the heap is full — saves a push+pop pair for values that can't make the cut.",
+          "Generalizes to a streaming KthLargest class: maintain the heap across calls, each `add` is O(log k)."
+        ]
+      },
+      {
+        "label": "Quickselect (Lomuto partition)",
+        "when": "When you want sub-`log k` average time and don't mind the unstable worst case (or are using median-of-medians, which we won't here). The 'staff-level' answer when interviewers push past the heap.",
+        "complexity": "O(N) avg, O(N²) worst / O(1)",
+        "code": "function findKthLargest(nums, k) {\n  // (N-k)-th smallest == k-th largest — partition around a pivot and recurse into the side holding the target index.\n  const target = nums.length - k;\n  const a = nums.slice();\n  let lo = 0, hi = a.length - 1;\n  while (lo < hi) {\n    // Deterministic mid-pivot — swap to end so Lomuto partition can use the last slot.\n    const mid = Math.floor((lo + hi) / 2);\n    [a[mid], a[hi]] = [a[hi], a[mid]];\n    const pivot = a[hi];\n    let store = lo;\n    for (let i = lo; i < hi; i++) {\n      if (a[i] < pivot) {\n        [a[store], a[i]] = [a[i], a[store]];\n        store++;\n      }\n    }\n    // Drop the pivot into its final sorted position.\n    [a[store], a[hi]] = [a[hi], a[store]];\n    if (store === target) return a[store];\n    if (store < target) lo = store + 1;\n    else hi = store - 1;\n  }\n  return a[lo];\n}\nconsole.log(findKthLargest([3, 2, 3, 1, 2, 4, 5, 5, 6], 4));",
+        "notes": [
+          "Reframe: `kth largest` = `(N-k)th smallest`. Partition around a pivot; recurse into ONLY the side holding `target = N-k`, not both.",
+          "Mid-pivot keeps the snippet deterministic for testing; in interview you'd note `Math.random()` or median-of-medians to dodge the O(N²) adversarial worst case.",
+          "After partition, `store` is the pivot's final sorted index — compare to `target` and shrink the active window from one side only."
+        ]
+      }
     ]
   },
   "L1": {

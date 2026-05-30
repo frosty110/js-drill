@@ -222,6 +222,9 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     if (!SKIP_BANNED && !BANNED_SYNTAX_EXEMPTIONS.has(id)) {
       const sources = [];
       if (lesson.reference?.code) sources.push({ where: 'reference.code', code: lesson.reference.code });
+      if (Array.isArray(lesson.reference?.alternates)) {
+        lesson.reference.alternates.forEach((alt, i) => sources.push({ where: `reference.alternates#${i}.code`, code: alt.code || '' }));
+      }
       if (lesson.L2?.exercises) {
         lesson.L2.exercises.forEach((ex, i) => sources.push({ where: `L2#${i}.template`, code: ex.template || '' }));
       }
@@ -306,6 +309,38 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
             continue;
           }
           pass++;
+        }
+      }
+
+      // Alternate solutions — run each `reference.alternates[*].code` and
+      // assert its output matches `L3.expectedOutput`. Alternates solve the
+      // same problem with a different idiom (e.g. min-heap vs pairwise
+      // divide-and-conquer for merge-k-lists), so the output contract is
+      // identical to L3. Required shape per entry: { label, code }; optional:
+      // when, complexity, notes[].
+      if (Array.isArray(lesson.reference?.alternates)) {
+        for (let ai = 0; ai < lesson.reference.alternates.length; ai++) {
+          const alt = lesson.reference.alternates[ai];
+          if (!alt || typeof alt.label !== 'string' || !alt.label.trim()) {
+            fail++;
+            failures.push(`${id} reference.alternates#${ai}: missing or empty "label"`);
+            continue;
+          }
+          if (typeof alt.code !== 'string' || !alt.code.trim()) {
+            fail++;
+            failures.push(`${id} reference.alternates#${ai} ("${alt.label}"): missing or empty "code"`);
+            continue;
+          }
+          const ar = await runCode(alt.code);
+          if (ar.error) {
+            fail++;
+            failures.push(`${id} reference.alternates#${ai} ("${alt.label}") runtime error: ${ar.error}`);
+          } else if (!outputsMatch(ar.output, lesson.L3.expectedOutput)) {
+            fail++;
+            failures.push(`${id} reference.alternates#${ai} ("${alt.label}") mismatch — got "${ar.output}" expected "${lesson.L3.expectedOutput}"`);
+          } else {
+            pass++;
+          }
         }
       }
     }

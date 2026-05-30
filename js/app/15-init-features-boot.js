@@ -506,25 +506,46 @@ init().catch(err => console.error(err));
 //   Train — timed streams (Rapid, Big-O, Speedrun, Gauntlet)
 //   Insights — visualizations (Stats, Streak, Sections, Mechanics, Cheatsheet, AI Coach)
 //   Settings — toggles (Hide Mastered, Plan View, Calibrate), Data (Backup/Restore), Reset
+// 2026-05-29 IA audit: trim the 30+ junk-drawer menus down to traditional
+// dropdown sizes. Three structural shifts:
+//   (1) Practice loses 6 status-driven items (Review / Weak / At-Risk /
+//       Reveal-Replay / Resurrect / Bridge). They render as sidebar count
+//       pills already; users only act when count > 0, so they don't belong
+//       in a menu of CHOICES.
+//   (2) Drill collapses 17 modes-in-5-groups → 5 family entries. Each
+//       family is a single-tap "shuffle-within-family" launcher
+//       (action: 'shuffle') that picks one of its modes at random.
+//   (3) Practice gains one "Pick one" smart-cascade launcher
+//       (action: 'pick-smart') that replaces Lucky + Shuffle by routing
+//       to Review / Weak / At-Risk first, falling back to Lucky or
+//       Shuffle. One affordance instead of three.
+//   (4) Reflect → Review (the menu's actual job is looking BACKWARD at
+//       progress, not abstract reflection).
+//
+// Item shape: either a string (sidebar button id, looked up via
+// _topbarItemFromButton) OR an object { emoji, label, desc, action,
+// ids?, id? }. Object items are inert in terms of the sidebar — they
+// don't have a backing button — so they're rendered directly.
 const TOPBAR_MENU_TAXONOMY = {
   practice: {
     label: 'Practice',
     blurb: 'Sessions + picks — what to drill next.',
     items: [
-      'today-btn', 'mock-btn', 'warmup-btn', 'lucky-btn', 'shuffle-btn',
-      'review-btn', 'weak-btn', 'at-risk-btn', 'reveal-replay-btn',
-      'resurrect-btn', 'bridge-btn'
+      'today-btn',
+      'mock-btn',
+      { emoji: '🎲', label: 'Pick one', desc: 'Smart-pick: if you have due reviews / weak spots / at-risk lessons it routes you there, else picks a random fresh lesson or mastered one.', action: 'pick-smart' },
+      'warmup-btn'
     ]
   },
   drills: {
     label: 'Drill',
-    blurb: 'Pick a recall direction — 5 families.',
-    groups: [
-      { label: '🧠 Run it in your head', items: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
-      { label: '🔧 Judge a code change', items: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
-      { label: '🧭 Name the pattern', items: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
-      { label: '📝 Recall the traps', items: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
-      { label: '🎬 Interview meta', items: ['conv-drill-btn'] }
+    blurb: 'Pick a recall family — taps launch a random member.',
+    items: [
+      { emoji: '🧠', label: 'Run it in your head', desc: 'Random pick across Predict / What-If / Trace-Hop / Reverse-Walk — mental execution drills.', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
+      { emoji: '🔧', label: 'Judge a code change', desc: 'Random pick across Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap — change-impact drills.', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
+      { emoji: '🧭', label: 'Name the pattern', desc: 'Random pick across Recognize / Reverse / Constellation / Match — pattern-identification drills.', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
+      { emoji: '📝', label: 'Recall the traps', desc: 'Random pick across Notes-Cloze / Notes-Locate / Gotcha — gotcha-recall drills.', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
+      'conv-drill-btn'
     ]
   },
   train: {
@@ -533,15 +554,15 @@ const TOPBAR_MENU_TAXONOMY = {
     items: ['rapid-fire-btn', 'big-o-btn', 'speedrun-btn', 'gauntlet-btn', 'phone-screen-btn']
   },
   insights: {
-    label: 'Reflect',
-    blurb: 'Cross-plan progress & analytics.',
-    // Grouped so it's no longer an 11-item junk drawer. The Reference group is
-    // plan-scoped: its cram-* buttons are display:none on non-cram plans (via
-    // applySidebarCuration), so the empty group is skipped and only Progress +
-    // Export show on the default plan. (decision #2 — references are plan-scoped.)
+    label: 'Review',
+    blurb: 'Look back: progress, coverage, and shareable exports.',
+    // Cram-only references are gated by applySidebarCuration (display:none on
+    // non-cram plans, so _topbarItemFromButton filters them out everywhere).
+    // Stats/Streak/Sections/Mechanics stay grouped under Progress for scan-
+    // ability now that the menu is smaller.
     groups: [
       { label: 'Progress', items: ['stats-btn', 'streak-map-btn', 'sections-grid-btn', 'mechanics-btn'] },
-      { label: 'Export', items: ['export-btn', 'ai-coach-btn'] },
+      { label: 'Share', items: ['export-btn', 'ai-coach-btn'] },
       { label: '📖 Reference (this plan)', items: ['cram-cheat-btn', 'cram-glossary-btn', 'cram-behavior-btn', 'cram-shapes-btn', 'cram-review-btn'] }
     ]
   },
@@ -629,23 +650,56 @@ function renderTopbarMenuContents(menuKey) {
   // (touch devices have no hover, so descriptions are silently dropped on
   // mobile — that's the intent, descriptions reappear on the destination
   // modal). Cuts each row's height by ~2 lines and ~28px.
-  const _itemRow = (it) => `
-    <button class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-      <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
-      <span class="topbar-item-name">${escapeHtml(it.label)}</span>
-    </button>`;
-  // Grouped menus (Drill's 5 recall-direction families) render a labelled
-  // sub-header per group so 19 surfaces stay scannable.
+  //
+  // Two row shapes:
+  //   - Sidebar-backed (string item ids): `data-btn-id` synth-clicks the
+  //     underlying sidebar button (existing path, ~95% of items).
+  //   - Action-backed (object items with `action`): `data-action="shuffle"`
+  //     picks a random id from `data-shuffle-ids` and synth-clicks it;
+  //     `data-action="pick-smart"` runs the triage cascade in the
+  //     dispatcher. Both share the same .topbar-item DOM + click delegation.
+  const _itemRow = (it) => {
+    if (it.action === 'shuffle') {
+      const ids = Array.isArray(it.ids) ? it.ids.join(',') : '';
+      return `
+        <button class="topbar-item" role="menuitem" data-action="shuffle" data-shuffle-ids="${escapeHtml(ids)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
+          <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
+          <span class="topbar-item-name">${escapeHtml(it.label)}</span>
+        </button>`;
+    }
+    if (it.action === 'pick-smart') {
+      return `
+        <button class="topbar-item" role="menuitem" data-action="pick-smart"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
+          <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
+          <span class="topbar-item-name">${escapeHtml(it.label)}</span>
+        </button>`;
+    }
+    return `
+      <button class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
+        <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
+        <span class="topbar-item-name">${escapeHtml(it.label)}</span>
+      </button>`;
+  };
+  // Normalize an item entry: strings → resolved via _topbarItemFromButton
+  // (may return null if button hidden), objects → passed through. Lets the
+  // group+flat render paths share one normalizer.
+  const _resolveItem = (entry) => {
+    if (typeof entry === 'string') return _topbarItemFromButton(document.getElementById(entry));
+    if (entry && typeof entry === 'object') return entry;
+    return null;
+  };
+  // Grouped menus (Review's Progress / Share / Reference) render a labelled
+  // sub-header per group so the menu stays scannable when items grow.
   if (Array.isArray(cat.groups)) {
     const blurb = cat.blurb ? `<div class="topbar-menu-blurb">${escapeHtml(cat.blurb)}</div>` : '';
     const groupsHtml = cat.groups.map(g => {
-      const gi = g.items.map(id => _topbarItemFromButton(document.getElementById(id))).filter(Boolean);
+      const gi = g.items.map(_resolveItem).filter(Boolean);
       if (!gi.length) return '';
       return `<div class="topbar-group-label">${escapeHtml(g.label)}</div>${gi.map(_itemRow).join('')}`;
     }).join('');
     return blurb + (groupsHtml || `<div class="topbar-dropdown-stub">Nothing here right now.</div>`);
   }
-  const items = cat.items.map(id => _topbarItemFromButton(document.getElementById(id))).filter(Boolean);
+  const items = cat.items.map(_resolveItem).filter(Boolean);
   if (!items.length) {
     return `<div class="topbar-dropdown-stub">Nothing actionable in <b>${escapeHtml(cat.label)}</b> right now — try again once you've drilled a few lessons.</div>`;
   }
@@ -778,6 +832,45 @@ function initTopbarDropdowns() {
     const item = e.target.closest('.topbar-item');
     if (!item) return;
     e.stopPropagation();
+    // 2026-05-29: action-backed rows (shuffle / pick-smart) dispatched here
+    // BEFORE the legacy data-btn-id synth-click path. Each action resolves
+    // to ONE underlying sidebar button to click.
+    const action = item.dataset.action;
+    if (action === 'shuffle') {
+      const ids = (item.dataset.shuffleIds || '').split(',').filter(Boolean);
+      const pick = ids.length ? ids[Math.floor(Math.random() * ids.length)] : null;
+      const target = pick ? document.getElementById(pick) : null;
+      if (!target) return;
+      close();
+      target.click();
+      return;
+    }
+    if (action === 'pick-smart') {
+      // Cascade: due reviews → weak spots → at-risk → fresh (lucky) →
+      // mastered (shuffle). First chip with non-zero count wins; the
+      // sidebar count pills are the source of truth for triage state.
+      const countOf = (id) => {
+        const el = document.getElementById(id);
+        return el ? (parseInt(el.textContent || '0', 10) || 0) : 0;
+      };
+      const cascade = [
+        ['review-count', 'review-btn'],
+        ['weak-count', 'weak-btn'],
+        ['at-risk-count', 'at-risk-btn'],
+        [null, 'lucky-btn'],
+        [null, 'shuffle-btn']
+      ];
+      let picked = null;
+      for (const [countId, btnId] of cascade) {
+        if (countId && !countOf(countId)) continue;
+        const btn = document.getElementById(btnId);
+        if (btn) { picked = btn; break; }
+      }
+      if (!picked) return;
+      close();
+      picked.click();
+      return;
+    }
     const btnId = item.dataset.btnId;
     const target = btnId ? document.getElementById(btnId) : null;
     if (!target) return;

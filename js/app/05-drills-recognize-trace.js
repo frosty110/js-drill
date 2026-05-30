@@ -261,8 +261,17 @@ async function startGotchaSession() {
         if (answered) return;
         answered = true;
         const wasKnew = btn.dataset.pick === 'knew';
-        if (wasKnew) knew++;
-        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        if (wasKnew) {
+          knew++;
+          // Hold-but-reset-dueAt SR on an honor-based "knew it". Guarded
+          // to mastered+due lessons only — mirrors the L2 pattern in
+          // markPassed() (slice 09:791). Gotcha is the shallowest
+          // tier (self-reported), so the bucket holds; the dueAt
+          // reset just signals "user looked at this recently."
+          if (state.reviews[card.lessonId] && isDueForReview(card.lessonId)) {
+            scheduleReview(card.lessonId, { advance: false });
+          }
+        } else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
         state.gotcha.attempts++;
         if (wasKnew) state.gotcha.correct++;
         saveProgress();

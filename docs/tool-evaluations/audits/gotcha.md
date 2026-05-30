@@ -36,3 +36,4 @@
 
 ## Action log
 - 2026-05-30 Scored at 12/21 by `/eval-learning-tool --all`.
+- 2026-05-30 Salvage edit 2 applied — guarded SR write on "knew it" at `js/app/05-drills-recognize-trace.js:263-278`. Mirrors L2's hold-but-reset-dueAt pattern; only fires when `state.reviews[id]` exists AND `isDueForReview(id)` returns true. Projected 12→14 (+2 Spacing). Cloze-deletion conversion (+2 Active recall +2 Encoding) and per-note "why" feedback (+1 Feedback) are larger Phase 3-class follow-ups, deferred. Validator: 810 passed, 0 failed.

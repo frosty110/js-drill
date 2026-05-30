@@ -38,3 +38,4 @@ Ordered by leverage.
 
 ## Action log
 - 2026-05-30 Scored at 14/21 by `/eval-learning-tool --all`.
+- 2026-05-30 Salvage edit 1 applied — Notes→Code green pass now calls `markPassed(content.id, 'L3')` + `appendHistory(content.id, 'notes-to-code-pass')` at `js/app/11-tabs-ref-conv-walk.js:806-815`. Projected 14→18 (Spacing 1→3, Closed-loop 2→3). Validator: 810 passed, 0 failed.

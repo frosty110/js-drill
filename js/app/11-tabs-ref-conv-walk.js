@@ -796,6 +796,15 @@ function _renderBulletsCode(codeEl, content) {
     } else if ((res.output || '') === expected) {
       fb.textContent = '✓ Output matches the canonical. Notes→Code recall succeeded.';
       fb.className = 'bullets-code-feedback bullets-feedback-pass';
+      // Notes→Code grader is byte-identical to L3's (same runCode +
+      // L3.expectedOutput) — a green pass IS an L3 win. Feed the SR
+      // scheduler so the bucket advances; tag history with the cue
+      // distinction so downstream telemetry can split L3-direct from
+      // notes-direct recalls.
+      if (content && content.id) {
+        markPassed(content.id, 'L3');
+        appendHistory(content.id, 'notes-to-code-pass');
+      }
     } else {
       // Show first 80 chars of the wrong output for inline visibility.
       const got = (res.output || '(empty)').slice(0, 80);

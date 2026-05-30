@@ -83,19 +83,10 @@ The audits sometimes use a generic name like `recordReview` when describing the 
 
 These two tools scored sub-10 (strict ladder → REMOVE band), but agents argued viable salvage. **Ask the user before touching them.**
 
-- [ ] **flash** (7/21) — DECIDE one of:
-  - (a) salvage → self-rate + SR + mechanics-weighted tokens → projected 14/21
-  - (b) remove (Notes Drill covers cloze-MC; flash is strictly weaker cousin per audit)
-  - (c) demote to "preview" surface that routes to Notes Drill
+- [x] **flash** (7/21) — DECISION (2026-05-30): **(a) salvage** → self-rate + SR + mechanics-weighted tokens → projected 14/21. Added to Phase 3.
   - 📄 `audits/flash.md`
-- [ ] **conversation** (6/21) — DECIDE one of:
-  - (a) salvage by routing through sibling `convDrill` (already reuses `conversation.sections[]`)
-  - (b) demote tab to "preview" surface that routes to `convDrill`
-  - (c) remove the tab entirely (content survives in drill registry)
+- [x] **conversation** (6/21) — DECISION (2026-05-30): **(a) salvage via convDrill route** (preview-with-route to sibling drill). Added to Phase 3.
   - 📄 `audits/conversation.md`
-
-If user says "salvage", move the item to the appropriate tier below and proceed.
-If user says "remove" or "decline", mark `- [-] declined-by-user` and continue.
 
 ---
 
@@ -103,7 +94,7 @@ If user says "remove" or "decline", mark `- [-] declined-by-user` and continue.
 
 Highest-impact-per-edit ratio. Each is a single ~3-line change with a meaningful rubric lift. Low risk, fast confidence-build.
 
-- [ ] **reference** — In the L3 grader for Notes→Code mode, call `markPassed(id, 'L3')` on green pass so the SR scheduler picks up the win (+4: Spacing 1→3, Closed-loop 2→3) — 📄 `audits/reference.md`
+- [~] **reference** — In the L3 grader for Notes→Code mode, call `markPassed(id, 'L3')` on green pass so the SR scheduler picks up the win (+4: Spacing 1→3, Closed-loop 2→3) — 📄 `audits/reference.md` — edits applied, awaiting commit
 
 **After Phase 1 ships:** re-run `/eval-learning-tool reference` to verify the lift.
 
@@ -145,6 +136,8 @@ Multi-edit but each tool has a clear path to ship-quality band.
 - [ ] **warmup-3card** — `appendHistory('L1-pass')` on win + typed-recall variant for next-on-plan card (+2: 15→17) — 📄 `audits/warmup-3card.md`
 - [ ] **l2** — attempt-count weakness signal (so "struggled-but-eventually-passed" middle case is visible) + per-blank tiered reveal — 📄 `audits/l2.md`
 - [ ] **l1** — carry-over weak-spot question per session — 📄 `audits/l1.md`
+- [ ] **flash** (Phase 0 salvage decision) — self-rate after reveal + persist `state.flash.{lessonId} = { attempts, blanks, lastRunAt }` + mechanics-weighted token selection + SR-scheduled surfacing. Projected 7→14 (+7) — 📄 `audits/flash.md`
+- [ ] **conversation** (Phase 0 salvage decision) — demote tab to preview-with-route surface that links each section header into `convDrill` (which already mines `conversation.sections[]` and writes counters). Keeps the tab visible but the recall happens in the drill — 📄 `audits/conversation.md`
 
 **After Phase 3 ships:** re-run `/eval-learning-tool --all`. Phase 3 + Phase 1+2 together should move the median tool score by 3-5 points.
 

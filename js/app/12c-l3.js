@@ -148,7 +148,7 @@ function renderL3(body, lesson, content) {
     </div>
     ` : ''}
     <div class="mb-4 text-sm text-slate-400 flex items-center justify-between flex-wrap gap-2">
-      <span>Blank editor. Type the canonical solution from memory, then Run. Pass when output matches.</span>
+      ${isMock ? '' : '<span>Blank editor. Type the canonical solution from memory, then Run. Pass when output matches.</span>'}
       <div class="flex items-center gap-2 flex-wrap">${bestBadge}${slopeBadge}${trendBadge}</div>
     </div>
     <div class="mock-reel-tile hidden" data-mock-reel-tile></div>

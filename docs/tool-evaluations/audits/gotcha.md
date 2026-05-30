@@ -29,7 +29,7 @@
 
 ## Salvage path (if IMPROVE)
 1. **Convert to cloze-deletion on the note** — mask the load-bearing token in `card.note` (the key term/method/operator); user must TYPE the masked word before reveal. Lifts **Active recall 2→3** AND **Encoding strength 1→3** (becomes cued-recall typed production).
-2. **Add SR write on pass** — when user taps "knew it", call `recordReview(card.lessonId)` in `05-drills-recognize-trace.js:257`. Lifts **Spacing 0→2** at lesson-grain.
+2. **Add SR write on pass** — when user taps "knew it", call `scheduleReview(card.lessonId, { advance: false })` (real function at `js/app/04-progress-sr.js:431`) in `05-drills-recognize-trace.js:257`. Uses L2's hold-but-reset-dueAt semantics — drill is recognition-tier, shallower than L2 cued-recall, so it should keep the SR cycle moving without falsely advancing the bucket. Lifts **Spacing 0→2** at lesson-grain.
 3. **Attach a 1-line "why" from the source lesson** — pull `notes[ni+1]` or the L1 explain text adjacent to the note as a contrast/why string at reveal (`05-drills-recognize-trace.js:263-269`). Lifts **Feedback quality 1→2**.
 
 **Projected after salvage:** 18/21 (KEEP, ship-quality). Salvage moves +6 pts — comfortably clears the IMPROVE threshold.

@@ -29,7 +29,7 @@
 
 ## Salvage path (if IMPROVE)
 1. **Auto-generate distractors algorithmically** — derive `distractor` from `actual` via canonical transforms (O(N) ↔ O(N²), O(N log N) ↔ O(N), O(N) ↔ O(1)) inside `_claimBuildDeck` (`07-drills-swap-speedrun.js:156`). Lifts **Interleaving 1→3** (every patterns lesson with L3.canonical becomes drillable, decoupled from the curated registry).
-2. **Add per-card SR write on win** — on `wasRight`, call `recordReview(card.lessonId)` in `07-drills-swap-speedrun.js:238`. Lifts **Spacing 0→2** at lesson-grain.
+2. **Add per-card SR write on win** — on `wasRight`, call `scheduleReview(card.lessonId, { advance: false })` (real function at `js/app/04-progress-sr.js:431`) in `07-drills-swap-speedrun.js:238`. Uses L2's hold-but-reset-dueAt semantics — drill is recognition-tier (binary forced choice), shallower than L2, so it should keep the SR cycle moving without falsely advancing the bucket. Lifts **Spacing 0→2** at lesson-grain.
 3. **Optional "name the complexity" tier** — gated input box that asks the user to TYPE the actual complexity after the 2-tap. Lifts **Encoding strength 1→2**.
 
 **Projected after salvage:** 18/21 (KEEP, ship-quality). Salvage moves +5 pts — clears the IMPROVE threshold.

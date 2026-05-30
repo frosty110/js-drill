@@ -28,7 +28,7 @@
 - Feedback is "was X" only; no per-option explanation of WHY (so a wrong pick reveals the right answer but doesn't correct the user's mental model).
 
 ## Salvage path (if IMPROVE)
-1. **Add SR write on per-card pass** — `07-drills-swap-speedrun.js:405` — when `wasCorrect`, also call `recordReview(card.lessonId)` (the function backing L1/L2/L3 in `04-progress-sr.js`). Lifts **Spacing 0→2** (re-uses existing intervals via lesson-grain not card-grain).
+1. **Add SR write on per-card pass** — `07-drills-swap-speedrun.js:405` — when `wasCorrect`, call `scheduleReview(card.lessonId, { advance: false })` (real function at `js/app/04-progress-sr.js:431`). Uses L2's hold-but-reset-dueAt semantics — drill is 4-MC recognition, shallower than L2 cued-recall, so it should keep the SR cycle moving without falsely advancing the bucket. Lifts **Spacing 0→2** (re-uses existing intervals via lesson-grain not card-grain).
 2. **Toggle to "type the output" mode** — add a state flag (`state.crystal.typed`) and an alternate render path that swaps the 4-button grid for a single text input compared against `card.correct`. Lifts **Encoding strength 1→3** (free production from a code cue).
 3. **Per-option explain on the canonical** — attach `explainByOption: {output: oneLineWhy}` to deck cards built by mining the L3 hints/notes already in CONTENT. Lifts **Feedback quality 1→2**.
 

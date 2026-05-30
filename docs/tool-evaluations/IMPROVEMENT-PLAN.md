@@ -61,6 +61,22 @@
 
 After every tier, run `/eval-learning-tool --all` to verify the projected lifts were real. Compare the new TRIAGE.md to the old; if a tool didn't actually move, the salvage path didn't deliver — investigate.
 
+## Real SR-write functions (reference)
+
+The audits sometimes use a generic name like `recordReview` when describing the salvage. The ACTUAL functions in this codebase are below — use these exact signatures. Anything else is phantom.
+
+| Helper | Signature | Lives at | When to call |
+|---|---|---|---|
+| `markPassed` | `markPassed(lessonId, level)` where `level ∈ {'L1','L2','L3'}` | `js/app/09-stats-cheatsheet-mock.js:764` | The high-level entry point L1/L2/L3 wins call. Internally appends history + cascades to `scheduleReview`. Use this when a drill genuinely represents an L-level pass. |
+| `scheduleReview` | `scheduleReview(lessonId, { advance = true } = {})` | `js/app/04-progress-sr.js:431` | The SR primitive. `advance: true` rolls the bucket to the next interval (1d → 7d → 30d). `advance: false` is the L2-style **hold-but-reset-dueAt** — keeps the SR cycle moving without claiming the user free-recalled. **Drill family salvages should use `{ advance: false }`** — drills are recognition-tier, shallower than L2, so the bucket should not advance. |
+| `appendHistory` | `appendHistory(lessonId, event)` where `event` is a string like `'L1-pass'`, `'L1-miss'`, `'notes-to-code-pass'`, `'walkthrough-quiz-pass'` | `js/app/04-progress-sr.js` (search the file for the export) | History feed read by Pace-Bar, sparkline, Stats. Schema-additive — new event strings are silently accepted by all readers (they branch on known strings or ignore unknowns). |
+| `recordWrong` | `recordWrong(lessonId)` | `js/app/04-progress-sr.js:764` | Increments `state.weakness[lessonId]`. The miss-side counterpart for closed-loop signal. Surfaces in At-Risk, Weak Spots, Today's Plan, Rapid-Fire weak-spot diagnostic. |
+| `recordMiss` | `recordMiss(lessonId, level, tagId)` | `js/app/04-progress-sr.js:787` | Writes `state.misses[lessonId]` for the iter-58 mistake-tagging chip-strip. Used by L1's chip strip. |
+| `clearWeakness` | `clearWeakness(lessonId)` | `js/app/04-progress-sr.js` | Decrements weakness counter on a clean pass (so a single win doesn't reset a long-standing weakness, but a steady-state of wins erodes it). |
+| `markRevealed` | `markRevealed(lessonId, level)` | `js/app/04-progress-sr.js` | Flags `state.revealed[lessonId][level] = true`. Drives At-Risk dot variant, Reveal Replay queue, ringed-green dot demotion on clean-pass invariant. |
+
+**Drill-win SR semantics (decision baked into Phase 2 audits, 2026-05-30):** drill wins call `scheduleReview(id, { advance: false })`, NOT `markPassed` (which would falsely claim an L-tier pass). Rationale: drills are 4-MC recognition tier, shallower than L2's typed cued-recall (which already uses hold-but-reset). Drill wins should keep the SR cycle moving without overstating recognition-vs-recall confidence. If you ship a free-text-first drill variant later (Phase 6), THAT variant could promote to `markPassed(id, 'L2')` — but the recognition mode stays hold-but-reset.
+
 ---
 
 ## Phase 0 — User decisions (do BEFORE any execution)
@@ -93,22 +109,30 @@ Highest-impact-per-edit ratio. Each is a single ~3-line change with a meaningful
 
 ---
 
-## Phase 2 — Drill-family cross-cutting (huge cumulative leverage)
+## Phase 2 — Drill-family Spacing fixes (high cumulative leverage)
 
-**Pattern: SR write on win.** None of the 8 drill tools call `recordReview(lessonId)` on a correct pick — wins don't strengthen the SR cache. Add the shared pattern to each. One commit per tool keeps each diff reviewable.
+**Common theme:** none of the 8 drill tools currently feed the SR scheduler well — but the audits propose **three different patterns**, not one shared fix. Group A reads from SR (`state.reviews`/`state.weakness`) to bias card selection. Group B writes to SR on win. Group C invents per-card SR state. Each tool's audit names its own approach — read the linked audit before editing.
 
-Some tools also have a *second* edit bundled — apply both in the same commit when noted.
+**Group A — SR-weighted READ (bias card pick from existing signals):** +1 Spacing each. Lowest-risk, smallest-edit.
 
-- [ ] **notes-drill** — `recordReview` on win (+2 Spacing) — 📄 `audits/notes-drill.md`
-- [ ] **recognize** — `recordReview` on win + `state.weakness` on miss (+3 total) — 📄 `audits/recognize.md`
-- [ ] **trace** — `recordReview` on win (+2 Spacing) — 📄 `audits/trace.md`
-- [ ] **reverse** — `recordReview` on win (+2 Spacing) — 📄 `audits/reverse.md`
-- [ ] **predict** — `recordReview` on win + optional typed-output mode behind toggle (+4 total) — 📄 `audits/predict.md`
-- [ ] **claim** — `recordReview` on win + algorithmic distractors (replace hand-curated registry seeding) (+5 total) — 📄 `audits/claim.md`
-- [ ] **gotcha** — `recordReview` on win + cloze-deletion on the note text (replace honor-system "knew it") (+6 total) — 📄 `audits/gotcha.md`
-- [ ] **swap-bench** — per-pair `recordReview` on win + corpus expansion path (+5 total) — 📄 `audits/swap-bench.md`
+- [ ] **notes-drill** — replace Fisher-Yates with SR-weighted pull biased toward `state.weakness` lessons or overdue `state.reviews[lessonId]` at `js/app/05-drills-recognize-trace.js:832-835` (+1 Spacing) — 📄 `audits/notes-drill.md`
+- [ ] **recognize** — SR-weighted shuffle (mirrors Reverse pattern at `:585`) at `js/app/05-drills-recognize-trace.js:9-21` (+1 Spacing); **also** feed `state.weakness[card.lessonId]++` + `appendHistory(... 'L1-miss')` on miss at `:62-71` (+1 Closed-loop) — 📄 `audits/recognize.md`
+- [ ] **trace** — SR-weighted shuffle at `js/app/05-drills-recognize-trace.js:551-572` (+1 Spacing) — 📄 `audits/trace.md`
+- [ ] **reverse** — SR-weighted shuffle at `js/app/07-drills-swap-speedrun.js:489-510` (+1 Spacing); audit also bundles Interleaving +1 (include `applied` track) and Feedback +1 — see audit for the full +3 — 📄 `audits/reverse.md`
 
-**After Phase 2 ships:** re-run `/eval-learning-tool --all` to verify the +16 cumulative Spacing lift across the drill family.
+**Group B — SR WRITE on win (`scheduleReview(id, { advance: false })`):** +2 Spacing each. Uses L2's hold-but-reset-dueAt semantics — drills are recognition-tier, shallower than L2 cued-recall, so the SR cycle keeps moving but the bucket doesn't falsely advance. See "Real SR-write functions" reference section below for the function signatures.
+
+- [ ] **predict** — `scheduleReview(card.lessonId, { advance: false })` on `wasCorrect` at `js/app/07-drills-swap-speedrun.js:405` (+2 Spacing); audit also proposes typed-output mode (+2 Encoding) and per-option explain (+1 Feedback) — 📄 `audits/predict.md`
+- [ ] **claim** — same SR-write pattern at `js/app/07-drills-swap-speedrun.js:238` (+2 Spacing); audit also proposes algorithmic distractors (+2 Interleaving) — 📄 `audits/claim.md`
+- [ ] **gotcha** — same SR-write pattern at `js/app/05-drills-recognize-trace.js:257` (+2 Spacing); audit also proposes cloze-deletion on the note (+2 Active recall +2 Encoding) and a 1-line "why" from source lesson (+1 Feedback) — full path lifts +6 — 📄 `audits/gotcha.md`
+
+**Group C — Custom per-pair SR (new schema):** +3 Spacing. Multi-edit; treat as its own mini-phase.
+
+- [ ] **swap-bench** — extend `state.swapBench` shape to track per-pair `{ dueAt, interval }` (`js/app/01-state-content.js:221`); on win double interval (1d→2d→4d), on miss reset to 1d; build deck preferring overdue pairs in `_swapBuildDeck` at `js/app/07-drills-swap-speedrun.js:12`. Lifts Spacing 0→3 (+3) — 📄 `audits/swap-bench.md`
+
+**Cumulative Spacing lift across drill family (Group A + B + C):** ≈4×1 + 3×2 + 1×3 = **+13 Spacing points** across 8 tools. Plus the Closed-loop / Encoding / Interleaving / Feedback side-edits bundled into each audit (read each audit for the full +N projection per tool).
+
+**After Phase 2 ships:** re-run `/eval-learning-tool --all` to verify per-tool lifts.
 
 ---
 
@@ -116,7 +140,7 @@ Some tools also have a *second* edit bundled — apply both in the same commit w
 
 Multi-edit but each tool has a clear path to ship-quality band.
 
-- [ ] **walkthrough** — persist Quiz / 🪲 Bug submode outcomes to `state.weakness` + history (+6: 11→17) — 📄 `audits/walkthrough.md`
+- [ ] **walkthrough** — extend `state.walkthrough[lessonId] = { quizAttempts, quizCorrect, bugAttempts, bugCorrect, lastRunAt }` at `js/app/11-tabs-ref-conv-walk.js:424-438, 548-563`; on miss also flag `state.weakness[lessonId]`; default-open `🔮 Quiz` after first full scrub (+6: 11→17) — 📄 `audits/walkthrough.md`
 - [ ] **rapid-fire-l1** — SR+weakness-weighted deck (currently uniform Fisher-Yates) + post-streak free-recall reveal window (+3: 16→19) — 📄 `audits/rapid-fire-l1.md`
 - [ ] **warmup-3card** — `appendHistory('L1-pass')` on win + typed-recall variant for next-on-plan card (+2: 15→17) — 📄 `audits/warmup-3card.md`
 - [ ] **l2** — attempt-count weakness signal (so "struggled-but-eventually-passed" middle case is visible) + per-blank tiered reveal — 📄 `audits/l2.md`

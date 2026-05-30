@@ -76,8 +76,12 @@ These are the next-moves, ranked by expected score-lift per edit. Each entry is 
 8. **Streak Map** — capture per-day missed lessonIds + drill-routing button. **3→6 (+3).**
 
 ### Family-wide pattern (single shared salvage across many tools)
-9. **All drill-kind tools** (Notes Drill, Recognize, Trace, Reverse, Predict, Claim, Gotcha, Swap-Bench): NONE write to `state.reviews` on wins. A shared 3-line `recordReview(lessonId)` call on win lifts Spacing by +2 across 8 tools. **+16 cumulative points.**
-10. **Rapid-Fire L1, Notes-Drill, Predict, Claim, Gotcha** — also all uniform-random deck selection. Adding SR+weakness weighting would lift Spacing by +1 across 5 tools. **+5 cumulative.**
+9. **All drill-kind tools share Spacing gaps** (Notes Drill, Recognize, Trace, Reverse, Predict, Claim, Gotcha, Swap-Bench) but the per-tool audits propose **three different fixes**, not one shared pattern:
+   - **Group A** (notes-drill, recognize, trace, reverse): SR-weighted READ — bias card-pick by existing `state.reviews`/`state.weakness`. +1 Spacing each.
+   - **Group B** (predict, claim, gotcha): SR WRITE on win using `scheduleReview(id, { advance: false })` (NOT phantom `recordReview` — corrected post-audit). Hold-but-reset semantics matching L2. +2 Spacing each.
+   - **Group C** (swap-bench): new per-pair `state.swapBench.pairs[id] = { dueAt, interval }` schema. +3 Spacing.
+   - **Cumulative Spacing lift:** ≈4×1 + 3×2 + 1×3 = **+13 points** across 8 tools (revised down from initial +16 claim which was based on misframing). See `IMPROVEMENT-PLAN.md` Phase 2 for per-tool detail and `## Real SR-write functions` section for signatures.
+10. **Rapid-Fire L1, Notes-Drill, Predict, Claim, Gotcha** — uniform-random deck selection. Adding SR+weakness weighting lifts Spacing by +1 across 5 tools. **+5 cumulative.** (Overlaps with Group A above for Notes Drill.)
 
 ### Heavier salvage (worth doing but >1 edit)
 11. **Conversation** — route through `convDrill` OR demote tab to "preview". Reframes the surface. **6→?**
@@ -93,7 +97,7 @@ After any salvage paths execute, re-run `/eval-learning-tool --all` (or per-tool
 
 ## Cross-cutting findings worth flagging
 
-1. **Drill-kind family shares one structural gap.** None of the 8 drills (`notes-drill`, `recognize`, `trace`, `reverse`, `predict`, `claim`, `gotcha`, `swap-bench`) write to `state.reviews` on wins. The single shared salvage (`recordReview(lessonId)` on win) is a +2 Spacing lift across the whole family. Highest cumulative leverage in the audit.
+1. **Drill-kind family shares Spacing gaps — but via 3 different patterns.** None of the 8 drills feed the SR scheduler well today, but per-tool audits propose 3 distinct fixes (READ-bias, WRITE-on-win, custom-per-pair-SR). Cumulative Spacing lift: **+13 across 8 tools** (corrected from initial +16 misframing). See Action sequence item #9 and `IMPROVEMENT-PLAN.md` Phase 2 for per-tool detail. The WRITE-on-win pattern uses `scheduleReview(lessonId, { advance: false })` — L2-style hold-but-reset-dueAt semantics, NOT phantom `recordReview`.
 
 2. **The lesson-tab content trio (Reference / Conversation / Walkthrough) doesn't write back at all.** Sibling drills built on the same content (`convDrill`, `traceHop`, `whatif`, `notesDrill`) do persist counters; the *content tabs themselves* are read-only consumption surfaces. The question for PROFILE.md (autopilot, get out of the way): should these tabs continue to exist as their own surfaces, or be demoted to "preview that routes to the drill"?
 

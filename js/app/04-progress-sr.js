@@ -453,6 +453,33 @@ function isDueForReview(lessonId) {
   if (lessonOverallStatus(lessonId) !== 'mastered') return false;
   return Date.now() >= r.dueAt;
 }
+// Soft SR/weakness-weighted shuffle for recognition-tier drills
+// (notes-drill, recognize, trace-hop, reverse). Groups items into 4
+// priority buckets: 3=due+weak, 2=due, 1=weak, 0=neither. Fisher-Yates
+// within each bucket, then concatenates high-to-low — so cards from
+// lessons the user owes attention surface first within a session, but
+// the order inside each bucket is still randomized. A cold-start user
+// with no SR/weakness state degrades to a uniform shuffle (everything
+// lands in bucket 0). getLessonId is a callback that pulls the lessonId
+// off whatever item shape the caller uses (CURRICULUM entries, deck
+// items, etc.).
+function _srPriorityShuffle(items, getLessonId) {
+  const buckets = [[], [], [], []];
+  for (const item of items) {
+    const id = getLessonId(item);
+    const overdue = id ? isDueForReview(id) : false;
+    const weak = id ? (state.weakness[id] || 0) > 0 : false;
+    const bucket = (overdue ? 2 : 0) + (weak ? 1 : 0);
+    buckets[bucket].push(item);
+  }
+  for (let b = 0; b < 4; b++) {
+    for (let i = buckets[b].length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [buckets[b][i], buckets[b][j]] = [buckets[b][j], buckets[b][i]];
+    }
+  }
+  return [...buckets[3], ...buckets[2], ...buckets[1], ...buckets[0]];
+}
 function dueReviewIds() {
   // iter 45: path-aware SR. When Starter Plan is on AND scoped to a single
   // track, only surface reviews from lessons in that track-path — closes

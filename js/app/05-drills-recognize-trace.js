@@ -828,14 +828,13 @@ async function _notesDrillBuildDeck() {
     }
   }
   if (pool.length < 4) return null;
-  // Fisher-Yates shuffle.
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
+  // SR/weakness-weighted shuffle — cards from overdue or weak-spot
+  // lessons surface first, then random fill. See `_srPriorityShuffle`
+  // in slice 04 for the bucketing rules.
+  const ordered = _srPriorityShuffle(pool, item => item.lessonId);
   // Build cards with distractors. Skip any card with <3 distractors.
   const deck = [];
-  for (const item of pool) {
+  for (const item of ordered) {
     if (deck.length >= NOTES_DRILL_DECK_LEN) break;
     const distractors = _notesCollectDistractors(item.lessonId, item.sectionName, item.blankWord);
     if (distractors.length < 3) continue;

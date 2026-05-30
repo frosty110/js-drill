@@ -463,17 +463,28 @@ function renderL3(body, lesson, content) {
       const target = wrap.querySelector('[data-diff]');
       const userLines = stripCommentsForDiff(cm.getValue());
       const canonLines = stripCommentsForDiff(drill.canonical);
-      const rows = lcsDiffRows(userLines, canonLines);
+      const rows = lcsDiffRows(userLines, canonLines, normalizeForDiff);
       // Header row + a (left, right) pair per diff row, laid out in a 2-col grid.
       const cells = [
         '<div class="diff-side-header">Yours</div>',
         '<div class="diff-side-header diff-side-header-right">Canonical</div>'
       ];
       for (const r of rows) {
-        const leftCls = `diff-row diff-row-left diff-${r.status === 'eq' ? 'eq' : (r.status === 'del' ? 'del' : 'empty')}`;
-        const rightCls = `diff-row diff-row-right diff-${r.status === 'eq' ? 'eq' : (r.status === 'add' ? 'add' : 'empty')}`;
-        cells.push(`<div class="${leftCls}">${escapeHtml(r.left) || '&nbsp;'}</div>`);
-        cells.push(`<div class="${rightCls}">${escapeHtml(r.right) || '&nbsp;'}</div>`);
+        const leftCls = `diff-row diff-row-left diff-${r.status === 'eq' ? 'eq' : ((r.status === 'del' || r.status === 'chg') ? 'del' : 'empty')}`;
+        const rightCls = `diff-row diff-row-right diff-${r.status === 'eq' ? 'eq' : ((r.status === 'add' || r.status === 'chg') ? 'add' : 'empty')}`;
+        // Word-level highlight where both sides exist (eq rows too, to surface
+        // internal-whitespace-only diffs the line match normalized away).
+        let leftHtml, rightHtml;
+        if ((r.status === 'eq' || r.status === 'chg') && r.left && r.right) {
+          const w = inlineWordDiff(r.left, r.right);
+          leftHtml = w.leftHtml;
+          rightHtml = w.rightHtml;
+        } else {
+          leftHtml = escapeHtml(r.left);
+          rightHtml = escapeHtml(r.right);
+        }
+        cells.push(`<div class="${leftCls}">${leftHtml || '&nbsp;'}</div>`);
+        cells.push(`<div class="${rightCls}">${rightHtml || '&nbsp;'}</div>`);
       }
       target.innerHTML = cells.join('');
       panel.classList.remove('hidden');

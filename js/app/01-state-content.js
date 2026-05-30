@@ -6,7 +6,8 @@
 // ──────────────────────────────────────────────────────────────────────────
 const {
   escapeHtml, formatTime, normalize, normalizeLines, outputsMatch,
-  stripCommentsForDiff, lcsDiffRows, colorizeInto, renderFlash
+  stripCommentsForDiff, lcsDiffRows, normalizeForDiff, inlineWordDiff,
+  colorizeInto, renderFlash
 } = window.DrillUtil;
 const { formatArg, runCode } = window.DrillRunner;
 

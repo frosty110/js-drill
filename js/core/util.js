@@ -76,27 +76,105 @@
       .filter(line => line.trim().length > 0);
   };
 
+  // Normalize a line for diff *matching* (not display): collapse internal
+  // whitespace runs to a single space and trim. Lets indentation-only and
+  // brace-spacing-only differences anchor as equal, so the user's 4-space
+  // recall lines up with the canonical's 2-space form. Display still uses
+  // the original line.
+  U.normalizeForDiff = function (line) {
+    return line.replace(/\s+/g, ' ').trim();
+  };
+
   // LCS-based line alignment for side-by-side diff. O(n*m) DP — fine for
   // snippets under a few hundred lines (our canonicals top out ~40).
-  // Returns rows of `{left, right, status: 'eq'|'del'|'add'}`.
-  U.lcsDiffRows = function (a, b) {
+  // `keyFn` (optional) maps a display line to its match key — pass
+  // `normalizeForDiff` to make alignment whitespace-insensitive.
+  // Returns rows of `{left, right, status: 'eq'|'del'|'add'|'chg'}`.
+  // Post-pass: adjacent del/add runs are paired positionally into 'chg'
+  // rows (both sides populated) so a changed line sits beside its
+  // counterpart instead of producing a blank gap.
+  U.lcsDiffRows = function (a, b, keyFn) {
+    const ka = keyFn ? a.map(keyFn) : a;
+    const kb = keyFn ? b.map(keyFn) : b;
     const n = a.length, m = b.length;
     const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
     for (let i = n - 1; i >= 0; i--) {
       for (let j = m - 1; j >= 0; j--) {
-        dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+        dp[i][j] = ka[i] === kb[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
       }
     }
-    const rows = [];
+    const raw = [];
     let i = 0, j = 0;
     while (i < n && j < m) {
-      if (a[i] === b[j]) { rows.push({ left: a[i], right: b[j], status: 'eq' }); i++; j++; }
-      else if (dp[i + 1][j] >= dp[i][j + 1]) { rows.push({ left: a[i], right: '', status: 'del' }); i++; }
-      else { rows.push({ left: '', right: b[j], status: 'add' }); j++; }
+      if (ka[i] === kb[j]) { raw.push({ left: a[i], right: b[j], status: 'eq' }); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { raw.push({ left: a[i], right: '', status: 'del' }); i++; }
+      else { raw.push({ left: '', right: b[j], status: 'add' }); j++; }
     }
-    while (i < n) rows.push({ left: a[i++], right: '', status: 'del' });
-    while (j < m) rows.push({ left: '', right: b[j++], status: 'add' });
+    while (i < n) raw.push({ left: a[i++], right: '', status: 'del' });
+    while (j < m) raw.push({ left: '', right: b[j++], status: 'add' });
+
+    // Pair adjacent del/add runs into side-by-side 'chg' rows.
+    const rows = [];
+    let k = 0;
+    while (k < raw.length) {
+      if (raw[k].status === 'eq') { rows.push(raw[k]); k++; continue; }
+      const dels = [], adds = [];
+      while (k < raw.length && raw[k].status !== 'eq') {
+        if (raw[k].status === 'del') dels.push(raw[k].left);
+        else adds.push(raw[k].right);
+        k++;
+      }
+      const pairs = Math.max(dels.length, adds.length);
+      for (let p = 0; p < pairs; p++) {
+        const left = p < dels.length ? dels[p] : '';
+        const right = p < adds.length ? adds[p] : '';
+        const status = left && right ? 'chg' : (left ? 'del' : 'add');
+        rows.push({ left, right, status });
+      }
+    }
     return rows;
+  };
+
+  // Inline word-level diff for a single side-by-side row. Tokenizes each line
+  // into words / punctuation / whitespace-runs and LCS-aligns the tokens, so
+  // the differing TOKENS (not the whole line) get highlighted — GitHub-style.
+  // Returns `{ leftHtml, rightHtml }` with `<span>`-wrapped changed tokens.
+  //
+  // Whitespace policy (intentional, matches the diff's whitespace-blind match):
+  //   - LEADING indent whitespace is split off and never compared/highlighted
+  //     (4-space recall vs 2-space canonical shouldn't flag as a diff).
+  //   - INTERNAL whitespace runs ARE tokens, so `a  b` vs `a b` highlights the
+  //     extra space. (Trailing whitespace is already stripped upstream.)
+  U.inlineWordDiff = function (leftLine, rightLine) {
+    const splitLead = s => { const m = (s.match(/^\s*/) || [''])[0]; return [m, s.slice(m.length)]; };
+    const tokenize = s => s.match(/\s+|\w+|[^\w\s]/g) || [];
+    const [lLead, lRest] = splitLead(leftLine || '');
+    const [rLead, rRest] = splitLead(rightLine || '');
+    const lt = tokenize(lRest), rt = tokenize(rRest);
+    const n = lt.length, m = rt.length;
+    const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] = lt[i] === rt[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    const esc = U.escapeHtml;
+    const wsCls = t => /^\s+$/.test(t) ? ' diff-word-ws' : '';
+    const del = t => `<span class="diff-word-del${wsCls(t)}">${esc(t)}</span>`;
+    const add = t => `<span class="diff-word-add${wsCls(t)}">${esc(t)}</span>`;
+    const leftParts = [], rightParts = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (lt[i] === rt[j]) { leftParts.push(esc(lt[i])); rightParts.push(esc(rt[j])); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { leftParts.push(del(lt[i])); i++; }
+      else { rightParts.push(add(rt[j])); j++; }
+    }
+    while (i < n) leftParts.push(del(lt[i++]));
+    while (j < m) rightParts.push(add(rt[j++]));
+    return {
+      leftHtml: esc(lLead) + leftParts.join(''),
+      rightHtml: esc(rLead) + rightParts.join('')
+    };
   };
 
   // CodeMirror static-render helpers. Both depend on the runMode addon being

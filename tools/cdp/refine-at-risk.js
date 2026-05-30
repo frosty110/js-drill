@@ -106,6 +106,35 @@ async function shot({ mobile, label }) {
   s.assert(inv && parseFloat(inv.borderLeftWidth) >= 2,
     `[${label}] inventory has ≥2px left-border (got ${inv?.borderLeftWidth})`);
 
+  // iter-40 (refine): explainer copy collapsed to single-vocab. Asserts the
+  // 3 dropped legacy terms ("wobbly" / "about to slip" / "mastered-with-reveal")
+  // are gone, and the new copy mentions "missed or revealed". The inventory
+  // row's DUE NOW / SOON / NO-SR labels are now the modal's single vocabulary.
+  const explainerText = await s.eval(`
+    (() => {
+      const modal = document.getElementById('at-risk-modal');
+      const inv = modal?.querySelector('[data-at-risk-inventory]');
+      // Explainer is the sibling div just above the inventory row.
+      const candidates = Array.from(modal?.querySelectorAll('div') || []);
+      const idx = candidates.findIndex(d => d === inv?.parentNode);
+      // Easier: search all divs whose textContent includes "Tap any row".
+      const explainer = candidates.find(d =>
+        /Tap any row/.test(d.textContent || '') &&
+        d.children.length === 0
+      );
+      return explainer ? explainer.textContent.trim() : null;
+    })()
+  `);
+  s.assert(!!explainerText, `[${label}] explainer copy should be present`);
+  s.assert(explainerText && !/wobbly/i.test(explainerText),
+    `[${label}] explainer should not contain legacy "wobbly" term (got "${explainerText}")`);
+  s.assert(explainerText && !/about to slip/i.test(explainerText),
+    `[${label}] explainer should not contain legacy "about to slip" term`);
+  s.assert(explainerText && !/mastered-with-reveal/i.test(explainerText),
+    `[${label}] explainer should not contain legacy "mastered-with-reveal" term`);
+  s.assert(explainerText && /missed or revealed/i.test(explainerText),
+    `[${label}] explainer should use unified "missed or revealed" phrasing (got "${explainerText}")`);
+
   s.report();
   await s.close();
   return s;

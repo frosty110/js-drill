@@ -183,7 +183,15 @@ function renderSidebar() {
     repBtn.classList.toggle('text-rose-300', state.repairFilter);
     repBtn.classList.toggle('text-slate-500', !state.repairFilter);
     const cntEl = repBtn.querySelector('#repair-filter-count');
-    if (cntEl) cntEl.textContent = String(_repairIdx.size);
+    if (cntEl) {
+      cntEl.textContent = String(_repairIdx.size);
+      // iter 44 (refine): when the filter is OFF and there's work to do,
+      // paint the COUNT (not the label) rose so the chip announces the
+      // live decay signal at rest. Without this the chip reads identical
+      // for N=0 vs N=5 — invisible diagnostic. When the filter is ON the
+      // whole button is already rose; when N=0 the count stays muted.
+      cntEl.classList.toggle('text-rose-300', !state.repairFilter && _repairIdx.size > 0);
+    }
   }
 
   const _allTracks = [

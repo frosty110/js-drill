@@ -185,6 +185,34 @@ async function seedAndSnap({ mobile, label }) {
   s.assert(weakestRow && parseInt(weakestRow.borderLeft || '0', 10) >= 2,
     `weakest-row should have left-border accent (got ${weakestRow?.borderLeft})`);
 
+  // iter-41 (refine): post-CTA explainer collapsed to single sentence so the
+  // breakdown table sits closer to the fold on mobile. The JSON-handoff
+  // workflow is independently explained by the bottom prose at lines
+  // 802-805 + the labeled JSON buttons themselves.
+  const postCtaHint = await s.eval(`(() => {
+    const btn = document.getElementById('drill-weakest-btn');
+    if (!btn) return null;
+    // The explainer hint is the .hint paragraph immediately after the button.
+    let sib = btn.nextElementSibling;
+    while (sib && !sib.classList?.contains('hint')) sib = sib.nextElementSibling;
+    return sib ? sib.textContent.replace(/\\s+/g, ' ').trim() : null;
+  })()`);
+  s.assert(!!postCtaHint, 'Post-CTA explainer hint should exist');
+  s.assert(postCtaHint && !/JSON buttons below/i.test(postCtaHint),
+    `Post-CTA explainer should not redirect to JSON buttons (got "${postCtaHint}")`);
+  s.assert(postCtaHint && !/Want to send results/i.test(postCtaHint),
+    `Post-CTA explainer should not contain "Want to send results" copy`);
+  s.assert(postCtaHint && /Patterns track ready to drill/i.test(postCtaHint),
+    `Post-CTA explainer should still describe the CTA's behavior (got "${postCtaHint}")`);
+  // Bottom prose still carries the full JSON-handoff explanation.
+  const bottomHint = await s.eval(`(() => {
+    const hints = Array.from(document.querySelectorAll('p.hint'));
+    const bottom = hints[hints.length - 1];
+    return bottom ? bottom.textContent.replace(/\\s+/g, ' ').trim() : null;
+  })()`);
+  s.assert(bottomHint && /Send the JSON to me/i.test(bottomHint),
+    `Bottom prose should still explain the JSON workflow (got "${bottomHint?.slice(0, 60)}…")`);
+
   const { failed, errors, networkErrors } = s.report();
   await s.close();
   return { failed, errors, networkErrors };

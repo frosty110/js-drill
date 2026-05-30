@@ -399,8 +399,19 @@ async function startCrystalSession() {
         answered = true;
         const picked = btn.dataset.opt;
         const wasCorrect = picked === card.correct;
-        if (wasCorrect) correct++;
-        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        if (wasCorrect) {
+          correct++;
+          // Hold-but-reset-dueAt SR semantics — Predict is 4-MC recognition,
+          // shallower than L2 cued-recall, so a win keeps the SR cycle
+          // moving (resets dueAt) without falsely advancing the bucket.
+          // Guarded to mastered+due lessons only — mirrors the L2 pattern
+          // in markPassed() (js/app/09-stats-cheatsheet-mock.js:791) so a
+          // recognition win can't seed SR on a not-yet-mastered lesson
+          // or push the dueAt out further on a not-yet-due one.
+          if (state.reviews[card.lessonId] && isDueForReview(card.lessonId)) {
+            scheduleReview(card.lessonId, { advance: false });
+          }
+        } else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
         state.crystal.attempts++;
         if (wasCorrect) state.crystal.correct++;
         saveProgress();

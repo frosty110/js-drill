@@ -109,11 +109,11 @@ Highest-impact-per-edit ratio. Each is a single ~3-line change with a meaningful
 - [x] **notes-drill** — replace Fisher-Yates with SR-weighted pull biased toward `state.weakness` lessons or overdue `state.reviews[lessonId]` at `js/app/05-drills-recognize-trace.js:832-835` (+1 Spacing) — 📄 `audits/notes-drill.md` → commit `69ba011`
 - [x] **recognize** — SR-weighted shuffle (mirrors Reverse pattern at `:585`) at `js/app/05-drills-recognize-trace.js:9-21` (+1 Spacing); **also** feed `state.weakness[card.lessonId]++` + `appendHistory(... 'L1-miss')` on miss at `:62-71` (+1 Closed-loop) — 📄 `audits/recognize.md` → commit `02fb7dd`
 - [x] **trace** — SR-weighted shuffle at `js/app/05-drills-recognize-trace.js:551-572` (+1 Spacing) — 📄 `audits/trace.md` → commit `047278a`
-- [x] **reverse** — SR-weighted shuffle at `js/app/07-drills-swap-speedrun.js:489-510` (+1 Spacing); audit also bundles Interleaving +1 (include `applied` track) and Feedback +1 — see audit for the full +3 — 📄 `audits/reverse.md` → awaiting commit
+- [x] **reverse** — SR-weighted shuffle at `js/app/07-drills-swap-speedrun.js:489-510` (+1 Spacing); audit also bundles Interleaving +1 (include `applied` track) and Feedback +1 — see audit for the full +3 — 📄 `audits/reverse.md` → commit `d1c27bc`
 
 **Group B — SR WRITE on win (`scheduleReview(id, { advance: false })`):** +2 Spacing each. Uses L2's hold-but-reset-dueAt semantics — drills are recognition-tier, shallower than L2 cued-recall, so the SR cycle keeps moving but the bucket doesn't falsely advance. See "Real SR-write functions" reference section below for the function signatures.
 
-- [ ] **predict** — `scheduleReview(card.lessonId, { advance: false })` on `wasCorrect` at `js/app/07-drills-swap-speedrun.js:405` (+2 Spacing); audit also proposes typed-output mode (+2 Encoding) and per-option explain (+1 Feedback) — 📄 `audits/predict.md`
+- [x] **predict** — `scheduleReview(card.lessonId, { advance: false })` on `wasCorrect` at `js/app/07-drills-swap-speedrun.js:405` (+2 Spacing); audit also proposes typed-output mode (+2 Encoding) and per-option explain (+1 Feedback) — 📄 `audits/predict.md` → awaiting commit
 - [ ] **claim** — same SR-write pattern at `js/app/07-drills-swap-speedrun.js:238` (+2 Spacing); audit also proposes algorithmic distractors (+2 Interleaving) — 📄 `audits/claim.md`
 - [ ] **gotcha** — same SR-write pattern at `js/app/05-drills-recognize-trace.js:257` (+2 Spacing); audit also proposes cloze-deletion on the note (+2 Active recall +2 Encoding) and a 1-line "why" from source lesson (+1 Feedback) — full path lifts +6 — 📄 `audits/gotcha.md`
 

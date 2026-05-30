@@ -249,6 +249,7 @@ const state = {
   cramView: { mode: 'today', dayIndex: -1 },  // active Cram Home view. mode: 'today' (live day) | 'day' (specific past/future day, dayIndex set) | 'all' (all days expanded) | 'open-from' (only !done items from dayIndex).
   cramReview: { items: {}, session: null },  // SR over cram glossary/cheat/behavior/code-shapes. items[itemId] = { familiarity 0-3, lastReviewedAt }. session = active queue { queue, index, revealed, gotIt, fuzzy } | null.
   glossaryQuiz: { sessions: 0, attempts: 0, correct: 0, lastRunAt: 0, perTerm: {}, session: null },  // MC quiz over cram glossary terms. Mixed direction (term→def + def→term), 10 cards/session. session = { queue, index, picked, correctCount } | null. perTerm[term] = { seen, correct }.
+  walkthrough: {},  // iter eval-2026-05-30: { [lessonId]: { quizAttempts, quizCorrect, bugAttempts, bugCorrect, lastRunAt, scrubbed } } — Walkthrough tab Quiz/Bug outcome persistence + scrub-to-end flag for default-open-Quiz behavior (additive, no `__v` bump)
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   lastLessonId: null, // persisted across sessions for resume
   lastTab: null,

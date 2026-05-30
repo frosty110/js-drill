@@ -415,6 +415,20 @@ function renderWalkthrough(body, lesson, content) {
         if (picked) return;
         picked = true;
         card.classList.add(opt.isCorrect ? 'correct' : 'incorrect');
+        // Persist Quiz outcome to state.walkthrough[lessonId]. Misses
+        // also flag state.weakness so Today's Plan / At-Risk surface
+        // the lesson — closes the loop the surface previously left open
+        // (per audits/walkthrough.md edit 1).
+        const wt = state.walkthrough[lesson.id] || { quizAttempts: 0, quizCorrect: 0, bugAttempts: 0, bugCorrect: 0, lastRunAt: 0 };
+        wt.quizAttempts++;
+        if (opt.isCorrect) wt.quizCorrect++;
+        else {
+          state.weakness[lesson.id] = (state.weakness[lesson.id] || 0) + 1;
+          appendHistory(lesson.id, 'walkthrough-quiz-miss');
+        }
+        wt.lastRunAt = Date.now();
+        state.walkthrough[lesson.id] = wt;
+        saveProgress();
         // Always reveal the correct one too
         if (!opt.isCorrect) {
           [...quizOptsEl.children].forEach((el, i) => {
@@ -433,7 +447,23 @@ function renderWalkthrough(body, lesson, content) {
   });
   nextBtn.addEventListener('click', () => {
     const steps = currentSteps();
-    if (uiState.stepIdx < steps.length - 1) { uiState.stepIdx++; render(); }
+    if (uiState.stepIdx < steps.length - 1) {
+      uiState.stepIdx++;
+      render();
+      // Once the user reaches the final step at least once, flag the
+      // lesson as "scrubbed" so the next entry to the tab auto-opens
+      // the 🔮 Quiz (per audits/walkthrough.md edit 2 — recall becomes
+      // default, not opt-in).
+      if (uiState.stepIdx === steps.length - 1) {
+        const wt = state.walkthrough[lesson.id] || { quizAttempts: 0, quizCorrect: 0, bugAttempts: 0, bugCorrect: 0, lastRunAt: 0 };
+        if (!wt.scrubbed) {
+          wt.scrubbed = true;
+          wt.lastRunAt = Date.now();
+          state.walkthrough[lesson.id] = wt;
+          saveProgress();
+        }
+      }
+    }
   });
   resetBtn.addEventListener('click', () => {
     uiState.stepIdx = 0;
@@ -540,6 +570,18 @@ function renderWalkthrough(body, lesson, content) {
         picked = true;
         const wasCorrect = i === bug.bugIdx;
         card.classList.add(wasCorrect ? 'correct' : 'incorrect');
+        // Persist Bug outcome to state.walkthrough[lessonId]. Misses
+        // flag state.weakness (audits/walkthrough.md edit 1).
+        const wt = state.walkthrough[lesson.id] || { quizAttempts: 0, quizCorrect: 0, bugAttempts: 0, bugCorrect: 0, lastRunAt: 0 };
+        wt.bugAttempts++;
+        if (wasCorrect) wt.bugCorrect++;
+        else {
+          state.weakness[lesson.id] = (state.weakness[lesson.id] || 0) + 1;
+          appendHistory(lesson.id, 'walkthrough-bug-miss');
+        }
+        wt.lastRunAt = Date.now();
+        state.walkthrough[lesson.id] = wt;
+        saveProgress();
         // Always reveal the actual bug step.
         if (!wasCorrect) {
           [...bugListEl.children][bug.bugIdx]?.classList.add('correct');
@@ -570,6 +612,16 @@ function renderWalkthrough(body, lesson, content) {
 
   // Initial paint
   render();
+
+  // Default-open 🔮 Quiz when the user has already scrubbed this
+  // walkthrough to the end at least once (per audits/walkthrough.md
+  // edit 2 — recall becomes the default surface, not opt-in). Only
+  // triggers when the trace is long enough for a quiz (≥4 steps);
+  // _pickQuizOptions returns null otherwise and startQuiz exits cleanly.
+  const wt = state.walkthrough && state.walkthrough[lesson.id];
+  if (wt && wt.scrubbed && !quizActive && !bugActive) {
+    startQuiz();
+  }
 }
 
 function renderReference(body, content) {

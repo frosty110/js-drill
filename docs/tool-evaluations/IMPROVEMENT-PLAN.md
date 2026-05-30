@@ -131,7 +131,7 @@ Highest-impact-per-edit ratio. Each is a single ~3-line change with a meaningful
 
 Multi-edit but each tool has a clear path to ship-quality band.
 
-- [ ] **walkthrough** — extend `state.walkthrough[lessonId] = { quizAttempts, quizCorrect, bugAttempts, bugCorrect, lastRunAt }` at `js/app/11-tabs-ref-conv-walk.js:424-438, 548-563`; on miss also flag `state.weakness[lessonId]`; default-open `🔮 Quiz` after first full scrub (+6: 11→17) — 📄 `audits/walkthrough.md`
+- [x] **walkthrough** — extend `state.walkthrough[lessonId] = { quizAttempts, quizCorrect, bugAttempts, bugCorrect, lastRunAt }` at `js/app/11-tabs-ref-conv-walk.js:424-438, 548-563`; on miss also flag `state.weakness[lessonId]`; default-open `🔮 Quiz` after first full scrub (+6: 11→17) — 📄 `audits/walkthrough.md` → awaiting commit
 - [ ] **rapid-fire-l1** — SR+weakness-weighted deck (currently uniform Fisher-Yates) + post-streak free-recall reveal window (+3: 16→19) — 📄 `audits/rapid-fire-l1.md`
 - [ ] **warmup-3card** — `appendHistory('L1-pass')` on win + typed-recall variant for next-on-plan card (+2: 15→17) — 📄 `audits/warmup-3card.md`
 - [ ] **l2** — attempt-count weakness signal (so "struggled-but-eventually-passed" middle case is visible) + per-blank tiered reveal — 📄 `audits/l2.md`

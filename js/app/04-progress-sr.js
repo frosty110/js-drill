@@ -141,6 +141,9 @@ function loadProgress() {
           lastRunAt: +parsed.traceHop.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
+    // iter eval-2026-05-30: Walkthrough tab per-lesson Quiz/Bug outcome
+    // persistence + scrub-to-end flag. Legacy users → empty {}.
+    state.walkthrough = parsed.walkthrough && typeof parsed.walkthrough === 'object' ? parsed.walkthrough : {};
     // iter 97: 📝 Notes Cloze Tap-Drill lifetime stats. Legacy users get zeros.
     state.notesDrill = parsed.notesDrill && typeof parsed.notesDrill === 'object'
       ? {
@@ -391,6 +394,7 @@ function saveProgress() {
     swapBench: state.swapBench,
     convDrill: state.convDrill,
     traceHop: state.traceHop,
+    walkthrough: state.walkthrough,
     notesDrill: state.notesDrill,
     mechConstellation: state.mechConstellation,
     reverseWalk: state.reverseWalk,

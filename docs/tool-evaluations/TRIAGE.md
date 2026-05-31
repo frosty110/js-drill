@@ -22,9 +22,9 @@ Sorted worst-first.
 | Trace-Hop | 16/21 | +1 | KEEP, salvageable | SR-weighted candidates landed; free-text state-key recall + per-distractor "why wrong" → 18/21 | actioned-2026-05-30 (partial) | [→](audits/trace.md) |
 | Predict | 16/21 | +2 | KEEP, salvageable | Guarded SR-write on win landed; SR-weighted card pick + typed-output mode + per-option explain → 19/21 | actioned-2026-05-30 (partial) | [→](audits/predict.md) |
 | 3-Card Warmup | 16/21 | +1 | KEEP, salvageable | Wins now close the loop (history + weakness decrement); typed-recall variant for next-on-plan deferred → 17/21 | actioned-2026-05-30 (partial) | [→](audits/warmup-3card.md) |
-| L2 — Fill-in | 17/21 | +1 | KEEP, salvageable | Struggle-pass weakness landed; per-blank tiered reveal + authored `whyAnswer` deferred → 19/21 | actioned-2026-05-30 (partial) | [→](audits/l2.md) |
+| L2 — Fill-in | 18/21 (proj) | +2 | **KEEP, ship-quality** (pending rescore) | Struggle-pass weakness + per-blank tiered reveal both landed across desktop+mobile | actioned-2026-05-30 | [→](audits/l2.md) |
 | Gotcha (now Crux) | 17/21 | +5 | KEEP, salvageable | Tool transformed into 🎯 Crux drill (Easy MC + Hard typed-recall modes replaced honor-system cloze); biggest single-tool lift of the campaign | actioned-2026-05-30 (transformed) | [→](audits/gotcha.md) |
-| Reverse | 17/21 | +3 | KEEP, salvageable | SR + applied track + I/O-shape tell all landed; corrective feedback paragraph on miss deferred → 18/21 | actioned-2026-05-30 (partial) | [→](audits/reverse.md) |
+| Reverse | 19/21 (proj) | +5 | **KEEP, ship-quality** (pending rescore) | All 3 SR/applied/tell edits + per-distractor "why wrong" + guarded SR-on-win all landed | actioned-2026-05-30 | [→](audits/reverse.md) |
 | Swap-Bench | 17/21 | +3 | KEEP, salvageable | Per-pair SR fully shipped (6-step interval ladder); corpus expansion to ≥40 pairs (+1 Interleaving) + typed-difference miss tier (+1 Encoding) deferred → 19/21 | actioned-2026-05-30 (partial) | [→](audits/swap-bench.md) |
 | Reference | 18/21 | +4 | **KEEP, ship-quality** | Notes→Code green pass now `markPassed('L3')` + history-tag landed. Cinema auto-on + reference-visit history are speculative further lifts | actioned-2026-05-30 | [→](audits/reference.md) |
 | L1 — Concept MC | 18/21 | +1 | **KEEP, ship-quality** | Carry-over weak-spot Q landed (cross-lesson interleave inside per-lesson tab); per-option `whyWrong` + code-token-blank variant authoring-heavy, deferred | actioned-2026-05-30 (partial) | [→](audits/l1.md) |
@@ -38,8 +38,8 @@ Reflection tools surface signal; they don't directly teach. Only Closed-loop sig
 
 | Tool | Score | Δ | Verdict | Salvage/Removal one-liner | Action status | Audit |
 |---|---|---|---|---|---|---|
-| Streak Map | 3/6 | 0 | IMPROVE | Pure-display heatmap + classifier regression (new event types post-Phase-3 not recognized) — extend pass/miss classifier + add drill-routing button → 6/6 | not-actioned | [→](audits/streak-map.md) |
-| Mistake Tagging | 4/6 | 0 | IMPROVE | Captures concept-grain miss signal but Stats aggregator pills have zero click-route + tag-grain Today's Plan slot never built → 6/6 | not-actioned | [→](audits/mistake-tagging.md) |
+| Streak Map | 6/6 (proj) | +3 | **KEEP, ship-quality** (pending rescore) | Classifier extended for all new event types + per-day missed-lessonIds + tap-route drill buttons + forward-looking peak-streak header all landed | actioned-2026-05-30 | [→](audits/streak-map.md) |
+| Mistake Tagging | 6/6 (proj) | +2 | **KEEP, ship-quality** (pending rescore) | Tap-route chips + reverse-index `topLessons` + tag-grain Today's Plan slot all landed | actioned-2026-05-30 | [→](audits/mistake-tagging.md) |
 | Mock Replay Reel | 5/6 | 0 | KEEP | Composes mockHistory+bestTimes+slope inline; -1 on Transfer (no cross-lesson routing, intentionally scoped to L3 tab). Optional: aggregate regression badge → 6/6 | n/a | [→](audits/mock-replay-reel.md) |
 | Stats Dashboard | 6/6 | 0 | **KEEP, ship-quality** | Composes 8+ signals with tap-routes to 5+ drills | n/a | [→](audits/stats.md) |
 | Mechanics Matrix | 6/6 | 0 | **KEEP, ship-quality** | Categorized + state-priority-tiered list, transfer-gap matrix with diagnostic-aware default-view picker, tap-routes to lessons | n/a | [→](audits/mechanics.md) |
@@ -51,12 +51,12 @@ Reflection tools surface signal; they don't directly teach. Only Closed-loop sig
 
 ## Summary — campaign delta
 
-| Band | Pre-rescore | Post-rescore | Net move |
-|---|---|---|---|
-| **KEEP, ship-quality** (≥18 retrieval, 5-6 reflection) | 10 | **13** | +3 (Reference, L1, Rapid-Fire L1 promoted) |
-| KEEP, salvageable (14-17 retrieval) | 10 | **11** | +1 (Gotcha→Crux jumped from IMPROVE to KEEP-salvageable) |
-| IMPROVE (10-13 retrieval, 3-4 reflection) | 6 | **3** | -3 (4 IMPROVE retrieval tools promoted; only flash stayed in IMPROVE band, +1 from streak-map/mistake-tagging unchanged) |
-| REMOVE (<10) | 0 | 0 | 0 (Conversation marked REMOVE-as-standalone by user but route remains; tab demoted, not deleted) |
+| Band | Pre-rescore | Post-Phase-3 rescore | Post-Phase-4/5-promote (projected) | Net move |
+|---|---|---|---|---|
+| **KEEP, ship-quality** (≥18 retrieval, 5-6 reflection) | 10 | 13 | **17** | +7 total (Reference, L1, Rapid-Fire L1, Reverse, L2, Streak Map, Mistake Tagging) |
+| KEEP, salvageable (14-17 retrieval) | 10 | 11 | 9 | -1 (Reverse + L2 promoted out) |
+| IMPROVE (10-13 retrieval, 3-4 reflection) | 6 | 3 | **1** | -5 (only Flash 11/21 remains; Streak Map + Mistake Tagging promoted out) |
+| REMOVE (<10) | 0 | 0 | 0 | 0 (Conversation marked REMOVE-as-standalone by user but route remains) |
 
 **Tools that crossed a band boundary:**
 - Reference 14 → 18 (KEEP-salvageable → KEEP-ship-quality) — single-edit lift confirmed

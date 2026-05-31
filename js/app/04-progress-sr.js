@@ -833,27 +833,99 @@ function recordMiss(lessonId, level, tagId) {
   }
   saveProgress();
 }
-// Aggregate top-N miss tags across all lessons. Returns sorted [{tag, count}].
+// Aggregate top-N miss tags across all lessons. Returns sorted
+// [{tag, count, label, topLessons: [{lessonId, count, lastAt}]}].
+// iter eval-2026-05-30 (Phase 4-B): also reverse-index per tag so the
+// Stats tile chips can route to the lesson with the most recent miss
+// of that tag (audits/mistake-tagging.md edits 1+2).
 function _aggregateMissTags(topN = 5) {
   const counts = {};
+  const byTag = {}; // tag → { [lessonId]: { count, lastAt } }
   for (const lessonId of Object.keys(state.misses || {})) {
     const log = state.misses[lessonId];
     if (!Array.isArray(log)) continue;
     for (const entry of log) {
       if (!entry || !entry.tag) continue;
       counts[entry.tag] = (counts[entry.tag] || 0) + 1;
+      if (!byTag[entry.tag]) byTag[entry.tag] = {};
+      const slot = byTag[entry.tag][lessonId] || { count: 0, lastAt: 0 };
+      slot.count++;
+      if (entry.at > slot.lastAt) slot.lastAt = entry.at;
+      byTag[entry.tag][lessonId] = slot;
     }
   }
   return Object.entries(counts)
-    .map(([tag, count]) => ({ tag, count, label: MISTAKE_TAGS.find(t => t.id === tag)?.label || tag }))
+    .map(([tag, count]) => {
+      const topLessons = Object.entries(byTag[tag] || {})
+        .map(([lessonId, v]) => ({ lessonId, count: v.count, lastAt: v.lastAt }))
+        .sort((a, b) => b.lastAt - a.lastAt || b.count - a.count)
+        .slice(0, 3);
+      return {
+        tag,
+        count,
+        label: MISTAKE_TAGS.find(t => t.id === tag)?.label || tag,
+        topLessons
+      };
+    })
     .sort((a, b) => b.count - a.count)
     .slice(0, topN);
+}
+// Most-recent missed lesson for a given tag (or null if no misses for
+// that tag). Used by Today's Plan to inject a "recent <tag> miss" slot.
+function topLessonForTag(tagId) {
+  const agg = _aggregateMissTags(MISTAKE_TAGS.length);
+  const row = agg.find(r => r.tag === tagId);
+  return row && row.topLessons[0] ? row.topLessons[0].lessonId : null;
+}
+// Most-recent missed lesson across ANY tag (the single hottest "recent
+// concept miss" the user just made). Used by Today's Plan to surface
+// the freshest concept-grain gap.
+function mostRecentTaggedMissLesson() {
+  let bestLessonId = null;
+  let bestAt = 0;
+  let bestTag = null;
+  for (const lessonId of Object.keys(state.misses || {})) {
+    const log = state.misses[lessonId];
+    if (!Array.isArray(log)) continue;
+    for (const entry of log) {
+      if (!entry || !entry.tag || typeof entry.at !== 'number') continue;
+      if (entry.at > bestAt) {
+        bestAt = entry.at;
+        bestLessonId = lessonId;
+        bestTag = entry.tag;
+      }
+    }
+  }
+  if (!bestLessonId) return null;
+  return {
+    lessonId: bestLessonId,
+    tagId: bestTag,
+    tagLabel: MISTAKE_TAGS.find(t => t.id === bestTag)?.label || bestTag,
+    at: bestAt
+  };
 }
 function clearWeakness(lessonId) {
   if (state.weakness[lessonId]) {
     delete state.weakness[lessonId];
     saveProgress();
   }
+}
+// L1 partial-pass flag. Set when L1 was passed at ≥80%/miss-one but not a
+// clean 100% — the ✓ on the L1 tab renders amber instead of emerald, and the
+// missed question(s) are deliberately LEFT in state.weakness (we do NOT
+// clearWeakness on a partial pass) so they resurface in the weak-spot queue,
+// At-Risk radar, and AI-Coach export for re-review. A later clean run (100%)
+// demotes the dot back to emerald and clears the weakness. Mirrors the
+// state.revealed "passed-with-an-asterisk" pattern.
+function markPartialL1(lessonId) {
+  if (!state.partialL1) state.partialL1 = {};
+  if (!state.partialL1[lessonId]) { state.partialL1[lessonId] = true; saveProgress(); }
+}
+function clearPartialL1(lessonId) {
+  if (state.partialL1 && state.partialL1[lessonId]) { delete state.partialL1[lessonId]; saveProgress(); }
+}
+function isPartialL1(lessonId) {
+  return !!(state.partialL1 && state.partialL1[lessonId]);
 }
 function topWeakLessonId() {
   const entries = Object.entries(state.weakness)

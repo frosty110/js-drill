@@ -647,7 +647,13 @@ function dailyPlan() {
   //   2. Up to 1 top weak-spot (an active misconception is more actionable
   //      than the next-in-path; surface BEFORE path so dedup promotes the
   //      "weak spot" label when a lesson is in both buckets)
-  //   3. Up to 2 next-in-starter-path that are not mastered
+  //   3. Up to 1 recent concept-grain miss (Mistake Tagging tag), so a
+  //      freshly self-flagged misconception surfaces next-up without
+  //      waiting for the lesson-grain weakness counter to hit threshold.
+  //      Per audits/mistake-tagging.md edit 3 (Phase 4-B). Label embeds
+  //      the tag name ("recent off-by-one miss") so the why-color in the
+  //      sidebar/warmup carries the concept-grain signal.
+  //   4. Up to 2 next-in-starter-path that are not mastered
   const seen = new Set();
   const plan = [];
   const add = (id, why) => {
@@ -655,6 +661,8 @@ function dailyPlan() {
   };
   for (const id of dueReviewIds().slice(0, 3)) add(id, 'review due');
   add(topWeakLessonId(), 'weak spot');
+  const recentTagged = typeof mostRecentTaggedMissLesson === 'function' ? mostRecentTaggedMissLesson() : null;
+  if (recentTagged) add(recentTagged.lessonId, `recent ${recentTagged.tagLabel} miss`);
   let added = 0;
   for (const id of getActiveStarterPath()) {
     if (added >= 2) break;

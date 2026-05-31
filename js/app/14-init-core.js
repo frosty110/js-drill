@@ -1640,15 +1640,24 @@ function initStatsModal() {
       ${(() => {
         // iter 58: Mistake Tagging top-5 tile. Only renders when the user
         // has tagged ≥1 miss — keeps Stats quiet for users who never opt in.
+        // iter eval-2026-05-30 (Phase 4-B): chips are now tap-route buttons.
+        // Tap a tag → jump to the lesson with the most recent miss of that
+        // tag (via _aggregateMissTags's new topLessons reverse index) and
+        // open L1. Per audits/mistake-tagging.md edits 1+2.
         const top = _aggregateMissTags(5);
         if (!top.length) return '';
         const total = top.reduce((s, r) => s + r.count, 0);
         return `
         <div style="margin-top: 8px;">
           <div style="background: rgba(192,132,252,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(192,132,252,0.2);">
-            <div style="color: #94a3b8; font-size: 12px; margin-bottom: 6px;">🏷 Top miss patterns <span style="color: #64748b; font-weight: 400;">(${total} tagged)</span></div>
-            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-              ${top.map(row => `<span style="background: rgba(192,132,252,0.15); color: #e9d5ff; border: 1px solid rgba(192,132,252,0.3); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 500;">${escapeHtml(row.label)} <span style="color: #a78bfa; margin-left: 2px;">×${row.count}</span></span>`).join('')}
+            <div style="color: #94a3b8; font-size: 12px; margin-bottom: 6px;">🏷 Top miss patterns <span style="color: #64748b; font-weight: 400;">(${total} tagged · tap to drill)</span></div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;" data-mistake-tag-tiles>
+              ${top.map(row => {
+                const route = row.topLessons && row.topLessons[0] ? row.topLessons[0].lessonId : '';
+                const interactive = route ? 'cursor: pointer;' : 'cursor: default; opacity: 0.7;';
+                const title = route ? `Drill most-recent ${escapeHtml(row.label)} miss` : `No routable lesson for ${escapeHtml(row.label)}`;
+                return `<button type="button" data-mistake-route="${escapeHtml(route)}" title="${title}" style="background: rgba(192,132,252,0.15); color: #e9d5ff; border: 1px solid rgba(192,132,252,0.3); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 500; ${interactive}">${escapeHtml(row.label)} <span style="color: #a78bfa; margin-left: 2px;">×${row.count}</span></button>`;
+              }).join('')}
             </div>
           </div>
         </div>
@@ -1749,6 +1758,21 @@ function initStatsModal() {
         if (!id) return;
         statsModal.style.display = 'none';
         selectLesson(id);
+      });
+    });
+    // iter eval-2026-05-30 (Phase 4-B): 🏷 Mistake Tagging tile chips
+    // now tap-route to the most-recent miss of that tag. Per
+    // audits/mistake-tagging.md edits 1+2.
+    document.getElementById('stats-body').querySelectorAll('[data-mistake-route]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-mistake-route');
+        if (!id) return;
+        statsModal.style.display = 'none';
+        selectLesson(id);
+        // Default tab on selectLesson is Reference; bump to L1 so the
+        // user lands on the concept-grain surface where they tagged
+        // the miss to begin with.
+        if (typeof selectTab === 'function') selectTab('L1');
       });
     });
     statsModal.style.display = 'block';

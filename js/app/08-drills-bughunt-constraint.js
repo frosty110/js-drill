@@ -14,10 +14,31 @@ function _streakMapBuckets(lookbackDays = 60) {
       isoDate: d.toISOString().slice(0, 10),
       total: 0,
       passes: 0,
-      misses: 0
+      misses: 0,
+      // iter eval-2026-05-30 (Phase 4-A): capture which lesson ids
+      // missed each day so day-cells can route the user to "drill the
+      // 3 you missed Mar 14" per audits/streak-map.md edit 1. De-dup
+      // via Set then read as Array at consumer.
+      missedLessonIds: new Set()
     };
   });
   const startMs = buckets[0].dateMs;
+  // Pass/miss classifier — iter eval-2026-05-30: extended to recognise
+  // event types added during the Phase 1-3 campaign so a growing
+  // surface inventory doesn't make the heatmap silently less
+  // informative. New events: L2-struggle-pass (pass — user fought to
+  // a clean output), notes-to-code-pass (pass — Reference Notes→Code
+  // mode is L3-grade), walkthrough-quiz-miss (miss), walkthrough-bug-
+  // miss (miss), flash-blank (miss — user self-rated as blanked).
+  const PASS_EVENTS = new Set([
+    'L1-pass', 'L2-pass', 'L3-pass',
+    'L2-struggle-pass', 'notes-to-code-pass'
+  ]);
+  const MISS_EVENTS = new Set([
+    'L1-miss',
+    'walkthrough-quiz-miss', 'walkthrough-bug-miss',
+    'flash-blank'
+  ]);
   // Walk every lesson's history; bucket events into days.
   for (const lessonId of Object.keys(state.history || {})) {
     const events = state.history[lessonId];
@@ -29,12 +50,19 @@ function _streakMapBuckets(lookbackDays = 60) {
       if (dayIdx < 0 || dayIdx >= lookbackDays) continue;
       const bucket = buckets[dayIdx];
       bucket.total++;
-      if (e.event === 'L1-miss') bucket.misses++;
-      else if (e.event === 'L1-pass' || e.event === 'L2-pass' || e.event === 'L3-pass') bucket.passes++;
-      // Other events (e.g. hint-tier-N, critical-lines-used) are counted in
-      // `total` but not classified — they're activity, not pass/miss signal.
+      if (MISS_EVENTS.has(e.event)) {
+        bucket.misses++;
+        bucket.missedLessonIds.add(lessonId);
+      } else if (PASS_EVENTS.has(e.event)) {
+        bucket.passes++;
+      }
+      // Other events (e.g. hint-tier-N, critical-lines-used) are counted
+      // in `total` but not classified — they're activity, not pass/miss
+      // signal.
     }
   }
+  // Convert Set → Array for downstream consumers (renderers iterate it).
+  for (const b of buckets) b.missedLessonIds = Array.from(b.missedLessonIds);
   return buckets;
 }
 // iter 73: 🪲 Code Bug-Hunt — first §9B (Code Evaluation Skills) surface,

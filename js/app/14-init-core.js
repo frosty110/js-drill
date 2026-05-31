@@ -977,20 +977,65 @@ function initStreakMapModal() {
     }).join('');
     // Legend swatches.
     legend.innerHTML = `<span>Less</span>` + tierColors.map((c, i) => `<span style="display:inline-block; width:12px; height:12px; background:${c}; border:1px solid #0f172a; border-radius:3px;" title="${tierTitles[i]}"></span>`).join('') + `<span>More</span>`;
-    // Default tooltip: total events this window.
+    // iter eval-2026-05-30 (Phase 4-A): forward-looking default
+    // tooltip — past-only "X events across Y days" is vanity-adjacent.
+    // Compute the user's peak streak (max consecutive active-day run)
+    // and current gap (days since last active day) so the header
+    // nudges interview-prep urgency, not history pride. Per
+    // audits/streak-map.md edit 3.
     const totalAll = buckets.reduce((s, b) => s + b.total, 0);
     const activeDays = buckets.filter(b => b.total > 0).length;
-    tooltip.innerHTML = totalAll > 0
-      ? `<strong style="color:#cbd5e1;">${totalAll}</strong> events across <strong style="color:#cbd5e1;">${activeDays}</strong> of 60 days. Hover a cell for that day's detail.`
-      : `<span style="color:#475569;">No history yet — drill anything to start the map.</span>`;
+    let peakStreak = 0, run = 0;
+    for (const b of buckets) {
+      if (b.total > 0) { run++; if (run > peakStreak) peakStreak = run; }
+      else run = 0;
+    }
+    let gapDays = 0;
+    for (let i = buckets.length - 1; i >= 0; i--) {
+      if (buckets[i].total > 0) break;
+      gapDays++;
+    }
+    if (totalAll === 0) {
+      tooltip.innerHTML = `<span style="color:#475569;">No history yet — drill anything to start the map.</span>`;
+    } else {
+      const gapStr = gapDays === 0
+        ? `drilled today ✓`
+        : gapDays === 1 ? `last gap: yesterday — drill today to extend` : `last gap: ${gapDays} days — drill today to extend`;
+      tooltip.innerHTML = `Peak streak: <strong style="color:#34d399;">${peakStreak} day${peakStreak === 1 ? '' : 's'}</strong> · ${gapStr} · ${activeDays}/60 active`;
+    }
     // Per-cell hover/tap: replace the tooltip with that day's detail.
+    // iter eval-2026-05-30 (Phase 4-A): on a click of a day-cell with
+    // misses, also render a "Drill the N lessons you missed" routing
+    // button that calls `selectLesson()`. Lifts Closed-loop from
+    // pure-display to actionable routing per audits/streak-map.md edit 2.
     grid.querySelectorAll('[data-streak-idx]').forEach(cell => {
       const detail = (e) => {
         const b = buckets[+cell.dataset.streakIdx];
         if (b.total === 0) {
           tooltip.innerHTML = `<span style="color:#475569;">${escapeHtml(b.dateLabel)} — no activity</span>`;
+          return;
+        }
+        const head = `<strong style="color:#cbd5e1;">${escapeHtml(b.dateLabel)}</strong> · ${b.total} event${b.total === 1 ? '' : 's'} · <span style="color:#34d399;">${b.passes} pass</span>${b.misses > 0 ? ` · <span style="color:#f87171;">${b.misses} miss</span>` : ''}`;
+        // Tap (not just hover) on a day with misses → show drill routes.
+        // Hover stays informational only.
+        const isClick = e && (e.type === 'click' || e.type === 'pointerdown');
+        const missedIds = Array.isArray(b.missedLessonIds) ? b.missedLessonIds : [];
+        if (isClick && missedIds.length > 0) {
+          const lessons = missedIds.map(id => CURRICULUM.find(l => l.id === id)).filter(Boolean).slice(0, 5);
+          const routesHtml = lessons.length > 0
+            ? `<div style="margin-top:6px;">Drill the ${lessons.length === 1 ? 'lesson' : `${lessons.length} lessons`} you missed:<br>${lessons.map(l => `<button class="streak-route-btn" data-route-id="${escapeHtml(l.id)}" style="margin:4px 6px 0 0; padding:3px 8px; font-size:11px; background:rgba(248,113,113,0.12); border:1px solid rgba(248,113,113,0.35); color:#fca5a5; border-radius:4px; cursor:pointer;">${escapeHtml(l.title)} →</button>`).join('')}</div>`
+            : '';
+          tooltip.innerHTML = head + routesHtml;
+          tooltip.querySelectorAll('[data-route-id]').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              const id = btn.getAttribute('data-route-id');
+              streakMapModal.style.display = 'none';
+              if (typeof selectLesson === 'function') selectLesson(id);
+            });
+          });
         } else {
-          tooltip.innerHTML = `<strong style="color:#cbd5e1;">${escapeHtml(b.dateLabel)}</strong> · ${b.total} event${b.total === 1 ? '' : 's'} · <span style="color:#34d399;">${b.passes} pass</span>${b.misses > 0 ? ` · <span style="color:#f87171;">${b.misses} miss</span>` : ''}`;
+          tooltip.innerHTML = head;
         }
       };
       cell.addEventListener('mouseenter', detail);
@@ -1527,10 +1572,10 @@ function initStatsModal() {
         <div style="margin-top: 8px;">
           <div style="background: rgba(244,114,182,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(244,114,182,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #94a3b8; font-size: 12px;">🎰 Gotcha lifetime <span style="color: #64748b; font-weight: 400;">(reference.notes recall)</span></div>
+              <div style="color: #94a3b8; font-size: 12px;">🎯 Crux lifetime <span style="color: #64748b; font-weight: 400;">(key-trick recall)</span></div>
               <div style="color: #fbcfe8; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.gotcha.correct} / ${state.gotcha.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.gotcha.correct / state.gotcha.attempts * 100)}%)</span></div>
             </div>
-            <button data-action="open-gotcha-from-stats" style="background: rgba(244,114,182,0.16); color: #fbcfe8; border: 1px solid rgba(244,114,182,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Spin →</button>
+            <button data-action="open-gotcha-from-stats" style="background: rgba(244,114,182,0.16); color: #fbcfe8; border: 1px solid rgba(244,114,182,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Recall →</button>
           </div>
         </div>
       ` : ''}

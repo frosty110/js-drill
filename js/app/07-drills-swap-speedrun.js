@@ -1056,6 +1056,17 @@ async function startWarmupSession() {
         const wasCorrect = picked === card.answerIdx;
         if (wasCorrect) {
           correct++;
+          // Wins are concept-grain signal too — append history and decay
+          // weakness (decrement, not delete) so a single warmup win
+          // doesn't reset a long-standing weakness, but a steady-state of
+          // wins erodes it. Note: clearWeakness() deletes outright — too
+          // generous here; do an explicit decrement instead. Per
+          // audits/warmup-3card.md edit 1 (closes Hattie/Wiliam loop on
+          // wins, not just misses).
+          appendHistory(card.lessonId, 'L1-pass');
+          const w = state.weakness[card.lessonId] || 0;
+          if (w > 1) state.weakness[card.lessonId] = w - 1;
+          else if (w === 1) delete state.weakness[card.lessonId];
         } else {
           // Misses route to the existing weak-spot tracker — same path as
           // missing an in-lesson L1.

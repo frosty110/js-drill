@@ -38,3 +38,4 @@ N/A — KEEP.
 
 ## Action log
 - 2026-05-30 Scored at 15/21 by `/eval-learning-tool --all`.
+- 2026-05-30 Salvage edit 1 applied — wins now feed concept-grain signal at `js/app/07-drills-swap-speedrun.js:1057-1068`. On correct: `appendHistory(card.lessonId, 'L1-pass')` + manual weakness decrement (not `clearWeakness()` which deletes outright — decrement preserves long-standing weakness across a single win, eroding only on steady wins per CLAUDE.md intent). Projected 15→16 (+1 Closed-loop). Typed-recall variant for next-on-plan cards (+1 Encoding) is a larger UX change, deferred. Validator: 810 passed, 0 failed.

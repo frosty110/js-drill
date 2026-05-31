@@ -137,7 +137,7 @@ Multi-edit but each tool has a clear path to ship-quality band.
 - [x] **l2** — attempt-count weakness signal (so "struggled-but-eventually-passed" middle case is visible) + per-blank tiered reveal — 📄 `audits/l2.md` → commit `5a51fe2` (attempt-count + struggle-pass weakness shipped; per-blank tiered reveal deferred)
 - [x] **l1** — carry-over weak-spot question per session — 📄 `audits/l1.md` → commit `22e4b81`
 - [x] **flash** (Phase 0 salvage decision) — self-rate after reveal + persist `state.flash.{lessonId} = { attempts, blanks, lastRunAt }` + mechanics-weighted token selection + SR-scheduled surfacing. Projected 7→14 (+7) — 📄 `audits/flash.md` → commit `cdfc6f1` (mechanics-weight + self-rate + weakness flag shipped; SR-scheduled surfacing + cross-lesson stream deferred)
-- [x] **conversation** (Phase 0 salvage decision) — demote tab to preview-with-route surface that links each section header into `convDrill` (which already mines `conversation.sections[]` and writes counters). Keeps the tab visible but the recall happens in the drill — 📄 `audits/conversation.md` → awaiting commit
+- [x] **conversation** (Phase 0 salvage decision) — demote tab to preview-with-route surface that links each section header into `convDrill` (which already mines `conversation.sections[]` and writes counters). Keeps the tab visible but the recall happens in the drill — 📄 `audits/conversation.md` → commit `6c55271`
 
 **After Phase 3 ships:** re-run `/eval-learning-tool --all`. Phase 3 + Phase 1+2 together should move the median tool score by 3-5 points.
 

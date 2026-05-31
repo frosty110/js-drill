@@ -120,6 +120,15 @@ function renderConversation(body, content) {
   }).join('');
   section.innerHTML = `
     <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Interview walk-through</div>
+    <div class="conv-drill-route mb-3 p-3 rounded-lg" style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25);">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div class="text-sm text-slate-300">
+          <span class="font-medium text-cyan-300">Reading is the prep.</span>
+          <span class="text-slate-400">Run the cross-lesson Conversation Drill to actually recall which section a snippet belongs to.</span>
+        </div>
+        <button data-action="conv-drill-route" style="background:#0891b2; color:#f8fafc; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:600; white-space:nowrap;">🎬 Drill recall →</button>
+      </div>
+    </div>
     ${intro}
     <div class="conv-list">${sectionsHtml}</div>
     <div class="mt-8 flex justify-end gap-2">
@@ -128,6 +137,14 @@ function renderConversation(body, content) {
   `;
   body.appendChild(section);
   section.querySelector('[data-action="conv-to-reference"]').addEventListener('click', () => selectTab('reference'));
+  // 🎬 Drill recall — Phase 0 salvage decision (audits/conversation.md).
+  // Conversation tab demoted from pure-read to preview-with-route. The
+  // sibling convDrill (`startConvDrillSession`, slice 05) mines the same
+  // conversation.sections[] for an active-recall section-classifier quiz
+  // and persists counters — that's the recall surface. Tap routes there.
+  section.querySelector('[data-action="conv-drill-route"]').addEventListener('click', () => {
+    if (typeof startConvDrillSession === 'function') startConvDrillSession();
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ Sorted worst-first.
 
 | Tool | Score | Verdict | Salvage/Removal one-liner | Action status | Audit |
 |---|---|---|---|---|---|
-| Conversation | 6/21 | IMPROVE | Pure tap-to-reveal read with zero recall gate or state writes — route through sibling `convDrill` (already reuses `conversation.sections[]`) or demote tab to "preview" surface | not-actioned | [→](audits/conversation.md) |
+| Conversation | 6/21 | IMPROVE | Pure tap-to-reveal read with zero recall gate or state writes — route through sibling `convDrill` (already reuses `conversation.sections[]`) or demote tab to "preview" surface | actioned-2026-05-30 | [→](audits/conversation.md) |
 | Flash mode | 7/21 | IMPROVE | Genuine read+recall direction but random tokens, no answer verification, zero closed loop — salvage: self-rate + SR + mechanics-weighted tokens → 14/21 | actioned-2026-05-30 | [→](audits/flash.md) |
 | Walkthrough | 11/21 | IMPROVE | Strong cue (code + state panel) + two real retrieval submodes (🔮 Quiz / 🪲 Bug) hidden behind opt-in; outcomes are ephemeral — persist Quiz/Bug outcomes → 17/21 | actioned-2026-05-30 | [→](audits/walkthrough.md) |
 | Gotcha | 12/21 | IMPROVE | Best interleaving in drill family but honor-system "knew it" caps active recall — cloze-deletion on the note + SR write → 18/21 | actioned-2026-05-30 | [→](audits/gotcha.md) |

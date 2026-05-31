@@ -426,10 +426,29 @@ function _parseHash() {
   if (!raw) return null;
   const parts = raw.split('/').filter(Boolean);
   if (parts.length === 0) return null;
+  // Mode route: #/m/<mode> — opens a launchable surface (Dashboard, Mock, a
+  // drill, …) by clicking its hidden <mode>-btn. The `m/` namespace keeps a
+  // mode slug from ever colliding with a lesson id.
+  if (parts[0] === 'm') {
+    const mode = parts[1] ? parts[1].replace(/[^a-z0-9-]/gi, '') : '';
+    return mode ? { mode } : null;
+  }
   let lessonId;
   try { lessonId = decodeURIComponent(parts[0]); } catch (_) { return null; }
   const tab = parts[1] && _VALID_TABS.has(parts[1]) ? parts[1] : null;
   return { lessonId, tab };
+}
+
+// Mode-route dispatch: resolve #<mode>-btn and click it. The topbar menu
+// already wires every launchable surface to a hidden <id>-btn, and the route
+// slug is that id minus the '-btn' suffix (mock-btn → mock). Fire-and-forget:
+// opening the surface is enough; the URL normalizes back to the lesson on the
+// next selectLesson/_updateHash. Returns true if a surface was opened.
+function _dispatchModeRoute(mode) {
+  if (!mode) return false;
+  const btn = document.getElementById(mode + '-btn');
+  if (btn) { btn.click(); return true; }
+  return false;
 }
 
 function _updateHash() {
@@ -449,6 +468,7 @@ function _updateHash() {
 function _handleHashChange() {
   const parsed = _parseHash();
   if (!parsed) return;
+  if (parsed.mode) { _dispatchModeRoute(parsed.mode); return; }
   const lesson = findLesson(parsed.lessonId);
   if (!lesson || lesson.status !== 'full') return;
   if (state.currentLessonId !== parsed.lessonId) {

@@ -14,6 +14,10 @@
 //   3. initBootTail runs last. It paints initial badge counts, mounts
 //      cross-tab + interval + service-worker listeners, and reflects
 //      persisted toggle state onto already-wired buttons.
+// Mode-route stashed during initBootstrap (#/m/<mode>), dispatched at the end
+// of init() once every surface button is wired. See initBootstrap + init tail.
+let _pendingBootMode = null;
+
 async function init() {
   if (!(await initBootstrap())) return;
 
@@ -29,6 +33,7 @@ async function init() {
   initAudioPlayer();
   initHeatstrip();
   initStatsModal();
+  initDashboardModal();
   initTodaysPlanModal();
   initPathSwitcher();
   initMechanicsWiring();
@@ -36,6 +41,9 @@ async function init() {
   initBackupRestore();
   initCheatsheetWiring();
   initBootTail();
+  // Boot mode-route dispatch — runs AFTER every surface button is wired, so a
+  // new tab opened at #/m/<mode> lands straight on that surface.
+  if (_pendingBootMode) { _dispatchModeRoute(_pendingBootMode); _pendingBootMode = null; }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -223,7 +231,14 @@ async function initBootstrap() {
   // if their localStorage points elsewhere.
   let resumed = false;
   const hashRoute = _parseHash();
-  if (hashRoute) {
+  if (hashRoute && hashRoute.mode) {
+    // Boot mode-route (#/m/<mode>, e.g. a new tab opened via cmd+click). The
+    // surface's button isn't wired until the sub-inits run after bootstrap, and
+    // _updateHash() below would clobber the hash — so stash it and dispatch at
+    // the very end of init(), once every button exists.
+    _pendingBootMode = hashRoute.mode;
+  }
+  if (hashRoute && hashRoute.lessonId) {
     const target = findLesson(hashRoute.lessonId);
     if (target && target.status === 'full') {
       state.currentLessonId = hashRoute.lessonId;
@@ -944,20 +959,25 @@ function initAtRiskModal() {
 // ──────────────────────────────────────────────────────────────────────────
 //  STREAK MAP MODAL — 60-day calendar density heatmap
 // ──────────────────────────────────────────────────────────────────────────
-function initStreakMapModal() {
-  // iter 62: 📅 Streak Map — 60-day calendar density heatmap. Closes iter-59
-  // roadmap entry #3. The modal renders a 9-column grid of 60 day-cells
-  // (oldest top-left → today bottom-right with empty padding cells where
-  // 60 doesn't fill a 9-col row evenly). Cell color depth reflects events
-  // that day; tooltip below the grid shows date + breakdown on hover/tap.
-  // Read-only v1 — no day-tap filter (deferred to a future iter if useful).
-  const streakMapModal = document.getElementById('streak-map-modal');
-  function openStreakMap() {
+// iter 62: 📅 Streak Map — 60-day calendar density heatmap. Renders a 9-column
+// grid of 60 day-cells (oldest top-left → today bottom-right); cell color depth
+// reflects events that day; tooltip shows date + breakdown on hover/tap, and a
+// tap on a day with misses surfaces drill-route buttons. Extracted from the old
+// standalone Streak Map modal into a reusable renderer — now hosted inside the
+// unified Dashboard (openDashboard). `_close` lets the drill-route buttons close
+// whatever modal is hosting the heatmap.
+function renderActivityInto(rootEl, closeFn) {
+  const _close = typeof closeFn === 'function' ? closeFn : () => {};
+  rootEl.innerHTML = `
+    <div data-act-tooltip style="margin-bottom: 12px; min-height: 22px; font-size: 12px; color: #94a3b8;"></div>
+    <div data-act-grid style="display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px;"></div>
+    <div data-act-legend style="margin-top: 14px; display: flex; gap: 8px; align-items: center; font-size: 11px; color: #64748b;"></div>`;
+  {
     const buckets = _streakMapBuckets(60);
     const max = buckets.reduce((m, b) => Math.max(m, b.total), 0);
-    const grid = document.getElementById('streak-map-grid');
-    const tooltip = document.getElementById('streak-map-tooltip');
-    const legend = document.getElementById('streak-map-legend');
+    const grid = rootEl.querySelector('[data-act-grid]');
+    const tooltip = rootEl.querySelector('[data-act-tooltip]');
+    const legend = rootEl.querySelector('[data-act-legend]');
     // 5-tier color scale based on relative density (no absolute thresholds —
     // a user with 50 events/day max gets a different scale than one with 5).
     const tier = (count) => {
@@ -1030,7 +1050,7 @@ function initStreakMapModal() {
             btn.addEventListener('click', (ev) => {
               ev.stopPropagation();
               const id = btn.getAttribute('data-route-id');
-              streakMapModal.style.display = 'none';
+              _close();
               if (typeof selectLesson === 'function') selectLesson(id);
             });
           });
@@ -1041,13 +1061,14 @@ function initStreakMapModal() {
       cell.addEventListener('mouseenter', detail);
       cell.addEventListener('click', detail);
     });
-    streakMapModal.style.display = 'block';
   }
-  document.getElementById('streak-map-btn').addEventListener('click', openStreakMap);
-  document.getElementById('streak-map-close').addEventListener('click', () => streakMapModal.style.display = 'none');
-  streakMapModal.addEventListener('click', (e) => {
-    if (e.target === streakMapModal) streakMapModal.style.display = 'none';
-  });
+}
+
+function initStreakMapModal() {
+  // Streak Map is retired into the unified Dashboard. The hidden #streak-map-btn
+  // now routes there so the Review path and #/m/streak-map deep-links resolve.
+  const btn = document.getElementById('streak-map-btn');
+  if (btn) btn.addEventListener('click', () => openDashboard());
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1468,10 +1489,14 @@ function initHeatstrip() {
 // ──────────────────────────────────────────────────────────────────────────
 //  STATS MODAL — track balance, drill lifetime tiles, retention, mock PBs
 // ──────────────────────────────────────────────────────────────────────────
-function initStatsModal() {
-  // Stats modal
-  const statsModal = document.getElementById('stats-modal');
-  function openStats() {
+// Renders the full Progress/Stats body into `statsBodyEl` and wires its
+// tap-to-drill tiles (Recognize / Crux / Claim / Predict / Bug-Hunt lifetimes,
+// slippery half-life rows, miss-pattern chips). `_close` closes whatever modal
+// hosts it. Extracted from the old standalone Stats modal, now retired into the
+// unified Dashboard (openDashboard).
+function renderStatsInto(statsBodyEl, _close) {
+  if (typeof _close !== 'function') _close = () => {};
+  {
     const fullLessons = CURRICULUM.filter(l => l.status === 'full');
     const mastered = fullLessons.filter(l => lessonOverallStatus(l.id) === 'mastered').length;
     const inProgress = fullLessons.filter(l => lessonOverallStatus(l.id) === 'in_progress').length;
@@ -1518,7 +1543,7 @@ function initStatsModal() {
       </div>
     `;
 
-    document.getElementById('stats-body').innerHTML = `${compassHtml}
+    statsBodyEl.innerHTML = `${compassHtml}
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Mastered</div>
@@ -1726,48 +1751,48 @@ function initStatsModal() {
       <div style="margin-top: 16px; text-align: center; color: #64748b; font-size: 11px;">Streak this session: ${state.streak}</div>
     `;
     // iter 51: wire the Recognize Drill-from-Stats button (only present when lifetime attempts > 0).
-    document.getElementById('stats-body').querySelector('[data-action="open-recognize-from-stats"]')?.addEventListener('click', () => {
-      statsModal.style.display = 'none';
+    statsBodyEl.querySelector('[data-action="open-recognize-from-stats"]')?.addEventListener('click', () => {
+      _close();
       startRecognizeSession();
     });
     // iter 84: wire the Gotcha + Claim Drill-from-Stats buttons (only present when lifetime > 0).
-    document.getElementById('stats-body').querySelector('[data-action="open-gotcha-from-stats"]')?.addEventListener('click', () => {
-      statsModal.style.display = 'none';
+    statsBodyEl.querySelector('[data-action="open-gotcha-from-stats"]')?.addEventListener('click', () => {
+      _close();
       startGotchaSession();
     });
-    document.getElementById('stats-body').querySelector('[data-action="open-claim-from-stats"]')?.addEventListener('click', () => {
-      statsModal.style.display = 'none';
+    statsBodyEl.querySelector('[data-action="open-claim-from-stats"]')?.addEventListener('click', () => {
+      _close();
       startClaimSession();
     });
     // iter 85: Crystal + Bug-Hunt Drill-from-Stats buttons. Same pattern.
-    document.getElementById('stats-body').querySelector('[data-action="open-crystal-from-stats"]')?.addEventListener('click', () => {
-      statsModal.style.display = 'none';
+    statsBodyEl.querySelector('[data-action="open-crystal-from-stats"]')?.addEventListener('click', () => {
+      _close();
       startCrystalSession();
     });
-    document.getElementById('stats-body').querySelector('[data-action="open-bughunt-from-stats"]')?.addEventListener('click', () => {
-      statsModal.style.display = 'none';
+    statsBodyEl.querySelector('[data-action="open-bughunt-from-stats"]')?.addEventListener('click', () => {
+      _close();
       startBugHuntSession();
     });
     // iter 106: 📈 Mastery Half-Life — wire each slippery-list row to deep-link
     // to its lesson. Each row carries data-lesson-id; selectLesson handles the
     // rest (default tab = Reference, so the user lands on the canonical they
     // need to re-encode before re-attempting L3).
-    document.getElementById('stats-body').querySelectorAll('[data-action="open-slippery"]').forEach(row => {
+    statsBodyEl.querySelectorAll('[data-action="open-slippery"]').forEach(row => {
       row.addEventListener('click', () => {
         const id = row.getAttribute('data-lesson-id');
         if (!id) return;
-        statsModal.style.display = 'none';
+        _close();
         selectLesson(id);
       });
     });
     // iter eval-2026-05-30 (Phase 4-B): 🏷 Mistake Tagging tile chips
     // now tap-route to the most-recent miss of that tag. Per
     // audits/mistake-tagging.md edits 1+2.
-    document.getElementById('stats-body').querySelectorAll('[data-mistake-route]').forEach(btn => {
+    statsBodyEl.querySelectorAll('[data-mistake-route]').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-mistake-route');
         if (!id) return;
-        statsModal.style.display = 'none';
+        _close();
         selectLesson(id);
         // Default tab on selectLesson is Reference; bump to L1 so the
         // user lands on the concept-grain surface where they tagged
@@ -1775,13 +1800,84 @@ function initStatsModal() {
         if (typeof selectTab === 'function') selectTab('L1');
       });
     });
-    statsModal.style.display = 'block';
   }
-  document.getElementById('stats-btn').addEventListener('click', openStats);
-  document.getElementById('stats-close').addEventListener('click', () => statsModal.style.display = 'none');
-  statsModal.addEventListener('click', (e) => {
-    if (e.target === statsModal) statsModal.style.display = 'none';
+}
+
+function initStatsModal() {
+  // Stats is retired into the unified Dashboard. The hidden #stats-btn now
+  // routes there so the Review→Stats path and #/m/stats deep-link resolve.
+  const btn = document.getElementById('stats-btn');
+  if (btn) btn.addEventListener('click', () => openDashboard());
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  DASHBOARD — unified surface merging daily progress + 60-day activity
+//  heatmap + mastery/stats into one scrollable view. Replaces the standalone
+//  Stats and Streak Map modals (their buttons route here). Opened from the
+//  top-nav Dashboard link and the hidden #dashboard-btn (so #/m/dashboard
+//  deep-links + cmd+click-new-tab resolve).
+// ──────────────────────────────────────────────────────────────────────────
+function renderDailyInto(rootEl) {
+  // Today's facts only — no streak counts / no completion %, per the
+  // anti-gamification stance in PROFILE.md + the Streak Map design notes.
+  const today = (typeof _streakMapBuckets === 'function' ? _streakMapBuckets(1)[0] : null) || { passes: 0, misses: 0 };
+  const due = (typeof dueReviewIds === 'function') ? dueReviewIds().length : 0;
+  const weak = Object.keys(state.weakness || {}).length;
+  const tile = (label, value, color, bg, border) =>
+    `<div style="background:${bg}; padding:10px 12px; border-radius:8px; border:1px solid ${border};">
+       <div style="font-size:11px; color:#94a3b8;">${label}</div>
+       <div style="font-size:20px; font-weight:700; color:${color};">${value}</div>
+     </div>`;
+  rootEl.innerHTML = `
+    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">📆 Today</div>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+      ${tile('Passed today', today.passes || 0, '#34d399', 'rgba(52,211,153,0.08)', 'rgba(52,211,153,0.25)')}
+      ${tile('Missed today', today.misses || 0, '#f87171', 'rgba(248,113,113,0.08)', 'rgba(248,113,113,0.25)')}
+      ${tile('Due now', due, '#67e8f9', 'rgba(34,211,238,0.08)', 'rgba(34,211,238,0.25)')}
+      ${tile('Weak spots', weak, '#fdba74', 'rgba(251,146,60,0.08)', 'rgba(251,146,60,0.25)')}
+    </div>`;
+}
+
+function openDashboard() {
+  const modal = document.getElementById('dashboard-modal');
+  const body = document.getElementById('dashboard-body');
+  if (!modal || !body) return;
+  body.innerHTML = `
+    <section class="dash-section" data-dash-daily></section>
+    <section class="dash-section"><div class="dash-h">📅 Activity · 60 days</div><div data-dash-activity></div></section>
+    <section class="dash-section"><div class="dash-h">📊 Mastery &amp; progress</div><div data-dash-stats></div></section>`;
+  renderDailyInto(body.querySelector('[data-dash-daily]'));
+  renderActivityInto(body.querySelector('[data-dash-activity]'), closeDashboard);
+  renderStatsInto(body.querySelector('[data-dash-stats]'), closeDashboard);
+  modal.classList.remove('hidden');
+  modal.style.display = 'block';
+}
+
+function closeDashboard() {
+  const modal = document.getElementById('dashboard-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function initDashboardModal() {
+  // Hidden #dashboard-btn — the uniform target the #/m/dashboard route + the
+  // retired stats/streak buttons all resolve to.
+  const btn = document.getElementById('dashboard-btn');
+  if (btn) btn.addEventListener('click', openDashboard);
+  // Top-nav link. Modifier / middle click → let the browser open #/m/dashboard
+  // in a new tab natively (the link's href); plain click → open in place.
+  const navLink = document.getElementById('topbar-dashboard');
+  if (navLink) navLink.addEventListener('click', (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+    e.preventDefault();
+    openDashboard();
   });
+  // Mobile-only 📊 icon (the desktop nav link is display:none ≤767px).
+  const mob = document.getElementById('topbar-dashboard-mobile');
+  if (mob) mob.addEventListener('click', openDashboard);
+  const closeBtn = document.getElementById('dashboard-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeDashboard);
+  const modal = document.getElementById('dashboard-modal');
+  if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeDashboard(); });
 }
 
 // ──────────────────────────────────────────────────────────────────────────

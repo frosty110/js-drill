@@ -559,10 +559,10 @@ const TOPBAR_MENU_TAXONOMY = {
     blurb: 'Look back: progress, coverage, and shareable exports.',
     // Cram-only references are gated by applySidebarCuration (display:none on
     // non-cram plans, so _topbarItemFromButton filters them out everywhere).
-    // Stats/Streak/Sections/Mechanics stay grouped under Progress for scan-
-    // ability now that the menu is smaller.
+    // Stats + Streak retired into the top-nav Dashboard (merged daily progress
+    // + activity + mastery); Sections + Mechanics stay grouped under Progress.
     groups: [
-      { label: 'Progress', items: ['stats-btn', 'streak-map-btn', 'sections-grid-btn', 'mechanics-btn'] },
+      { label: 'Progress', items: ['sections-grid-btn', 'mechanics-btn'] },
       { label: 'Share', items: ['export-btn', 'ai-coach-btn'] },
       { label: '📖 Reference (this plan)', items: ['cram-cheat-btn', 'cram-glossary-btn', 'cram-behavior-btn', 'cram-shapes-btn', 'cram-review-btn'] }
     ]
@@ -676,11 +676,16 @@ function renderTopbarMenuContents(menuKey) {
           <span class="topbar-item-name">${escapeHtml(it.label)}</span>
         </button>`;
     }
+    // Concrete mode items render as ANCHORS pointing at #/m/<slug> (slug = the
+    // button id minus '-btn'). The href is what makes cmd+click / middle-click /
+    // right-click → "Open in New Tab" work natively; the delegated handler still
+    // owns plain left-click (preventDefault → in-place synth-click via data-btn-id).
+    const slug = it.id.replace(/-btn$/, '');
     return `
-      <button class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
+      <a class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}" href="#/m/${escapeHtml(slug)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
         <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
         <span class="topbar-item-name">${escapeHtml(it.label)}</span>
-      </button>`;
+      </a>`;
   };
   // Normalize an item entry: strings → resolved via _topbarItemFromButton (may
   // return null if button hidden), objects → passed through. Centralizes the
@@ -834,6 +839,13 @@ function initTopbarDropdowns() {
     }
     const item = e.target.closest('.topbar-item');
     if (!item) return;
+    // Anchor items carry href="#/m/<mode>". On a modifier/middle click, bail
+    // WITHOUT preventDefault/stopPropagation so the browser opens that hash in a
+    // NEW TAB natively (right-click "Open in New Tab" needs no JS at all). Plain
+    // left-click falls through to the in-place synth-click path below; we
+    // preventDefault so it doesn't ALSO navigate the current tab's hash.
+    if (item.tagName === 'A' && (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) return;
+    if (item.tagName === 'A') e.preventDefault();
     e.stopPropagation();
     // 2026-05-29: action-backed rows (shuffle / pick-smart) are dispatched
     // here before the legacy data-btn-id synth-click path. Each action

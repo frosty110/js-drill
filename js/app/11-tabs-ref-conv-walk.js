@@ -119,7 +119,10 @@ function renderConversation(body, content) {
       </details>`;
   }).join('');
   section.innerHTML = `
-    <div class="mb-2 text-xs text-slate-500 uppercase tracking-wider">Interview walk-through</div>
+    <div class="mb-2 flex items-center justify-between gap-2">
+      <div class="text-xs text-slate-500 uppercase tracking-wider">Interview walk-through</div>
+      <button data-action="conv-listen" style="background:#fbbf24; color:#0f172a; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600;">🎧 Listen</button>
+    </div>
     <div class="conv-drill-route mb-3 p-3 rounded-lg" style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25);">
       <div class="flex items-center justify-between gap-3 flex-wrap">
         <div class="text-sm text-slate-300">
@@ -137,6 +140,13 @@ function renderConversation(body, content) {
   `;
   body.appendChild(section);
   section.querySelector('[data-action="conv-to-reference"]').addEventListener('click', () => selectTab('reference'));
+  // 🎧 Listen — start audio playback for this lesson's conversation. The
+  // dock-based player handles the rest (queue build, two-voice playback,
+  // file-vs-TTS source selection). state.currentLessonId is the source of
+  // truth for which lesson we're on.
+  section.querySelector('[data-action="conv-listen"]').addEventListener('click', () => {
+    if (typeof window.startAudioEpisode === 'function') window.startAudioEpisode(state.currentLessonId);
+  });
   // 🎬 Drill recall — Phase 0 salvage decision (audits/conversation.md).
   // Conversation tab demoted from pure-read to preview-with-route. The
   // sibling convDrill (`startConvDrillSession`, slice 05) mines the same

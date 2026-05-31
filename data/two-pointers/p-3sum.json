@@ -125,6 +125,36 @@
       "Sorting is what unlocks the two-pointer step — without it you cannot decide which pointer to move.",
       "Three layers of dedup: skip equal i, skip equal l after a hit, skip equal r after a hit.",
       "Outer loop stops at length - 2 so l = i + 1 and r still leave room for a pair."
+    ],
+    "crux": "Sort first, then fix each anchor i and converge two pointers on the rest — the sorted order tells you which pointer to move and lets you skip duplicates by neighbor comparison.",
+    "cruxDistractors": [
+      "Three nested loops over every (i, j, k) triplet, deduping hits by sorting and stringifying each into a Set.",
+      "For each anchor, run hash-map Two-Sum on the rest for the complement −nums[i], then dedup the triplets afterward.",
+      "Sort, then for each anchor binary-search the remaining slice for the complement of each second element."
+    ],
+    "alternates": [
+      {
+        "label": "Sort + hash-set inner scan",
+        "when": "A natural first step when you think 'fix anchor, Two-Sum the rest with a hash set.' Still O(n²) time but requires an extra O(n) set per anchor and an output-sort pass to guarantee deterministic order. Use when you'd rather not derive the two-pointer direction rule in an interview.",
+        "complexity": "O(n²) / O(n)",
+        "code": "function threeSum(nums) {\n  nums.sort((a, b) => a - b);\n  const res = [];\n  for (let i = 0; i < nums.length - 2; i++) {\n    if (i > 0 && nums[i] === nums[i - 1]) continue;\n    const seen = new Set();\n    let j = i + 1;\n    while (j < nums.length) {\n      const complement = -nums[i] - nums[j];\n      if (seen.has(complement)) {\n        res.push([nums[i], complement, nums[j]]);\n        while (j + 1 < nums.length && nums[j] === nums[j + 1]) j++;\n      }\n      seen.add(nums[j]);\n      j++;\n    }\n  }\n  res.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);\n  return res;\n}\nconsole.log(JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4])));",
+        "notes": [
+          "The hash set finds the complement that was seen earlier in the scan — because the array is sorted, `complement ≤ nums[j]`, so each pushed triplet is already internally sorted.",
+          "An output sort is needed because hits for different anchors can arrive out of order; the two-pointer approach avoids this cost.",
+          "Same O(n²) time as the two-pointer variant but O(n) extra space per anchor for the set vs. O(1) with two pointers."
+        ]
+      },
+      {
+        "label": "Brute force O(n³)",
+        "when": "Only when you need to confirm understanding before deriving the faster solution. Three nested loops are correct but O(n³) — too slow for n > ~300. Name it out loud, then discard it.",
+        "complexity": "O(n³) / O(n)",
+        "code": "function threeSum(nums) {\n  nums.sort((a, b) => a - b);\n  const resSet = new Set();\n  const res = [];\n  for (let i = 0; i < nums.length - 2; i++) {\n    for (let j = i + 1; j < nums.length - 1; j++) {\n      for (let k = j + 1; k < nums.length; k++) {\n        if (nums[i] + nums[j] + nums[k] === 0) {\n          const key = nums[i] + ',' + nums[j] + ',' + nums[k];\n          if (!resSet.has(key)) {\n            resSet.add(key);\n            res.push([nums[i], nums[j], nums[k]]);\n          }\n        }\n      }\n    }\n  }\n  return res;\n}\nconsole.log(JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4])));",
+        "notes": [
+          "Sorting first means each triplet is already in ascending order, so the string key `i+','+j+','+k` is unique per distinct value-triple — a cheap dedup without sorting each candidate.",
+          "O(n³) time: each of the three loops visits up to n positions; even with early exits on anchors > 0 the worst case is cubic.",
+          "The Set grows up to O(n³) entries in the worst case (all unique pairs), though in practice it's bounded by the output size."
+        ]
+      }
     ]
   },
   "L1": {

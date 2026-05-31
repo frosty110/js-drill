@@ -158,7 +158,21 @@
     "notes": [
       "search vs startsWith differ ONLY in whether you require the terminal node.end flag.",
       "Use Object.create(null) (not {}) so input characters like \"__proto__\" cannot collide with the prototype chain — a classic interview follow-up.",
-      "Pick a terminal sentinel that cannot collide with a character — `end` works for ASCII words; Symbol/$ is safer for arbitrary input."
+      "Pick a terminal sentinel that cannot collide with a character — `end` works for ASCII words; Symbol/$ is safer for arbitrary input.",
+      "Time O(L) per op, Space O(total characters inserted) worst case."
+    ],
+    "alternates": [
+      {
+        "label": "Array[26] fixed-slot children (lowercase ASCII)",
+        "when": "Reach for this when the problem guarantees lowercase ASCII letters only (the standard LeetCode constraint). Fixed-size 26-slot arrays replace the hash-keyed object: index = charCode - 97. Slightly faster in practice (no hashing) and immune to prototype-collision bugs without needing Object.create(null).",
+        "complexity": "O(L) / O(26L)",
+        "code": "class Trie {\n  constructor() { this.children = new Array(26).fill(null); this.end = false; }\n  insert(word) {\n    let node = this;\n    for (const ch of word) {\n      const i = ch.charCodeAt(0) - 97;\n      if (!node.children[i]) node.children[i] = new Trie();\n      node = node.children[i];\n    }\n    node.end = true;\n  }\n  search(word) {\n    const node = this._walk(word);\n    return !!node && node.end === true;\n  }\n  startsWith(prefix) {\n    return !!this._walk(prefix);\n  }\n  _walk(s) {\n    let node = this;\n    for (const ch of s) {\n      const i = ch.charCodeAt(0) - 97;\n      if (!node.children[i]) return null;\n      node = node.children[i];\n    }\n    return node;\n  }\n}\nconst t = new Trie();\nt.insert(\"apple\");\nconsole.log(t.search(\"apple\"));\nconsole.log(t.search(\"app\"));\nconsole.log(t.startsWith(\"app\"));\nt.insert(\"app\");\nconsole.log(t.search(\"app\"));",
+        "notes": [
+          "Each node IS a Trie instance — the class doubles as its own child-slot container. Fewer object-wrapper allocations than a separate 'children' object per node.",
+          "O(26) constant space per node regardless of how many children are occupied — trades wasted nulls for O(1) index access.",
+          "Breaks for non-lowercase input (index goes negative or > 25); fall back to the Object.create(null) version for arbitrary character sets."
+        ]
+      }
     ]
   },
   "L1": {

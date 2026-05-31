@@ -138,6 +138,12 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
   await rawSend('Page.enable');
   await rawSend('Runtime.enable');
   await rawSend('Network.enable');
+  // Bypass HTTP cache for the lifetime of the probe — prevents stale
+  // js/app/*.js bytes from a previous local-dev session masking a freshly
+  // edited slice. Cheap to do per-tab, applies to all navigations on this
+  // session. Discovered while smoke-testing the 🎧 Audio prototype: HTML
+  // cachebust query bust the document but Chrome still returned cached JS.
+  await rawSend('Network.setCacheDisabled', { cacheDisabled: true });
 
   if (mobile) {
     // iPhone 13 mini viewport — the PROFILE.md mobile target.
@@ -154,6 +160,11 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
 
   await rawSend('Page.navigate', { url });
   await new Promise(r => setTimeout(r, waitForLoadMs));
+  // Note on cache busting after a code edit: Network.setCacheDisabled
+  // (above) is the lighter-touch option but sometimes loses to Chrome's
+  // preload scanner on recently-visited URLs. Probes that run right after
+  // an edit and see stale JS can add `?cb=Date.now()` to the URL passed to
+  // connect() — that busts the HTML which then re-requests subresources.
 
   let snapCounter = 0;
   const session = {

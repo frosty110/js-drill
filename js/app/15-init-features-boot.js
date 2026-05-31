@@ -534,7 +534,8 @@ const TOPBAR_MENU_TAXONOMY = {
       'today-btn',
       'mock-btn',
       { emoji: '🎲', label: 'Pick one', desc: 'Smart-pick: if you have due reviews / weak spots / at-risk lessons it routes you there, else picks a random fresh lesson or mastered one.', action: 'pick-smart' },
-      'warmup-btn'
+      'warmup-btn',
+      'audio-btn'
     ]
   },
   drills: {
@@ -544,7 +545,7 @@ const TOPBAR_MENU_TAXONOMY = {
       { emoji: '🧠', label: 'Run it in your head', desc: 'Random pick across Predict / What-If / Trace-Hop / Reverse-Walk — mental execution drills.', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
       { emoji: '🔧', label: 'Judge a code change', desc: 'Random pick across Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap — change-impact drills.', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
       { emoji: '🧭', label: 'Name the pattern', desc: 'Random pick across Recognize / Reverse / Constellation / Match — pattern-identification drills.', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
-      { emoji: '📝', label: 'Recall the traps', desc: 'Random pick across Notes-Cloze / Notes-Locate / Gotcha — gotcha-recall drills.', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
+      { emoji: '📝', label: 'Recall the traps', desc: 'Random pick across Notes-Cloze / Notes-Locate / Crux — trick & gotcha recall drills.', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
       'conv-drill-btn'
     ]
   },
@@ -652,12 +653,13 @@ function renderTopbarMenuContents(menuKey) {
   // modal). Cuts each row's height by ~2 lines and ~28px.
   //
   // Two row shapes:
-  //   - Sidebar-backed (string item ids): `data-btn-id` synth-clicks the
-  //     underlying sidebar button (existing path, ~95% of items).
-  //   - Action-backed (object items with `action`): `data-action="shuffle"`
-  //     picks a random id from `data-shuffle-ids` and synth-clicks it;
-  //     `data-action="pick-smart"` runs the triage cascade in the
-  //     dispatcher. Both share the same .topbar-item DOM + click delegation.
+  //   - Sidebar-backed: `data-btn-id` synth-clicks the underlying button
+  //     (existing path, used by ~95% of items).
+  //   - Action-backed: `data-action="shuffle"` + `data-shuffle-ids` picks
+  //     a random member id and synth-clicks it. `data-action="pick-smart"`
+  //     runs the smart-routing cascade in initTopbarDropdowns().
+  // Both shapes share the same .topbar-item DOM + click delegation, so the
+  // dispatcher just checks data-action first and falls back to data-btn-id.
   const _itemRow = (it) => {
     if (it.action === 'shuffle') {
       const ids = Array.isArray(it.ids) ? it.ids.join(',') : '';
@@ -680,9 +682,10 @@ function renderTopbarMenuContents(menuKey) {
         <span class="topbar-item-name">${escapeHtml(it.label)}</span>
       </button>`;
   };
-  // Normalize an item entry: strings → resolved via _topbarItemFromButton
-  // (may return null if button hidden), objects → passed through. Lets the
-  // group+flat render paths share one normalizer.
+  // Normalize an item entry: strings → resolved via _topbarItemFromButton (may
+  // return null if button hidden), objects → passed through. Centralizes the
+  // string-or-object branch so the two render code paths (groups + flat) share
+  // the same normalization.
   const _resolveItem = (entry) => {
     if (typeof entry === 'string') return _topbarItemFromButton(document.getElementById(entry));
     if (entry && typeof entry === 'object') return entry;
@@ -832,9 +835,9 @@ function initTopbarDropdowns() {
     const item = e.target.closest('.topbar-item');
     if (!item) return;
     e.stopPropagation();
-    // 2026-05-29: action-backed rows (shuffle / pick-smart) dispatched here
-    // BEFORE the legacy data-btn-id synth-click path. Each action resolves
-    // to ONE underlying sidebar button to click.
+    // 2026-05-29: action-backed rows (shuffle / pick-smart) are dispatched
+    // here before the legacy data-btn-id synth-click path. Each action
+    // resolves to ONE underlying sidebar button to click.
     const action = item.dataset.action;
     if (action === 'shuffle') {
       const ids = (item.dataset.shuffleIds || '').split(',').filter(Boolean);
@@ -847,11 +850,12 @@ function initTopbarDropdowns() {
     }
     if (action === 'pick-smart') {
       // Cascade: due reviews → weak spots → at-risk → fresh (lucky) →
-      // mastered (shuffle). First chip with non-zero count wins; the
-      // sidebar count pills are the source of truth for triage state.
+      // mastered (shuffle). The first chip with a non-zero count wins —
+      // matches the same triage logic the sidebar pills surface, but
+      // does the routing for the user.
       const countOf = (id) => {
         const el = document.getElementById(id);
-        return el ? (parseInt(el.textContent || '0', 10) || 0) : 0;
+        return el ? parseInt(el.textContent || '0', 10) || 0 : 0;
       };
       const cascade = [
         ['review-count', 'review-btn'],
@@ -864,7 +868,8 @@ function initTopbarDropdowns() {
       for (const [countId, btnId] of cascade) {
         if (countId && !countOf(countId)) continue;
         const btn = document.getElementById(btnId);
-        if (btn) { picked = btn; break; }
+        if (btn && btn.offsetParent !== null) { picked = btn; break; }
+        if (btn) { picked = btn; break; } // fallback even if hidden — lucky/shuffle always exist
       }
       if (!picked) return;
       close();

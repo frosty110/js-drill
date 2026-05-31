@@ -114,6 +114,25 @@
       "The starts/ends arrays are decoupled — pairing is irrelevant; only the timeline of events matters.",
       "Strict `<`: a meeting starting exactly when another ends can reuse the room.",
       "Equivalent min-heap solution: push end times, pop when the next start is ≥ heap top — same O(n log n)."
+    ],
+    "crux": "Min rooms = peak concurrency. Sort starts and ends into SEPARATE arrays, then sweep: a start before the next end needs a room, a start at/after it reuses one. The peak count is the answer.",
+    "cruxDistractors": [
+      "Sort meetings by start, then for each check how many earlier meetings have an end after this start, taking the max — O(n^2).",
+      "Sort intervals by start and greedily assign each to the first room whose last meeting has ended, scanning the room list each time.",
+      "Sweep every integer time point from min start to max end, counting intervals that contain it, and return the max."
+    ],
+    "alternates": [
+      {
+        "label": "Min-heap of end times",
+        "when": "Reach for this when the interviewer asks which room each meeting goes in, or when the greedy decoupled-sort feels unintuitive. Each heap entry represents one occupied room; the heap root is the soonest-to-free room. Generalizes cleanly to 'assign meeting → room ID' variants.",
+        "complexity": "O(n log n) / O(n)",
+        "code": "function minMeetingRooms(intervals) {\n  if (intervals.length === 0) return 0;\n  // Sort by start time so we process meetings in chronological order.\n  const sorted = intervals.slice().sort((a, b) => a[0] - b[0]);\n  // Min-heap of end times (smallest end = soonest freed room at the top).\n  // JS has no built-in heap; simulate with a sorted array for correctness.\n  const heap = [];\n  const heapPush = (v) => { heap.push(v); heap.sort((a, b) => a - b); };\n  const heapPop  = ()  => heap.shift();\n  for (const [start, end] of sorted) {\n    if (heap.length > 0 && start >= heap[0]) {\n      // Earliest-ending meeting has freed its room — reuse it.\n      heapPop();\n    }\n    heapPush(end);\n  }\n  return heap.length;\n}\nconsole.log(minMeetingRooms([[0,30],[5,10],[15,20]]));\nconsole.log(minMeetingRooms([[7,10],[2,4]]));",
+        "notes": [
+          "Heap size at any point = rooms currently occupied; final size = peak rooms needed.",
+          "Pop before push when reusing: if the new start is >= the earliest end, one room has freed up.",
+          "In production JS use a proper MinHeap class — the sorted-array simulation is O(n log n) amortized but with high constants."
+        ]
+      }
     ]
   },
   "L1": {

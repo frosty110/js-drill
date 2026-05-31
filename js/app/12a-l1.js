@@ -426,7 +426,7 @@ function renderL1(body, lesson, content) {
   const status = document.createElement('div');
   status.className = 'mt-2 mb-2 flex items-center justify-between flex-wrap gap-2';
   status.innerHTML = `
-    <div class="text-sm text-slate-400" id="l1-status">Answer all to pass.</div>
+    <div class="text-sm text-slate-400" id="l1-status">Answer all — miss ≤1 to pass.</div>
     <div class="flex gap-2 flex-wrap">
       <button class="secondary" data-action="export-l1" title="Copy a prompt with your answers + the right answers to paste into ChatGPT/Claude for tutoring">📋 Ask AI to teach me</button>
       <button class="secondary" data-action="retry-l1">Retry</button>
@@ -480,18 +480,47 @@ function renderL1(body, lesson, content) {
   function maybePassL1() {
     const allLocked = localState.perQ.every(p => p.locked);
     if (!allLocked) return;
-    const allCorrect = localState.perQ.every((p, qi) => {
+    const total = localState.perQ.length;
+    const correct = localState.perQ.reduce((n, p, qi) => {
       const correctDisplayIdx = p.optOrder.indexOf(qs[qi].answer);
-      return p.selected === correctDisplayIdx;
-    });
+      return n + (p.selected === correctDisplayIdx ? 1 : 0);
+    }, 0);
+    const allCorrect = correct === total;
+    // Pass rule (user-set): ≥80% OR at most one wrong — whichever is more
+    // lenient. With 4-question lessons (the common case) that means 3/4 passes;
+    // big lessons (8–10 Q) also let two misses through once 80% is cleared.
+    const passed = (correct / total >= 0.8) || (total - correct <= 1);
     const statusEl = document.getElementById('l1-status');
-    if (allCorrect) {
-      statusEl.innerHTML = '<span class="text-emerald-400 font-medium">✓ L1 passed.</span> Onward.';
+    const alreadyPassed = levelStatus(lesson.id, 'L1') === 'passed';
+    if (passed) {
       status.querySelector('[data-action="next-l2"]').classList.remove('hidden');
-      clearWeakness(lesson.id);
-      markPassed(lesson.id, 'L1');
+      if (allCorrect) {
+        statusEl.innerHTML = '<span class="text-emerald-400 font-medium">✓ L1 passed.</span> Onward.';
+      } else {
+        const missed = total - correct;
+        statusEl.innerHTML = `<span class="text-amber-400 font-medium">✓ L1 passed (${correct}/${total}).</span> ${missed} flagged to review — Retry for a clean green pass.`;
+      }
+      // Mutate state once. The trailing maybePassL1() on every L1 re-render
+      // (tab re-entry) must not re-append history or re-toggle flags — guard on
+      // the prior pass state. The one exception: a clean run that upgrades a
+      // previously-orange pass to green, handled in the else branch.
+      if (!alreadyPassed) {
+        if (allCorrect) {
+          clearWeakness(lesson.id);     // perfect — gap closed
+          clearPartialL1(lesson.id);
+        } else {
+          markPartialL1(lesson.id);     // amber ✓; KEEP weakness for re-review
+        }
+        markPassed(lesson.id, 'L1');
+      } else if (allCorrect && isPartialL1(lesson.id)) {
+        // Retry/clean sweep on a lesson that previously passed orange:
+        // demote amber → emerald and clear the now-closed gap.
+        clearWeakness(lesson.id);
+        clearPartialL1(lesson.id);
+        renderSidebar();
+      }
     } else {
-      statusEl.innerHTML = '<span class="text-amber-400">Some answers were off — hit Retry to start over.</span>';
+      statusEl.innerHTML = `<span class="text-rose-400">${correct}/${total} correct — below the pass line. Hit Retry to start over.</span>`;
     }
   }
 

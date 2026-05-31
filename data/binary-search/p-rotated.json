@@ -119,6 +119,25 @@
       "Key: after any rotation, at least ONE of [l..m] or [m..r] is still sorted.",
       "`nums[l] <= nums[m]` (inclusive) — equality handles single-element left half.",
       "Boundary strictness matters: `nums[l] <= target && target < nums[m]` avoids re-testing nums[m]."
+    ],
+    "crux": "After rotation at least one half [l..m] or [m..r] is still sorted — identify it, and if target falls inside that half's value range search there, else the other.",
+    "cruxDistractors": [
+      "First find the rotation pivot by scanning for `nums[i] > nums[i+1]`, then binary-search the correct half.",
+      "Binary-search the pivot, rotate the array back into ascending order, then run a plain binary search.",
+      "Compare target to `nums[m]`; if smaller go left, if larger go right — standard binary search ignores the rotation."
+    ],
+    "alternates": [
+      {
+        "label": "Find-pivot-first, then plain BS (two-pass)",
+        "when": "If you find the one-pass invariant hard to reason about under pressure, decompose into two explicit binary searches: first find the rotation pivot (index of the minimum), then pick the correct sorted half and run a standard binary search. Both passes are O(log n) so the total is still O(log n) / O(1) — same complexity, clearer structure.",
+        "complexity": "O(log n) / O(1)",
+        "code": "function search(nums, target) {\n  const n = nums.length;\n  // Pass 1: find the pivot (index of minimum) using right-anchor find-min.\n  let pl = 0, pr = n - 1;\n  while (pl < pr) {\n    const pm = Math.floor((pl + pr) / 2);\n    if (nums[pm] > nums[pr]) pl = pm + 1;\n    else pr = pm;\n  }\n  const pivot = pl;\n  // Pass 2: binary-search the appropriate sorted half.\n  let l, r;\n  if (target >= nums[pivot] && target <= nums[n - 1]) {\n    l = pivot; r = n - 1;\n  } else {\n    l = 0; r = pivot - 1;\n  }\n  while (l <= r) {\n    const m = Math.floor((l + r) / 2);\n    if (nums[m] === target) return m;\n    if (nums[m] < target) l = m + 1;\n    else r = m - 1;\n  }\n  return -1;\n}\nconsole.log(search([4,5,6,7,0,1,2], 0));",
+        "notes": [
+          "Pass 1 is exactly the Find-Minimum-in-Rotated-Array algorithm (right-anchor BS, r=m on <=).",
+          "After finding pivot, the problem reduces to two standard sorted sub-arrays — pick the one that can contain target by comparing to the array's endpoints.",
+          "Same O(log n) / O(1) complexity as the one-pass version; the constant factor is slightly higher (two loops), but correctness is easier to argue."
+        ]
+      }
     ]
   },
   "L1": {

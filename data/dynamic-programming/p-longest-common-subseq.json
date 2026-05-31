@@ -105,6 +105,25 @@
       "Row 0 and column 0 stay at 0 — LCS with the empty prefix is 0, so no explicit init needed beyond `fill(0)`.",
       "On a match the diagonal carries +1; on a mismatch take max of the two adjacent cells (drop one char from either side).",
       "Subsequence (order preserved, characters not necessarily adjacent) — distinct from substring, which requires contiguity."
+    ],
+    "crux": "dp[i][j] over prefix pairs: when last chars match, 1 + diagonal; when they don't, max(top, left) — drop a char from either string and keep the better.",
+    "cruxDistractors": [
+      "On a mismatch, reset dp[i][j] to 0 and track a global max — that solves longest common SUBSTRING (contiguous), not subsequence.",
+      "Build a frequency map of each string and sum the per-character minimums — counts shared multiset size but ignores the order-preservation constraint.",
+      "Greedily walk both strings with two pointers, advancing both on a match and the lexicographically smaller one otherwise."
+    ],
+    "alternates": [
+      {
+        "label": "1D rolling array (O(min(m,n)) space)",
+        "when": "Reach for this when memory is the constraint — the full 2D table is O(m*n) but each row only reads the row above it. A single row of length n+1 plus one saved diagonal value suffices. Make the shorter string the columns to minimize the array.",
+        "complexity": "O(m*n) / O(min(m,n))",
+        "code": "function lcs(a, b) {\n  // Keep shorter string as columns to minimize the rolling array.\n  if (a.length < b.length) return lcs(b, a);\n  const m = a.length, n = b.length;\n  // prev[j] = LCS of a[0..i-1] and b[0..j-1] (the row above the current one).\n  let prev = new Array(n + 1).fill(0);\n  for (let i = 1; i <= m; i++) {\n    const curr = new Array(n + 1).fill(0);\n    for (let j = 1; j <= n; j++) {\n      if (a[i - 1] === b[j - 1]) {\n        // Match: extend the diagonal (prev[j-1] is dp[i-1][j-1]).\n        curr[j] = 1 + prev[j - 1];\n      } else {\n        // Mismatch: max of drop-a (prev[j]) or drop-b (curr[j-1]).\n        curr[j] = Math.max(prev[j], curr[j - 1]);\n      }\n    }\n    prev = curr;\n  }\n  return prev[n];\n}\nconsole.log(lcs(\"abcde\", \"ace\"));\nconsole.log(lcs(\"abc\", \"def\"));",
+        "notes": [
+          "prev is the completed previous row; curr builds the current row — only O(n) space instead of O(m*n).",
+          "prev[j-1] (the diagonal) is safely read before curr[j] overwrites it because j increments left-to-right.",
+          "Swapping a and b so the shorter string is columns is optional but halves memory when the strings have very different lengths."
+        ]
+      }
     ]
   },
   "L1": {

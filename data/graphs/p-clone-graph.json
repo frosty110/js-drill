@@ -126,6 +126,19 @@
       "CRITICAL: set map.set(orig, copy) BEFORE recursing into neighbors. Otherwise a cycle re-enters dfs and infinite-loops.",
       "The Map keys are the original node OBJECTS (identity), not their .val — vals can repeat.",
       "For each original node you create exactly one clone, then wire its neighbors by recursing or fetching from the map."
+    ],
+    "alternates": [
+      {
+        "label": "BFS (iterative queue)",
+        "when": "Use BFS when you want to avoid recursion-stack overflow on large graphs (V can be up to ~100 on LeetCode but arbitrary in production). The same visited Map discipline applies — set-before-enqueue instead of set-before-recurse.",
+        "complexity": "O(V+E) / O(V)",
+        "code": "function cloneGraph(node) {\n  if (!node) return null;\n  const map = new Map();\n  // Create the root clone and seed the queue with the original root.\n  map.set(node, { val: node.val, neighbors: [] });\n  const queue = [node];\n  while (queue.length) {\n    const orig = queue.shift();\n    for (const nb of orig.neighbors) {\n      if (!map.has(nb)) {\n        // Create the clone and enqueue BEFORE wiring — same discipline as DFS set-before-recurse.\n        map.set(nb, { val: nb.val, neighbors: [] });\n        queue.push(nb);\n      }\n      // Wire this edge on every visit (both directions of an undirected edge).\n      map.get(orig).neighbors.push(map.get(nb));\n    }\n  }\n  return map.get(node);\n}\nfunction serialize(start) {\n  const seen = new Set();\n  const order = [];\n  function walk(n) {\n    if (seen.has(n)) return;\n    seen.add(n);\n    order.push(n);\n    for (const nb of n.neighbors) walk(nb);\n  }\n  walk(start);\n  return order.map(n => n.val + \":[\" + n.neighbors.map(x => x.val).join(\",\") + \"]\").join(\" \");\n}\nconst a = { val: 1, neighbors: [] };\nconst b = { val: 2, neighbors: [] };\nconst c = { val: 3, neighbors: [] };\nconst d = { val: 4, neighbors: [] };\na.neighbors = [b, d];\nb.neighbors = [a, c];\nc.neighbors = [b, d];\nd.neighbors = [a, c];\nconst cloned = cloneGraph(a);\nconsole.log(cloned !== a);\nconsole.log(serialize(cloned));",
+        "notes": [
+          "Create the root's clone and add it to the map BEFORE entering the loop — the root has no 'parent' to trigger the if (!map.has) branch for it.",
+          "Wire each neighbor edge inside the loop for every dequeued node — this correctly handles undirected edges appearing from both endpoints.",
+          "BFS traverses level-by-level vs DFS depth-first, but the result is identical: every node cloned exactly once, all edges wired."
+        ]
+      }
     ]
   },
   "L1": {

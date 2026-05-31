@@ -111,7 +111,21 @@
     "notes": [
       "Always write to a separate output grid. In-place mutation corrupts the neighbor counts of cells you have not visited yet.",
       "Live survives on 2 or 3 neighbors; dead births on EXACTLY 3. Anything else is death (under/overpopulation).",
-      "Skip dr=dc=0 (the cell itself) when summing the 8 neighbors, and bounds-check every (nr, nc)."
+      "Skip dr=dc=0 (the cell itself) when summing the 8 neighbors, and bounds-check every (nr, nc).",
+      "Time O(h*w), Space O(h*w) for the new grid."
+    ],
+    "alternates": [
+      {
+        "label": "In-place encoding (O(1) extra space)",
+        "when": "Use when the interviewer specifically asks for O(1) extra space. Encodes transitions as intermediate values so neighbor reads still see the original state during the first pass.",
+        "complexity": "O(h*w) / O(1)",
+        "code": "function nextGen(grid) {\n  const h = grid.length, w = grid[0].length;\n  // First pass: encode transitions in-place.\n  // 1 (live, stays live) = 1; 1->0 (live, dies) = -1; 0->1 (dead, births) = 2; 0 (dead, stays dead) = 0.\n  for (let r = 0; r < h; r++) {\n    for (let c = 0; c < w; c++) {\n      let n = 0;\n      for (let dr = -1; dr <= 1; dr++) {\n        for (let dc = -1; dc <= 1; dc++) {\n          if (dr === 0 && dc === 0) continue;\n          const nr = r + dr, nc = c + dc;\n          if (nr >= 0 && nr < h && nc >= 0 && nc < w) {\n            // Count cells that WERE alive: original 1, or -1 (was 1, will die).\n            const v = grid[nr][nc];\n            if (v === 1 || v === -1) n++;\n          }\n        }\n      }\n      const self = grid[r][c];\n      const wasAlive = self === 1 || self === -1;\n      if (wasAlive) {\n        if (n !== 2 && n !== 3) grid[r][c] = -1; // live -> dies\n      } else {\n        if (n === 3) grid[r][c] = 2;             // dead -> births\n      }\n    }\n  }\n  // Second pass: normalize back to 0/1.\n  for (let r = 0; r < h; r++) {\n    for (let c = 0; c < w; c++) {\n      if (grid[r][c] === 2) grid[r][c] = 1;\n      else if (grid[r][c] === -1) grid[r][c] = 0;\n    }\n  }\n  return grid;\n}\n// In-place version mutates the input; caller must copy first if the original matters.\nconst block1 = [[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]];\nconst block2 = block1.map(r => r.slice());\nconsole.log(JSON.stringify(nextGen(block1)));\nconsole.log(JSON.stringify(nextGen(block2)));\nconst blinker1 = [[0,0,0],[1,1,1],[0,0,0]];\nconst blinker2 = blinker1.map(r => r.slice());\nnextGen(blinker1);\nconsole.log(JSON.stringify(blinker1));\nnextGen(blinker2); nextGen(blinker2);\nconsole.log(JSON.stringify(blinker2));",
+        "notes": [
+          "Encode live-dying as -1 and dead-birthing as 2 so the first pass can still read original state from any cell.",
+          "The neighbor-count predicate must check `v === 1 || v === -1` (was-alive), NOT just `v === 1`.",
+          "Two-pass is still O(h*w) time; the win is eliminating the O(h*w) output-grid allocation."
+        ]
+      }
     ]
   },
   "L1": {

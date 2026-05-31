@@ -128,11 +128,25 @@
     ]
   },
   "reference": {
-    "code": "class History {\n  // done = applied stack; undone = redo stack. Two stacks model a linear timeline.\n  constructor() {\n    this.done = [];\n    this.undone = [];\n  }\n  do(cmd) {\n    cmd.apply();\n    this.done.push(cmd);\n    // A fresh action invalidates redo — branching destroys the old future.\n    this.undone = [];\n  }\n  undo() {\n    const cmd = this.done.pop();\n    // No-op on empty stack — don't throw; UI buttons just stay disabled.\n    if (!cmd) return;\n    cmd.revert();\n    this.undone.push(cmd);\n  }\n  redo() {\n    const cmd = this.undone.pop();\n    if (!cmd) return;\n    cmd.apply();\n    this.done.push(cmd);\n  }\n}",
+    "code": "class History {\n  // done = applied stack; undone = redo stack. Two stacks model a linear timeline.\n  constructor() {\n    this.done = [];\n    this.undone = [];\n  }\n  do(cmd) {\n    cmd.apply();\n    this.done.push(cmd);\n    // A fresh action invalidates redo — branching destroys the old future.\n    this.undone = [];\n  }\n  undo() {\n    const cmd = this.done.pop();\n    // No-op on empty stack — don't throw; UI buttons just stay disabled.\n    if (!cmd) return;\n    cmd.revert();\n    this.undone.push(cmd);\n  }\n  redo() {\n    const cmd = this.undone.pop();\n    if (!cmd) return;\n    cmd.apply();\n    this.done.push(cmd);\n  }\n}\n// Time O(1) per do/undo/redo, Space O(n) commands",
     "notes": [
       "Each command must be self-contained: apply() and revert() are inverses. The history doesn't know what the command does.",
       "Doing a new action after an undo clears the undone stack — branching destroys the redo path. Standard editor behavior.",
-      "Undo and redo are no-ops on empty stacks. Don't throw — UI buttons just stay disabled."
+      "Undo and redo are no-ops on empty stacks. Don't throw — UI buttons just stay disabled.",
+      "Time O(1) per operation; Space O(n) where n is history depth."
+    ],
+    "alternates": [
+      {
+        "label": "Cursor-index into a single command array",
+        "when": "Reach for this when you want to avoid two separate stacks and don't mind a slice on every do(). The cursor approach keeps all commands in one array and uses an index to mark the boundary between past and future. The two-stacks version is cleaner: 'clear undone' is one assignment vs 'slice to cursor'.",
+        "complexity": "O(n) do (slice) / O(1) undo/redo",
+        "code": "class History {\n  constructor() {\n    this.cmds = [];\n    this.cursor = 0;  // index of the next slot to fill — cmds[0..cursor-1] are applied\n  }\n  do(cmd) {\n    // Truncate stale future — same as clearing the undone stack in the two-stack version.\n    this.cmds = this.cmds.slice(0, this.cursor);\n    cmd.apply();\n    this.cmds.push(cmd);\n    this.cursor++;\n  }\n  undo() {\n    if (this.cursor === 0) return;  // nothing to undo\n    this.cursor--;\n    this.cmds[this.cursor].revert();\n  }\n  redo() {\n    if (this.cursor === this.cmds.length) return;  // nothing to redo\n    this.cmds[this.cursor].apply();\n    this.cursor++;\n  }\n}\nlet x = 0;\nconst h = new History();\nconst add = n => ({ apply: () => x += n, revert: () => x -= n });\nh.do(add(1));\nconsole.log(x);\nh.do(add(2));\nconsole.log(x);\nh.undo();\nconsole.log(x);\nh.do(add(10));\nconsole.log(x);\nh.undo();\nconsole.log(x);\nh.undo();\nconsole.log(x);",
+        "notes": [
+          "`cursor` is the pivot: cmds[0..cursor-1] are applied (the 'done' stack); cmds[cursor..] are future (the 'undone' stack).",
+          "`do` slices off the future (O(n) allocation) — equivalent to `this.undone = []` in the two-stack version, just more expensive.",
+          "Two-stacks wins on do() cost (O(1) assignment vs O(n) slice) and is easier to reason about without index arithmetic."
+        ]
+      }
     ]
   },
   "L1": {

@@ -123,6 +123,19 @@
       "Mutate-then-restore is the backtracking signature — save the char, overwrite to mark visited, recurse, then put it back.",
       "Short-circuit with `||` so the first successful neighbor stops the recursion.",
       "Check `i === word.length` BEFORE bounds — a successful tail match ends recursion cleanly."
+    ],
+    "alternates": [
+      {
+        "label": "Explicit visited Set (no board mutation)",
+        "when": "Use this when the interviewer says 'don't mutate the input' or when the board might contain the sentinel character '#'. Passes a Set of encoded cell keys through the recursion instead of overwriting board cells. Space goes from O(L) to O(L) for the Set (only L cells are ever in it at once), but allocating a Set object per DFS start cell is slower in practice.",
+        "complexity": "O(m*n*4^L) / O(L)",
+        "code": "function exist(board, word) {\n  const rows = board.length, cols = board[0].length;\n  function dfs(r, c, i, visited) {\n    if (i === word.length) return true;\n    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;\n    const key = r * cols + c;\n    if (visited.has(key) || board[r][c] !== word[i]) return false;\n    visited.add(key);                    // mark visited (no board mutation)\n    const found = dfs(r+1,c,i+1,visited) || dfs(r-1,c,i+1,visited)\n               || dfs(r,c+1,i+1,visited) || dfs(r,c-1,i+1,visited);\n    visited.delete(key);                 // un-mark (backtrack)\n    return found;\n  }\n  for (let r = 0; r < rows; r++)\n    for (let c = 0; c < cols; c++)\n      if (dfs(r, c, 0, new Set())) return true;\n  return false;\n}\nconst board = [[\"A\",\"B\",\"C\",\"E\"],[\"S\",\"F\",\"C\",\"S\"],[\"A\",\"D\",\"E\",\"E\"]];\nconsole.log(exist(board, \"ABCCED\"));\nconsole.log(exist(board, \"SEE\"));\nconsole.log(exist(board, \"ABCB\"));",
+        "notes": [
+          "Encode (r,c) as `r * cols + c` — a unique integer key that avoids string allocation.",
+          "Set.add / Set.delete mirrors board overwrite / restore: same backtracking discipline, different container.",
+          "The Set holds at most L keys at any moment, so space is still O(L) — same asymptotic as the in-place version."
+        ]
+      }
     ]
   },
   "L1": {

@@ -113,7 +113,21 @@
     "notes": [
       "Default key is JSON.stringify(args) — fast and good enough for primitives + plain objects, but won't distinguish two objects with identical content from one passed twice.",
       "Memoization only works for pure fns. A fn that reads `Date.now()` or mutates globals will return stale results on cache hits.",
-      "Use Map (not a plain object) for keys — Map handles any string cleanly and avoids prototype-pollution edge cases like `__proto__`."
+      "Use Map (not a plain object) for keys — Map handles any string cleanly and avoids prototype-pollution edge cases like `__proto__`.",
+      "Time O(k) per call where k = key serialization cost (negligible for primitives). Space O(unique args seen)."
+    ],
+    "alternates": [
+      {
+        "label": "Object cache with null prototype",
+        "when": "Reach for this when you want the simplest possible implementation and args are always primitives or JSON-safe values. `Object.create(null)` avoids prototype-pollution without needing Map, and `k in cache` is the correct hit-test. Skip this for production code that might cache `undefined` returns or non-serializable args — Map is safer.",
+        "complexity": "O(k) / O(unique args)",
+        "code": "function memoize(fn, keyFn) {\n  // Null-prototype object — no __proto__ or toString collisions, simpler syntax than Map.\n  const cache = Object.create(null);\n  const toKey = keyFn || ((...args) => JSON.stringify(args));\n  return function (...args) {\n    const k = toKey(...args);\n    // `k in cache` correctly handles cached `undefined` — unlike `cache[k] !== undefined`.\n    if (k in cache) return cache[k];\n    const v = fn(...args);\n    cache[k] = v;\n    return v;\n  };\n}\nlet calls = 0;\nconst square = (n) => { calls++; return n * n; };\nconst m = memoize(square);\nconsole.log(m(3));\nconsole.log(m(3));\nconsole.log(m(4));\nconsole.log('calls=' + calls);",
+        "notes": [
+          "`k in cache` is the correct hit-test — checks key presence regardless of value; `cache[k] !== undefined` would re-run fn for any call that legitimately returns undefined.",
+          "`Object.create(null)` removes the prototype chain so keys like `'__proto__'` or `'constructor'` can't shadow built-in properties.",
+          "Object key iteration order and Map iteration order are both insertion-order for string keys in modern JS, so neither has an ordering advantage."
+        ]
+      }
     ]
   },
   "L1": {

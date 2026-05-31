@@ -99,6 +99,36 @@
       "`i >> 1` is integer divide by 2 — drops the lowest bit, which (i & 1) recovers.",
       "counts[0] = 0 is the base case; the loop starts at 1.",
       "Naive popcount per i is O(log i) → O(n log n) total; this DP is O(n)."
+    ],
+    "crux": "DP reusing a smaller answer: `counts[i] = counts[i >> 1] + (i & 1)` — i is its half's bits plus one low bit, so the table fills bottom-up in O(n).",
+    "cruxDistractors": [
+      "Popcount each i independently with a bit-loop (`i & (i-1)` repeatedly), tallying for every value 0..n.",
+      "Convert each i to a binary string with `i.toString(2)` and count the '1' characters.",
+      "Use `counts[i] = counts[i - 1] + 1` since each successive integer adds one more set bit."
+    ],
+    "alternates": [
+      {
+        "label": "Brian Kernighan DP (lowest-set-bit identity)",
+        "when": "Use this alternate if you already know the `i & (i-1)` Kernighan trick from hammingWeight — the recurrence `counts[i] = counts[i & (i-1)] + 1` flows naturally from it. Same O(n) / O(n), different bit identity.",
+        "complexity": "O(n) / O(n)",
+        "code": "function countBits(n) {\n  const counts = new Array(n + 1).fill(0);\n  for (let i = 1; i <= n; i++) {\n    // i & (i-1) clears the lowest set bit — strictly smaller than i, so safe to look up.\n    counts[i] = counts[i & (i - 1)] + 1;\n  }\n  return counts;\n}\nconsole.log(JSON.stringify(countBits(5)));",
+        "notes": [
+          "`i & (i-1)` clears the lowest set bit of i, giving a strictly smaller index always in the table.",
+          "Each cell adds exactly 1 to a previously-computed value — one fewer set bit than i.",
+          "Equivalent O(n) as the right-shift DP; pick whichever identity you recall more easily."
+        ]
+      },
+      {
+        "label": "Naive popcount per number (Brian Kernighan loop)",
+        "when": "Use this as the brute-force baseline you name before pitching the DP — running hammingWeight independently on each i is O(n log n) total because each call is O(set bits of i). It's instructive to show WHY the DP is better.",
+        "complexity": "O(n log n) / O(n)",
+        "code": "function countBits(n) {\n  const counts = new Array(n + 1).fill(0);\n  for (let i = 1; i <= n; i++) {\n    let x = i;\n    while (x !== 0) { x = x & (x - 1); counts[i]++; }\n  }\n  return counts;\n}\nconsole.log(JSON.stringify(countBits(5)));",
+        "notes": [
+          "Runs Brian Kernighan's popcount loop independently for every i — O(log i) per number, O(n log n) total.",
+          "No shared work between adjacent values — the DP avoids this waste by reusing `counts[i>>1]` or `counts[i&(i-1)]`.",
+          "Name this brute force first in an interview; the DP is the optimization over it."
+        ]
+      }
     ]
   },
   "L1": {

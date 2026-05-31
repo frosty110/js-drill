@@ -123,7 +123,21 @@
     "notes": [
       "Map preserves insertion order — leverage that to skip a doubly-linked list.",
       "On HIT, delete + set to move the key to the end. Forgetting this turns the cache into FIFO.",
-      "Evict from the FRONT via `this.map.keys().next().value` — that key is the oldest."
+      "Evict from the FRONT via `this.map.keys().next().value` — that key is the oldest.",
+      "Time O(1) amortized per op, Space O(capacity)."
+    ],
+    "alternates": [
+      {
+        "label": "Doubly-linked list + HashMap (language-agnostic classic)",
+        "when": "This is the canonical interview answer in Java, C++, or Python — languages without an ordered map. Also reach for it if the interviewer explicitly asks for the 'classic' implementation or asks you to avoid relying on Map insertion order. Sentinel head/tail nodes eliminate all null-pointer edge cases in the link/unlink helpers.",
+        "complexity": "O(1) / O(capacity)",
+        "code": "class LRUCache {\n  constructor(capacity) {\n    this.capacity = capacity;\n    this.map = new Map(); // key -> DLL node\n    // Sentinel dummy nodes — head.next = LRU, tail.prev = MRU\n    this.head = { key: null, val: null, prev: null, next: null };\n    this.tail = { key: null, val: null, prev: null, next: null };\n    this.head.next = this.tail;\n    this.tail.prev = this.head;\n  }\n  _remove(node) {\n    node.prev.next = node.next;\n    node.next.prev = node.prev;\n  }\n  _insertBack(node) {\n    node.prev = this.tail.prev;\n    node.next = this.tail;\n    this.tail.prev.next = node;\n    this.tail.prev = node;\n  }\n  get(key) {\n    if (!this.map.has(key)) return -1;\n    const node = this.map.get(key);\n    this._remove(node);\n    this._insertBack(node);\n    return node.val;\n  }\n  put(key, value) {\n    if (this.map.has(key)) {\n      const node = this.map.get(key);\n      node.val = value;\n      this._remove(node);\n      this._insertBack(node);\n    } else {\n      if (this.map.size >= this.capacity) {\n        const lru = this.head.next; // oldest\n        this._remove(lru);\n        this.map.delete(lru.key);\n      }\n      const node = { key, val: value, prev: null, next: null };\n      this._insertBack(node);\n      this.map.set(key, node);\n    }\n  }\n}\nconst c = new LRUCache(2);\nc.put(1, 1);\nc.put(2, 2);\nconsole.log(c.get(1));\nc.put(3, 3);\nconsole.log(c.get(2));\nc.put(4, 4);\nconsole.log(c.get(1));\nconsole.log(c.get(3));\nconsole.log(c.get(4));",
+        "notes": [
+          "Sentinel dummy head/tail nodes mean _remove and _insertBack never handle null neighbors — no edge-case checks needed inside those helpers.",
+          "HashMap stores key → DLL node so O(1) lookup → O(1) move-to-back on both get and put, without scanning the list.",
+          "Eviction is O(1): head.next is always the LRU node; unlink it and delete its key from the map."
+        ]
+      }
     ]
   },
   "L1": {

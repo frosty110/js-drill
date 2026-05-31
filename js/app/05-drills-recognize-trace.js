@@ -180,141 +180,316 @@ async function startBigOSession() {
   return _runRapidFireWithDeck(deck, { label: '⏱ Big-O', emoji: '⏱' });
 }
 
-// iter 83: 🎰 Gotcha Roulette — standalone recall stream over reference.notes[].
-// The `notes[]` corpus (2-5 strings × 143 lessons = ~400 cards) has been
-// on-disk since project start and is read by ~zero surfaces — every existing
-// surface treats notes as ornamentation around code. This surface treats them
-// as the atomic recall unit: one note per card, lesson title hidden; user
-// 2-taps "knew it" / "didn't"; reveal shows lesson + deep-link CTA. Trains
-// surfacing the half-remembered traps (off-by-one, mutation footguns,
-// coercion edges) without the navigation cost of opening each lesson.
-// From `ideas-by-category.md § 1 → Gotcha Roulette` (iter-82 vision top pick).
-const GOTCHA_DECK_LEN = 8;
-async function _gotchaBuildDeck() {
-  // Preload a broad sample across all tracks so the pool has variety.
-  const sample = CURRICULUM.filter(l => l.status === 'full').slice(0, 60);
-  for (const l of sample) {
-    if (!CONTENT[l.id]) {
-      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
-      if (Object.keys(CONTENT).length >= 30) break;
-    }
+// iter 83→: 🎯 Crux — forced-choice recall of the ONE key trick per problem.
+// Evolved from the old 🎰 Gotcha Roulette (honor-system "knew it / didn't"
+// recognition over reference.notes[], audit 12/21 — recognition only, no
+// verifiable retrieval). This is a real retrieval test over the authored
+// `reference.crux` field (the single insight that unlocks the optimal
+// solution). Two modes:
+//   Easy — 4-option MC. Distractors are HYBRID: the lesson's own authored
+//          `reference.cruxDistractors` first, padded as needed from OTHER
+//          lessons' real cruxes (same section preferred → most confusable).
+//          Believable wrong answers by construction (every pad is a real trick
+//          from an adjacent problem). Forced pick before reveal.
+//   Hard — free recall. Type the trick from memory, then "Copy for AI grading"
+//          exports {problem + your answer + canonical crux} to the clipboard
+//          for an LLM to grade (reuses copyTextToClipboard from slice 12a, the
+//          same BYOK bridge as the L1 "Ask AI to teach me" export). Reveal +
+//          honest self-grade (✓/✗) closes the loop into stats/weakness.
+// Corpus: `reference.crux` across patterns/applied lessons (53 seeded; grows as
+// more lessons author the field). `state.gotcha` stats are reused as-is.
+const CRUX_DECK_LEN = 8;
+
+// Build the pool of {lessonId,title,section,prompt,crux,distractors[]} over
+// every loaded patterns/applied lesson that authored a crux. Preloads a broad
+// sample first so both the crux pool AND the sibling-distractor pool have
+// variety on first run.
+async function _cruxBuildPool() {
+  const candidates = CURRICULUM.filter(l =>
+    l.status === 'full' && (l.track === 'patterns' || l.track === 'applied'));
+  const shuffled = candidates.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  // Flatten all notes across all loaded lessons.
+  for (const l of shuffled.slice(0, 50)) {
+    if (!CONTENT[l.id]) { try { await loadLessonContent(l.id); } catch (_) { /* skip */ } }
+  }
   const pool = [];
   for (const lesson of CURRICULUM) {
     const c = CONTENT[lesson.id];
-    if (!c || !c.reference || !Array.isArray(c.reference.notes)) continue;
-    for (let ni = 0; ni < c.reference.notes.length; ni++) {
-      const note = c.reference.notes[ni];
-      if (typeof note !== 'string' || note.length < 20) continue; // skip thin ornament
-      pool.push({
-        lessonId: lesson.id,
-        lessonTitle: lesson.title,
-        sectionName: lesson.section,
-        note
-      });
-    }
+    if (!c || !c.reference || typeof c.reference.crux !== 'string' || !c.reference.crux.trim()) continue;
+    pool.push({
+      lessonId: lesson.id,
+      lessonTitle: lesson.title,
+      sectionName: lesson.section,
+      prompt: (c.L3 && c.L3.prompt) || lesson.description || lesson.title,
+      crux: c.reference.crux.trim(),
+      distractors: Array.isArray(c.reference.cruxDistractors)
+        ? c.reference.cruxDistractors.filter(d => typeof d === 'string' && d.trim()).map(d => d.trim())
+        : []
+    });
   }
-  if (pool.length < 4) return null;
-  // Fisher-Yates shuffle.
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  return pool.slice(0, GOTCHA_DECK_LEN);
+  return pool;
 }
 
-async function startGotchaSession() {
-  const deck = await _gotchaBuildDeck();
-  if (!deck || deck.length < 4) {
-    alert('Gotcha needs more loaded lessons. Click around a few first, then try again.');
+// Build 4 shuffled MC options for one card: [crux] + authored distractors,
+// padded from other lessons' cruxes (same section preferred) until 4. Returns
+// { options, correctIdx }. Dedupes so no option text repeats.
+function _cruxBuildOptions(card, pool) {
+  const opts = [card.crux];
+  const used = new Set([card.crux]);
+  for (const d of card.distractors) {
+    if (opts.length >= 4) break;
+    if (!used.has(d)) { opts.push(d); used.add(d); }
+  }
+  if (opts.length < 4) {
+    const others = pool.filter(p => p.lessonId !== card.lessonId);
+    const sameSection = others.filter(p => p.sectionName === card.sectionName);
+    const rest = others.filter(p => p.sectionName !== card.sectionName);
+    const shuf = arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    for (const p of shuf(sameSection).concat(shuf(rest))) {
+      if (opts.length >= 4) break;
+      if (!used.has(p.crux)) { opts.push(p.crux); used.add(p.crux); }
+    }
+  }
+  // Shuffle option order.
+  for (let i = opts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [opts[i], opts[j]] = [opts[j], opts[i]];
+  }
+  return { options: opts, correctIdx: opts.indexOf(card.crux) };
+}
+
+// Hard-mode clipboard export: problem + the user's recalled trick + the
+// canonical crux, framed for an LLM to grade. Mirrors buildL1AiPrompt's
+// paste-into-Claude/ChatGPT pattern.
+function _cruxBuildAiPrompt(card, userAnswer) {
+  return [
+    `I'm drilling the KEY INSIGHT ("the trick") for a coding-interview problem and recalling it from memory. Grade my recall.`,
+    ``,
+    `## Problem`,
+    card.prompt,
+    ``,
+    `## My recalled key trick`,
+    (userAnswer || '').trim() || '(left blank — I drew a blank)',
+    ``,
+    `## The canonical key trick (reference answer)`,
+    card.crux,
+    ``,
+    `Please: (1) score my recall 0–5 for whether I captured the load-bearing insight (not just any working approach), (2) name anything critical I missed or got subtly wrong, (3) give one sharper one-sentence phrasing of the trick worth memorizing.`
+  ].join('\n');
+}
+
+// Entry point (kept reachable as startCruxSession; back-compat alias below for
+// any older wiring). Shows a mode picker, then runs the deck in that mode.
+async function startCruxSession() {
+  const pool = await _cruxBuildPool();
+  if (!pool || pool.length < 4) {
+    alert('Crux needs more lessons with an authored key-trick. Click around a few Patterns problems first, then try again.');
     return;
   }
+  const shell = document.getElementById('lesson-shell');
+  shell.innerHTML = `
+    <div class="recognize-shell crux-shell">
+      <div class="recognize-header">
+        <span>🎯 Crux — recall the key trick</span>
+        <button class="recognize-exit" data-action="exit-crux">✕ Exit</button>
+      </div>
+      <div class="crux-mode-intro">One problem at a time — recall <strong>the</strong> insight that unlocks the optimal solution. Pick a mode:</div>
+      <div class="crux-mode-pick">
+        <button class="crux-mode-btn" data-mode="easy">
+          <span class="crux-mode-title">🟢 Easy — Multiple choice</span>
+          <span class="crux-mode-sub">Pick the right trick from 4 believable options</span>
+        </button>
+        <button class="crux-mode-btn" data-mode="hard">
+          <span class="crux-mode-title">🔴 Hard — Describe it</span>
+          <span class="crux-mode-sub">Type the trick from memory · export to an AI to grade</span>
+        </button>
+      </div>
+    </div>
+  `;
+  shell.querySelector('[data-action="exit-crux"]').addEventListener('click', () => renderLesson());
+  shell.querySelectorAll('.crux-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => _runCruxDeck(pool, btn.dataset.mode));
+  });
+}
+// Back-compat alias — older call sites referenced startGotchaSession.
+const startGotchaSession = startCruxSession;
+
+function _runCruxDeck(pool, mode) {
+  // SR/weakness-weighted pick so overdue/weak lessons surface first (mirrors
+  // Recognize). Then cap to the session length.
+  const deck = (typeof _srPriorityShuffle === 'function'
+    ? _srPriorityShuffle(pool, p => p.lessonId)
+    : pool.slice()).slice(0, CRUX_DECK_LEN);
   state.gotcha.sessions++;
   state.gotcha.lastRunAt = Date.now();
   saveProgress();
   let idx = 0, knew = 0;
   const shell = document.getElementById('lesson-shell');
+
+  // Shared: record one graded outcome into stats + the closed loop.
+  function grade(card, gotIt) {
+    if (gotIt) {
+      knew++;
+      // Hold-but-reset-dueAt SR (mastered+due only) — same shallow-tier policy
+      // the old Gotcha used; a correct recall signals "looked at recently."
+      if (state.reviews[card.lessonId] && isDueForReview(card.lessonId)) {
+        scheduleReview(card.lessonId, { advance: false });
+      }
+    } else {
+      state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
+      appendHistory(card.lessonId, 'L1-miss');
+    }
+    state.gotcha.attempts++;
+    if (gotIt) state.gotcha.correct++;
+    saveProgress();
+  }
+
+  // Shared reveal block: canonical crux + source lesson + drill/next CTAs.
+  function revealHtml(card, opts) {
+    const o = opts || {};
+    return `
+      <div class="crux-reveal">
+        ${o.showCrux ? `<div class="crux-reveal-answer"><span class="crux-reveal-label">The trick:</span> ${escapeHtml(card.crux)}</div>` : ''}
+        <div class="crux-reveal-source">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
+        <div class="crux-reveal-actions">
+          <button class="gotcha-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
+          <button class="gotcha-next" data-action="crux-next">Next →</button>
+        </div>
+      </div>
+    `;
+  }
+  function wireReveal(fb, card) {
+    const drillBtn = fb.querySelector('[data-drill]');
+    if (drillBtn) drillBtn.addEventListener('click', () => {
+      if (typeof selectLesson === 'function') selectLesson(drillBtn.dataset.drill);
+    });
+    fb.querySelector('[data-action="crux-next"]').addEventListener('click', () => { idx++; renderCard(); });
+  }
+
   function renderCard() {
     if (idx >= deck.length) return renderSummary();
     const card = deck[idx];
+    const modeLabel = mode === 'hard' ? 'Hard' : 'Easy';
+    if (mode === 'hard') return renderHard(card, modeLabel);
+    return renderEasy(card, modeLabel);
+  }
+
+  function renderEasy(card, modeLabel) {
+    const { options, correctIdx } = _cruxBuildOptions(card, pool);
     shell.innerHTML = `
-      <div class="recognize-shell gotcha-shell">
+      <div class="recognize-shell crux-shell">
         <div class="recognize-header">
-          <span>🎰 Gotcha · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-gotcha">✕ Exit</button>
+          <span>🎯 Crux · ${idx + 1} of ${deck.length} · ${modeLabel}</span>
+          <button class="recognize-exit" data-action="exit-crux">✕ Exit</button>
         </div>
-        <div class="gotcha-tag">${escapeHtml(card.sectionName)} · ??? </div>
-        <div class="gotcha-note">${escapeHtml(card.note)}</div>
-        <div class="gotcha-options">
-          <button class="recognize-opt gotcha-opt" data-pick="knew">✓ Knew it</button>
-          <button class="recognize-opt gotcha-opt" data-pick="didnt">✗ Didn't</button>
+        <div class="crux-q-label">What's the key insight that unlocks the optimal solution?</div>
+        <div class="crux-prompt">${escapeHtml(card.prompt)}</div>
+        <div class="recognize-options crux-options">
+          ${options.map((opt, i) => `<button class="recognize-opt crux-opt" data-i="${i}">${escapeHtml(opt)}</button>`).join('')}
         </div>
-        <div class="recognize-feedback" data-gotcha-feedback></div>
+        <div class="recognize-feedback" data-crux-feedback></div>
       </div>
     `;
-    shell.querySelector('[data-action="exit-gotcha"]').addEventListener('click', () => renderLesson());
-    const opts = shell.querySelectorAll('.gotcha-opt');
+    shell.querySelector('[data-action="exit-crux"]').addEventListener('click', () => renderLesson());
+    const optEls = shell.querySelectorAll('.crux-opt');
     let answered = false;
-    opts.forEach(btn => {
+    optEls.forEach(btn => {
       btn.addEventListener('click', () => {
         if (answered) return;
         answered = true;
-        const wasKnew = btn.dataset.pick === 'knew';
-        if (wasKnew) {
-          knew++;
-          // Hold-but-reset-dueAt SR on an honor-based "knew it". Guarded
-          // to mastered+due lessons only — mirrors the L2 pattern in
-          // markPassed() (slice 09:791). Gotcha is the shallowest
-          // tier (self-reported), so the bucket holds; the dueAt
-          // reset just signals "user looked at this recently."
-          if (state.reviews[card.lessonId] && isDueForReview(card.lessonId)) {
-            scheduleReview(card.lessonId, { advance: false });
-          }
-        } else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
-        state.gotcha.attempts++;
-        if (wasKnew) state.gotcha.correct++;
-        saveProgress();
-        opts.forEach(b => b.disabled = true);
-        btn.classList.add(wasKnew ? 'recognize-opt-correct' : 'recognize-opt-wrong');
-        const fb = shell.querySelector('[data-gotcha-feedback]');
-        if (fb) {
-          fb.innerHTML = `
-            <div class="gotcha-reveal">
-              <div class="gotcha-reveal-title">${escapeHtml(card.lessonTitle)}</div>
-              <div class="gotcha-reveal-section">${escapeHtml(card.sectionName)}</div>
-              <button class="gotcha-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
-              <button class="gotcha-next" data-action="gotcha-next">Next card</button>
-            </div>
-          `;
-          const drillBtn = fb.querySelector('[data-drill]');
-          if (drillBtn) drillBtn.addEventListener('click', () => {
-            const lid = drillBtn.dataset.drill;
-            if (typeof selectLesson === 'function') selectLesson(lid);
-          });
-          fb.querySelector('[data-action="gotcha-next"]').addEventListener('click', () => { idx++; renderCard(); });
-        }
+        const picked = +btn.dataset.i;
+        const wasCorrect = picked === correctIdx;
+        grade(card, wasCorrect);
+        optEls.forEach((b, i) => {
+          b.disabled = true;
+          if (i === correctIdx) b.classList.add('recognize-opt-correct');
+          else if (i === picked) b.classList.add('recognize-opt-wrong');
+        });
+        const fb = shell.querySelector('[data-crux-feedback]');
+        fb.innerHTML = `
+          <div class="crux-verdict ${wasCorrect ? 'crux-verdict-good' : 'crux-verdict-bad'}">${wasCorrect ? '✓ That\'s the move.' : '✗ Not the key trick.'}</div>
+          ${revealHtml(card, { showCrux: false })}
+        `;
+        wireReveal(fb, card);
       });
     });
   }
+
+  function renderHard(card, modeLabel) {
+    shell.innerHTML = `
+      <div class="recognize-shell crux-shell">
+        <div class="recognize-header">
+          <span>🎯 Crux · ${idx + 1} of ${deck.length} · ${modeLabel}</span>
+          <button class="recognize-exit" data-action="exit-crux">✕ Exit</button>
+        </div>
+        <div class="crux-q-label">Recall the key trick from memory — what's the one insight?</div>
+        <div class="crux-prompt">${escapeHtml(card.prompt)}</div>
+        <textarea class="crux-textarea" placeholder="Type the insight that makes the optimal solution work…" rows="3"></textarea>
+        <div class="crux-hard-actions">
+          <button class="recognize-opt crux-hard-btn" data-action="crux-copy">📋 Copy for AI grading</button>
+          <button class="recognize-opt crux-hard-btn crux-hard-reveal" data-action="crux-reveal">Reveal answer →</button>
+        </div>
+        <div class="recognize-feedback" data-crux-feedback></div>
+      </div>
+    `;
+    shell.querySelector('[data-action="exit-crux"]').addEventListener('click', () => renderLesson());
+    const ta = shell.querySelector('.crux-textarea');
+    const copyBtn = shell.querySelector('[data-action="crux-copy"]');
+    copyBtn.addEventListener('click', async () => {
+      const ok = await copyTextToClipboard(_cruxBuildAiPrompt(card, ta.value));
+      const orig = copyBtn.innerHTML;
+      copyBtn.innerHTML = ok ? '✓ Copied — paste into AI' : '✗ Copy failed';
+      setTimeout(() => { copyBtn.innerHTML = orig; }, 1800);
+    });
+    let revealed = false;
+    shell.querySelector('[data-action="crux-reveal"]').addEventListener('click', () => {
+      if (revealed) return;
+      revealed = true;
+      ta.disabled = true;
+      const fb = shell.querySelector('[data-crux-feedback]');
+      fb.innerHTML = `
+        ${revealHtml(card, { showCrux: true })}
+        <div class="crux-selfgrade">
+          <span class="crux-selfgrade-label">How close were you?</span>
+          <button class="recognize-opt crux-selfgrade-btn" data-grade="hit">✓ Nailed it</button>
+          <button class="recognize-opt crux-selfgrade-btn" data-grade="miss">✗ Missed it</button>
+        </div>
+      `;
+      wireReveal(fb, card);
+      let graded = false;
+      fb.querySelectorAll('.crux-selfgrade-btn').forEach(b => {
+        b.addEventListener('click', () => {
+          if (graded) return;
+          graded = true;
+          grade(card, b.dataset.grade === 'hit');
+          fb.querySelectorAll('.crux-selfgrade-btn').forEach(x => { x.disabled = true; });
+          b.classList.add(b.dataset.grade === 'hit' ? 'recognize-opt-correct' : 'recognize-opt-wrong');
+        });
+      });
+    });
+  }
+
   function renderSummary() {
     const pct = Math.round((knew / deck.length) * 100);
     shell.innerHTML = `
-      <div class="recognize-shell gotcha-shell">
-        <div class="recognize-header"><span>🎰 Gotcha · Session done</span></div>
+      <div class="recognize-shell crux-shell">
+        <div class="recognize-header"><span>🎯 Crux · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
-          <div class="recognize-summary-line">${knew} of ${deck.length} traps recognized · ${deck.length - knew} flagged as weak spots</div>
+          <div class="recognize-summary-line">${knew} of ${deck.length} tricks recalled · ${deck.length - knew} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.gotcha.correct} / ${state.gotcha.attempts} (${state.gotcha.attempts > 0 ? Math.round(state.gotcha.correct / state.gotcha.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="gotcha-again">🎰 Another spin</button>
-            <button class="secondary" data-action="gotcha-done">Done</button>
+            <button class="primary" data-action="crux-again">🎯 Another round</button>
+            <button class="secondary" data-action="crux-done">Done</button>
           </div>
         </div>
       </div>
     `;
-    shell.querySelector('[data-action="gotcha-again"]').addEventListener('click', () => startGotchaSession());
-    shell.querySelector('[data-action="gotcha-done"]').addEventListener('click', () => renderLesson());
+    shell.querySelector('[data-action="crux-again"]').addEventListener('click', () => startCruxSession());
+    shell.querySelector('[data-action="crux-done"]').addEventListener('click', () => renderLesson());
   }
   renderCard();
 }

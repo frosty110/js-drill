@@ -35,6 +35,7 @@
 //     revealed[id][level]:     OR                  (once revealed, always revealed)
 //     reviews[id]:             greater lastPassedAt wins
 //     weakness[id]:            OR                  (flagged on any device → flagged)
+//     partialL1[id]:           OR                  (L1 passed <100% on any device → amber ✓)
 //     welcomed:                OR
 //     lastLessonId / lastTab / starterPath / hideMastered / sidebarTrack:
 //                              prefer LOCAL        (active device wins device-state)
@@ -391,6 +392,14 @@
     for (const id of unionKeys(local.weakness, cloud.weakness)) {
       const v = (local.weakness && local.weakness[id]) || (cloud.weakness && cloud.weakness[id]);
       if (v) merged.weakness[id] = true;
+    }
+
+    // partialL1[id]: OR. Sibling of weakness — both are set on an imperfect L1
+    // pass and cleared on a later clean (100%) pass, so they merge identically.
+    merged.partialL1 = {};
+    for (const id of unionKeys(local.partialL1, cloud.partialL1)) {
+      const v = (local.partialL1 && local.partialL1[id]) || (cloud.partialL1 && cloud.partialL1[id]);
+      if (v) merged.partialL1[id] = true;
     }
 
     // welcomed: OR

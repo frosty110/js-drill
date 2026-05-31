@@ -418,6 +418,39 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
         });
       }
     }
+
+    // Crux — the one key trick/insight per problem, used by the 🎯 Crux recall
+    // drill (Easy MC + Hard describe). OPTIONAL field: a lesson without
+    // reference.crux simply doesn't enter the deck, so this rolls out
+    // incrementally. When present: crux must be a non-empty string;
+    // cruxDistractors (optional) must be an array of non-empty strings, each
+    // distinct from the crux (so an authored MC distractor can never equal the
+    // right answer). Only meaningful on patterns/applied — where "the trick" is
+    // the recall unit — but not enforced by track here (a syntax lesson that
+    // authors one is harmless).
+    if (lesson.reference && lesson.reference.crux !== undefined) {
+      const crux = lesson.reference.crux;
+      if (typeof crux !== 'string' || !crux.trim()) {
+        fail++;
+        failures.push(`${id} reference.crux must be a non-empty string`);
+      } else if (lesson.reference.cruxDistractors !== undefined) {
+        const ds = lesson.reference.cruxDistractors;
+        if (!Array.isArray(ds)) {
+          fail++;
+          failures.push(`${id} reference.cruxDistractors must be an array of strings`);
+        } else {
+          ds.forEach((d, di) => {
+            if (typeof d !== 'string' || !d.trim()) {
+              fail++;
+              failures.push(`${id} reference.cruxDistractors#${di} must be a non-empty string`);
+            } else if (d.trim() === crux.trim()) {
+              fail++;
+              failures.push(`${id} reference.cruxDistractors#${di} is identical to the crux — distractors must be wrong answers`);
+            }
+          });
+        }
+      }
+    }
   }
 
   console.log(`\n${pass} passed, ${fail} failed.`);

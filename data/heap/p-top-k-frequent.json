@@ -106,7 +106,24 @@
       "For O(n log k), push each entry into a min-heap of size K and pop when it overflows — keeps only the top K alive.",
       "Bucket sort by frequency is the third option: O(n) overall, but uses O(n) extra buckets."
     ],
+    "crux": "Count in a Map, then bucket values by frequency into buckets[0..n] — a count can't exceed n, so walking buckets high-to-low collects the top k in O(n), no comparison sort.",
+    "cruxDistractors": [
+      "Count in a Map, sort the entries descending by count, and slice the first k — correct, but O(n log n) from the sort.",
+      "Count in a Map, then push every entry into a size-k min-heap keyed by frequency, popping when it overflows.",
+      "Sort the raw input array first so equal values are adjacent, then scan run-lengths and take the k longest runs."
+    ],
     "alternates": [
+      {
+        "label": "Size-k min-heap by frequency",
+        "when": "Reach for this when k << d (number of distinct values) and you want O(n log k) instead of O(n log n). Also the right answer for streaming input where n isn't known in advance — you can't pre-size a bucket array but you can always maintain a bounded heap.",
+        "complexity": "O(n log k) / O(n+k)",
+        "code": "function topKFrequent(nums, k) {\n  const count = new Map();\n  for (const n of nums) count.set(n, (count.get(n) || 0) + 1);\n  // Min-heap keyed by frequency — root = entry with LOWEST count among keepers.\n  const heap = [];  // [ [freq, num], ... ]\n  const heapPush = (entry) => {\n    heap.push(entry);\n    let i = heap.length - 1;\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (heap[p][0] <= heap[i][0]) break;\n      [heap[p], heap[i]] = [heap[i], heap[p]];\n      i = p;\n    }\n  };\n  const heapPop = () => {\n    const top = heap[0];\n    const last = heap.pop();\n    if (heap.length) {\n      heap[0] = last;\n      let i = 0;\n      while (true) {\n        const l = 2 * i + 1, r = 2 * i + 2;\n        let s = i;\n        if (l < heap.length && heap[l][0] < heap[s][0]) s = l;\n        if (r < heap.length && heap[r][0] < heap[s][0]) s = r;\n        if (s === i) break;\n        [heap[s], heap[i]] = [heap[i], heap[s]];\n        i = s;\n      }\n    }\n    return top;\n  };\n  for (const entry of count.entries()) {\n    heapPush(entry);\n    if (heap.length > k) heapPop(); // evict the least-frequent keeper\n  }\n  // Pop all k entries (ascending freq), reverse for descending, project to nums.\n  const result = [];\n  while (heap.length) result.push(heapPop()[1]);\n  return result.reverse();\n}\nconsole.log(JSON.stringify(topKFrequent([1, 1, 1, 2, 2, 3], 2)));",
+        "notes": [
+          "Heap is keyed by frequency (entry[0]); the root is always the entry with the LOWEST count among the k kept — anything with a lower count gets evicted.",
+          "After processing all entries, the heap holds exactly k entries and their order is arbitrary — the result array may differ from the sort-based approach for tied frequencies.",
+          "Memory stays O(k) for the heap itself (plus O(d) for the count Map); much better than bucket sort's O(n) when k is tiny."
+        ]
+      },
       {
         "label": "Bucket sort by frequency",
         "when": "Reach for this when the interviewer pushes past O(n log n) and asks for the asymptotic best — frequencies are bounded by n, so we can index buckets by count and skip comparison sorting entirely. Not viable for streaming input (no bound on n) but optimal when the full array is in hand.",

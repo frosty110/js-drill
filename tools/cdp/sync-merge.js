@@ -72,6 +72,13 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
      return m.welcomed;`,
     true);
 
+  await check('progress: partialL1 OR (amber-pass on either device → flagged)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, partialL1: { two_sum: true } },
+       { __v: 6, partialL1: { reverse_list: true } });
+     return m.partialL1;`,
+    { two_sum: true, reverse_list: true });
+
   // ============================================================================
   // mergePrep: completed OR, reviewed by lastReviewedAt, currentTab prefers local
   // ============================================================================

@@ -146,7 +146,21 @@
     "notes": [
       "Storing the full word at the terminal node avoids reconstructing it from the DFS path.",
       "Set next.word = null after collection — same word reachable from multiple cells would otherwise appear twice.",
-      "Mark-and-restore on the board itself is the standard trick to avoid a separate visited set."
+      "Mark-and-restore on the board itself is the standard trick to avoid a separate visited set.",
+      "Time O(R·C · 4^L) worst case (L = longest word); trie pruning makes actual runtime far lower."
+    ],
+    "alternates": [
+      {
+        "label": "Naive DFS per word (Word Search I × W)",
+        "when": "Only viable for a tiny dictionary (≤5 words). Shows why the trie matters: for W=5000 words, this runs W independent DFS passes over the entire board, repeating all shared-prefix work per word. Use this framing to motivate the trie in an interview — explain this, then say 'the trie folds all W passes into one.'",
+        "complexity": "O(W·R·C·4^L) / O(L)",
+        "code": "function findWords(board, words) {\n  const R = board.length, C = board[0].length;\n  function exists(word) {\n    function dfs(r, c, i) {\n      if (i === word.length) return true;\n      if (r < 0 || r >= R || c < 0 || c >= C) return false;\n      if (board[r][c] !== word[i]) return false;\n      const ch = board[r][c];\n      board[r][c] = \"#\";\n      const found = dfs(r+1,c,i+1)||dfs(r-1,c,i+1)||dfs(r,c+1,i+1)||dfs(r,c-1,i+1);\n      board[r][c] = ch;\n      return found;\n    }\n    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (dfs(r, c, 0)) return true;\n    return false;\n  }\n  return words.filter(w => exists(w));\n}\nconst board = [\n  [\"o\",\"a\",\"a\",\"n\"],\n  [\"e\",\"t\",\"a\",\"e\"],\n  [\"i\",\"h\",\"k\",\"r\"],\n  [\"i\",\"f\",\"l\",\"v\"]\n];\nconst words = [\"oath\",\"pea\",\"eat\",\"rain\"];\nconsole.log(JSON.stringify(findWords(board, words).sort()));",
+        "notes": [
+          "Each `exists` call re-walks the board independently — words sharing prefix 'ca' ('cat', 'car') both traverse c→a from scratch, duplicating work.",
+          "The W factor vanishes in the trie version: all dictionary words are in the trie simultaneously, so one grid DFS tests all of them at once.",
+          "Acceptable to present as 'the obvious baseline' before proposing the trie — it makes the complexity improvement concrete and earned."
+        ]
+      }
     ]
   },
   "L1": {

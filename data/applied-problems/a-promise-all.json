@@ -124,7 +124,21 @@
     "notes": [
       "Wrap each entry with `Promise.resolve()` — values may be raw, not promises, but you still want a microtask boundary.",
       "Track completion with a counter, not by checking `out` for empty slots. A resolved `undefined` is still a real result.",
-      "Empty input must resolve to `[]` synchronously (well, in a microtask). Forgetting this gives a forever-pending promise."
+      "Empty input must resolve to `[]` synchronously (well, in a microtask). Forgetting this gives a forever-pending promise.",
+      "Time O(n) setup + wall-clock max(durations). Space O(n) for the preallocated out array."
+    ],
+    "alternates": [
+      {
+        "label": "Sequential async/await (for-of loop)",
+        "when": "Use only when you explicitly want serial execution — each item must finish before the next begins. Produces correct output but loses all concurrency: n promises each taking 100ms take 100n ms total instead of ~100ms. Show this to an interviewer as the naive version, then explain why the counter-based approach is what Promise.all is actually for.",
+        "complexity": "O(n) / O(n)",
+        "code": "async function promiseAll(arr) {\n  // Sequential: awaits each item in turn — simple but not parallel.\n  const out = [];\n  for (const item of arr) out.push(await Promise.resolve(item));\n  return out;\n}\n(async () => {\n  const ok = await promiseAll([Promise.resolve(1), 2, Promise.resolve(3)]);\n  console.log(ok);\n  try {\n    await promiseAll([Promise.resolve(1), Promise.reject(new Error('boom')), 3]);\n  } catch (e) {\n    console.log(e.message);\n  }\n})();",
+        "notes": [
+          "Each `await` blocks the next iteration — the loop serializes what should be parallel work.",
+          "Wall-clock latency is sum(durations), not max(durations); the parallel counter-based version brings it down to max.",
+          "Rejection propagates correctly (await re-throws) but not fail-fast: items before the rejection still run to completion."
+        ]
+      }
     ]
   },
   "L1": {

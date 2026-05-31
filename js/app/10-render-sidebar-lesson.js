@@ -688,7 +688,14 @@ function renderLesson() {
     // Prefix with "N. " so the keyboard shortcut (number key = Nth tab) is
     // discoverable without opening the help modal.
     const num = `<span class="text-slate-500 mr-1">${i + 1}.</span>`;
-    btn.innerHTML = `${num}${t.label}${t.status === 'passed' ? ' <span class="text-emerald-400 ml-1">✓</span>' : ''}`;
+    // L1 can pass orange (≥80%/miss-one but not 100%) — render an amber ✓ vs
+    // the emerald ✓ for a clean pass, so the remaining gap stays visible.
+    let check = '';
+    if (t.status === 'passed') {
+      const partial = t.id === 'L1' && isPartialL1(lesson.id);
+      check = ` <span class="${partial ? 'text-amber-400' : 'text-emerald-400'} ml-1">✓</span>`;
+    }
+    btn.innerHTML = `${num}${t.label}${check}`;
     btn.addEventListener('click', () => selectTab(t.id));
     tabs.appendChild(btn);
   }

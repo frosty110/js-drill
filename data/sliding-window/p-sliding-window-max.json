@@ -110,6 +110,28 @@
       "Pop from the back while the tail value is smaller than nums[i]; those tails can never be the window max once nums[i] enters.",
       "Front of the deque is the answer for the current window — record it only once i >= k-1.",
       "Each index enters and leaves the deque at most once → amortized O(n) despite the inner while."
+    ],
+    "crux": "Keep a deque of indices whose values stay strictly decreasing; a smaller new value is dominated and gets popped, so the front is always the current window's max in O(1).",
+    "cruxDistractors": [
+      "For each window position, take Math.max over the k elements that slice covers.",
+      "Push every value into a max-heap and pop the root for each window's maximum.",
+      "Cache the running max in a variable; when it slides out of the window, rescan the window to find the next max."
+    ],
+    "alternates": [
+      {
+        "label": "Max-heap with lazy expiry",
+        "when": "Reach for this if the deque feels hard to derive under pressure. A max-heap with (value, index) pairs is easier to motivate — 'push everything, poll the top, skip stale entries' — and lands O(n log k), which is acceptable for most interviews. Many candidates write this first and then optimize to the deque only if pushed.",
+        "complexity": "O(n log k) / O(k)",
+        "code": "// Min-heap helper (JS has no built-in max-heap; simulate with negated values)\nclass MinHeap {\n  constructor() { this.h = []; }\n  push(val) {\n    this.h.push(val);\n    let i = this.h.length - 1;\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (this.h[p][0] <= this.h[i][0]) break;\n      [this.h[p], this.h[i]] = [this.h[i], this.h[p]];\n      i = p;\n    }\n  }\n  pop() {\n    const top = this.h[0];\n    const last = this.h.pop();\n    if (this.h.length) {\n      this.h[0] = last;\n      let i = 0;\n      while (true) {\n        let s = i, l = 2*i+1, r = 2*i+2;\n        if (l < this.h.length && this.h[l][0] < this.h[s][0]) s = l;\n        if (r < this.h.length && this.h[r][0] < this.h[s][0]) s = r;\n        if (s === i) break;\n        [this.h[i], this.h[s]] = [this.h[s], this.h[i]];\n        i = s;\n      }\n    }\n    return top;\n  }\n  peek() { return this.h[0]; }\n  size() { return this.h.length; }\n}\nfunction maxSlidingWindow(nums, k) {\n  // Store [-value, index] so the heap root is the maximum.\n  const heap = new MinHeap();\n  const out = [];\n  for (let i = 0; i < nums.length; i++) {\n    heap.push([-nums[i], i]);\n    // Lazily expire entries whose index is outside the window.\n    while (heap.peek()[1] <= i - k) heap.pop();\n    if (i >= k - 1) out.push(-heap.peek()[0]);\n  }\n  return out;\n}\nconsole.log(JSON.stringify(maxSlidingWindow([1, 3, -1, -3, 5, 3, 6, 7], 3)));",
+        "notes": ["Negate values so a min-heap acts as a max-heap; the root's negated value is the window max.", "Lazy expiry: don't eagerly remove stale entries — just skip them when peeking. Worst-case heap size is O(n), but entries expire naturally.", "O(n log k) vs deque's O(n) — the log k factor comes from each push/pop being O(log(heap size ≤ n))."]
+      },
+      {
+        "label": "Brute force (Math.max per window)",
+        "when": "Name this first, then discard it. In an interview, saying 'O(n·k) naïve, then I'll optimize to O(n)' is the standard opening move. Some interviewers also accept O(n·k) if k is small.",
+        "complexity": "O(n·k) / O(1)",
+        "code": "function maxSlidingWindow(nums, k) {\n  const out = [];\n  for (let i = 0; i <= nums.length - k; i++) {\n    let max = nums[i];\n    for (let j = i + 1; j < i + k; j++) {\n      if (nums[j] > max) max = nums[j];\n    }\n    out.push(max);\n  }\n  return out;\n}\nconsole.log(JSON.stringify(maxSlidingWindow([1, 3, -1, -3, 5, 3, 6, 7], 3)));",
+        "notes": ["Each of the n-k+1 windows is scanned in O(k) — the k-1 elements that didn't change are rescanned from scratch on every slide.", "The redundancy motivates the deque: instead of rescanning, maintain a data structure that updates in O(1) amortized as elements enter and leave.", "Correct for any input; only impractical when n and k are both large (e.g. n=10^5, k=10^4 → 10^9 ops)."]
+      }
     ]
   },
   "L1": {

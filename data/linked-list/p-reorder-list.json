@@ -128,6 +128,25 @@
       "Cut with `slow.next = null` BEFORE reversing, so the first half terminates cleanly.",
       "Weave loop condition uses `b` (the shorter/equal half) — when nodes are odd, the first half has one extra node already in place.",
       "Cache `a.next` and `b.next` before rewiring or you lose the rest of each list."
+    ],
+    "crux": "Compose three known moves: find the middle with slow/fast, reverse the second half in place, then weave the two halves node-by-node — all O(1) space.",
+    "cruxDistractors": [
+      "Copy every node into an array, then rebuild with two indices walking inward (arr[l], arr[r], arr[l+1]…) — correct, but O(n) extra space.",
+      "Find the middle, then for each front node walk to the current tail and splice it in — O(n²) from the repeated tail walks.",
+      "Reverse the whole list first, then interleave it with the original — the two orders don't line up into L0→Ln→L1."
+    ],
+    "alternates": [
+      {
+        "label": "Array-index (collect nodes, rewire with two pointers)",
+        "when": "Reach for this when the three-phase in-place approach feels error-prone under time pressure. It's O(n) space but much easier to reason about on a whiteboard — collect nodes into an array, then use l/r indices walking inward to rewire in one pass.",
+        "complexity": "O(n) / O(n)",
+        "code": "function reorderList(head) {\n  if (!head || !head.next) return head;\n  // Collect all nodes into an array for random access.\n  const nodes = [];\n  let curr = head;\n  while (curr) { nodes.push(curr); curr = curr.next; }\n  // Two indices walk inward, rewiring next pointers.\n  let l = 0, r = nodes.length - 1;\n  while (l < r) {\n    nodes[l].next = nodes[r];\n    l++;\n    if (l === r) break;\n    nodes[r].next = nodes[l];\n    r--;\n  }\n  nodes[l].next = null;   // null-terminate the reordered list\n  return head;\n}\nfunction toList(arr) { let d = { next: null }, c = d; for (const v of arr) { c.next = { val: v, next: null }; c = c.next; } return d.next; }\nfunction toArr(h) { const o = []; while (h) { o.push(h.val); h = h.next; } return o; }\nconsole.log(JSON.stringify(toArr(reorderList(toList([1, 2, 3, 4, 5])))));",
+        "notes": [
+          "The `if (l === r) break` guard handles odd-length lists — the middle node shouldn't point at itself.",
+          "`nodes[l].next = null` at the end is essential: the last remaining node still points at its original successor without it.",
+          "O(n) extra space for the array; the in-place version avoids this by composing three pointer primitives instead."
+        ]
+      }
     ]
   },
   "L1": {

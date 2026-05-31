@@ -126,6 +126,19 @@
       "Flood is REVERSED: start at ocean edges and climb to cells with height >= current — that mirrors water flowing FROM a cell TO the ocean.",
       "Two separate visited grids (one per ocean) so the same cell can be explored once per ocean — intersect at the end.",
       "Top + left edges touch the Pacific; bottom + right edges touch the Atlantic — corners belong to both."
+    ],
+    "alternates": [
+      {
+        "label": "BFS multi-source (iterative queue)",
+        "when": "Use BFS when you want to avoid recursion-stack overflow on large grids — a 200x200 grid with a tall mountain ridge can produce O(R*C) DFS depth. BFS uses an explicit queue and is otherwise structurally identical: same two visited grids, same reverse-climb rule, same intersection step.",
+        "complexity": "O(R*C) / O(R*C)",
+        "code": "function pacificAtlantic(heights) {\n  const R = heights.length, C = heights[0].length;\n  const pac = Array.from({length: R}, () => new Array(C).fill(false));\n  const atl = Array.from({length: R}, () => new Array(C).fill(false));\n  function bfs(seeds, seen) {\n    const queue = [];\n    for (const [r, c] of seeds) {\n      seen[r][c] = true;\n      queue.push([r, c]);\n    }\n    while (queue.length) {\n      const [r, c] = queue.shift();\n      for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {\n        const nr = r + dr, nc = c + dc;\n        if (nr >= 0 && nr < R && nc >= 0 && nc < C && !seen[nr][nc] && heights[nr][nc] >= heights[r][c]) {\n          seen[nr][nc] = true;\n          queue.push([nr, nc]);\n        }\n      }\n    }\n  }\n  const pacSeeds = [], atlSeeds = [];\n  for (let c = 0; c < C; c++) { pacSeeds.push([0, c]); atlSeeds.push([R - 1, c]); }\n  for (let r = 0; r < R; r++) { pacSeeds.push([r, 0]); atlSeeds.push([r, C - 1]); }\n  bfs(pacSeeds, pac);\n  bfs(atlSeeds, atl);\n  const out = [];\n  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (pac[r][c] && atl[r][c]) out.push([r, c]);\n  return out;\n}\nconst heights = [[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]];\nconsole.log(JSON.stringify(pacificAtlantic(heights)));",
+        "notes": [
+          "Mark each seed cell visited BEFORE pushing to the queue — prevents re-enqueuing edge cells when they appear in both the row and column seed loops (e.g., corners).",
+          "The BFS helper is a reusable function called twice — cleaner than duplicating the seeding logic for each ocean.",
+          "BFS explores level-by-level (by distance from edge) vs DFS depth-first; the reachability sets and output are identical."
+        ]
+      }
     ]
   },
   "L1": {

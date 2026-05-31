@@ -151,7 +151,21 @@
     "notes": [
       "Use `>>> 0` to coerce a 32-bit hash to an unsigned int before modulo — otherwise negative numbers give negative bucket indices.",
       "put must SEARCH the bucket first to update an existing key in place. Without that, duplicates accumulate and size lies.",
-      "Knuth's multiplier 2654435761 = floor(2^32 / phi) — good distribution for sequential integer keys."
+      "Knuth's multiplier 2654435761 = floor(2^32 / phi) — good distribution for sequential integer keys.",
+      "Avg O(1) per op (put/get/has/remove); worst O(n) with pathological collisions. Space O(n + capacity)."
+    ],
+    "alternates": [
+      {
+        "label": "Open addressing (linear probing)",
+        "when": "Use when cache efficiency matters more than code simplicity. Open addressing stores entries directly in the slot array — no inner arrays — so accesses are cache-friendly and memory layout is tighter. The trade-off: remove() requires tombstone markers so probe sequences aren't broken, making the code more fiddly than chaining.",
+        "complexity": "O(1) avg / O(n+cap)",
+        "code": "class HashMap {\n  constructor(capacity = 16) {\n    this.capacity = capacity;\n    // Flat parallel arrays — each slot holds one key/value entry.\n    this.keys = new Array(capacity).fill(undefined);\n    this.vals = new Array(capacity).fill(undefined);\n    this.size = 0;\n    // Tombstone symbol distinguishes 'deleted' from 'empty' so probe sequences survive removes.\n    this.DELETED = Symbol('deleted');\n  }\n  _hash(k) {\n    if (typeof k === 'number') return ((k * 2654435761) >>> 0) % this.capacity;\n    const s = String(k); let h = 0;\n    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;\n    return (h >>> 0) % this.capacity;\n  }\n  // Walk slots (mod capacity) from hash(k) until we find the key, an empty slot,\n  // or have probed every slot. Return the first deleted slot if key not found (for put).\n  _find(k) {\n    let firstDeleted = -1;\n    for (let step = 0; step < this.capacity; step++) {\n      const slot = (this._hash(k) + step) % this.capacity;\n      if (this.keys[slot] === undefined) return firstDeleted !== -1 ? firstDeleted : slot;\n      if (this.keys[slot] === this.DELETED) { if (firstDeleted === -1) firstDeleted = slot; continue; }\n      if (this.keys[slot] === k) return slot;\n    }\n    return firstDeleted !== -1 ? firstDeleted : -1;\n  }\n  put(k, v) {\n    const slot = this._find(k);\n    if (this.keys[slot] !== k) this.size++;\n    this.keys[slot] = k; this.vals[slot] = v;\n  }\n  get(k) {\n    const slot = this._find(k);\n    return this.keys[slot] === k ? this.vals[slot] : -1;\n  }\n  has(k) { return this.keys[this._find(k)] === k; }\n  remove(k) {\n    const slot = this._find(k);\n    if (this.keys[slot] !== k) return false;\n    // Tombstone — do NOT set to undefined, which would break downstream probe sequences.\n    this.keys[slot] = this.DELETED; this.vals[slot] = undefined; this.size--;\n    return true;\n  }\n}\nconst m = new HashMap();\nm.put(1, 'a'); m.put(2, 'b'); m.put(17, 'c');\nconsole.log(m.get(1));\nconsole.log(m.get(2));\nconsole.log(m.get(17));\nconsole.log(m.get(99));\nconsole.log(m.has(2));\nm.put(2, 'B');\nconsole.log(m.get(2));\nconsole.log(m.size);\nm.remove(1);\nconsole.log(m.has(1));\nconsole.log(m.size);",
+        "notes": [
+          "Tombstone (DELETED symbol) is what makes remove() safe — setting to `undefined` would truncate the probe sequence and break subsequent lookups for keys that were placed past this slot.",
+          "Keep load factor below ~0.7; above that, probe chains get long and performance degrades. Chaining degrades more gracefully at high load.",
+          "_find returns the first DELETED slot for put (reuse the tombstone slot), but must still probe past DELETED slots when searching for an existing key."
+        ]
+      }
     ]
   },
   "L1": {

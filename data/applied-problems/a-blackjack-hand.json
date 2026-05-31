@@ -110,7 +110,21 @@
     "notes": [
       "Count aces as 11 first, then demote one-by-one ONLY while the hand busts. Demoting all aces upfront under-scores ['A','9'] (would give 10 instead of 20).",
       "`'JQK'.includes(c)` is a tight way to test face cards without an array.",
-      "The while loop terminates either when total ≤ 21 or aces hit 0 — the bust is unavoidable."
+      "The while loop terminates either when total ≤ 21 or aces hit 0 — the bust is unavoidable.",
+      "Time O(n), Space O(1) where n = number of cards."
+    ],
+    "alternates": [
+      {
+        "label": "Brute-force (enumerate 2^k ace combinations)",
+        "when": "Reach for this only when explaining WHY the greedy works — the exponential search space makes the greedy's invariant ('at most one soft Ace') feel non-obvious to an interviewer who hasn't seen it before. Don't write this for production; k ≤ 4 aces keeps it fast in practice but the greedy is strictly better.",
+        "complexity": "O(n · 2^k) / O(k)",
+        "code": "function handValue(cards) {\n  const aces = cards.filter(c => c === 'A').length;\n  const baseTotal = cards.reduce((s, c) => {\n    if (c === 'A') return s;\n    if ('JQK'.includes(c)) return s + 10;\n    return s + Number(c);\n  }, 0);\n  let best = -Infinity;\n  for (let mask = 0; mask < (1 << aces); mask++) {\n    let total = baseTotal;\n    for (let i = 0; i < aces; i++) total += (mask >> i & 1) ? 11 : 1;\n    if (total <= 21) best = Math.max(best, total);\n  }\n  return best === -Infinity ? baseTotal + aces : best;\n}\nconsole.log(handValue(['A','K']));\nconsole.log(handValue(['A','9','5']));\nconsole.log(handValue(['A','A','9']));\nconsole.log(handValue(['10','Q','2']));",
+        "notes": [
+          "Compute non-ace sum first, then try all 2^k combinations of aces as 1 or 11.",
+          "Track 'best non-busting total'; if ALL combinations bust, fall back to the all-1s total.",
+          "O(n · 2^k): the inner loop is bounded by aces ≤ cards, but for a single deck k ≤ 4 so 2^k ≤ 16 — effectively constant."
+        ]
+      }
     ]
   },
   "L1": {

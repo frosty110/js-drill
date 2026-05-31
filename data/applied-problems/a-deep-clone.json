@@ -111,7 +111,32 @@
     "notes": [
       "Primitives (number, string, boolean, null, undefined) are immutable — return as-is, no copy needed.",
       "Register the new object in the WeakMap before recursing into children, or cyclic graphs recurse forever.",
-      "This minimal version skips Date, Map, Set, RegExp, and class prototypes. Real `structuredClone` handles those; interviews usually only ask for the recursive core."
+      "This minimal version skips Date, Map, Set, RegExp, and class prototypes. Real `structuredClone` handles those; interviews usually only ask for the recursive core.",
+      "Time O(n) where n = total nodes. Space O(n) for the clone + WeakMap + recursion stack."
+    ],
+    "alternates": [
+      {
+        "label": "structuredClone (built-in, production answer)",
+        "when": "Use in production code when you're targeting Node 17+ or modern browsers — it handles Date, Map, Set, ArrayBuffer, typed arrays, and cyclic references natively and is faster than a JS implementation. The recursive version in the primary is what an interviewer wants (shows you understand the algorithm); structuredClone is what you'd ship in real code.",
+        "complexity": "O(n) / O(n)",
+        "code": "function deepClone(value) {\n  return structuredClone(value);\n}\nconst a = { nested: { x: 1 }, list: [1, 2, 3] };\nconst b = deepClone(a);\nb.nested.x = 99;\nconsole.log(a.nested.x);\nconsole.log(b.nested.x);\nconsole.log(a.list !== b.list);\nconst cyc = { name: 'root' };\ncyc.self = cyc;\nconst cycClone = deepClone(cyc);\nconsole.log(cycClone.self === cycClone);",
+        "notes": [
+          "structuredClone is a W3C standard built into browsers (Chrome 98+, Node 17+) — no library needed.",
+          "Handles cycles, Date, Map, Set, ArrayBuffer; throws on functions, DOM nodes, and class instances that aren't serializable.",
+          "Prefer this in production; use the recursive version in interviews to demonstrate you understand the algorithm."
+        ]
+      },
+      {
+        "label": "JSON round-trip (JSON.parse + JSON.stringify)",
+        "when": "Acceptable for plain JSON-shaped data where you know there are no functions, undefined values, Date objects, cycles, or class instances. It is the one-liner answer — name it first to show you know it, then explain why the recursive version is correct for the general case.",
+        "complexity": "O(n) / O(n)",
+        "code": "function deepClone(value) {\n  return JSON.parse(JSON.stringify(value));\n}\nconst a = { nested: { x: 1 }, list: [1, 2, 3] };\nconst b = deepClone(a);\nb.nested.x = 99;\nconsole.log(a.nested.x);\nconsole.log(b.nested.x);\nconsole.log(a.list !== b.list);\n// Note: cyclic inputs throw \"Converting circular structure to JSON\".\n// The line below demonstrates independence without cycles:\nconsole.log(b.nested.x === 99);",
+        "notes": [
+          "Silently drops functions, undefined, and Symbol keys — the clone will be missing those properties entirely.",
+          "Converts Date to ISO string, Map/Set/RegExp to {} — prototypes are lost.",
+          "Throws on cyclic references (circular structure); use the recursive+WeakMap version or structuredClone for those."
+        ]
+      }
     ]
   },
   "L1": {

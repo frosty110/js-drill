@@ -100,6 +100,36 @@
       "Initialize cur AND best to nums[0] — handles all-negative arrays correctly.",
       "cur = max(nums[i], cur + nums[i]) is the heart: drop the prefix when it hurts.",
       "Best is the max over all cur values seen, not the final cur."
+    ],
+    "crux": "At each element, either extend the running sum or restart at the element alone — `cur = max(nums[i], cur + nums[i])` — and track `best` separately, since cur can fall after a peak.",
+    "cruxDistractors": [
+      "Keep a running sum and reset it to 0 whenever it goes negative, taking the max along the way — but this returns 0 on all-negative arrays.",
+      "Initialize cur and best to 0, then sweep `best = max(best, cur += nums[i])` — clean, but wrongly allows the empty subarray.",
+      "Try every (i, j) pair as subarray bounds with prefix sums for O(1) range queries — correct but O(n^2)."
+    ],
+    "alternates": [
+      {
+        "label": "Divide and conquer",
+        "when": "Reach for this when the interviewer asks for a recursive solution or wants to see an O(n log n) approach. Also a good teaching step in the O(n³) → O(n²) → O(n log n) → O(n) complexity ladder that shows HOW Kadane wins.",
+        "complexity": "O(n log n) / O(log n)",
+        "code": "function maxSubArray(nums) {\n  function helper(lo, hi) {\n    if (lo === hi) return nums[lo];\n    const mid = (lo + hi) >> 1;\n    const leftMax = helper(lo, mid);\n    const rightMax = helper(mid + 1, hi);\n    // Max crossing subarray: expand from mid outward on each side\n    let leftCross = -Infinity, sum = 0;\n    for (let i = mid; i >= lo; i--) { sum += nums[i]; leftCross = Math.max(leftCross, sum); }\n    let rightCross = -Infinity; sum = 0;\n    for (let i = mid + 1; i <= hi; i++) { sum += nums[i]; rightCross = Math.max(rightCross, sum); }\n    return Math.max(leftMax, rightMax, leftCross + rightCross);\n  }\n  return helper(0, nums.length - 1);\n}\nconsole.log(maxSubArray([-2, 1, -3, 4, -1, 2, 1, -5, 4]));",
+        "notes": [
+          "The max subarray is entirely in the left half, entirely in the right half, or crosses the midpoint — those three cases are exhaustive.",
+          "Cross-boundary sum: scan outward from mid on each side independently, taking the best prefix on each side.",
+          "T(n) = 2T(n/2) + O(n) solves to O(n log n) by Master Theorem; O(log n) stack space."
+        ]
+      },
+      {
+        "label": "Brute force (prefix sums)",
+        "when": "Name this before Kadane to show the O(n²) stepping stone. Using a prefix-sum array makes every subarray sum an O(1) lookup, bringing naive all-pairs from O(n³) to O(n²). Interviewers rarely want you to code this, but naming it earns the optimization.",
+        "complexity": "O(n²) / O(n)",
+        "code": "function maxSubArray(nums) {\n  const n = nums.length;\n  const prefix = new Array(n + 1).fill(0);\n  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + nums[i];\n  let best = -Infinity;\n  for (let i = 0; i < n; i++) {\n    for (let j = i; j < n; j++) {\n      const sum = prefix[j + 1] - prefix[i];\n      best = Math.max(best, sum);\n    }\n  }\n  return best;\n}\nconsole.log(maxSubArray([-2, 1, -3, 4, -1, 2, 1, -5, 4]));",
+        "notes": [
+          "prefix[j+1] - prefix[i] gives the sum of nums[i..j] in O(1) — removes the inner summation loop.",
+          "Still O(n²) pairs to check; Kadane avoids them by observing only the BEST end at i-1 matters.",
+          "Handles all-negative correctly since best starts at -Infinity, not 0."
+        ]
+      }
     ]
   },
   "L1": {

@@ -109,6 +109,25 @@
       "Row 0 and column 0 are the base cases: converting to/from the empty string costs exactly the other length.",
       "On a character match the cost CARRIES from dp[i-1][j-1] — no +1.",
       "The three predecessors map to delete (top), insert (left), replace (diagonal). Take min, then add one."
+    ],
+    "crux": "dp[i][j] over prefix pairs: matching last chars carry the diagonal free; otherwise 1 + min(delete=top, insert=left, replace=diagonal). Base row/col = i and j.",
+    "cruxDistractors": [
+      "Walk both strings with two pointers, counting positions where the characters differ — only handles same-length strings and can't price inserts or deletes.",
+      "Compute m + n − 2·LCS(word1, word2) — the right formula when only inserts/deletes are allowed, but it ignores the cheaper single replace.",
+      "Recurse on the last characters branching three ways (delete/insert/replace) with no memo on (i,j) — exponential re-derivation of identical subproblems."
+    ],
+    "alternates": [
+      {
+        "label": "1D rolling array (O(min(m,n)) space)",
+        "when": "Reach for this when space is the bottleneck — e.g. very long strings where the full O(m*n) table would exhaust memory. Each row of the 2D table only reads from the previous row, so a single rolling row of length n+1 suffices. Make the shorter string the columns to minimize the array size.",
+        "complexity": "O(m*n) / O(min(m,n))",
+        "code": "function minDistance(w1, w2) {\n  // Always iterate over the shorter string as columns to keep the array small.\n  if (w1.length < w2.length) return minDistance(w2, w1);\n  const m = w1.length, n = w2.length;\n  // prev[j] represents the previous row (dp[i-1][0..n]).\n  let prev = Array.from({ length: n + 1 }, (_, j) => j);\n  for (let i = 1; i <= m; i++) {\n    const curr = new Array(n + 1);\n    curr[0] = i;     // base case: i deletes to reach empty w2\n    for (let j = 1; j <= n; j++) {\n      if (w1[i - 1] === w2[j - 1]) {\n        curr[j] = prev[j - 1];        // match: carry diagonal\n      } else {\n        curr[j] = 1 + Math.min(\n          prev[j],       // delete from w1 (above)\n          curr[j - 1],   // insert into w1 (left)\n          prev[j - 1]    // replace (diagonal)\n        );\n      }\n    }\n    prev = curr;\n  }\n  return prev[n];\n}\nconsole.log(minDistance(\"horse\", \"ros\"));\nconsole.log(minDistance(\"intention\", \"execution\"));",
+        "notes": [
+          "prev holds the previous row; curr builds the current row — only O(n) space instead of O(m*n).",
+          "The diagonal value (prev[j-1]) must be captured BEFORE it gets overwritten by the next cell — here prev is a separate array so prev[j-1] is safe to read in the j-th iteration.",
+          "Swap w1/w2 so the shorter string is always the columns: the rolling array is length min(m,n)+1, halving memory use on asymmetric inputs."
+        ]
+      }
     ]
   },
   "L1": {

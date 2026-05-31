@@ -104,6 +104,25 @@
       "dp[i] = the LIS length that ENDS at index i — the final answer is Math.max over the whole dp.",
       "Initialize every dp[i] to 1 because each element by itself is a valid subsequence of length 1.",
       "Faster variant: maintain a `tails` array and binary-search the first tail >= nums[i] (lower_bound). O(n log n)."
+    ],
+    "crux": "Let dp[i] = LIS length ENDING at i; dp[i] = 1 + max dp[j] over j<i with nums[j]<nums[i]; the answer is max over ALL dp, not dp[n-1].",
+    "cruxDistractors": [
+      "Greedily extend a single running chain, resetting whenever the next element isn't larger — that only finds the longest increasing RUN (contiguous), not subsequence.",
+      "dp[i] = LIS of the prefix nums[0..i], so dp[i] = max(dp[i-1], dp[i-1]+1) — a prefix property that can't test 'can I extend from j to i?'.",
+      "Sort the array, then return the length of the longest run of consecutive equal-or-increasing values against the original."
+    ],
+    "alternates": [
+      {
+        "label": "Patience sort + binary search (O(n log n))",
+        "when": "Reach for this when n can be 10^5+ and O(n²) is too slow, or when the interviewer explicitly asks for the most efficient solution. The insight is maintaining a `tails` array where tails[k] is the smallest possible tail of any length-(k+1) increasing subsequence seen so far. IMPORTANT: tails is NOT the actual LIS — only its length matters.",
+        "complexity": "O(n log n) / O(n)",
+        "code": "function lengthOfLIS(nums) {\n  if (nums.length === 0) return 0;\n  // tails[k] = smallest tail element of all length-(k+1) increasing subsequences seen so far.\n  // tails stays sorted, enabling binary search.\n  const tails = [];\n  for (const x of nums) {\n    // Binary search for the first tail >= x (lower bound).\n    let lo = 0, hi = tails.length;\n    while (lo < hi) {\n      const mid = (lo + hi) >> 1;\n      if (tails[mid] < x) lo = mid + 1;\n      else hi = mid;\n    }\n    // lo is the index to update: either extend tails (new longest LIS) or replace (keep tails optimal).\n    tails[lo] = x;\n  }\n  // The length of tails is the LIS length.\n  return tails.length;\n}\nconsole.log(lengthOfLIS([10, 9, 2, 5, 3, 7, 101, 18]));",
+        "notes": [
+          "tails is always sorted, so binary search (lo/hi halving) finds the insertion point in O(log n) per element.",
+          "Replacing tails[lo] = x never changes the tails length unless lo === tails.length (a new longest extension) — either way tails[lo] becomes the best (smallest) tail for subsequences of that length.",
+          "tails is NOT the actual LIS: e.g. for [3,1,2] tails becomes [1,2] but the LIS is [1,2] or [3] — the array can be 'fictitious'. Only tails.length is the answer."
+        ]
+      }
     ]
   },
   "L1": {

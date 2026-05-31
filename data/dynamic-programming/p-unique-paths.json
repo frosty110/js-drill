@@ -98,6 +98,36 @@
       "First row and first column are all 1 — there is exactly one way to reach any cell on the top edge (all rights) or the left edge (all downs).",
       "Recurrence dp[i][j] = dp[i-1][j] + dp[i][j-1] says: paths to (i,j) = paths through the cell above + paths through the cell to the left.",
       "Space can drop to O(n) by reusing a single row left-to-right (newRow[j] += newRow[j-1])."
+    ],
+    "crux": "You enter a cell from above (last move DOWN) or the left (last move RIGHT), so dp[i][j] = dp[i-1][j] + dp[i][j-1]; the top row and left column are all 1.",
+    "cruxDistractors": [
+      "dp[i][j] = max(dp[i-1][j], dp[i][j-1]) + 1 — that finds a longest path length, not the COUNT of distinct paths.",
+      "Greedily move toward the corner with more remaining cells at each step and count one path — there is exactly one greedy walk, ignoring the combinatorial branching.",
+      "Multiply the two predecessors: dp[i][j] = dp[i-1][j] · dp[i][j-1], treating the entry directions as independent choices to combine."
+    ],
+    "alternates": [
+      {
+        "label": "Rolling row (O(n) space)",
+        "when": "Reach for this when an interviewer asks 'can you reduce space?' after seeing the 2D table. Each cell only reads the cell directly above (previous row, same column) and the cell to its left (same row). One row of length n is enough — update it in-place left-to-right.",
+        "complexity": "O(m*n) / O(n)",
+        "code": "function uniquePaths(m, n) {\n  // Single row initialized to 1 (the top-row base case).\n  const row = new Array(n).fill(1);\n  // For each subsequent grid row, update the row in-place.\n  for (let i = 1; i < m; i++) {\n    // row[j] currently holds dp[i-1][j] (above); after update it becomes dp[i][j].\n    // row[j-1] already holds the updated dp[i][j-1] (left), because we go left-to-right.\n    for (let j = 1; j < n; j++) {\n      row[j] += row[j - 1];   // dp[i][j] = dp[i-1][j] + dp[i][j-1]\n    }\n  }\n  return row[n - 1];\n}\nconsole.log(uniquePaths(3, 7));",
+        "notes": [
+          "row[j] before the update is dp[i-1][j] (the cell above); row[j-1] after update is dp[i][j-1] (the cell to the left) — one array covers both.",
+          "The left column implicitly stays 1 because j starts at 1 and row[0] is never modified (it's always the base-case 1).",
+          "For a further O(min(m,n)) variant, swap m and n so the shorter dimension is the column — the row array is then length min(m,n)."
+        ]
+      },
+      {
+        "label": "Combinatorics: C(m+n-2, m-1) (O(min(m,n)) time)",
+        "when": "Reach for this when you recognize the combinatorial structure: every path from (0,0) to (m-1,n-1) is a sequence of exactly (m-1) DOWNs and (n-1) RIGHTs in some order. The answer is just choose which (m-1) of the (m+n-2) moves are DOWNs. This is O(min(m,n)) time and O(1) space — much faster than any DP approach. Skip it if obstacles are possible (Unique Paths II), since the closed form doesn't extend to blocked cells.",
+        "complexity": "O(min(m,n)) / O(1)",
+        "code": "function uniquePaths(m, n) {\n  // C(m+n-2, m-1): choose which (m-1) of the (m+n-2) moves are DOWNs.\n  // Compute iteratively to avoid factorial overflow: multiply and divide step-by-step.\n  let result = 1;\n  const k = Math.min(m - 1, n - 1);   // choose the smaller to minimize iterations\n  const total = m + n - 2;\n  for (let i = 0; i < k; i++) {\n    // Multiply by (total - i) and divide by (i + 1) at each step — stays integer.\n    result = result * (total - i) / (i + 1);\n  }\n  return result;\n}\nconsole.log(uniquePaths(3, 7));",
+        "notes": [
+          "C(m+n-2, m-1) counts the number of ways to arrange (m-1) DOWNs and (n-1) RIGHTs — every distinct arrangement is a unique path.",
+          "Compute iteratively as result *= (total-i)/(i+1) to stay integer at each step (JS floats handle this exactly for small m,n; switch to BigInt near m+n≈60).",
+          "Cannot extend to Unique Paths II (obstacles) or Minimum Path Sum — those require the DP table."
+        ]
+      }
     ]
   },
   "L1": {

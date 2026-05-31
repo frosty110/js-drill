@@ -131,6 +131,19 @@
       "Drop the tail BEFORE checking self-overlap — otherwise legal moves that occupy the old tail cell falsely register as collisions.",
       "Track body cells in a Set keyed by 'r,c' for O(1) collision lookup; the array gives ordered queue semantics.",
       "Food is a queue (FIFO) — only the FRONT food piece is eligible. Compare head's new cell against food[0] only."
+    ],
+    "alternates": [
+      {
+        "label": "Array-only scan — no Set (O(snake length) per move)",
+        "when": "Reach for this when the interviewer wants the simplest possible implementation and the snake is known to stay short. For competitive-programming toy grids it's fine; for long games it degrades to O(snake²) total work.",
+        "complexity": "O(n) move / O(n) space",
+        "code": "class Snake {\n  constructor(width, height, food) {\n    this.w = width; this.h = height;\n    this.food = food.slice();\n    this.snake = [[0, 0]];  // head is last; tail is first\n    this.score = 0;\n  }\n  move(dir) {\n    const [r, c] = this.snake[this.snake.length - 1];\n    let nr = r, nc = c;\n    if (dir === \"U\") nr--; else if (dir === \"D\") nr++;\n    else if (dir === \"L\") nc--; else if (dir === \"R\") nc++;\n    if (nr < 0 || nr >= this.h || nc < 0 || nc >= this.w) return -1;\n    const ate = this.food.length && this.food[0][0] === nr && this.food[0][1] === nc;\n    // Drop tail before self-check — same ordering invariant as the Set version.\n    if (!ate) this.snake.shift();\n    // O(snake_length) linear scan instead of O(1) Set lookup.\n    if (this.snake.some(([br, bc]) => br === nr && bc === nc)) return -1;\n    this.snake.push([nr, nc]);\n    if (ate) { this.food.shift(); this.score++; }\n    return this.score;\n  }\n}\nconst g = new Snake(3, 3, [[0, 1]]);\nconsole.log(g.move(\"R\"));\nconsole.log(g.move(\"R\"));\nconsole.log(g.move(\"U\"));",
+        "notes": [
+          "`Array.some` scans every body cell looking for a match — O(snake_length) per move vs O(1) with a Set.",
+          "The tail-drop-before-collision-check ordering is identical — the Set version doesn't change that invariant.",
+          "Simpler to write under time pressure; upgrade to Set+array when the snake can grow long."
+        ]
+      }
     ]
   },
   "L1": {

@@ -107,6 +107,36 @@
       "Always lowercase + strip non-alphanumeric for \"ignore case/spaces\" palindromes.",
       "Loop condition is `l < r` (not `<=`) — the middle char trivially matches itself.",
       "/[^a-z0-9]/g: `^` inside `[]` negates the class; `/g` makes replace replace all."
+    ],
+    "crux": "After normalizing, walk two pointers inward from both ends comparing characters — palindrome symmetry pairs index i with n−1−i, and the first mismatch bails in O(n) with O(1) extra.",
+    "cruxDistractors": [
+      "Normalize, then build the reversed string and compare it to the cleaned string with ===.",
+      "Recursively compare the first and last chars, then recurse on the inner substring until it's empty.",
+      "Push every cleaned char onto a stack, then pop while re-scanning to check each char matches its mirror."
+    ],
+    "alternates": [
+      {
+        "label": "In-place O(1) space (skip non-alnum on original)",
+        "when": "Reach for this when the interviewer asks for O(1) extra space — no cleaned string is allocated. The tradeoff is fiddlier logic: each pointer must skip non-alphanumeric characters before comparing.",
+        "complexity": "O(n) / O(1)",
+        "code": "function isPalindrome(s) {\n  const isAlnum = c => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');\n  let l = 0, r = s.length - 1;\n  while (l < r) {\n    while (l < r && !isAlnum(s[l].toLowerCase())) l++;\n    while (l < r && !isAlnum(s[r].toLowerCase())) r--;\n    if (l < r) {\n      if (s[l].toLowerCase() !== s[r].toLowerCase()) return false;\n      l++;\n      r--;\n    }\n  }\n  return true;\n}\nconsole.log(isPalindrome('A man, a plan, a canal: Panama'));",
+        "notes": [
+          "Two inner while-loops skip non-alphanumeric chars before each comparison — the `l < r` guard prevents over-running on punctuation-only inputs.",
+          "The outer `if (l < r)` after the skip loops protects against comparing past the midpoint when both skip-loops exhaust the window simultaneously.",
+          "O(1) extra space vs. the cleaned-string approach's O(n); the same O(n) time since each character is visited at most once by l or r."
+        ]
+      },
+      {
+        "label": "Reverse-and-compare",
+        "when": "The simplest first-pass: clean the string, reverse it, compare with ===. Correct but allocates an extra O(n) reversed string — use only when code clarity matters more than the second allocation.",
+        "complexity": "O(n) / O(n)",
+        "code": "function isPalindrome(s) {\n  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, '');\n  const reversed = clean.split('').reverse().join('');\n  return clean === reversed;\n}\nconsole.log(isPalindrome('A man, a plan, a canal: Panama'));",
+        "notes": [
+          "Three array operations (split, reverse, join) each traverse the cleaned string once — still O(n), just with higher constant.",
+          "Does not short-circuit on a mismatch — must fully build the reversed string even if the first and last chars differ.",
+          "Both `clean` and `reversed` are O(n) allocations; the two-pointer approach halves this by allocating only `clean`."
+        ]
+      }
     ]
   },
   "L1": {

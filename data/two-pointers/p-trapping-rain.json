@@ -115,6 +115,36 @@
       "The shorter side bounds the water on its column — that's why we advance it.",
       "Update the running max BEFORE adding water; otherwise you subtract too much.",
       "No need to precompute left/right max arrays — the two-pointer walk is sufficient."
+    ],
+    "crux": "Two pointers inward with a running lMax/rMax: settle the shorter side, because its running max is provably the binding constraint there — giving O(n) time and O(1) space.",
+    "cruxDistractors": [
+      "For each column, scan left for its highest bar and right for its highest bar, then add min(leftMax, rightMax) − height[i].",
+      "Precompute leftMax[] and rightMax[] arrays in two passes, then sum min(leftMax[i], rightMax[i]) − height[i] per column.",
+      "Two pointers inward, but always advance the TALLER side since it sets the water ceiling."
+    ],
+    "alternates": [
+      {
+        "label": "Prefix-max arrays (leftMax[] / rightMax[])",
+        "when": "The most direct translation of the formula water[i] = min(leftMax[i], rightMax[i]) - height[i]. Reach for it when you want the clearest correctness story and O(n) extra space is acceptable — it's the natural stepping stone before the two-pointer optimization.",
+        "complexity": "O(n) / O(n)",
+        "code": "function trap(height) {\n  const n = height.length;\n  if (n === 0) return 0;\n  // Pass 1: tallest bar at or left of i.\n  const leftMax = new Array(n);\n  leftMax[0] = height[0];\n  for (let i = 1; i < n; i++) leftMax[i] = Math.max(leftMax[i - 1], height[i]);\n  // Pass 2: tallest bar at or right of i.\n  const rightMax = new Array(n);\n  rightMax[n - 1] = height[n - 1];\n  for (let i = n - 2; i >= 0; i--) rightMax[i] = Math.max(rightMax[i + 1], height[i]);\n  // Pass 3: water above each column.\n  let water = 0;\n  for (let i = 0; i < n; i++) water += Math.min(leftMax[i], rightMax[i]) - height[i];\n  return water;\n}\nconsole.log(trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]));",
+        "notes": [
+          "Three linear passes: build leftMax[], build rightMax[], then sum the per-column water.",
+          "Materializes both maxes explicitly — easiest to verify, but pays O(n) space for the two arrays.",
+          "The two-pointer canonical is this exact idea with the two arrays collapsed into running scalars."
+        ]
+      },
+      {
+        "label": "Monotonic stack (decreasing heights)",
+        "when": "Computes water in horizontal slabs rather than vertical columns. Worth knowing because the same decreasing-stack machinery solves Largest Rectangle in Histogram and Daily Temperatures — interviewers probing the stack family may steer you here.",
+        "complexity": "O(n) / O(n)",
+        "code": "function trap(height) {\n  const stack = []; // indices of bars in decreasing height\n  let water = 0;\n  for (let i = 0; i < height.length; i++) {\n    // Current bar is a right wall — drain every shorter bar it tops.\n    while (stack.length && height[i] > height[stack[stack.length - 1]]) {\n      const bottom = stack.pop();         // basin floor\n      if (!stack.length) break;           // no left wall → nothing bounded\n      const left = stack[stack.length - 1];\n      const width = i - left - 1;          // span between the two walls\n      const bounded = Math.min(height[i], height[left]) - height[bottom];\n      water += width * bounded;            // one horizontal slab\n    }\n    stack.push(i);\n  }\n  return water;\n}\nconsole.log(trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]));",
+        "notes": [
+          "Keep a stack of indices with decreasing heights; a taller bar triggers draining.",
+          "Each pop fills one horizontal slab: width (i - left - 1) times bounded height min(height[i], height[left]) - height[bottom].",
+          "Each index is pushed and popped at most once → O(n) time; the stack is the O(n) space."
+        ]
+      }
     ]
   },
   "L1": {

@@ -29,6 +29,10 @@ function loadProgress() {
     state.bestTimes = parsed.bestTimes || {};
     state.mockHistory = parsed.mockHistory || {};
     state.revealed = parsed.revealed || {};
+    // L1 partial-pass flags: lessons passed at ≥80%/miss-one but not 100%.
+    // Legacy users (field absent) get {} — every prior pass was a clean 100%,
+    // so no lesson should be retro-flagged orange.
+    state.partialL1 = parsed.partialL1 && typeof parsed.partialL1 === 'object' ? parsed.partialL1 : {};
     state.lastLessonId = parsed.lastLessonId || null;
     state.lastTab = parsed.lastTab || null;
     state.starterPath = !!parsed.starterPath;
@@ -370,7 +374,7 @@ function loadProgress() {
       if (mutated) saveProgress();
     }
   } catch (e) {
-    state.progress = {}; state.bestTimes = {}; state.revealed = {}; state.mockHistory = {}; state.history = {};
+    state.progress = {}; state.bestTimes = {}; state.revealed = {}; state.partialL1 = {}; state.mockHistory = {}; state.history = {};
   }
 }
 function saveProgress() {
@@ -381,6 +385,7 @@ function saveProgress() {
     bestTimes: state.bestTimes,
     mockHistory: state.mockHistory,
     revealed: state.revealed,
+    partialL1: state.partialL1,
     lastLessonId: state.currentLessonId,
     lastTab: state.currentTab,
     starterPath: state.starterPath,

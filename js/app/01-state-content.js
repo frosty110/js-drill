@@ -252,6 +252,7 @@ const state = {
   walkthrough: {},  // iter eval-2026-05-30: { [lessonId]: { quizAttempts, quizCorrect, bugAttempts, bugCorrect, lastRunAt, scrubbed } } — Walkthrough tab Quiz/Bug outcome persistence + scrub-to-end flag for default-open-Quiz behavior (additive, no `__v` bump)
   flash: {},  // iter eval-2026-05-30: { [lessonId]: { attempts, blanks, lastRunAt } } — 🃏 Flash mode per-token self-rate persistence; "blanked" taps feed state.weakness on session threshold (additive, no `__v` bump)
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
+  partialL1: {},  // { lessonId: true } — L1 passed at ≥80%/miss-one but NOT 100%; drives the amber (vs emerald) ✓ and keeps the missed question(s) in the weakness queue for re-review
   lastLessonId: null, // persisted across sessions for resume
   lastTab: null,
   welcomed: false,    // hide welcome panel after first dismissal

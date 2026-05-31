@@ -127,7 +127,21 @@
     "notes": [
       "Set the cell BEFORE pushing neighbors, otherwise the same cell gets enqueued many times and you re-count its mines.",
       "Numbered cells are flood-fill stoppers — never push their neighbors. Only zero-mine ('B') cells propagate.",
-      "Mines under the click become 'X', not 'B'. Short-circuit before entering the flood loop."
+      "Mines under the click become 'X', not 'B'. Short-circuit before entering the flood loop.",
+      "Time O(h*w) worst case; each cell pushed at most once. Space O(h*w) for the stack."
+    ],
+    "alternates": [
+      {
+        "label": "Recursive DFS",
+        "when": "Use when the board is guaranteed small (e.g. ≤100×100) and you want the most concise code. On large boards (1000×1000 all zeros), the call stack overflows around ~10k frames in V8 — the iterative version avoids this entirely.",
+        "complexity": "O(h*w) / O(h*w)",
+        "code": "function reveal(board, click) {\n  const [r, c] = click;\n  const h = board.length, w = board[0].length;\n  if (board[r][c] === 'M') { board[r][c] = 'X'; return board; }\n  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];\n  function dfs(cr, cc) {\n    // Out-of-bounds or already revealed — stop.\n    if (cr < 0 || cr >= h || cc < 0 || cc >= w) return;\n    if (board[cr][cc] !== 'E') return;\n    let n = 0;\n    for (const [dr, dc] of dirs) {\n      const nr = cr + dr, nc = cc + dc;\n      if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === 'M') n++;\n    }\n    if (n > 0) { board[cr][cc] = String(n); return; }\n    // Mark BEFORE recursing so the same cell is not re-entered via a diagonal path.\n    board[cr][cc] = 'B';\n    for (const [dr, dc] of dirs) dfs(cr + dr, cc + dc);\n  }\n  dfs(r, c);\n  return board;\n}\nconst board = [\n  ['E','E','E','E','E'],\n  ['E','E','M','E','E'],\n  ['E','E','E','E','E'],\n  ['E','E','E','E','E']\n];\nconsole.log(JSON.stringify(reveal(board, [3, 0])));",
+        "notes": [
+          "Same algorithm as the iterative version — only the call mechanism differs (call stack vs explicit array stack).",
+          "Mark the cell 'B' BEFORE recursing on neighbors, otherwise the same cell is revisited via a diagonal path.",
+          "JS call stack is ~10k frames in V8; an all-zero 1000x1000 board would overflow — prefer the iterative version for large inputs."
+        ]
+      }
     ]
   },
   "L1": {

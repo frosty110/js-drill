@@ -119,6 +119,30 @@
       "Sink cells to \"0\" in-place to avoid a separate visited set — but it MUTATES the input.",
       "Bounds check FIRST inside dfs; that lets you call neighbors blindly without per-call guards.",
       "Grid cells are strings (\"1\"/\"0\"), not numbers — compare with the matching type."
+    ],
+    "alternates": [
+      {
+        "label": "BFS flood-fill (iterative queue)",
+        "when": "Reach for BFS when you want to avoid recursion-stack overflow on large grids (a snake-shaped island of 200x200 would blow the JS call stack with DFS). BFS uses an explicit queue of bounded size so depth is not an issue.",
+        "complexity": "O(R*C) / O(R*C)",
+        "code": "function numIslands(grid) {\n  const rows = grid.length, cols = grid[0].length;\n  let count = 0;\n  for (let r = 0; r < rows; r++) {\n    for (let c = 0; c < cols; c++) {\n      if (grid[r][c] === \"1\") {\n        count++;\n        // Sink the seed cell BEFORE enqueuing to avoid re-enqueuing it.\n        grid[r][c] = \"0\";\n        const queue = [[r, c]];\n        while (queue.length) {\n          const [cr, cc] = queue.shift();\n          for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {\n            const nr = cr + dr, nc = cc + dc;\n            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && grid[nr][nc] === \"1\") {\n              grid[nr][nc] = \"0\"; // sink before enqueue — prevents duplicate entries\n              queue.push([nr, nc]);\n            }\n          }\n        }\n      }\n    }\n  }\n  return count;\n}\nconst grid = [\n  [\"1\",\"1\",\"0\",\"0\",\"0\"],\n  [\"1\",\"1\",\"0\",\"0\",\"0\"],\n  [\"0\",\"0\",\"1\",\"0\",\"0\"],\n  [\"0\",\"0\",\"0\",\"1\",\"1\"]\n];\nconsole.log(numIslands(grid));",
+        "notes": [
+          "Sink each cell to '0' BEFORE pushing it to the queue — prevents the same cell from being enqueued multiple times by different neighbors.",
+          "BFS and DFS produce the same island count; BFS visits the component level-by-level rather than depth-first.",
+          "O(R*C) queue space in the worst case (a solid land rectangle); trade recursion depth for queue width."
+        ]
+      },
+      {
+        "label": "Union-Find (non-mutating)",
+        "when": "Use Union-Find when you must NOT mutate the input grid or when the problem asks 'given streaming land additions, report the island count after each one' (LeetCode 305). For a static grid DFS is simpler; UF shines for dynamic connectivity.",
+        "complexity": "O(R*C*α(R*C)) / O(R*C)",
+        "code": "function numIslands(grid) {\n  const rows = grid.length, cols = grid[0].length;\n  const parent = Array.from({length: rows * cols}, (_, i) => i);\n  function find(x) {\n    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }\n    return x;\n  }\n  // Start count = number of land cells; each successful union drops it by 1.\n  let count = 0;\n  for (let r = 0; r < rows; r++)\n    for (let c = 0; c < cols; c++)\n      if (grid[r][c] === \"1\") count++;\n  // Only need to check right + down neighbors to avoid double-processing each edge.\n  for (let r = 0; r < rows; r++) {\n    for (let c = 0; c < cols; c++) {\n      if (grid[r][c] !== \"1\") continue;\n      for (const [dr, dc] of [[1,0],[0,1]]) {\n        const nr = r + dr, nc = c + dc;\n        if (nr < rows && nc < cols && grid[nr][nc] === \"1\") {\n          const ra = find(r * cols + c), rb = find(nr * cols + nc);\n          if (ra !== rb) { parent[ra] = rb; count--; }\n        }\n      }\n    }\n  }\n  return count;\n}\nconst grid = [\n  [\"1\",\"1\",\"0\",\"0\",\"0\"],\n  [\"1\",\"1\",\"0\",\"0\",\"0\"],\n  [\"0\",\"0\",\"1\",\"0\",\"0\"],\n  [\"0\",\"0\",\"0\",\"1\",\"1\"]\n];\nconsole.log(numIslands(grid));",
+        "notes": [
+          "Initialize count to the number of land cells; each union of two distinct roots merges two islands, so count decrements once.",
+          "Flatten the 2D index to 1D via r*cols+c so the parent array is a plain 1D array.",
+          "Only check right and down neighbors (not left/up) to process each edge once — correctness preserved since union is symmetric."
+        ]
+      }
     ]
   },
   "L1": {

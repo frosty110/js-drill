@@ -201,7 +201,7 @@ const STRICT_DENSITY = process.argv.includes('--strict-density');
 const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
 
 (async () => {
-  let pass = 0, fail = 0;
+  let pass = 0;
   const failures = [];
   const underL1 = [];
   const underL2 = [];
@@ -224,25 +224,22 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     // question becomes silently unpassable on the highest-throughput surface.
     // Density only counts questions — this gates each question's shape.
     if (Array.isArray(lesson.L1?.questions)) {
-      // NOTE: the run-summary exits on the `fail` counter, not failures.length —
-      // so every push here MUST be paired with `fail++` or it's silently ignored.
-      const failL1 = (msg) => { fail++; failures.push(msg); };
       lesson.L1.questions.forEach((q, qi) => {
         if (typeof q.q !== 'string' || !q.q.trim()) {
-          failL1(`${id} L1#${qi} missing question text (q)`);
+          failures.push(`${id} L1#${qi} missing question text (q)`);
         }
         if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) {
-          failL1(`${id} L1#${qi} options must be an array of 2-4 choices (got ${Array.isArray(q.options) ? q.options.length : typeof q.options})`);
+          failures.push(`${id} L1#${qi} options must be an array of 2-4 choices (got ${Array.isArray(q.options) ? q.options.length : typeof q.options})`);
           return; // answer bounds undefined without a valid options array
         }
         if (q.options.some(o => typeof o !== 'string' || !o.trim())) {
-          failL1(`${id} L1#${qi} every option must be a non-empty string`);
+          failures.push(`${id} L1#${qi} every option must be a non-empty string`);
         }
         if (new Set(q.options.map(o => String(o).trim())).size !== q.options.length) {
-          failL1(`${id} L1#${qi} has duplicate options`);
+          failures.push(`${id} L1#${qi} has duplicate options`);
         }
         if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.options.length) {
-          failL1(`${id} L1#${qi} answer ${JSON.stringify(q.answer)} out of bounds (options has ${q.options.length})`);
+          failures.push(`${id} L1#${qi} answer ${JSON.stringify(q.answer)} out of bounds (options has ${q.options.length})`);
         }
       });
     }
@@ -280,14 +277,12 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
       } else if (Array.isArray(lesson.mechanics)) {
         for (const m of lesson.mechanics) {
           if (!MECHANIC_IDS.has(m)) {
-            fail++;
             failures.push(`${id} unknown mechanic id "${m}" — not in data/mechanics.json`);
           } else {
             usedMechanicIds.add(m);
           }
         }
       } else {
-        fail++;
         failures.push(`${id} mechanics must be an array (use [] for "no applicable mechanic")`);
       }
     }
@@ -303,10 +298,8 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
         }
         const r = await runCode(filled);
         if (r.error) {
-          fail++;
           failures.push(`${id} L2#${i} runtime error: ${r.error}`);
         } else if (!outputsMatch(r.output, ex.expectedOutput)) {
-          fail++;
           failures.push(`${id} L2#${i} mismatch — got "${r.output}" expected "${ex.expectedOutput}"`);
         } else {
           pass++;
@@ -318,10 +311,8 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     if (lesson.L3 && lesson.L3.canonical) {
       const r = await runCode(lesson.L3.canonical);
       if (r.error) {
-        fail++;
         failures.push(`${id} L3 runtime error: ${r.error}`);
       } else if (!outputsMatch(r.output, lesson.L3.expectedOutput)) {
-        fail++;
         failures.push(`${id} L3 mismatch — got "${r.output}" expected "${lesson.L3.expectedOutput}"`);
       } else {
         pass++;
@@ -334,13 +325,11 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
         const lines = lesson.L3.canonical.split('\n');
         for (const lineNo of lesson.L3.criticalLines) {
           if (!Number.isInteger(lineNo) || lineNo < 1 || lineNo > lines.length) {
-            fail++;
             failures.push(`${id} L3.criticalLines: ${lineNo} out of bounds (canonical has ${lines.length} lines)`);
             continue;
           }
           const line = lines[lineNo - 1].trim();
           if (!line || line.startsWith('//')) {
-            fail++;
             failures.push(`${id} L3.criticalLines: line ${lineNo} is empty or comment-only ("${line}")`);
             continue;
           }
@@ -358,21 +347,17 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
         for (let ai = 0; ai < lesson.reference.alternates.length; ai++) {
           const alt = lesson.reference.alternates[ai];
           if (!alt || typeof alt.label !== 'string' || !alt.label.trim()) {
-            fail++;
             failures.push(`${id} reference.alternates#${ai}: missing or empty "label"`);
             continue;
           }
           if (typeof alt.code !== 'string' || !alt.code.trim()) {
-            fail++;
             failures.push(`${id} reference.alternates#${ai} ("${alt.label}"): missing or empty "code"`);
             continue;
           }
           const ar = await runCode(alt.code);
           if (ar.error) {
-            fail++;
             failures.push(`${id} reference.alternates#${ai} ("${alt.label}") runtime error: ${ar.error}`);
           } else if (!outputsMatch(ar.output, lesson.L3.expectedOutput)) {
-            fail++;
             failures.push(`${id} reference.alternates#${ai} ("${alt.label}") mismatch — got "${ar.output}" expected "${lesson.L3.expectedOutput}"`);
           } else {
             pass++;
@@ -389,7 +374,6 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     if (lesson.walkthrough) {
       const w = lesson.walkthrough;
       if (!Array.isArray(w.examples) || w.examples.length === 0) {
-        fail++;
         failures.push(`${id} walkthrough has no examples`);
       } else {
         const src = Array.isArray(w.trace) ? w.trace.join('\n') : String(w.trace || '');
@@ -397,7 +381,6 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
         try {
           fn = new Function('input', '"use strict";\n' + src + '\nreturn trace(input);');
         } catch (e) {
-          fail++;
           failures.push(`${id} walkthrough trace compile error: ${e.message}`);
           fn = null;
         }
@@ -407,7 +390,6 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
             try {
               const steps = [...fn(ex.input)];
               if (steps.length === 0) {
-                fail++;
                 failures.push(`${id} walkthrough example#${ei} (${ex.label || ex.input}) yielded zero steps`);
                 continue;
               }
@@ -415,7 +397,6 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
               if (ex.expected !== undefined) {
                 const got = last.state && last.state.returns;
                 if (String(got) !== String(ex.expected)) {
-                  fail++;
                   failures.push(`${id} walkthrough example#${ei} (${ex.label || ex.input}) returns mismatch — got ${JSON.stringify(got)}, expected ${JSON.stringify(ex.expected)}`);
                 } else {
                   pass++;
@@ -424,7 +405,6 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
                 pass++;
               }
             } catch (e) {
-              fail++;
               failures.push(`${id} walkthrough example#${ei} (${ex.label || ex.input}) runtime error: ${e.message}`);
             }
           }
@@ -438,17 +418,14 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     if (lesson.conversation) {
       const c = lesson.conversation;
       if (!Array.isArray(c.sections) || c.sections.length < 3) {
-        fail++;
         failures.push(`${id} conversation needs at least 3 sections (got ${c.sections?.length || 0})`);
       } else {
         c.sections.forEach((sec, si) => {
           if (!sec.title) {
-            fail++;
             failures.push(`${id} conversation section#${si} missing title`);
           }
           const hasBody = sec.say || sec.why || sec.reveal || (Array.isArray(sec.examples) && sec.examples.length);
           if (!hasBody) {
-            fail++;
             failures.push(`${id} conversation section#${si} (${sec.title || '?'}) has no body — needs at least one of say|why|reveal|examples`);
           }
         });
@@ -467,20 +444,16 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     if (lesson.reference && lesson.reference.crux !== undefined) {
       const crux = lesson.reference.crux;
       if (typeof crux !== 'string' || !crux.trim()) {
-        fail++;
         failures.push(`${id} reference.crux must be a non-empty string`);
       } else if (lesson.reference.cruxDistractors !== undefined) {
         const ds = lesson.reference.cruxDistractors;
         if (!Array.isArray(ds)) {
-          fail++;
           failures.push(`${id} reference.cruxDistractors must be an array of strings`);
         } else {
           ds.forEach((d, di) => {
             if (typeof d !== 'string' || !d.trim()) {
-              fail++;
               failures.push(`${id} reference.cruxDistractors#${di} must be a non-empty string`);
             } else if (d.trim() === crux.trim()) {
-              fail++;
               failures.push(`${id} reference.cruxDistractors#${di} is identical to the crux — distractors must be wrong answers`);
             }
           });
@@ -489,6 +462,10 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     }
   }
 
+  // failures.length is the SINGLE source of truth for failure: every check
+  // registers via failures.push, so the exit can never be silently bypassed by
+  // forgetting to bump a separate counter (the dual-counter footgun this had).
+  const fail = failures.length;
   console.log(`\n${pass} passed, ${fail} failed.`);
   if (fail) {
     for (const f of failures.slice(0, 20)) console.log('  - ' + f);

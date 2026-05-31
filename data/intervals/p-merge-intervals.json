@@ -107,6 +107,8 @@
     ]
   },
   "reference": {
+    "approach": "Sort by start, then linear sweep",
+    "complexity": "O(n log n) / O(n)",
     "code": "function merge(intervals) {\n  if (intervals.length === 0) return [];\n  // Sort by start — after this, each interval only needs to compare to the LAST merged one.\n  intervals.sort((a, b) => a[0] - b[0]);\n  const res = [intervals[0]];\n  for (let i = 1; i < intervals.length; i++) {\n    const last = res[res.length - 1];\n    const cur = intervals[i];\n    // Touching counts as overlap (<= not <); use Math.max in case cur is fully inside last.\n    if (cur[0] <= last[1]) {\n      last[1] = Math.max(last[1], cur[1]);\n    } else {\n      res.push(cur);\n    }\n  }\n  return res;\n}\n// merge([[1,3],[2,6],[8,10],[15,18]]) -> [[1,6],[8,10],[15,18]]\n// Time O(n log n), Space O(n)",
     "notes": [
       "Sort by START. After sorting, compare a candidate only against the LAST merged interval.",
@@ -118,6 +120,19 @@
       "Repeatedly scan for any overlapping pair and merge them, looping until no merges remain — correct but O(n^2) or worse.",
       "Sort by END instead of start, then sweep and merge each interval into the previous one.",
       "On overlap, set last.end = cur.end directly instead of Math.max — which shrinks the run when cur is fully contained."
+    ],
+    "alternates": [
+      {
+        "label": "Union-Find (DSU) on overlapping intervals",
+        "when": "Reach for this when the problem morphs into 'add an interval and re-merge' (Insert Interval, dynamic calendar) or when intervals arrive as a stream and you need to keep merging incrementally without re-sorting. Sort+sweep is one-shot — DSU gives you a structure that absorbs new overlaps in near-constant amortized time per union.",
+        "complexity": "O(n² α(n)) / O(n)",
+        "code": "function merge(intervals) {\n  const n = intervals.length;\n  if (n === 0) return [];\n  // DSU: parent[i] is the root of interval i's merged component.\n  const parent = Array.from({length: n}, (_, i) => i);\n  function find(x) {\n    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }\n    return x;\n  }\n  function union(x, y) { parent[find(x)] = find(y); }\n  // Pairwise overlap check — union every overlapping pair into one component.\n  for (let i = 0; i < n; i++) {\n    for (let j = i + 1; j < n; j++) {\n      const a = intervals[i], b = intervals[j];\n      if (a[0] <= b[1] && b[0] <= a[1]) union(i, j);\n    }\n  }\n  // Collapse each component to one [min-start, max-end] interval.\n  const groups = new Map();\n  for (let i = 0; i < n; i++) {\n    const r = find(i);\n    const iv = intervals[i];\n    if (!groups.has(r)) groups.set(r, [iv[0], iv[1]]);\n    else {\n      const g = groups.get(r);\n      g[0] = Math.min(g[0], iv[0]);\n      g[1] = Math.max(g[1], iv[1]);\n    }\n  }\n  return [...groups.values()].sort((a, b) => a[0] - b[0]);\n}\nconsole.log(JSON.stringify(merge([[1,4],[4,5]])));",
+        "notes": [
+          "Two intervals [a0,a1] and [b0,b1] overlap iff a0 <= b1 AND b0 <= a1 — the classic 'one starts before the other ends, both ways' test.",
+          "Path compression in `find` keeps the amortized cost per union near-constant; the O(n²) bound is from the pairwise overlap scan, not the DSU itself.",
+          "DSU shines on the Insert Interval / dynamic-calendar followup: incoming intervals just `union` with whatever they overlap, no re-sort needed."
+        ]
+      }
     ]
   },
   "L1": {

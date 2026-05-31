@@ -295,6 +295,15 @@ function renderCheatsheetBody() {
       // they've hit "Expand all" — matches the "browse titles, drill in on demand" flow.
       const lessonOpen = q || lesson.id === curLessonId || _cheatsheetExpandAll;
       const desc = c.description ? `<div style="color:#94a3b8;font-size:12px;margin:2px 0 6px 0;">${escapeHtml(c.description)}</div>` : '';
+      // Primary approach + complexity header — mirrors the alternate chip
+      // pattern so the cheatsheet's "two solutions visible side-by-side" view
+      // surfaces complexity for BOTH the canonical and its alternates.
+      const approachHtml = (c.reference && (c.reference.approach || c.reference.complexity))
+        ? `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0 4px 0;flex-wrap:wrap;">
+            ${c.reference.approach ? `<strong style="color:#f1f5f9;font-size:12.5px;">${escapeHtml(c.reference.approach)}</strong>` : '<span></span>'}
+            ${c.reference.complexity ? `<span style="color:#fbbf24;font-size:10.5px;font-family:ui-monospace,monospace;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);padding:1px 6px;border-radius:999px;white-space:nowrap;" title="time / space">${escapeHtml(c.reference.complexity)}</span>` : ''}
+          </div>`
+        : '';
       const notesHtml = (c.reference && c.reference.notes && c.reference.notes.length)
         ? `<ul style="margin:6px 0 0 0;padding-left:18px;color:#cbd5e1;font-size:12px;">${c.reference.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
         : '';
@@ -324,6 +333,7 @@ function renderCheatsheetBody() {
         </summary>
         <div style="padding:4px 0 6px 0;">
           ${desc}
+          ${approachHtml}
           <pre class="cm-s-dracula" data-cs-code="${escapeHtml(lesson.id)}" style="margin:0;padding:8px 10px;background:#020617;border:1px solid #1e293b;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.45;white-space:pre;"></pre>
           ${notesHtml}
           ${altHtml}

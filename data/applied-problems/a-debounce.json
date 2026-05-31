@@ -111,12 +111,27 @@
     ]
   },
   "reference": {
+    "approach": "Trailing-edge debounce (closure + due-time)",
+    "complexity": "O(1) / O(1)",
     "code": "function debounce(fn, ms) {\n  let scheduled = null;       // due-at on fake clock, or null when idle\n  let lastArgs = null;\n  const api = function (...args) {\n    lastArgs = args;\n    scheduled = api._now + ms;     // (re)set the due time on every call\n  };\n  api._now = 0;\n  api.tick = (delta) => {          // advance fake clock; fire if due\n    api._now += delta;\n    if (scheduled !== null && api._now >= scheduled) {\n      scheduled = null;\n      fn(...lastArgs);\n    }\n  };\n  return api;\n}",
     "notes": [
       "Each call resets `scheduled` to now+ms — the timer restarts, not accumulates. That's the debounce contract.",
       "Only the most recent args are captured. The trailing call wins; intermediate args are dropped.",
       "Injecting a clock (tick/_now) instead of using setTimeout makes the implementation testable without real timers.",
       "Time O(1) per call and per tick. Space O(1) — two closure variables."
+    ],
+    "alternates": [
+      {
+        "label": "Leading-edge debounce (fire first, then ignore burst)",
+        "when": "Reach for this when the interviewer asks 'can you make it fire on the LEADING edge instead?' — the canonical follow-up. Different semantics: the first call of a burst fires immediately, then the wrapper goes silent until one full quiet period of `ms` elapses; subsequent burst calls are dropped (not deferred). Useful for 'fire once on click, ignore rapid repeats' UI patterns where a delayed firing would feel sluggish.",
+        "complexity": "O(1) / O(1)",
+        "code": "function debounce(fn, ms) {\n  // lastFired tracks WHEN we last invoked fn; quietUntil is the next allowed fire time.\n  // Initialize to -Infinity so the very first call always passes the gate.\n  let quietUntil = -Infinity;\n  const api = function (...args) {\n    if (api._now >= quietUntil) {\n      // Leading-edge: fire IMMEDIATELY on entry to a quiet window.\n      fn(...args);\n      quietUntil = api._now + ms;          // cooldown — drop calls until this passes\n    } else {\n      // Inside the cooldown — extend the silence (debounce-style),\n      // but the call itself fires nothing. Args are gone, unlike trailing edge.\n      quietUntil = api._now + ms;\n    }\n  };\n  api._now = 0;\n  api.tick = (delta) => { api._now += delta; };  // no fire on tick — leading edge only fires on call\n  return api;\n}\nlet calls = 0, last = null;\nconst d = debounce((x) => { calls++; last = x; }, 100);\nconsole.log('calls=' + calls);\nd('c');                              // first call — fires immediately (leading edge)\nd('b'); d('a');                      // inside cooldown — dropped, args gone\nd.tick(50);\nd('x');                              // still inside cooldown — extends quiet window, drops\nconsole.log('calls=' + calls + ' last=' + last);\nd.tick(500);                         // clock past the extended quietUntil\nd('d');                              // fresh quiet window — fires immediately\nconsole.log('calls=' + calls + ' last=' + last);",
+        "notes": [
+          "The `quietUntil` sentinel replaces `scheduled` + `lastArgs` — leading edge has no concept of 'pending args' because the firing happens at call time, not later.",
+          "Calls inside the cooldown still EXTEND the quiet window (true debounce behavior) — they just don't get to fire. Without that extension this would be plain leading-edge throttle.",
+          "`-Infinity` initialization is the same trick throttle uses: it guarantees the very first call satisfies `_now >= quietUntil` without a separate `hasFired` boolean."
+        ]
+      }
     ]
   },
   "L1": {

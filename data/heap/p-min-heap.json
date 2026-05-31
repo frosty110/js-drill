@@ -139,6 +139,8 @@
     ]
   },
   "reference": {
+    "approach": "Array-as-complete-tree heap with siftUp/siftDown",
+    "complexity": "O(log n) / O(n)",
     "code": "class MinHeap {\n  constructor() { this.a = []; }\n  size() { return this.a.length; }\n  peek() { return this.a[0]; }\n  push(x) {\n    const a = this.a;\n    a.push(x);\n    let i = a.length - 1;\n    // siftUp: parent = (i-1)>>1; swap while parent is larger.\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (a[p] <= a[i]) break;\n      [a[p], a[i]] = [a[i], a[p]];\n      i = p;\n    }\n  }\n  pop() {\n    // Save root; move LAST to index 0 to keep the array (and tree) contiguous.\n    const a = this.a, top = a[0], last = a.pop();\n    if (!a.length) return top;\n    a[0] = last;\n    let i = 0;\n    // siftDown: swap with the SMALLER child while it is smaller than current.\n    while (true) {\n      const l = 2 * i + 1, r = 2 * i + 2;\n      let s = i;\n      if (l < a.length && a[l] < a[s]) s = l;\n      if (r < a.length && a[r] < a[s]) s = r;\n      // No smaller child — heap property restored, done.\n      if (s === i) return top;\n      [a[s], a[i]] = [a[i], a[s]];\n      i = s;\n    }\n  }\n}\n// Time O(log n) per push/pop, Space O(n)",
     "notes": [
       "Index math: parent = (i-1) >> 1, left = 2*i+1, right = 2*i+2.",
@@ -151,6 +153,19 @@
       "Keep the backing array fully sorted on every push so the min is always at index 0 — but insertion is then O(n).",
       "Use a self-balancing BST of nodes; the leftmost node is the min, and rotations keep it O(log n).",
       "On siftDown, swap with the LARGER child while it exceeds the current node, walking down until the heap settles."
+    ],
+    "alternates": [
+      {
+        "label": "Bottom-up heapify constructor (Floyd's O(n) build)",
+        "when": "Reach for this when the interviewer hands you an existing array and asks you to heapify it in place — pushing n items one-by-one is O(n log n), but Floyd's bottom-up siftDown builds the heap in O(n). The intuition: most nodes are near the bottom (n/2 leaves need no work; the next level needs at most 1 swap each), so the total work telescopes to O(n) by the standard sum Σ(h · n/2^(h+1)) = 2n.",
+        "complexity": "O(n) build / O(n)",
+        "code": "class MinHeap {\n  constructor(arr = []) {\n    this.a = arr.slice();                              // copy — do not mutate caller's array\n    // Floyd's heapify: siftDown from the last internal node up to the root.\n    // Last internal node is at index (n>>1)-1; everything past it is a leaf (already a valid 1-node heap).\n    for (let i = (this.a.length >> 1) - 1; i >= 0; i--) {\n      this._siftDown(i);\n    }\n  }\n  size() { return this.a.length; }\n  peek() { return this.a[0]; }\n  push(x) {\n    const a = this.a;\n    a.push(x);\n    let i = a.length - 1;\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (a[p] <= a[i]) break;\n      [a[p], a[i]] = [a[i], a[p]];\n      i = p;\n    }\n  }\n  pop() {\n    const a = this.a, top = a[0], last = a.pop();\n    if (!a.length) return top;\n    a[0] = last;\n    this._siftDown(0);\n    return top;\n  }\n  _siftDown(i) {\n    const a = this.a;\n    while (true) {\n      const l = 2 * i + 1, r = 2 * i + 2;\n      let s = i;\n      if (l < a.length && a[l] < a[s]) s = l;\n      if (r < a.length && a[r] < a[s]) s = r;\n      if (s === i) return;\n      [a[s], a[i]] = [a[i], a[s]];\n      i = s;\n    }\n  }\n}\n// Build the heap in O(n) from the input array — no per-element siftUp.\nconst h = new MinHeap([5, 3, 8, 1, 9, 2]);\nconst out = [];\nwhile (h.size()) out.push(h.pop());\nconsole.log(JSON.stringify(out));",
+        "notes": [
+          "Start siftDown from index `(n>>1) - 1` — the last internal node. Indices past that are leaves: a single-node subtree is already a valid heap, so they need no work.",
+          "The O(n) bound is non-obvious: it's NOT n/2 · log n. Most nodes are near the bottom (cheap to sift), and the sum Σ(h · n/2^(h+1)) collapses to 2n by the geometric-series identity.",
+          "Push and pop still cost O(log n) — bottom-up heapify only speeds up the INITIAL build from a known array, not subsequent operations."
+        ]
+      }
     ]
   },
   "L1": {

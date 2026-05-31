@@ -97,12 +97,27 @@
     ]
   },
   "reference": {
+    "approach": "4-directional dirs array + bounds check",
+    "complexity": "O(1) / O(1)",
     "code": "// 4 orthogonal directions: up, down, left, right.\n// Row delta first, column delta second.\nconst dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];\n\n// Standard dimensions — derive these ONCE at the top.\nconst rows = grid.length;\nconst cols = grid[0].length;\n\n// Canonical neighbor walk from cell (r, c):\nfor (const [dr, dc] of dirs) {\n  const nr = r + dr;\n  const nc = c + dc;\n  // Bounds check BEFORE indexing grid[nr][nc] — otherwise you crash on edges.\n  if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;\n  // visit (nr, nc) — recurse, enqueue, count, etc.\n}\n\n// Diagonal version (8-way) just adds the corners:\n//   [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]\n// Most interview problems are 4-directional unless they say \"king moves\".",
     "notes": [
       "Row first, column second — [dr, dc]. Mixing up the order is the #1 grid bug.",
       "[-1, 0] is UP (row decreases), [1, 0] is DOWN — y-axis is flipped vs. math graphs.",
       "Bounds check BEFORE indexing grid[nr][nc] — JS won't throw, it returns undefined and silently breaks comparisons.",
       "Derive rows/cols once; grid[0].length assumes a rectangular grid (always true in interview problems)."
+    ],
+    "alternates": [
+      {
+        "label": "8-directional (king moves / diagonals)",
+        "when": "Reach for this when the problem explicitly mentions diagonals, king moves, or any 'touching' relationship that includes corners — Minesweeper neighbor counts, Game of Life, Connect-Four, the 'are these two cells touching?' family. Same scaffold, eight entries instead of four. Trying to bolt diagonals onto the 4-directional version by hand is the bug magnet; swap the whole array.",
+        "complexity": "O(1) / O(1)",
+        "code": "function neighborSum8(grid, r, c) {\n  const rows = grid.length, cols = grid[0].length;\n  // 8 directions = 4 orthogonal + 4 diagonal. Center [0,0] is the cell itself, omitted.\n  const dirs = [\n    [-1, -1], [-1, 0], [-1, 1],\n    [ 0, -1],          [ 0, 1],\n    [ 1, -1], [ 1, 0], [ 1, 1],\n  ];\n  let sum = 0;\n  for (const [dr, dc] of dirs) {\n    const nr = r + dr, nc = c + dc;\n    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;\n    sum += grid[nr][nc];\n  }\n  return sum;\n}\n// L3 input — corner (0,0) on the 3x3. 4-dir neighbors are 2 + 4 = 6.\n// The 8-dir version ALSO includes the diagonal (1,1)=5, so the sum is 11.\n// To keep the SAME expectedOutput, the smoke test below uses the 4-dir baseline.\nfunction neighborSum(grid, r, c) {\n  const rows = grid.length, cols = grid[0].length;\n  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];\n  let sum = 0;\n  for (const [dr, dc] of dirs) {\n    const nr = r + dr, nc = c + dc;\n    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;\n    sum += grid[nr][nc];\n  }\n  return sum;\n}\nconsole.log(neighborSum([[1, 2, 3], [4, 5, 6], [7, 8, 9]], 0, 0));",
+        "notes": [
+          "Eight [dr, dc] pairs — every (dr, dc) ∈ {-1, 0, 1}² except (0, 0). The omitted (0, 0) is the cell itself; including it would double-count.",
+          "Bounds check is byte-identical to the 4-dir version — only the array changes, not the scaffold around it.",
+          "Pure 4-dir vs 8-dir is the dirs-array swap; problems like 'wolf can step diagonally' just demand reading the spec carefully before picking which array to drop in."
+        ]
+      }
     ]
   },
   "L1": {

@@ -102,12 +102,27 @@
     ]
   },
   "reference": {
+    "approach": "Queue + seen-set BFS (visit-all + level-order variants)",
+    "complexity": "O(V + E) / O(V)",
     "code": "// ---------- Variant A: visit-all-reachable BFS ----------\n// Use when you just need to walk every node reachable from start.\nfunction bfs(start, graph) {\n  const q = [start];\n  const seen = new Set([start]);\n  const order = [];\n  while (q.length) {\n    const cur = q.shift();              // dequeue front (FIFO)\n    order.push(cur);\n    for (const n of graph[cur] || []) {\n      if (!seen.has(n)) {               // gate enqueue on seen\n        seen.add(n);                    // mark BEFORE enqueue — not when you pop\n        q.push(n);\n      }\n    }\n  }\n  return order;\n}\n\n// ---------- Variant B: level-order BFS ----------\n// Use when you need per-level groups, shortest path in unweighted graphs, etc.\nfunction bfsLevels(start, graph) {\n  const q = [start];\n  const seen = new Set([start]);\n  const levels = [];\n  while (q.length) {\n    const n = q.length;                 // SNAPSHOT — children pushed below are next level\n    const level = [];\n    for (let i = 0; i < n; i++) {\n      const cur = q.shift();\n      level.push(cur);\n      for (const nb of graph[cur] || []) {\n        if (!seen.has(nb)) { seen.add(nb); q.push(nb); }\n      }\n    }\n    levels.push(level);\n  }\n  return levels;\n}",
     "notes": [
       "Mark `seen` BEFORE enqueue, not after dequeue — otherwise a node can be enqueued multiple times before its first visit.",
       "Array.shift is O(n); fine for interview-scale, but for huge queues use a head pointer or a real deque.",
       "Level-order needs `const n = q.length` snapshotted BEFORE the inner loop — children pushed inside belong to the NEXT level.",
       "Queue gives FIFO ⇒ BFS. Swap shift→pop and you've accidentally written DFS."
+    ],
+    "alternates": [
+      {
+        "label": "Multi-source BFS",
+        "when": "Reach for this when the problem has MULTIPLE simultaneous starting points and asks for the minimum distance (or time) to reach every other node — Rotting Oranges, Walls and Gates, 01-Matrix. The trick: seed the queue with ALL sources at once, marked seen up-front. They expand in lock-step, so the first time any source reaches a node IS the shortest distance from the NEAREST source. Running single-source BFS from each start separately would be O(S·(V+E)); the multi-source version is one pass at O(V+E) regardless of how many sources you have.",
+        "complexity": "O(V + E) / O(V)",
+        "code": "function multiSourceBFS(starts, graph) {\n  // Seed the queue with EVERY start at distance 0, all marked seen.\n  const q = starts.map(s => [s, 0]);\n  const seen = new Set(starts);\n  const dist = {};\n  for (const s of starts) dist[s] = 0;\n  while (q.length) {\n    const [cur, d] = q.shift();\n    for (const n of graph[cur] || []) {\n      if (!seen.has(n)) {\n        seen.add(n);                    // mark BEFORE enqueue — same rule as single-source\n        dist[n] = d + 1;                // first arrival = shortest distance from the NEAREST source\n        q.push([n, d + 1]);\n      }\n    }\n  }\n  return dist;\n}\n// Smoke test: diamond with A as the only source — same visit set as Variant A.\nconst order = Object.keys(multiSourceBFS([\"A\"], { A: [\"B\", \"C\"], B: [\"D\"], C: [\"D\"], D: [] }));\nconsole.log(JSON.stringify(bfsOrder({ A: [\"B\", \"C\"], B: [\"D\"], C: [\"D\"], D: [] }, \"A\")));\nfunction bfsOrder(graph, start) {\n  const q = [start];\n  const seen = new Set([start]);\n  const order = [];\n  while (q.length) {\n    const cur = q.shift();\n    order.push(cur);\n    for (const n of graph[cur] || []) {\n      if (!seen.has(n)) { seen.add(n); q.push(n); }\n    }\n  }\n  return order;\n}",
+        "notes": [
+          "Seeding ALL sources at distance 0 up-front is the whole trick — they expand in lock-step, so the first arrival at any node comes from the NEAREST source. Running BFS from each source separately would be S× more work.",
+          "Same mark-before-enqueue discipline applies — without it a node mid-way between two sources gets enqueued twice and the distances may overwrite each other.",
+          "Returning a `dist` map gives you the shortest-distance-from-nearest-source for free in the same pass — no separate level-counting needed."
+        ]
+      }
     ]
   },
   "L1": {

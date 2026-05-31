@@ -138,12 +138,27 @@
     ]
   },
   "reference": {
+    "approach": "4-direction mirror scan",
+    "complexity": "O(rows·cols) / O(rows·cols)",
     "code": "class ConnectFour {\n  constructor() {\n    this.rows = 6;\n    this.cols = 7;\n    // Row 0 = bottom of board so drop scans upward to the first empty slot.\n    this.board = Array.from({ length: 6 }, () => new Array(7).fill(''));\n  }\n  drop(col, color) {\n    for (let r = 0; r < this.rows; r++) {\n      if (this.board[r][col] === '') { this.board[r][col] = color; return r; }\n    }\n    return -1;                                  // column full — sentinel\n  }\n  winner() {\n    // Only 4 directions — reverses would re-detect the same line from its other end.\n    const dirs = [[0,1],[1,0],[1,1],[1,-1]];    // →, ↑, ↗, ↘\n    for (let r = 0; r < this.rows; r++) {\n      for (let c = 0; c < this.cols; c++) {\n        const v = this.board[r][c];\n        if (!v) continue;\n        for (const [dr, dc] of dirs) {\n          let k = 1;\n          // Count consecutive matches in this direction, capped at 4.\n          while (k < 4) {\n            const nr = r + dr*k, nc = c + dc*k;\n            if (nr < 0 || nr >= this.rows || nc < 0 || nc >= this.cols) break;\n            if (this.board[nr][nc] !== v) break;\n            k++;\n          }\n          if (k === 4) return v;\n        }\n      }\n    }\n    return '';\n  }\n}",
     "notes": [
       "Pick a row convention and stick with it. Here row 0 = bottom; drop scans 0 → rows-1 finding the first empty slot.",
       "Only 4 direction vectors are needed (→, ↑, ↗, ↘) — checking the reverse directions would double-count every line.",
       "After the move you can scan the whole board, OR check only the 4 lines through the just-dropped cell. The full scan keeps the API decoupled.",
       "Time O(rows) per drop, O(rows × cols) per full-board winner(). Space O(rows × cols)."
+    ],
+    "alternates": [
+      {
+        "label": "8-direction local check from the dropped piece",
+        "when": "Reach for this if you haven't memorized the 4-mirror optimization, or if `winner()` is called immediately after every `drop` so you can pass in the just-dropped cell. Couples `drop` and `winner` (the win-check needs the landing row), but cuts per-move work from O(rows·cols) to O(1) — only the 4 lines through the new piece can possibly have just completed a 4-in-a-row.",
+        "complexity": "O(1) / O(rows·cols)",
+        "code": "class ConnectFour {\n  constructor() {\n    this.rows = 6;\n    this.cols = 7;\n    this.board = Array.from({ length: 6 }, () => new Array(7).fill(''));\n    this.won = '';                              // cached winner from last drop\n  }\n  drop(col, color) {\n    for (let r = 0; r < this.rows; r++) {\n      if (this.board[r][col] === '') {\n        this.board[r][col] = color;\n        // All 8 direction vectors — one-way walk from the just-dropped cell.\n        const dirs = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,-1],[1,-1],[-1,1]];\n        // Pair each direction with its opposite to count a full line through (r, col).\n        for (let d = 0; d < 8; d += 2) {\n          const [dr1, dc1] = dirs[d], [dr2, dc2] = dirs[d + 1];\n          let count = 1;                        // the piece we just placed\n          // Walk forward along dir1 while still the same color.\n          let nr = r + dr1, nc = col + dc1;\n          while (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols && this.board[nr][nc] === color) {\n            count++; nr += dr1; nc += dc1;\n          }\n          // Walk backward along dir2 (the opposite) to extend the same line.\n          nr = r + dr2; nc = col + dc2;\n          while (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols && this.board[nr][nc] === color) {\n            count++; nr += dr2; nc += dc2;\n          }\n          if (count >= 4) { this.won = color; break; }\n        }\n        return r;\n      }\n    }\n    return -1;\n  }\n  winner() { return this.won; }\n}\nconst g = new ConnectFour();\ng.drop(0, 'R');\ng.drop(1, 'Y');\ng.drop(1, 'R');\ng.drop(2, 'Y');\ng.drop(6, 'R');\ng.drop(2, 'Y');\ng.drop(2, 'R');\ng.drop(3, 'Y');\ng.drop(6, 'R');\ng.drop(3, 'Y');\ng.drop(5, 'R');\ng.drop(3, 'Y');\nconsole.log(g.winner());\ng.drop(3, 'R');\nconsole.log(g.winner());",
+        "notes": [
+          "8 explicit direction vectors paired into 4 line-axes — `(0,1)+(0,-1)` is the horizontal line, `(1,1)+(-1,-1)` is the ↘↖ diagonal, etc. Conceptually simpler than 'only 4 because reverses are redundant'.",
+          "Walks outward from the dropped cell in both directions, summing matches; `count >= 4` (not `=== 4`) handles the 5-in-a-row edge cleanly.",
+          "Caches `this.won` on the dropped cell so `winner()` becomes O(1) — but the trade is that `drop` and `winner` are no longer independent (the check must run at drop time)."
+        ]
+      }
     ]
   },
   "L1": {

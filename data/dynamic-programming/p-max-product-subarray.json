@@ -101,6 +101,8 @@
     ]
   },
   "reference": {
+    "approach": "Two-track rolling Kadane (max & min scalars)",
+    "complexity": "O(n) / O(1)",
     "code": "function maxProduct(nums) {\n  // Track BOTH max and min ending here — a min × negative flips into the new max.\n  let maxHere = nums[0];\n  let minHere = nums[0];\n  let best   = nums[0];\n  for (let i = 1; i < nums.length; i++) {\n    const x = nums[i];\n    // Multiplying by a negative swaps max and min — capture both candidates.\n    const candMax = Math.max(x, maxHere * x, minHere * x);\n    const candMin = Math.min(x, maxHere * x, minHere * x);\n    maxHere = candMax;\n    minHere = candMin;\n    best = Math.max(best, maxHere);\n  }\n  return best;\n}\n// Time O(n), Space O(1)",
     "notes": [
       "A negative element flips min ↔ max, so a Kadane-style single-track DP fails here — you need both rails.",
@@ -112,6 +114,19 @@
       "Run single-track Kadane on the product (carry only the running max, reset when it drops) — silently wrong on [-2,3,-4] because it loses the negative that later flips positive.",
       "Count the negatives: if even, multiply the whole array; if odd, drop the array up to or after the worst negative and take the larger side — breaks once zeros split the array.",
       "Take the absolute value of every element, run Kadane for the max product of magnitudes, then reattach the sign at the end."
+    ],
+    "alternates": [
+      {
+        "label": "Explicit DP arrays (maxArr[] + minArr[])",
+        "when": "Reach for this when the interviewer asks 'walk me through the DP recurrence' or wants to see the full table for didactic clarity. Same O(n) time but O(n) space — the two scalars become two arrays indexed by i, making each step's dependency on i-1 explicit at the cost of memory. Useful as a stepping stone: write this first, then optimize to the rolling-scalar version by noting only `i-1` is ever read. Some interviewers prefer it because the same-source-before-assign trap disappears (each cell reads only from the prior cell).",
+        "complexity": "O(n) / O(n)",
+        "code": "function maxProduct(nums) {\n  const n = nums.length;\n  // maxArr[i] = best product of any subarray ending exactly at i.\n  // minArr[i] = worst product of any subarray ending exactly at i.\n  const maxArr = new Array(n);\n  const minArr = new Array(n);\n  maxArr[0] = minArr[0] = nums[0];\n  let best = nums[0];\n  for (let i = 1; i < n; i++) {\n    const x = nums[i];\n    // Each cell reads only from i-1 — no same-source-before-assign trap.\n    maxArr[i] = Math.max(x, maxArr[i-1] * x, minArr[i-1] * x);\n    minArr[i] = Math.min(x, maxArr[i-1] * x, minArr[i-1] * x);\n    best = Math.max(best, maxArr[i]);\n  }\n  return best;\n}\nconsole.log(maxProduct([2, 3, -2, 4]));\nconsole.log(maxProduct([-2, 0, -1]));\nconsole.log(maxProduct([-2, 3, -4]));",
+        "notes": [
+          "Each row depends only on row i-1, which is the textbook signal that the array can be collapsed to two rolling scalars — that's the optimization back to the canonical.",
+          "No same-source-before-assign hazard here: maxArr[i] reads maxArr[i-1] (untouched), so the order of the max/min assignments doesn't matter.",
+          "Best teaching version of the recurrence: write this on the whiteboard first, then point at 'we only ever read i-1' to motivate the space-optimized scalars."
+        ]
+      }
     ]
   },
   "L1": {

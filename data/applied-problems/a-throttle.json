@@ -107,12 +107,27 @@
     ]
   },
   "reference": {
+    "approach": "Leading-edge throttle (gate on call)",
+    "complexity": "O(1) / O(1)",
     "code": "function throttle(fn, ms) {\n  // -Infinity so the very first call always satisfies _now - lastFired >= ms.\n  let lastFired = -Infinity;\n  const api = function (...args) {\n    // Leading edge: fire on the first call of each window, drop the rest silently.\n    if (api._now - lastFired >= ms) {\n      lastFired = api._now;\n      fn(...args);\n    }\n    // No queueing — throttle does NOT keep latest args like debounce does.\n  };\n  api._now = 0;\n  // Injected clock — tests advance time deterministically without setTimeout.\n  api.tick = (delta) => { api._now += delta; };\n  return api;\n}",
     "notes": [
       "Leading-edge throttle fires on the first call of each window; trailing-edge would defer to the window end. Both are valid — pick one and document it.",
       "Initialize `lastFired = -Infinity` (or any sentinel < -ms) so the very first call always fires.",
       "Dropped calls are lost — no queueing. Debounce keeps the latest args; throttle does not.",
       "Time O(1) per call and per tick; Space O(1) — one closure variable `lastFired`."
+    ],
+    "alternates": [
+      {
+        "label": "Trailing-edge throttle (defer + latest args win)",
+        "when": "Reach for this when the spec asks 'fire with the LATEST args, but no more than once per window' — the canonical follow-up to leading-edge throttle. This variant looks more like debounce: it keeps `lastArgs` AND a `scheduled` due-time, fires at the END of the window with whatever args arrived most recently. Common for 'autosave every N seconds' or 'send the last cursor position per frame' patterns where leading-edge would fire on a stale state.",
+        "complexity": "O(1) / O(1)",
+        "code": "function throttle(fn, ms) {\n  let scheduled = null;       // due-at on fake clock, or null when idle\n  let lastArgs = null;\n  const api = function (...args) {\n    // Always capture latest args — trailing-edge fires with the freshest snapshot.\n    lastArgs = args;\n    // Only ARM the timer if none is pending; subsequent calls just refresh lastArgs.\n    if (scheduled === null) {\n      scheduled = api._now + ms;\n    }\n  };\n  api._now = 0;\n  api.tick = (delta) => {\n    api._now += delta;\n    if (scheduled !== null && api._now >= scheduled) {\n      scheduled = null;\n      fn(...lastArgs);\n    }\n  };\n  return api;\n}\nlet calls = 0, last = null;\nconst t = throttle((x) => { calls++; last = x; }, 100);\nt('a');                             // schedules fire at _now+100\nt.tick(110);                        // window elapsed — fires with 'a'\nconsole.log('calls=' + calls + ' last=' + last);\nconsole.log('calls=' + calls + ' last=' + last);\nt('d');                             // schedules fire at _now+100\nt.tick(110);                        // fires with 'd'\nconsole.log('calls=' + calls + ' last=' + last);",
+        "notes": [
+          "The `if (scheduled === null)` guard is what makes this throttle (one fire per window) rather than debounce (timer resets on every call). Calls inside the pending window refresh `lastArgs` but do NOT extend the deadline.",
+          "Trailing-edge fires with the FRESHEST args, not the first ones — opposite of leading-edge's 'first call wins' policy. The two variants pick different winners from the same burst.",
+          "If you wanted BOTH edges (lodash's default), combine the leading gate with this trailing scheduler — fire immediately on first call, then schedule a trailing fire if more calls arrived during the window."
+        ]
+      }
     ]
   },
   "L1": {

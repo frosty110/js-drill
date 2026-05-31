@@ -164,12 +164,27 @@
     ]
   },
   "reference": {
+    "approach": "Feature extraction + top-down ladder",
+    "complexity": "O(1) / O(1)",
     "code": "function rankHand(cards) {\n  const order = '23456789TJQKA';\n  // Normalize '10' to 'T' so every rank is a single char (indexable + sortable).\n  const ranks = cards.map(c => c.slice(0, -1) === '10' ? 'T' : c.slice(0, -1));\n  const suits = cards.map(c => c.slice(-1));\n  const idx = ranks.map(r => order.indexOf(r)).sort((a, b) => a - b);\n  const counts = {};\n  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;\n  // Sort counts desc: [4,1]=four, [3,2]=full-house, [2,2,1]=two-pair.\n  const groups = Object.values(counts).sort((a, b) => b - a);\n  const flush = suits.every(s => s === suits[0]);\n  let straight = idx.every((v, i) => i === 0 || v === idx[i-1] + 1);\n  // Wheel straight (A-2-3-4-5): ace is low — indices aren't consecutive otherwise.\n  if (!straight && ranks.includes('A') && ranks.includes('2') && ranks.includes('3') && ranks.includes('4') && ranks.includes('5')) straight = true;\n  // Ladder checked top-down — first match wins; stronger categories sit above weaker.\n  if (straight && flush && idx[0] === order.indexOf('T')) return 'royal-flush';\n  if (straight && flush)                                   return 'straight-flush';\n  if (groups[0] === 4)                                     return 'four-of-a-kind';\n  if (groups[0] === 3 && groups[1] === 2)                  return 'full-house';\n  if (flush)                                               return 'flush';\n  if (straight)                                            return 'straight';\n  if (groups[0] === 3)                                     return 'three-of-a-kind';\n  if (groups[0] === 2 && groups[1] === 2)                  return 'two-pair';\n  if (groups[0] === 2)                                     return 'pair';\n  return 'high-card';\n}",
     "notes": [
       "Normalize '10' to a single character ('T') so rank ordering uses a simple string index.",
       "The rank ladder must be checked TOP-DOWN: a full-house also matches three-of-a-kind, but we return the stronger category first.",
       "Wheel straight (A-2-3-4-5) is the special case where the ace is low — handle it explicitly because indices wouldn't be consecutive otherwise.",
       "Time O(1), Space O(1) — hand is always 5 cards; all loops and arrays are bounded by a constant."
+    ],
+    "alternates": [
+      {
+        "label": "Groups-signature dispatch table",
+        "when": "Reach for this when an interviewer says 'can you make the ladder more declarative?' or you want to collapse the group-based categories into a single Map lookup. The same feature extraction (groups + flush + straight) feeds a string key like '4,1' or '3,2' that looks up the category in a table. Reads more like a config than control flow — easier to extend (add a new variant just by adding a row), harder to re-order accidentally. Flush + straight + royal still need explicit if-checks since they don't reduce to a pure group signature.",
+        "complexity": "O(1) / O(1)",
+        "code": "function rankHand(cards) {\n  const order = '23456789TJQKA';\n  const ranks = cards.map(c => c.slice(0, -1) === '10' ? 'T' : c.slice(0, -1));\n  const suits = cards.map(c => c.slice(-1));\n  const idx = ranks.map(r => order.indexOf(r)).sort((a, b) => a - b);\n  const counts = {};\n  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;\n  const groups = Object.values(counts).sort((a, b) => b - a);\n  const flush = suits.every(s => s === suits[0]);\n  let straight = idx.every((v, i) => i === 0 || v === idx[i-1] + 1);\n  if (!straight && ranks.includes('A') && ranks.includes('2') && ranks.includes('3') && ranks.includes('4') && ranks.includes('5')) straight = true;\n  // Flush/straight/royal first — they don't reduce to a pure group signature.\n  if (straight && flush && idx[0] === order.indexOf('T')) return 'royal-flush';\n  if (straight && flush) return 'straight-flush';\n  if (flush) return 'flush';\n  if (straight) return 'straight';\n  // Now dispatch on the sorted-groups signature.\n  const table = {\n    '4,1':     'four-of-a-kind',\n    '3,2':     'full-house',\n    '3,1,1':   'three-of-a-kind',\n    '2,2,1':   'two-pair',\n    '2,1,1,1': 'pair'\n  };\n  return table[groups.join(',')] || 'high-card';\n}\nconsole.log(rankHand(['10S','JS','QS','KS','AS']));\nconsole.log(rankHand(['KH','KD','KS','KC','3D']));\nconsole.log(rankHand(['KH','KD','KS','2H','2D']));\nconsole.log(rankHand(['AH','2D','3S','4C','5H']));\nconsole.log(rankHand(['9H','9D','5S','3C','2H']));",
+        "notes": [
+          "The key insight: every group-based category has a unique sorted-counts signature, so `groups.join(',')` is a perfect-hash dispatch key — no need to compare element-by-element.",
+          "Flush, straight, straight-flush, and royal-flush can't go in the table because they don't depend on the groups signature alone — they cross over with [1,1,1,1,1]. Handle them explicitly above the dispatch.",
+          "Default branch (`|| 'high-card'`) handles the [1,1,1,1,1] non-flush, non-straight case — no signature, no flush, no straight means nothing matches."
+        ]
+      }
     ]
   },
   "L1": {

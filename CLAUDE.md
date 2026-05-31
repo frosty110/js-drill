@@ -193,6 +193,8 @@ Each lesson is a standalone JSON file at `data/<section-slug>/<id>.json`:
   "status": "full",              // or "stub"
   "description": "One sentence describing the lesson.",
   "reference": {
+    "approach": "Hash map (one-pass complement lookup)",   // OPTIONAL — short name of the canonical approach. When present, renders as a primary header row above the code block, mirroring the alternate-summary layout (label + complexity chip).
+    "complexity": "O(n) / O(n)",                           // OPTIONAL — same "O(time) / O(space)" format as alternates. Renders in a yellow chip with a "time / space" legend above the values.
     "code": "// canonical code as a string\n...",
     "notes": ["Gotcha 1", "Gotcha 2"],
     "alternates": [                  // OPTIONAL — see § Alternate solutions below

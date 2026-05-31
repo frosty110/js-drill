@@ -158,12 +158,28 @@
     ]
   },
   "reference": {
+    "approach": "0-indexed array heap with sift-up / sift-down",
+    "complexity": "O(log n) / O(1)",
     "code": "// 0-indexed array heap — index math\nconst parent = i => (i - 1) >> 1;   // floor((i-1) / 2)\nconst left   = i => 2 * i + 1;\nconst right  = i => 2 * i + 2;\n\n// Sift UP — used after appending a new element at the tail (push)\n//   bubble the new item upward while it is smaller than its parent\nlet i = heap.length - 1;\nwhile (i > 0 && heap[parent(i)] > heap[i]) {\n  [heap[i], heap[parent(i)]] = [heap[parent(i)], heap[i]];\n  i = parent(i);\n}\n\n// Sift DOWN — used after moving the last element to index 0 (pop-root)\n//   bubble it downward, always swapping with the SMALLER child\nlet j = 0;\nwhile (true) {\n  const l = left(j), r = right(j);\n  let s = j;\n  if (l < heap.length && heap[l] < heap[s]) s = l;\n  if (r < heap.length && heap[r] < heap[s]) s = r;\n  if (s === j) break;\n  [heap[j], heap[s]] = [heap[s], heap[j]];\n  j = s;\n}",
     "notes": [
       "A heap is just an array — no node objects. The tree shape is encoded by the index math.",
       "Parent = (i-1) >> 1, left = 2*i+1, right = 2*i+2 — memorize these three formulas.",
       "Sift UP after a push (new item is at the tail). Sift DOWN after a pop-root (move last to index 0, then bubble down).",
-      "On sift-down ALWAYS swap with the smaller child — swapping with the larger would leave the smaller child violating the heap property."
+      "On sift-down ALWAYS swap with the smaller child — swapping with the larger would leave the smaller child violating the heap property.",
+      "MAX-heap variant: same code, flip every comparison (`>` ↔ `<`) in the sift loops. The index math is identical."
+    ],
+    "alternates": [
+      {
+        "label": "Bottom-up heapify (Floyd, O(n))",
+        "when": "Reach for this when you're handed an UNORDERED array up front and need to heap-ify it once before draining. Naive 'push every element' is O(n log n); Floyd's bottom-up heapify is O(n) — half the nodes are leaves with zero work, a quarter sift at most one level, and the weighted sum converges to linear. Standard interview answer when the problem starts 'given an unsorted array, find the k smallest…'.",
+        "complexity": "O(n) / O(1)",
+        "code": "function heapify(heap) {\n  // 0-indexed heap helpers.\n  const left  = i => 2 * i + 1;\n  const right = i => 2 * i + 2;\n  // Sift-down at index j over the prefix heap[0..n).\n  function siftDown(j) {\n    while (true) {\n      const l = left(j), r = right(j);\n      let s = j;\n      if (l < heap.length && heap[l] < heap[s]) s = l;\n      if (r < heap.length && heap[r] < heap[s]) s = r;\n      if (s === j) break;\n      [heap[j], heap[s]] = [heap[s], heap[j]];\n      j = s;\n    }\n  }\n  // Start at the last NON-LEAF (parent of the tail) and walk to the root.\n  // Leaves (indices ≥ n/2) are trivially heaps of size 1 — skip them.\n  for (let i = (heap.length >> 1) - 1; i >= 0; i--) {\n    siftDown(i);\n  }\n  return heap;\n}\nconst heap = [1, 5, 3, 10, 8, 7];\nheapify(heap);\nconst p = (i) => (i - 1) >> 1;\nconsole.log(heap[p(4)]);",
+        "notes": [
+          "Iterate from `(n>>1) - 1` down to 0 — that's the last node with at least one child. Anything past it is a leaf and already a valid heap of size 1.",
+          "The O(n) bound comes from the weighted sum: ~n/2 leaves do 0 work, ~n/4 nodes sift ≤1 level, ~n/8 sift ≤2, etc. The series Σ k·n/2^(k+1) converges to n, not n log n.",
+          "On already-min-heap input (like [1,5,3,10,8,7]) every siftDown is a no-op — heapify is idempotent, the output equals the input."
+        ]
+      }
     ]
   },
   "L1": {

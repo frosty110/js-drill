@@ -121,6 +121,8 @@
     ]
   },
   "reference": {
+    "approach": "Variable sliding window + have/required counter",
+    "complexity": "O(|s| + |t|) / O(|s| + |t|)",
     "code": "function minWindow(s, t) {\n  if (t.length === 0 || s.length < t.length) return \"\";\n  // need[c] = required count of c in any valid window.\n  const need = new Map();\n  for (const c of t) need.set(c, (need.get(c) || 0) + 1);\n  // have = DISTINCT chars whose window count has hit their need quota. required = distinct chars in t.\n  const required = need.size;\n  const window = new Map();\n  let have = 0, l = 0, bestL = 0, bestLen = Infinity;\n  for (let r = 0; r < s.length; r++) {\n    const c = s[r];\n    window.set(c, (window.get(c) || 0) + 1);\n    // === (not >=): going past the quota mustn't bump have again.\n    if (need.has(c) && window.get(c) === need.get(c)) have++;\n    // Window satisfies t — shrink from left while it still does, recording the best.\n    while (have === required) {\n      if (r - l + 1 < bestLen) { bestLen = r - l + 1; bestL = l; }\n      const lc = s[l];\n      window.set(lc, window.get(lc) - 1);\n      // Only decrement have when we drop BELOW the quota (excess removals don't break the window).\n      if (need.has(lc) && window.get(lc) < need.get(lc)) have--;\n      l++;\n    }\n  }\n  return bestLen === Infinity ? \"\" : s.slice(bestL, bestL + bestLen);\n}\n// Time O(|s| + |t|), Space O(|s| + |t|)",
     "notes": [
       "have counts DISTINCT chars whose window count reached the need count — not total chars. required = need.size.",
@@ -132,6 +134,19 @@
       "Each time you extend the window, recompare the window's char counts against need to decide if it's valid.",
       "Use a Set of t's characters and check the window contains every one of them.",
       "For every (start, end) pair, slice the substring and verify it covers t, keeping the shortest."
+    ],
+    "alternates": [
+      {
+        "label": "Need-map covers check (no have counter)",
+        "when": "Reach for this when the interviewer says 'just write something correct, we'll optimize after' or when the alphabet is small enough that the per-step factor doesn't matter. The validity test inlines as 'does the window's count for every needed char meet its quota?' — a small loop over `need` instead of a single integer compare. Same expand/shrink skeleton, same shrink trigger, just an O(|need|) check per step instead of O(1). Reads more directly ('window covers t means every needed char is covered'), and removes the asymmetric `===` / `<` traps that the have/required version has.",
+        "complexity": "O(|s|·|t|) / O(|s| + |t|)",
+        "code": "function minWindow(s, t) {\n  if (t.length === 0 || s.length < t.length) return \"\";\n  const need = new Map();\n  for (const c of t) need.set(c, (need.get(c) || 0) + 1);\n  const window = new Map();\n  // Window is valid iff every needed char has at least its required count.\n  const covers = () => {\n    for (const [c, n] of need) if ((window.get(c) || 0) < n) return false;\n    return true;\n  };\n  let l = 0, bestL = 0, bestLen = Infinity;\n  for (let r = 0; r < s.length; r++) {\n    window.set(s[r], (window.get(s[r]) || 0) + 1);\n    while (covers()) {\n      if (r - l + 1 < bestLen) { bestLen = r - l + 1; bestL = l; }\n      window.set(s[l], window.get(s[l]) - 1);\n      l++;\n    }\n  }\n  return bestLen === Infinity ? \"\" : s.slice(bestL, bestL + bestLen);\n}\nconsole.log(minWindow(\"ADOBECODEBANC\", \"ABC\"));\nconsole.log(JSON.stringify(minWindow(\"a\", \"aa\")));",
+        "notes": [
+          "`covers()` rebuilds the validity decision every step — that's the per-step O(|need|) factor that pushes total time to O(|s|·|t|) in the worst case.",
+          "No asymmetric `===` / `<` traps: window counts can go arbitrarily above or below need, and `covers()` re-derives the answer each call.",
+          "Use this as the 'write it correct first' draft on a whiteboard, then sell the have/required optimization as 'we only need to recompute when a char crosses the quota boundary.'"
+        ]
+      }
     ]
   },
   "L1": {

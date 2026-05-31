@@ -663,6 +663,14 @@ function renderReference(body, content) {
         <button class="bullets-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="bullets-toggle" title="Hide canonical, type it from the notes below. Desk-tier 'see concept, recall code' recall direction the L1→L2→L3 ladder doesn't drill (L2 = template + blanks given; L3 = problem prompt only; Bullets→Code = notes-as-prompt, full code recall).">📝 Notes→Code</button>
       </div>
     </div>
+    ${ref.approach || ref.complexity ? `
+    <!-- Primary approach header: visually mirrors the alternate-summary row
+         (label + complexity chip) so the user learns one layout for "how to
+         read a solution + its big-O." -->
+    <div class="ref-primary-header">
+      <span class="ref-alt-label">${escapeHtml(ref.approach || 'Canonical')}</span>
+      ${ref.complexity ? `<span class="ref-alt-complexity" title="time / space"><span class="ref-complexity-legend">time / space</span>${escapeHtml(ref.complexity)}</span>` : ''}
+    </div>` : ''}
     <pre class="code-block cm-s-dracula" data-ref-code></pre>
     <!-- Iter 13: inline autopilot CTA right after the canonical so the user
          can transition to drilling without scrolling past mechanics + notes
@@ -696,7 +704,7 @@ function renderReference(body, content) {
           <details class="ref-alternate">
             <summary class="ref-alt-summary">
               <span class="ref-alt-label">${escapeHtml(alt.label || '')}</span>
-              ${alt.complexity ? `<span class="ref-alt-complexity">${escapeHtml(alt.complexity)}</span>` : ''}
+              ${alt.complexity ? `<span class="ref-alt-complexity" title="time / space"><span class="ref-complexity-legend">time / space</span>${escapeHtml(alt.complexity)}</span>` : ''}
               <span class="ref-alt-toggle" aria-hidden="true">▸</span>
             </summary>
             <div class="ref-alt-body">

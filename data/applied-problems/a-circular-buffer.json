@@ -120,12 +120,27 @@
     ]
   },
   "reference": {
+    "approach": "Ring buffer (head/tail mod cap)",
+    "complexity": "O(1) / O(capacity)",
     "code": "class CircularBuffer {\n  constructor(capacity) {\n    this.cap = capacity;\n    this.buf = new Array(capacity);\n    this.head = 0;        // next slot to write\n    this.tail = 0;        // next slot to read\n    // size disambiguates head === tail (could mean full OR empty).\n    this.size = 0;\n  }\n  write(v) {\n    this.buf[this.head] = v;\n    // Modulo on indices is the whole trick — never reallocate.\n    this.head = (this.head + 1) % this.cap;\n    if (this.size === this.cap) {\n      // Overwrite policy: drop oldest by advancing tail too.\n      this.tail = (this.tail + 1) % this.cap;\n    } else {\n      this.size++;\n    }\n  }\n  read() {\n    if (this.size === 0) return undefined;\n    const v = this.buf[this.tail];\n    this.tail = (this.tail + 1) % this.cap;\n    this.size--;\n    return v;\n  }\n}",
     "notes": [
       "Two indices (head=write, tail=read) plus a size counter — size disambiguates the full-vs-empty case where head === tail.",
       "Decision: when full, additional writes overwrite the oldest element rather than throwing. Document the policy — both choices are valid.",
       "All ops are O(1). Modulo on indices is the only trick — never reallocate.",
       "Time O(1) per read/write. Space O(capacity)."
+    ],
+    "alternates": [
+      {
+        "label": "Reject-on-full (bounded queue)",
+        "when": "Reach for this when the producer needs to KNOW that a write failed — backpressure flows, durable inbound queues, rate-limited APIs — anywhere silently dropping the oldest entry would be a data-loss bug. Same ring-buffer skeleton; only the overflow branch differs: instead of advancing tail to drop the oldest, refuse the new write and signal that to the caller (return false / throw).",
+        "complexity": "O(1) / O(capacity)",
+        "code": "class CircularBuffer {\n  constructor(capacity) {\n    this.cap = capacity;\n    this.buf = new Array(capacity);\n    this.head = 0;\n    this.tail = 0;\n    this.size = 0;\n  }\n  write(v) {\n    // Reject policy: full buffer means caller's write is refused.\n    if (this.size === this.cap) return false;\n    this.buf[this.head] = v;\n    this.head = (this.head + 1) % this.cap;\n    this.size++;\n    return true;                                // caller checks for backpressure\n  }\n  read() {\n    if (this.size === 0) return undefined;\n    const v = this.buf[this.tail];\n    this.tail = (this.tail + 1) % this.cap;\n    this.size--;\n    return v;\n  }\n}\nconst b = new CircularBuffer(3);\nb.write(2); b.write(3); b.write(4);  // buf full at [2,3,4]\nb.write(5);                          // rejected — buf still [2,3,4]\nconsole.log(b.size);\nconsole.log(b.read());\nconsole.log(b.read());\nconsole.log(b.read());\nconsole.log(b.read());",
+        "notes": [
+          "Same modulo/head/tail/size scaffolding — only the full-buffer branch flips. Tail NEVER advances on write; the oldest entries are preserved.",
+          "Boolean return value is the signal — `if (!buf.write(v)) handleBackpressure()`. Throw instead if the caller should treat full as exceptional rather than expected.",
+          "Contrast on cap=3 writes of 1,2,3,4: reject-on-full keeps [1,2,3] and the 4 is lost; the overwrite variant keeps [2,3,4] and the 1 is silently dropped. Which 'wins' depends on whether oldest data or newest data is more valuable to the caller."
+        ]
+      }
     ]
   },
   "L1": {

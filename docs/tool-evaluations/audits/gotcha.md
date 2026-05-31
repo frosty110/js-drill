@@ -1,39 +1,42 @@
 # 🎰 Gotcha — Learning-effectiveness audit
 
-**Total: 12/21**
-**Verdict: IMPROVE-or-cut (salvage must move ≥4 pts or REMOVE)**
-**Anchor file:** `js/app/05-drills-recognize-trace.js:217`
+**Total: 17/21**
+**Verdict: KEEP, salvageable**
+**Anchor file:** `js/app/05-drills-recognize-trace.js:286` (`startCruxSession`, aliased as `startGotchaSession` at :318)
 **Scored:** 2026-05-30
+
+> **NOTE — tool has been substantially transformed since prior audit.** The original honor-system "knew it / didn't" cloze-of-a-note tool (`reference.notes` corpus, audit 12/21) was rebuilt as **🎯 Crux** (iter 83+) — a forced-recall test over the authored `reference.crux` field with TWO modes (Easy = 4-option MC over hybrid distractors; Hard = free-recall typed answer + AI-grading copy-export + honest self-grade). The `state.gotcha` schema is reused, the registry row still says "🎰 Gotcha", and `startGotchaSession` is preserved as a back-compat alias (`:318`). Scoring the CURRENT implementation per task instructions.
 
 ## Score
 
 | Dim | Score | Evidence (file:line) |
 |---|---|---|
-| Active recall | 2/3 | User taps "knew it" / "didn't" — a metacognitive judgment, not a retrieval test; the note IS the answer, shown alongside the question (`05-drills-recognize-trace.js:238-241`). Lesson title is hidden until reveal (`05-drills-recognize-trace.js:237`), so SOME retrieval (which lesson is this trap from) is implicit but never tested. |
-| Encoding strength | 1/3 | Recognition-only — read the note, judge familiarity. No production of the trap, no lesson-name typing (`05-drills-recognize-trace.js:240-241`). |
-| Spacing | 0/3 | `state.gotcha` is lifetime attempts/correct/sessions/lastRunAt (`01-state-content.js:220`); no per-note interval, no SR write. |
-| Interleaving | 3/3 | Pool flattens `reference.notes` across all loaded lessons of all tracks — Fisher-Yates shuffles the full corpus (`05-drills-recognize-trace.js:194-214`). Broadest interleaving of the four tools audited. |
-| Feedback quality | 1/3 | Reveal shows the lesson title + section name (`05-drills-recognize-trace.js:265-266`); no explanation of WHY the trap matters or how to avoid it. The reveal IS the source attribution, not pedagogical feedback. |
-| Transfer-context match | 1/3 | Cloze-of-a-note is closer to flashcards than to interview retrieval. Notes are pre-written prose, not code-shaped traps; the user reads, not codes (`05-drills-recognize-trace.js:238`). |
-| Closed-loop signal use | 3/3 | "Didn't know" writes `state.weakness[lessonId]++` AND `appendHistory(...,'L1-miss')`; wins update lifetime stats (`05-drills-recognize-trace.js:255-257`). Honor-based but routes to existing weak-spot machinery. |
+| Active recall | 3/3 | Easy mode forces a 4-option pick BEFORE any reveal — no peek path (`05-drills-recognize-trace.js:399-405`). Hard mode requires typing into a textarea, then revealing (`05-drills-recognize-trace.js:430, 448-460`). Both modes are real retrieval moments, not honor-system. |
+| Encoding strength | 2/3 | Mixed: Easy mode is recognition (4 MC); Hard mode is free production (type the trick from memory, `05-drills-recognize-trace.js:430`). User picks mode at session start (`:300-309`). Hard mode hits Bjork's free-production tier — 2/3 reflects that Easy is still the default-presented option and pure MC; bumping to 3 would require Hard being the default. |
+| Spacing | 2/3 | NEW (commit `0c518ea`): on win, `grade()` calls `scheduleReview(card.lessonId, { advance: false })` guarded by `state.reviews[id] && isDueForReview(id)` — hold-but-reset-dueAt (`05-drills-recognize-trace.js:336-340`). Plus `_runCruxDeck` uses `_srPriorityShuffle(pool, p => p.lessonId)` so overdue/weak lessons surface first in deck-build (`:323-325`). Both selection-AND-write integrate the SR scheduler. Not 3 because the SR write is hold-only — never seeds a new bucket from a Crux win. |
+| Interleaving | 3/3 | Pool spans every loaded patterns + applied lesson with an authored `reference.crux` (`:208-209, 218-232`); `_runCruxDeck` further sorts via `_srPriorityShuffle` and slices to 8 (`:323-325`). Eight cards across the full Patterns/Applied corpus is solidly cross-section interleaved. |
+| Feedback quality | 2/3 | Reveal shows the canonical crux + source lesson title + "Drill this lesson →" deep-link (`:351-362`). Easy mode adds verdict line; Hard mode adds self-grade buttons (`:454-460`). 1-line reveal of the canonical trick is contrast against the user's pick/type, but no per-distractor explanation of WHY the wrong MC was wrong. 2/3 for one-line corrective; 3/3 would require per-distractor "why this one was tempting" annotations. |
+| Transfer-context match | 2/3 | Cue is the L3 problem prompt itself (`card.prompt = lesson.L3.prompt`, `:226`); user recalls the load-bearing insight given an interview-shaped problem statement. Hard mode's typed-recall closely matches the interview "talk through your approach" beat. 2 (not 3) because the surface tests the INSIGHT, not the CODE — the interview wants code production, not insight-naming, even though insight-naming precedes coding. |
+| Closed-loop signal use | 3/3 | `grade()` is shared between Easy and Hard modes (`:333-348`): wins fire SR refresh; misses flag `state.weakness[lessonId]++` AND `appendHistory(...,'L1-miss')`. Both lifetime `state.gotcha` stats (attempts/correct) and the SR/weakness signals fire on both branches. |
 
 ## Strengths
-- Best-in-class interleaving — broadest cross-lesson, cross-track sampling of any drill (`05-drills-recognize-trace.js:194-214`).
-- Surfaces a previously-unused corpus (`reference.notes` × 166 lessons ≈ 400 cards) without per-lesson authoring.
-- Closes the loop to `state.weakness` despite being honor-based — a miss reroutes the user via the existing sidebar weak-spot pill.
+- Free-recall Hard mode + AI-grading clipboard export is the deepest retrieval surface in any drill (`:430-446`); user TYPES the insight, then exports `{problem + answer + canonical}` to ChatGPT/Claude for adjudication. Bjork's desirable-difficulty + closed-feedback-loop in one path.
+- Hybrid distractors in Easy mode pull from OTHER lessons' real cruxes (same section preferred) so every wrong option is a real interview-grade trick — believable by construction (`:240-255`).
+- SR-priority deck shuffle + per-win SR refresh + miss-feeds-weakness gives full closed-loop signal use across both modes.
 
 ## Weaknesses
-- Honor-system grading: "knew it" is self-reported with the answer (the note) visible. No verifiable retrieval moment — encoding strength is bounded above by recognition.
-- Transfer-context drift: a note about "for-in walks inherited keys" pre-stated as prose doesn't resemble the interview moment of WRITING `for (const k in obj)` and reasoning about its output.
-- No spacing — a note bombed today can resurface tomorrow at the same shuffled rate, with no priority to overdue items.
+- Easy is the default-presented mode (top button in the picker, `:301-304`) and most users will pick it; the deeper-encoding Hard mode is opt-in. Median user gets MC-only.
+- No per-distractor "why this wrong answer was tempting" feedback — the reveal shows the right answer but the user has to infer why their MC pick was a distractor.
+- Self-grade in Hard mode is honor-based (`:457-458`) — the AI-grading export path exists but requires the user to round-trip through a separate tool; no in-app grading.
 
 ## Salvage path (if IMPROVE)
-1. **Convert to cloze-deletion on the note** — mask the load-bearing token in `card.note` (the key term/method/operator); user must TYPE the masked word before reveal. Lifts **Active recall 2→3** AND **Encoding strength 1→3** (becomes cued-recall typed production).
-2. **Add SR write on pass** — when user taps "knew it", call `scheduleReview(card.lessonId, { advance: false })` (real function at `js/app/04-progress-sr.js:431`) in `05-drills-recognize-trace.js:257`. Uses L2's hold-but-reset-dueAt semantics — drill is recognition-tier, shallower than L2 cued-recall, so it should keep the SR cycle moving without falsely advancing the bucket. Lifts **Spacing 0→2** at lesson-grain.
-3. **Attach a 1-line "why" from the source lesson** — pull `notes[ni+1]` or the L1 explain text adjacent to the note as a contrast/why string at reveal (`05-drills-recognize-trace.js:263-269`). Lifts **Feedback quality 1→2**.
+1. **Add per-distractor "why this was tempting" annotations** — extend `reference.cruxDistractors` schema from `string[]` to `{text, why}[]`; on miss, the reveal panel shows the user's wrong pick + its `why` string. Lifts **Feedback quality 2→3**.
+2. **Default to Hard mode for repeat users** — track `state.gotcha.hardModeRuns`; once ≥3, swap the picker order so Hard becomes the top button. Lifts **Encoding strength 2→3** (median user now does free production).
+3. **Local heuristic grader for Hard mode** — token-set Jaccard between user answer and `card.crux`; if ≥0.4 → auto-pass without requiring AI round-trip. Lifts **Feedback quality** further by removing the external-tool dependency on Hard wins.
 
-**Projected after salvage:** 18/21 (KEEP, ship-quality). Salvage moves +6 pts — comfortably clears the IMPROVE threshold.
+**Projected after salvage:** 19/21 (KEEP, ship-quality). Salvage moves +2 pts.
 
 ## Action log
 - 2026-05-30 Scored at 12/21 by `/eval-learning-tool --all`.
 - 2026-05-30 Salvage edit 2 applied — guarded SR write on "knew it" at `js/app/05-drills-recognize-trace.js:263-278`. Mirrors L2's hold-but-reset-dueAt pattern; only fires when `state.reviews[id]` exists AND `isDueForReview(id)` returns true. Projected 12→14 (+2 Spacing). Cloze-deletion conversion (+2 Active recall +2 Encoding) and per-note "why" feedback (+1 Feedback) are larger Phase 3-class follow-ups, deferred. Validator: 810 passed, 0 failed.
+- 2026-05-30 Re-scored at 17/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/). Tool was substantially rebuilt as 🎯 Crux since prior audit — forced-recall MC + free-recall typed modes replaced the honor-system cloze. Active recall 2→3, Encoding 1→2, Interleaving 3→3, Transfer 1→2, plus Spacing already lifted by SR-priority deck shuffle + per-win SR refresh in `grade()`.

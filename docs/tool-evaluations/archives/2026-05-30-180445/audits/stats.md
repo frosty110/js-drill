@@ -14,12 +14,12 @@
 | Spacing | N/A | (reflection tool) |
 | Interleaving | N/A | (reflection tool) |
 | Feedback quality | N/A | (reflection tool) |
-| Transfer-context match | 3/3 | `14-init-core.js:1447-1473` Track Balance Compass names the least-covered track explicitly; `14-init-core.js:1612-1650` 📈 Mastery Half-Life tile names top-5 *slippery* lessons with tap-to-drill rows (interview-prep specific — "what's slipping"); `14-init-core.js:1570-1594` 🎯 Self-rescue rate is the only quality-of-pass interview-readiness signal (zero-hint L3 passes); `14-init-core.js:1595-1611` 🏷 Top miss patterns surfaces concept-level (off-by-one, semantics) interview pitfalls. Every diagnostic chip answers "what to drill next." |
-| Closed-loop signal use | 3/3 | Composes ≥8 signal sources (`progress`, `weakness`, `reviews/dueAt`, `mockHistory/bestTimes`, `recognize/gotcha/claim/crystal/bugHunt` lifetime stats, `state.history` via `_selfRescueRateGlobal` + `_masteryHalfLife`, `state.misses`, `calibration`, per-track tallies, mechanic-coverage via `_renderSectionRetentionBlock`); routes on tap to drills — Recognize `:1675`, Gotcha `:1680`, Claim `:1684`, Crystal `:1689`, Bug-Hunt `:1693`, and per-lesson "open-slippery" `:1701-1707` jumps to the slipping lesson. |
+| Transfer-context match | 3/3 | `14-init-core.js:1447-1459` Track Balance Compass names the least-covered track explicitly; `14-init-core.js:1612-1650` 📈 Mastery Half-Life tile names top-5 *slippery* lessons (interview-prep specific — "what's slipping"); `14-init-core.js:1570-1594` 🎯 Self-rescue rate is the only quality-of-pass interview-readiness signal; `14-init-core.js:1595-1611` 🏷 Top miss patterns surfaces concept-level (off-by-one, semantics) interview pitfalls. Every diagnostic chip answers "what to drill next." |
+| Closed-loop signal use | 3/3 | Composes ≥8 signal sources (`progress`, `weakness`, `reviews/dueAt`, `mockHistory/bestTimes`, `recognize/gotcha/claim/crystal/bugHunt` lifetime stats, `state.history` self-rescue, `state.misses`, `calibration`, per-track tallies, mechanic-coverage via `_renderSectionRetentionBlock`); routes on tap to drills — Recognize `:1675`, Gotcha `:1680`, Claim `:1684`, Crystal `:1689`, Bug-Hunt `:1693`, and per-lesson "open-slippery" `:1701-1705` jumps to the slipping lesson. |
 
 ## Strengths
 - Multi-source signal aggregation with tap-routing — the only reflection surface that composes lifetime-drill stats, SR signal, miss tags, and self-rescue rate in one view (`14-init-core.js:1476-1672`).
-- Diagnostic-aware tiles render conditionally (hidden when `attempts === 0` / `total === 0`) so the surface stays quiet for new users and grows with usage — respects PROFILE.md low-overwhelm constraint (`14-init-core.js:1515, 1526, 1559, 1577, 1599, 1620`).
+- Diagnostic-aware tiles render conditionally (hidden when `attempts === 0`) so the surface stays quiet for new users and grows with usage — respects PROFILE.md low-overwhelm constraint (`14-init-core.js:1515, 1526, 1559, 1577, 1599, 1620`).
 - 📈 Mastery Half-Life slippery list `14-init-core.js:1636-1645` is a direct "what is decaying despite SR" diagnostic — closes the gap PROFILE.md success criterion #2 ("Mastered lessons stay mastered") names.
 
 ## Weaknesses
@@ -29,4 +29,3 @@
 
 ## Action log
 - 2026-05-30 Scored 6/6 by `/eval-learning-tool --all`.
-- 2026-05-30 Re-scored at 6/6 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/).

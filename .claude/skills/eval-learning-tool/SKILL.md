@@ -18,7 +18,7 @@ If a tool engages well but doesn't consolidate memory, it's *engagement theater*
 | Invocation | What it does |
 |---|---|
 | `/eval-learning-tool <tool-id>` | Score one tool. Writes its audit detail + upserts its row in TRIAGE.md. Read-only on the app. |
-| `/eval-learning-tool --all` | Batch over the registry. Writes all per-tool audits + the master TRIAGE.md. Read-only on the app. |
+| `/eval-learning-tool --all` | Batch over the registry. **First snapshots the prior TRIAGE.md + audits/ to `docs/tool-evaluations/archives/<YYYY-MM-DD-HHMMSS>/`** so the baseline survives the overwrite. Then writes all per-tool audits + the master TRIAGE.md. Read-only on the app. |
 | `/eval-learning-tool --execute-improve <tool-id>` | Reads the tool's audit, executes the salvage path edits, runs validator + probes, commits, marks TRIAGE row `actioned-YYYY-MM-DD`. |
 | `/eval-learning-tool --execute-remove <tool-id>` | Reads the tool's audit, deletes the named files/entries + migrates state, runs validator, commits, marks TRIAGE row `actioned-YYYY-MM-DD`. |
 
@@ -229,13 +229,40 @@ Catalog of what exists to be scored. Verdicts do NOT live here — they live in 
 
 ## Workflow — batch score (`/eval-learning-tool --all`)
 
-1. Walk every entry in `docs/tool-evaluations/tools.md`.
-2. Parallelize via sub-agents (~4 tools per general-purpose agent, capped at 5 concurrent agents).
-3. Each sub-agent writes its audit files independently.
-4. After all sub-agents complete, write the master `docs/tool-evaluations/TRIAGE.md`:
+1. **Snapshot the previous run BEFORE anything else.** If `docs/tool-evaluations/TRIAGE.md` already exists OR `docs/tool-evaluations/audits/` contains files:
+   - Generate timestamp `TS=$(date +%Y-%m-%d-%H%M%S)` (includes HH:MM:SS so multiple runs per day don't collide).
+   - `mkdir -p docs/tool-evaluations/archives/$TS/audits`
+   - `cp docs/tool-evaluations/TRIAGE.md docs/tool-evaluations/archives/$TS/TRIAGE.md` (if it exists).
+   - `cp docs/tool-evaluations/audits/*.md docs/tool-evaluations/archives/$TS/audits/` (if any exist).
+   - Write `docs/tool-evaluations/archives/$TS/README.md` with the snapshot timestamp, current `git rev-parse --short HEAD`, and a one-line reason ("Pre-rescore baseline" by default; user can pass a custom reason via positional arg like `/eval-learning-tool --all "after Phase 4 ships"`).
+   - This preserves the *before* picture so the new run's lifts can be diff'd against it. Audits keep their `## Action log` history in the live files too (upsert preserves it), but the snapshot captures the full TRIAGE state which is otherwise overwritten in place.
+2. Walk every entry in `docs/tool-evaluations/tools.md`.
+3. Parallelize via sub-agents (~4 tools per general-purpose agent, capped at 5 concurrent agents).
+4. Each sub-agent writes its audit files independently.
+5. After all sub-agents complete, write the master `docs/tool-evaluations/TRIAGE.md`:
    - One row per tool, sorted by score ascending (worst first, drives the next-moves list).
    - Summary section (counts per verdict band).
    - Action sequence (ordered by leverage).
+6. After TRIAGE.md is written, append a one-line summary to the archive README at `docs/tool-evaluations/archives/$TS/README.md` noting the post-run delta if comparing to the snapshot is straightforward (e.g. tools that moved bands). Skip if it's the first-ever run with no snapshot.
+
+### Archive layout
+
+```
+docs/tool-evaluations/
+├── TRIAGE.md                  ← live, always reflects latest run
+├── audits/                    ← live, upsert'd per run; Action logs accumulate
+└── archives/
+    ├── 2026-05-30-143052/     ← snapshot at start of one --all run
+    │   ├── README.md
+    │   ├── TRIAGE.md
+    │   └── audits/...
+    ├── 2026-05-30-175954/     ← second run same day (timestamp disambiguates)
+    │   └── ...
+    └── 2026-06-02-091500/
+        └── ...
+```
+
+Folder-per-run keeps each rescore's full output bundled together; the timestamp is sortable and never collides even at multiple-runs-per-day cadence.
 
 ## Workflow — execute salvage (`/eval-learning-tool --execute-improve <tool-id>`)
 

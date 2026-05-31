@@ -752,12 +752,37 @@ function _rapidFireBuildDeck() {
     }
   }
   if (pool.length < 5) return null;
-  // Fisher-Yates shuffle then slice.
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
+  // SR/weakness-weighted selection — questions from lessons the user
+  // owes attention surface more often. Weight = (weak && due) ? 5 :
+  // (weak || due) ? 3 : 1. Expand each item by its weight, Fisher-Yates,
+  // then slice the session length while dedup'ing so the deck doesn't
+  // repeat the same question card. Cold-start users (no SR/weakness
+  // signal yet) degrade to uniform random because every lesson has
+  // weight 1. Per audits/rapid-fire-l1.md edit 1.
+  const weighted = [];
+  for (const item of pool) {
+    const overdue = isDueForReview(item.lessonId);
+    const weak = (state.weakness[item.lessonId] || 0) > 0;
+    const weight = (weak && overdue) ? 5 : (weak || overdue) ? 3 : 1;
+    for (let w = 0; w < weight; w++) weighted.push(item);
   }
-  return pool.slice(0, RAPID_FIRE_SESSION_LEN);
+  // Fisher-Yates over the expanded pool.
+  for (let i = weighted.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [weighted[i], weighted[j]] = [weighted[j], weighted[i]];
+  }
+  // Dedup as we walk — same (lessonId, q) shouldn't appear twice in
+  // a 20-card session; weight controls probability, not multiplicity.
+  const seen = new Set();
+  const deck = [];
+  for (const item of weighted) {
+    const key = `${item.lessonId}::${item.q}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deck.push(item);
+    if (deck.length >= RAPID_FIRE_SESSION_LEN) break;
+  }
+  return deck;
 }
 
 async function startRapidFireSession() {

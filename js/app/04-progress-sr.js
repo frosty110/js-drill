@@ -144,6 +144,9 @@ function loadProgress() {
     // iter eval-2026-05-30: Walkthrough tab per-lesson Quiz/Bug outcome
     // persistence + scrub-to-end flag. Legacy users → empty {}.
     state.walkthrough = parsed.walkthrough && typeof parsed.walkthrough === 'object' ? parsed.walkthrough : {};
+    // iter eval-2026-05-30: 🃏 Flash mode per-token self-rate persistence.
+    // { [lessonId]: { attempts, blanks, lastRunAt } }. Legacy users → {}.
+    state.flash = parsed.flash && typeof parsed.flash === 'object' ? parsed.flash : {};
     // iter 97: 📝 Notes Cloze Tap-Drill lifetime stats. Legacy users get zeros.
     state.notesDrill = parsed.notesDrill && typeof parsed.notesDrill === 'object'
       ? {
@@ -395,6 +398,7 @@ function saveProgress() {
     convDrill: state.convDrill,
     traceHop: state.traceHop,
     walkthrough: state.walkthrough,
+    flash: state.flash,
     notesDrill: state.notesDrill,
     mechConstellation: state.mechConstellation,
     reverseWalk: state.reverseWalk,

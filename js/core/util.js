@@ -188,11 +188,21 @@
     }
   };
 
-  // Flash-mode render — same tokens as colorizeInto, but 1-3 randomly-chosen
-  // "good" tokens (length >= 3, alphanumeric content, not a comment) are wrapped
-  // in tap-to-reveal blur spans. Active-recall surface on the Reference tab:
-  // the user mentally fills the blank before tapping to confirm.
-  U.renderFlash = function (target, code, mode = 'javascript') {
+  // Flash-mode render — same tokens as colorizeInto, but 1-3 "good" tokens
+  // (length >= 3, alphanumeric, not a comment) are wrapped in tap-to-reveal
+  // blur spans. Active-recall surface on the Reference tab: the user
+  // mentally fills the blank before tapping to confirm.
+  //
+  // iter eval-2026-05-30 (audits/flash.md edits 1+2):
+  //  - When `opts.mechanics` is a non-empty array, candidate tokens whose
+  //    `.text` matches any mechanic label/id are preferred — pure shuffle
+  //    falls back when no mechanic match exists.
+  //  - When `opts.onRate` is a callback, each revealed blur span renders
+  //    a tiny 👍/👎 chip pair after reveal; the user's tap calls
+  //    `onRate('knew' | 'blanked')`. The Reference tab uses this to
+  //    persist `state.flash[lessonId]` counters and flag weakness on
+  //    session-threshold blanks.
+  U.renderFlash = function (target, code, mode = 'javascript', opts = {}) {
     target.textContent = '';
     if (!(root.CodeMirror && root.CodeMirror.runMode)) {
       target.textContent = code;
@@ -209,12 +219,40 @@
       if (t.style && /^(comment)$/.test(t.style)) return;
       goodIdx.push(i);
     });
-    for (let i = goodIdx.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [goodIdx[i], goodIdx[j]] = [goodIdx[j], goodIdx[i]];
+    // Mechanics-weighted selection — bias toward tokens that match the
+    // lesson's idiom keywords. Mechanics often hold the load-bearing
+    // method/keyword (e.g. `flatMap`, `WeakMap`, `reduce`); blurring
+    // those forces recall on the idiom that gave the lesson its identity.
+    let ordered = goodIdx.slice();
+    const mechs = Array.isArray(opts.mechanics) ? opts.mechanics : null;
+    if (mechs && mechs.length) {
+      const needles = mechs.map(m => String(m || '').toLowerCase()).filter(Boolean);
+      const matchScore = (idx) => {
+        const t = (tokens[idx].text || '').toLowerCase();
+        for (const n of needles) {
+          if (n && t.includes(n)) return 1;
+        }
+        return 0;
+      };
+      const matched = ordered.filter(i => matchScore(i) === 1);
+      const others = ordered.filter(i => matchScore(i) === 0);
+      for (let i = matched.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [matched[i], matched[j]] = [matched[j], matched[i]];
+      }
+      for (let i = others.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [others[i], others[j]] = [others[j], others[i]];
+      }
+      ordered = [...matched, ...others];
+    } else {
+      for (let i = ordered.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+      }
     }
-    const n = Math.min(goodIdx.length, 1 + Math.floor(Math.random() * 3));
-    const blurSet = new Set(goodIdx.slice(0, n));
+    const n = Math.min(ordered.length, 1 + Math.floor(Math.random() * 3));
+    const blurSet = new Set(ordered.slice(0, n));
     tokens.forEach((tok, i) => {
       const span = document.createElement('span');
       if (blurSet.has(i)) {
@@ -223,7 +261,27 @@
         span.setAttribute('role', 'button');
         span.setAttribute('tabindex', '0');
         span.title = 'Tap to reveal';
-        const reveal = () => span.classList.add('revealed');
+        let rated = false;  // each blur can only be self-rated once
+        const reveal = () => {
+          span.classList.add('revealed');
+          if (typeof opts.onRate === 'function' && !rated) {
+            // Inject a tiny 👍 / 👎 chip pair right after the token.
+            const chips = document.createElement('span');
+            chips.className = 'flash-rate-chips';
+            chips.innerHTML = '<button type="button" class="flash-rate" data-rate="knew" title="Recalled it">👍</button><button type="button" class="flash-rate" data-rate="blanked" title="Blanked — flag for review">👎</button>';
+            chips.addEventListener('click', (e) => {
+              const btn = e.target.closest('.flash-rate');
+              if (!btn || rated) return;
+              rated = true;
+              const rate = btn.getAttribute('data-rate');
+              chips.querySelectorAll('.flash-rate').forEach(b => { b.disabled = true; b.classList.toggle('chosen', b === btn); });
+              try { opts.onRate(rate === 'knew' ? 'knew' : 'blanked'); } catch (_) { /* swallow callback errors */ }
+            });
+            // Insert AFTER the span so it appears inline next to the
+            // newly-revealed token.
+            if (span.parentNode) span.parentNode.insertBefore(chips, span.nextSibling);
+          }
+        };
         span.addEventListener('click', reveal);
         span.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(); }

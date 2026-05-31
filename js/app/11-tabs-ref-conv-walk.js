@@ -715,13 +715,46 @@ function renderReference(body, content) {
     bulletsBtn.textContent = '📝 Notes→Code';
     colorizeInto(codeEl, ref.code);
   }
+  // iter eval-2026-05-30: 🃏 Flash now per-token self-rates. Per audits/
+  // flash.md edits 1+2: mechanics-weighted token selection + 👍/👎 chips
+  // on reveal. Session-local blank counter; ≥2 blanks within a single
+  // toggle-on flags state.weakness for the lesson. Tap counts persist
+  // to state.flash[lessonId] = { attempts, blanks, lastRunAt }.
+  let flashSessionBlanks = 0;
+  const FLASH_BLANK_WEAKNESS_THRESHOLD = 2;
   flashBtn.addEventListener('click', () => {
     if (cinemaOn || bulletsOn) restoreCanonical();
     flashOn = !flashOn;
     flashBtn.classList.toggle('active', flashOn);
     flashBtn.textContent = flashOn ? '🃏 Reveal all' : '🃏 Flash';
-    if (flashOn) renderFlash(codeEl, ref.code);
-    else colorizeInto(codeEl, ref.code);
+    if (flashOn) {
+      flashSessionBlanks = 0;
+      const lessonId = content && content.id;
+      renderFlash(codeEl, ref.code, 'javascript', {
+        mechanics: Array.isArray(content && content.mechanics) ? content.mechanics : null,
+        onRate: (rate) => {
+          if (!lessonId) return;
+          const rec = state.flash[lessonId] || { attempts: 0, blanks: 0, lastRunAt: 0 };
+          rec.attempts++;
+          rec.lastRunAt = Date.now();
+          if (rate === 'blanked') {
+            rec.blanks++;
+            flashSessionBlanks++;
+            // Cross the session threshold once → flag the lesson as a
+            // weak spot and append a history event. Subsequent blanks
+            // in the same session don't re-flag.
+            if (flashSessionBlanks === FLASH_BLANK_WEAKNESS_THRESHOLD) {
+              state.weakness[lessonId] = (state.weakness[lessonId] || 0) + 1;
+              appendHistory(lessonId, 'flash-blank');
+            }
+          }
+          state.flash[lessonId] = rec;
+          saveProgress();
+        }
+      });
+    } else {
+      colorizeInto(codeEl, ref.code);
+    }
   });
   // iter 121: 🎬 Reference Cinema — every line starts blurred; tap to reveal.
   // Read+predict-then-verify retrieval direction (distinct from Flash's

@@ -978,12 +978,74 @@ function initAtRiskModal() {
 // whatever modal is hosting the heatmap.
 function renderActivityInto(rootEl, closeFn) {
   const _close = typeof closeFn === 'function' ? closeFn : () => {};
+  const buckets = _streakMapBuckets(60);
+
+  // ── Rate + streak summary. PROFILE.md (L72) explicitly wants a streak count
+  // + today-vs-yesterday delta "progress at a glance"; the only guardrail (L109)
+  // is gamification that OBSCURES real progress. So every number here is a real
+  // rep: "solved" = a pass event (L1/L2/L3 + struggle/notes passes), "miss" = an
+  // L1/walkthrough miss or flash-blank (per _streakMapBuckets' classifier).
+  const todayActive = buckets[buckets.length - 1].passes > 0;
+  let streak = 0;
+  for (let i = buckets.length - 1 - (todayActive ? 0 : 1); i >= 0; i--) {
+    if (buckets[i].passes > 0) streak++; else break;
+  }
+  const last7 = buckets.slice(-7);
+  const wkPass = last7.reduce((s, b) => s + b.passes, 0);
+  const wkMiss = last7.reduce((s, b) => s + b.misses, 0);
+  const rate = wkPass / 7;
+  const rateStr = rate >= 10 ? String(Math.round(rate)) : rate.toFixed(1);
+  const successRate = (wkPass + wkMiss) > 0 ? Math.round(wkPass / (wkPass + wkMiss) * 100) : null;
+  const streakLine = streak > 0
+    ? `🔥 <strong style="color:#fbbf24;">${streak}-day streak</strong>${todayActive ? '' : ` · <span style="color:#fca5a5;">drill today to keep it</span>`}`
+    : `<span style="color:#94a3b8;">No streak yet — one solve today starts it 🔥</span>`;
+  const chip = (label, value, color) =>
+    `<div style="flex:1; background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:8px 10px; text-align:center;">
+       <div style="font-size:18px; font-weight:700; color:${color};">${value}</div>
+       <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.04em;">${label}</div>
+     </div>`;
+  const summaryHtml = `
+    <div style="font-size:13px; margin-bottom:10px;">${streakLine}</div>
+    <div style="display:flex; gap:8px; margin-bottom:16px;">
+      ${chip('Solved · 7d', wkPass, '#34d399')}
+      ${chip('Per day', rateStr, '#67e8f9')}
+      ${chip('First-try', successRate === null ? '—' : successRate + '%', '#a78bfa')}
+    </div>`;
+
+  // ── 14-day rate bars: height = reps that day, green=solved with amber=miss
+  // stacked on top, so the daily RATE and the success/failure split both read
+  // at a glance. Today's bar is outlined.
+  const last14 = buckets.slice(-14);
+  const barMax = Math.max(1, ...last14.map(b => b.passes + b.misses));
+  const CH = 54;
+  const barsHtml = `
+    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Last 14 days · solved/day</div>
+    <div style="display:flex; align-items:flex-end; gap:3px; height:${CH}px; margin-bottom:4px;">
+      ${last14.map((b, i) => {
+        const ph = Math.round((b.passes / barMax) * CH);
+        const mh = Math.round((b.misses / barMax) * CH);
+        const isToday = i === last14.length - 1;
+        const tip = `${b.dateLabel}: ${b.passes} solved${b.misses ? `, ${b.misses} miss` : ''}`;
+        return `<div title="${escapeHtml(tip)}" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:${CH}px;${isToday ? ' outline:1px solid #475569; outline-offset:1px; border-radius:2px;' : ''}">
+          ${mh ? `<div style="height:${mh}px; background:#f59e0b; border-radius:2px 2px 0 0;"></div>` : ''}
+          <div style="height:${ph}px; min-height:${b.passes ? '2px' : '0'}; background:#34d399; border-radius:${mh ? '0' : '2px 2px 0 0'};"></div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#64748b; margin-bottom:18px;">
+      <span>${escapeHtml(last14[0].dateLabel)}</span>
+      <span style="display:flex; gap:10px;"><span><span style="color:#34d399;">■</span> solved</span><span><span style="color:#f59e0b;">■</span> miss</span></span>
+      <span>Today</span>
+    </div>`;
+
   rootEl.innerHTML = `
-    <div data-act-tooltip style="margin-bottom: 12px; min-height: 22px; font-size: 12px; color: #94a3b8;"></div>
+    ${summaryHtml}
+    ${barsHtml}
+    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">60-day consistency</div>
+    <div data-act-tooltip style="margin-bottom: 8px; min-height: 22px; font-size: 12px; color: #94a3b8;"></div>
     <div data-act-grid style="display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px;"></div>
     <div data-act-legend style="margin-top: 14px; display: flex; gap: 8px; align-items: center; font-size: 11px; color: #64748b;"></div>`;
   {
-    const buckets = _streakMapBuckets(60);
     const max = buckets.reduce((m, b) => Math.max(m, b.total), 0);
     const grid = rootEl.querySelector('[data-act-grid]');
     const tooltip = rootEl.querySelector('[data-act-tooltip]');
@@ -1828,11 +1890,19 @@ function initStatsModal() {
 //  deep-links + cmd+click-new-tab resolve).
 // ──────────────────────────────────────────────────────────────────────────
 function renderDailyInto(rootEl) {
-  // Today's facts only — no streak counts / no completion %, per the
-  // anti-gamification stance in PROFILE.md + the Streak Map design notes.
-  const today = (typeof _streakMapBuckets === 'function' ? _streakMapBuckets(1)[0] : null) || { passes: 0, misses: 0 };
+  const b = (typeof _streakMapBuckets === 'function') ? _streakMapBuckets(2) : [];
+  const today = b[1] || { passes: 0, misses: 0 };
+  const yest = b[0] || { passes: 0, misses: 0 };
   const due = (typeof dueReviewIds === 'function') ? dueReviewIds().length : 0;
   const weak = Object.keys(state.weakness || {}).length;
+  // Today-vs-yesterday delta — explicitly endorsed by PROFILE.md (L72) as
+  // "progress at a glance". Encouraging when ahead, neutral-honest otherwise.
+  const delta = (today.passes || 0) - (yest.passes || 0);
+  let deltaLine;
+  if (!today.passes && !today.misses) deltaLine = `<span style="color:#64748b;">No reps logged yet today — one drill counts.</span>`;
+  else if (delta > 0) deltaLine = `<span style="color:#34d399;">▲ ${delta} more solved than yesterday — keep going.</span>`;
+  else if (delta < 0) deltaLine = `<span style="color:#94a3b8;">▼ ${-delta} fewer than yesterday so far.</span>`;
+  else deltaLine = `<span style="color:#94a3b8;">On pace with yesterday.</span>`;
   const tile = (label, value, color, bg, border) =>
     `<div style="background:${bg}; padding:10px 12px; border-radius:8px; border:1px solid ${border};">
        <div style="font-size:11px; color:#94a3b8;">${label}</div>
@@ -1841,11 +1911,12 @@ function renderDailyInto(rootEl) {
   rootEl.innerHTML = `
     <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">📆 Today</div>
     <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
-      ${tile('Passed today', today.passes || 0, '#34d399', 'rgba(52,211,153,0.08)', 'rgba(52,211,153,0.25)')}
+      ${tile('Solved today', today.passes || 0, '#34d399', 'rgba(52,211,153,0.08)', 'rgba(52,211,153,0.25)')}
       ${tile('Missed today', today.misses || 0, '#f87171', 'rgba(248,113,113,0.08)', 'rgba(248,113,113,0.25)')}
       ${tile('Due now', due, '#67e8f9', 'rgba(34,211,238,0.08)', 'rgba(34,211,238,0.25)')}
       ${tile('Weak spots', weak, '#fdba74', 'rgba(251,146,60,0.08)', 'rgba(251,146,60,0.25)')}
-    </div>`;
+    </div>
+    <div style="margin-top:8px; font-size:12px;">${deltaLine}</div>`;
 }
 
 function openDashboard() {

@@ -238,14 +238,18 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     }
 
     // Mechanics field — when registry is present, every referenced id must
-    // exist; missing field is a non-fatal warning so tagging can roll out
-    // incrementally.
+    // exist. Three states, by design:
+    //   - field ABSENT          → genuine TODO; surfaced in the coverage report
+    //                             so tagging can roll out incrementally.
+    //   - field present as `[]`  → INTENTIONAL "no cross-cutting mechanic
+    //                             applies" (foundational/conceptual lessons like
+    //                             s-variables, t-tdz, big-O intuition). Not a TODO.
+    //   - field present with ids → each id must resolve to the registry.
     if (MECHANIC_IDS) {
-      const mechs = Array.isArray(lesson.mechanics) ? lesson.mechanics : null;
-      if (!mechs || mechs.length === 0) {
+      if (!('mechanics' in lesson)) {
         untaggedMechanics.push({ id, section: info.slug });
-      } else {
-        for (const m of mechs) {
+      } else if (Array.isArray(lesson.mechanics)) {
+        for (const m of lesson.mechanics) {
           if (!MECHANIC_IDS.has(m)) {
             fail++;
             failures.push(`${id} unknown mechanic id "${m}" — not in data/mechanics.json`);
@@ -253,6 +257,9 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
             usedMechanicIds.add(m);
           }
         }
+      } else {
+        fail++;
+        failures.push(`${id} mechanics must be an array (use [] for "no applicable mechanic")`);
       }
     }
 

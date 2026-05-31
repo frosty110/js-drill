@@ -218,6 +218,35 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     if (l1n < L1_MIN) underL1.push({ id, section: info.slug, n: l1n });
     if (l2n < L2_MIN) underL2.push({ id, section: info.slug, n: l2n });
 
+    // L1 structural integrity — HARD failure. The app marks the correct choice
+    // via optOrder.indexOf(q.answer) (js/app/12a-l1.js); an out-of-bounds
+    // `answer` resolves to -1, so NO option is ever flagged correct and the
+    // question becomes silently unpassable on the highest-throughput surface.
+    // Density only counts questions — this gates each question's shape.
+    if (Array.isArray(lesson.L1?.questions)) {
+      // NOTE: the run-summary exits on the `fail` counter, not failures.length —
+      // so every push here MUST be paired with `fail++` or it's silently ignored.
+      const failL1 = (msg) => { fail++; failures.push(msg); };
+      lesson.L1.questions.forEach((q, qi) => {
+        if (typeof q.q !== 'string' || !q.q.trim()) {
+          failL1(`${id} L1#${qi} missing question text (q)`);
+        }
+        if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) {
+          failL1(`${id} L1#${qi} options must be an array of 2-4 choices (got ${Array.isArray(q.options) ? q.options.length : typeof q.options})`);
+          return; // answer bounds undefined without a valid options array
+        }
+        if (q.options.some(o => typeof o !== 'string' || !o.trim())) {
+          failL1(`${id} L1#${qi} every option must be a non-empty string`);
+        }
+        if (new Set(q.options.map(o => String(o).trim())).size !== q.options.length) {
+          failL1(`${id} L1#${qi} has duplicate options`);
+        }
+        if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.options.length) {
+          failL1(`${id} L1#${qi} answer ${JSON.stringify(q.answer)} out of bounds (options has ${q.options.length})`);
+        }
+      });
+    }
+
     // Banned-syntax scan — covers reference.code, every L2 template, L3 canonical.
     if (!SKIP_BANNED && !BANNED_SYNTAX_EXEMPTIONS.has(id)) {
       const sources = [];

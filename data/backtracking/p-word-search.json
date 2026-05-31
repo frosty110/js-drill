@@ -135,6 +135,17 @@
           "Set.add / Set.delete mirrors board overwrite / restore: same backtracking discipline, different container.",
           "The Set holds at most L keys at any moment, so space is still O(L) — same asymptotic as the in-place version."
         ]
+      },
+      {
+        "label": "Direction-array DFS (one neighbor loop)",
+        "when": "The same backtracking DFS, with the `||`-chained neighbor calls rewritten as a for…of with an early `break`. Worth it when you want a single reusable neighbor-walk; the explicit `||` form is terser for plain 4-directional.",
+        "complexity": "O(R·C·4^L) / O(L)",
+        "code": "const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];\nfunction exist(board, word) {\n  const rows = board.length, cols = board[0].length;\n  function dfs(r, c, i) {\n    if (i === word.length) return true;\n    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;\n    if (board[r][c] !== word[i]) return false;\n    const tmp = board[r][c];\n    board[r][c] = \"#\";\n    let found = false;\n    for (const [dr, dc] of DIRS) {\n      if (dfs(r + dr, c + dc, i + 1)) { found = true; break; }  // break = the `||` short-circuit\n    }\n    board[r][c] = tmp;\n    return found;\n  }\n  for (let r = 0; r < rows; r++) {\n    for (let c = 0; c < cols; c++) {\n      if (dfs(r, c, 0)) return true;\n    }\n  }\n  return false;\n}\nconst board = [[\"A\",\"B\",\"C\",\"E\"],[\"S\",\"F\",\"C\",\"S\"],[\"A\",\"D\",\"E\",\"E\"]];\nconsole.log(exist(board, \"ABCCED\"));\nconsole.log(exist(board, \"SEE\"));\nconsole.log(exist(board, \"ABCB\"));",
+        "notes": [
+          "`break` on the first truthy dfs reproduces the canonical's `||` short-circuit exactly — don't drop it or you explore dead branches.",
+          "The mark/restore (board[r][c] = '#' … = tmp) still brackets the loop — backtracking is unchanged.",
+          "DIRS hoisted to module scope; row delta first, column delta second."
+        ]
       }
     ]
   },

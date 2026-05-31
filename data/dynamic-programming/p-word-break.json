@@ -118,6 +118,19 @@
       "Greedily match the longest dictionary word at the front, consume it, and repeat — fails when an early greedy choice strands the suffix (e.g. 'aaaa' with ['a','aaa']).",
       "Recurse: try every dict word as a prefix and recurse on the remaining suffix, with no memo on the start index — exponential re-derivation of the same suffixes.",
       "Mark dp[i] true whenever s[j..i) is in the dict for any j, ignoring whether dp[j] itself was reachable."
+    ],
+    "alternates": [
+      {
+        "label": "Top-down memoization (recursive)",
+        "when": "Reach for this if the interviewer says 'can you do it recursively?' or you find recursion easier to reason about than tabulation. Same asymptotic complexity as the bottom-up DP — the recursion mirrors the 'where does the next word start?' decision tree, which some find more natural than threading the same idea through a dp[] array. Lazy: a lucky early split can skip whole regions of the table the iterative version still fills.",
+        "complexity": "O(n²·k) / O(n)",
+        "code": "function wordBreak(s, wordDict) {\n  const set = new Set(wordDict);\n  // memo[start] = can the suffix s[start..] be segmented?\n  const memo = new Map();\n  function canBreak(start) {\n    if (start === s.length) return true;        // consumed the whole string ✓\n    if (memo.has(start)) return memo.get(start);\n    for (let end = start + 1; end <= s.length; end++) {\n      // Try every word that could start at `start`, then recurse on the rest.\n      if (set.has(s.slice(start, end)) && canBreak(end)) {\n        memo.set(start, true);\n        return true;\n      }\n    }\n    memo.set(start, false);\n    return false;\n  }\n  return canBreak(0);\n}\nconsole.log(wordBreak(\"applepenapple\", [\"apple\", \"pen\"]));\nconsole.log(wordBreak(\"catsandog\", [\"cats\", \"dog\", \"sand\", \"and\", \"cat\"]));",
+        "notes": [
+          "Memo keys on `start` (the suffix's first index), not the dp[] table index — semantically equivalent but lets the recursion read forward (\"can the rest be broken?\") instead of backward.",
+          "Without the memo, the recursion fans out to O(d^n) — every overlapping split path re-derives the same suffixes. The memo collapses it back to O(n²·k).",
+          "The base case `start === s.length` is the recursive analog of bottom-up's `dp[0] = true` seed — it's the terminal that lets any earlier call ever return true."
+        ]
+      }
     ]
   },
   "L1": {

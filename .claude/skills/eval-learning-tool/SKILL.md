@@ -213,10 +213,31 @@ Catalog of what exists to be scored. Verdicts do NOT live here — they live in 
 
 ## Verdict ladder
 
+Different tool kinds get different ladders because they're trying to do different things. Score against the right one — don't grade a study/reference artifact as if it should be a recall surface.
+
+### Retrieval-kind tools (/21, full 7-dim rubric)
+
 - **≥18/21 → KEEP, ship-quality.** This tool earns its menu slot. UX refinement goes through /drill-refine.
 - **14–17/21 → KEEP, salvageable.** One or two specific upgrades would bring it to ship-quality. Salvage path lists them.
 - **10–13/21 → IMPROVE-or-cut.** Marginal. Salvage path must move the score ≥4 points to be worth doing; otherwise REMOVE.
 - **<10/21 → REMOVE.** Engagement theater. Cutting reduces ADHD-fit cost (PROFILE.md decision overload) with no measurable learning loss.
+
+### Reflection-kind tools (/6, only Closed-loop + Transfer-context scored)
+
+- **5–6/6 → KEEP, ship-quality.** Signal is actionable and surfaces well.
+- **3–4/6 → IMPROVE.** Composes signal but doesn't route, OR routes without composing.
+- **0–2/6 → REMOVE.** Duplicates another reflection tool or surfaces no actionable signal.
+
+### Prep-kind tools (/6, only Transfer-context + Closed-loop scored)
+
+**The rubric's recall dimensions don't apply to prep surfaces by design.** Prep tools are study/reference/exemplar artifacts — worked examples, model interview dialogue, canonical reading, audio commentary — where the value is *contextual modeling*, not retrieval. The user reads them to internalize the *shape* of expert performance before going to the recall surface. Grading a prep tool by Active-recall / Encoding / Spacing is the rubric's blind spot — those dimensions are N/A by design, not a failure to engage them.
+
+- **5–6/6 → KEEP, ship-quality.** Models the target context well (Transfer 2-3/3) AND routes to a sibling recall surface (Closed-loop 2-3/3).
+- **3–4/6 → KEEP, with route.** Strong contextual model but doesn't route — sibling recall surface exists but isn't linked, OR routes weakly. Ship the routing edit.
+- **1–2/6 → IMPROVE.** Contextual model is weak — surface doesn't actually look/feel like the target context. Salvage by reshaping the cue, OR REMOVE if the sibling recall surface already covers the modeling.
+- **0/6 → REMOVE.** Neither models the context nor routes. Pure decoration.
+
+**Routing exception:** A prep surface that links to its sibling recall drill (e.g. Conversation tab → convDrill button) earns the full Closed-loop 3/3 even though the prep tool itself writes no signal. Closed-loop is judged by "does the user's encounter with this surface FEED FORWARD to a recall act" — for prep tools, the route IS the closed loop. The sibling drill must persist counters (state.weakness, state.reviews, lifetime stats, etc.) for the credit to land.
 
 ## Workflow — score one tool (`/eval-learning-tool <tool-id>`)
 
@@ -341,16 +362,24 @@ The skill reads TRIAGE.md, filters by verdict + action status, opens each audit,
 Append a row to `docs/tool-evaluations/tools.md`:
 
 ```
-| <id> | <Name> | <kind: retrieval / reflection / navigation> | <surface: drill / train / reflect / practice> | <primary-file(s)> | <entry-point: cmd-k label / button id / tab name> |
+| <id> | <Name> | <kind: retrieval / reflection / prep / navigation> | <surface: drill / train / reflect / practice / study> | <primary-file(s)> | <entry-point: cmd-k label / button id / tab name> |
 ```
 
-`retrieval` tools are scored by the full rubric. `reflection` tools (Stats / Mechanics / Streak Map / At Risk / Resurrect) get Closed-loop + Transfer-context only (others N/A) with the verdict ladder adjusted: KEEP if signal is actionable, REMOVE if signal duplicates another reflection tool. `navigation` tools (Plan picker, Search, hamburger) are NOT learning tools — reject if added.
+**Pick the kind by what the user is asked to DO on the surface, not what the artifact contains:**
+
+- **`retrieval`** — user must produce or pick before any reveal. Scored by the full 7-dim rubric /21. Examples: L1, L2, L3, Mock, all drill-family surfaces.
+- **`reflection`** — surface composes signal sources and routes the user to action (no retrieval gate on the reflection surface itself). Scored on Closed-loop + Transfer-context only, others N/A, total /6. Examples: Stats, Mechanics, At Risk, Resurrect, Streak Map, Today's Plan.
+- **`prep`** — user reads / studies / listens to a worked example or exemplar; the value is *modeling the target context*, not producing recall. Scored on Transfer-context + Closed-loop only, others N/A, total /6. **The recall dimensions are N/A by design** — grading a prep surface as if it should retrieve is the rubric's blind spot to avoid. Examples: Conversation tab (model interview dialogue), audio Listen mode (eyes-free study). A prep surface that routes to a sibling recall drill (e.g. Conversation → convDrill button) earns full Closed-loop credit even though it writes no signal of its own — the route IS the closed loop.
+- **`navigation`** — Plan picker, Search, hamburger menu, etc. NOT learning tools — reject if added.
+
+**Hybrid surfaces — pick the kind by the DEFAULT mode**, not the available modes. Reference and Walkthrough both have study (canonical reading / step-scrubbing) as their default but also ship retrieval modes (Notes→Code, 🔮 Quiz, 🪲 Bug) — they're scored as `retrieval` because (a) the retrieval modes carry the score and (b) post-Phase-3 the retrieval modes are auto-defaulted on second entry (Walkthrough) or have parity affordances (Reference). Conversation is `prep` because there's no retrieval mode in-tab — every section is one-tap-to-reveal — and the recall happens in the sibling convDrill, not here.
 
 ## Anti-patterns (skill refuses)
 
 - ❌ Scoring without reading the implementation. Source-truth required for every dimension.
 - ❌ Scoring a tool that doesn't exist yet (that's a build → /drill-improve).
 - ❌ Scoring engagement as a proxy for learning. Engagement is necessary, not sufficient.
+- ❌ **Scoring a `prep`-kind surface by retrieval dimensions** — the rubric's blind spot. Prep tools are study/reference/exemplar artifacts where contextual modeling IS the value; grading them as if they should retrieve produces a fake-low score and recommends scrapping things that have a legitimate role. If the surface has no retrieval gate by design and is paired with a sibling recall drill, classify it as `prep` and score on Transfer + Closed-loop only.
 - ❌ Editing PROFILE.md inside this scoring run. PROFILE.md is a stable input.
 - ❌ A salvage path that doesn't move ≥1 rubric dim by ≥1 point. That's a UX iter — route to /drill-refine.
 - ❌ Executing `--execute-improve` or `--execute-remove` without re-confirming the audit's salvage/removal path against current source. The path may have drifted since scoring.

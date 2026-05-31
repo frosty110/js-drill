@@ -14,7 +14,7 @@ for one tool, or `/eval-learning-tool --all` for the batch.
 | `l2` | L2 — Fill-in typed | retrieval | practice | `js/app/12b-l2.js` | per-lesson L2 tab |
 | `l3` | L3 — Blank-editor drill | retrieval | practice | `js/app/12c-l3.js` | per-lesson L3 tab |
 | `reference` | Reference reading | retrieval | practice | `js/app/11-tabs-ref-conv-walk.js` | per-lesson Reference tab |
-| `conversation` | Conversation interview-narration | retrieval | practice | `js/app/11-tabs-ref-conv-walk.js` | per-lesson Conversation tab (Patterns/Applied) |
+| `conversation` | Conversation interview-narration | prep | study | `js/app/11-tabs-ref-conv-walk.js` | per-lesson Conversation tab (Patterns/Applied) |
 | `walkthrough` | Walkthrough — line-by-line stepper | retrieval | practice | `js/app/11-tabs-ref-conv-walk.js` | per-lesson Walkthrough tab (Patterns/Applied) |
 | `flash` | 🃏 Flash mode — cloze blur-tap on canonical | retrieval | practice | (verify file in audit) | Reference tab → Flash button |
 | `notes-drill` | 📝 Notes Drill — fill-blank MC over notes | retrieval | drill | `js/app/05-drills-recognize-trace.js:801` | cmd-k "Notes" / Drills menu |
@@ -51,8 +51,8 @@ for one tool, or `/eval-learning-tool --all` for the batch.
 Append a row above. Fields:
 - **id** — kebab-case, unique. Becomes the audit filename.
 - **Name** — display name as the user sees it (include emoji if present in UI).
-- **Kind** — `retrieval` (scored by full rubric) | `reflection` (Closed-loop + Transfer-context only, others N/A) | reject `navigation` (not a learning tool).
-- **Surface** — `drill` | `train` | `reflect` | `practice` (per user's mental model).
+- **Kind** — `retrieval` (full 7-dim rubric /21) | `reflection` (Closed-loop + Transfer-context only /6) | `prep` (Transfer + Closed-loop only /6 — study/exemplar surfaces where contextual modeling IS the value; recall dims N/A by design) | reject `navigation` (not a learning tool).
+- **Surface** — `drill` | `train` | `reflect` | `practice` | `study` (per user's mental model).
 - **Primary file(s)** — load-bearing source location(s). Use `(verify file in audit)` if unknown; the audit will resolve.
 - **Entry point** — how the user invokes (cmd-k label / button id / tab name).
 

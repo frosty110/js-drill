@@ -8,13 +8,12 @@
 
 The decision document. Per-tool detail in `audits/<id>.md`. Each row is one learning tool with a verdict, a one-line summary, and an Action status. All 4 promoted tools confirmed at projected scores.
 
-## Retrieval-kind tools (18) — scored /21
+## Retrieval-kind tools (17) — scored /21
 
 Sorted worst-first.
 
 | Tool | Score | Δ vs rescore-2 | Verdict | Salvage/Removal one-liner | Action status | Audit |
 |---|---|---|---|---|---|---|
-| Conversation | 7/21 | 0 | REMOVE (as standalone) — IMPROVE-or-cut band | User marked verdict; tab is a viable convDrill front-door but standalone learning value remains marginal | actioned-2026-05-30 (route shipped) | [→](audits/conversation.md) |
 | Flash mode | 11/21 | 0 | IMPROVE-or-cut | Mechanics-weight + self-rate landed; SR-scheduled surfacing (+1 Spacing) + cross-lesson Flash stream (+2 Interleaving) deferred → 14/21 | actioned-2026-05-30 (partial) | [→](audits/flash.md) |
 | Walkthrough | 14/21 | 0 | KEEP, salvageable | Quiz/Bug persistence + scrub-to-Quiz landed; wrong-pick rationale (+1 Feedback) + cross-lesson Trace-Hop entry (+1 Interleaving) + Quiz pass → SR (+1 Spacing) deferred → 17/21 | actioned-2026-05-30 (partial) | [→](audits/walkthrough.md) |
 | Notes Drill | 15/21 | 0 | KEEP, salvageable | SR-weighted shuffle landed; per-distractor "why wrong" + same-lesson distractors → 17/21 | actioned-2026-05-30 (partial) | [→](audits/notes-drill.md) |
@@ -32,6 +31,14 @@ Sorted worst-first.
 | Mock Interview | 19/21 | 0 | **KEEP, ship-quality** | Interview-format gold standard; no regression | n/a | [→](audits/mock-interview.md) |
 | Reverse | 19/21 | **+2** ⭐ | **KEEP, ship-quality** | Per-distractor "why wrong" + guarded SR-on-win landed; Encoding 1/3 is structural ceiling (4-option MC) — would require free-text production variant | actioned-2026-05-30 | [→](audits/reverse.md) |
 | L3 — Blank-editor drill | 20/21 | 0 | **KEEP, ship-quality** | Ship-quality; no regression | n/a | [→](audits/l3.md) |
+
+## Prep-kind tools (1) — scored /6
+
+Prep tools are study/exemplar/reference artifacts where the value is *contextual modeling*, not retrieval. Recall dimensions are N/A by design — grading prep by Active-recall/Encoding/Spacing/Interleaving/Feedback was the rubric's blind spot that produced fake-low scores. Only Transfer-context + Closed-loop are scored. A prep surface earns full Closed-loop credit when it routes to a sibling recall drill (the route IS the closed loop for prep).
+
+| Tool | Score | Δ | Verdict | One-liner | Action status | Audit |
+|---|---|---|---|---|---|---|
+| Conversation | 5/6 | (reclassified from 7/21 retrieval-kind) | **KEEP, ship-quality** | Best in-app model of interview verbalization (Transfer 2/3 — capped because reading not simulating) + routes to convDrill (Closed-loop 3/3). The Phase 0 banner-with-route is what makes this prep surface load-bearing | actioned-2026-05-30 (route shipped + reclassified) | [→](audits/conversation.md) |
 
 ## Reflection-kind tools (10) — scored /6
 
@@ -52,13 +59,15 @@ Reflection tools surface signal; they don't directly teach. Only Closed-loop sig
 
 ## Summary — full campaign delta
 
-| Band | Pre-campaign (2026-05-30-175954) | Post-Phase-3 (180445) | **Post-Phase-4/5-promote (this run)** | Net |
-|---|---|---|---|---|
-| **KEEP, ship-quality** (≥18 retrieval, 5-6 reflection) | 10 | 13 | **17** | **+7** |
-| KEEP, salvageable (14-17 retrieval) | 10 | 11 | **9** | -1 |
-| IMPROVE (10-13 retrieval, 3-4 reflection) | 6 | 3 | **1** | **-5** |
-| REMOVE (<10) | 0 | 0 | 0 | 0 |
-| **Total tools at ship-quality** | **36%** | **46%** | **61%** | **+25 pts** |
+| Band | Pre-campaign (2026-05-30-175954) | Post-Phase-3 (180445) | Post-Phase-4/5-promote (184940) | **Post-rubric-update (this run)** | Net |
+|---|---|---|---|---|---|
+| **KEEP, ship-quality** (≥18 retrieval, 5-6 reflection, 5-6 prep) | 10 | 13 | 17 | **18** | **+8** |
+| KEEP, salvageable (14-17 retrieval) | 10 | 11 | 9 | **9** | -1 |
+| IMPROVE (10-13 retrieval, 3-4 reflection, 1-2 prep) | 6 | 3 | 1 | **1** | **-5** |
+| REMOVE (<10 retrieval, 0-2 reflection, 0 prep) | 0 | 0 | 0 | 0 | 0 |
+| **Total tools at ship-quality** | **36%** | **46%** | **61%** | **64%** | **+28 pts** |
+
+**Rubric-update lift (this run):** Conversation reclassified from `retrieval` (7/21 IMPROVE-or-cut) to `prep` (5/6 KEEP, ship-quality). This wasn't a code change — the tool was correctly scored as a study artifact instead of being mis-graded as a recall surface. The fake-low retrieval score was the rubric's blind spot before the update. See `.claude/skills/eval-learning-tool/SKILL.md` "Verdict ladder → Prep-kind tools" section.
 
 **This run's promotions confirmed (vs prior rescore at 180445):**
 - L2 17 → **18** (+1 Active recall) ⭐ promoted to ship-quality

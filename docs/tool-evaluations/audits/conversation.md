@@ -1,21 +1,27 @@
-# Conversation interview-narration — Learning-effectiveness audit
+# Conversation interview-narration — Learning-effectiveness audit (prep-kind)
 
-**Total: 7/21**
-**Verdict: REMOVE (as standalone retrieval surface) — IMPROVE-or-cut band**
+**Total: 5/6** (prep-kind: only Transfer-context + Closed-loop scored — recall dims N/A by design)
+**Verdict: KEEP, ship-quality**
 **Anchor file:** `js/app/11-tabs-ref-conv-walk.js:49`
-**Scored:** 2026-05-30
+**Scored:** 2026-05-30 (reclassified prep-kind 2026-05-30 post-rubric-update)
+
+## Why prep-kind, not retrieval-kind
+
+The Conversation tab models what a candidate would *say* across the 6 interview phases (Clarify / Approach / Code / Complexity / Edge cases / Wrap-up). It's a worked-example surface — the value is letting the user internalize the *shape* of expert interview performance before going to the recall drill. Retrieval happens in the sibling `convDrill` (which the tab now explicitly routes to via the cyan banner), not in-tab.
+
+Grading this as `retrieval` (the prior classification) caps it at 7/21 with 0s on Spacing / Interleaving / Feedback by structure — the rubric's blind spot for prep surfaces. The reclassification to `prep` scores it on the dimensions that actually matter for a study artifact: does it model the target context, and does it route to a real recall drill.
 
 ## Score
 
 | Dim | Score | Evidence (file:line) |
 |---|---|---|
-| Active recall | 1/3 | `js/app/11-tabs-ref-conv-walk.js:111-119` — every section is a `<details>` collapsed by default; tap-to-expand is one-tap reveal with no retrieval gate. Title + prompt are visible (lines 113-115) — user reads the prompt, then taps to see the "say/why" answer without producing anything. Categorically recognition/familiarity, not recall. The new cyan banner at `:126-134` and 🎬 Drill recall route button at `:132, 155-157` advertises the sibling drill but does not change the in-tab read posture. |
-| Encoding strength | 1/3 | `js/app/11-tabs-ref-conv-walk.js:78-106` — body is pre-authored prose ("What I'd say", "Why this matters"). User reads, doesn't produce. Closest to recognition; sections occasionally include `examples` with traces (lines 84-100) but those are also read-only. |
-| Spacing | 0/3 | No `state.reviews` integration. The Conversation tab itself writes nothing to SR — the new "🎬 Drill recall →" route at `:155-157` opens a sibling `startConvDrillSession()` that DOES write counters (`state.convDrill`), but that's a separate tool. The tab as a surface still has zero SR-touching write paths. |
-| Interleaving | 0/3 | Bound to one lesson (`renderConversation(body, content)` at line 49 takes single lesson content). No cross-lesson session in-tab. The routed drill IS interleaved across lessons, but again — sibling surface, not this tab. |
-| Feedback quality | 0/3 | No right/wrong concept — purely expository. There's no "answer to be wrong about" so the dimension is structurally absent. |
-| Transfer-context match | 2/3 | `js/app/11-tabs-ref-conv-walk.js:111-119` — sections are *interview-shaped* ("Clarify", "Approach", "Code", "Complexity", etc. per `docs/conversation-walkthrough.md`) and the say/why split mirrors the verbalize-while-coding cadence PROFILE.md targets. Closest match of any surface to "what would you say in an interview." But it's a *reading* of the interview rather than a simulation. |
-| Closed-loop signal use | 3/3 | `js/app/11-tabs-ref-conv-walk.js:126-134, 150-157` — the cyan drill-route banner explicitly funnels the user from "I read this" → `startConvDrillSession()` which persists `state.convDrill` counters AND can flag `state.weakness` on classifier miss. The tab is now structurally the front-door to a real retrieval drill rather than a terminal read. Crediting the tab full 3/3 because the route is wired AND the destination drill writes the full signal triad (attempts/correct/weakness). |
+| Active recall | N/A | (prep-kind — user reads/studies; recall happens in sibling convDrill) |
+| Encoding strength | N/A | (prep-kind) |
+| Spacing | N/A | (prep-kind) |
+| Interleaving | N/A | (prep-kind) |
+| Feedback quality | N/A | (prep-kind — purely expository, no right/wrong) |
+| Transfer-context match | 2/3 | `js/app/11-tabs-ref-conv-walk.js:111-119` — sections are *interview-shaped* ("Clarify", "Approach", "Code", "Complexity", etc. per `docs/conversation-walkthrough.md`) and the say/why split mirrors the verbalize-while-coding cadence PROFILE.md targets. **Best in-app model of interview verbalization.** Capped at 2/3 because it's a *reading* of the interview rather than a *simulation* — 3/3 would require the user to produce verbalization, which is the convDrill's job. |
+| Closed-loop signal use | 3/3 | `js/app/11-tabs-ref-conv-walk.js:126-134, 150-157` — the cyan drill-route banner funnels the user from "I read this" → `startConvDrillSession()` which persists `state.convDrill` counters AND can flag `state.weakness` on classifier miss. **For prep-kind, the route IS the closed loop** — the surface has no signal of its own to write, but the user's encounter with it feeds forward into a real recall act on the sibling drill. Full 3/3. |
 
 ## Strengths
 - **Best-in-app transfer-context match** — `js/app/11-tabs-ref-conv-walk.js:78-106` "What I'd say" / "Why this matters" split is the only surface modeling interview verbalization.
@@ -23,25 +29,24 @@
 - **Listen mode** (`js/app/11-tabs-ref-conv-walk.js:124, 147-149`) extends usage to the eyes-free phone-time slice PROFILE.md amendment C names.
 
 ## Weaknesses
-- **Pure read surface in-tab** — `js/app/11-tabs-ref-conv-walk.js:111-117` — every section is a one-tap expand. No prompt-and-recall before reveal; tap is just disclosure. The drill route lifts Closed-loop but not Active recall — the IN-TAB act remains reading.
-- **Zero state writes from the in-tab act itself.** Banner click writes via the sibling drill; expand/collapse writes nothing. A user who reads but never taps the route gets zero signal.
-- **Not interleaved in-tab.** Single-lesson surface; the routed drill is the only interleaved path, and the tab itself violates Rohrer & Taylor mixing.
+- **Transfer-context capped at 2/3** — the surface is a *reading* of the interview rather than a *simulation*. Real interview verbalization happens under time pressure with no script visible. The Conversation tab is the prep surface that models what to say; the convDrill is the surface where the user actually produces it. Lifting Transfer to 3/3 would require the prep surface to also force production, which would collapse it back into being a retrieval surface (i.e. duplicate convDrill).
+- **Standalone learning loss if convDrill is broken or unloaded** — the tab is honest about being prep, not retrieval; if the user never taps the route, the value is bounded at "they read a model script." This is the same tradeoff every textbook has — readers who never do the exercises learn less.
 
 ## Salvage path (if IMPROVE)
 
-The Phase 0 route-to-drill salvage already shipped (`:126-134, 155-157`) — that lift is in the 7/21 score. Further single-edit options to push toward 10/21 KEEP-band:
+Tool is at 5/6 ship-quality under the prep-kind rubric — no salvage needed. Remaining ceiling is Transfer 2/3 → 3/3 which would require turning the surface into a simulation (production-based), at which point it would be a `retrieval` tool not `prep` (and would duplicate convDrill). The prep-kind 2/3 is the structural ceiling.
 
-1. **Per-section "predict before reveal" gate** — `js/app/11-tabs-ref-conv-walk.js:111-119` add a thin "What would you say here?" textarea OR "Tap when you've thought of an answer" intent button before the `<details>` opens. Counter persisted to `state.convRead.{lessonId}.{sectionIdx}`. Lifts Active recall +1 (1→2), Encoding strength +1 (1→2).
-2. **Read → schedule for review** — on first read of all sections in a lesson, seed `state.reviews[lessonId]` if absent (1d interval). Lifts Spacing +1 (0→1).
-3. **Mark-confidence after reveal** — 3-button "knew it / partial / blank" under each expanded section, write to `state.weakness[lessonId]` on blank. Lifts Feedback +1 (0→1, the self-rating IS signal).
+If you wanted to add in-tab signal that doesn't change the surface kind:
+- **Mark-confidence after reveal (optional polish)** — 3-button "knew it / partial / blank" chip under each expanded section, write to `state.weakness[lessonId]` on blank. Wouldn't change the rubric score (Closed-loop is already 3/3 via the route), but would add a finer-grain self-rating signal for users who use Conversation as their primary study surface without always tapping through to convDrill.
 
-**Projected after salvage:** 10-11/21 — bottom of KEEP, salvageable. Borderline. If salvage doesn't move it ≥4 pts, the rubric verdict reverts to REMOVE (tab demoted to settings-toggle off-by-default); however the conv **content** stays load-bearing for `convDrill` and audio regardless of tab status.
+## Removal path (NOT recommended)
+Prior to the prep-kind reclassification, this audit suggested REMOVE-as-standalone. Under the corrected rubric, the tab is **KEEP, ship-quality** — it models the target context well and routes to a real recall drill. The "scrap" recommendation was an artifact of grading a prep surface by retrieval dimensions. Don't remove.
 
-## Removal path (if REMOVE)
-Conv tab content is reused by `convDrill` (`js/app/01-state-content.js:222`, `js/app/05-drills-recognize-trace.js`) and the audio Listen mode — removing the *tab* would not remove the *content*. If the rubric forces removal: hide the tab behind a settings toggle (default off), keep `data/*.json` `conversation` blocks intact, keep `convDrill` and audio as the primary surfaces consuming the content. Drilling-user-visible loss: the desk-tier "read the interview script" surface; but interleaved drill still drives the content.
+If a future re-evaluation does call for removal: the content is reused by `convDrill` (`js/app/01-state-content.js:222`, `js/app/05-drills-recognize-trace.js`) and the audio Listen mode, so the tab could be hidden behind a settings toggle (default off) with no content loss. Drilling-user-visible loss: the desk-tier "read the interview script" surface; interleaved drill still drives the content. But the prep-kind score doesn't warrant this.
 
 ## Action log
 - 2026-05-30 Scored at 6/21 by `/eval-learning-tool --all`.
 - 2026-05-30 Phase 0 salvage decision applied — tab demoted to preview-with-route. New prominent cyan banner at top of Conversation tab (`js/app/11-tabs-ref-conv-walk.js:123-131`) reads "Reading is the prep" + "🎬 Drill recall →" button. Tap routes to `startConvDrillSession()` (cross-lesson section-classifier quiz over `conversation.sections[]` that already persists counters). The 6 sections still render below the banner as the reading surface — but the surface is now framed as preview, not the recall destination. Closed-loop signal lifts from "borrowed from convDrill content" to "user routes here, then drills". Projected 6→8 (Closed-loop 2→3 via the explicit route; Active recall stays 1 because in-tab is still tap-to-reveal — true lift comes from the routed convDrill session, not from this tab). Validator: 810 passed, 0 failed.
 - 2026-05-30 Re-scored at 7/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/). Closed-loop lift confirmed (2→3). Active recall stays 1 — in-tab act is still tap-to-reveal; route lifts Closed-loop not Active recall. Verdict still IMPROVE-or-cut band: tab is now a viable front-door to convDrill, but the standalone learning value remains marginal.
+- 2026-05-30 **Reclassified `retrieval` → `prep`** per rubric update (SKILL.md verdict-ladder section now distinguishes prep-kind tools where recall dims are N/A by design and the value is contextual modeling + routing to a sibling recall drill). The 7/21 retrieval-kind score was a rubric blind spot — grading a prep surface by Active-recall/Encoding/Spacing/Interleaving/Feedback produces zeros on dimensions that aren't trying to be engaged. Under the prep-kind ladder: Transfer 2/3 + Closed-loop 3/3 = **5/6 KEEP, ship-quality.** Tool is now correctly scored as a study surface that models the interview context AND routes to the recall drill. No code change; the rubric was wrong, not the tool.
 - 2026-05-30 Re-scored at 7/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-184940/). No source changes since prior rescore. Banner at `:126-134`, route handler at `:150-157`, sections `<details>` block at `:111-119` all verified in current source. Verdict unchanged.

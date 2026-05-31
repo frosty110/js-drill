@@ -32,7 +32,7 @@ function renderL2(body, lesson, content) {
   // lose typing: { passed: bool, values: [str, str, ...] } per exercise.
   let exerciseState = _cacheGet(lesson.id, 'L2');
   if (!Array.isArray(exerciseState) || exerciseState.length !== exercises.length) {
-    exerciseState = exercises.map(ex => ({ passed: false, values: ex.blanks.map(() => '') }));
+    exerciseState = exercises.map(ex => ({ passed: false, attempts: 0, values: ex.blanks.map(() => '') }));
     _cacheSet(lesson.id, 'L2', exerciseState);
   } else {
     // Defensive: an older cache entry may lack `values` if it predates BS-12.
@@ -40,6 +40,8 @@ function renderL2(body, lesson, content) {
       if (!Array.isArray(exerciseState[exi].values) || exerciseState[exi].values.length !== ex.blanks.length) {
         exerciseState[exi].values = ex.blanks.map(() => '');
       }
+      // Legacy cache entries pre-2026-05-30 lack `attempts`; backfill 0.
+      if (typeof exerciseState[exi].attempts !== 'number') exerciseState[exi].attempts = 0;
     });
   }
 
@@ -106,6 +108,10 @@ function renderL2(body, lesson, content) {
     const outputBox = card.querySelector('[data-output]');
 
     card.querySelector('[data-action="check"]').addEventListener('click', async () => {
+      // Count this attempt — used to flag the "struggled-but-eventually-
+      // passed" middle case (≥3 attempts) as a weakness signal. Audit:
+      // audits/l2.md edit 1.
+      if (!exerciseState[exi].passed) exerciseState[exi].attempts++;
       // mark each blank
       let allBlanksRight = true;
       inputs.forEach((inp, i) => {
@@ -130,6 +136,15 @@ function renderL2(body, lesson, content) {
       outputWrap.classList.remove('hidden');
 
       const matched = result.ok && outputsMatch(result.output, ex.expectedOutput);
+      // If the user passes after struggling (≥3 attempts), flag once
+      // as a weakness signal — surfaces "struggled-but-eventually-passed"
+      // middle case the SR loop previously couldn't see (audits/l2.md
+      // edit 1). Only fires on the FIRST pass for this exercise.
+      const justPassed = !exerciseState[exi].passed && matched;
+      if (justPassed && exerciseState[exi].attempts >= 3) {
+        state.weakness[lesson.id] = (state.weakness[lesson.id] || 0) + 1;
+        appendHistory(lesson.id, 'L2-struggle-pass');
+      }
       if (allBlanksRight && matched) {
         feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
         exerciseState[exi].passed = true;
@@ -214,22 +229,26 @@ function renderL2Mobile(body, lesson, content) {
   // shape is identical; chips are DOM and per-render so they stay local.
   let cached = _cacheGet(lesson.id, 'L2');
   if (!Array.isArray(cached) || cached.length !== exercises.length) {
-    cached = exercises.map(ex => ({ passed: false, values: ex.blanks.map(() => '') }));
+    cached = exercises.map(ex => ({ passed: false, attempts: 0, values: ex.blanks.map(() => '') }));
     _cacheSet(lesson.id, 'L2', cached);
   } else {
     exercises.forEach((ex, exi) => {
       if (!Array.isArray(cached[exi].values) || cached[exi].values.length !== ex.blanks.length) {
         cached[exi].values = ex.blanks.map(() => '');
       }
+      // Legacy cache entries pre-2026-05-30 lack `attempts`; backfill 0.
+      if (typeof cached[exi].attempts !== 'number') cached[exi].attempts = 0;
     });
   }
   // exerciseState wraps the cached data with per-render chip refs.
-  // Use getter/setter for `passed` and share the `values` array reference
-  // so every existing write site (chip taps, reveal, check) automatically
-  // mutates the cache too — no manual sync calls needed.
+  // Use getter/setter for `passed`/`attempts` and share the `values`
+  // array reference so every existing write site (chip taps, reveal,
+  // check) automatically mutates the cache too — no manual sync.
   const exerciseState = cached.map((c) => ({
     get passed() { return c.passed; },
     set passed(v) { c.passed = v; },
+    get attempts() { return c.attempts; },
+    set attempts(v) { c.attempts = v; },
     values: c.values,
     chips: []
   }));
@@ -297,6 +316,10 @@ function renderL2Mobile(body, lesson, content) {
     card.querySelector('[data-action="check"]').addEventListener('click', async () => {
       // Save whatever's typed in the sheet before validating.
       saveActiveValue();
+      // Count this attempt — used to flag the "struggled-but-eventually-
+      // passed" middle case (≥3 attempts) as a weakness signal. Audit:
+      // audits/l2.md edit 1.
+      if (!exerciseState[exi].passed) exerciseState[exi].attempts++;
       const vals = exerciseState[exi].values;
       const chips = exerciseState[exi].chips;
       let allBlanksRight = true;
@@ -317,6 +340,15 @@ function renderL2Mobile(body, lesson, content) {
       outputWrap.classList.remove('hidden');
 
       const matched = result.ok && outputsMatch(result.output, ex.expectedOutput);
+      // If the user passes after struggling (≥3 attempts), flag once
+      // as a weakness signal — surfaces "struggled-but-eventually-passed"
+      // middle case the SR loop previously couldn't see (audits/l2.md
+      // edit 1). Only fires on the FIRST pass for this exercise.
+      const justPassed = !exerciseState[exi].passed && matched;
+      if (justPassed && exerciseState[exi].attempts >= 3) {
+        state.weakness[lesson.id] = (state.weakness[lesson.id] || 0) + 1;
+        appendHistory(lesson.id, 'L2-struggle-pass');
+      }
       if (allBlanksRight && matched) {
         feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
         exerciseState[exi].passed = true;

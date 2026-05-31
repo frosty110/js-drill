@@ -133,8 +133,8 @@ Multi-edit but each tool has a clear path to ship-quality band.
 
 - [x] **walkthrough** — extend `state.walkthrough[lessonId] = { quizAttempts, quizCorrect, bugAttempts, bugCorrect, lastRunAt }` at `js/app/11-tabs-ref-conv-walk.js:424-438, 548-563`; on miss also flag `state.weakness[lessonId]`; default-open `🔮 Quiz` after first full scrub (+6: 11→17) — 📄 `audits/walkthrough.md` → commit `a01b0a8`
 - [x] **rapid-fire-l1** — SR+weakness-weighted deck (currently uniform Fisher-Yates) + post-streak free-recall reveal window (+3: 16→19) — 📄 `audits/rapid-fire-l1.md` → commit `5c44495` (SR-weight edit shipped; free-recall variant deferred)
-- [x] **warmup-3card** — `appendHistory('L1-pass')` on win + typed-recall variant for next-on-plan card (+2: 15→17) — 📄 `audits/warmup-3card.md` → awaiting commit (history+decay shipped; typed-recall variant deferred)
-- [ ] **l2** — attempt-count weakness signal (so "struggled-but-eventually-passed" middle case is visible) + per-blank tiered reveal — 📄 `audits/l2.md`
+- [x] **warmup-3card** — `appendHistory('L1-pass')` on win + typed-recall variant for next-on-plan card (+2: 15→17) — 📄 `audits/warmup-3card.md` → commit `61e3d94` (history+decay shipped; typed-recall variant deferred)
+- [x] **l2** — attempt-count weakness signal (so "struggled-but-eventually-passed" middle case is visible) + per-blank tiered reveal — 📄 `audits/l2.md` → awaiting commit (attempt-count + struggle-pass weakness shipped; per-blank tiered reveal deferred)
 - [ ] **l1** — carry-over weak-spot question per session — 📄 `audits/l1.md`
 - [ ] **flash** (Phase 0 salvage decision) — self-rate after reveal + persist `state.flash.{lessonId} = { attempts, blanks, lastRunAt }` + mechanics-weighted token selection + SR-scheduled surfacing. Projected 7→14 (+7) — 📄 `audits/flash.md`
 - [ ] **conversation** (Phase 0 salvage decision) — demote tab to preview-with-route surface that links each section header into `convDrill` (which already mines `conversation.sections[]` and writes counters). Keeps the tab visible but the recall happens in the drill — 📄 `audits/conversation.md`

@@ -32,7 +32,13 @@ function renderL2(body, lesson, content) {
   // lose typing: { passed: bool, values: [str, str, ...] } per exercise.
   let exerciseState = _cacheGet(lesson.id, 'L2');
   if (!Array.isArray(exerciseState) || exerciseState.length !== exercises.length) {
-    exerciseState = exercises.map(ex => ({ passed: false, attempts: 0, values: ex.blanks.map(() => '') }));
+    exerciseState = exercises.map(ex => ({
+      passed: false,
+      attempts: 0,
+      values: ex.blanks.map(() => ''),
+      blankRevealed: ex.blanks.map(() => false),
+      anyRevealed: false
+    }));
     _cacheSet(lesson.id, 'L2', exerciseState);
   } else {
     // Defensive: an older cache entry may lack `values` if it predates BS-12.
@@ -42,6 +48,12 @@ function renderL2(body, lesson, content) {
       }
       // Legacy cache entries pre-2026-05-30 lack `attempts`; backfill 0.
       if (typeof exerciseState[exi].attempts !== 'number') exerciseState[exi].attempts = 0;
+      // Per-blank reveal state (Phase 5-promote). Legacy entries get a
+      // fresh blankRevealed array sized to the current blanks.
+      if (!Array.isArray(exerciseState[exi].blankRevealed) || exerciseState[exi].blankRevealed.length !== ex.blanks.length) {
+        exerciseState[exi].blankRevealed = ex.blanks.map(() => false);
+      }
+      if (typeof exerciseState[exi].anyRevealed !== 'boolean') exerciseState[exi].anyRevealed = false;
     });
   }
 
@@ -99,6 +111,38 @@ function renderL2(body, lesson, content) {
           exerciseState[exi].values[blankIdx] = inp.value;
         });
         templEl.appendChild(inp);
+        // iter eval-2026-05-30 (Phase 5-promote): per-blank "?" reveal.
+        // Replaces the flat "Reveal answers" giving-up affordance with
+        // a granular per-blank surrender — user can ask for blank 2's
+        // answer while still attempting blanks 1, 3, 4 honestly. Per
+        // audits/l2.md edit 1 (+1 Active recall).
+        const hintBtn = document.createElement('button');
+        hintBtn.type = 'button';
+        hintBtn.className = 'blank-hint-btn';
+        hintBtn.title = 'Reveal just this blank';
+        hintBtn.setAttribute('aria-label', `Reveal blank ${blankIdx + 1}`);
+        hintBtn.textContent = '?';
+        if (exerciseState[exi].blankRevealed && exerciseState[exi].blankRevealed[blankIdx]) {
+          hintBtn.classList.add('hidden');
+          inp.classList.add('correct');
+        }
+        hintBtn.addEventListener('click', () => {
+          inp.value = ex.blanks[blankIdx].answer;
+          exerciseState[exi].values[blankIdx] = ex.blanks[blankIdx].answer;
+          inp.classList.remove('incorrect');
+          inp.classList.add('correct');
+          if (!exerciseState[exi].blankRevealed) exerciseState[exi].blankRevealed = [];
+          exerciseState[exi].blankRevealed[blankIdx] = true;
+          hintBtn.classList.add('hidden');
+          // First per-blank reveal also writes the lesson-level reveal
+          // signal (same demote-SR semantics as the bulk reveal button)
+          // — but only ONCE per exercise to avoid re-demoting.
+          if (!exerciseState[exi].anyRevealed) {
+            exerciseState[exi].anyRevealed = true;
+            markRevealed(lesson.id, 'L2');
+          }
+        });
+        templEl.appendChild(hintBtn);
         inputs.push(inp);
       }
     });
@@ -169,8 +213,17 @@ function renderL2(body, lesson, content) {
         inp.value = ex.blanks[i].answer;
         inp.classList.remove('incorrect');
         inp.classList.add('correct');
+        if (!exerciseState[exi].blankRevealed) exerciseState[exi].blankRevealed = [];
+        exerciseState[exi].blankRevealed[i] = true;
       });
-      const { demoted } = markRevealed(lesson.id, 'L2');
+      // Hide all per-blank `?` buttons since everything is now revealed.
+      card.querySelectorAll('.blank-hint-btn').forEach(b => b.classList.add('hidden'));
+      // Guard against double markRevealed if per-blank `?` already fired.
+      let demoted = false;
+      if (!exerciseState[exi].anyRevealed) {
+        exerciseState[exi].anyRevealed = true;
+        ({ demoted } = markRevealed(lesson.id, 'L2'));
+      }
       if (demoted) {
         feedback.innerHTML = '<span class="text-amber-400">Solution revealed.</span>' + srBadgeHtml(lesson.id, 'demote');
       }
@@ -229,7 +282,13 @@ function renderL2Mobile(body, lesson, content) {
   // shape is identical; chips are DOM and per-render so they stay local.
   let cached = _cacheGet(lesson.id, 'L2');
   if (!Array.isArray(cached) || cached.length !== exercises.length) {
-    cached = exercises.map(ex => ({ passed: false, attempts: 0, values: ex.blanks.map(() => '') }));
+    cached = exercises.map(ex => ({
+      passed: false,
+      attempts: 0,
+      values: ex.blanks.map(() => ''),
+      blankRevealed: ex.blanks.map(() => false),
+      anyRevealed: false
+    }));
     _cacheSet(lesson.id, 'L2', cached);
   } else {
     exercises.forEach((ex, exi) => {
@@ -238,18 +297,27 @@ function renderL2Mobile(body, lesson, content) {
       }
       // Legacy cache entries pre-2026-05-30 lack `attempts`; backfill 0.
       if (typeof cached[exi].attempts !== 'number') cached[exi].attempts = 0;
+      // Per-blank reveal state (Phase 5-promote).
+      if (!Array.isArray(cached[exi].blankRevealed) || cached[exi].blankRevealed.length !== ex.blanks.length) {
+        cached[exi].blankRevealed = ex.blanks.map(() => false);
+      }
+      if (typeof cached[exi].anyRevealed !== 'boolean') cached[exi].anyRevealed = false;
     });
   }
   // exerciseState wraps the cached data with per-render chip refs.
-  // Use getter/setter for `passed`/`attempts` and share the `values`
-  // array reference so every existing write site (chip taps, reveal,
-  // check) automatically mutates the cache too — no manual sync.
+  // Use getter/setter for `passed`/`attempts`/`anyRevealed` and share
+  // the `values` + `blankRevealed` array references so every existing
+  // write site (chip taps, reveal, check) automatically mutates the
+  // cache too — no manual sync.
   const exerciseState = cached.map((c) => ({
     get passed() { return c.passed; },
     set passed(v) { c.passed = v; },
     get attempts() { return c.attempts; },
     set attempts(v) { c.attempts = v; },
+    get anyRevealed() { return c.anyRevealed; },
+    set anyRevealed(v) { c.anyRevealed = v; },
     values: c.values,
+    blankRevealed: c.blankRevealed,
     chips: []
   }));
 
@@ -374,11 +442,18 @@ function renderL2Mobile(body, lesson, content) {
         if (valueEl) valueEl.textContent = b.answer;
         chips[i].classList.remove('incorrect');
         chips[i].classList.add('has-value', 'correct');
+        if (!exerciseState[exi].blankRevealed) exerciseState[exi].blankRevealed = [];
+        exerciseState[exi].blankRevealed[i] = true;
       });
       if (activeRef && activeRef.exi === exi) {
         sheetInput.value = ex.blanks[activeRef.bi].answer;
       }
-      const { demoted } = markRevealed(lesson.id, 'L2');
+      // Guard against double markRevealed if per-blank sheet-reveal already fired.
+      let demoted = false;
+      if (!exerciseState[exi].anyRevealed) {
+        exerciseState[exi].anyRevealed = true;
+        ({ demoted } = markRevealed(lesson.id, 'L2'));
+      }
       if (demoted) {
         feedback.innerHTML = '<span class="text-amber-400">Solution revealed.</span>' + srBadgeHtml(lesson.id, 'demote');
       }
@@ -398,6 +473,7 @@ function renderL2Mobile(body, lesson, content) {
     <input class="l2-sheet-input mono" data-sheet-input type="text" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="text" />
     <div class="l2-sheet-actions">
       <button class="secondary" data-sheet-prev>← Prev</button>
+      <button class="secondary" data-sheet-reveal title="Reveal just this blank">? Reveal</button>
       <button class="primary" data-sheet-next>Next →</button>
       <button class="secondary" data-sheet-done>Done</button>
     </div>
@@ -481,6 +557,31 @@ function renderL2Mobile(body, lesson, content) {
     activeRef = null;
     sheet.classList.remove('open');
     sheetInput.blur();
+  });
+  // iter eval-2026-05-30 (Phase 5-promote): per-blank reveal on mobile.
+  // Mirrors the desktop "?" affordance — surrenders only the currently-
+  // active blank, preserving recall attempt on the others. Per
+  // audits/l2.md edit 1 (+1 Active recall, mobile-symmetric).
+  const sheetReveal = sheet.querySelector('[data-sheet-reveal]');
+  sheetReveal.addEventListener('click', () => {
+    if (!activeRef) return;
+    const { exi, bi } = activeRef;
+    const blank = exercises[exi].blanks[bi];
+    sheetInput.value = blank.answer;
+    exerciseState[exi].values[bi] = blank.answer;
+    const chip = exerciseState[exi].chips[bi];
+    const valueEl = chip.querySelector('.chip-value');
+    if (valueEl) valueEl.textContent = blank.answer;
+    chip.classList.remove('incorrect');
+    chip.classList.add('has-value', 'correct');
+    // Per-blank reveal flag (shared schema with desktop variant).
+    if (!exerciseState[exi].blankRevealed) exerciseState[exi].blankRevealed = [];
+    exerciseState[exi].blankRevealed[bi] = true;
+    // First per-blank reveal in this exercise → demote SR once.
+    if (!exerciseState[exi].anyRevealed) {
+      exerciseState[exi].anyRevealed = true;
+      markRevealed(lesson.id, 'L2');
+    }
   });
 
   // Status footer (same as desktop)

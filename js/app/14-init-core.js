@@ -58,6 +58,16 @@ let _paletteCursor = 0;
 
 function _paletteBuildIndex() {
   const items = [];
+  // (0) Dashboard — lives in the topbar (not the sidebar scan below), so add it
+  // explicitly. "stats" / "streak" still resolve via their retired sidebar
+  // buttons (which now route to the Dashboard).
+  items.push({
+    id: 'btn:dashboard',
+    label: 'Dashboard',
+    kind: 'mode',
+    hint: 'Daily progress, activity, and mastery in one view',
+    action: () => { if (typeof openDashboard === 'function') openDashboard(); }
+  });
   // (1) Sidebar buttons — synthetic click invokes existing handlers.
   document.querySelectorAll('aside button[id], #sidebar-main-buttons button[id]').forEach(btn => {
     const id = btn.id;
@@ -785,7 +795,7 @@ function initSearchAndKeyboard() {
         e.preventDefault();
         return;
       }
-      const modals = ['help-modal', 'today-modal', 'stats-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal', 'streak-map-modal', 'heatstrip-modal', 'audio-modal'];
+      const modals = ['help-modal', 'today-modal', 'dashboard-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal', 'heatstrip-modal', 'audio-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);
         if (m && m.style.display === 'block') { m.style.display = 'none'; e.preventDefault(); return; }

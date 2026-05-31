@@ -48,8 +48,17 @@ async function clearSWAndReload(s, hash = '') {
   s.assert(dash.stats, 'S1: stats section should contain the Track Balance compass');
   await s.snap('01-dashboard-desktop');
 
+  // (1b) Escape closes the Dashboard (parity with every other modal).
+  await s.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await s.sleep(200);
+  const escClosed = await s.eval(`(() => { const m = document.getElementById('dashboard-modal'); return getComputedStyle(m).display === 'none'; })()`);
+  s.assert(escClosed, 'S1b: Escape should close the Dashboard');
+
+  // (1c) Dashboard is discoverable in the Cmd-K palette by name.
+  const inPalette = await s.eval(`typeof _paletteBuildIndex === 'function' && _paletteBuildIndex().some(i => i.label === 'Dashboard' && i.kind === 'mode')`);
+  s.assert(inPalette, 'S1c: command palette index should contain a "Dashboard" mode entry');
+
   // (4) Review menu: no Stats/Streak items; items are routable anchors.
-  await s.eval(`closeDashboard && closeDashboard()`);
   await s.sleep(150);
   await s.click('.topbar-menu[data-menu="insights"]');
   await s.sleep(250);

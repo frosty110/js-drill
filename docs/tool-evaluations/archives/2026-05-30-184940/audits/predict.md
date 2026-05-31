@@ -40,4 +40,3 @@ Ordered by leverage. Each edit names file:line + dim it lifts.
 - 2026-05-30 Scored at 14/21 by `/eval-learning-tool --all`.
 - 2026-05-30 Salvage edit 1 applied — SR write on win at `js/app/07-drills-swap-speedrun.js:402-415` via `scheduleReview(card.lessonId, { advance: false })`. **Guarded** to `state.reviews[id] && isDueForReview(id)` (mirrors `markPassed`'s L2 pattern at slice 09:791) so a recognition win can't seed SR on a non-mastered lesson or extend dueAt on a not-yet-due lesson. Projected 14→16 (+2 Spacing). Typed-output mode and per-option explain deferred to Phase 3-class follow-ups. Validator: 810 passed, 0 failed.
 - 2026-05-30 Re-scored at 16/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/).
-- 2026-05-30 Re-scored at 16/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-184940/).

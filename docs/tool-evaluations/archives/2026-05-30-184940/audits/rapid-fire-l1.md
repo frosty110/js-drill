@@ -38,4 +38,3 @@ N/A — KEEP.
 - 2026-05-30 Scored at 16/21 by `/eval-learning-tool --all`.
 - 2026-05-30 Salvage edit 1 applied — SR/weakness-weighted deck at `js/app/07-drills-swap-speedrun.js:754-783`. Per-lesson weight = `(weak && due) ? 5 : (weak || due) ? 3 : 1`; expand pool by weight, Fisher-Yates, then dedup-while-slicing to 20-card session. Cold-start users degrade to uniform. Projected 16→18 (+2 Spacing). Free-recall variant on streak ≥10 (+1 Encoding) is a bigger UX change, deferred. Validator: 810 passed, 0 failed.
 - 2026-05-30 Re-scored at 18/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/). Spacing now 3/3 — weighted-selection lift fully realized; tool clears KEEP threshold.
-- 2026-05-30 Re-scored at 18/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-184940/).

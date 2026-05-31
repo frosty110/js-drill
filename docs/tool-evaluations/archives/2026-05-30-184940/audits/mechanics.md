@@ -30,4 +30,3 @@
 ## Action log
 - 2026-05-30 Scored 6/6 by `/eval-learning-tool --all`.
 - 2026-05-30 Re-scored at 6/6 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/).
-- 2026-05-30 Re-scored at 6/6 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-184940/).

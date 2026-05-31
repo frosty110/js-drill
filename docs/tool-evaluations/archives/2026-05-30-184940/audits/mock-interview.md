@@ -35,4 +35,3 @@ N/A.
 ## Action log
 - 2026-05-30 Scored at 19/21 by `/eval-learning-tool --all`.
 - 2026-05-30 Re-scored at 19/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/). No regression; line numbers in `js/app/12c-l3.js` shifted slightly (~1 line) due to neighboring edits but all dim evidence holds.
-- 2026-05-30 Re-scored at 19/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-184940/).

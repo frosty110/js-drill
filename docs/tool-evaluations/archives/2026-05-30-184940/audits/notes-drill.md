@@ -39,4 +39,3 @@ Ordered by leverage. Each edit names file:line + dim it lifts.
 - 2026-05-30 Scored at 14/21 by `/eval-learning-tool --all`.
 - 2026-05-30 Salvage edit 1 applied — replaced Fisher-Yates pool shuffle with shared `_srPriorityShuffle` helper at `js/app/05-drills-recognize-trace.js:828-840`. New helper at `js/app/04-progress-sr.js:461-490` bucketizes by SR-overdue + weakness (also used by recognize, trace-hop, reverse in Phase 2A). Projected 14→15 (+1 Spacing). Validator: 810 passed, 0 failed.
 - 2026-05-30 Re-scored at 15/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/).
-- 2026-05-30 Re-scored at 15/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-184940/).

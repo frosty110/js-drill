@@ -37,4 +37,3 @@
 - 2026-05-30 Scored at 13/21 by `/eval-learning-tool --all`.
 - 2026-05-30 Salvage edit 2 applied — guarded SR write on win at `js/app/07-drills-swap-speedrun.js:235-247`. Mirrors L2's hold-but-reset-dueAt pattern; only fires when `state.reviews[id]` exists AND `isDueForReview(id)` returns true. Projected 13→15 (+2 Spacing). Algorithmic distractors (+2 Interleaving) and typed "name the complexity" mode (+1 Encoding) are larger Phase 3-class follow-ups, deferred. Validator: 810 passed, 0 failed.
 - 2026-05-30 Re-scored at 15/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-180445/).
-- 2026-05-30 Re-scored at 15/21 by `/eval-learning-tool --all` (auto-snapshot of prior baseline at docs/tool-evaluations/archives/2026-05-30-184940/).

@@ -188,6 +188,28 @@ async function startAiCoachExport() {
   }, 3200);
 }
 
+// iter eval-2026-05-30: Pick one carry-over weak-spot question for an
+// L1 session — from a DIFFERENT lesson the user has flagged in
+// state.weakness, picked at random. Returns null if no weak-spot lesson
+// has loaded L1 content yet (cold-start or all weak lessons unloaded).
+// Excludes the current lesson so the carry-over genuinely interleaves.
+// Per audits/l1.md edit 1.
+function _pickCarryoverL1Question(currentLessonId) {
+  const candidates = Object.keys(state.weakness || {})
+    .filter(id => id !== currentLessonId && (state.weakness[id] || 0) > 0)
+    .filter(id => {
+      const c = CONTENT[id];
+      return c && c.L1 && Array.isArray(c.L1.questions) && c.L1.questions.length > 0;
+    });
+  if (!candidates.length) return null;
+  const lessonId = candidates[Math.floor(Math.random() * candidates.length)];
+  const lessonMeta = CURRICULUM.find(l => l.id === lessonId);
+  const qs = CONTENT[lessonId].L1.questions;
+  const q = qs[Math.floor(Math.random() * qs.length)];
+  if (!q || !Array.isArray(q.options) || typeof q.answer !== 'number') return null;
+  return { lessonId, lessonTitle: lessonMeta ? lessonMeta.title : lessonId, q };
+}
+
 function renderL1(body, lesson, content) {
   const qs = content.L1.questions;
   // Per-session shuffle: question order + per-question option order. Both
@@ -221,7 +243,97 @@ function renderL1(body, lesson, content) {
   const cardHandles = [];
 
   const wrap = document.createElement('div');
-  wrap.innerHTML = `<div class="mb-4 text-sm text-slate-400">Pick the right answer for each. Pass = all correct in one session.</div>`;
+  wrap.innerHTML = `<div class="mb-4 text-sm text-slate-400">Pick the right answer for each. Pass = miss at most one (≥80%); a perfect run earns a green ✓, otherwise an amber ✓ and the miss is saved to review.</div>`;
+
+  // Carry-over weak-spot card — one extra L1 question from another lesson
+  // the user has flagged, picked once per session and cached. Does NOT
+  // count toward this lesson's pass criterion (excluded from
+  // localState/maybePassL1). Per audits/l1.md edit 1 — adds cross-lesson
+  // interleaving inside the L1 tab itself, complementing Rapid-Fire.
+  let carryover = localState.carryover;  // { lessonId, lessonTitle, q, optOrder, selected, locked }
+  if (!carryover) {
+    const pick = _pickCarryoverL1Question(lesson.id);
+    if (pick) {
+      carryover = {
+        lessonId: pick.lessonId,
+        lessonTitle: pick.lessonTitle,
+        q: pick.q,
+        optOrder: _shuffleIndices(pick.q.options.length),
+        selected: null,
+        locked: false
+      };
+      localState.carryover = carryover;
+    }
+  }
+  if (carryover) {
+    const cQ = carryover.q;
+    const cCorrectDisplayIdx = carryover.optOrder.indexOf(cQ.answer);
+    const cCard = document.createElement('div');
+    cCard.className = 'mb-6 p-5 rounded-lg bg-slate-900 border border-cyan-700/40';
+    cCard.innerHTML = `
+      <div class="text-xs uppercase tracking-wider text-cyan-300/80 mb-1">🔁 Carry-over weak spot · <span class="text-slate-400 normal-case tracking-normal">${escapeHtml(carryover.lessonTitle)}</span></div>
+      <div class="text-white font-medium mb-3">${escapeHtml(cQ.q)}</div>
+      <div class="space-y-2" data-carryover-opts></div>
+      <div class="explain mt-3 text-sm text-slate-400 hidden"></div>
+      <div class="mt-2 text-xs text-slate-500">Doesn't count toward this lesson's pass — purely a memory recheck on a flagged concept.</div>
+    `;
+    const cOptsContainer = cCard.querySelector('[data-carryover-opts]');
+    carryover.optOrder.forEach((origOi, displayOi) => {
+      const opt = cQ.options[origOi];
+      const optEl = document.createElement('div');
+      optEl.className = 'mc-option';
+      const letter = String.fromCharCode(65 + displayOi);
+      optEl.innerHTML = `<span class="text-slate-500 font-mono text-xs mr-2">${letter}.</span>${escapeHtml(opt)}`;
+      optEl.setAttribute('role', 'button');
+      optEl.setAttribute('tabindex', '0');
+      optEl.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !carryover.locked) { e.preventDefault(); optEl.click(); }
+      });
+      optEl.addEventListener('click', () => {
+        if (carryover.locked) return;
+        carryover.selected = displayOi;
+        carryover.locked = true;
+        const isRight = displayOi === cCorrectDisplayIdx;
+        // Write back to the SOURCE lesson's weakness counter, not the
+        // current one. On miss: increment. On win: decrement (steady
+        // wins erode a long-standing weakness without a single win
+        // resetting it).
+        if (!isRight) {
+          state.weakness[carryover.lessonId] = (state.weakness[carryover.lessonId] || 0) + 1;
+          appendHistory(carryover.lessonId, 'L1-miss');
+        } else {
+          const w = state.weakness[carryover.lessonId] || 0;
+          if (w > 1) state.weakness[carryover.lessonId] = w - 1;
+          else if (w === 1) delete state.weakness[carryover.lessonId];
+          appendHistory(carryover.lessonId, 'L1-pass');
+        }
+        saveProgress();
+        [...cOptsContainer.children].forEach((el, idx) => {
+          el.classList.add('disabled');
+          if (idx === cCorrectDisplayIdx) el.classList.add('correct');
+          if (idx === displayOi && !isRight) el.classList.add('incorrect');
+        });
+        const ex = cCard.querySelector('.explain');
+        ex.classList.remove('hidden');
+        ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${cQ.explain ? ' ' + escapeHtml(cQ.explain) : ''}`;
+      });
+      cOptsContainer.appendChild(optEl);
+    });
+    // Replay locked-state across re-renders (tab switch back into L1).
+    if (carryover.locked && carryover.selected != null) {
+      [...cOptsContainer.children].forEach((el, idx) => {
+        el.classList.add('disabled');
+        if (idx === cCorrectDisplayIdx) el.classList.add('correct');
+        if (idx === carryover.selected && idx !== cCorrectDisplayIdx) el.classList.add('incorrect');
+      });
+      const ex = cCard.querySelector('.explain');
+      ex.classList.remove('hidden');
+      const wasRight = carryover.selected === cCorrectDisplayIdx;
+      ex.innerHTML = `<strong class="${wasRight ? 'text-emerald-400' : 'text-rose-400'}">${wasRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${cQ.explain ? ' ' + escapeHtml(cQ.explain) : ''}`;
+    }
+    wrap.appendChild(cCard);
+  }
+
   localState.qOrder.forEach((qi, displayIdx) => {
     const q = qs[qi];
     const perQ = localState.perQ[qi];

@@ -597,24 +597,31 @@ function _reverseBuildDeck() {
   // distractors from the rest of the pool.
   const targets = pool.slice(0, Math.min(REVERSE_DECK_LEN, pool.length));
   for (const t of targets) {
-    const distractors = pool
+    const distractorPool = pool
       .filter(p => p.lessonId !== t.lessonId)
       .slice()
       .sort(() => Math.random() - 0.5)
-      .slice(0, 3)
-      .map(p => p.promptMasked);
+      .slice(0, 3);
+    const distractors = distractorPool.map(p => p.promptMasked);
     const options = [t.promptMasked, ...distractors];
     // Shuffle the 4-option array.
     for (let i = options.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [options[i], options[j]] = [options[j], options[i]];
     }
+    // iter eval-2026-05-30: per-distractor outputs for "why wrong"
+    // feedback. Map promptMasked → output so the reveal can surface
+    // "Your pick would have produced <X>" as a contrast with the
+    // canonical's actual output (per audits/reverse.md edit 1).
+    const distractorOutputs = {};
+    for (const p of distractorPool) distractorOutputs[p.promptMasked] = p.output;
     cards.push({
       lessonId: t.lessonId,
       invocation: t.invocation,
       output: t.output,
       options,
-      correct: t.promptMasked
+      correct: t.promptMasked,
+      distractorOutputs
     });
   }
   return cards.length >= 3 ? cards : null;
@@ -668,8 +675,17 @@ async function startReverseSession() {
         answered = true;
         const picked = btn.dataset.opt;
         const wasCorrect = picked === card.correct;
-        if (wasCorrect) correct++;
-        else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
+        if (wasCorrect) {
+          correct++;
+          // Hold-but-reset-dueAt SR on a recognition-tier win — mirrors
+          // Predict/Claim/Gotcha pattern. Guarded to mastered+due
+          // lessons only so a recognition win can't seed SR on a
+          // not-yet-mastered lesson or push dueAt later on a not-yet-due
+          // one. Per audits/reverse.md edit 2.
+          if (state.reviews[card.lessonId] && isDueForReview(card.lessonId)) {
+            scheduleReview(card.lessonId, { advance: false });
+          }
+        } else { state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1; appendHistory(card.lessonId, 'L1-miss'); }
         state.recognize.attempts++;
         if (wasCorrect) state.recognize.correct++;
         saveProgress();
@@ -684,13 +700,29 @@ async function startReverseSession() {
           // the answer. Heuristic; null for unknown shapes.
           const tell = _reverseIOSignalHint(card.output);
           const tellHtml = tell ? `<div class="reverse-tell">${escapeHtml(tell)}</div>` : '';
+          // Per-distractor "why wrong" — on a miss, surface what the
+          // user's picked prompt would have actually produced, so they
+          // contrast with the canonical's output. Per audits/reverse.md
+          // edit 1. Only shows when the picked distractor's output is
+          // distinguishable from the correct one.
+          let distHtml = '';
+          if (!wasCorrect && card.distractorOutputs && card.distractorOutputs[picked]) {
+            const distOut = card.distractorOutputs[picked];
+            if (distOut !== card.output) {
+              const shortDist = distOut.length > 80 ? distOut.slice(0, 80) + '…' : distOut;
+              distHtml = `<div class="reverse-distractor">Your pick would have produced <code>${escapeHtml(shortDist)}</code> — different from this trace's actual output.</div>`;
+            }
+          }
           fb.innerHTML = wasCorrect
             ? `<span class="recognize-good">✓</span>${tellHtml}`
-            : `<span class="recognize-bad">✗ Correct shown above</span>${tellHtml}`;
+            : `<span class="recognize-bad">✗ Correct shown above</span>${distHtml}${tellHtml}`;
         }
-        // Hold longer when a tell is shown so the user has time to read.
+        // Hold longer when a tell or distractor explanation is shown so
+        // the user has time to read.
         const tellShown = _reverseIOSignalHint(card.output) != null;
-        const delay = wasCorrect ? (tellShown ? 1400 : 700) : (tellShown ? 2200 : 1500);
+        const distShown = !wasCorrect && card.distractorOutputs && card.distractorOutputs[picked] && card.distractorOutputs[picked] !== card.output;
+        const extra = (tellShown ? 700 : 0) + (distShown ? 800 : 0);
+        const delay = wasCorrect ? (700 + extra) : (1500 + extra);
         setTimeout(() => { idx++; renderCard(); }, delay);
       });
     });

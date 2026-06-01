@@ -1,0 +1,101 @@
+{
+  "id": "a-eve-double-booking",
+  "title": "Double-Booking Detector",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Interval shape on object input — sort depositions by start time, then a single scan comparing each event's start against the furthest end seen so far to surface scheduling conflicts.",
+  "mechanics": ["sort-then-sweep"],
+  "reference": {
+    "approach": "Sort by start, scan against furthest end",
+    "complexity": "O(n log n) / O(n)",
+    "code": "const depositions = [\n  { caseId: 'A-101', start: '09:00', end: '10:30' },\n  { caseId: 'B-205', start: '10:00', end: '11:00' },\n  { caseId: 'C-309', start: '11:00', end: '12:00' },\n  { caseId: 'D-412', start: '11:30', end: '13:00' }\n];\n\nfunction findConflicts(events) {\n  const sorted = [...events].sort((a, b) =>\n    a.start < b.start ? -1 : a.start > b.start ? 1 : 0\n  );\n  const conflicts = [];\n  let last = sorted[0];\n  for (let i = 1; i < sorted.length; i++) {\n    const curr = sorted[i];\n    if (curr.start < last.end) {\n      conflicts.push([last.caseId, curr.caseId]);\n    }\n    if (curr.end > last.end) last = curr;\n  }\n  return conflicts;\n}\n\nconsole.log(JSON.stringify(findConflicts(depositions)));",
+    "notes": [
+      "Sort by start time first — overlap logic only holds once events are in chronological order.",
+      "Track the event with the furthest end seen so far, not just the immediately previous one: a long early deposition can overlap several later ones, which a bare `i-1` comparison would miss.",
+      "The overlap test is strict — `curr.start < last.end`. Touching boundaries (one ends exactly when the next starts) are NOT a conflict."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why sort the events by start time before scanning for conflicts?",
+        "options": [
+          "Sorting removes duplicate depositions",
+          "Overlap detection compares each event to earlier ones — 'earlier' only means something on a chronologically ordered list",
+          "JavaScript requires arrays to be sorted before a for loop",
+          "Sorting converts the time strings into Date objects"
+        ],
+        "answer": 1,
+        "explain": "Conflict detection is about whether an event starts before an earlier one ends. 'Earlier' is only well-defined once the events are sorted by start time."
+      },
+      {
+        "q": "Why compare each event against the event with the FURTHEST end seen so far, rather than just the immediately previous event?",
+        "options": [
+          "It makes the scan run faster",
+          "A long early deposition can overlap several later ones; comparing only to the immediately previous event would miss those conflicts",
+          "JavaScript cannot compare two array elements directly",
+          "Sorting by start guarantees the previous element is always the closest in time"
+        ],
+        "answer": 1,
+        "explain": "Once sorted by start, the previous element isn't necessarily the one that ends latest. A 9:00–13:00 event overlaps everything starting before 13:00 — you must compare against the furthest-reaching end, not just index i-1."
+      },
+      {
+        "q": "Given `curr` starts after `prev`, what condition means they overlap?",
+        "options": [
+          "curr.start <= prev.start",
+          "curr.start < prev.end",
+          "curr.end < prev.end",
+          "curr.start > prev.end"
+        ],
+        "answer": 1,
+        "explain": "If the later event starts before the earlier one has ended (`curr.start < prev.end`), the two intervals overlap in time."
+      },
+      {
+        "q": "One deposition ends at 11:00 and the next starts at exactly 11:00. Using `curr.start < last.end`, is that a conflict?",
+        "options": [
+          "Yes — they touch, so they collide",
+          "No — the test is strict `<`, so a shared boundary is not an overlap",
+          "Yes — adjacent events in the sorted array always conflict",
+          "Only if the two share the same caseId"
+        ],
+        "answer": 1,
+        "explain": "`'11:00' < '11:00'` is false, so back-to-back events that merely touch are not flagged. This matches reality: you can finish one deposition and start the next at the same minute."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Sort the events by start ascending, grab the first as `last`, and write the overlap test for the next event.",
+        "template": "const evs = [\n  { id: 'X', start: '10:00', end: '11:00' },\n  { id: 'Y', start: '09:00', end: '10:30' }\n];\nconst sorted = [...evs].___((a, b) => a.start < b.start ? -1 : 1);\nconst last = sorted[___];\nconst curr = sorted[1];\nconst conflict = curr.start ___ last.end;\nconsole.log(sorted[0].id, conflict);",
+        "blanks": [
+          { "answer": "sort", "hint": "array method that orders in place" },
+          { "answer": "0", "hint": "first element index" },
+          { "answer": "<", "hint": "strict comparison — touching boundaries don't conflict" }
+        ],
+        "expectedOutput": "Y true"
+      },
+      {
+        "prompt": "Record a conflicting pair, then advance `last` only when the current event reaches further.",
+        "template": "const conflicts = [];\nlet last = { caseId: 'A', end: '10:30' };\nconst curr = { caseId: 'B', start: '10:00', end: '11:00' };\nif (curr.start ___ last.end) conflicts.___([last.caseId, curr.caseId]);\nif (curr.end > last.end) last = ___;\nconsole.log(JSON.stringify(conflicts[0]), last.caseId);",
+        "blanks": [
+          { "answer": "<", "hint": "overlap test" },
+          { "answer": "push", "hint": "append to the array" },
+          { "answer": "curr", "hint": "the event that now ends latest" }
+        ],
+        "expectedOutput": "[\"A\",\"B\"] B"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Given an array of {caseId, start, end} depositions for one attorney, return an array of [caseId, caseId] pairs that overlap in time (the attorney can't be in two places at once).",
+    "expectedOutput": "[[\"A-101\",\"B-205\"],[\"C-309\",\"D-412\"]]",
+    "canonical": "const depositions = [\n  { caseId: 'A-101', start: '09:00', end: '10:30' },\n  { caseId: 'B-205', start: '10:00', end: '11:00' },\n  { caseId: 'C-309', start: '11:00', end: '12:00' },\n  { caseId: 'D-412', start: '11:30', end: '13:00' }\n];\n\nfunction findConflicts(events) {\n  const sorted = [...events].sort((a, b) =>\n    a.start < b.start ? -1 : a.start > b.start ? 1 : 0\n  );\n  const conflicts = [];\n  let last = sorted[0];\n  for (let i = 1; i < sorted.length; i++) {\n    const curr = sorted[i];\n    if (curr.start < last.end) {\n      conflicts.push([last.caseId, curr.caseId]);\n    }\n    if (curr.end > last.end) last = curr;\n  }\n  return conflicts;\n}\n\nconsole.log(JSON.stringify(findConflicts(depositions)));",
+    "hints": [
+      "Sort by start time first, then walk the list once.",
+      "Keep a reference to the event with the furthest end so far; compare each new event's start against it.",
+      "Overlap is strict: `curr.start < last.end`. Advance `last` when `curr.end > last.end`."
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "id": "a-eve-largest-files",
+  "title": "K Largest Files",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Top-K shape on object input — return the k largest documents in a production by byte size. Sort-and-slice is the brute-force-OK answer; a size-k min-heap is the O(n log k) optimization to name.",
+  "mechanics": ["array-chain"],
+  "reference": {
+    "approach": "Sort by size descending, take the first k",
+    "complexity": "O(n log n) / O(n)",
+    "code": "const files = [\n  { name: 'deposition.pdf', bytes: 2400000 },\n  { name: 'intake.docx', bytes: 38000 },\n  { name: 'mri-scan.dcm', bytes: 9100000 },\n  { name: 'photo.jpg', bytes: 512000 },\n  { name: 'notes.txt', bytes: 4096 }\n];\n\nfunction largestFiles(files, k) {\n  return [...files]\n    .sort((a, b) => b.bytes - a.bytes)\n    .slice(0, k)\n    .map(f => f.name);\n}\n\nconsole.log(JSON.stringify(largestFiles(files, 3)));",
+    "notes": [
+      "The comparator `b.bytes - a.bytes` sorts descending, so the k largest land at the front.",
+      "Spread `[...files]` before sorting — `.sort()` mutates in place and you don't want to reorder the caller's array.",
+      "Sort-and-slice is O(n log n). When n is huge and k is small, a size-k min-heap is faster — see the alternate."
+    ],
+    "alternates": [
+      {
+        "label": "Min-heap of size k",
+        "when": "When n is huge but k is small — e.g. the 10 largest files out of a million-document production. A size-k min-heap avoids sorting everything: O(n log k) vs O(n log n).",
+        "complexity": "O(n log k) / O(k)",
+        "code": "class MinHeap {\n  constructor() { this.h = []; }\n  size() { return this.h.length; }\n  push(v) {\n    const h = this.h; h.push(v);\n    let i = h.length - 1;\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (h[p].bytes <= h[i].bytes) break;\n      [h[p], h[i]] = [h[i], h[p]];\n      i = p;\n    }\n  }\n  pop() {\n    const h = this.h; const top = h[0]; const last = h.pop();\n    if (h.length) { h[0] = last; let i = 0;\n      while (true) {\n        let s = i; const l = 2*i+1, r = 2*i+2;\n        if (l < h.length && h[l].bytes < h[s].bytes) s = l;\n        if (r < h.length && h[r].bytes < h[s].bytes) s = r;\n        if (s === i) break;\n        [h[s], h[i]] = [h[i], h[s]]; i = s;\n      }\n    }\n    return top;\n  }\n}\n\nconst files = [\n  { name: 'deposition.pdf', bytes: 2400000 },\n  { name: 'intake.docx', bytes: 38000 },\n  { name: 'mri-scan.dcm', bytes: 9100000 },\n  { name: 'photo.jpg', bytes: 512000 },\n  { name: 'notes.txt', bytes: 4096 }\n];\nconst k = 3;\nconst heap = new MinHeap();\nfor (const f of files) {\n  heap.push(f);\n  if (heap.size() > k) heap.pop();\n}\nconst top = [];\nwhile (heap.size()) top.push(heap.pop());\ntop.reverse();\nconsole.log(JSON.stringify(top.map(f => f.name)));",
+        "notes": [
+          "Keep a MIN-heap of size k: the smallest of the current top-k sits at the root, so a bigger incoming file evicts it in one pop.",
+          "Compare on `.bytes`, not the object — the heap orders files by size.",
+          "Drain and reverse at the end: a min-heap pops smallest-first, so reverse to get descending size."
+        ]
+      }
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "To return the k LARGEST files with a heap, what kind of heap do you keep, and of what size?",
+        "options": [
+          "A max-heap of size n",
+          "A min-heap of size k — the smallest of the current top-k sits at the root for cheap eviction",
+          "A min-heap of size n",
+          "A max-heap of size k"
+        ],
+        "answer": 1,
+        "explain": "Counterintuitively, you keep a MIN-heap of size k. The root is the smallest of your current top-k, so when a bigger file arrives you pop the root and push the newcomer — O(log k) per element."
+      },
+      {
+        "q": "What order does the comparator `(a, b) => b.bytes - a.bytes` produce?",
+        "options": [
+          "Ascending by bytes",
+          "Descending by bytes — largest first",
+          "Alphabetical by file name",
+          "The original insertion order"
+        ],
+        "answer": 1,
+        "explain": "Subtracting in the order `b - a` flips the sort to descending, so the largest files come first and `.slice(0, k)` grabs the top k."
+      },
+      {
+        "q": "Why spread `[...files]` before calling `.sort()`?",
+        "options": [
+          "It converts the array into a heap",
+          "`.sort()` mutates in place, so spreading first avoids reordering the caller's original array",
+          "Spreading makes the sort run faster",
+          "JavaScript requires it before calling `.slice()`"
+        ],
+        "answer": 1,
+        "explain": "`Array.prototype.sort` sorts in place and returns the same array. Spreading into a fresh array first keeps the caller's data untouched — important when other code still relies on the original order."
+      },
+      {
+        "q": "When does the size-k min-heap (O(n log k)) clearly beat sort-and-slice (O(n log n))?",
+        "options": [
+          "When k is close to n",
+          "When n is very large and k is small — e.g. the 10 largest out of a million files",
+          "When the array is already sorted",
+          "Never — a full sort is always faster"
+        ],
+        "answer": 1,
+        "explain": "If k is tiny relative to n, `log k` is far smaller than `log n`, so the heap does much less work. When k approaches n the two converge and a plain sort is simpler."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Sort the files largest-first, take the top 2, and map to names.",
+        "template": "const files = [{ name: 'a', bytes: 10 }, { name: 'b', bytes: 50 }, { name: 'c', bytes: 30 }];\nconst top2 = [...files]\n  .sort((a, b) => b.bytes ___ a.bytes)\n  .___(0, 2)\n  .map(f => f.___);\nconsole.log(JSON.stringify(top2));",
+        "blanks": [
+          { "answer": "-", "hint": "numeric comparator operator for descending" },
+          { "answer": "slice", "hint": "take the first k without mutating" },
+          { "answer": "name", "hint": "the field to project" }
+        ],
+        "expectedOutput": "[\"b\",\"c\"]"
+      },
+      {
+        "prompt": "Mimic the size-k min-heap eviction: if the incoming file beats the smallest kept, drop the smallest and add the newcomer.",
+        "template": "const k = 2;\nlet kept = [30, 80];\nconst incoming = 50;\nconst smallest = Math.___(...kept);\nif (incoming > smallest && kept.length >= k) {\n  kept = kept.filter(x => x ___ smallest);\n  kept.push(incoming);\n}\nconsole.log(JSON.stringify(kept.sort((a, b) => b - a)));",
+        "blanks": [
+          { "answer": "min", "hint": "smallest of the current top-k" },
+          { "answer": "!==", "hint": "keep everything except the evicted value" }
+        ],
+        "expectedOutput": "[80,50]"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Given an array of {name, bytes} files and a number k, return the names of the k largest files, ordered largest first.",
+    "expectedOutput": "[\"mri-scan.dcm\",\"deposition.pdf\",\"photo.jpg\"]",
+    "canonical": "const files = [\n  { name: 'deposition.pdf', bytes: 2400000 },\n  { name: 'intake.docx', bytes: 38000 },\n  { name: 'mri-scan.dcm', bytes: 9100000 },\n  { name: 'photo.jpg', bytes: 512000 },\n  { name: 'notes.txt', bytes: 4096 }\n];\n\nfunction largestFiles(files, k) {\n  return [...files]\n    .sort((a, b) => b.bytes - a.bytes)\n    .slice(0, k)\n    .map(f => f.name);\n}\n\nconsole.log(JSON.stringify(largestFiles(files, 3)));",
+    "hints": [
+      "Sort by bytes descending with `(a, b) => b.bytes - a.bytes`.",
+      "Take the first k with `.slice(0, k)`, then `.map(f => f.name)`.",
+      "For the O(n log k) optimization, mention keeping a size-k min-heap instead of sorting everything."
+    ]
+  }
+}

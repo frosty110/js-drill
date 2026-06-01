@@ -13,6 +13,18 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
   await ensureChrome();
   const s = await connect({ url: 'http://localhost:8765/' });
 
+  // The service worker is cache-first; a prior run can pin a stale js/sync.js
+  // (missing newly-added merge policies). Unregister it + clear CacheStorage,
+  // then reload so the tests run against the on-disk sync.js.
+  await s.evalAwait(`(async () => {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+  })()`);
+  await s.reload();
+
   await s.waitFor(`window.DrillSync && window.DrillSync._testInternals`);
 
   // Helper: run a JS expression in the page that returns JSON-safe data.
@@ -157,6 +169,106 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
     `const m = window.DrillSync._testInternals.mergePrep({ __v: 1, completed: { a: true } }, null);
      return m.completed;`,
     { a: true });
+
+  // ============================================================================
+  // history / misses: per-lesson event-log UNION (the consistency-map fix).
+  // ============================================================================
+  await check('history: UNION events across devices, sorted by at',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, history: { two_sum: [{ at: 30, event: 'L1-pass' }] } },
+       { __v: 6, history: { two_sum: [{ at: 10, event: 'L3-pass' }] } });
+     return m.history.two_sum;`,
+    [{ at: 10, event: 'L3-pass' }, { at: 30, event: 'L1-pass' }]);
+
+  await check('history: dedupes identical events (re-pulled cloud no-op)',
+    `const e = { at: 5, event: 'L2-pass' };
+     const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, history: { x: [e] } }, { __v: 6, history: { x: [e] } });
+     return m.history.x;`,
+    [{ at: 5, event: 'L2-pass' }]);
+
+  await check('history: union across DIFFERENT lessons (phone+laptop)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, history: { a: [{ at: 1, event: 'L1-pass' }] } },
+       { __v: 6, history: { b: [{ at: 2, event: 'L1-pass' }] } });
+     return { a: m.history.a.length, b: m.history.b.length };`,
+    { a: 1, b: 1 });
+
+  await check('history: NOT dropped when only one side has it (was the bug)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, history: { x: [{ at: 1, event: 'L3-pass' }] } },
+       { __v: 6, progress: { x: { L1: 'passed' } } });
+     return m.history.x.length;`,
+    1);
+
+  await check('misses: UNION + cap reflected (mistake tagging totals)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, misses: { x: [{ at: 1, level: 'L1', tag: 'off-by-one' }] } },
+       { __v: 6, misses: { x: [{ at: 2, level: 'L2', tag: 'edge case' }] } });
+     return m.misses.x.length;`,
+    2);
+
+  // ============================================================================
+  // Additive lifetime drill stats: SUM counters, MAX timestamps/records.
+  // ============================================================================
+  await check('additive: recognize SUM attempts+correct across devices',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, recognize: { attempts: 10, correct: 7 } },
+       { __v: 6, recognize: { attempts: 4, correct: 3 } });
+     return m.recognize;`,
+    { attempts: 14, correct: 10 });
+
+  await check('additive: lastRunAt MAX, bestStreak MAX, counters SUM',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, rapidFire: { attempts: 5, correct: 2, bestStreak: 8, lastRunAt: 100 } },
+       { __v: 6, rapidFire: { attempts: 3, correct: 3, bestStreak: 12, lastRunAt: 50 } });
+     return m.rapidFire;`,
+    { attempts: 8, correct: 5, bestStreak: 12, lastRunAt: 100 });
+
+  await check('additive: speedrun.bests per-section MIN (fastest time)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, speedrun: { sessions: 1, bests: { arrays: 9000 } } },
+       { __v: 6, speedrun: { sessions: 2, bests: { arrays: 7000, trees: 5000 } } });
+     return m.speedrun;`,
+    { sessions: 3, bests: { arrays: 7000, trees: 5000 } });
+
+  await check('additive: glossaryQuiz.session prefers local (active session)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, glossaryQuiz: { attempts: 2, correct: 1, session: { index: 4 } } },
+       { __v: 6, glossaryQuiz: { attempts: 1, correct: 1, session: { index: 9 } } });
+     return { a: m.glossaryQuiz.attempts, idx: m.glossaryQuiz.session.index };`,
+    { a: 3, idx: 4 });
+
+  await check('additive: commandUsage SUM per command',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, commandUsage: { open_stats: 3, open_mock: 1 } },
+       { __v: 6, commandUsage: { open_stats: 2, open_recognize: 5 } });
+     return m.commandUsage;`,
+    { open_stats: 5, open_mock: 1, open_recognize: 5 });
+
+  await check('additive: walkthrough per-lesson counters SUM, scrubbed OR',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, walkthrough: { x: { quizAttempts: 2, quizCorrect: 1, scrubbed: false, lastRunAt: 10 } } },
+       { __v: 6, walkthrough: { x: { quizAttempts: 1, quizCorrect: 1, scrubbed: true, lastRunAt: 99 } } });
+     return m.walkthrough.x;`,
+    { quizAttempts: 3, quizCorrect: 2, scrubbed: true, lastRunAt: 99 });
+
+  // ============================================================================
+  // Carry-over base: settings/device scalars NOT explicitly policied survive.
+  // ============================================================================
+  await check('carry-over: subscribedPathId survives (prefer local)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, subscribedPathId: 'prep-4day' },
+       { __v: 6, subscribedPathId: 'starter' });
+     return m.subscribedPathId;`,
+    'prep-4day');
+
+  await check('carry-over: settings survive from whichever side has them',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, adhdMode: true },
+       { __v: 6, fontScale: 1.2 });
+     return { a: m.adhdMode, f: m.fontScale };`,
+    { a: true, f: 1.2 });
 
   s.report();
   await s.close();

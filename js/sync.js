@@ -28,6 +28,10 @@
 //
 // Conflict policy (per-field merge per blob, no last-write-wins on the whole row):
 //
+// Base rule: each merge starts from { ...cloud, ...local } so any field WITHOUT
+// an explicit policy below survives (prefer local) instead of being dropped.
+// The explicit policies then override for fields that need a smarter merge.
+//
 //   progress (jsdrill.progress.v1):
 //     progress[id][L1|L2|L3]: OR of 'passed'      (any pass on any device wins)
 //     bestTimes[id]:           MIN                 (faster time wins)
@@ -36,8 +40,21 @@
 //     reviews[id]:             greater lastPassedAt wins
 //     weakness[id]:            OR                  (flagged on any device → flagged)
 //     partialL1[id]:           OR                  (L1 passed <100% on any device → amber ✓)
+//     history[id] / misses[id]: UNION events + dedupe + sort + cap 50
+//                              (consistency map / activity / streak / mistake
+//                               tagging aggregate BOTH devices — mergeEventLog)
+//     recognize, rapidFire, warmup, speedrun, gauntlet, bugHunt, crystal,
+//     claim, gotcha, swapBench, convDrill, traceHop, notesDrill,
+//     mechConstellation, reverseWalk, notesLocate, match, whatif, mutate,
+//     phoneScreen, constraintShift, flash, walkthrough, glossaryQuiz,
+//     cramReview, commandUsage:
+//                              ADDITIVE (mergeAdditive) — SUM counters, MAX
+//                              timestamps/records, MIN best-times, OR booleans,
+//                              prefer-local active sessions
 //     welcomed:                OR
-//     lastLessonId / lastTab / starterPath / hideMastered / sidebarTrack:
+//     lastLessonId / lastTab / starterPath / hideMastered / sidebarTrack
+//     + all other settings/device scalars (adhdMode, fontScale, subscribedPathId,
+//       surface, tagFilter, …):
 //                              prefer LOCAL        (active device wins device-state)
 //
 //   prep (jsdrill.prep.v1):
@@ -319,12 +336,107 @@
   // ============================================================================
   // INTERNAL — merge
   // ============================================================================
+
+  // Caps mirror the app's own truncation (HISTORY_MAX / misses .slice(-50) in
+  // js/app). Keep in sync if those change.
+  const EVENT_LOG_CAP = 50;
+
+  // Per-lesson event logs (state.history, state.misses): { id: [{at, ...}] }.
+  // UNION the two devices' arrays per lesson, dedupe identical events, sort by
+  // timestamp, and cap to the most-recent N (matching the app's own cap). This
+  // is what makes the 60-day consistency map / activity / streak reflect TOTAL
+  // progress across mobile + desktop instead of one device's slice.
+  function mergeEventLog(local, cloud, cap) {
+    const out = {};
+    for (const id of unionKeys(local, cloud)) {
+      const seen = new Set();
+      const arr = [];
+      for (const e of [].concat((local && local[id]) || [], (cloud && cloud[id]) || [])) {
+        const k = JSON.stringify(e);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        arr.push(e);
+      }
+      arr.sort((x, y) => (x.at || 0) - (y.at || 0));
+      out[id] = cap ? arr.slice(-cap) : arr;
+    }
+    return out;
+  }
+
+  // Generic ADDITIVE merge for lifetime-stat objects (recognize, bugHunt, …)
+  // and per-lesson counter maps (flash, walkthrough, commandUsage). Rules,
+  // applied recursively by key name:
+  //   number + key ~ /At$|lastRunAt/        → MAX   (timestamps: keep latest)
+  //   number + key ~ /best|streak|familiar/ → MAX   (records: keep best)
+  //   number + key === 'interval'           → MAX   (SR interval: never sum)
+  //   number (any other)                    → SUM   (attempts/correct/sessions…)
+  //   boolean                               → OR
+  //   array                                 → union by identity
+  //   object, key === 'session'             → prefer LOCAL (active session snapshot)
+  //   object, key === 'bests'               → per-key MIN (best = fastest time)
+  //   object (any other)                    → recurse
+  //   mixed / string                        → prefer LOCAL
+  function mergeAdditive(a, b, key) {
+    if (a === undefined || a === null) return b;
+    if (b === undefined || b === null) return a;
+    const ta = typeof a, tb = typeof b;
+    if (ta === 'number' && tb === 'number') {
+      if (key === 'interval' || /At$/.test(key) || key === 'lastRunAt') return Math.max(a, b);
+      if (/best|streak|familiar/i.test(key)) return Math.max(a, b);
+      return a + b;
+    }
+    if (ta === 'boolean' || tb === 'boolean') return !!(a || b);
+    if (Array.isArray(a) || Array.isArray(b)) {
+      const seen = new Set();
+      const out = [];
+      for (const x of [].concat(a || [], b || [])) {
+        const k = JSON.stringify(x);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(x);
+      }
+      return out;
+    }
+    if (ta === 'object' && tb === 'object') {
+      if (key === 'session') return a;            // active session — prefer local
+      if (key === 'bests') {                       // speedrun per-section best TIME → MIN
+        const out = {};
+        for (const k of unionKeys(a, b)) {
+          const av = a[k], bv = b[k];
+          out[k] = (av == null) ? bv : (bv == null) ? av : Math.min(av, bv);
+        }
+        return out;
+      }
+      const out = {};
+      for (const k of unionKeys(a, b)) out[k] = mergeAdditive(a[k], b[k], k);
+      return out;
+    }
+    return a; // mixed types / strings → prefer local (active device)
+  }
+
+  // Lifetime drill stats + per-lesson counter maps that accumulate across
+  // devices. Each is run through mergeAdditive so totals SUM (and the
+  // consistency/activity surfaces reflect both devices). Previously every one
+  // of these fell through mergeProgress and was DROPPED on each sync.
+  const ADDITIVE_STAT_KEYS = [
+    'recognize', 'rapidFire', 'warmup', 'speedrun', 'gauntlet', 'bugHunt',
+    'crystal', 'claim', 'gotcha', 'swapBench', 'convDrill', 'traceHop',
+    'notesDrill', 'mechConstellation', 'reverseWalk', 'notesLocate', 'match',
+    'whatif', 'mutate', 'phoneScreen', 'constraintShift', 'flash', 'walkthrough',
+    'glossaryQuiz', 'cramReview', 'commandUsage'
+  ];
+
   function mergeProgress(local, cloud) {
     if (!local && !cloud) return null;
     if (!local) return cloud;
     if (!cloud) return local;
 
-    const merged = {};
+    // Carry-over base: start from cloud, overlay local. Any field WITHOUT an
+    // explicit policy below survives (prefer the active/local device) instead
+    // of being silently dropped. This is the structural fix for the class of
+    // bug where a new field added to saveProgress() — but not mirrored here —
+    // got wiped on every sync (e.g. state.history → the consistency map).
+    const merged = { ...cloud, ...local };
     merged.__v = Math.max(local.__v || 0, cloud.__v || 0, 6);
 
     // progress[id][L1|L2|L3]: OR of 'passed'
@@ -405,8 +517,23 @@
     // welcomed: OR
     merged.welcomed = !!(local.welcomed || cloud.welcomed);
 
+    // history / misses: per-lesson event logs → UNION (see mergeEventLog).
+    // These drive the 60-day consistency map, the activity bars/streak, and the
+    // mistake-tagging postmortem — so they MUST aggregate both devices.
+    merged.history = mergeEventLog(local.history, cloud.history, EVENT_LOG_CAP);
+    merged.misses  = mergeEventLog(local.misses,  cloud.misses,  EVENT_LOG_CAP);
+
+    // Lifetime drill stats + per-lesson counter maps → additive merge (SUM
+    // counters, MAX timestamps/records, etc. — see mergeAdditive).
+    for (const key of ADDITIVE_STAT_KEYS) {
+      if (local[key] === undefined && cloud[key] === undefined) continue;
+      merged[key] = mergeAdditive(local[key], cloud[key], key);
+    }
+
     // Device-state scalars: prefer LOCAL (active device shouldn't get
-    // yanked to another device's last-lesson / tab / track / filters).
+    // yanked to another device's last-lesson / tab / track / filters). The
+    // carry-over base already prefers local for these, but keep the explicit
+    // list as documentation of intent.
     const scalarPreferLocal = ['lastLessonId', 'lastTab', 'starterPath',
                                'hideMastered', 'sidebarTrack'];
     for (const key of scalarPreferLocal) {
@@ -422,7 +549,9 @@
     if (!local) return cloud;
     if (!cloud) return local;
 
-    const merged = {};
+    // Carry-over base (see mergeProgress) — unlisted fields prefer local
+    // instead of being dropped.
+    const merged = { ...cloud, ...local };
     merged.__v = Math.max(local.__v || 0, cloud.__v || 0, 1);
 
     // completed[taskId]: OR
@@ -467,7 +596,9 @@
     if (!local) return cloud;
     if (!cloud) return local;
 
-    const merged = {};
+    // Carry-over base (see mergeProgress) — unlisted fields prefer local
+    // instead of being dropped.
+    const merged = { ...cloud, ...local };
     merged.__v = Math.max(local.__v || 0, cloud.__v || 0, 1);
 
     // startedAt: MIN (earliest start across devices)

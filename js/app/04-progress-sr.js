@@ -296,9 +296,13 @@ function loadProgress() {
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
     state.misses = parsed.misses && typeof parsed.misses === 'object' ? parsed.misses : {};
-    // Subscribed study plan. Legacy users (no field) default to 'starter' = existing behavior.
-    // Validate against the registry so a stale/removed path id falls back gracefully.
-    state.subscribedPathId = (typeof PATHS !== 'undefined' && PATHS.some(p => p.id === parsed.subscribedPathId))
+    // Subscribed study plan. Legacy users (no field) default to 'starter'.
+    // Trust any non-empty stored string — getSubscribedPath() already falls
+    // back to PATHS[0] at read time when the id is unknown, and we don't want
+    // a transient loadPaths failure (offline cold-start, stale SW serving an
+    // older paths.json, flaky network) to silently overwrite the user's saved
+    // plan with 'starter' on every reload.
+    state.subscribedPathId = (typeof parsed.subscribedPathId === 'string' && parsed.subscribedPathId)
       ? parsed.subscribedPathId : 'starter';
     state.cramTaskChecks = parsed.cramTaskChecks && typeof parsed.cramTaskChecks === 'object' ? parsed.cramTaskChecks : {};
     state.cramView = parsed.cramView && typeof parsed.cramView === 'object'

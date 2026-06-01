@@ -734,6 +734,26 @@ function initTopbarDropdowns() {
     dropdown.classList.add('hidden');
     dropdown.setAttribute('aria-hidden', 'true');
     body.innerHTML = '';
+    dropdown.style.left = '';
+  }
+
+  // Anchor the dropdown under the trigger on desktop (traditional menu-bar
+  // style — narrow vertical panel under the button rather than a full-width
+  // mega-menu). Clamp so the panel never overflows the topbar's right edge.
+  // On mobile (≤767px) CSS pins the dropdown full-bleed via `left: 0
+  // !important`, so this inline left is harmless there.
+  function _anchorDropdown(menuButton) {
+    if (!window.matchMedia('(min-width: 768px)').matches) {
+      dropdown.style.left = '';
+      return;
+    }
+    const btnRect = menuButton.getBoundingClientRect();
+    const barRect = topbar.getBoundingClientRect();
+    const panelWidth = dropdown.offsetWidth || 280;
+    const desired = btnRect.left - barRect.left;
+    const maxLeft = barRect.width - panelWidth - 4;
+    const left = Math.max(4, Math.min(desired, maxLeft));
+    dropdown.style.left = left + 'px';
   }
 
   // show(): open or switch to a menu (no toggle). open(): click semantics —
@@ -746,6 +766,7 @@ function initTopbarDropdowns() {
     body.innerHTML = renderTopbarMenuContents(menuKey);
     dropdown.classList.remove('hidden');
     dropdown.setAttribute('aria-hidden', 'false');
+    _anchorDropdown(menuButton);
   }
 
   function open(menuButton) {
@@ -917,6 +938,12 @@ function initTopbarDropdowns() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && openMenu) close();
   });
+
+  // Re-anchor (or close) on resize — the desktop dropdown is positioned via
+  // an inline `left` computed from the trigger's getBoundingClientRect(); a
+  // resize invalidates that math. Cheapest fix: close so the next open
+  // recomputes from the current layout.
+  window.addEventListener('resize', () => { if (openMenu) close(); });
 }
 
 // Defer-loaded scripts run after DOM parse, so wiring synchronously is safe.

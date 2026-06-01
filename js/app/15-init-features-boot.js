@@ -787,7 +787,11 @@ function initTopbarDropdowns() {
   const scheduleHoverClose = () => { cancelHoverClose(); hoverCloseTimer = setTimeout(close, 220); };
 
   const settingsBtn = document.getElementById('topbar-settings');
-  const hoverTriggers = [...topbar.querySelectorAll('.topbar-menu')];
+  // `.topbar-menu-link` (e.g. Dashboard) is a direct-navigation link, NOT a
+  // dropdown trigger — exclude it or clicking/hovering it would open an empty
+  // "Menu 'dashboard' not configured" stub panel (it has no TOPBAR_MENU_TAXONOMY
+  // entry). It wires its own click handler in initDashboardModal().
+  const hoverTriggers = [...topbar.querySelectorAll('.topbar-menu:not(.topbar-menu-link)')];
   if (settingsBtn) hoverTriggers.push(settingsBtn);
   hoverTriggers.forEach(btn => {
     btn.addEventListener('click', (e) => {

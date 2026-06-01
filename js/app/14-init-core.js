@@ -795,7 +795,7 @@ function initSearchAndKeyboard() {
         e.preventDefault();
         return;
       }
-      const modals = ['help-modal', 'today-modal', 'dashboard-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal', 'heatstrip-modal', 'audio-modal'];
+      const modals = ['help-modal', 'today-modal', 'mechanics-modal', 'cheatsheet-modal', 'path-modal', 'at-risk-modal', 'heatstrip-modal', 'audio-modal'];
       for (const id of modals) {
         const m = document.getElementById(id);
         if (m && m.style.display === 'block') { m.style.display = 'none'; e.preventDefault(); return; }
@@ -1919,24 +1919,33 @@ function renderDailyInto(rootEl) {
     <div style="margin-top:8px; font-size:12px;">${deltaLine}</div>`;
 }
 
+// Full-page surface (NOT a modal) — takes over #lesson-shell the same way the
+// drill surfaces (Recognize, Constellation, …) do, with an Exit that routes
+// back to the lesson view via renderLesson(). Navigation buttons inside the
+// stats/activity bodies re-render #lesson-shell themselves (selectLesson /
+// startXSession), so their close-callback is a no-op here.
 function openDashboard() {
-  const modal = document.getElementById('dashboard-modal');
-  const body = document.getElementById('dashboard-body');
-  if (!modal || !body) return;
-  body.innerHTML = `
-    <section class="dash-section" data-dash-daily></section>
-    <section class="dash-section"><div class="dash-h">📅 Activity · 60 days</div><div data-dash-activity></div></section>
-    <section class="dash-section"><div class="dash-h">📊 Mastery &amp; progress</div><div data-dash-stats></div></section>`;
-  renderDailyInto(body.querySelector('[data-dash-daily]'));
-  renderActivityInto(body.querySelector('[data-dash-activity]'), closeDashboard);
-  renderStatsInto(body.querySelector('[data-dash-stats]'), closeDashboard);
-  modal.classList.remove('hidden');
-  modal.style.display = 'block';
-}
-
-function closeDashboard() {
-  const modal = document.getElementById('dashboard-modal');
-  if (modal) modal.style.display = 'none';
+  const shell = document.getElementById('lesson-shell');
+  if (!shell) return;
+  shell.innerHTML = `
+    <div class="dashboard-page">
+      <div class="dashboard-page-header">
+        <h1 class="dashboard-page-title">📊 Dashboard</h1>
+        <button class="dashboard-exit" data-action="exit-dashboard" aria-label="Exit dashboard">✕ Exit</button>
+      </div>
+      <section class="dash-section" data-dash-daily></section>
+      <section class="dash-section"><div class="dash-h">📅 Activity · 60 days</div><div data-dash-activity></div></section>
+      <section class="dash-section"><div class="dash-h">📊 Mastery &amp; progress</div><div data-dash-stats></div></section>
+    </div>`;
+  renderDailyInto(shell.querySelector('[data-dash-daily]'));
+  renderActivityInto(shell.querySelector('[data-dash-activity]'), () => {});
+  renderStatsInto(shell.querySelector('[data-dash-stats]'), () => {});
+  shell.querySelector('[data-action="exit-dashboard"]').addEventListener('click', () => {
+    if (typeof renderLesson === 'function') renderLesson();
+  });
+  // Start at the top of the daily summary, not wherever the prior view scrolled.
+  const main = document.querySelector('.app-main');
+  if (main) main.scrollTop = 0;
 }
 
 function initDashboardModal() {
@@ -1955,10 +1964,6 @@ function initDashboardModal() {
   // Mobile-only 📊 icon (the desktop nav link is display:none ≤767px).
   const mob = document.getElementById('topbar-dashboard-mobile');
   if (mob) mob.addEventListener('click', openDashboard);
-  const closeBtn = document.getElementById('dashboard-close');
-  if (closeBtn) closeBtn.addEventListener('click', closeDashboard);
-  const modal = document.getElementById('dashboard-modal');
-  if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeDashboard(); });
 }
 
 // ──────────────────────────────────────────────────────────────────────────

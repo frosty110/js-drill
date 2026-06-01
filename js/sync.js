@@ -137,6 +137,34 @@
     return data;
   };
 
+  Sync.signInWithPassword = async function (email, password) {
+    if (!supa) throw new Error('Sync not configured');
+    const { data, error } = await supa.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  };
+
+  Sync.signUpWithPassword = async function (email, password) {
+    if (!supa) throw new Error('Sync not configured');
+    const { data, error } = await supa.auth.signUp({
+      email,
+      password,
+      // If the project requires email confirmation, the link lands back here.
+      options: { emailRedirectTo: root.location.origin + root.location.pathname }
+    });
+    if (error) throw error;
+    return data;
+  };
+
+  // Set/change the password on the CURRENTLY signed-in account. This is how an
+  // OTP-only (passwordless) account gets a password: sign in via code once,
+  // then call this. Future sign-ins can use the password.
+  Sync.setPassword = async function (password) {
+    if (!supa) throw new Error('Sync not configured');
+    const { error } = await supa.auth.updateUser({ password });
+    if (error) throw error;
+  };
+
   Sync.signOut = async function () {
     if (!supa) return;
     await supa.auth.signOut();
@@ -714,6 +742,12 @@
         padding: 10px 12px; font-size: 13px;
       }
       #sync-modal .user-row .email { color: #e2e8f0; word-break: break-all; }
+      #sync-modal .linkbtn {
+        display: block; margin: 14px auto 0; background: none; border: 0; padding: 4px;
+        color: #60a5fa; font-size: 12px; cursor: pointer; text-decoration: underline;
+      }
+      #sync-modal .linkbtn:hover { color: #93c5fd; }
+      #sync-modal .hr { height: 1px; background: #1e293b; margin: 16px 0 6px; border: 0; }
     `;
     document.head.appendChild(style);
 
@@ -731,14 +765,18 @@
       <div class="panel" role="dialog" aria-labelledby="sync-title">
         <div data-view="signed-out">
           <h2 id="sync-title">Sync your progress</h2>
-          <p>Enter your email to get a 6-digit code. Your laptop and phone will then stay in sync — local-only otherwise.</p>
+          <p>Sign in with your email and password to keep your laptop and phone in sync — local-only otherwise.</p>
           <label for="sync-email">Email</label>
           <input id="sync-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" />
+          <label for="sync-password">Password</label>
+          <input id="sync-password" type="password" autocomplete="current-password" placeholder="••••••••" />
           <div class="row">
-            <button type="button" class="ghost" data-act="cancel">Cancel</button>
-            <button type="button" class="primary" data-act="send">Send code</button>
+            <button type="button" class="ghost" data-act="signup">Create account</button>
+            <button type="button" class="primary" data-act="signin">Sign in</button>
           </div>
           <div class="err" data-err></div>
+          <div class="ok" data-ok></div>
+          <button type="button" class="linkbtn" data-act="use-code">Email me a 6-digit code instead</button>
         </div>
         <div data-view="awaiting-code" style="display:none">
           <h2>Check your email</h2>
@@ -759,11 +797,18 @@
             <span class="email" data-user-email></span>
             <span class="sync-dot" style="width:8px;height:8px;border-radius:50%;background:#22c55e"></span>
           </div>
+          <label for="sync-newpw">Set / change password</label>
+          <input id="sync-newpw" type="password" autocomplete="new-password" placeholder="New password (min 6 chars)" />
           <div class="row">
-            <button type="button" class="ghost" data-act="close">Close</button>
-            <button type="button" class="primary" data-act="signout">Sign out</button>
+            <button type="button" class="primary" data-act="setpw">Save password</button>
           </div>
           <div class="err" data-err></div>
+          <div class="ok" data-ok></div>
+          <hr class="hr" />
+          <div class="row">
+            <button type="button" class="ghost" data-act="close">Close</button>
+            <button type="button" class="ghost" data-act="signout">Sign out</button>
+          </div>
         </div>
       </div>
     `;
@@ -778,6 +823,13 @@
       btn.addEventListener('click', () => handleAction(btn.getAttribute('data-act')));
     });
 
+    // Enter-to-submit so the password fast-path is one-handed on mobile.
+    const onEnter = (el, fn) => { if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fn(); } }); };
+    onEnter(modal.querySelector('#sync-email'), () => { const p = document.getElementById('sync-password'); if (p) p.focus(); });
+    onEnter(modal.querySelector('#sync-password'), () => handleAction('signin'));
+    onEnter(modal.querySelector('#sync-code'), () => handleAction('verify'));
+    onEnter(modal.querySelector('#sync-newpw'), () => handleAction('setpw'));
+
     // Update chip + modal whenever auth state changes
     Sync.onAuthStateChange((user) => {
       renderAuthState(user);
@@ -791,8 +843,7 @@
     showView(user ? 'signed-in' : 'signed-out');
     document.getElementById('sync-modal').classList.add('is-open');
     setTimeout(() => {
-      const focusEl = document.getElementById(user ? 'sync-code' : 'sync-email');
-      if (focusEl) focusEl.focus();
+      if (!user) { const e = document.getElementById('sync-email'); if (e) e.focus(); }
     }, 50);
   }
 
@@ -822,20 +873,72 @@
       if (act === 'cancel' || act === 'close') return closeModal();
       if (act === 'back') return showView('signed-out');
 
-      if (act === 'send') {
+      if (act === 'signin' || act === 'signup') {
         const email = (document.getElementById('sync-email').value || '').trim();
-        if (!email || !/.+@.+\..+/.test(email)) {
-          return setErr('Enter a valid email.');
+        const password = document.getElementById('sync-password').value || '';
+        if (!email || !/.+@.+\..+/.test(email)) return setErr('Enter a valid email.');
+        if (password.length < 6) return setErr('Password must be at least 6 characters.');
+        const btn = document.querySelector(`#sync-modal [data-act="${act}"]`);
+        const orig = btn.textContent;
+        btn.disabled = true; btn.textContent = act === 'signin' ? 'Signing in…' : 'Creating…';
+        try {
+          if (act === 'signin') {
+            await Sync.signInWithPassword(email, password);
+            // onAuthStateChange → renderAuthState → signed-in view.
+            showView('signed-in');
+            setOk('Signed in. Merging progress…');
+          } else {
+            const data = await Sync.signUpWithPassword(email, password);
+            if (data && data.session) {
+              showView('signed-in');
+              setOk('Account created. Syncing…');
+            } else {
+              setOk('Account created — check your email to confirm, then sign in.');
+            }
+          }
+        } catch (e) {
+          const msg = (e && e.message) || '';
+          if (act === 'signin' && /invalid login credentials/i.test(msg)) {
+            setErr('Wrong email/password — or this account has no password yet. Tap "Email me a code instead", sign in, then set a password.');
+          } else {
+            setErr(msg || 'Something went wrong. Try again.');
+          }
+        } finally {
+          btn.disabled = false; btn.textContent = orig;
         }
-        const btn = document.querySelector('#sync-modal [data-act="send"]');
+        return;
+      }
+
+      if (act === 'setpw') {
+        const password = document.getElementById('sync-newpw').value || '';
+        if (password.length < 6) return setErr('Password must be at least 6 characters.');
+        const btn = document.querySelector('#sync-modal [data-act="setpw"]');
+        btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+          await Sync.setPassword(password);
+          document.getElementById('sync-newpw').value = '';
+          setOk('Password saved. Use it to sign in next time.');
+        } finally {
+          btn.disabled = false; btn.textContent = 'Save password';
+        }
+        return;
+      }
+
+      if (act === 'use-code') {
+        const email = (document.getElementById('sync-email').value || '').trim();
+        if (!email || !/.+@.+\..+/.test(email)) return setErr('Enter your email above first, then tap this.');
+        const btn = document.querySelector('#sync-modal [data-act="use-code"]');
         btn.disabled = true; btn.textContent = 'Sending…';
-        await Sync.signInWithOtp(email);
-        btn.disabled = false; btn.textContent = 'Send code';
-        pendingEmail = email;
-        document.querySelectorAll('#sync-modal [data-email-echo]').forEach(el => { el.textContent = email; });
-        showView('awaiting-code');
-        setOk('Code sent. Check your inbox.');
-        setTimeout(() => document.getElementById('sync-code').focus(), 50);
+        try {
+          await Sync.signInWithOtp(email);
+          pendingEmail = email;
+          document.querySelectorAll('#sync-modal [data-email-echo]').forEach(el => { el.textContent = email; });
+          showView('awaiting-code');
+          setOk('Code sent. Check your inbox.');
+          setTimeout(() => document.getElementById('sync-code').focus(), 50);
+        } finally {
+          btn.disabled = false; btn.textContent = 'Email me a 6-digit code instead';
+        }
         return;
       }
 

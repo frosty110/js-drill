@@ -166,6 +166,43 @@
       ],
       "answer": 0,
       "explain": "Many datastores provide atomic single-object writes cheaply, but keeping an invariant consistent across several rows/documents (e.g., moving money between accounts, updating denormalized copies) is exactly where multi-object transactions earn their keep."
+    },
+    {
+      "type": "open",
+      "prompt": "A booking app lets two users concurrently book the last remaining seat: each transaction reads `seats_left = 1`, both see it's available, and both insert a booking. Which isolation level does this need, why won't snapshot isolation save you, and what's the cheapest fix if you must stay on snapshot isolation?",
+      "points": [
+        "Name the race: this is write skew — two transactions read the same premise (a seat is free) and each writes a different row (its own booking), together violating the invariant.",
+        "Snapshot isolation does NOT prevent write skew: each transaction reads from its own consistent snapshot and neither sees the other's not-yet-committed insert.",
+        "True fix is serializability (SSI, or 2PL with predicate/index-range locks to catch the phantom).",
+        "Cheap fix on SI: materialize the conflict — take an explicit lock on the seat row (SELECT ... FOR UPDATE) or a lock row for the resource so the reads collide.",
+        "A plain UPDATE ... SET x = x - 1 atomic decrement also serializes the contended write."
+      ],
+      "answer": "This is write skew: both transactions read `seats_left = 1`, decide it's safe, then insert conflicting bookings. Snapshot isolation can't stop it because each runs against its own snapshot and can't see the other's phantom insert. The correct fix is serializable isolation (SSI or 2PL with predicate locks); if I must stay on SI, I'd materialize the conflict by taking an explicit `SELECT ... FOR UPDATE` lock on the seat/resource row so the two transactions actually contend on the same object."
+    },
+    {
+      "type": "open",
+      "prompt": "You're on call for a hospital scheduler whose invariant is 'at least one doctor must remain on call at all times.' Explain to a teammate why weaker isolation is genuinely unsafe here and what specifically serializability buys you.",
+      "points": [
+        "Describe the failure: two doctors each check that another is on call, both see the invariant satisfied, and both simultaneously book off — leaving zero, a classic write skew.",
+        "Read committed and snapshot isolation both permit this because the two transactions read overlapping rows but write disjoint rows, so no lock or snapshot conflict fires.",
+        "The invariant spans multiple rows and depends on a read staying true through commit — exactly what serializability guarantees.",
+        "Serializability makes the outcome equivalent to some serial order, in which the second doctor to run would see only one left and be rejected.",
+        "This is worth the performance cost precisely because a violated safety invariant here is a real-world harm, not cosmetic staleness."
+      ],
+      "answer": "The invariant couples multiple rows: each transaction reads the set of on-call doctors, confirms one other is present, then writes its own row — classic write skew that read committed and snapshot isolation both allow, since the writes don't overlap. Under those levels both can commit and leave nobody on call. Serializability forces the result to match some serial order, where whoever runs second would observe only one doctor left and be blocked. The isolation cost is justified because violating this invariant is an actual safety harm, not just stale data."
+    },
+    {
+      "type": "open",
+      "prompt": "Two teams debate serializable isolation for a service with mostly short, read-heavy transactions and rare conflicts. When would you pick two-phase locking (2PL) versus serializable snapshot isolation (SSI), and what's the core mechanical tradeoff?",
+      "points": [
+        "2PL is pessimistic: it takes shared/exclusive locks (plus predicate/index-range locks for phantoms) so conflicting transactions block each other up front.",
+        "SSI is optimistic: transactions run unblocked on a snapshot and the DB checks at commit whether a read premise was invalidated, aborting the loser.",
+        "For low-contention, read-heavy workloads SSI wins — few aborts, no lock waiting, better throughput and no reader/writer blocking.",
+        "For high-contention workloads SSI's abort-and-retry rate climbs and wastes work, so 2PL's blocking can be more predictable.",
+        "2PL costs come from lock overhead, reduced concurrency, and deadlocks; SSI costs come from wasted work on aborts.",
+        "Both give the same correctness (equivalent to a serial order); the choice is a performance-profile decision, not a correctness one."
+      ],
+      "answer": "For this mostly-read, low-conflict workload I'd pick SSI: transactions run optimistically on a snapshot without blocking, and since conflicts are rare, few will be aborted at commit — you get near snapshot-isolation throughput with serializable correctness. 2PL would make readers and writers block each other and risk deadlocks even though conflicts almost never happen. I'd flip to 2PL only if contention were high, where SSI's abort-and-retry rate would waste too much work; both deliver identical correctness, so it's purely a performance-profile call."
     }
   ]
 }

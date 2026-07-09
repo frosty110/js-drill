@@ -1,0 +1,184 @@
+{
+  "id": "c05",
+  "chapter": 5,
+  "part": "Async & Control",
+  "title": "Rate Limiting",
+  "summary": "Rate limiting protects a service from overload and abuse by capping how many requests a client may make in a window. This section covers the four canonical algorithms (token bucket, leaky bucket, fixed-window counter, and the two sliding-window variants), where in the stack to enforce limits, how to do it accurately across a distributed fleet, and how the server signals a throttled client.",
+  "keyTakeaways": [
+    "Token bucket refills tokens at a fixed rate up to a cap; each request spends a token, so it ALLOWS short bursts up to the bucket capacity.",
+    "Leaky bucket processes a queue at a fixed rate, SMOOTHING output to a steady stream and dropping requests when the queue overflows — no bursts.",
+    "Fixed-window counters are simple but suffer the boundary-burst flaw: up to 2x the limit can pass across the edge of two adjacent windows.",
+    "Sliding-window log stores every request timestamp for an exact count but is memory-heavy; sliding-window counter approximates it cheaply by weighting the previous window.",
+    "Enforce limits at the edge/API gateway, keyed per user, per IP, or per API key.",
+    "Distributed rate limiting needs a shared counter (e.g. Redis INCR / Lua scripts) and must handle races, trading accuracy against latency and coordination cost.",
+    "Return HTTP 429 Too Many Requests with a Retry-After header; throttling (delay/queue) and load shedding (drop) are distinct responses to overload."
+  ],
+  "questions": [
+    {
+      "q": "How does the token bucket algorithm work, and what traffic shape does it permit?",
+      "options": [
+        "It processes a fixed-size FIFO queue at a constant rate, so output is perfectly smooth with no bursts",
+        "It counts requests in a fixed clock window and resets the count when the window rolls over",
+        "Tokens are added at a fixed rate up to a bucket capacity; each request consumes a token, so bursts up to the bucket size are allowed while the long-run average stays capped",
+        "It stores a timestamp per request and counts how many fall inside the trailing window"
+      ],
+      "answer": 2,
+      "explain": "Token bucket refills tokens at a steady rate but lets them accumulate up to the bucket's capacity, so a client that has been idle can spend a burst of saved-up tokens at once — bursts up to the cap are allowed while the average is bounded. Smoothing to a constant output rate is the leaky bucket's behavior, not the token bucket's."
+    },
+    {
+      "q": "What distinguishes the leaky bucket algorithm's output?",
+      "options": [
+        "Requests leave the bucket at a fixed, constant rate (like water leaking from a hole), smoothing bursty input into a steady stream and dropping overflow when the bucket is full",
+        "It permits large bursts as long as saved-up tokens remain in the bucket",
+        "It allows exactly the limit in each fixed calendar window, then resets",
+        "It weights the previous window's count to approximate a sliding window"
+      ],
+      "answer": 0,
+      "explain": "The leaky bucket drains at a constant rate regardless of how bursty the arrivals are, producing a smooth output and shedding requests that arrive when the queue is already full. Permitting bursts from accumulated tokens is the token bucket; the two are frequently offered as each other's distractors precisely because they invert this burst-vs-smooth tradeoff."
+    },
+    {
+      "q": "Which statement correctly contrasts token bucket with leaky bucket?",
+      "options": [
+        "Both smooth traffic to a constant rate and neither allows bursts",
+        "Token bucket drops overflow immediately; leaky bucket never drops anything",
+        "Leaky bucket allows bursts; token bucket forces a constant output rate",
+        "Token bucket allows bursts up to its capacity; leaky bucket smooths output to a fixed rate and does not allow bursts"
+      ],
+      "answer": 3,
+      "explain": "The core distinction: token bucket tolerates bursts (spend accumulated tokens), while leaky bucket enforces a steady drain rate and thus no bursts. Reversing that — claiming leaky bucket allows bursts and token bucket is constant-rate — is the classic trap answer."
+    },
+    {
+      "q": "What is the well-known flaw of the fixed-window counter algorithm?",
+      "options": [
+        "It requires storing a timestamp for every request, so memory grows without bound",
+        "Boundary burst: a client can send the full limit at the end of one window and again at the start of the next, pushing up to 2x the limit through a short span straddling the edge",
+        "It smooths traffic so aggressively that legitimate bursts are always rejected",
+        "It cannot be implemented without a distributed consensus protocol"
+      ],
+      "answer": 1,
+      "explain": "Because the counter resets sharply at each window boundary, a burst clustered just before the reset plus a burst just after can deliver nearly twice the intended limit within a rolling interval shorter than the window. Unbounded per-request memory is the sliding-window LOG's weakness, not the fixed-window counter's."
+    },
+    {
+      "q": "How does the sliding-window log algorithm achieve exactness, and at what cost?",
+      "options": [
+        "It keeps a single integer counter per window, so it is exact and O(1) memory",
+        "It refills tokens continuously, making it exact without storing history",
+        "It stores the timestamp of every request and counts those within the trailing window, giving an exact rate at the cost of memory proportional to request volume",
+        "It weights two adjacent fixed-window counters to estimate the current rate"
+      ],
+      "answer": 2,
+      "explain": "The sliding-window log records each request's timestamp and, on every new request, counts how many timestamps fall inside the trailing window — perfectly accurate with no boundary artifact. The price is memory (and cleanup work) that scales with the number of requests, which is why the cheaper sliding-window counter approximation exists."
+    },
+    {
+      "q": "How does the sliding-window counter approximate a true sliding window cheaply?",
+      "options": [
+        "It combines the current fixed window's count with a weighted fraction of the previous window's count based on how far into the current window the request falls",
+        "It stores every request timestamp but compresses them with run-length encoding",
+        "It runs a full leaky bucket per client and reads the queue depth",
+        "It doubles the limit near window boundaries to compensate for bursts"
+      ],
+      "answer": 0,
+      "explain": "The sliding-window counter blends counts from the current and previous fixed windows, weighting the previous one by the portion of the sliding window it still overlaps. This smooths away most of the fixed-window boundary burst using only two counters — far cheaper than storing a timestamp per request like the log."
+    },
+    {
+      "q": "Where is rate limiting typically enforced, and on what key?",
+      "options": [
+        "Deep inside each microservice's database layer, keyed by table name",
+        "Only on the client device, keyed by the app version",
+        "In the compiler at build time, keyed by function",
+        "At the edge / API gateway (before requests hit backend services), keyed per user, per IP address, or per API key"
+      ],
+      "answer": 3,
+      "explain": "Putting the limiter at the API gateway or edge rejects abusive traffic early — before it consumes backend resources — and it keys on an identity dimension like user id, client IP, or API key. Enforcing only client-side is trivially bypassed, and burying it in the database defeats the point of shedding load before it arrives."
+    },
+    {
+      "q": "What is the central challenge of rate limiting across a distributed fleet of servers?",
+      "options": [
+        "TCP cannot carry the counter between servers, so UDP is required",
+        "Each server sees only its own traffic, so counts must be shared (e.g. a Redis counter via INCR or an atomic Lua script) while handling race conditions and the accuracy-vs-latency tradeoff",
+        "Distributed limiting is impossible, so every fleet must run on a single node",
+        "The only correct approach is to disable limiting entirely under high load"
+      ],
+      "answer": 1,
+      "explain": "With many gateway nodes, a per-node counter under-counts the global rate, so implementations centralize the counter in a store like Redis using atomic INCR or Lua scripts to avoid read-modify-write races. That coordination adds latency, so designs trade some accuracy (e.g. approximate or sticky-routed counts) for speed. Sticky-routing a client to one node is a common alternative that avoids the shared counter."
+    },
+    {
+      "q": "When a client exceeds its limit, what should the HTTP response be?",
+      "options": [
+        "403 Forbidden with no additional headers",
+        "503 Service Unavailable, because the whole service is down",
+        "429 Too Many Requests, ideally with a Retry-After header telling the client when to try again",
+        "200 OK with an empty body so the client silently backs off"
+      ],
+      "answer": 2,
+      "explain": "429 Too Many Requests is the standard rate-limit status, and a Retry-After header (seconds or a date) lets well-behaved clients back off precisely instead of hammering. 403 signals authorization failure, and 503 signals the service itself is unavailable rather than the client being throttled."
+    },
+    {
+      "q": "What is the difference between throttling and load shedding as responses to overload?",
+      "options": [
+        "Throttling delays or queues excess requests to slow the client down, while load shedding outright drops (rejects) requests to protect the system — they are distinct strategies",
+        "They are two names for the same action: dropping every request over the limit",
+        "Throttling drops requests instantly; load shedding always queues them for later",
+        "Load shedding speeds requests up, while throttling caches their responses"
+      ],
+      "answer": 0,
+      "explain": "Throttling slows a client by delaying or queuing its excess requests (the request eventually gets served), whereas load shedding sacrifices requests by dropping them to keep the system healthy under overload. Conflating the two, or reversing which one drops versus queues, is the trap."
+    },
+    {
+      "q": "A client has been idle for a while under a token-bucket limiter with capacity 10 and refill of 1 token/sec. What happens if it suddenly sends 10 requests at once?",
+      "options": [
+        "All 10 are rejected because the per-second rate is only 1",
+        "Only 1 is allowed and the other 9 are queued and released one per second",
+        "The requests are smoothed to exactly 1 per second with no bursting",
+        "All 10 are allowed immediately because the bucket has accumulated up to its capacity of 10 tokens during the idle period"
+      ],
+      "answer": 3,
+      "explain": "During the idle period the bucket refilled up to its capacity (10 tokens), so a burst of 10 requests each spends one token and all pass at once — that accumulated-burst allowance is the whole point of token bucket. A leaky bucket, by contrast, would release them at the fixed drain rate."
+    },
+    {
+      "q": "In a leaky-bucket limiter, what happens to a request that arrives when the bucket (queue) is already full?",
+      "options": [
+        "It is served immediately, temporarily exceeding the drain rate",
+        "It is dropped (or rejected), because the fixed-size queue has no room and the leak rate is constant",
+        "The bucket capacity automatically doubles to absorb it",
+        "It replaces the oldest queued request, which is discarded instead"
+      ],
+      "answer": 1,
+      "explain": "The leaky bucket has a fixed queue size draining at a constant rate; once the queue is full, arriving requests overflow and are dropped, which is how it enforces the cap while smoothing output. It never bursts above the drain rate, and it doesn't grow the queue to fit the load."
+    },
+    {
+      "q": "You want to eliminate the fixed-window boundary-burst problem without storing a timestamp per request. Which algorithm best fits?",
+      "options": [
+        "Fixed-window counter, run with a larger window",
+        "Sliding-window log, since exactness is the only goal",
+        "Sliding-window counter, which weights the previous and current windows to smooth the boundary using just two counters",
+        "Token bucket with the capacity set to zero"
+      ],
+      "answer": 2,
+      "explain": "The sliding-window counter is the cheap middle ground: it removes almost all of the fixed-window boundary burst by blending the previous and current window counts, using O(1) memory rather than a per-request log. The sliding-window log also fixes the burst but pays the memory cost you're trying to avoid."
+    },
+    {
+      "q": "Sticky routing (hashing each client to a fixed gateway node) is sometimes used for distributed rate limiting because it…",
+      "options": [
+        "…lets each node count that client's requests locally, avoiding a shared counter and its coordination latency, at the cost of uneven load and weaker fault tolerance",
+        "…guarantees perfectly even load across all nodes automatically",
+        "…makes exactly-once counting trivial across the whole fleet",
+        "…removes the need to return 429 responses"
+      ],
+      "answer": 0,
+      "explain": "If a given client always lands on the same node, that node sees all of the client's traffic and can enforce the limit with a purely local counter — no Redis round-trip. The tradeoff is that hot clients can imbalance nodes and a node failure disrupts its clients' limiting, which is why it's an alternative to, not a strict improvement over, a shared counter."
+    },
+    {
+      "type": "open",
+      "prompt": "You're running rate limiting across a fleet of 20 API gateway nodes and need per-user limits. Walk through how you'd implement it and the tradeoffs you'd weigh.",
+      "points": [
+        "Per-node counters under-count the true global rate, so you need shared state — a centralized store like Redis keyed by user id.",
+        "Use atomic operations (INCR with an expiring key, or a Lua script) to avoid read-modify-write race conditions across concurrent nodes.",
+        "Pick an algorithm: token bucket or sliding-window counter are common; sliding-window counter avoids the fixed-window boundary burst cheaply.",
+        "Acknowledge the accuracy vs latency tradeoff — every check adds a Redis round-trip; you can batch/approximate or use sticky routing to trade exactness for speed.",
+        "Signal rejected clients with HTTP 429 + Retry-After, and decide between throttling (delay) and load shedding (drop) under overload."
+      ],
+      "answer": "Because each of the 20 nodes only sees a slice of a user's traffic, a local counter would let the user exceed the global limit, so I centralize the counter in Redis keyed by user id. I use atomic INCR with a TTL (or a Lua script) so concurrent nodes don't race on read-modify-write, and I'd typically use a token bucket or sliding-window counter — the latter kills the fixed-window boundary burst with just two counters. The main tradeoff is accuracy versus latency: every request now pays a Redis round-trip, so if that's too costly I can approximate, batch updates, or sticky-route each user to one node and count locally. Rejected requests get a 429 with Retry-After, and I decide up front whether to throttle (queue/delay) or shed (drop) when the system is saturated."
+    }
+  ]
+}

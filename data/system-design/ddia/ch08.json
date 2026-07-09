@@ -167,6 +167,43 @@
       ],
       "answer": 3,
       "explain": "A safety property requires that nothing bad ever happens — once violated the damage is done and cannot be undone (e.g. two leaders elected). A liveness property requires that something good eventually happens (e.g. a request eventually gets a response); it can be pending for a while without being violated. DDIA usually insists safety always holds while allowing liveness to depend on timing assumptions."
+    },
+    {
+      "type": "open",
+      "prompt": "Your failure detector marks a node dead after a 5-second timeout and reassigns its work. In production this occasionally double-executes jobs. Explain why you fundamentally can't distinguish a slow node from a dead one, and how you'd design around it instead of just tuning the timeout.",
+      "points": [
+        "On an asynchronous network a missing reply is ambiguous: lost request, dead node, or slow/queued response are indistinguishable from the outside.",
+        "There is no correct timeout — too long delays failover, too short declares live-but-slow nodes dead, triggering duplicate work and cascading load.",
+        "Network delay has no guaranteed upper bound, so no single value eliminates the ambiguity.",
+        "Design around it: don't rely on timeouts for correctness — make reassigned work idempotent or guard shared state with fencing tokens so a wrongly-declared-dead node can't corrupt anything.",
+        "Let a quorum, not one observer, decide liveness, and accept the timeout only as a liveness/latency heuristic, never a safety guarantee."
+      ],
+      "answer": "The absence of a reply is inherently ambiguous — I can't tell whether the node crashed, the network dropped the packet, or the node is just slow, because packet delay has no upper bound. So any timeout is a guess: shorter ones declare healthy-but-slow nodes dead and cause the double execution I'm seeing. Rather than chase a magic value, I'd stop treating the timeout as truth: make the reassigned work idempotent and protect shared state with fencing tokens, so even if the 'dead' node is actually alive and resumes, it can't corrupt results. Liveness should be a quorum decision and the timeout only a heuristic for when to react."
+    },
+    {
+      "type": "open",
+      "prompt": "A leader acquires a lease on a lock service, then suffers a 30-second stop-the-world GC pause; meanwhile the cluster elects a new leader. When the old leader wakes it writes to shared storage believing it still holds the lock. Walk through how fencing tokens prevent corruption here.",
+      "points": [
+        "A process can pause arbitrarily (GC, VM migration, paging) with no awareness that time passed, so a lease can silently expire mid-pause.",
+        "During the pause the cluster times out the lease and elects a new leader, creating a split-brain window.",
+        "The lock service hands out a monotonically increasing fencing token with each grant; the new leader gets a higher token than the old one.",
+        "Clients attach their token to every write to the storage/resource.",
+        "The storage rejects any write bearing a token lower than the highest it has already accepted, so the woken old leader's stale-token write is refused.",
+        "Correctness comes from the resource enforcing the token, not from trusting the lock client to behave."
+      ],
+      "answer": "The GC pause is invisible to the old leader — it can't know its lease expired while it was frozen, so on waking it still thinks it's leader (split brain). Fencing fixes this at the resource: each lock grant carries a monotonically increasing token, so the new leader holds a higher token than the old one. Every write to shared storage includes its token, and the storage refuses any write whose token is lower than the highest it has seen. The old leader's write, stamped with a now-stale token, is rejected — and crucially the guarantee lives in the resource enforcing the token, not in the paused client behaving correctly."
+    },
+    {
+      "type": "open",
+      "prompt": "A colleague proposes ordering events across servers by their time-of-day (wall-clock) timestamps and resolving conflicts with last-write-wins. What breaks, and what would you use instead for (a) measuring a request's duration and (b) ordering events causally?",
+      "points": [
+        "Time-of-day clocks are NTP-synced and can jump forward or backward; nodes disagree by their sync error, so timestamps can misorder events.",
+        "LWW on wall clocks silently drops data: a write with an earlier real time but a higher timestamp (skewed-ahead clock) wins, discarding a genuinely newer write with no error.",
+        "For durations use a monotonic clock — it only moves forward and never jumps, though its absolute value is meaningless across machines.",
+        "For cross-machine event ordering use logical clocks (Lamport timestamps / version vectors), which order by causality, not wall time.",
+        "If real-time ordering is truly required, something like Spanner's TrueTime (bounded uncertainty interval + commit-wait) is needed, not raw NTP timestamps."
+      ],
+      "answer": "Wall-clock ordering breaks because time-of-day clocks are NTP-corrected and can jump backward or disagree between nodes; LWW then keeps the highest timestamp, so a node whose clock runs fast can make a stale write win and silently drop a newer one — data loss with no error. For measuring a request's duration I'd use a monotonic clock, which never goes backward (its absolute value is meaningless, but deltas are reliable). For ordering events across machines I'd use logical clocks like Lamport timestamps or version vectors, which capture causality; only something like TrueTime with bounded uncertainty and commit-wait can safely order by real time."
     }
   ]
 }

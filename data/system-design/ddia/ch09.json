@@ -167,6 +167,44 @@
       ],
       "answer": 1,
       "explain": "ZooKeeper/etcd expose a small set of consensus-backed primitives: linearizable atomic compare-and-set, a total order via a monotonically increasing transaction id, failure detection via ephemeral nodes tied to client sessions, and watches for change notifications. Applications use these for leader election, locks, service discovery, and membership — not for storing large volumes of application data."
+    },
+    {
+      "type": "open",
+      "prompt": "For a distributed lock / leader-election service you insist on linearizability, but for a social feed you're fine with causal consistency. Explain when linearizability is actually required versus when causal is enough, and what linearizability costs you.",
+      "points": [
+        "Linearizability is a recency guarantee on a single object: once a read sees a new value, all later reads see it or newer, as if one up-to-date copy.",
+        "Locking / leader election needs it — a stale read could let two nodes both believe they hold the lock (split brain), a correctness violation.",
+        "The feed tolerates stale reads, so it needs only causal consistency: preserve happens-before (e.g. a reply never appears before its parent) while allowing concurrent ops to be seen in different orders.",
+        "Cost of linearizability: it requires coordination, so under a network partition (CAP) you must sacrifice availability, and even without partitions it adds latency.",
+        "Causal consistency is the strongest model that stays available and fast under partitions, which is why it's the default when recency isn't safety-critical."
+      ],
+      "answer": "Linearizability is a single-object recency guarantee — once anyone reads the new value, everyone does — and it's genuinely required for the lock service, because a stale read could let two nodes both think they're leader and cause split-brain. The feed only needs causal consistency: preserve happens-before so a reply never precedes its parent, while letting concurrent posts be ordered differently on different replicas. The reason not to make everything linearizable is cost: it needs coordination, so under a partition CAP forces me to give up availability, and it adds latency even without partitions. Causal is the strongest guarantee that stays available and fast, so I use it wherever stale reads aren't a safety problem."
+    },
+    {
+      "type": "open",
+      "prompt": "An interviewer asks: 'Two-phase commit and Raft both get nodes to agree — why do we say 2PC blocks but consensus is fault-tolerant?' Explain the mechanical difference.",
+      "points": [
+        "2PC is an atomic-commit protocol needing a unanimous 'yes' from every participant and driven by a single coordinator.",
+        "After a participant votes yes it is 'in doubt' — it has promised to commit and can't decide alone; if the coordinator crashes before delivering the decision, it must hold locks and block until the coordinator recovers.",
+        "The coordinator is a single point of failure with no built-in failover, so 2PC is not fault-tolerant.",
+        "Fault-tolerant consensus (Raft/Paxos/Zab) needs agreement only from a majority (quorum), not unanimity, so it survives a minority of failures including the leader.",
+        "Consensus uses monotonically increasing epoch/term numbers and overlapping quorums so a new leader learns the latest committed decisions and progress continues without blocking.",
+        "So 2PC and consensus are related (both about agreement) but distinct: 2PC blocks on one coordinator; consensus keeps going as long as a majority is up."
+      ],
+      "answer": "2PC requires every participant to vote yes and is driven by one coordinator; once a participant votes yes it's in doubt — committed to obey but unable to decide itself — so if the coordinator dies before sending the verdict, the participant blocks holding locks until it recovers. That single coordinator has no failover, so 2PC isn't fault-tolerant. Consensus algorithms like Raft instead need only a majority quorum to agree, so they tolerate a minority of failures including the leader: each election bumps a monotonic epoch number and overlapping quorums guarantee a new leader sees the latest committed decisions, so progress continues without blocking. They're related but not the same — 2PC blocks on unanimity + one coordinator, consensus advances on any majority."
+    },
+    {
+      "type": "open",
+      "prompt": "You need to enforce a globally unique username across a partitioned system. Explain why Lamport timestamps alone aren't enough and how total order broadcast lets you build the constraint.",
+      "points": [
+        "Lamport timestamps give a total order consistent with causality, but the order is only known in hindsight.",
+        "To reject a duplicate in the moment, a node must know it has seen all competing claims — but a lower timestamp could still arrive later, so it can't decide immediately.",
+        "Total order broadcast delivers every message reliably and in the identical order to all nodes, finalizing the order at delivery time.",
+        "Route all username claims through the broadcast (e.g. one log partition keyed by the name); a deterministic consumer reads them in the agreed order.",
+        "The consumer grants the first claim for a name and rejects every later one, giving a linearizable uniqueness check.",
+        "Total order broadcast is equivalent to consensus and to a linearizable compare-and-set, which is exactly the primitive a uniqueness constraint needs."
+      ],
+      "answer": "Lamport timestamps do define a total order, but only in hindsight — to reject a duplicate right now a node would have to be certain it has already seen every competing claim, and a lower timestamp could still show up later, so it can't safely decide in the moment. Total order broadcast solves this by delivering all claims reliably and in the same order to every node, finalizing the order at delivery. I route every claim for a username through the ordered log (partitioned by the name), and a deterministic consumer accepts the first claim it sees and rejects the rest. That's a linearizable compare-and-set, which is equivalent to consensus — exactly the primitive a uniqueness constraint requires."
     }
   ]
 }

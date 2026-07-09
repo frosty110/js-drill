@@ -1,0 +1,184 @@
+{
+  "id": "c06",
+  "chapter": 6,
+  "part": "Scale Primitives & APIs",
+  "title": "Scale Primitives",
+  "summary": "The low-level distributed-systems building blocks you compose under the hood of a scalable design: consistent hashing, bloom filters, sharding strategies, quorums, idempotency keys, leader election, and failure detection.",
+  "keyTakeaways": [
+    "Consistent hashing places keys and nodes on a ring so adding/removing a node remaps only ~K/N keys instead of nearly all of them.",
+    "Virtual nodes give each physical node many points on the ring, smoothing load imbalance and reducing variance.",
+    "A bloom filter is a probabilistic set-membership test with no false negatives but tunable false positives; you cannot delete from a standard one.",
+    "Sharding strategies trade off: range (ordered, good scans, hotspot risk) vs hash (even spread, no range scans) vs geo vs directory/lookup table.",
+    "Hotspots are mitigated by salting or composite keys that spread a hot value across shards.",
+    "A quorum with R + W > N guarantees every read set overlaps the latest write set, so a read can see the most recent write.",
+    "Idempotency keys let a retried request be applied exactly once; leader election plus heartbeats keep a single coordinator alive without split-brain."
+  ],
+  "questions": [
+    {
+      "q": "What problem does consistent hashing primarily solve compared to a naive `hash(key) % N` placement?",
+      "options": [
+        "It makes each lookup O(1) instead of O(log n)",
+        "It guarantees perfectly even key distribution with no configuration",
+        "It avoids remapping nearly every key when the number of nodes N changes",
+        "It removes the need for replication because keys never move"
+      ],
+      "answer": 2,
+      "explain": "With `hash(key) % N`, changing N (adding/removing a node) alters the modulus for almost every key, so nearly all keys must move. Consistent hashing changes the placement of only the keys in one arc of the ring, roughly K/N of them."
+    },
+    {
+      "q": "In consistent hashing, which node owns a given key?",
+      "options": [
+        "The node whose hash is numerically closest to the key's hash in either direction",
+        "The node with the most free capacity at write time",
+        "A node chosen by a central directory service per key",
+        "The first node encountered moving clockwise from the key's position on the ring"
+      ],
+      "answer": 3,
+      "explain": "Both keys and nodes are hashed onto the same ring; a key is assigned to the next node found walking clockwise from the key's position. Closest-in-either-direction and capacity-based schemes are different placement models."
+    },
+    {
+      "q": "Roughly how many keys move when one node is added to or removed from a consistent-hashing ring of N nodes?",
+      "options": [
+        "About K/N of the K total keys",
+        "About half of all keys",
+        "Nearly all K keys",
+        "Exactly one key per node"
+      ],
+      "answer": 0,
+      "explain": "Adding or removing a node only reassigns the keys in the affected arc, which is on average K/N of the K total keys. Remapping nearly all keys is the failure mode of `hash % N` that consistent hashing was designed to avoid."
+    },
+    {
+      "q": "Why do consistent-hashing systems introduce virtual nodes (each physical node getting many ring positions)?",
+      "options": [
+        "To eliminate the need for hashing keys at all",
+        "To smooth out load imbalance and reduce variance from an uneven ring layout",
+        "To guarantee strong consistency across replicas",
+        "To let range scans work efficiently on the ring"
+      ],
+      "answer": 1,
+      "explain": "With few points per node, random placement leaves some nodes owning much larger arcs than others. Giving each physical node many virtual positions averages out the arc sizes, evening the load and reducing variance."
+    },
+    {
+      "q": "Which statement about a standard bloom filter is correct?",
+      "options": [
+        "It can produce false negatives but never false positives",
+        "It produces neither false positives nor false negatives",
+        "It can produce false positives but never false negatives",
+        "It stores the actual elements so membership is always exact"
+      ],
+      "answer": 2,
+      "explain": "A bloom filter may report that an absent element is present (false positive), but a 'not present' answer is always trustworthy — there are no false negatives. It stores only bits, not the elements themselves."
+    },
+    {
+      "q": "How is a bloom filter structured internally?",
+      "options": [
+        "An m-bit array with k independent hash functions setting/checking k bits per element",
+        "A balanced binary search tree of hashed keys",
+        "A sorted array of key fingerprints searched by binary search",
+        "A hash map from key to a presence boolean"
+      ],
+      "answer": 0,
+      "explain": "A bloom filter is an m-bit array; each element is run through k hash functions that set k bits, and membership is tested by checking whether all k bits are set. Tuning m and k trades space against the false-positive rate."
+    },
+    {
+      "q": "What is a canonical use of a bloom filter in a storage engine?",
+      "options": [
+        "To physically delete keys during compaction",
+        "To compress column values on disk",
+        "To skip an expensive disk lookup when the filter says a key is definitely absent",
+        "To keep replicas in sync via anti-entropy"
+      ],
+      "answer": 2,
+      "explain": "Because a bloom filter never yields false negatives, a 'definitely not present' result lets the engine skip reading a segment or disk block entirely, avoiding costly I/O for keys that are absent. Positives still require the real lookup to confirm."
+    },
+    {
+      "q": "Why can't you delete an element from a standard bloom filter by clearing its bits?",
+      "options": [
+        "The bits are stored on immutable disk segments",
+        "A given bit may be shared by other elements, so clearing it could create false negatives for them",
+        "Bloom filters have no hash functions to locate the bits",
+        "Deletion would require rehashing the entire m-bit array"
+      ],
+      "answer": 1,
+      "explain": "Multiple elements can set the same bit, so clearing bits for one element could turn another element's lookup into a false negative — which breaks the filter's core guarantee. Deletion needs a variant like a counting bloom filter."
+    },
+    {
+      "q": "Which is the key tradeoff between range-based and hash-based sharding?",
+      "options": [
+        "Range sharding spreads load evenly but forbids scans; hash sharding preserves order but causes hotspots",
+        "Both preserve key order; they differ only in replication factor",
+        "Hash sharding is only for reads and range sharding only for writes",
+        "Range sharding keeps keys ordered (good for scans) but risks hotspots; hash sharding spreads keys evenly but kills range scans"
+      ],
+      "answer": 3,
+      "explain": "Range partitioning keeps adjacent keys together so range scans are efficient, but a hot key range concentrates load on one shard. Hashing the key scatters adjacent keys across shards for even load, at the cost of making range scans require touching every shard."
+    },
+    {
+      "q": "A social app shards user timelines by `hash(user_id)`, but one celebrity account overwhelms its shard. Which mitigation directly addresses this hotspot?",
+      "options": [
+        "Switch to range sharding by user_id",
+        "Add a salt or composite key so the hot user's data spreads across multiple shards",
+        "Increase the replication factor N on every shard",
+        "Replace the hash function with `id % N`"
+      ],
+      "answer": 1,
+      "explain": "Salting (e.g. appending a random or bucketed suffix) or using a composite key splits the single hot key's writes across several shards so no one shard is overwhelmed. Range sharding would make the hotspot worse, and more replicas doesn't reduce write load on the primary."
+    },
+    {
+      "q": "What is the purpose of a client-supplied idempotency key on a request?",
+      "options": [
+        "To ensure a retried (duplicated) request is applied only once",
+        "To authenticate the client to the server",
+        "To encrypt the request payload end-to-end",
+        "To route the request to the correct shard"
+      ],
+      "answer": 0,
+      "explain": "The client sends a unique idempotency key with the operation; the server records it and, on a retry with the same key, returns the original result instead of performing the action again — critical for non-idempotent operations like 'charge card'. It is not an auth or routing mechanism."
+    },
+    {
+      "q": "In a quorum system with N replicas, W write acknowledgments, and R read responses, what does the condition R + W > N guarantee?",
+      "options": [
+        "That writes are always faster than reads",
+        "That every read set overlaps the latest write set, so a read can observe the most recent write",
+        "That data is replicated to exactly N/2 + 1 nodes",
+        "That the system is linearizable under all network partitions"
+      ],
+      "answer": 1,
+      "explain": "R + W > N forces any read quorum to share at least one node with the last write quorum, so the read is guaranteed to encounter a replica holding the latest write. It does not by itself provide full linearizability — quorum reads can still see stale data during concurrent writes or partial failures."
+    },
+    {
+      "q": "Why do distributed systems perform leader election (via ZooKeeper, etcd, or Raft)?",
+      "options": [
+        "To shard data evenly across nodes",
+        "To compress the write-ahead log",
+        "To generate idempotency keys for clients",
+        "To pick a single coordinator and avoid split-brain, where two nodes both believe they are in charge"
+      ],
+      "answer": 3,
+      "explain": "Leader election designates one node as the coordinator for a task, and consensus systems like Raft ensure only one leader is active at a time to prevent split-brain (two competing leaders making conflicting decisions). It is unrelated to sharding or compaction."
+    },
+    {
+      "q": "What is the primary role of heartbeats in a distributed system?",
+      "options": [
+        "To synchronize wall-clock time across nodes",
+        "To replicate every write to every replica synchronously",
+        "To detect node failures so a dead node can be marked down and its work reassigned",
+        "To balance read load across healthy nodes"
+      ],
+      "answer": 2,
+      "explain": "Nodes periodically send heartbeats (or answer health checks); a missed heartbeat past a timeout is the signal that a node has likely failed, triggering failover or reassignment. Clock synchronization is a separate concern handled by protocols like NTP."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain why consistent hashing is preferable to `hash(key) % N` for a distributed cache, and what virtual nodes add on top of it.",
+      "points": [
+        "`hash % N` changes the modulus for almost every key when N changes, remapping ~all keys and causing a cache stampede.",
+        "Consistent hashing places keys and nodes on a ring; a key maps to the next node clockwise.",
+        "Adding/removing a node only remaps the keys in one arc — about K/N keys — so most cache entries stay put.",
+        "With few points per node, arc sizes are uneven, causing load imbalance.",
+        "Virtual nodes give each physical node many ring positions, averaging arc sizes to smooth load and reduce variance."
+      ],
+      "answer": "With `hash % N`, adding or removing a node changes the modulus for nearly every key, so almost the whole cache is invalidated at once. Consistent hashing hashes keys and nodes onto a ring and sends each key to the next node clockwise, so a membership change only moves the ~K/N keys in the affected arc. Virtual nodes then give each physical node many positions on the ring, evening out otherwise-lopsided arc sizes and reducing load variance."
+    }
+  ]
+}

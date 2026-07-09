@@ -156,6 +156,43 @@
       ],
       "answer": 1,
       "explain": "The actor model communicates only by asynchronous messages and already tolerates message loss even on one node, so extending it across machines (a distributed actor framework) fits the network's realities more naturally than the RPC pretense of a local call. Actors avoid shared mutable state by design."
+    },
+    {
+      "type": "open",
+      "prompt": "You need to add a field to a Protobuf/Thrift message and remove another, then deploy via a rolling upgrade where old and new code run at once. Walk through exactly how you keep both backward and forward compatibility.",
+      "points": [
+        "Rolling upgrade means old and new code coexist, so new code must read old data (backward) AND old code must tolerate new data (forward).",
+        "Add the new field with a fresh, never-before-used tag number — never reuse an old tag.",
+        "Make the new field optional or give it a default so new readers can handle old records that lack it (backward compat).",
+        "Old readers skip unknown tag numbers, so a new field is safely ignored by old code (forward compat) — but never mark a new field required.",
+        "To remove a field, only remove an optional one, and retire (never reuse) its tag number so future messages can't be misinterpreted.",
+        "Renaming is free since encoding uses tag numbers, not names."
+      ],
+      "answer": "The rolling upgrade means both directions matter: new nodes read old data and old nodes must survive new data. For the added field I give it a brand-new tag number and make it optional/defaulted — old readers just skip the unknown tag (forward compatible) and new readers fall back to the default on old records (backward compatible); I never make a new field required. For the removal I only drop an optional field and permanently retire its tag number so it's never reused and misread later. Renames are safe because Protobuf/Thrift key everything on numeric tags, not field names."
+    },
+    {
+      "type": "open",
+      "prompt": "You're picking a binary encoding for a pipeline where the schema is auto-generated from a frequently-changing database table and dumped to files. Would you choose Avro or Protobuf, and why? When would the answer flip?",
+      "points": [
+        "Avro matches fields by name and uses no manually-assigned tag numbers, so a schema regenerated from a changing table needs no stable tag bookkeeping — ideal for dynamically generated schemas.",
+        "Avro decoding needs the exact writer's schema, which fits file/archive use where you can store the schema once per large file.",
+        "Avro resolves writer's vs reader's schema by name, filling defaults/dropping fields, so evolution stays clean.",
+        "Protobuf/Thrift require hand-stable tag numbers, which is friction when the schema is auto-regenerated constantly.",
+        "Flip to Protobuf when you have a hand-maintained schema, want mature cross-language tooling/RPC (gRPC), or per-message overhead of shipping/looking up the writer schema is undesirable."
+      ],
+      "answer": "I'd choose Avro. Because it matches fields by name and has no hand-assigned tag numbers, a schema regenerated every time the table changes needs no fragile tag bookkeeping, and its writer's-schema/reader's-schema resolution handles added/dropped columns cleanly by name. It also fits the file-dump case, where I can store the writer's schema once per large file rather than per record. The answer flips to Protobuf when the schema is hand-maintained and stable, or when I want its mature cross-language tooling and gRPC — then stable tag numbers are an asset, not a burden."
+    },
+    {
+      "type": "open",
+      "prompt": "An old version of a service reads a record, edits one field, and writes it back — but the record was written by newer code with fields the old code doesn't know about. What goes wrong, and how do you prevent it?",
+      "points": [
+        "Data in a database can outlive the code, so old code will encounter records written by newer code (the forward-compatibility case).",
+        "The danger is a read-modify-write cycle: old code deserializes into its model, which has no place for the unknown new fields, and silently drops them on write-back.",
+        "This is data loss even though nothing errors — the new fields just vanish.",
+        "Fix: preserve unknown/unrecognized fields through the round-trip (carry them untouched) rather than dropping them.",
+        "Schema-tag formats (Protobuf/Avro) and careful code can keep unknown fields; naive object-mapping that only knows current fields is the trap."
+      ],
+      "answer": "The problem is the classic read-modify-write hazard: because data outlives code, the old service reads a record written by newer code, but its object model has no slot for the newer fields, so when it writes the record back it silently drops them — real data loss with no error. The fix is to preserve unknown fields through the round-trip: carry any unrecognized fields untouched and re-emit them on write, rather than materializing only the fields this version knows about. That's a place where thoughtless object-mapping bites you, and why the encoding and the write path both need to respect fields the current code doesn't understand."
     }
   ]
 }

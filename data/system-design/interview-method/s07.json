@@ -1,0 +1,187 @@
+{
+  "id": "s07",
+  "chapter": 7,
+  "part": "Estimation & Numbers",
+  "title": "Numbers Every Engineer Should Know",
+  "summary": "The classic 'latency numbers every programmer should know,' held at order-of-magnitude precision. Internalize the relative ordering — cache << memory << SSD << datacenter round trip << disk seek << cross-continent round trip — plus rough throughput and single-machine QPS ballparks that let you reason about where time and bottlenecks go.",
+  "keyTakeaways": [
+    "Rough latency ladder: L1 cache ~1 ns, L2 ~10 ns, main memory ~100 ns, SSD random read ~16-150 µs, intra-datacenter round trip ~0.5 ms, disk (HDD) seek ~10 ms, cross-continent round trip ~150 ms.",
+    "Relative ordering matters more than exact figures: cache << RAM << SSD << same-DC network << spinning disk seek << cross-region network.",
+    "Each rung is roughly orders of magnitude apart: memory (~100 ns) is ~100-1000x faster than an SSD read (~10-100 µs), which is ~100x faster than a disk seek (~10 ms).",
+    "Reading 1 MB sequentially: from memory ~microseconds, from SSD ~1 ms, from spinning disk ~tens of ms — sequential is far faster than random, especially on disk.",
+    "A cross-continent round trip (~150 ms) is dominated by the speed of light, so no amount of server tuning removes it — you place data near users instead.",
+    "Single-machine ballparks: an in-memory store handles ~100k+ ops/sec; a single relational DB handles low thousands of writes/sec to tens of thousands of reads/sec — order-of-magnitude anchors for when you must shard.",
+    "Use these numbers to locate the bottleneck: if a request crosses regions or hits disk randomly, that dominates; batching, caching, and locality attack the slow rungs."
+  ],
+  "questions": [
+    {
+      "q": "Order these from FASTEST to SLOWEST: (a) SSD random read, (b) main memory reference, (c) disk (HDD) seek, (d) L1 cache reference.",
+      "options": [
+        "d < b < a < c (L1 < memory < SSD < disk seek)",
+        "b < d < a < c (memory < L1 < SSD < disk seek)",
+        "d < a < b < c (L1 < SSD < memory < disk seek)",
+        "a < d < b < c (SSD < L1 < memory < disk seek)"
+      ],
+      "answer": 0,
+      "explain": "L1 cache (~1 ns) < main memory (~100 ns) < SSD random read (~tens of µs) < HDD seek (~10 ms). Memory is faster than an SSD, and both are far faster than a mechanical disk seek — this ordering is the load-bearing intuition."
+    },
+    {
+      "q": "Roughly how long is a main-memory reference, to an order of magnitude?",
+      "options": [
+        "~1 ns",
+        "~100 ns",
+        "~100 µs",
+        "~10 ms"
+      ],
+      "answer": 1,
+      "explain": "Main memory is on the order of 100 nanoseconds — about 100x slower than an L1 cache hit (~1 ns) and about 100-1000x faster than an SSD read. 100 µs is SSD territory and 10 ms is a disk seek."
+    },
+    {
+      "q": "A round trip within the same datacenter is closest to which order of magnitude?",
+      "options": [
+        "~0.5 microseconds",
+        "~0.5 milliseconds",
+        "~50 milliseconds",
+        "~0.5 seconds"
+      ],
+      "answer": 1,
+      "explain": "An intra-datacenter round trip is roughly 0.5 ms (~500 µs). That is much slower than a memory reference but far faster than a cross-continent round trip (~150 ms)."
+    },
+    {
+      "q": "A round trip between continents (e.g. California to Europe and back) is on the order of:",
+      "options": [
+        "~1 ms",
+        "~15 ms",
+        "~150 ms",
+        "~1.5 s"
+      ],
+      "answer": 2,
+      "explain": "Cross-continent round trips are roughly 150 ms, dominated by the speed of light over the distance. Because physics sets this floor, you reduce it by moving data closer to users (CDNs, regional replicas), not by faster servers."
+    },
+    {
+      "q": "Approximately how much slower is a spinning-disk seek (~10 ms) than a main-memory reference (~100 ns)?",
+      "options": [
+        "About 100x slower",
+        "About 1,000x slower",
+        "About 100,000x slower",
+        "About the same"
+      ],
+      "answer": 2,
+      "explain": "10 ms / 100 ns = 10^7 ns / 10^2 ns = 10^5, so a disk seek is on the order of 100,000x slower than a memory reference. This enormous gap is why random disk I/O is the classic bottleneck and why caching hot data in RAM pays off so heavily."
+    },
+    {
+      "q": "An SSD random read is closest to which order of magnitude?",
+      "options": [
+        "~100 nanoseconds",
+        "~10-100 microseconds",
+        "~10 milliseconds",
+        "~1 second"
+      ],
+      "answer": 1,
+      "explain": "SSD random reads are on the order of tens of microseconds (roughly 16-150 µs), sitting between main memory (~100 ns) and a spinning-disk seek (~10 ms). 100 ns is memory and 10 ms is an HDD seek."
+    },
+    {
+      "q": "Why is reading 1 MB sequentially from disk far faster than making many random disk seeks for the same data?",
+      "options": [
+        "Sequential reads avoid the ~10 ms mechanical seek per access; the head streams contiguous data",
+        "Sequential reads are cached in L1 while random reads are not",
+        "Random reads are always served from the network instead of disk",
+        "Sequential and random disk access actually take the same time"
+      ],
+      "answer": 0,
+      "explain": "Each random access on a spinning disk pays the ~10 ms seek/rotational cost, whereas a sequential read pays it roughly once and then streams contiguous bytes. This is why algorithms and storage engines favor sequential I/O (e.g. log-structured writes)."
+    },
+    {
+      "q": "You need a request to complete in under 10 ms, but it makes a cross-continent call. What does the latency ladder tell you?",
+      "options": [
+        "Optimize the server code; the network call is negligible",
+        "The ~150 ms cross-region round trip alone blows the budget, so you must serve from a nearby region or cache",
+        "Add more CPU cores to absorb the round trip",
+        "Switch from SSD to memory to fix it"
+      ],
+      "answer": 1,
+      "explain": "A single ~150 ms cross-continent round trip already exceeds a 10 ms budget, and no server-side tuning removes speed-of-light latency. The fix is locality: a regional replica, edge cache, or CDN close to the user."
+    },
+    {
+      "q": "Which is the best order-of-magnitude anchor for the write throughput of a single traditional relational database node?",
+      "options": [
+        "A few tens of writes/sec",
+        "A few thousand writes/sec (order of magnitude)",
+        "A few million writes/sec",
+        "A few billion writes/sec"
+      ],
+      "answer": 1,
+      "explain": "A single relational DB node handles roughly thousands of writes/sec (and higher tens-of-thousands for reads) as a working ballpark; exact numbers vary with schema and hardware. When your estimated write QPS climbs well past this, it signals you need sharding or a different store — that is the point of knowing the anchor."
+    },
+    {
+      "q": "Why do interviewers want you to know these numbers to an ORDER OF MAGNITUDE rather than exactly?",
+      "options": [
+        "Exact nanosecond values are required to pass",
+        "The relative gaps between rungs are what drive design decisions like caching, locality, and sharding",
+        "The numbers change every day so exactness is impossible",
+        "Only the cross-continent number actually matters"
+      ],
+      "answer": 1,
+      "explain": "Design decisions hinge on the ~100x-100,000x gaps between memory, SSD, disk, and network — not on whether memory is 90 or 110 ns. Knowing memory << SSD << disk seek << cross-region tells you where the time goes and what to optimize."
+    },
+    {
+      "q": "An in-memory key-value store (e.g. Redis) on a single node handles roughly what order of magnitude of simple operations per second?",
+      "options": [
+        "~100 ops/sec",
+        "~1,000 ops/sec",
+        "~100,000+ ops/sec",
+        "~1 billion ops/sec"
+      ],
+      "answer": 2,
+      "explain": "A single in-memory store node handles on the order of 100k+ simple ops/sec, far above a disk-backed relational node, because it avoids disk I/O. This anchor tells you how many cache nodes you need for a given read QPS."
+    },
+    {
+      "q": "Reading 1 MB sequentially from memory vs from an SSD differs by roughly which factor?",
+      "options": [
+        "They are essentially identical",
+        "SSD is ~10-100x slower than memory for the same sequential 1 MB",
+        "Memory is slower than SSD for large blocks",
+        "SSD is ~1,000,000x slower than memory"
+      ],
+      "answer": 1,
+      "explain": "A sequential 1 MB read from RAM is on the order of microseconds while from an SSD it is closer to ~1 ms, roughly a 10-100x gap. Both are far faster than the tens of milliseconds a spinning disk would take for the same block."
+    },
+    {
+      "type": "open",
+      "prompt": "Recite the latency ladder from fastest to slowest and give the rough order of magnitude for each rung, then say why the relative gaps matter more than the exact numbers.",
+      "points": [
+        "L1 cache ~1 ns, L2 ~10 ns, main memory ~100 ns.",
+        "SSD random read ~tens of µs (16-150 µs).",
+        "Intra-datacenter round trip ~0.5 ms.",
+        "Disk (HDD) seek ~10 ms.",
+        "Cross-continent round trip ~150 ms.",
+        "Explains that ~100x-100,000x gaps drive caching, locality, sequential-vs-random, and sharding decisions."
+      ],
+      "answer": "From fastest to slowest: L1 cache around 1 ns, L2 around 10 ns, main memory around 100 ns, SSD random read in the tens of microseconds, an intra-datacenter round trip around half a millisecond, a spinning-disk seek around 10 ms, and a cross-continent round trip around 150 ms. What matters isn't the exact figure but the gaps — memory is roughly 100,000x faster than a disk seek, and a same-datacenter hop is hundreds of times faster than crossing an ocean. Those gaps are exactly what tell me to cache hot data in RAM, prefer sequential over random I/O, keep chatty calls within a datacenter, and put replicas near users."
+    },
+    {
+      "type": "open",
+      "prompt": "A teammate proposes making a synchronous cross-region database call on the critical path of a request with a 50 ms p99 target. Using the numbers you know, explain why that's a problem and what you'd do.",
+      "points": [
+        "A cross-continent round trip is ~150 ms, which alone exceeds the 50 ms budget.",
+        "Speed-of-light latency can't be tuned away on the server.",
+        "Options: serve from a same-region replica (~0.5 ms RTT) or an edge cache.",
+        "Make the cross-region work asynchronous / off the critical path if it must happen.",
+        "Reason about the budget additively — each hop's latency adds up against the SLO."
+      ],
+      "answer": "A cross-region round trip is on the order of 150 ms, so a single synchronous call already blows a 50 ms p99 budget three times over, and that latency is set by the speed of light — no server tuning removes it. I'd keep the critical path within one region by reading from a local replica, where the round trip is under a millisecond, or serving from an edge cache. If the cross-region work is truly necessary, I'd push it off the critical path and do it asynchronously, then reconcile, so the user-facing request stays within budget."
+    },
+    {
+      "type": "open",
+      "prompt": "You estimate a service needs to sustain 50,000 writes/sec. Using single-machine throughput anchors, what does that tell you about the architecture?",
+      "points": [
+        "A single relational DB node handles ~thousands of writes/sec (order of magnitude).",
+        "50k writes/sec is ~10x+ beyond one node, so a single primary won't suffice.",
+        "Implies sharding/partitioning the write path across many nodes.",
+        "Consider write-optimized storage (LSM-based) and batching.",
+        "Cross-check the anchor and note real numbers vary with schema/hardware."
+      ],
+      "answer": "A single traditional relational node tops out around a few thousand writes/sec as a ballpark, so 50,000 writes/sec is more than an order of magnitude past what one primary can take. That tells me I need to shard the write path across many nodes — partition by a key like user or entity ID — and likely reach for write-optimized, LSM-based storage plus batching to raise per-node throughput. The exact per-node number depends on schema and hardware, so I'd validate it, but the anchor is enough to know a single database won't cut it."
+    }
+  ]
+}

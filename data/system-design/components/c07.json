@@ -1,0 +1,184 @@
+{
+  "id": "c07",
+  "chapter": 7,
+  "part": "Scale Primitives & APIs",
+  "title": "API & Protocol Design",
+  "summary": "How services expose and talk to each other: the REST vs gRPC vs GraphQL tradeoff, HTTP method idempotency, pagination strategies, versioning, sync vs async delivery, the real-time transport ladder (polling, long-polling, SSE, WebSockets), and the API gateway.",
+  "keyTakeaways": [
+    "REST is resource-oriented and cacheable; gRPC is action-oriented binary Protobuf over HTTP/2 with streaming, great for internal service-to-service; GraphQL gives clients one endpoint to request exactly the fields they need.",
+    "GraphQL solves over/under-fetching but makes HTTP caching and rate-limiting harder.",
+    "GET, PUT, and DELETE are idempotent; POST is not, because it creates a new resource each time — hence idempotency keys.",
+    "Offset/limit pagination is simple but skips O(n) rows and drifts when data is inserted; cursor/keyset pagination is stable and scalable.",
+    "Delivery models: synchronous request/response, asynchronous webhooks (server calls you back), and client polling.",
+    "SSE is one-way server→client over HTTP with auto-reconnect; WebSockets are full-duplex, persistent, and bidirectional.",
+    "An API gateway is the single entry point handling auth, rate limiting, routing, request aggregation, TLS termination, and protocol translation."
+  ],
+  "questions": [
+    {
+      "q": "Which set of properties best characterizes REST?",
+      "options": [
+        "Resource-oriented, uses HTTP verbs, stateless, and responses are cacheable",
+        "Action-oriented methods serialized as binary Protobuf over HTTP/2",
+        "A single endpoint where the client specifies exactly which fields to return",
+        "A persistent full-duplex connection for bidirectional streaming"
+      ],
+      "answer": 0,
+      "explain": "REST models the API as resources acted on with HTTP verbs (GET/POST/PUT/DELETE), is stateless, and its responses can be cached by HTTP infrastructure. The binary/Protobuf option describes gRPC and the single-endpoint/field-selection option describes GraphQL."
+    },
+    {
+      "q": "What makes gRPC especially well suited to internal service-to-service communication?",
+      "options": [
+        "It lets each client request exactly the fields it needs from one endpoint",
+        "It is the most cache-friendly protocol for CDNs and browsers",
+        "It uses a strong Protobuf contract with binary serialization over HTTP/2 and supports streaming",
+        "It requires no schema, so services can evolve independently"
+      ],
+      "answer": 2,
+      "explain": "gRPC pairs a strongly-typed Protobuf contract with compact binary framing over HTTP/2 and native streaming, giving low-latency, high-throughput internal RPC. Field-selection is GraphQL's trait, and gRPC's binary format is actually harder for browsers/CDNs to cache than REST."
+    },
+    {
+      "q": "What problem is GraphQL primarily designed to solve?",
+      "options": [
+        "Making service-to-service calls faster with binary encoding",
+        "Over-fetching and under-fetching, by letting the client ask for exactly the fields it needs in one request",
+        "Guaranteeing idempotent writes without idempotency keys",
+        "Providing full-duplex real-time streaming to the browser"
+      ],
+      "answer": 1,
+      "explain": "GraphQL exposes a single endpoint and lets the client specify the exact shape of the response, eliminating over-fetching (too many fields) and under-fetching (needing multiple round trips). Binary RPC is gRPC's domain, and streaming is what WebSockets/gRPC address."
+    },
+    {
+      "q": "Which is a genuine drawback of GraphQL compared to REST?",
+      "options": [
+        "It cannot express relationships between entities",
+        "It forces the client to over-fetch data on every query",
+        "It only works over HTTP/2 with Protobuf",
+        "HTTP caching and rate-limiting are harder because every query hits one endpoint with a variable shape"
+      ],
+      "answer": 3,
+      "explain": "Because all GraphQL queries POST to a single endpoint with arbitrary shapes, standard URL-based HTTP caching and simple per-endpoint rate limiting don't map cleanly, so those must be re-solved at the query level. GraphQL is actually good at expressing relationships and reducing over-fetching."
+    },
+    {
+      "q": "Which group of HTTP methods is idempotent (repeating the request has the same effect as making it once)?",
+      "options": [
+        "POST, PUT, and PATCH",
+        "GET, PUT, and DELETE",
+        "POST and DELETE only",
+        "Only GET"
+      ],
+      "answer": 1,
+      "explain": "GET (read), PUT (full replace), and DELETE (remove) are idempotent — repeating them lands the resource in the same state. POST is the notable non-idempotent method because each call typically creates a new resource."
+    },
+    {
+      "q": "Why do APIs often require a client-supplied idempotency key specifically on POST requests?",
+      "options": [
+        "Because POST responses are never cacheable",
+        "Because POST cannot carry a request body",
+        "Because POST is not idempotent — a retry would create a duplicate resource, so the key lets the server dedupe it",
+        "Because POST is slower than PUT and needs coalescing"
+      ],
+      "answer": 2,
+      "explain": "POST creates a new resource on each call, so a network retry could create duplicates (e.g. a double charge). An idempotency key lets the server recognize the retry and return the original result instead of acting twice. PUT and DELETE don't need this because they are already idempotent."
+    },
+    {
+      "q": "What is the key semantic difference between PUT and POST when creating/updating a resource?",
+      "options": [
+        "PUT is an idempotent full replace at a known URI; POST creates a new resource on each call and is not idempotent",
+        "POST is idempotent; PUT creates a new resource each time",
+        "Both are idempotent, differing only in whether they carry a body",
+        "PUT is only for reads and POST only for writes"
+      ],
+      "answer": 0,
+      "explain": "PUT replaces the resource at a specific URI, so sending it twice yields the same final state (idempotent). POST typically creates a new resource under a collection each time it's called, which is why repeating it produces duplicates."
+    },
+    {
+      "q": "What is the main weakness of offset/limit (e.g. `LIMIT 20 OFFSET 10000`) pagination?",
+      "options": [
+        "It cannot return results in a stable sort order",
+        "It requires a persistent WebSocket connection",
+        "It only works on hash-partitioned tables",
+        "The database must skip (scan past) all the offset rows — O(n) — and results drift when rows are inserted or deleted"
+      ],
+      "answer": 3,
+      "explain": "A large OFFSET forces the engine to read and discard all preceding rows, so deep pages get slow (O(n) skip), and inserts/deletes shift the offsets so a user can see duplicates or miss rows between pages. Sort order itself isn't the problem."
+    },
+    {
+      "q": "How does cursor (keyset/seek) pagination avoid the problems of offset pagination?",
+      "options": [
+        "By loading the entire result set into memory once and slicing it",
+        "By encoding the last-seen key in a cursor and querying `WHERE key > cursor`, so each page seeks directly without skipping rows",
+        "By using a WebSocket to push new pages as they change",
+        "By caching every page in the CDN so offsets never move"
+      ],
+      "answer": 1,
+      "explain": "Cursor pagination remembers the last row's sort key and fetches the next page with a range predicate on an indexed column, so it seeks straight to the boundary in roughly constant time and stays stable under concurrent inserts. It gives up the ability to jump to an arbitrary page number."
+    },
+    {
+      "q": "Which is a standard approach to API versioning?",
+      "options": [
+        "Changing the database schema without touching the API",
+        "Rotating the TLS certificate on each release",
+        "Putting the version in the URI path (`/v1/...`), a request header, or a query parameter",
+        "Requiring clients to send an idempotency key that encodes the version"
+      ],
+      "answer": 2,
+      "explain": "Common versioning schemes place the version in the URI path (`/v1/users`), in a custom or Accept header, or in a query parameter, letting old and new clients coexist. TLS rotation and idempotency keys are unrelated concerns."
+    },
+    {
+      "q": "In the webhook model, how does the client learn about an event, compared to polling?",
+      "options": [
+        "The server calls the client's registered URL when the event happens, instead of the client repeatedly asking",
+        "The client holds a request open until the server has data (long-polling)",
+        "The client opens a full-duplex socket and waits for frames",
+        "The client re-requests on a fixed timer until the data appears"
+      ],
+      "answer": 0,
+      "explain": "A webhook inverts control: the client registers a callback URL and the server makes an HTTP request to it when the event occurs, so the client isn't wasting requests. Re-requesting on a timer is polling, and holding the request open is long-polling — both are client-initiated."
+    },
+    {
+      "q": "Which statement about Server-Sent Events (SSE) is correct?",
+      "options": [
+        "It is a full-duplex protocol where client and server send frames at any time",
+        "It requires a separate binary protocol negotiated via an HTTP upgrade",
+        "It is used only for large file uploads from client to server",
+        "It is a one-way server→client stream over a single HTTP connection, with built-in auto-reconnect"
+      ],
+      "answer": 3,
+      "explain": "SSE pushes events from server to client over one long-lived HTTP response and automatically reconnects if dropped, making it simple for dashboards and feeds. It is one-directional — for client→server messages too you'd reach for WebSockets."
+    },
+    {
+      "q": "How do WebSockets differ from SSE?",
+      "options": [
+        "WebSockets are one-way server→client; SSE is bidirectional",
+        "WebSockets run only over plain HTTP/1.0 with no upgrade",
+        "WebSockets provide a persistent full-duplex connection where both sides send messages anytime, whereas SSE is one-way server→client",
+        "WebSockets cannot stay open, so they reconnect on every message"
+      ],
+      "answer": 2,
+      "explain": "A WebSocket upgrades an HTTP connection into a persistent full-duplex channel so client and server can both push messages at any time — ideal for chat or games — while SSE only streams from server to client. It's SSE, not WebSockets, that is the one-way option."
+    },
+    {
+      "q": "Which best describes the responsibilities of an API gateway?",
+      "options": [
+        "A single entry point that handles auth/authz, rate limiting, routing, request aggregation, TLS termination, and protocol translation",
+        "A database proxy that shards writes across partitions",
+        "A background worker that consumes messages from a queue",
+        "A CDN edge node that only caches static assets"
+      ],
+      "answer": 0,
+      "explain": "The API gateway is the front door for clients: it authenticates and authorizes requests, enforces rate limits, routes to backends, can aggregate/compose responses, terminates TLS, and translates protocols. Sharding, queue consumption, and static caching are handled by other components."
+    },
+    {
+      "type": "open",
+      "prompt": "You're designing an API and need to choose between REST, gRPC, and GraphQL for two cases: a public mobile-facing API and internal service-to-service calls. Which do you pick for each and why?",
+      "points": [
+        "REST is resource-oriented, cacheable, and universally supported — a safe default for public/mobile APIs.",
+        "GraphQL fits mobile clients that need to minimize round trips and avoid over/under-fetching, at the cost of harder caching and rate-limiting.",
+        "gRPC's binary Protobuf over HTTP/2 with strong contracts and streaming gives the lowest latency for internal service-to-service traffic.",
+        "gRPC is a poor public-facing choice because browsers/CDNs handle it awkwardly and it's less human-debuggable.",
+        "The decision hinges on caller (browser vs service), caching needs, and how variable the client's field requirements are."
+      ],
+      "answer": "For the public, mobile-facing API I'd lean REST for its caching and ubiquity, or GraphQL if mobile clients need to fetch precise field sets in one round trip and I can absorb the harder caching/rate-limiting. For internal service-to-service calls I'd pick gRPC: binary Protobuf over HTTP/2 with strong typed contracts and streaming gives the best latency and throughput, and its browser/CDN unfriendliness doesn't matter between backend services."
+    }
+  ]
+}

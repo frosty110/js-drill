@@ -167,6 +167,43 @@
       ],
       "answer": 0,
       "explain": "Because columns are sorted and compressed, an in-place update would mean rewriting large compressed segments, so column stores buffer writes in an in-memory row store and periodically merge them into the column files, exactly the LSM-tree strategy. Sort order can even differ across replicas to speed different queries."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain why an LSM-tree sustains higher write throughput than a B-tree, what it costs you on reads, and the mitigations that make those reads acceptable.",
+      "points": [
+        "LSM turns random writes into sequential appends (memtable → immutable sorted SSTables), and sequential I/O is far faster than the random in-place page writes a B-tree does.",
+        "Lower write amplification and denser on-disk layout (better compression, less fragmentation) than a B-tree that rewrites whole pages plus a WAL.",
+        "Read cost: a key may live in the memtable or any of several SSTable segments, so a lookup (especially for a missing key) may check multiple places.",
+        "Mitigation 1: bloom filters let a read skip segments that definitely don't contain the key, avoiding wasted disk reads for absent keys.",
+        "Mitigation 2: background compaction merges segments to bound the number that must be checked and reclaim space from superseded/tombstoned keys.",
+        "Caveat: compaction competes for disk bandwidth and can fall behind at very high write load — the real LSM downside."
+      ],
+      "answer": "An LSM-tree batches writes in an in-memory memtable and flushes them as sequential, immutable sorted segments, so it converts random writes into sequential I/O and avoids the in-place page rewrites and WAL churn a B-tree pays — that's the write-throughput and write-amplification win. The cost is reads: a key can be in the memtable or scattered across several segments, so a lookup, especially for a missing key, may probe many places. Bloom filters fix most of that by skipping segments that can't hold the key, and background compaction keeps the segment count and dead data bounded. The one thing I'd flag is that compaction shares disk bandwidth and can fall behind under heavy write load."
+    },
+    {
+      "type": "open",
+      "prompt": "You're choosing a storage engine for a write-heavy time-series ingestion service versus a read-latency-sensitive OLTP service with lots of point lookups and updates. Which engine for each, and why?",
+      "points": [
+        "Write-heavy ingest → LSM-tree: high sustained write throughput, sequential appends, good compression for append-mostly data.",
+        "Read-latency-sensitive OLTP with updates → B-tree: predictable read latency and each key in exactly one place.",
+        "B-tree keeps every key in one location, which also makes locking for transaction isolation cleaner.",
+        "LSM read latency is less predictable (multiple segments + compaction interference), a liability under tight read SLOs.",
+        "Frame it as matching the engine to the read/write ratio and latency-predictability needs, not a universal 'LSM is better' claim."
+      ],
+      "answer": "For write-heavy time-series ingest I'd pick an LSM-tree: it turns the firehose of writes into sequential appends, sustains high write throughput, and compresses append-mostly data well. For the read-latency-sensitive OLTP service I'd lean B-tree, because it keeps each key in exactly one place, giving predictable read latency and cleaner locking for transaction isolation — whereas an LSM's reads can jump across segments and get disturbed by compaction. The choice is really about matching the engine to the read/write ratio and how tight the read-latency SLO is, not declaring one universally better."
+    },
+    {
+      "type": "open",
+      "prompt": "An analyst runs 'SELECT AVG(price) over 4 of our 200 columns across a billion rows'. Explain why a column-oriented store crushes a row store here, and why you wouldn't just run these queries on the OLTP database.",
+      "points": [
+        "Column storage lays each column's values contiguously, so a query touching 4 columns reads only those 4 columns' data, not all 200 per row.",
+        "Contiguous same-type values compress hard (run-length, bitmap encoding) and enable vectorized/SIMD scans over long runs.",
+        "A row store must read whole rows (all 200 columns) to get 4 fields, wasting I/O and cache — the opposite access pattern.",
+        "OLTP databases are tuned for many small low-latency key-based reads/writes; big scan-aggregates would contend with and starve production traffic.",
+        "So analytics runs in a separate column-oriented warehouse loaded via ETL, isolating OLAP scans from the live OLTP workload."
+      ],
+      "answer": "Because a column store keeps each column's values together, that aggregate reads only the 4 relevant columns instead of dragging every 200-column row off disk, and those contiguous same-type values compress heavily and scan in vectorized batches — that's an order-of-magnitude I/O and CPU win over a row store for wide scans. I wouldn't run it on the OLTP database because that engine is tuned for many small low-latency key lookups and writes, and a billion-row scan would contend for resources and hurt production latency. So analytics lives in a separate column-oriented warehouse fed by ETL, keeping OLAP scans off the live OLTP path."
     }
   ]
 }

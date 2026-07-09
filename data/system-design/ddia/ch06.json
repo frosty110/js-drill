@@ -166,6 +166,42 @@
       ],
       "answer": 3,
       "explain": "MPP query engines parallelize a single analytic query across the partitions/nodes holding the data, which suits scan-heavy analytics rather than the point queries typical of OLTP. It is about query execution, not replication or routing."
+    },
+    {
+      "type": "open",
+      "prompt": "You're partitioning a large event store keyed by timestamp. Product wants efficient 'give me everything in this time window' scans, but ingestion is all recent-time writes. Explain the tension and design a scheme that gets range scans without a write hot spot.",
+      "points": [
+        "Key-range partitioning keeps keys sorted so time-window range scans are efficient — but a pure timestamp key funnels all current writes into the newest partition, a write hot spot.",
+        "Pure hash partitioning spreads writes evenly but scatters adjacent timestamps, destroying efficient range scans — the opposite failure.",
+        "The fix is a compound key: prefix with a higher-cardinality field (e.g., sensor/tenant/customer id) so writes spread across partitions, then sort by timestamp within each partition.",
+        "This mirrors Cassandra's compound primary key: hash the first component for even spread, keep remaining columns sorted for in-partition range scans.",
+        "Tradeoff: a time-window query now scatters across the id partitions and gathers, but each partition still does an efficient sorted range scan and the write hot spot is gone."
+      ],
+      "answer": "The tension is that a raw timestamp key gives me great time-window range scans because keys stay sorted, but it dumps every recent write into the single newest partition — a classic write hot spot; pure hashing would fix the hot spot but scatter adjacent times and kill the range scan. So I'd use a compound key: prefix with a higher-cardinality field like sensor or tenant id to spread writes across partitions, then sort by timestamp within each partition — exactly Cassandra's compound-key trick of hashing the first component and range-sorting the rest. A window query then scatters across those id-partitions and gathers, but each partition still does an efficient sorted scan and no single node is a write bottleneck."
+    },
+    {
+      "type": "open",
+      "prompt": "One key in your hashed-partitioned system is a celebrity account taking massive traffic, and it's pinning a single node even though hashing usually spreads load. Why doesn't hashing help, and what would you actually do?",
+      "points": [
+        "Hashing distributes DIFFERENT keys evenly, but every request for the SAME key hashes to one partition — a single hot key stays on one node.",
+        "So hash partitioning solves skew across keys, not skew concentrated in one key.",
+        "Application-level mitigation: split the hot key by appending a random suffix (e.g., 1..N), spreading its traffic across N partitions.",
+        "Cost: reads must now fan out to all N sub-keys and combine results, and you must track which keys are hot.",
+        "Apply it selectively to the few known hot keys, not every key, to avoid making all reads more expensive."
+      ],
+      "answer": "Hashing only spreads load across different keys — every request for the same key hashes to the same partition, so one celebrity key inevitably lands on one node no matter how good the hash is. The book's mitigation is application-level: split that hot key by appending a random suffix, say 1 through N, so its traffic spreads across N partitions. The cost is that reads for that key now have to fan out to all N variants and merge the results, and I have to track which keys are actually hot — so I'd apply this only to the handful of known hot keys, not universally, to avoid taxing every read."
+    },
+    {
+      "type": "open",
+      "prompt": "Your partitioned product catalog needs to serve queries like 'all red cars' by a secondary attribute. Compare a document-partitioned (local) secondary index versus a term-partitioned (global) one for this, and pick based on the read/write pattern.",
+      "points": [
+        "Local (document-partitioned) index: each partition indexes only its own docs, so a secondary-index query must scatter to ALL partitions and gather — reads expensive, writes cheap (stay on one partition).",
+        "Global (term-partitioned) index: partitioned by the indexed term, so a query for 'red' hits one partition — reads cheap — but a single document write may update index entries on several partitions, so writes fan out.",
+        "Global indexes are often updated asynchronously, so the index can lag the data.",
+        "Pick local when writes dominate and secondary-index reads are rare/tolerant of scatter-gather; pick global when secondary-index reads are frequent/latency-sensitive and you can absorb heavier, possibly-lagging writes.",
+        "Frame it as the mirror-image tradeoff: you're choosing which of read or write pays the cross-partition cost."
+      ],
+      "answer": "A local (document-partitioned) index stores each partition's index next to its own data, so writes stay on one partition but a 'red cars' query has to scatter to every partition and gather — cheap writes, expensive reads. A global (term-partitioned) index is partitioned by the term itself, so 'red' resolves on a single partition (fast reads), but one product write can touch index entries on several partitions, making writes fan out and often lag asynchronously. So it's the mirror-image tradeoff of which side pays the cross-partition cost: if this attribute query is frequent and latency-sensitive I'd go global and absorb the heavier, eventually-consistent writes; if writes dominate and these lookups are rare, the local index with scatter-gather reads is simpler."
     }
   ]
 }

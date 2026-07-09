@@ -1,0 +1,208 @@
+{
+  "id": "s02",
+  "chapter": 2,
+  "part": "Running the Interview",
+  "title": "Requirements: Functional vs Non-Functional",
+  "summary": "Functional requirements define WHAT the system does — the features and APIs. Non-functional requirements define the QUALITIES — scale, latency, availability, durability, consistency — and it's those numbers, not the feature list, that actually force the architecture.",
+  "keyTakeaways": [
+    "Functional requirements = the user-visible behaviors and APIs (post a tweet, load the home feed); non-functional requirements = the qualities the system must hold while doing them.",
+    "NFRs — scale (users/QPS/data), latency SLOs, availability, durability, consistency, security, cost — are what drive sharding, replication, caching, and consistency relaxation. Functional requirements only define the surface.",
+    "Availability nines translate to concrete downtime: 99.9% ≈ 8.76h/yr, 99.99% ≈ 52.6min/yr, 99.999% ≈ 5.26min/yr.",
+    "Read-heavy systems (most consumer social, often 100:1) lean on caching and read replicas; write-heavy systems lean on sharding, write-optimized stores (LSM), and careful write-path design.",
+    "CAP is only about behavior DURING a network partition: you choose consistency (CP) or availability (AP). With no partition you can have both — and CAP-consistency (linearizability) is not ACID-consistency.",
+    "Availability (uptime) ≠ durability (not losing committed data); latency (per-request time) ≠ throughput (requests per second). Keep them distinct.",
+    "State explicit assumptions when the interviewer won't give numbers, and nail down scale/latency/consistency early — they change the design most."
+  ],
+  "questions": [
+    {
+      "q": "Which of these is a FUNCTIONAL requirement for a Twitter-like system?",
+      "options": [
+        "The home feed must load with p99 latency under 200ms",
+        "The system must sustain 99.99% availability",
+        "A user can post a tweet and see it appear in followers' feeds",
+        "Tweets must be durably stored across at least three replicas"
+      ],
+      "answer": 2,
+      "explain": "Functional requirements describe user-visible behavior — posting a tweet, seeing it in a feed. Latency, availability, and durability are qualities of how well the system does its job, which makes them non-functional."
+    },
+    {
+      "q": "Why do experienced candidates say non-functional requirements 'drive the design' more than functional ones?",
+      "options": [
+        "Functional requirements are optional and can be skipped in interviews",
+        "NFRs like scale and latency are what force sharding, caching, and replication, while functional requirements only define the feature surface",
+        "Non-functional requirements are easier to estimate than features",
+        "Interviewers only grade the non-functional discussion"
+      ],
+      "answer": 1,
+      "explain": "The feature list ('post a tweet') can be satisfied by a single server; it's the numbers — millions of QPS, sub-200ms p99, 99.99% uptime — that force partitioning, replicas, and caches. Functional requirements set the contract; NFRs set the scale of the machinery."
+    },
+    {
+      "q": "An availability target of 99.99% ('four nines') allows roughly how much downtime per year?",
+      "options": [
+        "About 52.6 minutes",
+        "About 8.76 hours",
+        "About 5.26 minutes",
+        "About 26 seconds"
+      ],
+      "answer": 0,
+      "explain": "99.99% of a year of unavailability is ~52.6 minutes. 99.9% ('three nines') is ~8.76 hours and 99.999% ('five nines') is ~5.26 minutes — each additional nine cuts the allowed downtime by ~10x."
+    },
+    {
+      "q": "What is the key difference between availability and durability?",
+      "options": [
+        "They are the same guarantee described at different layers",
+        "Availability is measured in bytes and durability in seconds",
+        "Durability only matters for caches; availability only matters for databases",
+        "Availability is about the system being up to serve requests; durability is about not losing data once it is committed"
+      ],
+      "answer": 3,
+      "explain": "Availability is uptime — can I serve a request right now. Durability is persistence — once I acknowledge a write, it survives crashes and disk failures. A system can be highly durable but temporarily unavailable, or highly available while risking data loss."
+    },
+    {
+      "q": "A photo-sharing feed gets 100 reads for every write. What does this read-heavy ratio most directly justify?",
+      "options": [
+        "A write-optimized LSM-tree store and aggressive write sharding",
+        "Caching layers and read replicas to serve the read fan-out cheaply",
+        "Synchronous two-phase commit on every read",
+        "Dropping replication to reduce read latency"
+      ],
+      "answer": 1,
+      "explain": "Read-heavy workloads are served well by caches (CDN, in-memory) and read replicas that absorb the read volume off the primary. Write-optimized stores and write sharding are the answer to write-heavy workloads, not read-heavy ones."
+    },
+    {
+      "q": "Under the CAP theorem, when does the C-vs-A tradeoff actually force a choice?",
+      "options": [
+        "On every single request the system serves",
+        "Only during a network partition between nodes",
+        "Only when the database runs out of disk",
+        "Only when latency exceeds the SLO"
+      ],
+      "answer": 1,
+      "explain": "CAP says only that during a network partition you must sacrifice either consistency or availability. When there is no partition, a well-designed system can offer both — CAP is not a permanent 'pick two of three' tax on normal operation."
+    },
+    {
+      "q": "A bank's account-balance ledger and a social app's like-counter sit on opposite sides of the CAP choice. Which pairing is correct?",
+      "options": [
+        "Ledger leans AP; like-counter leans CP",
+        "Both lean CP because both store numbers",
+        "Ledger leans CP; like-counter leans AP",
+        "Both lean AP because both need to stay online"
+      ],
+      "answer": 2,
+      "explain": "A ledger must never show or allow an inconsistent balance, so it favors consistency and will reject writes during a partition (CP). A like-counter can tolerate a briefly stale or slightly-off count in exchange for staying available (AP)."
+    },
+    {
+      "q": "Why is it wrong to equate CAP-consistency with the 'C' in ACID?",
+      "options": [
+        "CAP-consistency means linearizability (a recency guarantee on reads); ACID-consistency means transactions preserve application invariants",
+        "ACID-consistency is a stronger form of the same recency guarantee",
+        "They are identical; the two fields just use different letters",
+        "CAP-consistency applies to SQL and ACID-consistency to NoSQL"
+      ],
+      "answer": 0,
+      "explain": "CAP's C is linearizability — every read sees the most recent committed write. ACID's C is that a transaction moves the database from one valid state to another per application-defined invariants (constraints, triggers). They are unrelated guarantees that happen to share a word."
+    },
+    {
+      "q": "What is the difference between latency and throughput?",
+      "options": [
+        "Latency is requests per second; throughput is time per request",
+        "Latency is the time for a single request; throughput is how many requests the system handles per unit time",
+        "They are two names for the same p99 metric",
+        "Latency applies to reads and throughput to writes"
+      ],
+      "answer": 1,
+      "explain": "Latency measures how long one request takes (often reported as p50/p99); throughput measures volume — requests or bytes per second. A system can have high throughput yet high tail latency, so both must be specified separately in the NFRs."
+    },
+    {
+      "q": "The interviewer gives no numbers for scale. What is the strongest move for a senior candidate?",
+      "options": [
+        "Wait for the interviewer to eventually supply exact figures",
+        "Design for infinite scale so no assumption can be wrong",
+        "State explicit, reasonable assumptions (e.g. '100M DAU, ~10K writes/s') and proceed, inviting correction",
+        "Skip the non-functional requirements entirely since they are unknown"
+      ],
+      "answer": 2,
+      "explain": "Interviewers deliberately leave scale open to see if you can frame it. Stating explicit assumptions and inviting correction keeps the design grounded and collaborative. Designing for 'infinite' scale or skipping NFRs both dodge the actual engineering judgment being tested."
+    },
+    {
+      "q": "Which requirement, if tightened, would most likely force you to introduce a cache and read replicas?",
+      "options": [
+        "Changing the API response format from XML to JSON",
+        "Lowering the read-path p99 latency target from 500ms to 50ms at high QPS",
+        "Adding an optional user avatar field",
+        "Renaming an endpoint for clarity"
+      ],
+      "answer": 1,
+      "explain": "A tight read-latency SLO under heavy load is exactly the pressure that pushes you toward in-memory caches and read replicas to keep hot reads fast. Format changes or new fields are functional tweaks that don't move the architecture."
+    },
+    {
+      "q": "In a write-heavy system such as a metrics/time-series ingestion pipeline, which choice fits the workload?",
+      "options": [
+        "A write-optimized, append-friendly store (e.g. LSM-tree) with sharding on the write path",
+        "A B-tree-first store optimized purely for point reads",
+        "A single primary with no partitioning to keep writes ordered",
+        "Serving all writes from a read replica"
+      ],
+      "answer": 0,
+      "explain": "High write volume favors append-optimized stores like LSM-trees that turn random writes into sequential appends, plus sharding to spread write load. A single unpartitioned primary becomes the bottleneck, and replicas serve reads, not writes."
+    },
+    {
+      "q": "Which set of requirements should you pin down EARLIEST because it most changes the architecture?",
+      "options": [
+        "Exact HTTP status codes and error message wording",
+        "The choice of programming language and framework",
+        "The visual layout of the client UI",
+        "Scale (QPS/data volume), latency targets, and consistency needs"
+      ],
+      "answer": 3,
+      "explain": "Scale, latency, and consistency are the high-leverage NFRs — they decide sharding, caching, replication, and whether you can relax to eventual consistency. Status codes, language, and UI layout rarely change the high-level design and can be deferred."
+    },
+    {
+      "q": "A candidate says 'we'll make it strongly consistent everywhere for safety.' Why might that be the wrong default at scale?",
+      "options": [
+        "Strong consistency is impossible in any distributed system",
+        "Strong consistency often costs availability and latency, and many features (feeds, counts) tolerate eventual consistency just fine",
+        "Eventual consistency is always faster and strictly better",
+        "Consistency has no effect on the design"
+      ],
+      "answer": 1,
+      "explain": "Blanket strong consistency adds coordination cost and, during partitions, sacrifices availability — often needlessly. A senior answer relaxes to eventual consistency where the feature allows (feeds, like-counts) and reserves strong consistency for the parts that truly need it (payments, balances)."
+    },
+    {
+      "type": "open",
+      "prompt": "Walk me through how you gather requirements for 'Design Twitter.' What's the difference between functional and non-functional requirements, and why do you care more about one for the architecture?",
+      "points": [
+        "Functional requirements = features/APIs/user-visible behavior (post a tweet, follow, home feed, timeline).",
+        "Non-functional requirements = qualities: scale (DAU/QPS/data), latency SLOs, availability, durability, consistency, security, cost.",
+        "NFRs drive the architecture — the numbers force sharding, replication, caching, consistency relaxation; functional requirements only define the surface.",
+        "Notes read-heavy vs write-heavy (Twitter is read-heavy) and how that shapes caching/replicas vs write-path/sharding.",
+        "States explicit assumptions when numbers aren't given and invites correction."
+      ],
+      "answer": "I split requirements into two buckets. Functional is what the system does — post a tweet, follow users, load a home timeline — basically the APIs and user-visible behavior. Non-functional is the qualities it must hold: scale like DAU and QPS and data volume, latency SLOs such as p99 under 200ms on the feed, availability and durability targets, and consistency needs. I care most about the non-functional side for architecture, because the feature list can run on one box — it's the numbers that force sharding, replication, and caching. I'd also call out that Twitter is heavily read-heavy, maybe 100:1, which pushes me toward fan-out and caching on the read path, and I'll state explicit scale assumptions and invite the interviewer to correct them."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the CAP theorem the way you'd use it to make a decision in an interview. Give a concrete example of a CP choice and an AP choice, and name a common misconception.",
+      "points": [
+        "CAP only forces a C-vs-A choice DURING a network partition; with no partition you can have both.",
+        "CP: sacrifice availability to stay consistent — e.g. a bank ledger / payment balance rejects writes during a partition.",
+        "AP: sacrifice consistency to stay available — e.g. a social feed or like-counter serves possibly-stale data.",
+        "The tradeoff should be made per-feature, not globally, based on tolerance for staleness.",
+        "Misconception: CAP-consistency (linearizability) is not the same as ACID-consistency (invariants), and CAP is not a permanent 'pick two of three'."
+      ],
+      "answer": "CAP says that during a network partition you have to choose between consistency and availability — you can't have both while nodes can't talk. When there's no partition, you can have both, so it's really a decision about behavior under failure. For something like a bank balance I go CP: I'd rather reject a write or return an error than show an inconsistent balance. For a like-counter or a social feed I go AP: staying available and serving a slightly stale count is fine. I make that call per feature. The misconception I'd flag is conflating CAP's consistency, which is linearizability — a recency guarantee on reads — with ACID's consistency, which is about preserving application invariants; they're different things that share a word."
+    },
+    {
+      "type": "open",
+      "prompt": "The interviewer asks for a 99.99% availability target. What does that actually mean in downtime, and how would it change your design versus a 99.9% target?",
+      "points": [
+        "99.99% ≈ 52.6 minutes of downtime per year; 99.9% ≈ 8.76 hours per year.",
+        "Higher availability means eliminating single points of failure — redundancy, multi-AZ/region, failover.",
+        "It pushes toward replication, health checks, automated failover, and possibly relaxing consistency (AP leanings) to stay up.",
+        "Distinguishes availability from durability — nines are about uptime, not data loss.",
+        "Notes the cost/complexity tradeoff: each additional nine is roughly 10x harder/more expensive."
+      ],
+      "answer": "Four nines, 99.99%, is about 52.6 minutes of downtime a year, whereas three nines, 99.9%, allows about 8.76 hours — a big jump. To hit four nines I have to design out single points of failure: redundant instances across availability zones, health checks with automated failover, and replication so no one node going down takes the system offline. It also nudges me toward availability-favoring choices during partitions and toward graceful degradation. I'd separate this from durability, since nines measure uptime, not whether committed data survives. And I'd flag the cost — each extra nine is roughly ten times harder and more expensive, so I'd confirm the business actually needs it before designing for it."
+    }
+  ]
+}

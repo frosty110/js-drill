@@ -166,6 +166,42 @@
       ],
       "answer": 1,
       "explain": "Accidental complexity is not inherent to the problem but stems from the implementation — tangled dependencies, inconsistent naming, hacks. It can be removed with good abstractions, unlike essential complexity, which is intrinsic to what the software must do. Managing complexity is the core of the simplicity principle."
+    },
+    {
+      "type": "open",
+      "prompt": "Your API's p50 is 30 ms but p99 is 900 ms and product wants a '200 ms for 99% of requests' SLO. How do you reason about where that tail comes from and how to attack it?",
+      "points": [
+        "Optimize the tail (p99/p999) specifically, not the mean/p50 — the mean hides the slow requests the SLO targets.",
+        "Measure response time client-side to capture queueing/head-of-line blocking that server-side timing misses.",
+        "Name likely tail causes: head-of-line blocking under limited parallelism, GC pauses, cold caches, contention on the slowest backend.",
+        "Watch for tail-latency amplification — if one user request fans out to many backend calls, the request is only as fast as the slowest call.",
+        "The heaviest/most-valuable customers (most data) often live in the tail, so the p99 matters commercially, not just cosmetically."
+      ],
+      "answer": "First I'd stop looking at the mean and drive off the p99/p999 directly, measured client-side so I capture queueing and head-of-line blocking, not just server service time. Then I'd decompose the tail: is one request fanning out to many backends so it inherits the slowest one (tail-latency amplification), or is it GC pauses, cold caches, and head-of-line blocking where a few slow requests hog limited slots? I'd attack whichever dominates — cap fan-out, add parallel hedged requests, or fix contention — because the tail is where our heaviest, most valuable users actually live."
+    },
+    {
+      "type": "open",
+      "prompt": "A service is hitting its capacity ceiling. Walk me through how you'd decide between scaling up (a bigger machine) and scaling out (more machines), and what makes the decision.",
+      "points": [
+        "First define the load parameters that are growing (requests/sec, data volume, fan-out) — scalability is relative to a specific load, not an absolute label.",
+        "Scaling up (vertical) is simpler operationally but has a hard ceiling and cost/failure-blast-radius grows nonlinearly.",
+        "Scaling out (horizontal, shared-nothing) has no single ceiling and improves fault tolerance but adds distributed-systems complexity (coordination, partitioning, consistency).",
+        "Stateless request-serving scales out easily; stateful data scaling out forces partitioning/replication decisions.",
+        "Real architectures mix both — there is no one-size-fits-all 'magic scaling sauce'; the right split depends on the workload's specific shape."
+      ],
+      "answer": "I'd start by naming which load parameter is actually growing, because scalability is always relative to a specific load, not a badge a system has. If the workload is stateful and heading past what one box can hold, or I need fault tolerance, I lean toward scaling out shared-nothing — but that buys distributed-systems complexity like partitioning and coordination. If a bigger machine buys me runway cheaply and keeps the system simple, I scale up first, since vertical is operationally simpler until it hits its ceiling. In practice it's a mix tuned to the workload; there's no universal scaling recipe."
+    },
+    {
+      "type": "open",
+      "prompt": "You're designing a social feed. Contrast fan-out-on-write versus fan-out-on-read, and tell me which you'd default to and how you'd handle a user with 30 million followers.",
+      "points": [
+        "Fan-out-on-write precomputes each follower's timeline at post time: cheap reads, expensive/amplified writes proportional to follower count.",
+        "Fan-out-on-read assembles the timeline by querying followees at read time: cheap writes, expensive reads.",
+        "The right default depends on the read:write ratio — feeds are read-heavy, so fan-out-on-write usually wins for the average user.",
+        "A celebrity with millions of followers makes write fan-out explode, so handle those accounts on read (hybrid).",
+        "The hybrid (fan-out-on-write for normal users, fan-out-on-read for celebrities) is the pragmatic answer Twitter actually adopted."
+      ],
+      "answer": "Fan-out-on-write pushes each new post into every follower's precomputed timeline, so reads are cheap lookups but writes are amplified by follower count; fan-out-on-read does the opposite, querying followees at read time. Since feeds are overwhelmingly read-heavy, I'd default to fan-out-on-write for the typical user. But a 30-million-follower account would make a single post trigger 30 million writes, so I'd special-case celebrities and merge their posts in at read time — the hybrid Twitter converged on."
     }
   ]
 }

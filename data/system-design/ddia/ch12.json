@@ -155,6 +155,45 @@
       ],
       "answer": 0,
       "explain": "Kleppmann reframes hoarded personal data as a liability and a surveillance apparatus, not just a competitive asset, and stresses engineers' responsibility around consent, privacy, bias, and regulation such as GDPR. The point is that data collection carries real ethical and legal costs that must be weighed, not ignored."
+    },
+    {
+      "type": "open",
+      "prompt": "For a payments ledger, an interviewer asks whether you'd prioritize integrity or timeliness, and why. Define both, make the call, and explain what it means for your design under a failure.",
+      "points": [
+        "Timeliness = users see up-to-date, recent/consistent data; integrity = the data is free of corruption, loss, or contradiction.",
+        "A timeliness violation (brief staleness) is usually temporary and self-correcting; an integrity violation (lost or corrupted money) can be permanent.",
+        "For a ledger, prioritize integrity: it's acceptable for a balance to be a few seconds stale, but never acceptable to lose or double-count a transaction.",
+        "Design implication: build the ledger as an append-only, ordered event log so no committed fact is lost or overwritten, and derive balances from it.",
+        "Under a failure you favor correctness over immediacy — you'd rather delay showing the newest balance than risk a corrupt one.",
+        "Note ACID conflates the two, but they're separable, and here integrity clearly deserves the higher priority."
+      ],
+      "answer": "Timeliness is about recency — users seeing current, consistent data — while integrity is about the absence of corruption, loss, or contradiction. For a payments ledger I prioritize integrity without hesitation: a balance being a few seconds stale is recoverable, but losing or double-counting a transaction is a permanent harm. Concretely I'd model the ledger as an append-only, totally-ordered event log so no committed fact is ever lost or overwritten, and derive balances from it. Under a failure I'd rather delay showing the very latest balance than ever serve a corrupt one — ACID bundles these two together, but they're separable and integrity wins here."
+    },
+    {
+      "type": "open",
+      "prompt": "A user double-clicks 'Pay' and gets charged twice, even though every layer (TCP, the DB transaction) is 'reliable.' Using the end-to-end argument, explain why per-layer guarantees didn't prevent this and how you'd fix it.",
+      "points": [
+        "Per-layer reliability only dedups within that layer: TCP guarantees delivery on one connection, a DB transaction is atomic for one execution — neither sees a retry that originates above them.",
+        "The double-click / app retry is a new request from a higher layer, so the lower layers legitimately process it as a distinct operation.",
+        "The end-to-end argument: correctness that spans the whole path (dedup across retries) must be enforced at the endpoints, not delegated to intermediate layers.",
+        "Fix: attach a client-generated unique request ID to the operation and thread it through the entire path.",
+        "The system records processed request IDs and suppresses (or makes idempotent) any repeat, so the second click with the same ID is recognized as a duplicate and ignored.",
+        "This makes the write idempotent end-to-end, which is the only place the duplicate is visible."
+      ],
+      "answer": "TCP and the DB transaction each only guarantee correctness within their own layer — TCP dedups packets on one connection, the transaction is atomic for one execution — but the double-click is a brand-new request coming from above them, so both layers correctly treat it as a separate, legitimate operation. The end-to-end argument says a guarantee that spans the whole path, like suppressing duplicate submits, has to live at the endpoints, not in the middle. So I'd have the client generate a unique request ID, carry it through the entire request path, and have the server record processed IDs and make the charge idempotent — the second click arrives with the same ID, is recognized as a duplicate, and is ignored. That end-to-end identifier is the only place the retry is actually visible."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain how you'd enforce a unique-username constraint in an unbundled, log-based data system, and why eventual consistency or last-write-wins would be wrong here.",
+      "points": [
+        "Partition a totally-ordered log by the value that must be unique (the username), so all competing claims for a given name land in the same partition.",
+        "Within that single partition, messages have a definite total order.",
+        "A deterministic consumer reads the claims in order, grants the first claim for a name, and rejects every later conflicting one.",
+        "This gives a linearizable compare-and-set on the name — the primitive a uniqueness constraint actually needs.",
+        "Eventual consistency is wrong: concurrent claims on different replicas would both succeed and only later 'converge,' violating uniqueness in the meantime.",
+        "Last-write-wins is wrong: it silently picks one and discards the other rather than rejecting the conflict, so a user thinks they registered a name they don't own."
+      ],
+      "answer": "I'd partition a totally-ordered log by the username itself, so every competing claim for a given name is routed into the same partition where it has a definite order. A deterministic consumer then reads claims in that order, grants the first one for each name, and rejects the rest — that's effectively a linearizable compare-and-set on the username, which is exactly the primitive a uniqueness constraint requires. Eventual consistency would let two concurrent claims on different replicas both succeed and only 'converge' afterward, breaking uniqueness in the window between. Last-write-wins is just as wrong: it silently keeps one write and discards the other instead of rejecting the conflict, so a user believes they registered a name they actually don't own."
     }
   ]
 }

@@ -166,6 +166,44 @@
       ],
       "answer": 1,
       "explain": "A sloppy quorum lets writes land on any reachable nodes (not the designated home nodes) to stay available during partitions; hinted handoff later delivers them home. This boosts availability but weakens the read-your-write guarantee, since a later read of the home nodes may miss it."
+    },
+    {
+      "type": "open",
+      "prompt": "Your app scales reads by serving them from asynchronous followers, but users complain that right after they save a change, a reload sometimes shows the old value. Diagnose the guarantee that's broken and give concrete ways to restore it without abandoning follower reads.",
+      "points": [
+        "Identify the anomaly: async replication lag means a user's own recent write hasn't reached the follower they read from — a read-your-writes (read-after-write) violation.",
+        "Technique 1: read anything the user may have modified from the leader (e.g., their own profile), other data from followers.",
+        "Technique 2: for a short window after a write, route that user's reads to the leader (or track last-write timestamp / log position and only read a replica caught up past it).",
+        "Technique 3: client remembers the timestamp/version of its last write and the system ensures the serving replica is at least that current.",
+        "Distinguish it from monotonic reads (going backward across reads) and consistent prefix (causal ordering) — this is specifically the own-writes case.",
+        "Preserve the read-scaling benefit — apply the stronger routing only to the user's own recently-written data, not all reads."
+      ],
+      "answer": "That's a read-your-writes violation: async replication lag means the follower serving the reload hasn't yet received the user's own just-saved write. I'd keep scaling reads on followers but special-case the writer — for data a user may have modified (like their own posts/profile), read from the leader, or for a short window after their write pin their reads to the leader. A cleaner version records the log position/timestamp of the user's last write and only serves them from a replica that has caught up past it. This is specifically the own-writes guarantee, distinct from monotonic reads or consistent-prefix, and I only tighten it for the writer's own data so the rest of the read traffic still fans out to followers."
+    },
+    {
+      "type": "open",
+      "prompt": "You're running a database across three datacenters on different continents and want each region to accept writes locally with low latency. What replication topology fits, what new problem does it force on you, and how do you handle it?",
+      "points": [
+        "Multi-leader replication fits multi-datacenter: each DC has a leader that takes local writes and replicates asynchronously to the others, so writes are low-latency and a DC can keep working during inter-DC network problems.",
+        "The new problem is write conflicts — two regions can concurrently modify the same record, since there's no single serialization point.",
+        "Conflict resolution options: last-write-wins (simple but silently drops data), version vectors to detect concurrency, CRDTs / application-defined merge to preserve both.",
+        "Avoid conflicts where possible: route all writes for a given record to one 'home' DC so the same key isn't concurrently edited.",
+        "Contrast with single-leader (all writes cross an ocean to one leader — high latency) and note multi-leader trades that latency for conflict-handling complexity."
+      ],
+      "answer": "Multi-leader replication is the fit: give each datacenter its own leader that accepts local writes at low latency and replicates asynchronously to the other regions, so a cross-continent link hiccup doesn't stop local writes. The price is write conflicts — two regions can edit the same record concurrently with no single serialization point. I'd first try to avoid them by homing each record's writes to one datacenter, and where conflicts are unavoidable resolve them deliberately: version vectors to detect concurrency plus a merge (or a CRDT) rather than last-write-wins, which silently discards data. Single-leader would dodge conflicts but force every write across an ocean, so multi-leader is trading that latency for conflict handling."
+    },
+    {
+      "type": "open",
+      "prompt": "In a leaderless (Dynamo-style) store with n=3, explain how you'd tune w and r for a read-heavy workload that still wants a good chance of fresh reads, and why a quorum here still isn't linearizable.",
+      "points": [
+        "The quorum condition is w + r > n so the write set and read set overlap in at least one node, so a read is likely to see the latest write.",
+        "For read-heavy load, favor a smaller r to keep reads fast/cheap and a larger w — e.g., w=3, r=1 (or w=2, r=2) — as long as w + r > n holds.",
+        "Note the availability/consistency tradeoff of that choice (large w hurts write availability if a node is down).",
+        "Read repair and anti-entropy converge stale replicas so rarely-read data doesn't stay stale forever.",
+        "Still not linearizable: sloppy quorums, concurrent writes, and writes that partially fail mean a fresh read isn't guaranteed — quorums give 'likely' fresh, not a strict recency guarantee.",
+        "Concurrent writes still need conflict resolution (version vectors), which linearizability would preclude."
+      ],
+      "answer": "Quorum reads/writes work because w + r > n forces the read set and write set to overlap on at least one node, so a read usually sees the newest write. For a read-heavy workload I'd bias toward cheap reads — say w=2, r=2 with n=3, or even w=3, r=1 if I can tolerate a write blocking when a node is down — as long as w + r > n. Read repair and background anti-entropy pull lagging replicas forward so unread data doesn't rot. But this still isn't linearizable: sloppy quorums, concurrent writes needing version-vector resolution, and partially-failed writes mean a quorum gives you a high probability of freshness, not a strict recency guarantee."
     }
   ]
 }

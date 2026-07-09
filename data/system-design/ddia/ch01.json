@@ -1,0 +1,171 @@
+{
+  "id": "ch01",
+  "chapter": 1,
+  "part": "Part I: Foundations of Data Systems",
+  "title": "Reliable, Scalable, and Maintainable Applications",
+  "summary": "Introduces the three concerns that shape every data system — reliability, scalability, and maintainability — and the vocabulary (faults vs failures, load parameters, response-time percentiles, operability/simplicity/evolvability) for reasoning about them.",
+  "keyTakeaways": [
+    "Data-intensive applications are built by composing standard building blocks — databases, caches, search indexes, stream processing, batch processing — each solving a different need.",
+    "Reliability means continuing to work correctly even when things go wrong; a fault is one component deviating from spec, a failure is the whole system stopping service, and fault-tolerance means preventing faults from becoming failures.",
+    "Hardware faults are largely random and independent (mitigated by redundancy), while software errors are systematic and correlated across nodes; human error causes most outages.",
+    "Scalability is describing load with load parameters and asking what happens to performance as load grows, and what resources you must add to hold performance steady.",
+    "Response time should be described with percentiles (p50/p95/p99/p999 tail latencies), not the mean, because tail latency reflects the worst user experiences.",
+    "Maintainability rests on operability (easy for ops), simplicity (managing complexity via good abstractions), and evolvability (making change easy)."
+  ],
+  "questions": [
+    {
+      "q": "In DDIA's terms, what distinguishes a `fault` from a `failure`?",
+      "options": [
+        "A fault is a bug in application code; a failure is a hardware defect",
+        "A fault is recoverable; a failure is permanent and unrecoverable by definition",
+        "A fault affects a single user's request; a failure affects all users simultaneously",
+        "A fault is one component deviating from its spec; a failure is the system as a whole stopping to provide the required service to users"
+      ],
+      "answer": 3,
+      "explain": "DDIA defines a fault as one component deviating from spec, and a failure as the whole system stopping service to users. Fault-tolerance is about preventing faults from cascading into failures — the distinction is component-level vs system-level, not hardware-vs-software or recoverable-vs-permanent."
+    },
+    {
+      "q": "Why does DDIA describe hardware faults as easier to reason about than software errors?",
+      "options": [
+        "Hardware faults never cause outages because redundancy always masks them",
+        "Hardware faults tend to be random and independent across machines, whereas software errors are systematic and often correlated across many nodes at once",
+        "Hardware faults are always detected instantly, while software errors are silent",
+        "Software errors can be fixed by rebooting, but hardware faults cannot"
+      ],
+      "answer": 1,
+      "explain": "Hardware faults (disk crash, RAM fault, power loss) are mostly random and independent, so redundancy like RAID and dual power supplies helps. Software errors are systematic bugs correlated across nodes — a bad input or leap-second bug can take down every replica at once, which redundancy does not protect against."
+    },
+    {
+      "q": "According to DDIA, what is the leading cause of outages, and which mitigation matches it?",
+      "options": [
+        "Disk failures — mitigated by RAID and off-site backups",
+        "Network partitions — mitigated by multi-region deployment",
+        "Human errors (operator/config mistakes) — mitigated by good abstractions, sandboxes, thorough testing, quick rollback, and telemetry",
+        "Memory leaks — mitigated by automatic garbage collection"
+      ],
+      "answer": 2,
+      "explain": "DDIA cites studies finding humans (configuration errors by operators) as the leading cause of outages. Mitigations target the human loop: well-designed abstractions and APIs, sandbox environments, comprehensive testing, fast rollback of config changes, and detailed telemetry to catch problems early."
+    },
+    {
+      "q": "What is the purpose of deliberately inducing faults in production, as with Netflix's `Chaos Monkey`?",
+      "options": [
+        "To continuously exercise and validate the fault-tolerance machinery so that it works when a real fault occurs, rather than staying untested",
+        "To reduce cloud costs by shutting down idle machines",
+        "To measure raw throughput under peak load",
+        "To force developers to write more unit tests"
+      ],
+      "answer": 0,
+      "explain": "Fault-tolerance code that is never triggered may be broken when you finally need it. Deliberately injecting faults (killing random processes) keeps the recovery paths continuously exercised, increasing confidence that the system tolerates real faults. It is not a cost or throughput optimization."
+    },
+    {
+      "q": "In DDIA, `scalability` is best described as…",
+      "options": [
+        "The maximum number of servers a system can run on",
+        "A property a system either has or lacks, determined by its programming language",
+        "A system's ability to cope with increased load, discussed by defining load parameters and asking how performance changes as load grows",
+        "The guarantee that response time stays constant no matter how much data is stored"
+      ],
+      "answer": 2,
+      "explain": "Scalability is not a one-dimensional label ('X is scalable'); it is the ability to cope with increased load, reasoned about by first choosing load parameters, then asking what happens to performance when load grows and what resources are needed to hold performance steady."
+    },
+    {
+      "q": "In the Twitter home-timeline example, what is the `fan-out on write` approach and its main tradeoff?",
+      "options": [
+        "Timelines are computed by querying all followees' tweets at read time, making writes cheap but reads expensive",
+        "Tweets are stored only once and never copied, minimizing both read and write cost",
+        "Followers poll a central queue on a fixed schedule, decoupling read and write entirely",
+        "Each new tweet is inserted into a precomputed cache for every follower at post time, making reads fast but writes costly — especially for users with millions of followers"
+      ],
+      "answer": 3,
+      "explain": "Fan-out on write pushes each tweet into a cache for every follower when it is posted, so reads are cheap lookups but writes are expensive and amplified by follower count. The read-time alternative (fan-out on read) is cheap to write but expensive to read; Twitter uses a hybrid, fanning out most users on write while handling celebrity accounts on read."
+    },
+    {
+      "q": "DDIA distinguishes `response time` from `latency`. Which statement is correct?",
+      "options": [
+        "They are synonyms and can be used interchangeably",
+        "Response time is the duration a request waits before being handled; latency is the total time the client observes",
+        "Response time is what the client sees (service time plus network delays plus queueing); latency is the duration a request waits to be serviced",
+        "Latency is measured on the server; response time is measured only on the client's CPU"
+      ],
+      "answer": 2,
+      "explain": "DDIA defines response time as what the client sees — service time plus network and queueing delays — while latency is the duration a request spends waiting to be serviced. The two are related but not identical; conflating them obscures where time is actually spent."
+    },
+    {
+      "q": "Why does DDIA recommend percentiles (e.g. p95, p99) over the arithmetic mean for reporting response times?",
+      "options": [
+        "The mean is harder to compute than percentiles",
+        "Percentiles are always smaller than the mean, making the numbers look better",
+        "The mean cannot be computed for skewed distributions",
+        "The mean does not reveal how many users experience slow responses; percentiles (especially tail latencies) show the worst-case experiences that the mean hides"
+      ],
+      "answer": 3,
+      "explain": "The mean tells you nothing about how many users hit slow responses and is easily skewed by outliers in both directions. Percentiles — p50 as the typical case, p95/p99/p999 as tail latencies — directly express the experience of the slowest requests, which often correspond to your most valuable, data-heavy customers."
+    },
+    {
+      "q": "What is `tail latency amplification`?",
+      "options": [
+        "A caching technique that reduces the p99 by precomputing results",
+        "When a single user request fans out to many backend calls and must wait for the slowest one, so the end-to-end request is slow if any backend call is slow",
+        "The tendency of median latency to grow faster than mean latency under load",
+        "A monitoring artifact where percentiles are overcounted at high throughput"
+      ],
+      "answer": 1,
+      "explain": "When one front-end request depends on multiple backend calls, it completes only when the slowest backend responds. As the number of backend calls grows, the chance that at least one is slow rises, so a larger fraction of end-user requests are slow — the tail is amplified. It is a real problem, not a monitoring artifact."
+    },
+    {
+      "q": "What does DDIA mean by `head-of-line blocking` in the context of response-time measurement?",
+      "options": [
+        "A few slow requests hold up a server's limited processing slots, delaying subsequent (even cheap) requests queued behind them",
+        "The first request in a batch always gets priority scheduling",
+        "Network packets are reordered so the head of the queue arrives last",
+        "The database blocks writes while a read is in progress"
+      ],
+      "answer": 0,
+      "explain": "With limited parallelism, a small number of slow requests can occupy all processing slots and delay every request queued behind them, even quick ones — so client-observed response time rises. This is why load should be measured client-side, since server-side timing misses queueing delay."
+    },
+    {
+      "q": "DDIA contrasts `scaling up` and `scaling out`. Which description is accurate?",
+      "options": [
+        "Scaling up adds more machines; scaling out buys a bigger machine",
+        "Scaling up increases network bandwidth; scaling out increases disk capacity",
+        "They are the same technique described with different vocabulary",
+        "Scaling up (vertical) means a more powerful single machine; scaling out (horizontal) means distributing load across many smaller machines, often a shared-nothing architecture"
+      ],
+      "answer": 3,
+      "explain": "Scaling up is vertical — a single, more powerful machine. Scaling out is horizontal — spreading load over many commodity machines, commonly shared-nothing. Good architectures usually mix both; DDIA stresses there is no one-size-fits-all 'magic scaling sauce.'"
+    },
+    {
+      "q": "What does DDIA mean by an `elastic` system?",
+      "options": [
+        "A system that automatically adds computing resources when it detects a load increase, rather than being scaled manually",
+        "A system whose data model can change shape without downtime",
+        "A system that compresses data to fit more into memory",
+        "A system that guarantees constant latency regardless of load"
+      ],
+      "answer": 0,
+      "explain": "An elastic system automatically provisions more resources as load rises (and releases them when it falls). The alternative is manual scaling, where a human analyzes capacity and adds machines. Elasticity is about automatic resource adjustment, not data-model flexibility or latency guarantees."
+    },
+    {
+      "q": "DDIA breaks maintainability into three design principles. Which set is correct?",
+      "options": [
+        "Availability, consistency, partition-tolerance",
+        "Durability, isolation, atomicity",
+        "Operability, simplicity, and evolvability",
+        "Throughput, latency, and capacity"
+      ],
+      "answer": 2,
+      "explain": "DDIA names operability (make it easy for operations teams to keep the system running), simplicity (manage complexity so new engineers can understand the system), and evolvability (make it easy to change the system for future requirements). The other options describe CAP, ACID, and performance metrics — not maintainability."
+    },
+    {
+      "q": "What is `accidental complexity` as DDIA (drawing on Moseley and Marks) uses the term?",
+      "options": [
+        "Complexity inherent in the problem the software solves, which cannot be removed",
+        "Complexity that arises only from the implementation, not from the problem itself, and can be removed with better abstractions",
+        "Complexity introduced by hardware faults occurring at random times",
+        "The unavoidable overhead of running in a distributed environment"
+      ],
+      "answer": 1,
+      "explain": "Accidental complexity is not inherent to the problem but stems from the implementation — tangled dependencies, inconsistent naming, hacks. It can be removed with good abstractions, unlike essential complexity, which is intrinsic to what the software must do. Managing complexity is the core of the simplicity principle."
+    }
+  ]
+}

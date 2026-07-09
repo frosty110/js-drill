@@ -1,0 +1,171 @@
+{
+  "id": "ch10",
+  "chapter": 10,
+  "part": "Part III: Derived Data",
+  "title": "Batch Processing",
+  "summary": "How systems that process a large, bounded input all at once — from Unix pipelines to MapReduce and modern dataflow engines — turn big datasets into derived outputs like search indexes and read-only key-value stores, prioritizing throughput over latency.",
+  "keyTakeaways": [
+    "Three system types: online services (latency-bound), batch processing (throughput-bound, bounded input), and stream processing (near-real-time, unbounded input).",
+    "The Unix philosophy — small composable tools with a uniform interface (text streams over stdin/stdout) and immutable inputs — is the intellectual ancestor of MapReduce.",
+    "MapReduce runs mapper → shuffle/sort-by-key → reducer across a distributed filesystem (HDFS), moving computation to the data and materializing intermediate state to disk between jobs.",
+    "Reduce-side joins (sort-merge) bring both sides together by key; map-side joins (broadcast hash, partitioned hash) avoid the shuffle when a table is small or co-partitioned.",
+    "Batch outputs are immutable read-only artifacts (search indexes, KV stores) swapped in atomically, making rollback trivial and buggy code safe to rerun.",
+    "MapReduce tolerates faults by materializing and retrying individual tasks; dataflow engines (Spark, Tez, Flink) model the job as a DAG, keep intermediate data in memory, and recompute lost partitions from lineage."
+  ],
+  "questions": [
+    {
+      "q": "DDIA distinguishes three types of systems by their performance goal. How does batch processing differ from an online service?",
+      "options": [
+        "Batch processing takes a large bounded input, runs a job to produce derived output, and is measured by throughput rather than per-request latency",
+        "Batch processing consumes an unbounded stream of events as they arrive",
+        "Batch processing optimizes for low response-time latency per request, like a service",
+        "Batch processing is a synonym for stream processing with a larger buffer"
+      ],
+      "answer": 0,
+      "explain": "A batch job crunches a fixed, bounded dataset and is judged on throughput (records processed / total job time), not the response latency an online service cares about. Consuming unbounded events as they arrive is stream processing (Ch 11)."
+    },
+    {
+      "q": "Which principle is central to the Unix philosophy that DDIA credits as the ancestor of MapReduce?",
+      "options": [
+        "Every tool maintains its own persistent mutable database of state",
+        "Each program does one thing well and programs compose via a uniform interface (text streams over stdin/stdout)",
+        "Programs communicate only through shared memory for speed",
+        "A single monolithic program should handle the entire pipeline end to end"
+      ],
+      "answer": 1,
+      "explain": "Unix tools do one thing well and chain through pipes using a uniform interface — a stream of bytes/text — so they compose freely. This uniform interface and immutable-input mindset is exactly what MapReduce generalizes to a distributed filesystem."
+    },
+    {
+      "q": "What is the correct sequence of stages in a MapReduce job?",
+      "options": [
+        "Reducer extracts key-value pairs, then the mapper aggregates them",
+        "Mapper and reducer run concurrently on the same records with no sort step",
+        "Mapper emits key-value pairs from each record, the framework shuffles and sorts them by key, then the reducer processes all values for each key",
+        "A coordinator sorts the input first, then a single mapper produces the final output"
+      ],
+      "answer": 2,
+      "explain": "The mapper extracts a key-value pair per input record; the framework's shuffle brings all values with the same key to one reducer (sorted by key); the reducer then processes each key's grouped values. There is no separate reducer-extract-then-mapper ordering."
+    },
+    {
+      "q": "Why must MapReduce mapper and reducer callbacks be pure and stateless (no external side effects)?",
+      "options": [
+        "Because JavaScript closures cannot capture mutable state",
+        "Because HDFS blocks any function that writes to memory",
+        "So the reducer can run before the mapper finishes",
+        "So the framework can freely re-run them on retries and speculative execution without the results depending on prior runs"
+      ],
+      "answer": 3,
+      "explain": "Determinism and freedom from side effects let MapReduce retry failed tasks and run speculative duplicate tasks safely, since re-execution yields the same output. If callbacks mutated external state, retries could corrupt results."
+    },
+    {
+      "q": "What does 'putting the computation near the data' mean in MapReduce on HDFS?",
+      "options": [
+        "Scheduling each map task to run on (or near) the machine that already stores that input file block, to avoid copying data over the network",
+        "Copying the entire dataset to a central compute node before processing",
+        "Storing the code inside the database alongside the rows",
+        "Caching query results in the client so repeated reads are local"
+      ],
+      "answer": 0,
+      "explain": "The scheduler tries to place a mapper on a machine holding a replica of its input block, so the bulky data stays put and only the (small) code moves. This locality optimization conserves scarce network bandwidth on large jobs."
+    },
+    {
+      "q": "How does MapReduce handle intermediate state between chained jobs differently from a Unix pipeline?",
+      "options": [
+        "MapReduce streams intermediate records directly between jobs with no persistence",
+        "MapReduce materializes each job's full output to the distributed filesystem before the next job reads it, unlike a Unix pipe's in-memory streaming",
+        "Both keep all intermediate state only in RAM",
+        "MapReduce discards intermediate output immediately to save disk"
+      ],
+      "answer": 1,
+      "explain": "A Unix pipe streams bytes between processes in memory; MapReduce fully materializes each job's output to HDFS, so the next job can only start once the previous one finishes completely. This materialization aids fault tolerance but adds latency and storage cost — a point dataflow engines push back on."
+    },
+    {
+      "q": "In a MapReduce sort-merge (reduce-side) join, how are the two sides brought together?",
+      "options": [
+        "The smaller table is broadcast into every mapper's memory",
+        "One table is loaded into a database and looked up per record over the network",
+        "Both inputs are mapped so that records with the same join key get the same key; the shuffle sorts them together and the reducer sees all matching records for a key adjacently",
+        "The join is computed by a single reducer scanning the whole dataset"
+      ],
+      "answer": 2,
+      "explain": "A reduce-side (sort-merge) join emits the join key from both datasets in the map phase; the framework's sort brings matching records adjacent at the reducer, which merges them. Broadcasting the small table into every mapper is instead the broadcast-hash (map-side) join."
+    },
+    {
+      "q": "When is a broadcast hash join (a map-side join) appropriate?",
+      "options": [
+        "When both datasets are enormous and neither fits in memory",
+        "Only when the join key is a monotonically increasing timestamp",
+        "When you need to detect and resolve write conflicts between replicas",
+        "When one of the two datasets is small enough to load entirely into each mapper's memory as a hash table, avoiding the shuffle"
+      ],
+      "answer": 3,
+      "explain": "A broadcast hash join loads the small side fully into the memory of every mapper, which then streams the large side and probes the hash table — no reducer shuffle needed. If both sides are large, you fall back to a partitioned hash join or a sort-merge (reduce-side) join."
+    },
+    {
+      "q": "What problem do 'skewed' (also called sharded) joins address in batch processing?",
+      "options": [
+        "A few hot keys with disproportionately many records overloading a single reducer, so the join is spread across multiple reducers for those keys",
+        "The distributed filesystem running out of replicas",
+        "Nondeterministic mapper functions producing divergent output",
+        "Records arriving in the wrong causal order"
+      ],
+      "answer": 0,
+      "explain": "When one key has vastly more records than others (hot key), the reducer handling it becomes a straggler; skewed/sharded-join techniques split that key's records across several reducers to rebalance. This is a load-distribution fix, not a determinism or ordering fix."
+    },
+    {
+      "q": "How does a MapReduce job typically deliver output such as a search index or key-value store to serving systems?",
+      "options": [
+        "It issues individual UPDATE statements against the live production database as it computes",
+        "It writes brand-new immutable files (e.g. Lucene index segments or a read-only KV store) that are then swapped in atomically, so a bad run is easy to roll back",
+        "It mutates the previous output in place to save disk space",
+        "It streams each record to clients as it is produced with no intermediate file"
+      ],
+      "answer": 1,
+      "explain": "Batch jobs build fresh immutable output files and atomically swap the whole dataset into the serving layer; because the old version is untouched, rollback is trivial and buggy code causes no permanent damage. Issuing live per-record UPDATEs would be slow and risk half-applied state."
+    },
+    {
+      "q": "How does MapReduce's fault-tolerance strategy contrast with that of a massively parallel processing (MPP) distributed database?",
+      "options": [
+        "MapReduce aborts and restarts the entire query on any node failure, like most MPP databases",
+        "MPP databases retry individual tasks while MapReduce restarts everything",
+        "MapReduce materializes intermediate results and retries only the individual failed tasks, letting huge jobs survive frequent failures (e.g. on preemptible resources), whereas MPP databases keep more work in memory and typically restart the whole query",
+        "Both keep all intermediate state in memory and never retry"
+      ],
+      "answer": 2,
+      "explain": "By writing intermediate output to disk, MapReduce can re-run just the tasks that failed, tolerating a high failure rate on large or preemptible clusters. MPP databases favor keeping data in memory for speed but generally must restart a whole query on failure — MapReduce trades performance for resilience."
+    },
+    {
+      "q": "What is the core architectural difference of dataflow engines (Spark, Tez, Flink) versus classic MapReduce?",
+      "options": [
+        "They forbid joins and grouping entirely",
+        "They require the input to fit in a single machine's memory",
+        "They eliminate the distributed filesystem and store everything in one node",
+        "They model the whole workflow as a DAG of operators, avoid fully materializing every intermediate stage to disk (keeping data in memory / pipelining), and support operators beyond just map and reduce"
+      ],
+      "answer": 3,
+      "explain": "Dataflow engines treat the entire job as a DAG of operators, so they can pipeline and keep intermediate data in memory instead of materializing to HDFS between every map/reduce step, and they offer richer operators. This cuts the redundant sorts and disk round-trips MapReduce incurs when chaining jobs."
+    },
+    {
+      "q": "How does Spark recover from a lost partition of intermediate data without re-running the whole job?",
+      "options": [
+        "It recomputes the lost partition from its RDD lineage — the recorded sequence of deterministic operations that produced it",
+        "It restores the partition from a periodic full backup on tape",
+        "It queries a replica of the partition from another datacenter",
+        "It cannot recover and must restart the entire job from the input"
+      ],
+      "answer": 0,
+      "explain": "Because Spark tracks each RDD's lineage (the deterministic operations that built it), it can recompute just a lost partition from its ancestors rather than restarting everything. This depends on the transformations being deterministic, so lineage-based replay reproduces the same data."
+    },
+    {
+      "q": "What computational model does DDIA describe for iterative graph processing frameworks like Pregel?",
+      "options": [
+        "A single reducer walks the entire graph depth-first",
+        "The bulk synchronous parallel (BSP) model, where vertices process incoming messages and send messages to neighbors in a series of synchronized iterations (supersteps)",
+        "A stream of events consumed with sliding-window joins",
+        "Two-phase commit across all graph vertices per edge"
+      ],
+      "answer": 1,
+      "explain": "Pregel uses the bulk synchronous parallel model: in each superstep, a vertex processes messages received in the prior step and emits messages to neighbors, iterating until convergence. This is well suited to graph algorithms that would need many MapReduce jobs otherwise."
+    }
+  ]
+}

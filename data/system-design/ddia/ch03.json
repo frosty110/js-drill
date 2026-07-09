@@ -1,0 +1,172 @@
+{
+  "id": "ch03",
+  "chapter": 3,
+  "part": "Part I: Foundations of Data Systems",
+  "title": "Storage and Retrieval",
+  "summary": "How databases physically store data and retrieve it again: the two dominant storage-engine families (log-structured LSM-trees vs page-oriented B-trees), how indexes are built on top, and how storage differs for transaction processing (OLTP) versus analytics (OLAP).",
+  "keyTakeaways": [
+    "Two storage-engine families dominate: log-structured (LSM-tree) and page-oriented (B-tree).",
+    "LSM-trees turn random writes into sequential appends via a memtable flushed to sorted SSTable segments, then compacted.",
+    "B-trees update pages in place, use a fixed-size page/block structure, and rely on a write-ahead log for crash recovery.",
+    "LSM-trees generally offer higher write throughput and less write amplification; B-trees offer more predictable reads and keep each key in exactly one place.",
+    "Secondary, clustered, covering, multi-column, spatial (R-tree), and full-text indexes address different query shapes.",
+    "OLTP (row/document, LSM or B-tree) and OLAP (column-oriented, compressed, warehouse) are optimized for opposite access patterns.",
+    "Column-oriented storage stores each column together to enable heavy compression and vectorized scans over few columns of many rows."
+  ],
+  "questions": [
+    {
+      "q": "In Bitcask (the simplest log + hash index), where does the index that maps each key to its value live?",
+      "options": [
+        "In an in-memory hash map from key to the byte offset of the latest value in the log file",
+        "In a sorted on-disk B-tree keyed by the primary key",
+        "In a sparse in-memory index pointing to sorted on-disk segments",
+        "In a bloom filter that stores the value alongside each key"
+      ],
+      "answer": 0,
+      "explain": "Bitcask keeps a complete in-memory hash map of key to byte offset, so a read is one hash lookup plus one disk seek. Its main limitation follows directly: all keys must fit in RAM, and range queries are inefficient because keys are not stored in sorted order."
+    },
+    {
+      "q": "Why does an append-only log-structured store need compaction and segment merging?",
+      "options": [
+        "To keep the in-memory index sorted so range queries stay fast",
+        "To rebalance the tree so it stays at O(log n) height",
+        "To flush the write-ahead log to the main data file after a checkpoint",
+        "To reclaim space by discarding superseded/deleted values, since updates only append new records rather than overwriting"
+      ],
+      "answer": 3,
+      "explain": "Because writes only append, an updated or deleted key leaves stale copies behind; compaction throws away all but the latest value per key and merges segments so disk usage does not grow unbounded. Rebalancing to keep O(log n) height is a B-tree concern, not a log-structured one."
+    },
+    {
+      "q": "What is a memtable in an LSM-tree-based storage engine?",
+      "options": [
+        "A fixed-size on-disk page that is updated in place",
+        "A bloom filter kept in memory to skip absent keys",
+        "An in-memory balanced tree holding recent writes in sorted order before it is flushed to a sorted segment",
+        "The sparse index that maps keys to byte offsets within an SSTable"
+      ],
+      "answer": 2,
+      "explain": "Writes first go to an in-memory balanced tree (the memtable, e.g. a red-black tree or skip list) kept sorted by key; when it grows large enough it is written out as a new sorted SSTable segment. Because it is already sorted, the flush and later merges are sequential, like the merge step of mergesort."
+    },
+    {
+      "q": "In an LSM-tree, what is the primary purpose of a bloom filter?",
+      "options": [
+        "To compress each column so it uses fewer bits on disk",
+        "To approximate set membership so lookups can skip reading segments that definitely do not contain a key",
+        "To keep multiple sort orders of the same data on different replicas",
+        "To guarantee that a deleted key is physically removed during compaction"
+      ],
+      "answer": 1,
+      "explain": "A bloom filter is a memory-efficient probabilistic structure for set membership; it may report false positives but never false negatives, so it lets the engine avoid unnecessary disk reads for keys that are absent. Deletes are instead handled by writing a tombstone marker."
+    },
+    {
+      "q": "How does an LSM-tree represent a deleted key?",
+      "options": [
+        "By immediately overwriting the value's page in place",
+        "By removing the key from the in-memory hash map only",
+        "By writing a special tombstone record that marks the key deleted until compaction drops it",
+        "By decrementing a reference count stored in the sparse index"
+      ],
+      "answer": 2,
+      "explain": "Since segments are immutable and append-only, a delete is recorded as a tombstone; the key's older values are discarded and the tombstone itself is removed during a later compaction/merge. There is no in-place overwrite in a log-structured engine."
+    },
+    {
+      "q": "Which statement correctly describes how a B-tree handles writes?",
+      "options": [
+        "It appends the new value to a log and later compacts old copies away",
+        "It overwrites the fixed-size page in place, using a write-ahead (redo) log so a crash mid-write can be recovered",
+        "It buffers writes in a memtable and flushes them to immutable sorted segments",
+        "It writes each column separately and relies on run-length encoding"
+      ],
+      "answer": 1,
+      "explain": "B-trees break the database into fixed-size pages and update them in place; because a single logical write may touch several pages, a write-ahead log (redo log) is appended first so an interrupted update can be restored on recovery. Memtables and immutable segments are the LSM approach, not the B-tree approach."
+    },
+    {
+      "q": "Per DDIA, which is a genuine advantage of LSM-trees over B-trees?",
+      "options": [
+        "Reads are faster because each key exists in exactly one place",
+        "They make range queries impossible, which simplifies the index",
+        "Higher sustained write throughput and lower write amplification, with better compression and less fragmentation on disk",
+        "They provide stronger transaction isolation because a key can be locked in one location"
+      ],
+      "answer": 2,
+      "explain": "Sequential appends and periodic compaction give LSM-trees high write throughput, typically lower write amplification, and denser on-disk layout (better compression, less fragmentation). Faster reads and locking a key in one place are B-tree advantages, since a B-tree keeps each key in exactly one location."
+    },
+    {
+      "q": "What is the main downside of LSM-trees that DDIA highlights?",
+      "options": [
+        "They cannot support secondary indexes",
+        "They require all keys to fit in memory at once",
+        "They lose data on crash because they have no durable log",
+        "Compaction can compete with reads and writes for disk resources, and at high write load compaction throughput can become a bottleneck"
+      ],
+      "answer": 3,
+      "explain": "Compaction runs in the background but shares finite disk bandwidth; at high write volume it can interfere with concurrent reads/writes and even fall behind, letting unmerged segments pile up. Needing all keys in memory is the limitation of the simple Bitcask hash index, not of LSM-trees in general."
+    },
+    {
+      "q": "In a clustered index (e.g. MySQL/InnoDB primary key), what is stored in the index leaf?",
+      "options": [
+        "A reference (pointer) to the row stored elsewhere in a heap file",
+        "The full row itself, stored directly within the index",
+        "Only the indexed columns, so the query can be answered without touching the row",
+        "A bloom filter summarizing which rows contain the key"
+      ],
+      "answer": 1,
+      "explain": "A clustered index stores the actual row data inside the index, avoiding an extra hop. That contrasts with a nonclustered index, which stores only a reference to the row, and a covering index, which stores just enough columns to answer certain queries without reading the full row."
+    },
+    {
+      "q": "Why do in-memory databases (e.g. Redis, VoltDB) gain performance, according to DDIA?",
+      "options": [
+        "Because reading from memory is inherently faster than any disk read, which is their only advantage",
+        "Because they eliminate the need for durability entirely",
+        "Because they avoid the overhead of encoding in-memory data structures into a form that can be written to disk",
+        "Because they store each column separately for better compression"
+      ],
+      "answer": 2,
+      "explain": "DDIA argues the main win is not avoiding disk reads (the OS cache already keeps hot data in RAM) but avoiding the CPU overhead of encoding data structures for durable on-disk storage. In-memory databases can still be durable via an append-only log and periodic snapshots."
+    },
+    {
+      "q": "Which pair correctly contrasts OLTP with OLAP?",
+      "options": [
+        "OLTP scans huge numbers of rows for aggregates; OLAP looks up small numbers of records by key",
+        "OLTP handles many small, low-latency reads/writes by key; OLAP scans large numbers of rows over few columns to compute aggregates",
+        "OLTP uses column-oriented storage; OLAP uses row-oriented storage",
+        "OLTP is served by data warehouses; OLAP is served by the live application database"
+      ],
+      "answer": 1,
+      "explain": "OLTP (online transaction processing) serves the application with many small key-based reads and writes at low latency; OLAP (online analytic processing) runs fewer, larger aggregate queries scanning many rows over a few columns, typically in a separate data warehouse loaded via ETL."
+    },
+    {
+      "q": "In a star schema, what is the fact table?",
+      "options": [
+        "A wide table describing an entity such as products, customers, or dates",
+        "The central table holding one row per event, with foreign-key references out to dimension tables",
+        "A normalized breakdown of dimensions into sub-dimensions",
+        "A materialized aggregate precomputed from the raw data"
+      ],
+      "answer": 1,
+      "explain": "The fact table sits at the center of a star schema with one row per event/transaction and foreign keys pointing out to dimension tables (the who/what/where/when). A snowflake schema further normalizes those dimensions into sub-dimensions."
+    },
+    {
+      "q": "What is the defining idea of column-oriented storage?",
+      "options": [
+        "Store all values of each column together, rather than storing all fields of a row together",
+        "Store each row as a self-describing document with its schema inline",
+        "Keep the newest column values in a memtable and flush them to B-tree pages",
+        "Replicate every column to a separate node to spread read load"
+      ],
+      "answer": 0,
+      "explain": "Column storage lays out each column's values contiguously, so an analytic query that touches only a few columns reads only those columns. This layout also enables strong compression (e.g. bitmap and run-length encoding) and vectorized processing over long runs of same-column values."
+    },
+    {
+      "q": "Why is writing to column-oriented storage harder, and how is it typically addressed?",
+      "options": [
+        "In-place updates would require rewriting every compressed, sorted column, so writes use an LSM-style approach: buffer in memory, then merge into the column files",
+        "Columns cannot be indexed, so every write must scan the whole table first",
+        "Each write must update a write-ahead log per column, doubling write amplification",
+        "Column stores forbid updates entirely, so data must be reloaded from scratch"
+      ],
+      "answer": 0,
+      "explain": "Because columns are sorted and compressed, an in-place update would mean rewriting large compressed segments, so column stores buffer writes in an in-memory row store and periodically merge them into the column files, exactly the LSM-tree strategy. Sort order can even differ across replicas to speed different queries."
+    }
+  ]
+}

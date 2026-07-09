@@ -1,0 +1,171 @@
+{
+  "id": "ch06",
+  "chapter": 6,
+  "part": "Part II: Distributed Data",
+  "title": "Partitioning",
+  "summary": "How to break a large dataset into partitions (shards) spread across many nodes for scalability, how to choose a partitioning scheme, keep it balanced as the cluster grows, and route requests to the right partition.",
+  "keyTakeaways": [
+    "Partitioning spreads data and query load across nodes for scalability; it is normally combined with replication so each partition has copies.",
+    "Key-range partitioning keeps keys sorted (enabling range scans) but risks hot spots; hash partitioning spreads load evenly but loses efficient range queries.",
+    "Even hashing does not fix a single hot key; that needs application-level splitting such as appending a random suffix.",
+    "Secondary indexes are either document-partitioned (local, scatter/gather reads) or term-partitioned (global, writes fan out but reads hit one partition).",
+    "Rebalancing should avoid hash-mod-N; fixed-partition-count, dynamic split/merge, and per-node-proportional strategies move data without reshuffling everything.",
+    "Request routing (node forwarding, a routing tier, or a partition-aware client) needs consensus on partition assignments — often via ZooKeeper or a gossip protocol."
+  ],
+  "questions": [
+    {
+      "q": "In DDIA, what is the main goal of partitioning (sharding)?",
+      "options": [
+        "To keep multiple copies of the same data for fault tolerance",
+        "To guarantee transactions execute in a serial order",
+        "To spread data and query load across many nodes so the system scales beyond one machine",
+        "To compress data by removing duplicate rows"
+      ],
+      "answer": 2,
+      "explain": "Partitioning splits a large dataset so different nodes hold different subsets, scaling storage and throughput. Keeping copies for fault tolerance is replication — the two are usually combined but are distinct concerns."
+    },
+    {
+      "q": "What does it mean for a partitioning scheme to be 'skewed', and why is it bad?",
+      "options": [
+        "Partitions are unevenly loaded so some nodes ('hot spots') get disproportionate data or traffic, undermining the scalability partitioning was meant to provide",
+        "Data is sorted incorrectly, breaking range queries",
+        "Replicas of a partition disagree on the current value",
+        "The partition key is stored in a different byte order than the sort key"
+      ],
+      "answer": 0,
+      "explain": "Skew means load isn't spread evenly; hot spots bottleneck on a few nodes while others idle. The goal of a good scheme is even distribution across partitions."
+    },
+    {
+      "q": "What is the key tradeoff of partitioning by key range (keys kept sorted within each partition)?",
+      "options": [
+        "It distributes load perfectly evenly but makes point lookups slow",
+        "It loses the ability to do point lookups entirely",
+        "It requires rehashing all data whenever a node is added",
+        "It enables efficient range scans, but certain access patterns (e.g., a timestamp key) can create hot spots"
+      ],
+      "answer": 3,
+      "explain": "Sorted key ranges support range queries, but a key like a timestamp funnels all recent writes into one partition, creating a hot spot. Even distribution is the strength of hash partitioning, not key-range."
+    },
+    {
+      "q": "What does partitioning by hash of the key gain and lose compared to key-range partitioning?",
+      "options": [
+        "Gains efficient range queries, loses even distribution",
+        "Gains even load distribution, loses efficient range queries (adjacent keys scatter across partitions)",
+        "Gains both range queries and even distribution with no downside",
+        "Gains stronger consistency, loses availability"
+      ],
+      "answer": 1,
+      "explain": "Hashing spreads keys uniformly (good for load) but destroys key adjacency, so a range scan must query every partition. Key-range partitioning is the opposite tradeoff."
+    },
+    {
+      "q": "How does Cassandra's compound primary key compromise between hash and range partitioning?",
+      "options": [
+        "It hashes every column of the key together into one partition ID",
+        "It stores each column in a separate partition",
+        "It hashes the first part of the key to choose a partition, then keeps rows sorted by the remaining columns within that partition",
+        "It uses consistent hashing across all key columns"
+      ],
+      "answer": 2,
+      "explain": "The first column of a Cassandra compound key is hashed to pick the partition (even spread), while the remaining columns sort rows inside the partition (efficient range scans within one partition key). This gives one-partition range queries without global hot spots."
+    },
+    {
+      "q": "Why does hash partitioning fail to solve the problem of a single hot key (e.g., a celebrity's user ID getting huge traffic)?",
+      "options": [
+        "All requests for one key still hash to the same single partition, so hashing can't split load for an individual key",
+        "Hashing makes the hot key even hotter by duplicating it",
+        "Hashing only distributes writes, not reads",
+        "Hash functions are too slow to keep up with a hot key"
+      ],
+      "answer": 0,
+      "explain": "A hash spreads different keys evenly, but every request for the same key lands on one partition — a single hot key stays on one node. The book's mitigation is application-level: e.g., append a random number to the key to split it across N partitions, at the cost of more complex reads."
+    },
+    {
+      "q": "How does a document-partitioned (local) secondary index behave on reads?",
+      "options": [
+        "A single partition holds the whole index, so reads hit exactly one partition",
+        "Reads never use the index; they scan primary keys",
+        "The index is stored on the client, so no partition is queried",
+        "Each partition indexes only its own documents, so a query on the secondary index must scatter to all partitions and gather results"
+      ],
+      "answer": 3,
+      "explain": "A local (document-partitioned) index keeps each partition's index alongside its own data, so a secondary-index query fans out to every partition (scatter/gather). Writes stay local — the opposite tradeoff from a global/term-partitioned index."
+    },
+    {
+      "q": "What is the tradeoff of a term-partitioned (global) secondary index versus a local one?",
+      "options": [
+        "Reads must query all partitions, but writes touch only one",
+        "Reads hit a single partition (fast), but a write may need to update index entries on several partitions",
+        "Both reads and writes always touch exactly one partition",
+        "It eliminates the need to store a primary index"
+      ],
+      "answer": 1,
+      "explain": "A global index is partitioned by the indexed term, so a read on that term hits one partition — but a single document write can affect several terms living on different partitions, making writes fan out (and often asynchronous). This is the mirror image of the local-index tradeoff."
+    },
+    {
+      "q": "Why should rebalancing NOT be done with 'hash mod N' (where N is the number of nodes)?",
+      "options": [
+        "Modulo is too computationally expensive at scale",
+        "Modulo produces collisions that corrupt keys",
+        "Changing N reassigns most keys to different nodes, forcing an enormous, disruptive data movement",
+        "It only works when N is a power of two"
+      ],
+      "answer": 2,
+      "explain": "With `hash mod N`, adding or removing a node changes N and remaps almost every key, so nearly all data must move. Rebalancing strategies aim to move as little data as possible."
+    },
+    {
+      "q": "How does the 'fixed number of partitions' rebalancing strategy work?",
+      "options": [
+        "It creates many more partitions than nodes up front and, when nodes are added, moves whole partitions between nodes without changing how keys map to partitions",
+        "It picks the partition count equal to the current node count and re-splits on every change",
+        "It splits a partition in two whenever it exceeds a size threshold",
+        "It uses hash mod N but caches the result"
+      ],
+      "answer": 0,
+      "explain": "You over-provision partitions (e.g., 1000 for 10 nodes) so rebalancing just reassigns entire partitions to new nodes; the key→partition mapping never changes. Splitting on a size threshold is the separate 'dynamic partitioning' strategy (HBase/B-trees)."
+    },
+    {
+      "q": "What characterizes 'dynamic partitioning' as used by HBase and range-partitioned stores?",
+      "options": [
+        "The number of partitions is fixed forever at cluster creation",
+        "Partitions are reassigned every time a client connects",
+        "Each node always holds exactly one partition",
+        "Partitions are split when they grow too large and merged when they shrink, so partition count adapts to the data volume — analogous to a B-tree"
+      ],
+      "answer": 3,
+      "explain": "Dynamic partitioning splits an overgrown partition and merges under-filled ones, letting the number of partitions track the dataset size (like B-tree node splits/merges). Fixed-count is the alternative where partition count never changes."
+    },
+    {
+      "q": "Which three approaches to request routing does DDIA describe?",
+      "options": [
+        "Only client-side routing is possible in distributed databases",
+        "A node receives the request and forwards it; a routing tier decides and forwards; or a partition-aware client connects directly to the right node",
+        "DNS round-robin, load balancer, and reverse proxy",
+        "Leader forwarding, follower forwarding, and quorum voting"
+      ],
+      "answer": 1,
+      "explain": "The three models are: any node forwards to the owner, a dedicated routing tier acts as a partition-aware load balancer, or the client itself knows the partition assignment. All three need current knowledge of which partition lives on which node."
+    },
+    {
+      "q": "What role does ZooKeeper commonly play in a partitioned system's request routing?",
+      "options": [
+        "It stores the actual partitioned data as a backup",
+        "It hashes keys to partitions on behalf of clients",
+        "It maintains authoritative metadata about partition-to-node assignments, and routing components subscribe to it for changes",
+        "It executes the parallel query plan across partitions"
+      ],
+      "answer": 2,
+      "explain": "ZooKeeper acts as the coordination service holding the authoritative mapping of partitions to nodes; routing tiers/clients watch it so they learn about rebalancing. A gossip protocol among the nodes is the decentralized alternative that avoids a separate coordinator."
+    },
+    {
+      "q": "What is massively parallel processing (MPP) in the context of partitioning?",
+      "options": [
+        "Running the same query on every replica and voting on the result",
+        "A routing scheme that picks the least-loaded node",
+        "A replication topology for multi-datacenter writes",
+        "Breaking a complex analytic query into stages that execute in parallel across many partitions/nodes to speed up throughput-heavy workloads"
+      ],
+      "answer": 3,
+      "explain": "MPP query engines parallelize a single analytic query across the partitions/nodes holding the data, which suits scan-heavy analytics rather than the point queries typical of OLTP. It is about query execution, not replication or routing."
+    }
+  ]
+}

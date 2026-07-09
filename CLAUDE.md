@@ -118,6 +118,9 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `tools/cdp/appsplit-smoke.js` | Browser smoke test: app boots, all slices load, no exceptions/404s. |
 | `SELF-IMPROVE-LEDGER.md` | Append-only history sidecar (Mode ledger + Last-touched index) extracted from `SELF-IMPROVE.md` to keep the active directive small. |
 | `diagnostic.html` | 43-question self-diagnostic (standalone page) |
+| `system-design.html` | Standalone **System Design** memorization drill (MC-only, no code execution). First topic: **DDIA** (Designing Data-Intensive Applications), 12 chapters. Reuses `tokens.css` + `js/storage.js`; own SR-lite progress under `jsdrill.systemdesign.v1`. Linked from the main app topbar. Content in `data/system-design/<topic>/`. |
+| `data/system-design/ddia/` | DDIA MC content — `manifest.json` (chapter + Part index) + `chNN.json` (per-chapter questions). `AUTHORING-BRIEF.md` documents the schema/quality bar for adding chapters/topics. Gated by `tools/validate-ddia.js`. |
+| `tools/validate-ddia.js` | Structural validator for the System Design → DDIA MC set (manifest↔disk parity, exactly-4 unique options, in-range answers, non-empty explains, answer-index variety). |
 | `data/paths.json` | Study-path registry. `kind:'lessons'` (Starter Path) drives the curated Today's Plan; `kind:'cram'` (e.g. 4-Day Interview Cram) carries `days[].blocks[].tasks[]` and `startIso` so Today's Plan renders a day-by-day acquisition view in the main app. |
 | `tokens.css` | **Single source of truth** for design tokens across the user-facing pages (colors, radii, type). See `.claude/skills/ui-consistency/`. |
 | `js/storage.js` | **Single source of truth** for localStorage I/O across pages. Exposes `window.DrillStorage`. See `.claude/skills/ui-consistency/`. |

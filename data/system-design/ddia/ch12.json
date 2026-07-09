@@ -1,0 +1,160 @@
+{
+  "id": "ch12",
+  "chapter": 12,
+  "part": "Part III: Derived Data",
+  "title": "The Future of Data Systems",
+  "summary": "Kleppmann's synthesis: no single tool fits all needs, so applications should be built by composing specialized systems around dataflows — funneling writes through ordered logs to keep derived data consistent — while aiming for end-to-end correctness, auditing rather than blind trust, and ethical responsibility for the data we collect.",
+  "keyTakeaways": [
+    "No one system does everything, so real applications integrate multiple tools; distinguishing the system of record (source of truth) from derived data is the key to reasoning about it.",
+    "Funneling all writes through a single ordered log gives derived systems a deterministic order to follow, keeping search indexes, caches, and warehouses consistent.",
+    "The lambda architecture (batch + speed/stream + serving layers) is criticized for duplicated logic; the trend is to unify by reprocessing streams (Kafka + reprocessing).",
+    "Unbundling the database means treating indexes and materialized views as stream-maintained components — the 'database inside-out' — and designing applications around dataflow and subscribing to changes.",
+    "Correctness needs the end-to-end argument: exactly-once/dedup ultimately requires end-to-end identifiers (e.g. request IDs); TCP or a DB transaction alone is not enough.",
+    "Integrity (no corruption or contradiction) usually matters more than timeliness (recency); trust but verify with auditing, and take ethical responsibility for bias, privacy, consent, and surveillance."
+  ],
+  "questions": [
+    {
+      "q": "What is DDIA's central argument about data integration in this chapter?",
+      "options": [
+        "Because no single tool satisfies all requirements, applications must combine several specialized systems, and the key discipline is distinguishing the system of record from derived data",
+        "One database technology can and should handle every access pattern in an application",
+        "Derived data should always be treated as authoritative alongside the source of truth",
+        "You should avoid derived data entirely and read everything from one store"
+      ],
+      "answer": 0,
+      "explain": "Kleppmann argues real systems compose multiple tools, and clarity comes from knowing which store is the source of truth (system of record) versus which are derived (reconstructable) from it. Derived data is not authoritative — it can always be rebuilt from the system of record."
+    },
+    {
+      "q": "Why does funneling all writes through a single totally-ordered log help keep multiple derived systems consistent?",
+      "options": [
+        "It makes writes faster by skipping durability",
+        "It gives every derived consumer the same deterministic order of events to apply, so search indexes, caches, and warehouses converge to the same state instead of diverging from concurrent dual writes",
+        "It encrypts the writes end to end",
+        "It removes the need for any derived systems at all"
+      ],
+      "answer": 1,
+      "explain": "A single ordered log means all derived systems process the same events in the same order, so they stay mutually consistent — the fix for the dual-write divergence problem. The benefit is deterministic ordering, not speed or encryption."
+    },
+    {
+      "q": "What is the lambda architecture, and what is DDIA's main criticism of it?",
+      "options": [
+        "A single stream layer only; criticized for losing historical data",
+        "A purely batch design; criticized for being too slow to ever use",
+        "A batch layer plus a fast stream (speed) layer feeding a serving layer; criticized because you must implement and maintain the same logic twice in two different frameworks",
+        "A leaderless replication scheme; criticized for weak consistency"
+      ],
+      "answer": 2,
+      "explain": "Lambda runs a batch layer (accurate, high-latency) alongside a stream/speed layer (fast, approximate) and merges them in a serving layer, but this forces maintaining duplicate logic in two systems. The trend Kleppmann favors is unifying them — reprocessing the same event log via a stream processor to get both speed and correctness."
+    },
+    {
+      "q": "What does 'unbundling the database' (the 'database inside-out') mean?",
+      "options": [
+        "Splitting one database into many shards of the same engine",
+        "Removing all indexes to speed up writes",
+        "Storing the database schema outside the database",
+        "Viewing the whole data system as a set of indexes and materialized views maintained by streams — composing separate specialized tools to do what one monolithic database's internals do, coordinated via logs"
+      ],
+      "answer": 3,
+      "explain": "Unbundling treats a database's internal pieces — the log, indexes, materialized views — as separately composable systems kept in sync by event streams, so you assemble the equivalent of a database from best-of-breed tools. This 'inside-out' view is about synchronizing derived state via logs, not about sharding one engine."
+    },
+    {
+      "q": "How does DDIA contrast federation with unbundling as approaches to combining data systems?",
+      "options": [
+        "Federation provides a unified read interface over disparate stores (a federated query), while unbundling focuses on a unified write path that keeps the separate systems in sync via logs",
+        "Federation unifies writes; unbundling unifies reads",
+        "They are two names for the same technique",
+        "Federation is only for batch and unbundling only for streams"
+      ],
+      "answer": 0,
+      "explain": "Federation (unified query) presents one read interface over heterogeneous underlying stores; unbundling instead concentrates on the write path, using logs to keep independently-specialized systems consistent. The chapter emphasizes the unbundled write-synchronization model as the harder, more valuable problem."
+    },
+    {
+      "q": "What does it mean to 'design applications around dataflow,' per DDIA's spreadsheet analogy?",
+      "options": [
+        "Store all application data in a spreadsheet file",
+        "Treat derived state as automatically maintained from its inputs — when a value changes, dependent views (all the way to the UI) recompute and update, like cells recalculating in a spreadsheet",
+        "Require users to manually refresh every screen",
+        "Compute all state on the server and never cache anything"
+      ],
+      "answer": 1,
+      "explain": "Like a spreadsheet where changing one cell cascades updates to dependent cells, dataflow design has derived state (including the UI) subscribe to changes in its inputs and update automatically. This extends the write path end-to-end so clients observe fresh derived data reactively."
+    },
+    {
+      "q": "According to the end-to-end argument, why is a database transaction or TCP alone insufficient to guarantee exactly-once processing?",
+      "options": [
+        "Because transactions are too slow to be practical",
+        "Because TCP already guarantees exactly-once at the application level",
+        "Because deduplication must happen at each individual layer with its own retry semantics, and only an end-to-end identifier (such as a client-generated request ID carried through the whole path) can suppress duplicates caused by retries above those layers",
+        "Because databases cannot detect duplicate rows at all"
+      ],
+      "answer": 2,
+      "explain": "A retry at a higher layer (e.g. a user resubmitting, or an app retrying after a timeout) produces a duplicate that TCP's or a single transaction's local guarantees can't catch. Only an end-to-end unique identifier threaded through the whole request path lets the system recognize and suppress that duplicate."
+    },
+    {
+      "q": "How does DDIA suggest enforcing a uniqueness constraint (e.g. a unique username) in a log-based / partitioned system?",
+      "options": [
+        "By locking the entire database on every write",
+        "By relying on eventually-consistent replicas to converge",
+        "By using last-write-wins to pick a winner",
+        "By routing all requests for the constrained value through a single partition of a totally-ordered log (partitioned by that value), so a deterministic consumer can accept the first claim and reject conflicts"
+      ],
+      "answer": 3,
+      "explain": "Partitioning the log by the value that must be unique funnels all competing claims into one ordered stream, where a deterministic processor grants the first and rejects the rest. Eventual convergence or LWW would silently allow or drop conflicting claims rather than enforce uniqueness."
+    },
+    {
+      "q": "How does DDIA distinguish 'timeliness' from 'integrity,' and which does it argue usually matters more?",
+      "options": [
+        "Timeliness means users see up-to-date (recent, consistent) data; integrity means the data has no corruption, loss, or contradiction — and integrity usually matters more because many apps tolerate temporary staleness but not permanent data loss",
+        "Timeliness (recency of data) matters more, since users never tolerate any staleness",
+        "They are the same property under different names",
+        "Integrity means low latency and timeliness means durability"
+      ],
+      "answer": 0,
+      "explain": "Timeliness is about recency/consistency (seeing current data), while integrity is about the absence of corruption or contradiction; a brief violation of timeliness is usually recoverable, but an integrity violation (lost or corrupted data) may be permanent. ACID conflates the two, but they are separable and integrity generally deserves higher priority."
+    },
+    {
+      "q": "What is the 'trust, but verify' stance DDIA advocates for data systems?",
+      "options": [
+        "Assume hardware and software are fault-free because modern systems are reliable",
+        "Don't blindly assume the layers beneath you are correct; build auditing and self-validating checks (like end-to-end integrity checks / checksums at the application level) to detect corruption rather than silently trusting it",
+        "Encrypt all data so it never needs checking",
+        "Trust only the database and never the application code"
+      ],
+      "answer": 1,
+      "explain": "Because bugs, hardware faults, and misconfiguration do corrupt data in practice, Kleppmann urges building systems that continuously audit and verify their own integrity end-to-end rather than assuming the lower layers are perfect. This mirrors HDFS block checksums, but applied at the application data level."
+    },
+    {
+      "q": "Why does immutability of the event log make auditing easier?",
+      "options": [
+        "It compresses the audit trail automatically",
+        "Because immutable logs cannot be read by unauthorized users",
+        "Because the append-only log preserves the full history of what happened, you can reconstruct and independently re-derive any state to check whether the current derived data is correct",
+        "Because it removes the need to store derived data"
+      ],
+      "answer": 2,
+      "explain": "An immutable, append-only event log retains the complete sequence of facts, so an auditor can replay it to verify that derived state was computed correctly and detect discrepancies. Mutable state that overwrites history would erase the very evidence auditing depends on."
+    },
+    {
+      "q": "In the chapter's ethics discussion, what is a 'feedback loop' risk in predictive analytics?",
+      "options": [
+        "The model runs too slowly and falls behind real time",
+        "The database replicates predictions to too many followers",
+        "Users can see the model's internal weights",
+        "A biased model's decisions shape future data (e.g. denying opportunities to a group), which then reinforces and amplifies the original bias in later model training — a self-perpetuating cycle of discrimination"
+      ],
+      "answer": 3,
+      "explain": "When algorithmic decisions influence the world (who gets a loan, a job, policing attention), the resulting data feeds back into training and entrenches the initial bias, creating a discriminatory feedback loop. Kleppmann highlights this as an ethical failure mode, not merely a performance issue."
+    },
+    {
+      "q": "What broad ethical framing about personal data does DDIA emphasize?",
+      "options": [
+        "Amassed personal data is not only an asset but also a liability and a form of surveillance — raising duties around consent, privacy, and legislation like GDPR — so collection should be weighed against its harms",
+        "Data is purely an asset with no downside, so collect as much as possible",
+        "Ethics is outside the scope of engineering and should be ignored",
+        "Only governments, not companies, bear responsibility for collected data"
+      ],
+      "answer": 0,
+      "explain": "Kleppmann reframes hoarded personal data as a liability and a surveillance apparatus, not just a competitive asset, and stresses engineers' responsibility around consent, privacy, bias, and regulation such as GDPR. The point is that data collection carries real ethical and legal costs that must be weighed, not ignored."
+    }
+  ]
+}

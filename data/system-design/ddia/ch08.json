@@ -1,0 +1,172 @@
+{
+  "id": "ch08",
+  "chapter": 8,
+  "part": "Part II: Distributed Data",
+  "title": "The Trouble with Distributed Systems",
+  "summary": "A tour of everything that can go wrong once data spans multiple machines connected by an unreliable network: dropped and delayed messages, untrustworthy clocks, arbitrary process pauses, and nodes that cannot even trust their own judgment. The chapter builds toward the system models and safety/liveness vocabulary used to reason about these faults.",
+  "keyTakeaways": [
+    "In distributed systems faults are partial and nondeterministic: some parts work while others fail in confusing ways, unlike a single computer that tends to fail totally and deterministically.",
+    "The network is asynchronous and unreliable; a timeout cannot distinguish a lost request, a crashed node, or a slow-but-alive node.",
+    "There is no correct timeout value: too long delays failover, too short declares live nodes dead and triggers duplicate actions and cascading failures.",
+    "Time-of-day clocks can jump (NTP, leap seconds) and must not be trusted for ordering events; use monotonic clocks for durations, and prefer logical clocks for ordering.",
+    "A process can pause arbitrarily long (GC, VM migration, paging), so a leader holding a lease may keep acting after the lease expired.",
+    "Truth is defined by the quorum/majority, not by any single node; fencing tokens stop a paused or deposed leader from corrupting shared state.",
+    "System models are defined by timing assumptions (synchronous / partially synchronous / asynchronous) and failure assumptions (crash-stop / crash-recovery / Byzantine), and correctness is stated as safety and liveness properties."
+  ],
+  "questions": [
+    {
+      "q": "How does DDIA characterize faults in a distributed system compared with faults on a single computer?",
+      "options": [
+        "Distributed faults are total and deterministic, so they are easier to reproduce than single-machine faults",
+        "Distributed faults are partial and nondeterministic: some components fail unpredictably while others keep working",
+        "Distributed systems have no more failure modes than a single machine; they just occur more often",
+        "A single computer fails partially, whereas a distributed system always fails completely"
+      ],
+      "answer": 1,
+      "explain": "A single computer usually fails cleanly and deterministically (it either works or crashes entirely), which is a deliberate design choice. Distributed systems instead suffer partial failures that are nondeterministic — one node or link misbehaves while the rest run — which is what makes them hard to reason about."
+    },
+    {
+      "q": "When a node sends a request over an asynchronous network and gets no reply, what can it actually conclude?",
+      "options": [
+        "That the remote node has definitely crashed",
+        "That the request was definitely lost in transit",
+        "Nothing definite; it cannot distinguish a lost request, a dead node, or a slow/queued response — only that no reply arrived yet",
+        "That the network has partitioned and will stay partitioned"
+      ],
+      "answer": 2,
+      "explain": "On an asynchronous packet network the sender cannot tell whether the request was lost, the node died, the response was lost, or everything is merely slow. The only signal available is the absence of a reply within some timeout, which is inherently ambiguous."
+    },
+    {
+      "q": "Why does DDIA say there is no universally correct timeout for detecting a failed node?",
+      "options": [
+        "Because timeouts should always be set to twice the average round-trip time",
+        "Because TCP already guarantees delivery, so timeouts are only needed for UDP",
+        "Because clocks are unsynchronized, so any timeout measured in wall-clock time is meaningless",
+        "Because a long timeout means slow detection/failover while a short timeout risks declaring a live node dead, causing duplicate actions and cascading load"
+      ],
+      "answer": 3,
+      "explain": "A long timeout makes users wait a long time before failover; a short timeout prematurely declares a healthy-but-slow node dead, which can hand its work to another node (risking double execution) and pile extra load onto an already struggling system, causing cascading failures. Network delay has no upper bound, so no single value is correct."
+    },
+    {
+      "q": "What is the key difference between a traditional synchronous (circuit-switched) telephone network and a packet-switched data network?",
+      "options": [
+        "A circuit reserves a fixed amount of bandwidth end-to-end giving bounded latency, whereas packet switching dynamically shares links and gives variable, unbounded delay",
+        "Packet-switched networks reserve bandwidth per call, so they have lower latency",
+        "Circuit-switched networks use queueing, which is the main cause of bufferbloat",
+        "Packet-switched networks guarantee delivery order, whereas circuits do not"
+      ],
+      "answer": 0,
+      "explain": "A telephone circuit reserves a fixed slice of bandwidth for the whole call, giving bounded latency with no queueing. Packet-switched networks are optimized for bursty traffic by sharing links dynamically, so packets queue in buffers (bufferbloat) and delay is variable with no guaranteed upper bound — the tradeoff is efficiency for predictability."
+    },
+    {
+      "q": "In DDIA's terms, what is a time-of-day clock (wall-clock) and why is it dangerous for ordering events?",
+      "options": [
+        "A clock returning the current calendar time that is synchronized via NTP and can jump forwards or backwards, so timestamps can order events incorrectly",
+        "A clock that only moves forward and is ideal for ordering events across machines",
+        "A hardware counter measuring elapsed durations that never goes backward",
+        "A logical counter incremented on every message, immune to clock drift"
+      ],
+      "answer": 0,
+      "explain": "A time-of-day clock reports calendar time and is kept in sync by NTP, so it can jump backward (or forward) when corrected, and different nodes disagree by their sync error. Using such timestamps to order events across machines can silently misorder them; that is why last-write-wins based on wall clocks can drop writes."
+    },
+    {
+      "q": "What is a monotonic clock best used for, and what does it guarantee?",
+      "options": [
+        "For reading calendar time; it guarantees agreement with other machines' wall clocks",
+        "For ordering events globally; it guarantees a total order consistent with causality",
+        "For timestamping database writes; it guarantees NTP-corrected accuracy",
+        "For measuring elapsed time/durations; it only ever moves forward and never jumps backward, but its absolute value is meaningless across machines"
+      ],
+      "answer": 3,
+      "explain": "A monotonic clock is a counter guaranteed never to go backward, so it is the right tool for measuring a duration (e.g. a timeout or request latency) on one machine. Its absolute value has no meaning and comparing monotonic readings across nodes is nonsensical — it says nothing about calendar time or cross-machine ordering."
+    },
+    {
+      "q": "How does last-write-wins (LWW) conflict resolution based on wall-clock timestamps fail?",
+      "options": [
+        "It always deadlocks when two writes have the same timestamp",
+        "It requires a global lock, which does not scale",
+        "Because clocks are not perfectly synchronized, a write with an earlier real time but a later timestamp can silently overwrite (drop) a newer write",
+        "It corrupts data whenever a leap second is inserted"
+      ],
+      "answer": 2,
+      "explain": "LWW keeps the write with the highest timestamp, but clock skew means the highest timestamp does not reliably correspond to the write that actually happened last. A node whose clock is ahead can make its stale write win, so a genuinely newer write is silently discarded — data loss with no error."
+    },
+    {
+      "q": "What problem does Google Spanner's TrueTime address, and how?",
+      "options": [
+        "It eliminates clock drift entirely by using a single global master clock",
+        "It replaces physical clocks with Lamport timestamps to get a total order for free",
+        "It uses GPS to make every server's clock read exactly the same value",
+        "It returns time as a confidence interval [earliest, latest] and waits out the uncertainty so it can safely order transactions despite clock error"
+      ],
+      "answer": 3,
+      "explain": "TrueTime acknowledges clocks are uncertain by exposing time as an interval bounding the true time, using GPS and atomic clocks to keep that interval narrow. Spanner deliberately waits for the interval's uncertainty to pass (commit-wait) before releasing a transaction, guaranteeing non-overlapping intervals reflect real ordering."
+    },
+    {
+      "q": "Why is a process pause (e.g. a stop-the-world garbage collection) dangerous for a node that holds a lease as leader?",
+      "options": [
+        "The pause corrupts the node's memory, forcing a restart",
+        "The node may be paused past the lease's expiry, so another node becomes leader while the paused node, on resuming, still believes it is leader",
+        "GC pauses reset the monotonic clock, breaking duration measurements",
+        "Leases are unaffected by pauses because they are enforced in hardware"
+      ],
+      "answer": 1,
+      "explain": "A node can be paused for an arbitrarily long time (GC, VM live migration, paging, suspended laptop) with no awareness that time passed. If the pause outlasts the lease, the cluster elects a new leader; when the old node wakes it acts as leader without knowing it was superseded, risking split-brain corruption."
+    },
+    {
+      "q": "How do fencing tokens prevent a paused or deposed leader from corrupting shared storage?",
+      "options": [
+        "Each write is stamped with a monotonically increasing token, and the storage rejects any write bearing a token lower than one it has already seen",
+        "The old leader is guaranteed to be killed before a new one starts, so no conflicting write is possible",
+        "Every request must include a wall-clock timestamp, and the newest timestamp wins",
+        "Clients hold a mutex that the storage releases only after a heartbeat"
+      ],
+      "answer": 0,
+      "explain": "The lock service hands out a monotonically increasing fencing token with each grant; clients attach it to their writes, and the resource refuses any write carrying a token older than the highest already accepted. So a woken-up former leader, holding a now-stale token, is fenced out even though it still thinks it holds the lock."
+    },
+    {
+      "q": "In DDIA's discussion of 'knowledge, truth, and lies', how is the truth about the cluster's state defined?",
+      "options": [
+        "By whichever node has the most up-to-date wall clock",
+        "By the current leader, whose word is authoritative",
+        "By the majority/quorum of nodes, because no single node's perception can be trusted",
+        "By the node with the lowest ID, chosen deterministically"
+      ],
+      "answer": 2,
+      "explain": "A single node cannot trust its own view — it may be paused, partitioned, or have a dead network card even though it feels fine. DDIA's principle is that decisions require agreement among a quorum (majority) of nodes, so the majority defines truth and a node declared dead by the quorum must comply even if it disagrees."
+    },
+    {
+      "q": "What is a Byzantine fault, and what assumption do most datacenter systems make about it?",
+      "options": [
+        "A node that sends arbitrary, possibly malicious or contradictory information ('lies'); most datacenter systems assume nodes are non-Byzantine (trusted)",
+        "A node that crashes and never recovers; most systems assume this cannot happen",
+        "A network partition that splits the cluster in two; most systems tolerate it automatically",
+        "A clock that drifts beyond NTP correction; most systems handle it with fencing tokens"
+      ],
+      "answer": 0,
+      "explain": "A Byzantine fault is when a node behaves arbitrarily — it may lie, send conflicting messages to different peers, or be actively malicious. Byzantine fault-tolerant algorithms exist (and matter in aerospace or blockchains) but are costly, so most systems inside a single trusted datacenter assume non-Byzantine behavior."
+    },
+    {
+      "q": "In DDIA's system-model taxonomy, what distinguishes the three timing models — synchronous, partially synchronous, and asynchronous?",
+      "options": [
+        "They describe whether nodes crash-stop, crash-recover, or act Byzantine",
+        "They describe whether the algorithm uses locks, leases, or fencing tokens",
+        "They describe assumptions about bounds on network delay and clock drift: bounded always, bounded most of the time, or no timing guarantees at all",
+        "They describe whether messages are delivered in FIFO, causal, or total order"
+      ],
+      "answer": 2,
+      "explain": "The timing models concern assumptions about delays: a synchronous model assumes bounded network delay and clock skew, an asynchronous model assumes no timing guarantees at all (and cannot use timeouts), and the partially synchronous model — the most realistic — assumes the system behaves synchronously most of the time but occasionally exceeds any bound. Crash-stop vs Byzantine is the separate node-failure axis."
+    },
+    {
+      "q": "What is the difference between a safety property and a liveness property?",
+      "options": [
+        "Safety means the system stays available under partitions; liveness means it stays consistent",
+        "Safety applies to synchronous models and liveness to asynchronous ones",
+        "Safety concerns data durability; liveness concerns network throughput",
+        "A safety property says 'nothing bad ever happens' (a violation is irreversible), while a liveness property says 'something good eventually happens'"
+      ],
+      "answer": 3,
+      "explain": "A safety property requires that nothing bad ever happens — once violated the damage is done and cannot be undone (e.g. two leaders elected). A liveness property requires that something good eventually happens (e.g. a request eventually gets a response); it can be pending for a while without being violated. DDIA usually insists safety always holds while allowing liveness to depend on timing assumptions."
+    }
+  ]
+}

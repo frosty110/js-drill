@@ -1,0 +1,171 @@
+{
+  "id": "ch05",
+  "chapter": 5,
+  "part": "Part II: Distributed Data",
+  "title": "Replication",
+  "summary": "How to keep copies of the same data on multiple machines connected by a network — for lower latency, higher availability, and read scalability — and the consistency problems that arise when those copies diverge.",
+  "keyTakeaways": [
+    "Replication buys lower latency (data close to users), fault-tolerant availability, and read-throughput scale-out; the hard part is handling changes.",
+    "Single-leader replication routes all writes through one leader that streams a replication log to followers; reads can hit any replica.",
+    "Synchronous replication guarantees an up-to-date follower but can block on a slow node; async is fast but can lose writes if the leader fails.",
+    "Replication lag breaks read-after-write, monotonic reads, and consistent prefix reads — each has a specific technique to restore its guarantee.",
+    "Multi-leader and leaderless replication accept concurrent writes, so they must detect and resolve conflicts (LWW, version vectors, CRDTs).",
+    "Leaderless (Dynamo-style) systems use quorums w + r > n plus read repair and anti-entropy, but quorums still permit stale reads in edge cases."
+  ],
+  "questions": [
+    {
+      "q": "In DDIA's terms, what is the defining characteristic of single-leader (master–slave) replication?",
+      "options": [
+        "All writes go to one designated leader, which propagates a change log to followers; reads can be served by any replica",
+        "Every replica accepts writes and they are merged asynchronously in the background",
+        "A quorum of replicas must acknowledge each write before it is considered committed",
+        "Writes are partitioned across leaders by key range so each key has its own leader"
+      ],
+      "answer": 0,
+      "explain": "Single-leader means exactly one node accepts writes and ships a replication log to read-only followers. Accepting writes on every replica is multi-leader/leaderless; quorum acknowledgement describes leaderless replication."
+    },
+    {
+      "q": "What is the primary risk of fully asynchronous replication in a single-leader system?",
+      "options": [
+        "Followers can never catch up to the leader once they fall behind",
+        "Reads always return stale data because followers are never updated",
+        "The leader cannot process writes until every follower has acknowledged",
+        "If the leader fails before its writes reach any follower, those recently confirmed writes are lost"
+      ],
+      "answer": 3,
+      "explain": "Async replication confirms a write to the client before followers have it, so a leader crash can durably lose those writes. Blocking on follower acknowledgement is the synchronous case, which async specifically avoids."
+    },
+    {
+      "q": "When setting up a brand-new follower without downtime, what is the standard procedure?",
+      "options": [
+        "Lock the leader for writes, copy its files, then unlock — accepting the write outage",
+        "Take a consistent snapshot of the leader, copy it to the follower, then have the follower request all changes since the snapshot's log position",
+        "Replay the entire write-ahead log from the beginning of time onto the new follower",
+        "Have the new follower serve reads immediately and lazily fetch missing rows on cache miss"
+      ],
+      "answer": 1,
+      "explain": "You snapshot the leader (ideally without a full lock), load it, then the follower connects and catches up from the snapshot's exact log position. Locking the leader for writes defeats the point of zero-downtime setup."
+    },
+    {
+      "q": "Which of these is a genuine danger during automatic leader failover?",
+      "options": [
+        "The new leader immediately reformats all follower disks",
+        "Followers permanently stop accepting reads until the old leader returns",
+        "Split brain, where two nodes both believe they are leader and accept conflicting writes",
+        "The replication log is rewritten in reverse chronological order"
+      ],
+      "answer": 2,
+      "explain": "Failover can produce split brain (two leaders) plus lost async writes and mis-tuned timeouts that trigger unnecessary failovers. The other options are not real failover failure modes DDIA describes."
+    },
+    {
+      "q": "Why is statement-based replication (shipping each SQL statement) problematic?",
+      "options": [
+        "Nondeterministic constructs like `NOW()`, `RAND()`, or triggers can execute differently on each replica, causing divergence",
+        "It produces logs far larger than the actual data changes",
+        "It cannot replicate DELETE statements, only INSERTs and UPDATEs",
+        "It requires all replicas to run identical storage-engine versions"
+      ],
+      "answer": 0,
+      "explain": "Replaying a statement like `NOW()` or `RAND()` yields different results per replica, and side-effecting triggers/stored procs compound this. Storage-engine version coupling is a downside of WAL shipping, not statement-based replication."
+    },
+    {
+      "q": "What is the main drawback of write-ahead-log (WAL) shipping as the replication method?",
+      "options": [
+        "It cannot capture updates, only inserts",
+        "It is nondeterministic and diverges across replicas",
+        "It only works for in-memory databases",
+        "The log is tied to the storage engine's low-level format, so leader and followers usually can't run different database versions — preventing zero-downtime upgrades"
+      ],
+      "answer": 3,
+      "explain": "WAL describes changes at the byte/disk-page level, coupling replicas to the exact storage format and blocking mixed-version rolling upgrades. Nondeterminism is the statement-based problem; logical (row-based) logs decouple from the storage engine to solve this."
+    },
+    {
+      "q": "A user posts a comment, reloads the page, and doesn't see their own comment because the read hit a lagging follower. Which guarantee restores correct behavior?",
+      "options": [
+        "Monotonic reads",
+        "Read-your-writes (read-after-write) consistency",
+        "Consistent prefix reads",
+        "Linearizability across all replicas"
+      ],
+      "answer": 1,
+      "explain": "Read-your-writes ensures a user always sees data they themselves submitted — e.g., by reading their own recently-modified data from the leader. Monotonic reads prevents going backward in time across reads; consistent prefix concerns causal ordering of different users' writes."
+    },
+    {
+      "q": "What anomaly does the 'monotonic reads' guarantee prevent?",
+      "options": [
+        "Two users writing conflicting values to the same key",
+        "A read that observes an effect before its cause",
+        "Seeing data move backward in time — a later read returning older data than an earlier read did",
+        "Not seeing your own writes after submitting them"
+      ],
+      "answer": 2,
+      "explain": "Monotonic reads means once you've seen a value, subsequent reads never return an older state — typically achieved by routing a user's reads to the same replica. Cause-before-effect ordering is consistent prefix reads; the own-writes case is read-your-writes."
+    },
+    {
+      "q": "Consistent prefix reads is primarily concerned with which anomaly?",
+      "options": [
+        "A follower falling permanently behind the leader",
+        "A user failing to read data they just wrote",
+        "Two leaders accepting conflicting writes simultaneously",
+        "An observer seeing writes in an order that violates their causal (happens-before) sequence — e.g., an answer appearing before its question"
+      ],
+      "answer": 3,
+      "explain": "Consistent prefix reads guarantees that if a sequence of writes has a causal order, anyone reading them sees them in that order — preventing an answer showing up before its question (common when writes are spread across partitions). The own-writes case is read-your-writes."
+    },
+    {
+      "q": "Which is a canonical, appropriate use case for multi-leader replication?",
+      "options": [
+        "Maximizing read throughput within a single datacenter",
+        "A database spanning multiple datacenters (or offline-capable clients like a calendar app), where each location accepts writes locally",
+        "Guaranteeing linearizable single-object reads",
+        "Eliminating the need to ever resolve write conflicts"
+      ],
+      "answer": 1,
+      "explain": "Multi-leader shines across datacenters, offline clients, and collaborative editing — each replica takes local writes and syncs async. It does not eliminate conflicts; on the contrary, allowing concurrent writes is exactly what creates conflicts to resolve."
+    },
+    {
+      "q": "Why does 'last write wins' (LWW) conflict resolution risk data loss?",
+      "options": [
+        "It silently discards all but one of a set of concurrent writes based on a timestamp, dropping the others' data",
+        "It merges concurrent writes field by field, corrupting the record",
+        "It requires a synchronous quorum and blocks on slow nodes",
+        "It can only be used with single-leader replication"
+      ],
+      "answer": 0,
+      "explain": "LWW picks one concurrent write (by timestamp) and throws the rest away, so genuinely concurrent updates are lost. Version vectors and CRDTs instead preserve/merge concurrent writes; LWW's appeal is simplicity, not correctness."
+    },
+    {
+      "q": "In leaderless (Dynamo-style) replication with n replicas, what does the quorum condition w + r > n ensure?",
+      "options": [
+        "Every write is replicated to all n nodes before being acknowledged",
+        "Reads and writes never touch the same node, distributing load evenly",
+        "The set of nodes written to and the set read from overlap in at least one node, so a read is likely to see the latest write",
+        "The system behaves linearizably under all failure conditions"
+      ],
+      "answer": 2,
+      "explain": "Overlapping read and write quorums guarantee at least one node in a read set has the newest value. It does not require writing to all n, and quorums still permit stale reads in edge cases (sloppy quorums, concurrent writes, failed writes), so it is not true linearizability."
+    },
+    {
+      "q": "In leaderless replication, how do 'read repair' and 'anti-entropy' differ?",
+      "options": [
+        "Read repair runs in the background; anti-entropy runs only during client reads",
+        "Both run only during leader failover",
+        "Read repair resolves conflicts; anti-entropy prevents them from ever occurring",
+        "Read repair fixes stale replicas opportunistically when a client read detects a divergence; anti-entropy is a background process that continuously compares and syncs replicas"
+      ],
+      "answer": 3,
+      "explain": "Read repair piggybacks on client reads to write back the newest value to lagging replicas, while anti-entropy is a separate background sync that catches data no one reads. Without anti-entropy, rarely-read values could stay stale indefinitely."
+    },
+    {
+      "q": "What do 'sloppy quorums' with 'hinted handoff' provide in a leaderless system?",
+      "options": [
+        "Stronger consistency by requiring more than n acknowledgements",
+        "Higher write availability during network partitions by accepting writes on other reachable nodes, which later hand the data off to the intended 'home' nodes",
+        "A guarantee that reads always see the latest write",
+        "Automatic conflict resolution using version vectors"
+      ],
+      "answer": 1,
+      "explain": "A sloppy quorum lets writes land on any reachable nodes (not the designated home nodes) to stay available during partitions; hinted handoff later delivers them home. This boosts availability but weakens the read-your-write guarantee, since a later read of the home nodes may miss it."
+    }
+  ]
+}

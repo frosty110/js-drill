@@ -1,0 +1,131 @@
+{
+  "id": "p05",
+  "num": 5,
+  "part": "Feeds & Read-Heavy Systems",
+  "title": "Design a Web Crawler",
+  "summary": "A distributed crawler (Googlebot-style) that starts from seed URLs and traverses the web breadth-first to fetch pages for indexing. The signature challenges are a polite, prioritized URL frontier, deduplicating both URLs and page content, and staying robust against crawler traps and infinite spaces while re-crawling for freshness.",
+  "keyTakeaways": [
+    "The URL frontier is the heart: a BFS queue enforcing per-domain politeness (rate limits so one host isn't hammered) plus priority (importance/freshness).",
+    "Dedup twice: URL-seen (normalize + hash into a large set / Bloom filter) AND content-seen (fingerprint the page body to catch the same content at different URLs).",
+    "DNS resolution is a hidden bottleneck — cache aggressively; a naive design blocks workers on DNS.",
+    "Politeness is non-negotiable: obey robots.txt, add crawl delays, and partition the frontier by host so each domain is fetched by one worker at a controlled rate.",
+    "Crawler traps (infinite calendars, session-id URLs, deep dynamic paths) require depth limits, URL-pattern heuristics, and per-domain page caps.",
+    "Freshness is a re-crawl policy problem: recrawl frequency scales with a page's change rate and importance, not uniformly."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a web crawler. What are the functional requirements, and what non-functional properties (scale, politeness, robustness) actually make this hard?",
+      "points": [
+        "Functional: start from seeds, fetch a page, extract links, enqueue new URLs, store fetched content for downstream indexing, repeat (BFS traversal).",
+        "Clarify purpose (search indexing? archival? scraping?) — it sets freshness and coverage goals. Assume search-index crawler.",
+        "Non-functional: scalability (billions of pages), politeness (don't overload any host, obey robots.txt), robustness (traps, malformed HTML, slow servers), extensibility (new content types).",
+        "Freshness: pages change, so crawling is continuous, not one-shot — need re-crawl scheduling.",
+        "Constraints to name: avoid duplicate work (URL + content dedup), bounded per-domain rate, distributed across many machines."
+      ],
+      "answer": "Functionally it's a loop: pull a URL from the frontier, fetch it, parse and extract links, dedup and enqueue the new ones, and hand the content to indexing — a BFS over the web graph from seed URLs. I'd confirm it's a search-indexing crawler, which fixes coverage and freshness goals. The hard parts are all non-functional: scaling to billions of pages, being polite (per-host rate limits and robots.txt so we don't DoS anyone), and being robust against traps, junk HTML, and slow hosts. And because pages change, it's a continuous re-crawling system, not a one-time batch."
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the scale. How many pages, at what fetch rate, and how much storage — and what does that imply about parallelism?",
+      "points": [
+        "Target corpus: say ~10B pages to (re)crawl, refreshed on average monthly → ~10B / (30×86400s) ≈ ~4,000 pages/sec sustained.",
+        "Per-page size: avg HTML ~100 KB (say 500 KB with resources, but index just HTML). 10B × 100 KB ≈ 1 PB of raw HTML to store.",
+        "That fetch rate over the public internet requires massive parallelism — thousands of concurrent fetches — but bounded per host by politeness.",
+        "Network-bound, not CPU-bound: workers spend most time waiting on I/O (fetch + DNS), so async I/O / many lightweight fetchers per machine.",
+        "Frontier size: billions of URLs pending — can't fit in memory, must be a distributed/disk-backed queue with an in-memory hot set."
+      ],
+      "answer": "If we target ~10B pages and refresh roughly monthly, that's about 4,000 pages/sec sustained; at ~100 KB of HTML each the corpus is on the order of 1 PB of raw pages. Hitting 4k/sec means thousands of concurrent fetches, but crucially bounded per host by politeness, so the parallelism comes from crawling many different domains at once rather than hammering few. The work is I/O-bound — mostly waiting on fetch and DNS — so each machine runs many async fetchers. And the frontier itself is billions of pending URLs, far too big for RAM, so it's a distributed disk-backed structure with an in-memory hot working set."
+    },
+    {
+      "type": "open",
+      "prompt": "Sketch the high-level architecture. Name the components data flows through from a seed URL to stored content, and the key data stores.",
+      "points": [
+        "URL Frontier (prioritized, politeness-aware queue) → Fetcher workers → DNS resolver (cached) → HTML downloader.",
+        "Downloaded page → Content parser/link extractor → URL normalizer → URL-seen dedup filter → back into frontier; content → content-seen dedup → content store.",
+        "Data stores: 'URL seen' set (Bloom filter / sharded KV), 'content seen' fingerprint store, the page content store (blob/object storage), and the frontier queue itself.",
+        "robots.txt cache per host; DNS cache.",
+        "Distributed: partition the frontier by host (consistent hashing) so one host maps to one worker/queue for politeness; workers are stateless and horizontally scalable.",
+        "A scheduler/prioritizer decides recrawl timing and URL priority feeding the frontier."
+      ],
+      "answer": "A seed enters the URL frontier, a prioritized politeness-aware queue partitioned by host so each domain funnels to one worker. A fetcher pops a URL, resolves DNS from a cache, downloads the HTML, and a parser extracts links. Each extracted link is normalized and checked against a URL-seen set (a Bloom filter or sharded KV) before re-entering the frontier; the page body is fingerprinted against a content-seen store and, if new, written to the content/blob store for indexing. Around this sit a robots.txt cache, a DNS cache, and a scheduler that assigns priority and decides recrawl timing. Workers are stateless and scale horizontally; host-partitioning is what makes politeness enforceable across the fleet.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant F as Frontier\n  participant W as Fetcher\n  participant D as DNS cache\n  participant H as Host\n  participant P as Parser\n  participant S as Stores\n  F->>W: pop URL (politeness ok)\n  W->>D: resolve host\n  D-->>W: IP (cached)\n  W->>H: GET page\n  H-->>W: HTML\n  W->>P: parse + extract links\n  P->>S: fingerprint + store if new\n  P->>F: enqueue new URLs (dedup)",
+        "caption": "Request flow"
+      }
+    },
+    {
+      "type": "mc",
+      "q": "The URL frontier must be BFS-ordered yet never hammer a single domain. What's the standard way to structure it?",
+      "options": [
+        "A single global FIFO queue that all fetcher threads pop from as fast as they can",
+        "Two-level queues: front queues capture priority, and back queues are per-host — a host maps to exactly one back queue with a timestamp gating its next allowed fetch, so each domain is fetched serially at a polite rate",
+        "A max-heap keyed purely by URL length so shorter, more canonical URLs are always crawled first",
+        "One queue per fetcher thread, filled by randomly assigning each newly discovered URL to a thread"
+      ],
+      "answer": 1,
+      "explain": "The classic Mercator-style frontier uses front queues for prioritization feeding back queues that are each mapped to a single host, with a heap of (next-fetch-time, back-queue) so a worker only pulls a host's URL once its politeness delay has elapsed. This enforces per-domain serialization and rate limiting while still allowing high aggregate throughput across many hosts. A single global FIFO would let many threads hit the same popular domain at once (impolite), and the other options ignore politeness entirely.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive #1 — deduplication. You must avoid re-crawling the same URL AND avoid re-storing the same content reached via different URLs. Explain both, and why one isn't enough.",
+      "points": [
+        "URL dedup: normalize URLs (lowercase host, strip default ports, sort/strip query params, remove fragments, resolve relative) then check a large URL-seen set — a Bloom filter (memory-efficient, false positives tolerable) or sharded KV of hashes.",
+        "URL dedup alone misses duplicate CONTENT: the same page served at many URLs (session ids, tracking params, mirrors, print/mobile variants).",
+        "Content dedup: fingerprint the page body — a hash for exact duplicates, or a similarity hash (e.g. SimHash/MinHash) for near-duplicates — and skip storing/indexing if already seen.",
+        "Bloom filter tradeoff: tiny memory for billions of URLs, but false positives can wrongly skip a URL; size it for an acceptable FP rate, or back it with an exact store.",
+        "Scale: both sets are sharded/distributed (consistent hashing on the URL/fingerprint) since they hold billions of entries."
+      ],
+      "answer": "Two different duplicates. First, URL-seen: I canonicalize the URL — normalize the host, drop fragments and default ports, strip/sort volatile query params — then test it against a URL-seen set, typically a Bloom filter for billions of URLs in modest RAM, tolerating rare false positives or backing it with an exact store. But URL dedup can't catch the same content served under many URLs — session-id links, tracking params, mirrors, print vs. mobile pages — so I also fingerprint the page body and check a content-seen store, using an exact hash for identical bytes and a SimHash/MinHash for near-duplicates. You need both because one guards against redundant fetching and the other against redundant indexing, and neither implies the other. At scale both sets are sharded by hash.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "Why is DNS resolution a notorious bottleneck in a large crawler, and what's the mitigation?",
+      "options": [
+        "DNS responses are too large to fit in a packet, so each lookup requires many round trips — fix by requesting compressed responses",
+        "DNS is encrypted by default, so every lookup needs a full TLS handshake that dominates fetch time",
+        "DNS lookups can be slow/synchronous and rate-limited by resolvers, so at thousands of fetches/sec they stall workers — mitigate with an aggressive local DNS cache (respecting TTLs) and async resolution",
+        "Each page fetch requires resolving every link on the page before downloading, multiplying lookups by the average out-degree"
+      ],
+      "answer": 2,
+      "explain": "DNS resolution is often a blocking, relatively slow operation and upstream resolvers rate-limit; at crawl scale (thousands of hostname lookups per second) naive synchronous resolution stalls fetcher threads and becomes a throughput ceiling. The fix is an aggressive local/distributed DNS cache honoring TTLs plus asynchronous resolution so workers don't block. The other options misstate DNS behavior — responses fit in packets, DNS isn't TLS-per-lookup, and you resolve a host when you fetch it, not for every link at parse time."
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive #2 — robustness. How do you keep the crawler from getting stuck in crawler traps and infinite spaces (e.g. an infinite calendar or session-id URLs)?",
+      "points": [
+        "Depth limits: cap how deep from a seed you'll follow links so infinite dynamic paths terminate.",
+        "Per-domain page caps / budget: limit total pages crawled per host so one site can't consume the crawler.",
+        "URL-pattern heuristics: detect and down-rank/skip suspicious patterns (endless query permutations, calendar `?date=` incrementing, repeated path segments like `/a/a/a/`).",
+        "Respect robots.txt and crawl-delay; honor `nofollow`/canonical hints.",
+        "Content dedup catches trap pages that are effectively identical (near-dup detection stops indexing the same generated page repeatedly).",
+        "Timeouts + circuit breakers for slow/malicious hosts; malformed-HTML tolerant parsing.",
+        "Prioritization by page importance (e.g. PageRank-ish signals) naturally starves low-value trap regions."
+      ],
+      "answer": "Traps are infinite or near-infinite generated spaces, so I bound the crawl several ways: a max depth from seeds, a per-domain page budget so no single site swallows the crawler, and URL-pattern heuristics that spot endless query permutations, incrementing calendar params, or repeating path segments and de-prioritize or drop them. Content fingerprinting is a second net — a trap that regenerates near-identical pages gets caught by near-duplicate detection and stops being indexed. On top of that I obey robots.txt and crawl-delay, add fetch timeouts and per-host circuit breakers for slow or hostile servers, and parse defensively. Finally, prioritizing by page importance naturally starves low-value trap regions of crawl budget.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level: pages change over time. How do you decide re-crawl frequency, and how does that interact with a fixed crawl budget?",
+      "points": [
+        "Non-uniform recrawl: frequency should scale with a page's estimated change rate AND its importance — a news homepage recrawls often; a static archived page rarely.",
+        "Estimate change rate empirically (compare fingerprints across crawls; adapt interval up/down based on whether content changed).",
+        "Importance signal (traffic/PageRank/inbound links) weights budget toward pages users actually see.",
+        "Fixed crawl budget → it's an allocation problem: spend limited fetches/sec where freshness matters most; don't waste budget re-fetching unchanged low-value pages.",
+        "Sitemaps / HTTP signals (Last-Modified, ETag, If-Modified-Since / 304) cheaply detect no-change and save bandwidth.",
+        "Tradeoff: freshness vs. coverage vs. politeness — recrawling more means crawling fewer new pages; tune per-segment.",
+        "Failure/robustness: back off hosts returning errors; retry with jitter; avoid synchronized thundering-herd recrawls."
+      ],
+      "answer": "Recrawl frequency shouldn't be uniform — it should scale with each page's observed change rate and its importance. I estimate change rate by comparing content fingerprints across crawls and adaptively lengthen the interval for stable pages and shorten it for volatile ones, weighting by an importance signal like inbound links or traffic so budget flows to pages users actually see. Because crawl budget (fetches/sec) is fixed, this is fundamentally an allocation tradeoff: every recrawl of an unchanged low-value page is a new page not discovered, so freshness competes with coverage under the politeness ceiling. Cheap signals — sitemaps, Last-Modified/ETag with conditional GETs returning 304 — let me detect no-change without paying full bandwidth, and I back off erroring hosts with jittered retries to avoid synchronized recrawl storms."
+    }
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  Seed([Seed URLs]) --> Frontier[[\"URL Frontier<br/>(per-host, prioritized)\"]]\n  Frontier --> Fetcher([Fetcher workers])\n  Fetcher --> DNS[(DNS cache)]\n  Fetcher --> Parser[\"Parser / link extractor\"]\n  Parser --> Dedup{\"URL seen?\"}\n  Dedup -->|new| Frontier\n  Parser --> Store[(Content store)]",
+    "caption": "High-level architecture"
+  }
+}

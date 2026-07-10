@@ -1,0 +1,133 @@
+{
+  "id": "p06",
+  "num": 6,
+  "part": "Realtime & Write-Heavy Systems",
+  "title": "Design a Chat System",
+  "summary": "A WhatsApp/Messenger-style messaging service delivering messages in real time over persistent WebSocket connections. The signature challenges are mapping each user to the server holding their live connection, ordering and durably storing messages, delivering to offline users via store-and-forward + push, and fanning out group messages.",
+  "keyTakeaways": [
+    "Real-time delivery needs persistent bidirectional connections (WebSocket) so the server can push, not just respond — plus a session service mapping user → the chat server holding their live socket.",
+    "Chat is write-heavy and latency-sensitive; every sent message is a durable write plus a real-time push to online recipients.",
+    "Offline recipients get store-and-forward: persist the message, then deliver on reconnect and/or send a mobile push (APNS/FCM).",
+    "Message ordering uses server-assigned sequence numbers / timestamps per conversation; storage is keyed by conversation for fast history reads.",
+    "Presence (online/last-seen) is heartbeat-driven and deliberately eventually consistent — it's high-churn and low-stakes.",
+    "Group chat is a fan-out problem: 1:1 writes to one inbox, group writes fan out to N members (write-fanout works until groups get huge)."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a 1:1 + group chat system like WhatsApp. What are the functional requirements, and which non-functional properties dominate the design?",
+      "points": [
+        "Functional: 1:1 messaging, group messaging, delivery receipts (sent/delivered/read), online presence, message history, offline delivery, push notifications.",
+        "Descope for now: media/attachments pipeline, end-to-end encryption details, voice/video calls (name them).",
+        "Non-functional: low-latency real-time delivery (sub-second), high availability, durability (never lose a delivered message), horizontal scalability to hundreds of millions of users.",
+        "Consistency: per-conversation message ordering matters; presence can be eventually consistent.",
+        "Write-heavy and connection-heavy: millions of concurrent long-lived connections is itself a scaling axis distinct from QPS."
+      ],
+      "answer": "Core features are 1:1 and group messaging, delivery and read receipts, presence, message history, and offline delivery with push notifications; I'd descope media handling, E2E-encryption internals, and calls up front. The dominating non-functional traits are sub-second delivery latency, durability so a message is never lost once accepted, and high availability. Ordering must be consistent within a conversation, while presence can lag. And a defining constraint that's easy to miss: it's not just QPS — it's tens of millions of concurrent persistent connections, which is its own scaling dimension."
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the scale: concurrent connections, message QPS, and storage per year. Show the math and call out which number is the unusual one.",
+      "points": [
+        "Users: say 500M DAU; assume ~50M concurrent connections at peak (10% online) — the unusual axis is persistent connections, not just request rate.",
+        "Messages: 500M users × ~40 messages/day ≈ 20B messages/day ≈ ~230k messages/sec average, higher at peak (say 2–3× → ~500k+/sec).",
+        "Each message write fans out to recipients (1 for 1:1, N for group) — read/delivery amplification on groups.",
+        "Storage: 20B msgs/day × ~1 KB (text + metadata) ≈ 20 TB/day ≈ ~7 PB/year (before retention policy).",
+        "Connection servers sized by concurrent sockets: 50M / ~100k sockets per box ≈ ~500 connection servers just to hold sockets.",
+        "Conclusion: connection count drives the gateway tier; message volume drives storage + the fan-out design."
+      ],
+      "answer": "Take 500M DAU with ~10% online at peak, so ~50M concurrent WebSocket connections — that's the unusual number, because a chat system is sized by live sockets, not just requests. At ~40 messages/user/day that's ~20B messages/day, roughly 230k/sec average and 500k+/sec at peak, each fanning out to one recipient for 1:1 or N for groups. At ~1 KB per message that's ~20 TB/day, on the order of several PB/year before retention limits. So two independent forces: the concurrent-connection count sizes the gateway/connection tier — maybe ~500 boxes at 100k sockets each — while message volume and group fan-out drive storage and the delivery design."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the core APIs / protocol. How does a client send and receive messages, and why is plain HTTP request/response insufficient?",
+      "points": [
+        "Real-time RECEIVE is the problem: with plain HTTP the server can't push, so you'd poll (wasteful/laggy). Use a persistent WebSocket (or long-poll fallback) so the server pushes inbound messages.",
+        "Client opens a WebSocket to a chat/connection server on login; server registers user→connection in a session store.",
+        "Send: client emits a `sendMessage(conversationId, clientMsgId, body)` frame over the socket; server persists + acks + routes to recipient(s).",
+        "`clientMsgId` for idempotency/dedup on retries; server assigns the authoritative message id + sequence.",
+        "Receipts: ack frames flow back — `delivered` when the recipient's device receives it, `read` when opened.",
+        "History/other ops (fetch older messages, create group) can be plain REST since they're pull-based."
+      ],
+      "answer": "The receive path is what breaks plain HTTP: the server needs to push an incoming message the instant it arrives, and request/response can't do that without polling, which is laggy and wasteful. So on login the client opens a persistent WebSocket to a connection server, which registers user→socket in a session store. Sending is a `sendMessage(conversationId, clientMsgId, body)` frame; the server persists it, assigns the authoritative id and sequence number, acks the sender, and routes it to recipients over their sockets. The `clientMsgId` gives idempotency across retries, and delivered/read receipts flow back as their own frames. Pull-style operations like fetching history or creating a group can stay ordinary REST.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant A as Client A\n  participant S1 as Chat srv A\n  participant DB as Msg store\n  participant SS as Session svc\n  participant S2 as Chat srv B\n  participant B as Client B\n  A->>S1: sendMessage(convId, body)\n  S1->>DB: persist + assign seq\n  S1-->>A: ack\n  S1->>SS: locate recipient B\n  SS-->>S1: B on srv S2\n  S1->>S2: forward message\n  S2->>B: push over socket",
+        "caption": "Request flow"
+      }
+    },
+    {
+      "type": "mc",
+      "q": "User A sends a message to User B, who is connected to a different chat server. How does A's server get the message to B's live socket?",
+      "options": [
+        "A's server broadcasts the message to every chat server in the fleet; the one holding B's socket delivers it and the rest ignore it",
+        "A session/presence service maps userId → the specific chat server holding that user's connection, so A's server looks up B, routes the message to B's server (directly or via a message broker), and that server pushes it down B's socket",
+        "The message is written to the database and B's server discovers it by polling the messages table every few hundred milliseconds",
+        "All users must connect to the same single chat server, so cross-server routing never happens"
+      ],
+      "answer": 1,
+      "explain": "With sockets spread across many servers, delivery requires knowing WHERE a user is connected: a session/presence service maps userId → server (or connection id), so the sender's server looks up the recipient and forwards the message to the exact server holding that socket, commonly through a message broker/pub-sub keyed by server or user. Broadcasting to the whole fleet wastes N× bandwidth, DB polling adds latency and load, and a single shared server obviously doesn't scale to millions of connections.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive #1 — message storage and ordering. How do you store messages so history reads are fast and messages appear in a consistent order for everyone in a conversation?",
+      "points": [
+        "Partition/shard by conversationId so all of a conversation's messages live together for efficient range reads (fetch last N, paginate older).",
+        "Ordering: assign a monotonic per-conversation sequence number (or a server timestamp / logical clock) at write time — clients sort by it, so ordering is consistent regardless of network jitter.",
+        "Don't trust client clocks for ordering; the server (or the conversation's owning partition) is the ordering authority.",
+        "Storage engine: a wide-column/LSM store (e.g. Cassandra/HBase-style) keyed by (conversationId, seq) suits high write volume + range scans; time-ordered.",
+        "Durability: message is persisted before the sender is acked (or with a durable queue), so an accepted message survives crashes.",
+        "For 1:1 vs group, the conversation is the unit; a group is just a conversationId with N members."
+      ],
+      "answer": "I key storage by conversationId and store messages sorted by a per-conversation sequence number, so a conversation's whole timeline is co-located and 'fetch the last N / page older' is a cheap range scan. Ordering comes from the server assigning that monotonic sequence (or a logical timestamp) at write time — clients sort by it, so everyone sees the same order regardless of network jitter, and I never trust client clocks as the authority. A wide-column LSM store keyed by (conversationId, seq) fits the high write rate and time-range reads well. Durability-wise the message is persisted before I ack the sender, so an accepted message survives a crash. A group is just a conversationId with N members, so the same model covers both."
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive #2 — offline delivery. User B is offline when A sends a message. Walk through exactly what happens from send to eventual delivery.",
+      "points": [
+        "Message is persisted durably regardless of B's status (store-and-forward) — B has no live socket, so it can't be pushed now.",
+        "Session/presence lookup shows B offline (no active connection) → mark message undelivered/queued for B.",
+        "Trigger a mobile push notification via APNS (iOS) / FCM (Android) so B's device wakes/notifies the user.",
+        "When B reconnects, the client syncs: server delivers all messages after B's last-acked sequence (per-user delivery cursor / inbox).",
+        "On delivery, emit the `delivered` receipt back to A; on open, the `read` receipt.",
+        "Idempotency: B may reconnect and re-request; delivery cursor + message ids prevent duplicates.",
+        "Retention: queued/undelivered messages persist until delivered or a TTL; multi-device means per-device cursors."
+      ],
+      "answer": "Because B has no live socket, the message can't be pushed, so store-and-forward kicks in: it's durably persisted first, the presence lookup shows B offline, and it's marked queued against B's delivery cursor. I then fire a push through APNS or FCM so B's phone notifies the user. When B's app reconnects it syncs from its last-acked sequence and the server streams everything after that cursor down the new socket, advancing the cursor as B acks — which also emits the `delivered` receipt back to A, and `read` when B opens the chat. The per-user cursor plus stable message ids make re-syncs idempotent so B never sees duplicates, and with multiple devices each device keeps its own cursor. Undelivered messages persist until delivered or a TTL expires.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "How should online presence (online / last-seen) be implemented at hundreds of millions of users?",
+      "options": [
+        "Write a row to the primary database on every status change and read-through it synchronously whenever any friend's presence is displayed",
+        "Keep an open WebSocket from every user to every one of their contacts so presence is peer-to-peer with no server state",
+        "Poll every user's device once per second from the server to ask if it is still online",
+        "Client heartbeats every N seconds refresh a TTL'd entry in an in-memory store (e.g. Redis); absence of heartbeats expires the entry to offline, and updates propagate via pub/sub — accepting eventual consistency"
+      ],
+      "answer": 3,
+      "explain": "Presence is extremely high-churn and low-stakes, so the standard approach is heartbeat-driven soft state: clients send periodic heartbeats that refresh a TTL'd key in an in-memory store like Redis, the key expiring to 'offline' if heartbeats stop, with changes fanned out via pub/sub to interested contacts. It's deliberately eventually consistent. Hitting the primary DB on every flicker would melt it, an N×N peer mesh is absurd, and server-initiated per-second polling doesn't scale to hundreds of millions of devices.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level: group chat fan-out and multi-region. When does the simple design break, and how do you evolve it for large groups and global users?",
+      "points": [
+        "1:1 and small groups: write-fanout is fine — on send, deliver to each member's connection/inbox.",
+        "Large groups (thousands of members) → write-fanout is N× amplification per message; a busy large group can overwhelm delivery. Consider fan-out-on-read (members pull the group timeline) or a hybrid: write-fanout for small groups, read-fanout for huge ones.",
+        "Broadcast/huge groups behave more like a feed than a chat — pull model + caching.",
+        "Multi-region: users connect to the nearest region's gateway; route cross-region messages between regions (a user in EU messaging one in US). Presence/session service must be reachable cross-region or replicated.",
+        "Connection server failure: client reconnects and re-registers in the session store; delivery cursor ensures no message loss (resume from last-acked seq).",
+        "Consistency/ordering across regions: keep a conversation's ordering authority in one owning partition/region to avoid split-brain sequence numbers.",
+        "Backpressure: slow/offline members must not block delivery to fast ones — per-recipient queues + push fallback."
+      ],
+      "answer": "For 1:1 and small groups, write-fanout — deliver to each member on send — is simplest and fine. It breaks for very large groups because every message is N× amplified; a thousand-member active group turns one send into a thousand deliveries. There I switch to fan-out-on-read or a hybrid: small groups push, huge groups behave like a feed that members pull with caching. Globally, users connect to their nearest gateway and cross-region messages route between regions, with the session/presence service replicated or reachable cross-region so we can still locate a recipient's socket. To keep ordering sane I pin each conversation's sequence authority to one owning partition so regions don't mint conflicting sequence numbers. Failures are handled by reconnect-and-resume: the client re-registers and replays from its last-acked cursor, so a connection-server crash loses no messages, and per-recipient queues plus push fallback keep one slow member from stalling delivery to everyone else."
+    }
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  A([Client A]) --> S1[\"Chat server A\"]\n  S1 --> DB[(Message store)]\n  S1 --> SESS[(Session store)]\n  S1 -->|route| S2[\"Chat server B\"]\n  S2 --> B([Client B])\n  S1 -.->|offline| PUSH[[\"APNS / FCM\"]]",
+    "caption": "High-level architecture"
+  }
+}

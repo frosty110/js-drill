@@ -1,0 +1,210 @@
+{
+  "id": "ch11",
+  "chapter": 11,
+  "part": "Part III: Derived Data",
+  "title": "Stream Processing",
+  "summary": "How to process unbounded, continuously arriving data as a stream of immutable events — the messaging systems and log-based brokers that transport events, the change-capture and event-sourcing patterns that turn databases into streams, and the time-reasoning and fault-tolerance issues stream operators must handle.",
+  "keyTakeaways": [
+    "A stream is unbounded, incrementally processed data; an event is a small self-contained immutable record that producers write and consumers read.",
+    "Message brokers deliver events via two patterns — load balancing (share work across consumers) and fan-out (every consumer gets every message) — using acks and redelivery.",
+    "AMQP/JMS brokers (RabbitMQ) delete a message once acknowledged; log-based brokers (Kafka) append to a partitioned log, retain messages, and let consumers replay by tracking an offset.",
+    "Change Data Capture (CDC) turns a database's replication log into an event stream to keep derived systems (search indexes, caches, warehouses) in sync, avoiding fragile dual writes.",
+    "Event sourcing stores immutable events as the source of truth and derives current state by replaying them, enabling auditability, multiple read views (CQRS), and reprocessing to fix bugs.",
+    "Stream time reasoning distinguishes event time from processing time and uses windows (tumbling/hopping/sliding/session) with watermarks; fault tolerance targets exactly-once via checkpointing, idempotence, and atomic commit."
+  ],
+  "questions": [
+    {
+      "q": "In DDIA's terminology, what is an 'event' in a stream?",
+      "options": [
+        "A small, self-contained, immutable record capturing something that happened at a point in time, written once by a producer and read by consumers",
+        "A mutable row in a database table that consumers update in place",
+        "A lock acquired by a consumer to serialize access to a partition",
+        "A periodic snapshot of the entire dataset"
+      ],
+      "answer": 0,
+      "explain": "An event is a small immutable record of something that happened, produced once and potentially read by many consumers. Its immutability is what makes replay and multiple derived views possible; a mutable row is the opposite model."
+    },
+    {
+      "q": "A message broker can distribute messages to consumers in two patterns. What distinguishes load balancing from fan-out?",
+      "options": [
+        "Load balancing sends every message to every consumer; fan-out sends each to only one",
+        "Load balancing delivers each message to just one of the consumers (sharing the work); fan-out delivers every message to every consumer",
+        "Both deliver every message to every consumer, differing only in ordering",
+        "Load balancing is synchronous while fan-out is always asynchronous"
+      ],
+      "answer": 1,
+      "explain": "With load balancing, each message goes to a single consumer so a group can share the processing load; with fan-out, each message is delivered independently to all consumers. The two can be combined (fan-out to groups, load-balance within each group)."
+    },
+    {
+      "q": "What most fundamentally distinguishes a log-based message broker (like Kafka) from a traditional AMQP/JMS broker (like RabbitMQ)?",
+      "options": [
+        "Kafka deletes each message as soon as it is acknowledged, like AMQP",
+        "AMQP guarantees total order across all queues while Kafka has no ordering at all",
+        "Kafka stores messages only in memory and loses them on restart",
+        "Kafka appends messages to a durable partitioned log and retains them, so consumers track an offset and can replay old messages; AMQP-style brokers delete a message once it is acknowledged"
+      ],
+      "answer": 3,
+      "explain": "A log-based broker persists messages in an append-only partitioned log and retains them regardless of consumption, so consumers just advance an offset and can rewind to replay. Traditional message queues delete a message once acked, so replay is impossible."
+    },
+    {
+      "q": "In a Kafka-style log broker, how does a consumer's offset relate to concepts elsewhere in DDIA?",
+      "options": [
+        "It is analogous to the log sequence number in leader–follower replication — it marks the position a consumer has processed up to, so the broker knows what has been consumed",
+        "It is a lock that prevents other consumers from reading the partition",
+        "It is a hash of the message contents used for deduplication",
+        "It is the timestamp at which the message was produced"
+      ],
+      "answer": 0,
+      "explain": "A consumer's offset is like a follower's position in a replication log: it records how far the consumer has read, letting it resume and letting the broker track progress. Because ordering is preserved within a partition, the offset is a monotonic position, not a lock or hash."
+    },
+    {
+      "q": "What is the 'dual write' problem that Change Data Capture is designed to avoid?",
+      "options": [
+        "Writing the same value twice to one database wastes storage",
+        "When application code writes the same change to two systems (e.g. a database and a search index) separately, races and partial failures can leave them permanently inconsistent",
+        "Two leaders accepting conflicting writes to the same key",
+        "A follower applying the replication log twice"
+      ],
+      "answer": 1,
+      "explain": "If the app independently writes to the DB and to a search index, one write can succeed while the other fails, or concurrent writes can apply in different orders — leaving the two stores inconsistent. CDC fixes this by making one system's change log the single ordered source that feeds the others."
+    },
+    {
+      "q": "What does Change Data Capture (CDC) do?",
+      "options": [
+        "It periodically diffs two databases and emails the differences",
+        "It compresses the write-ahead log to save disk",
+        "It captures the writes to a database (from its replication log / write-ahead log) as an ordered stream of change events, so derived systems like caches, search indexes, and warehouses can be kept in sync",
+        "It rejects writes that would violate a uniqueness constraint"
+      ],
+      "answer": 2,
+      "explain": "CDC observes and extracts the database's low-level change log as an event stream, so downstream derived systems can apply the same changes in the same order. This makes the database of record the leader and the derived systems its followers."
+    },
+    {
+      "q": "What is the purpose of log compaction in a log-based message system?",
+      "options": [
+        "To encrypt old messages for compliance",
+        "To reorder messages by event time",
+        "To merge multiple partitions into one",
+        "To retain only the most recent value for each key and discard superseded updates, so the log can serve as a durable, bounded snapshot of current state"
+      ],
+      "answer": 3,
+      "explain": "Log compaction keeps just the latest message per key and throws away older values for that key, so the compacted log holds current state without growing unbounded. This lets a new consumer rebuild a full derived view by replaying the compacted log."
+    },
+    {
+      "q": "What is the defining idea of event sourcing?",
+      "options": [
+        "Storing an immutable append-only log of events as the source of truth, and deriving current application state by replaying those events",
+        "Storing the current mutable state and overwriting it on each change",
+        "Sending every write to two databases at once",
+        "Assigning each event a globally unique lock"
+      ],
+      "answer": 0,
+      "explain": "Event sourcing persists the log of state-changing events as the authoritative record and reconstructs current state by folding over them, rather than mutating state in place. This preserves full history, enabling auditing and rebuilding new views by reprocessing."
+    },
+    {
+      "q": "In event sourcing / CQRS, how do a 'command' and an 'event' differ?",
+      "options": [
+        "They are identical; the terms are interchangeable",
+        "A command is a request that may be validated and rejected; once accepted it becomes an immutable event (a fact that happened) which is appended to the log and cannot be refused",
+        "A command is immutable and an event is mutable",
+        "A command is read-only and an event is a query"
+      ],
+      "answer": 1,
+      "explain": "A command is a tentative request the system can validate and reject; if it passes, it is turned into an event — a durable fact that already happened and is never rejected on replay. Keeping this distinction means events in the log are always facts, so replaying them is deterministic."
+    },
+    {
+      "q": "What is the difference between event time and processing time in stream processing, and why does it matter?",
+      "options": [
+        "They are the same unless the clock is wrong",
+        "Event time is set by the consumer and processing time by the producer",
+        "Processing time is always earlier than event time",
+        "Event time is when the event actually occurred; processing time is when the stream operator handles it — they diverge when there is queueing, network, or consumer lag, which can distort windowed aggregations"
+      ],
+      "answer": 3,
+      "explain": "Because of buffering, retries, or restarts, an operator may process an event much later than it occurred; windowing by processing time then attributes events to the wrong window. Reasoning in event time (with watermarks for stragglers) is needed to get correct time-bucketed results."
+    },
+    {
+      "q": "Which window type groups events by periods of activity separated by gaps of inactivity, with no fixed length?",
+      "options": [
+        "Session window",
+        "Tumbling window",
+        "Hopping window",
+        "Sliding window"
+      ],
+      "answer": 0,
+      "explain": "A session window collects events that occur close together and closes after a gap of inactivity, so its length varies per user/session. Tumbling windows are fixed, non-overlapping intervals; hopping and sliding windows are fixed-length but overlap."
+    },
+    {
+      "q": "What problem do watermarks address when computing windowed aggregations over event time?",
+      "options": [
+        "They encrypt the window contents",
+        "They signal that no more events with a timestamp older than a given point are expected, so an operator can decide when a window is complete despite straggler (late-arriving) events",
+        "They deduplicate events with identical payloads",
+        "They compress the window state to disk"
+      ],
+      "answer": 1,
+      "explain": "A watermark is a heuristic marker saying 'events up to time T have (probably) all arrived,' letting the operator finalize a window while still handling the risk of stragglers. You then choose whether to drop, or emit corrections for, events that arrive after the watermark."
+    },
+    {
+      "q": "In a stream-table join, how is a stream of events enriched with data from a database?",
+      "options": [
+        "Every event triggers a fresh remote query to the database, blocking the stream on network latency",
+        "The database is scanned in full for every window",
+        "The processor keeps a local copy of the table, kept up to date via a change stream (CDC) of the database, and joins each event against that local state",
+        "The two are joined only during batch reprocessing, never in the stream"
+      ],
+      "answer": 2,
+      "explain": "To avoid a slow remote lookup per event, the stream processor maintains a local, continuously-updated copy of the table fed by the database's change stream, and enriches events from that local state. Because the table changes over time, results are time-dependent (a slowly changing dimension)."
+    },
+    {
+      "q": "How do stream processors achieve exactly-once (effectively-once) semantics despite failures and retries?",
+      "options": [
+        "By processing each event synchronously with a global lock",
+        "By discarding any event that has been seen before based on its size",
+        "By requiring producers to send each event only once and never retry",
+        "Through mechanisms like microbatching (Spark Streaming), checkpointing operator state (Flink), atomic commit of output-plus-offset, and idempotent writes, so a replayed event does not double-apply its effects"
+      ],
+      "answer": 3,
+      "explain": "Exactly-once is achieved by making the combination of side effects and consumer-offset advance atomic — via checkpoints, microbatch boundaries, or transactional commits — plus idempotence so a retried event has no extra effect. It does not require the impossible guarantee that events are produced only once."
+    },
+    {
+      "type": "open",
+      "prompt": "You're choosing a message system for a pipeline where several independent derived systems (a search index, an analytics warehouse, a cache) must each consume the same event stream, and you need to add new consumers later and reprocess history. Would you pick a log-based broker (Kafka) or a traditional AMQP/JMS broker (RabbitMQ), and why?",
+      "points": [
+        "Traditional AMQP/JMS brokers delete a message once it's acknowledged, so history is gone and a message is effectively consumed by the group, not retained.",
+        "A log-based broker appends events to a durable, partitioned log and retains them regardless of consumption; each consumer just tracks its own offset.",
+        "Retention + offsets let a brand-new consumer replay the whole history to build its derived view, and let you reprocess after a bug by resetting the offset.",
+        "Multiple independent consumers each read the full stream at their own position (fan-out) without stealing each other's messages.",
+        "So the log-based broker (Kafka) fits this multi-consumer, replayable, derived-data use case.",
+        "A traditional broker is better when you want per-message load-balancing across workers with variable processing cost and don't need replay — the queue's redelivery/ack model shines there."
+      ],
+      "answer": "I'd pick a log-based broker like Kafka. It appends events to a durable, retained, partitioned log where each consumer just advances its own offset, so a search index, warehouse, and cache can each read the full stream independently at their own pace, and I can add a new consumer later that replays all of history to build its view — or reset an offset to reprocess after a bug. A traditional AMQP/JMS broker deletes each message once acknowledged, so history and replay are gone; it's the right tool when you instead want to load-balance individual tasks with uneven cost across a worker pool, but that's not this multi-consumer, replayable derived-data scenario."
+    },
+    {
+      "type": "open",
+      "prompt": "Your team writes each product update to the primary DB and also directly to a search index, and the two keep drifting out of sync. Explain the underlying problem and how Change Data Capture fixes it — including what happens if the search-index consumer crashes for an hour.",
+      "points": [
+        "Name the anti-pattern: dual writes — the app independently writes the DB and the index, so a partial failure or reordered concurrent writes leaves them permanently inconsistent.",
+        "CDC makes the database the single source of truth: it captures the DB's replication/write-ahead log as an ordered stream of change events.",
+        "Derived systems (the search index) become followers that apply those changes in the same order, so they can't diverge from concurrent races.",
+        "Crash recovery: the consumer tracks its offset in the change log, so after an hour down it resumes from its last offset and replays the missed changes in order — no lost updates.",
+        "Applying changes should be idempotent (keyed by primary key / offset) so re-processing on restart doesn't double-apply.",
+        "Optionally use a compacted log so a fully rebuilt index can be bootstrapped from current state per key."
+      ],
+      "answer": "The problem is dual writes: writing the DB and the index separately means one can succeed while the other fails, or concurrent updates can land in different orders, so the two drift apart with no error. CDC fixes it by making the database the source of truth and extracting its replication log as an ordered change stream; the search index becomes a follower that applies those events in the exact same order, so it can't diverge. If the index consumer crashes for an hour, it just resumes from its stored offset in the log and replays the missed changes in order — nothing is lost — and because I apply changes idempotently by primary key, re-processing on restart doesn't double-apply. A compacted log also lets me bootstrap a full rebuild from current per-key state."
+    },
+    {
+      "type": "open",
+      "prompt": "You compute hourly counts of events, but mobile clients buffer offline and upload events hours late. Counts by processing time look wrong. Explain the event-time vs processing-time distinction and how watermarks let you handle the stragglers.",
+      "points": [
+        "Event time is when the event actually occurred; processing time is when the stream operator handles it.",
+        "They diverge under buffering, network lag, retries, or restarts — offline mobile uploads are an extreme case.",
+        "Windowing by processing time attributes a late event to the wrong hour, distorting the aggregation; you must window by event time for correct hourly buckets.",
+        "A watermark is a heuristic marker saying 'events with timestamp older than T have probably all arrived,' letting the operator decide when an event-time window is complete.",
+        "For stragglers arriving after the watermark you choose a policy: drop them, or emit a correction/late update to the already-published window.",
+        "There's an inherent tradeoff: wait longer (looser watermark) for completeness vs. emit sooner for lower latency."
+      ],
+      "answer": "Processing time is when my operator sees the event; event time is when it actually happened. With mobile clients buffering offline, an event can be processed hours after it occurred, so bucketing by processing time drops it in the wrong hour — I need to window by event time to get correct hourly counts. Watermarks handle the lateness: a watermark is a heuristic saying 'events older than time T have most likely all arrived,' which lets me decide when an event-time window is complete enough to emit. For stragglers that still arrive after the watermark I pick a policy — drop them, or emit a correction to the already-published count — trading off how long I wait (completeness) against how soon I publish (latency)."
+    }
+  ]
+}

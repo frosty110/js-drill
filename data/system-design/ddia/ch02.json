@@ -1,0 +1,207 @@
+{
+  "id": "ch02",
+  "chapter": 2,
+  "part": "Part I: Foundations of Data Systems",
+  "title": "Data Models and Query Languages",
+  "summary": "Compares the relational, document, and graph data models and the query languages that go with them, examining which relationship shapes and workloads each model fits best.",
+  "keyTakeaways": [
+    "The document model excels at one-to-many, tree-shaped, self-contained data (storage locality), while the relational model excels at many-to-one and many-to-many relationships via joins.",
+    "The object-relational impedance mismatch is the awkward translation layer between application objects and relational tables that ORMs try to hide.",
+    "Document databases use schema-on-read (implicit, interpreted at read time) versus the relational schema-on-write (explicit, enforced on write), analogous to dynamic vs static type checking.",
+    "Declarative query languages like SQL say what data you want, letting the engine choose and optimize execution and parallelize it, unlike imperative code that fixes the algorithm.",
+    "MapReduce sits between declarative and imperative; its map and reduce callbacks must be pure functions so the framework can safely re-run and parallelize them.",
+    "Graph models (property graphs, triple-stores) fit data where many-to-many relationships are common and evolving; the relational model earlier displaced the CODASYL/hierarchical models by removing hard-coded access paths."
+  ],
+  "questions": [
+    {
+      "q": "What is the `object-relational impedance mismatch`?",
+      "options": [
+        "The awkward translation layer between the object-oriented structures of application code and the tables/rows/columns of the relational model",
+        "The performance gap between in-memory objects and on-disk rows",
+        "The mismatch between a database's declared schema and the data actually stored",
+        "The incompatibility between SQL dialects across different vendors"
+      ],
+      "answer": 0,
+      "explain": "The impedance mismatch is the clumsy translation between application objects and the relational table/row/column model, which ORM frameworks (Hibernate, ActiveRecord) try to hide. It is a modeling-layer friction, not a raw performance gap or a cross-vendor SQL issue."
+    },
+    {
+      "q": "For what kind of data does the document model have a clear advantage over the relational model?",
+      "options": [
+        "Data with many many-to-many relationships that are queried in multiple directions",
+        "Highly normalized data where the same entity is referenced from many places",
+        "Data requiring strong multi-object transactional guarantees across records",
+        "One-to-many, tree-structured data that forms a single self-contained document, benefiting from storage locality"
+      ],
+      "answer": 3,
+      "explain": "The document model shines for one-to-many tree structures loaded as one self-contained document (e.g. a résumé), giving storage locality. Many-to-many relationships and highly normalized, cross-referenced data favor the relational model's joins, which document stores support only weakly."
+    },
+    {
+      "q": "Which pair of forces did DDIA cite as driving the adoption of NoSQL?",
+      "options": [
+        "Stronger ACID guarantees and better SQL standardization",
+        "The desire for more rigid schemas and centralized single-server deployments",
+        "A need for greater scalability plus a preference for free/open-source software, specialized query operations, and schema flexibility",
+        "Better support for many-to-many joins than relational databases offer"
+      ],
+      "answer": 2,
+      "explain": "DDIA lists the NoSQL drivers as: greater write throughput / larger scale than relational DBs handle easily, preference for open-source, specialized query needs unsupported by SQL, and frustration with restrictive relational schemas (wanting more dynamic/expressive models). NoSQL generally weakened joins and ACID rather than strengthening them."
+    },
+    {
+      "q": "Why does DDIA say that many-to-one and many-to-many relationships favor the relational model?",
+      "options": [
+        "Such relationships require referencing shared entities by ID and traversing joins, which relational databases support natively but document databases support weakly",
+        "Relational databases store each record in a single self-contained document",
+        "Document databases forbid duplicating data, forcing normalization",
+        "Many-to-many relationships never occur in tree-shaped document data"
+      ],
+      "answer": 0,
+      "explain": "Many-to-one and many-to-many relationships mean many records point to a shared entity referenced by ID, so you need joins to resolve those references. Relational engines do joins efficiently; document databases have weak join support, pushing the work into application code (emulated joins with multiple queries)."
+    },
+    {
+      "q": "The difference between `normalization` and `denormalization` is best characterized as…",
+      "options": [
+        "Normalization duplicates data for read speed; denormalization removes duplication to save space",
+        "They describe the same operation from the reader's versus the writer's perspective",
+        "Normalization stores each fact once and references it by ID (removing duplication); denormalization copies data into multiple places to avoid joins, trading write cost and consistency risk for read speed",
+        "Normalization applies only to graph databases; denormalization only to relational ones"
+      ],
+      "answer": 2,
+      "explain": "Normalization removes duplication by storing a fact once and referencing it by ID (a human-meaningful entity gets an ID). Denormalization copies data to avoid joins, speeding reads but requiring extra writes to keep copies consistent. The first option reverses the two definitions."
+    },
+    {
+      "q": "How do `schema-on-read` and `schema-on-write` differ?",
+      "options": [
+        "Schema-on-read enforces the schema when data is written; schema-on-write enforces it when data is read",
+        "Schema-on-read means there is genuinely no schema at all",
+        "They are marketing terms for the same relational mechanism",
+        "Schema-on-read means the structure is implicit and interpreted only when data is read; schema-on-write means the schema is explicit and the database enforces conformance on write"
+      ],
+      "answer": 3,
+      "explain": "Schema-on-read (common in document DBs) keeps structure implicit, interpreted by the application at read time — 'schemaless' is a misnomer since a schema still exists, just not enforced. Schema-on-write (relational) makes the schema explicit and enforces it on every write. DDIA likens this to dynamic vs static type checking."
+    },
+    {
+      "q": "DDIA draws an analogy between schema-on-read/schema-on-write and which programming concept?",
+      "options": [
+        "Dynamic (runtime) type checking versus static (compile-time) type checking",
+        "Interpreted versus compiled languages",
+        "Pass-by-reference versus pass-by-value",
+        "Garbage collection versus manual memory management"
+      ],
+      "answer": 0,
+      "explain": "Schema-on-read is like dynamic type checking — errors surface at runtime when data is accessed — while schema-on-write is like static type checking, catching structural problems up front when data is written. Neither is universally better; the tradeoff mirrors the dynamic-vs-static typing debate."
+    },
+    {
+      "q": "What is the main data-locality caveat DDIA raises for the document model?",
+      "options": [
+        "Documents are always stored across multiple disks, so locality is impossible",
+        "Locality forces every document to be under 1 KB in size",
+        "The locality advantage applies only when you need most of a document at once; if you access a small part, loading the whole (often large) document is wasteful",
+        "Locality is only achievable if the document is normalized"
+      ],
+      "answer": 2,
+      "explain": "Storing a document contiguously gives locality when you need much of it at once. But the database typically must load the entire document even to read a small field, and updates often rewrite the whole document — so locality helps only when access patterns use most of the document."
+    },
+    {
+      "q": "What is the key advantage of a `declarative` query language like SQL over an `imperative` one?",
+      "options": [
+        "Declarative queries always run faster because they use less memory",
+        "You specify what data you want, not how to get it, so the query optimizer is free to choose indexes, execution order, and parallelization without you rewriting the query",
+        "Declarative languages allow arbitrary side effects during a query",
+        "Imperative queries cannot express filtering or sorting"
+      ],
+      "answer": 1,
+      "explain": "A declarative query describes the desired result and its constraints, leaving the engine to pick the execution strategy, use indexes, reorder operations, and parallelize across cores/machines. Imperative code fixes a specific algorithm and ordering, which blocks the optimizer and makes automatic parallelization hard."
+    },
+    {
+      "q": "Where does DDIA place `MapReduce` on the declarative–imperative spectrum, and what constraint does it impose on the map/reduce callbacks?",
+      "options": [
+        "Fully declarative; the callbacks may perform arbitrary I/O",
+        "Fully imperative; the callbacks are guaranteed to run exactly once in sequence",
+        "It is a graph query language unrelated to declarative or imperative styles",
+        "Between declarative and imperative; the map and reduce functions must be pure (no side effects, no extra DB queries) so the framework can re-run and parallelize them safely"
+      ],
+      "answer": 3,
+      "explain": "MapReduce is neither: you write snippets of imperative code (map and reduce), but the framework controls the overall dataflow declaratively. The callbacks must be pure functions — deterministic, side-effect-free — so they can be re-executed on failure and run in parallel across many machines without surprises."
+    },
+    {
+      "q": "In a `property graph` model, how are data and relationships represented?",
+      "options": [
+        "As vertices and edges, where each vertex and each edge has an ID, a label, and a set of key-value properties, and each edge records its head/tail vertices",
+        "As three-part (subject, predicate, object) triples stored in a single table",
+        "As nested documents with embedded arrays of references",
+        "As normalized relational tables with foreign keys only"
+      ],
+      "answer": 0,
+      "explain": "A property graph (e.g. Neo4j, queried with Cypher) stores vertices and edges, each carrying a label and key-value properties, with edges recording their tail and head vertices and relationship type. The triple (subject, predicate, object) form is the alternative triple-store model, queried with SPARQL or Datalog."
+    },
+    {
+      "q": "Which query languages are associated with the graph and triple-store models in DDIA?",
+      "options": [
+        "SQL for property graphs and MapReduce for triple-stores",
+        "XQuery for property graphs and GraphQL for triple-stores",
+        "Cypher for property graphs, and SPARQL or Datalog for triple-stores",
+        "Gremlin for relational tables and Cypher for documents"
+      ],
+      "answer": 2,
+      "explain": "DDIA presents Cypher as the declarative query language for property graphs (Neo4j), and SPARQL and Datalog for the triple-store / RDF world. GraphQL and XQuery are not the languages discussed here for these models."
+    },
+    {
+      "q": "What historical problem did the relational model solve relative to the CODASYL / hierarchical (network) models?",
+      "options": [
+        "It introduced the first support for many-to-many relationships, which network models could not express",
+        "It removed the need to hard-code an `access path` to navigate records; the query optimizer chooses how to reach the data, so new query patterns don't require rewriting traversal code",
+        "It eliminated the need for any schema at all",
+        "It stored data as graphs of vertices and edges for the first time"
+      ],
+      "answer": 1,
+      "explain": "In the CODASYL/network model, the programmer had to follow a predefined access path to navigate from record to record, and new query needs meant rewriting traversal code. The relational model let you just declare a query and have the optimizer decide the access path — the access-path problem is what it solved. Network models could represent many-to-many links; that was not the differentiator."
+    },
+    {
+      "q": "According to DDIA, when is a graph data model most appropriate?",
+      "options": [
+        "When the data is a shallow, fixed set of independent records with no relationships",
+        "Only when the entire dataset fits in memory on one machine",
+        "When strong schema-on-write enforcement is the top priority",
+        "When many-to-many relationships are common and the connections between data are complex, irregular, and likely to evolve"
+      ],
+      "answer": 3,
+      "explain": "Graphs fit naturally when anything can relate to anything — many-to-many, heterogeneous, evolving connections (social networks, web links, road networks). If relationships are rare or purely tree-shaped, the document or relational model is simpler; graph power is about rich, changing interconnection, not in-memory size or schema strictness."
+    },
+    {
+      "type": "open",
+      "prompt": "You're modeling a résumé/profile: one user with nested education, jobs, and contact info, but each job also links to a company entity that many users reference. Which data model do you pick, and where does that choice start to hurt?",
+      "points": [
+        "The self-contained, tree-shaped profile (one-to-many) fits the document model well — storage locality, load the whole profile in one read.",
+        "But company is a many-to-one reference shared across users, which is the relational model's strength via joins.",
+        "Document stores support joins weakly, so you either denormalize (duplicate company data, risk stale copies) or emulate joins in application code with multiple queries.",
+        "Name the tipping point: as many-to-many relationships grow (users→companies→schools→recommendations), the document model degrades and relational/graph fits better.",
+        "The decision is driven by the relationship shape and dominant access pattern, not by a blanket 'SQL vs NoSQL' preference."
+      ],
+      "answer": "The profile itself is a self-contained one-to-many tree, so a document gives me great locality — I load the whole thing in one read. The pain starts at `company`: it's a many-to-one entity many users share, and document stores join weakly, so I'd either denormalize company data and fight stale copies, or emulate joins in app code. If those shared references multiply into genuine many-to-many relationships, I'd move that part to a relational model where joins are native — the relationship shape drives the choice, not a blanket NoSQL preference."
+    },
+    {
+      "type": "open",
+      "prompt": "Your team stores events as schemaless documents and now needs to rename a field and change its type across billions of existing records. Explain the schema-on-read implications and how the migration actually plays out versus a relational schema-on-write system.",
+      "points": [
+        "Schema-on-read means there IS a schema, just implicit and enforced by application code at read time — not 'no schema'.",
+        "You typically DON'T rewrite all old documents; instead the application handles both old and new shapes on read (e.g., if newField exists use it, else read oldField).",
+        "This is like dynamic typing: the mismatch surfaces at runtime when a record is read, so the risk shifts into application code and test coverage.",
+        "A relational schema-on-write forces an explicit ALTER TABLE / migration up front — the DB enforces conformance, catching problems on write.",
+        "Tradeoff: schema-on-read gives cheap, incremental evolution over heterogeneous data; schema-on-write gives strong guarantees but a heavier, all-at-once migration."
+      ],
+      "answer": "Schemaless really means schema-on-read: the schema still exists but lives in application code and is only interpreted when a record is read, like dynamic typing. So I wouldn't rewrite billions of documents — I'd teach the read path to handle both shapes (use the new field if present, otherwise fall back), and let old records get rewritten lazily as they're updated. That's cheap and incremental but pushes the risk into runtime and my test coverage; a relational schema-on-write would instead force an explicit migration up front where the database enforces the new shape, catching mismatches on write at the cost of a heavier, synchronized change."
+    },
+    {
+      "type": "open",
+      "prompt": "A recommendation feature needs to answer 'friends-of-friends who also like X' and traverse arbitrary-depth connections that keep changing. Argue for a graph model here, and say when you would NOT reach for one.",
+      "points": [
+        "Graph models fit when many-to-many, heterogeneous, evolving connections dominate — anything can relate to anything.",
+        "Variable-depth traversals (friends-of-friends, shortest path) are awkward with fixed SQL joins but natural in Cypher/SPARQL/Datalog.",
+        "The evolving nature matters: new relationship types can be added without reshaping a rigid schema.",
+        "Don't reach for a graph when relationships are rare, shallow, or purely tree-shaped — document or relational is simpler.",
+        "Graph power is about rich interconnection, not dataset size or schema strictness — choose on relationship complexity, not scale."
+      ],
+      "answer": "This is a many-to-many, variable-depth traversal over connections that keep evolving, which is exactly where graphs shine — 'anything can relate to anything.' A friends-of-friends or shortest-path query is painful to express with fixed-arity SQL joins but natural in a graph language like Cypher, and I can add new relationship types without reshaping a rigid schema. I would NOT reach for a graph if the relationships were rare, shallow, or a simple tree — then a document or relational model is simpler. The deciding factor is the complexity and churn of the connections, not the data volume."
+    }
+  ]
+}

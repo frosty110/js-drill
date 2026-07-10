@@ -1,0 +1,159 @@
+{
+  "id": "p10",
+  "num": 10,
+  "part": "Realtime & Write-Heavy Systems",
+  "title": "Design a Collaborative Document Editor",
+  "summary": "A Google Docs-style editor where many users edit the same document concurrently and see each other's changes in real time. The signature challenge is concurrent-edit conflict resolution — making every client converge to the same document despite edits arriving out of order — plus low-latency sync, presence, versioning, and offline merge.",
+  "keyTakeaways": [
+    "The core problem is concurrent-edit convergence: given the same set of edits in any order, every replica must reach an identical document (the CRDT/OT convergence property).",
+    "Operational Transformation (OT) transforms an incoming operation against concurrent ops so indices stay correct; it is compact but needs a central server to order and transform, and is notoriously hard to get right.",
+    "CRDTs assign each character a unique, immutable, totally-orderable ID so inserts/deletes commute and converge without a central coordinator, at the cost of per-character metadata and tombstones.",
+    "Real-time fan-out uses a persistent bidirectional channel (WebSocket) with a per-document server/room that sequences ops and broadcasts them to all connected clients.",
+    "Presence (cursors, selections, who's-online) is ephemeral, high-frequency, best-effort state broadcast separately from the durable op stream.",
+    "Durability = an ordered, append-only op log per document; the current state is a materialized snapshot + a tail of ops, which also powers version history and undo.",
+    "Offline editing works because both OT and CRDT let a client accumulate local ops and merge them on reconnect — CRDTs merge without server mediation, OT requires replay/transform against the server's history."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a Google Docs-style collaborative editor. What are the core functional requirements, and what non-functional targets (scale, latency, consistency) actually drive the design?",
+      "points": [
+        "Functional: multiple users edit one document concurrently; edits propagate in near-real-time; presence (cursors/selections/online list); version history + undo/redo; offline edit then sync.",
+        "Convergence guarantee: all clients on a doc must end at byte-identical content regardless of edit order (eventual consistency / strong eventual consistency).",
+        "Latency: local edits echo instantly (optimistic local apply); remote edits should appear in ~50-200ms; presence can be looser.",
+        "Scale target: state it — e.g. millions of docs, but concurrency-per-doc is small (typically <50 active editors on one doc), which shapes the per-doc room design.",
+        "Availability > strong linearizable consistency: users tolerate brief divergence that converges, not a locked/unavailable doc.",
+        "Clarify out-of-scope: rich media, permissions/ACLs, and rendering are secondary to the concurrency engine."
+      ],
+      "answer": "Functionally it's concurrent multi-user editing with real-time propagation, live cursors/presence, version history with undo, and offline-then-merge. The non-functional driver is convergence: every client on a document must reach identical content no matter what order edits arrive, and it must feel instant, so local edits apply optimistically while remote ones land in ~100ms. Concurrency per document is small even though total docs are huge, which lets me put a lightweight per-doc room in front of a durable op log, and I favor availability with eventual convergence over locking the document."
+    },
+    {
+      "type": "open",
+      "prompt": "Do a back-of-the-envelope capacity estimate: pick numbers for DAU, docs, edit rate, and derive op QPS, connections, and storage/year.",
+      "points": [
+        "Assume ~10M DAU, each in ~5 editing sessions/day, session ~10 min → concurrent editors and WebSocket connections at peak.",
+        "Edit rate: an active typist emits ~5-10 keystroke-ops/sec; batch/coalesce to ~1-2 ops/sec on the wire per active editor.",
+        "Peak concurrent editors: e.g. 10M DAU with ~2% online-and-typing at peak ≈ 200K active editors → ~200K-400K op writes/sec fanned out.",
+        "Fan-out multiplier: each op is broadcast to every other editor in the doc; with avg ~3 editors/active-doc, read-side messages ≈ 3× writes.",
+        "Storage: op log ~50-100 bytes/op; 200K ops/s × 86400 ≈ 17B ops/day × ~75B ≈ ~1.3 TB/day of raw ops → compact via periodic snapshots + log truncation.",
+        "Connections: 200K-1M concurrent WebSockets → many gateway nodes (each handles ~50-100K conns), sticky per-doc routing."
+      ],
+      "answer": "Take 10M DAU, ~2% online and actively typing at peak, so ~200K active editors holding WebSocket connections. Coalesced to ~1-2 ops/sec each, that's ~200-400K op writes/sec, and since each op fans out to the other editors in its doc, read-side broadcast is a few times higher. Ops are tiny (~75 bytes), so raw logging is on the order of a terabyte a day — which I'd never keep raw; I snapshot the materialized doc periodically and truncate the log behind it. Connection count (hundreds of thousands to a million WebSockets) forces a fleet of gateway nodes with sticky, per-document routing."
+    },
+    {
+      "type": "open",
+      "prompt": "Sketch the core API/protocol between a client and the server for editing a document.",
+      "points": [
+        "Load: `GET /doc/{id}` returns a snapshot (materialized content) + the version/revision number it reflects.",
+        "Connect: `WS /doc/{id}` opens a persistent channel joined to that document's room; client sends its last-seen revision to catch up.",
+        "Submit edit: client sends `op` messages — e.g. `{docId, baseRev, op}` where op is insert/delete with position + content (OT) or element IDs (CRDT).",
+        "Server ack + broadcast: server assigns a monotonic revision, acks the sender `{ackRev}`, and broadcasts transformed/ordered ops `{rev, op}` to all other clients.",
+        "Presence channel: separate lightweight messages `{userId, cursor, selection}` broadcast best-effort, not persisted in the op log.",
+        "History: `GET /doc/{id}/revisions` and `GET /doc/{id}/at/{rev}` to browse/restore versions."
+      ],
+      "answer": "On load the client GETs a snapshot plus the revision it reflects, then opens a WebSocket to that document's room and tells the server its last-seen revision to replay any gap. To edit, it streams `op` messages tagged with the base revision; the server assigns a monotonic revision number, acks the author, and broadcasts the ordered/transformed op to everyone else. Presence (cursor and selection) rides a separate best-effort message type that's never written to the durable log, and version history is a plain REST surface over the op log and snapshots."
+    },
+    {
+      "type": "open",
+      "prompt": "Draw the high-level architecture and the data model for storage. What components exist and what actually gets persisted?",
+      "points": [
+        "Client editor with a local model + optimistic apply and a pending-ops buffer awaiting server ack.",
+        "Stateless WebSocket gateway fleet terminating connections, routing each to the right per-doc room (consistent-hash/sticky on docId).",
+        "Per-document coordinator/room (single logical owner per doc) that serializes ops, assigns revisions, runs OT transform (or accepts CRDT ops), and fans out.",
+        "Durable op log per doc (append-only, ordered by revision) as the source of truth; a periodic materialized snapshot to bound replay.",
+        "Data model: `documents(id, snapshot, snapshotRev, updatedAt)` + `operations(docId, rev, userId, op, ts)` append-only; presence in an in-memory/ephemeral store (Redis pub/sub).",
+        "Pub/sub layer (e.g. Redis) so multiple gateway nodes serving the same doc receive each broadcast."
+      ],
+      "answer": "Clients hold a local model with optimistic apply and a buffer of un-acked ops. A stateless WebSocket gateway fleet terminates connections and consistent-hashes each to a per-document coordinator that is the single serialization point: it assigns monotonic revisions, transforms or accepts ops, and fans out. Durability is an append-only per-doc operation log ordered by revision, with a periodic materialized snapshot so a joining client doesn't replay from zero. So the schema is a `documents` row (latest snapshot + its revision) plus an append-only `operations` table keyed by (docId, rev); presence is ephemeral in Redis, and Redis pub/sub bridges the op broadcast across gateway nodes serving the same doc.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Client\n  participant GW as WS Gateway\n  participant CO as Coordinator\n  participant LOG as Op Log\n  participant O as Other Clients\n  C->>C: apply edit locally (optimistic)\n  C->>GW: send op with baseRev\n  GW->>CO: forward op\n  CO->>CO: assign rev + transform\n  CO->>LOG: append op\n  CO-->>C: ack rev\n  CO->>O: broadcast op",
+        "caption": "Request flow"
+      }
+    },
+    {
+      "type": "mc",
+      "options": [
+        "Last-write-wins: keep the edit with the higher timestamp and discard the other",
+        "Pessimistic locking: whoever grabs the paragraph lock edits; others wait",
+        "Operational Transformation or CRDTs: transform/merge concurrent ops so both edits apply and every replica converges to identical content",
+        "Two-phase commit across all connected clients before any edit is shown"
+      ],
+      "answer": 2,
+      "explain": "OT and CRDTs are the two families built exactly for this: they let concurrent inserts/deletes both take effect while guaranteeing all replicas converge. Last-write-wins silently destroys one user's typing; locking kills the real-time feel and doesn't scale to character-level editing; and 2PC across clients would block every keystroke on a network round trip to everyone, which is untenable for an interactive editor.",
+      "q": "Two users concurrently edit the same paragraph. Which conflict-resolution strategy lets both edits survive and all clients converge, and is the industry choice for rich collaborative text?",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "This is the crux: compare Operational Transformation (OT) and CRDTs for the editor. How does each achieve convergence, and what's the real tradeoff?",
+      "points": [
+        "OT: represents edits as position-based ops (insert at index i, delete range); when a concurrent op arrives, you transform it against ops it didn't see so indices stay correct (e.g. an insert before your delete shifts your index).",
+        "OT requires a central server to impose a total order and to transform ops against document history — transform functions must satisfy convergence properties (TP1/TP2) and are famously bug-prone.",
+        "OT is compact: ops are small (index + char), no per-character metadata; state stays lean.",
+        "CRDT: gives each character a unique immutable ID with a dense total order (e.g. fractional position / logical clock) so inserts and deletes commute — apply in any order, same result — no transform needed.",
+        "CRDT converges without central coordination (good for P2P/offline), but carries metadata per character and accumulates tombstones for deletes, inflating size.",
+        "Tradeoff summary: OT = central server + complex but bandwidth/memory-lean; CRDT = coordination-free + robust to reordering but metadata/tombstone overhead. Docs historically used OT; newer systems (Figma, Automerge, Yjs) favor CRDTs."
+      ],
+      "answer": "OT models edits as position-based operations and, when a concurrent op arrives, transforms it against the ops the sender hadn't seen — so if someone inserted three chars before my delete, my delete index shifts by three. That keeps ops tiny with no per-character metadata, but it needs a central server to totally-order and transform, and the transform functions are notoriously hard to make correct. CRDTs instead give every character a unique, immutable, densely-orderable ID so inserts and deletes commute — you can apply them in any order and still converge, with no central transformer — which is great for offline and peer-to-peer, but you pay per-character metadata and keep tombstones for deletes. So the tradeoff is central-server-plus-complexity-but-compact (OT) versus coordination-free-and-reorder-safe-but-heavier (CRDT); classic Docs used OT, while Figma/Yjs/Automerge went CRDT.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Walk through how real-time sync works over WebSocket end to end, including optimistic local apply and how presence/cursors are handled differently from edits.",
+      "points": [
+        "Client applies its own edit locally immediately (optimistic) and sends the op tagged with the revision it was based on; it buffers the op as pending.",
+        "Server serializes the op, assigns the next revision, transforms (OT) or integrates (CRDT), persists to the op log, acks the author, and broadcasts to the room.",
+        "On ack, the client removes the op from its pending buffer; incoming remote ops are transformed against the client's still-pending local ops before applying.",
+        "Ordering/gap handling: revisions are monotonic, so a client detects a missing revision and requests replay from its last-seen rev.",
+        "Presence (cursor position, selection, name/color) is broadcast on a separate best-effort channel via pub/sub — high frequency, throttled, never persisted, and dropped losslessly if a message is lost.",
+        "Reconnect: on drop, client reopens the WS, sends last-seen revision, replays the gap, then flushes buffered offline ops."
+      ],
+      "answer": "The client applies its own keystroke locally the instant it happens and ships the op tagged with its base revision, holding it in a pending buffer. The per-doc server serializes it, assigns the next monotonic revision, transforms or integrates it, appends to the log, acks the author, and broadcasts to everyone else; on ack the author clears it from pending, and any remote op that arrives is transformed against the client's still-un-acked local ops before it's applied so indices line up. Because revisions are monotonic, a client that sees a gap just asks to replay from its last-seen revision. Presence is deliberately separate — cursors and selections go over a throttled, best-effort pub/sub channel that's never persisted, so a dropped cursor update just corrects itself on the next tick."
+    },
+    {
+      "type": "mc",
+      "options": [
+        "Overwrite the server's current document with the client's offline copy",
+        "Discard the client's offline edits since they're based on a stale revision",
+        "Force the user to manually resolve every character-level difference before syncing",
+        "Replay the client's buffered ops, transforming/merging them against the ops that landed while it was offline, so both sets of edits converge"
+      ],
+      "answer": 3,
+      "explain": "Both OT and CRDT are built to merge divergent histories: the client sends the ops it accumulated offline and they're transformed (OT) or integrated by element ID (CRDT) against the ops the server received meanwhile, so nothing is lost and everyone converges. Overwriting or discarding destroys real edits, and forcing manual character-by-character resolution defeats the entire point of an automatic-convergence engine.",
+      "q": "A user edits offline for an hour, then reconnects to find the document has moved on. What's the correct reconnection behavior?"
+    },
+    {
+      "type": "open",
+      "prompt": "How do you implement version history and undo/redo on top of this op-log model?",
+      "points": [
+        "The append-only op log IS the history — every revision is a point you can reconstruct by replaying ops onto the nearest earlier snapshot.",
+        "Named versions / 'see revision history' = periodic checkpoints (snapshots) plus the ability to materialize any rev; group fine-grained ops into human-meaningful revisions by time/author for the UI.",
+        "Undo in a collaborative setting is per-user and selective: undo your own last op, not the global last op — implemented by generating the inverse op and applying/transforming it against everything since.",
+        "Because someone else may have edited on top of your op, the inverse must be transformed against intervening ops (OT) or expressed as a new CRDT op — you don't just pop a stack.",
+        "Redo is the inverse of the undo op, similarly transformed.",
+        "Restore-to-version = compute the diff between current and target revision and apply it as new ops (so history stays append-only and auditable)."
+      ],
+      "answer": "History is free because the op log is append-only — any revision is the nearest snapshot plus a replay of ops, and for the UI you coalesce fine-grained ops into human-meaningful revisions by author and time. Undo is the subtle part: in collaboration it has to be per-user and selective — you undo your own last edit, not whoever typed last — so you generate the inverse of that op and transform it against everything that landed since, rather than naively popping a stack, because someone may have built on top of your change. Redo is just the inverse of that undo, and 'restore this version' is implemented as a forward diff applied as new ops so the log stays append-only and auditable.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level: what breaks at scale, and how do you handle failure of the per-document coordinator, hot documents, and multi-region users?",
+      "points": [
+        "Single per-doc coordinator is a bottleneck and SPOF: replicate it (leader + hot standby) with the op log as the recoverable source of truth — on failover, a new owner replays from the last snapshot + log tail.",
+        "Sticky routing: all connections for a doc must reach the same coordinator; use consistent hashing on docId and drain/re-home on node loss.",
+        "Hot document (viral doc, thousands of viewers): separate read-only viewers (broadcast-only, no ops) from the small set of editors; fan out via a pub/sub tree/CDN-like layer rather than the coordinator directly.",
+        "Op log growth: snapshot + truncate; compact CRDT tombstones periodically once all replicas have observed the delete (causal stability).",
+        "Multi-region: co-locate a doc's coordinator with its active editors; cross-region editing tolerates higher latency but still converges — pick region by first/most-active editor, migrate if the population shifts.",
+        "Consistency framing: you accept temporary divergence (eventual/strong-eventual consistency) but guarantee convergence; you don't offer linearizable single-copy semantics, and that's the right tradeoff for an editor."
+      ],
+      "answer": "The per-document coordinator is both a bottleneck and a single point of failure, so I make it a leader with a hot standby and treat the durable op log as the recoverable truth — on failover a new owner replays snapshot-plus-tail and connections re-home via consistent hashing on docId. Hot documents are handled by splitting the thousands of passive viewers (broadcast-only) from the handful of actual editors and fanning out through a pub/sub tree instead of hammering the coordinator. I bound storage by snapshotting and truncating the log, and for CRDTs I only garbage-collect tombstones once a delete is causally stable across replicas. Geographically I pin a document's coordinator near its active editors and migrate if that population moves, accepting that the system is eventually/strongly-eventually consistent — it guarantees convergence, not linearizability, which is exactly what an editor should trade for."
+    }
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C([\"Client Editor<br/>optimistic apply\"]) --> GW[\"WS Gateway fleet\"]\n  GW --> CO[\"Per-doc Coordinator<br/>serialize + OT/CRDT\"]\n  CO --> LOG[(\"Op Log<br/>append-only\")]\n  CO --> SNAP[(\"Snapshot store\")]\n  CO --> PS[[\"Redis pub/sub\"]]\n  PS --> GW",
+    "caption": "High-level architecture"
+  }
+}

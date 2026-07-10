@@ -1,0 +1,172 @@
+{
+  "id": "c01",
+  "chapter": 1,
+  "part": "Traffic & Edge",
+  "title": "Load Balancing & Routing",
+  "summary": "How incoming traffic is spread across a fleet: the layer a load balancer operates at (L4 vs L7), the algorithms it uses to pick a backend, how it detects dead servers, and how DNS/anycast steer users to the nearest healthy region.",
+  "keyTakeaways": [
+    "L4 load balancers route on transport info (IP/port) and connections/NAT; L7 load balancers understand HTTP and can route on path, header, or cookie and terminate TLS.",
+    "Common algorithms: round-robin, weighted round-robin, least-connections, least-response-time, IP-hash, and consistent hashing (which minimizes remapping when the pool changes).",
+    "Active health checks probe backends proactively; passive health checks infer health from live traffic errors.",
+    "Sticky sessions (session affinity) pin a client to one backend, but undermine even distribution and complicate scale-in/failover.",
+    "A reverse proxy, a load balancer, and an API gateway overlap; the gateway adds cross-cutting concerns like auth, rate limiting, and response aggregation.",
+    "DNS-based routing, GeoDNS, and anycast steer users toward a nearby or healthy endpoint before a connection is even made.",
+    "Redundancy runs active-active (all nodes serve, capacity shared) or active-passive (a standby takes over on failure)."
+  ],
+  "questions": [
+    {
+      "q": "What primarily distinguishes an L4 load balancer from an L7 load balancer?",
+      "options": [
+        "L4 operates on transport-layer info (IP/port) and forwards connections without reading the payload; L7 understands the application protocol and can route on path, header, or cookie",
+        "L4 always terminates TLS while L7 passes encrypted traffic straight through",
+        "L4 runs in the cloud provider while L7 must run on your own hardware",
+        "L4 can inspect and route on the HTTP path and headers; L7 only sees IP addresses"
+      ],
+      "answer": 0,
+      "explain": "An L4 (transport-layer) balancer makes decisions from the TCP/UDP connection (source/dest IP and port) and typically NATs or forwards the packet stream without parsing content. An L7 (application-layer) balancer parses HTTP, so it can route on URL path, headers, or cookies and can terminate TLS."
+    },
+    {
+      "q": "Because an L7 load balancer parses the HTTP request, which capability does it have that a pure L4 balancer does not?",
+      "options": [
+        "Lower per-request CPU cost since it does less work",
+        "The ability to route /api/* to one pool and /images/* to another based on the URL path",
+        "The ability to balance UDP as well as TCP traffic",
+        "Immunity to backend failures because it never opens a connection"
+      ],
+      "answer": 1,
+      "explain": "Content-based (path/header/cookie) routing requires reading the application-layer request, which only an L7 balancer does. L4 is actually cheaper per request precisely because it does not parse the payload, and UDP balancing is an L4 strength."
+    },
+    {
+      "q": "Which load-balancing algorithm sends each new request to the backend currently handling the fewest active connections?",
+      "options": [
+        "Round-robin",
+        "IP-hash",
+        "Least-connections",
+        "Weighted round-robin"
+      ],
+      "answer": 2,
+      "explain": "Least-connections tracks live connection counts and favors the least-loaded backend, which adapts well when request durations vary. Round-robin ignores load entirely, and IP-hash routes by a hash of the client IP for stickiness, not by current load."
+    },
+    {
+      "q": "What is the main advantage of consistent hashing over plain modulo (hash(key) % N) for choosing a backend?",
+      "options": [
+        "It removes the need for any health checking",
+        "It distributes load perfectly evenly with no hot spots",
+        "It lets you route on HTTP headers instead of on the key",
+        "When a server is added or removed, only a small fraction of keys are remapped instead of nearly all of them"
+      ],
+      "answer": 3,
+      "explain": "With hash % N, changing N reshuffles almost every key; consistent hashing places nodes on a ring so adding/removing one node only remaps the keys in its arc. It does not guarantee perfectly even distribution (virtual nodes are used to smooth that out) and is unrelated to health checks."
+    },
+    {
+      "q": "How does an active health check differ from a passive health check?",
+      "options": [
+        "Active checks send periodic probe requests to each backend; passive checks infer health by observing errors/timeouts in real client traffic",
+        "Active checks watch live traffic; passive checks send synthetic probes",
+        "Active checks run on the backend; passive checks run on the client",
+        "They are two names for the same TCP handshake test"
+      ],
+      "answer": 0,
+      "explain": "Active health checking proactively sends probes (e.g. an HTTP GET to /health) on a schedule and marks a node down if it fails; passive health checking watches real responses and ejects a backend after it produces enough errors or timeouts. Many systems combine both."
+    },
+    {
+      "q": "Why do sticky sessions (session affinity) work against even load distribution?",
+      "options": [
+        "They force every request through the API gateway first",
+        "They pin each client to one specific backend, so a few heavy or long-lived clients can overload their pinned server while others sit idle",
+        "They require TLS termination at L4, which is slower",
+        "They rewrite the client IP, defeating IP-hash"
+      ],
+      "answer": 1,
+      "explain": "Affinity keeps a client bound to the backend that holds its session state, so the balancer can no longer freely spread that client's load; skewed or long-lived sessions concentrate on some nodes. Storing session state externally (e.g. in a shared cache) lets you drop stickiness and rebalance freely."
+    },
+    {
+      "q": "In the classic reverse proxy vs load balancer vs API gateway distinction, what does the API gateway add on top of routing?",
+      "options": [
+        "It is the only one of the three that can terminate TLS",
+        "It removes the need for backend servers entirely",
+        "Cross-cutting concerns such as authentication, rate limiting, and request/response aggregation across services",
+        "It can only forward traffic to a single origin server"
+      ],
+      "answer": 2,
+      "explain": "The roles overlap heavily, but a gateway layers application concerns — auth, rate limiting, quota, request shaping, and aggregating several backend calls into one response — on top of proxying. TLS termination is common to reverse proxies and L7 balancers too, so it is not the distinguishing feature."
+    },
+    {
+      "q": "What does anycast routing do?",
+      "options": [
+        "Assigns every server a unique IP and rotates through them in DNS",
+        "Broadcasts each packet to all servers and keeps the first reply",
+        "Encrypts the DNS query so the client's location is hidden",
+        "Advertises the same IP address from many locations so the network routes each client to the topologically nearest one"
+      ],
+      "answer": 3,
+      "explain": "Anycast announces one IP prefix from multiple PoPs; BGP then delivers a client's packets to the nearest advertising location, cutting latency and providing implicit failover if a site withdraws its route. That is different from unicast-per-server or from broadcasting to all nodes."
+    },
+    {
+      "q": "How does GeoDNS steer users to a nearby region?",
+      "options": [
+        "By returning different A/AAAA records based on the resolver's (approximate) geographic location",
+        "By hashing the URL path to a region",
+        "By rewriting the HTTP Host header at the edge",
+        "By terminating the user's TCP connection and forwarding at L4"
+      ],
+      "answer": 0,
+      "explain": "GeoDNS answers the same hostname with location-dependent IP records, so a user in Europe is handed a European endpoint and a user in Asia an Asian one. It works at DNS resolution time — before any TCP/HTTP connection — so it cannot see the URL path or Host header."
+    },
+    {
+      "q": "In an active-active redundancy setup, how is traffic handled compared to active-passive?",
+      "options": [
+        "Active-active keeps a hot standby idle until failover; active-passive splits load across all nodes",
+        "Active-active has all nodes serving traffic simultaneously and sharing capacity; active-passive keeps a standby that takes over only when the primary fails",
+        "Both keep exactly one node serving at a time",
+        "Active-active requires sticky sessions while active-passive forbids them"
+      ],
+      "answer": 1,
+      "explain": "Active-active runs every node live, so total capacity is the sum and failover just means the survivors absorb the load; active-passive reserves a standby that is normally idle and is promoted on failure. Active-active uses hardware more efficiently but requires the nodes to tolerate concurrent operation."
+    },
+    {
+      "q": "Why does horizontal scaling behind a load balancer generally scale further than vertical scaling of one machine?",
+      "options": [
+        "Because horizontal scaling requires no state coordination of any kind",
+        "Because a single machine can be made arbitrarily large at constant cost",
+        "Because adding more commodity nodes behind the balancer sidesteps the ceiling and single-point-of-failure of one ever-bigger box",
+        "Because the load balancer eliminates the need for health checks"
+      ],
+      "answer": 2,
+      "explain": "Horizontal scaling adds independent nodes the balancer can spread load over, so you are not capped by the largest single machine and you gain redundancy. It does introduce coordination and shared-state challenges — the tradeoff, not a free lunch."
+    },
+    {
+      "q": "A backend needs per-user session state but you want to avoid sticky sessions. What is the standard fix?",
+      "options": [
+        "Enable IP-hash so the same user always lands on the same node",
+        "Turn off health checks to keep nodes from being ejected mid-session",
+        "Switch the load balancer from L7 to L4",
+        "Externalize session state into a shared store (e.g. Redis) so any backend can serve any request"
+      ],
+      "answer": 3,
+      "explain": "If session state lives in a shared external store, backends become stateless and interchangeable, so the balancer can route freely and scale-in/failover no longer drops sessions. IP-hash is just another form of stickiness, and dropping to L4 or disabling health checks does not solve the state problem."
+    },
+    {
+      "q": "What is a genuine risk of relying on DNS-based routing for failover?",
+      "options": [
+        "Cached DNS records (TTL) mean clients may keep hitting a failed endpoint until the record expires",
+        "DNS routing always terminates TLS, exposing keys",
+        "DNS can only route within a single data center",
+        "DNS cannot return more than one IP per hostname"
+      ],
+      "answer": 0,
+      "explain": "Resolvers and clients cache DNS answers for the record's TTL, so after a failover the old IP can linger in caches and keep sending users to a dead endpoint until the TTL lapses. That caching lag is why anycast or health-aware balancers are often layered in for fast failover."
+    },
+    {
+      "type": "open",
+      "prompt": "An interviewer asks: 'When would you choose an L7 load balancer over an L4 one, and what does it cost you?' Walk through your reasoning.",
+      "points": [
+        "L7 parses HTTP, so pick it when you need content-based routing (path/header/cookie), TLS termination, or per-request features like sticky-by-cookie.",
+        "L4 forwards connections on IP/port without reading payload, so it is cheaper, lower-latency, and protocol-agnostic (handles non-HTTP/UDP).",
+        "Cost of L7: more CPU per request to parse HTTP, it must terminate TLS to see content, and it becomes a more complex stateful hop.",
+        "Real systems often layer both: L4 for raw distribution/DDoS absorption, L7 behind it for smart routing."
+      ],
+      "answer": "I'd reach for L7 when routing decisions depend on the request itself — send /api to one pool and /static to another, route by cookie, or terminate TLS and add auth/rate limiting. That costs more CPU per request and makes the balancer a heavier, TLS-terminating hop. If I just need to spread raw connections cheaply across a stateless fleet, or handle non-HTTP traffic, L4 is faster and simpler — and it's common to run L4 at the edge with L7 behind it."
+    }
+  ]
+}

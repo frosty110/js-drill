@@ -96,6 +96,26 @@
   };
 
   // ============================================================================
+  // SYSTEM DESIGN — DDIA (and future topics) multiple-choice memorization
+  // ============================================================================
+  // A standalone conceptual-recall surface (system-design.html). Unlike the
+  // JS-drill blobs above, there's no code execution — just per-question mastery
+  // and a lightweight spaced-repetition-style box, keyed by "<topic>/<chapterId>/<qIdx>".
+  Storage.SYSDESIGN_KEY = 'jsdrill.systemdesign.v1';
+  Storage.SYSDESIGN_VERSION = 1;
+  Storage.SYSDESIGN_ACCEPTED_VERSIONS = [1];
+
+  Storage.loadSystemDesign = function () {
+    return _safeLoad(Storage.SYSDESIGN_KEY, Storage.SYSDESIGN_ACCEPTED_VERSIONS);
+  };
+
+  Storage.saveSystemDesign = function (state) {
+    const stamped = Object.assign({}, state, { __v: Storage.SYSDESIGN_VERSION });
+    _safeSave(Storage.SYSDESIGN_KEY, stamped);
+    _fireWriteEvent('systemdesign');
+  };
+
+  // ============================================================================
   // CROSS-APP BRIDGE
   // ============================================================================
   // Prep + diagnostic need to (a) READ main-app progress to auto-check

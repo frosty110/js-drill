@@ -1,0 +1,210 @@
+{
+  "id": "ch09",
+  "chapter": 9,
+  "part": "Part II: Distributed Data",
+  "title": "Consistency and Consensus",
+  "summary": "The strongest correctness guarantees for distributed systems and what they cost. Covers linearizability (single-object recency) and how it differs from serializability, causal ordering versus total ordering, total order broadcast, two-phase commit for atomic commit, and fault-tolerant consensus (Raft/Paxos/Zab) and the coordination services built on it.",
+  "keyTakeaways": [
+    "Linearizability makes a system behave as if there is a single copy of the data with atomic operations: a recency guarantee on reads and writes of a single object.",
+    "Linearizability is NOT serializability: serializability is a transaction-isolation property over multiple objects (transactions equivalent to some serial order); combining both is 'strict serializability'.",
+    "The CAP theorem: under a network partition you must choose between linearizable (Consistent) and totally Available; and linearizability is often dropped for speed, not just availability.",
+    "Causal consistency preserves happens-before (a partial order) and is the strongest consistency achievable without slowing down under partitions; linearizability imposes a total order.",
+    "Total order broadcast (atomic broadcast) delivers messages reliably in the same order to all nodes and is equivalent to consensus and to linearizable compare-and-set.",
+    "Two-phase commit (2PC) is an atomic commit protocol with a coordinator; after a participant votes 'yes' it is in doubt and blocks holding locks if the coordinator crashes.",
+    "Fault-tolerant consensus (Paxos, Raft, Zab, VSR) provides uniform agreement, integrity, validity, and termination using epochs and quorums; FLP proves it is impossible in a purely asynchronous model but achievable with timeouts."
+  ],
+  "questions": [
+    {
+      "q": "In DDIA's precise definition, what does linearizability guarantee?",
+      "options": [
+        "That a set of transactions is equivalent to executing them one at a time in some serial order",
+        "That the system behaves as if there were a single copy of the data, so once a read returns a new value every later read returns that value or newer (a recency guarantee on a single object)",
+        "That all replicas eventually converge to the same value given no new writes",
+        "That reads never block writes and writes never block reads"
+      ],
+      "answer": 1,
+      "explain": "Linearizability (atomic/strong consistency) makes concurrent operations on a single object appear to take effect atomically at one instant, so the data looks like a single up-to-date copy: after any read observes a new value, all subsequent reads see it too. Option A is serializability, and option C describes mere eventual consistency."
+    },
+    {
+      "q": "How does linearizability differ from serializability?",
+      "options": [
+        "They are two names for the same guarantee",
+        "Serializability concerns a single object, while linearizability concerns whole transactions",
+        "Linearizability is a recency guarantee on reads/writes of a single object; serializability is an isolation guarantee that a set of multi-object transactions is equivalent to some serial order",
+        "Linearizability is weaker than eventual consistency, whereas serializability is stronger"
+      ],
+      "answer": 2,
+      "explain": "Serializability is a transaction-isolation property: transactions (which may touch many objects) behave as if run one at a time in some serial order, but that order need not match real time. Linearizability is about the recency of individual object reads/writes in real-time order. A system providing both is called strictly serializable."
+    },
+    {
+      "q": "Which of these genuinely requires linearizability to be correct?",
+      "options": [
+        "Rendering a social-media timeline where slightly stale data is acceptable",
+        "Electing a single leader / acquiring a distributed lock, where two nodes must never both believe they hold it",
+        "Serving cached product images from the nearest region",
+        "Computing an approximate count of active users"
+      ],
+      "answer": 1,
+      "explain": "Leader election and locking need linearizability: all nodes must agree on the single current holder, so a stale read could produce a dangerous split-brain. This is why coordination services like ZooKeeper/etcd provide linearizable operations. The other cases tolerate stale reads and do not need a recency guarantee."
+    },
+    {
+      "q": "According to DDIA, what does the CAP theorem actually say?",
+      "options": [
+        "A system can pick at most two of Consistency, Availability, and Partition tolerance at all times",
+        "Consistency and availability are always mutually exclusive regardless of partitions",
+        "Partitions never happen in a well-designed datacenter, so CAP is irrelevant",
+        "When a network partition occurs, a system must choose between being linearizable (Consistent) and being totally Available; when there is no partition it can be both"
+      ],
+      "answer": 3,
+      "explain": "DDIA reframes CAP as: if the network is partitioned, you must sacrifice either linearizability or total availability; without a partition you can have both. The popular 'pick 2 of 3' phrasing is misleading because partition tolerance is not optional — partitions are a fact you must handle, not a property you choose. Note too that linearizability is often dropped for performance, not only availability."
+    },
+    {
+      "q": "What is causal consistency, and what is its relationship to linearizability?",
+      "options": [
+        "It preserves the happens-before (causal) partial order between operations, and is the strongest consistency model that does not slow down or become unavailable under network partitions",
+        "It enforces a single total order on all operations, making it stronger than linearizability",
+        "It is identical to eventual consistency but with vector clocks",
+        "It guarantees recency on single objects but not ordering between them"
+      ],
+      "answer": 0,
+      "explain": "Causal consistency enforces only the partial order of causally related operations (happens-before), so concurrent operations may be seen in different orders on different nodes. Crucially it can remain available during partitions, making it the strongest consistency achievable without the coordination cost of linearizability, which instead imposes a full total order."
+    },
+    {
+      "q": "Lamport timestamps provide a total order consistent with causality. Why are they nonetheless insufficient for something like enforcing a unique-username constraint?",
+      "options": [
+        "Because Lamport timestamps can go backward, unlike wall clocks",
+        "Because the total order is only known in hindsight — a node cannot tell in the moment whether some other node is concurrently claiming the same name, so it needs total order broadcast to know when the order is finalized",
+        "Because Lamport timestamps require synchronized physical clocks to work",
+        "Because they only order operations on the same object, not across objects"
+      ],
+      "answer": 1,
+      "explain": "Lamport timestamps define a total order, but to reject a duplicate username immediately a node must know it has seen all other claims — and it cannot, because a lower timestamp could still arrive later. You need the order finalized at the moment of the decision, which is what total order broadcast provides."
+    },
+    {
+      "q": "What does total order broadcast (atomic broadcast) guarantee?",
+      "options": [
+        "Messages are delivered to at least one node, in any order",
+        "Messages are delivered in causal order, but nodes may disagree on the order of concurrent messages",
+        "Messages are delivered in FIFO order per sender but not globally ordered",
+        "Messages are delivered reliably and in the exact same total order to every node"
+      ],
+      "answer": 3,
+      "explain": "Total order broadcast requires two properties: reliable delivery (no message lost, all nodes get it) and totally ordered delivery (every node sees messages in the identical order). This is exactly what state-machine replication needs, and it turns out to be equivalent to consensus."
+    },
+    {
+      "q": "In two-phase commit (2PC), what happens after a participant replies 'yes' in the prepare phase but the coordinator then crashes before sending the decision?",
+      "options": [
+        "The participant unilaterally aborts and releases its locks after a short timeout",
+        "The participant commits automatically, since a 'yes' vote implies commit",
+        "The participant is 'in doubt' and must hold its locks and block until it can learn the coordinator's decision",
+        "The participant promotes itself to coordinator and decides for the whole cluster"
+      ],
+      "answer": 2,
+      "explain": "Once a participant votes yes it has promised to commit if told to and can no longer decide on its own; the coordinator's write of the commit decision is the point of no return. If the coordinator crashes at that moment, the participant is stuck in doubt, holding locks and blocking, until the coordinator recovers — 2PC's central weakness."
+    },
+    {
+      "q": "How is two-phase commit (2PC) related to, but distinct from, consensus algorithms like Paxos/Raft?",
+      "options": [
+        "2PC is an atomic commit protocol requiring all participants to vote yes and is blocking if the coordinator fails; consensus needs only a majority to agree and can tolerate node failures",
+        "2PC and consensus are the same protocol under different names",
+        "Consensus requires unanimity while 2PC needs only a majority",
+        "2PC tolerates coordinator failure automatically, whereas consensus blocks on a single failure"
+      ],
+      "answer": 0,
+      "explain": "2PC achieves atomic commit but requires every participant to agree and blocks if its single coordinator dies. Fault-tolerant consensus instead reaches agreement with only a majority (quorum) and survives minority failures, including of its leader. They are related — both about agreement — but 2PC is not fault-tolerant consensus."
+    },
+    {
+      "q": "Which set of formal properties defines fault-tolerant consensus in DDIA?",
+      "options": [
+        "Atomicity, consistency, isolation, durability",
+        "Uniform agreement, integrity, validity, and termination",
+        "Linearizability, causality, availability, and partition tolerance",
+        "Prepare, promise, accept, and learn"
+      ],
+      "answer": 1,
+      "explain": "Consensus is defined by uniform agreement (no two nodes decide differently), integrity (a node decides at most once), validity (the decided value was proposed by some node), and termination (every non-crashed node eventually decides). Termination is the liveness property that FLP shows is impossible without timing assumptions. Option D lists the phases of Paxos, not the properties."
+    },
+    {
+      "q": "What does the FLP impossibility result state about consensus?",
+      "options": [
+        "Consensus is impossible whenever more than half the nodes fail",
+        "Consensus is impossible in the presence of Byzantine nodes",
+        "No deterministic algorithm can guarantee consensus in a purely asynchronous system if even one node may crash — though consensus is achievable in practice using timeouts or randomization",
+        "Consensus always requires synchronized clocks with bounded drift"
+      ],
+      "answer": 2,
+      "explain": "FLP proves that in a fully asynchronous model (no clocks, no timeouts) with even a single possible crash, no deterministic algorithm can always reach consensus, because you cannot tell a slow node from a dead one. Real systems escape this by adding partial-synchrony assumptions (timeouts) or randomization, so Raft and Paxos work fine in practice."
+    },
+    {
+      "q": "Consensus is shown to be equivalent to several other problems. Which list is correct?",
+      "options": [
+        "Total order broadcast, linearizable compare-and-set, and leader election",
+        "Two-phase commit, eventual consistency, and read repair",
+        "Snapshot isolation, causal consistency, and sloppy quorums",
+        "Vector clocks, anti-entropy, and hinted handoff"
+      ],
+      "answer": 0,
+      "explain": "DDIA shows total order broadcast, a linearizable compare-and-set register, and leader election are all equivalent to consensus — solving any one lets you solve the others. The distractors mix in weaker mechanisms (eventual consistency, read repair, anti-entropy) that explicitly do not require consensus."
+    },
+    {
+      "q": "How do consensus algorithms like Raft and Paxos use epoch (term/ballot) numbers together with quorums?",
+      "options": [
+        "They give every node a fixed epoch at startup that never changes, avoiding elections",
+        "The epoch number is a wall-clock timestamp used to break ties between leaders",
+        "Quorums are only consulted for reads; writes go to the single leader without voting",
+        "Each election increments a monotonically increasing epoch number, and a leader must gather votes from a quorum; overlapping quorums guarantee any new leader learns of the latest committed decisions"
+      ],
+      "answer": 3,
+      "explain": "Every leader election bumps a monotonically increasing epoch (term/ballot) number, and to act a leader needs votes from a quorum. Because two quorums always overlap in at least one node, any newly elected leader is guaranteed to have seen the most recent committed proposals, preventing two leaders with conflicting decisions from both succeeding."
+    },
+    {
+      "q": "What core capabilities do coordination services like ZooKeeper and etcd provide to applications?",
+      "options": [
+        "High-throughput bulk data storage for application records",
+        "Linearizable atomic operations, total ordering of operations (e.g. via a monotonically increasing zxid), failure detection through ephemeral nodes/sessions, and change notifications (watches)",
+        "Column-oriented analytics with vectorized scans",
+        "Automatic sharding and rebalancing of the application's primary database"
+      ],
+      "answer": 1,
+      "explain": "ZooKeeper/etcd expose a small set of consensus-backed primitives: linearizable atomic compare-and-set, a total order via a monotonically increasing transaction id, failure detection via ephemeral nodes tied to client sessions, and watches for change notifications. Applications use these for leader election, locks, service discovery, and membership — not for storing large volumes of application data."
+    },
+    {
+      "type": "open",
+      "prompt": "For a distributed lock / leader-election service you insist on linearizability, but for a social feed you're fine with causal consistency. Explain when linearizability is actually required versus when causal is enough, and what linearizability costs you.",
+      "points": [
+        "Linearizability is a recency guarantee on a single object: once a read sees a new value, all later reads see it or newer, as if one up-to-date copy.",
+        "Locking / leader election needs it — a stale read could let two nodes both believe they hold the lock (split brain), a correctness violation.",
+        "The feed tolerates stale reads, so it needs only causal consistency: preserve happens-before (e.g. a reply never appears before its parent) while allowing concurrent ops to be seen in different orders.",
+        "Cost of linearizability: it requires coordination, so under a network partition (CAP) you must sacrifice availability, and even without partitions it adds latency.",
+        "Causal consistency is the strongest model that stays available and fast under partitions, which is why it's the default when recency isn't safety-critical."
+      ],
+      "answer": "Linearizability is a single-object recency guarantee — once anyone reads the new value, everyone does — and it's genuinely required for the lock service, because a stale read could let two nodes both think they're leader and cause split-brain. The feed only needs causal consistency: preserve happens-before so a reply never precedes its parent, while letting concurrent posts be ordered differently on different replicas. The reason not to make everything linearizable is cost: it needs coordination, so under a partition CAP forces me to give up availability, and it adds latency even without partitions. Causal is the strongest guarantee that stays available and fast, so I use it wherever stale reads aren't a safety problem."
+    },
+    {
+      "type": "open",
+      "prompt": "An interviewer asks: 'Two-phase commit and Raft both get nodes to agree — why do we say 2PC blocks but consensus is fault-tolerant?' Explain the mechanical difference.",
+      "points": [
+        "2PC is an atomic-commit protocol needing a unanimous 'yes' from every participant and driven by a single coordinator.",
+        "After a participant votes yes it is 'in doubt' — it has promised to commit and can't decide alone; if the coordinator crashes before delivering the decision, it must hold locks and block until the coordinator recovers.",
+        "The coordinator is a single point of failure with no built-in failover, so 2PC is not fault-tolerant.",
+        "Fault-tolerant consensus (Raft/Paxos/Zab) needs agreement only from a majority (quorum), not unanimity, so it survives a minority of failures including the leader.",
+        "Consensus uses monotonically increasing epoch/term numbers and overlapping quorums so a new leader learns the latest committed decisions and progress continues without blocking.",
+        "So 2PC and consensus are related (both about agreement) but distinct: 2PC blocks on one coordinator; consensus keeps going as long as a majority is up."
+      ],
+      "answer": "2PC requires every participant to vote yes and is driven by one coordinator; once a participant votes yes it's in doubt — committed to obey but unable to decide itself — so if the coordinator dies before sending the verdict, the participant blocks holding locks until it recovers. That single coordinator has no failover, so 2PC isn't fault-tolerant. Consensus algorithms like Raft instead need only a majority quorum to agree, so they tolerate a minority of failures including the leader: each election bumps a monotonic epoch number and overlapping quorums guarantee a new leader sees the latest committed decisions, so progress continues without blocking. They're related but not the same — 2PC blocks on unanimity + one coordinator, consensus advances on any majority."
+    },
+    {
+      "type": "open",
+      "prompt": "You need to enforce a globally unique username across a partitioned system. Explain why Lamport timestamps alone aren't enough and how total order broadcast lets you build the constraint.",
+      "points": [
+        "Lamport timestamps give a total order consistent with causality, but the order is only known in hindsight.",
+        "To reject a duplicate in the moment, a node must know it has seen all competing claims — but a lower timestamp could still arrive later, so it can't decide immediately.",
+        "Total order broadcast delivers every message reliably and in the identical order to all nodes, finalizing the order at delivery time.",
+        "Route all username claims through the broadcast (e.g. one log partition keyed by the name); a deterministic consumer reads them in the agreed order.",
+        "The consumer grants the first claim for a name and rejects every later one, giving a linearizable uniqueness check.",
+        "Total order broadcast is equivalent to consensus and to a linearizable compare-and-set, which is exactly the primitive a uniqueness constraint needs."
+      ],
+      "answer": "Lamport timestamps do define a total order, but only in hindsight — to reject a duplicate right now a node would have to be certain it has already seen every competing claim, and a lower timestamp could still show up later, so it can't safely decide in the moment. Total order broadcast solves this by delivering all claims reliably and in the same order to every node, finalizing the order at delivery. I route every claim for a username through the ordered log (partitioned by the name), and a deterministic consumer accepts the first claim it sees and rejects the rest. That's a linearizable compare-and-set, which is equivalent to consensus — exactly the primitive a uniqueness constraint requires."
+    }
+  ]
+}

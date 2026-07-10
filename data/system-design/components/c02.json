@@ -1,0 +1,183 @@
+{
+  "id": "c02",
+  "chapter": 2,
+  "part": "Traffic & Edge",
+  "title": "Caching",
+  "summary": "Where to put a cache, how reads and writes flow through it (cache-aside, read-through, write-through, write-back, write-around), how entries are evicted and invalidated, and how to survive the stampede when a hot key expires.",
+  "keyTakeaways": [
+    "Cache-aside (lazy loading): the app checks the cache, and on a miss loads from the DB and populates the cache itself; the cache never talks to the DB.",
+    "Read-through and write-through push that logic into the cache layer; write-through writes cache and DB synchronously (fresh but slower writes).",
+    "Write-back (write-behind) writes to cache and flushes to the DB asynchronously — fastest writes but risks data loss if the node dies before flush; write-around writes straight to the DB and skips the cache.",
+    "Eviction policies (LRU, LFU, FIFO, TTL/random) decide who leaves when the cache is full; cache invalidation is famously one of the two hard problems.",
+    "A cache stampede/thundering herd happens when a hot key expires and many requests hit the origin at once; mitigate with per-key locking, request coalescing, jittered TTLs, early recomputation, or stale-while-revalidate.",
+    "Redis is single-threaded with rich data structures and optional persistence; Memcached is multi-threaded, string-only, and purely in-memory.",
+    "Caches live at many layers — browser, CDN, in-process/application, distributed cache, and the DB buffer pool — and hit ratio measures their effectiveness."
+  ],
+  "questions": [
+    {
+      "q": "In the cache-aside (lazy loading) pattern, who is responsible for loading data from the database on a cache miss?",
+      "options": [
+        "A background job pre-warms every possible key",
+        "The cache automatically fetches from the DB and returns it",
+        "The application code reads from the DB and then writes the value into the cache",
+        "The database pushes the row into the cache when it changes"
+      ],
+      "answer": 2,
+      "explain": "With cache-aside the application owns the logic: on a miss it queries the DB, returns the value, and populates the cache itself — the cache is a dumb store that never contacts the DB. When the cache does the load for you, that is read-through, a different pattern."
+    },
+    {
+      "q": "How does write-through caching behave on a write?",
+      "options": [
+        "Writes are dropped unless the key is already cached",
+        "Writes go to the cache only and are flushed to the DB later asynchronously",
+        "Writes go straight to the DB and bypass the cache entirely",
+        "Writes update the cache and the database synchronously as one operation"
+      ],
+      "answer": 3,
+      "explain": "Write-through updates both the cache and the DB synchronously, so the cache is always consistent with the database at the cost of slower writes. Writing to cache and flushing later is write-back; going straight to the DB and skipping the cache is write-around."
+    },
+    {
+      "q": "What is the defining risk of a write-back (write-behind) cache?",
+      "options": [
+        "Data can be lost if the cache node fails after acking the write but before flushing it to the database",
+        "Every write must also invalidate the CDN",
+        "Writes are slower than write-through because of the extra hop",
+        "Reads are always stale because the DB is never updated"
+      ],
+      "answer": 0,
+      "explain": "Write-back acknowledges the write once it hits the cache and flushes to the DB asynchronously, so a crash before the flush loses those buffered writes — the durability tradeoff for very fast writes. It is actually faster than write-through, which is its whole appeal."
+    },
+    {
+      "q": "When is write-around caching (write to the DB, skip the cache) the right choice?",
+      "options": [
+        "For data that is written once and read many times immediately after",
+        "For write-heavy data that is rarely re-read soon, so you avoid polluting the cache with entries that will just be evicted",
+        "When you need the cache and DB to stay perfectly consistent on every write",
+        "When you want the fastest possible write latency"
+      ],
+      "answer": 1,
+      "explain": "Write-around sends writes straight to the DB and only caches on a later read, which avoids filling the cache with write-once data that would otherwise evict hotter entries. The tradeoff is that a read right after a write is a guaranteed miss."
+    },
+    {
+      "q": "Which pattern combined with write-around causes a recently written item to be a cache miss on the next read?",
+      "options": [
+        "Write-through, because it invalidates on write",
+        "Read-through, because it never repopulates",
+        "Cache-aside read, because the write skipped the cache so the value must be loaded from the DB on first read",
+        "Write-back, because the flush blocks the read"
+      ],
+      "answer": 2,
+      "explain": "Write-around does not populate the cache on write, so the first read afterward misses and a cache-aside/read-through load pulls it from the DB. Write-through would have kept the cache fresh, avoiding that miss."
+    },
+    {
+      "q": "What does an LRU eviction policy do when the cache is full?",
+      "options": [
+        "Evicts a randomly chosen entry",
+        "Evicts the entry that has been accessed the fewest times overall",
+        "Evicts the entry that was inserted earliest, regardless of use",
+        "Evicts the entry that has gone the longest without being accessed"
+      ],
+      "answer": 3,
+      "explain": "LRU (least-recently-used) evicts whichever entry has been idle the longest, betting that recently touched items will be touched again. Evicting by lowest access count is LFU, and evicting the oldest-inserted is FIFO."
+    },
+    {
+      "q": "How does LFU differ from LRU?",
+      "options": [
+        "LFU evicts by lowest access frequency/count; LRU evicts by longest time since last access",
+        "LFU and LRU are identical for read-heavy workloads",
+        "LFU evicts the newest entries first; LRU evicts the oldest",
+        "LFU uses TTL while LRU never expires entries"
+      ],
+      "answer": 0,
+      "explain": "LFU tracks how often each key is used and drops the least-frequently-used, which can retain a long-popular item that was briefly idle; LRU only looks at recency of last access. A pitfall of LFU is that once-popular-now-cold keys can stick around unless the counts decay."
+    },
+    {
+      "q": "A cache stampede (thundering herd) occurs when...",
+      "options": [
+        "The cache runs out of memory and evicts everything at once",
+        "A popular key expires and many concurrent requests all miss and hit the origin database simultaneously",
+        "Two nodes write the same key with different values",
+        "The TTL is set too long, so entries never refresh"
+      ],
+      "answer": 1,
+      "explain": "When a hot key expires, every in-flight request misses at once and stampedes the origin to recompute the same value, which can overwhelm the DB. The classic fixes coordinate that recomputation so only one request does the work."
+    },
+    {
+      "q": "Which technique lets only one request recompute an expired hot key while the others wait for or reuse its result?",
+      "options": [
+        "Disabling TTLs so keys never expire",
+        "Increasing the LRU cache size",
+        "Per-key locking / request coalescing (single-flight)",
+        "Switching from Redis to Memcached"
+      ],
+      "answer": 2,
+      "explain": "A per-key lock (single-flight / request coalescing) ensures the first request rebuilds the value while the rest block briefly and then read the freshly cached result, collapsing N origin hits into one. Bigger caches or a different engine do not address the concurrent-miss problem."
+    },
+    {
+      "q": "Why add jitter (randomization) to cache TTLs?",
+      "options": [
+        "To guarantee strong consistency with the database",
+        "To reduce the memory footprint of each entry",
+        "To make each key use a different eviction policy",
+        "To spread expirations over time so many keys don't expire at the same instant and cause a synchronized stampede"
+      ],
+      "answer": 3,
+      "explain": "If many entries are written together with an identical TTL, they all expire simultaneously and stampede the origin; adding random jitter to each TTL staggers the expirations. It is a cheap complement to locking and early-recompute strategies."
+    },
+    {
+      "q": "What does the stale-while-revalidate strategy do?",
+      "options": [
+        "Serves the existing (slightly stale) cached value immediately while asynchronously refreshing it in the background",
+        "Deletes the key the moment it becomes stale",
+        "Writes through to the DB on every read",
+        "Blocks all readers until a fresh value is computed"
+      ],
+      "answer": 0,
+      "explain": "Stale-while-revalidate returns the stale entry right away to keep latency low and kicks off an async refresh so the next reader gets fresh data, avoiding both the miss latency and the stampede. The cost is briefly serving slightly outdated data."
+    },
+    {
+      "q": "Which statement correctly contrasts Redis and Memcached?",
+      "options": [
+        "Redis is multi-threaded and string-only; Memcached is single-threaded with rich data structures",
+        "Redis is single-threaded (per shard) with rich data structures and optional persistence; Memcached is multi-threaded, stores plain strings, and is purely in-memory",
+        "Both persist to disk by default and support the same data types",
+        "Memcached supports replication and pub/sub while Redis does not"
+      ],
+      "answer": 1,
+      "explain": "Redis offers data structures (lists, sets, sorted sets, hashes), optional persistence (RDB/AOF), and replication, running its command loop single-threaded; Memcached is a simpler multi-threaded string cache with no persistence. Pick Memcached for a pure, multi-core string cache and Redis when you need structures, durability, or pub/sub."
+    },
+    {
+      "q": "Which is an example of an in-process (application-layer) cache rather than a distributed cache?",
+      "options": [
+        "The database's buffer pool",
+        "A Redis cluster shared by all app servers",
+        "A local in-memory map inside a single application server's heap",
+        "A CDN edge PoP caching static assets"
+      ],
+      "answer": 2,
+      "explain": "An in-process cache lives inside one application instance's memory (fastest access, but not shared and lost on restart); a Redis cluster is a distributed cache shared across servers. CDN and DB buffer pool are separate cache layers entirely."
+    },
+    {
+      "q": "A single 'hot key' is receiving so much traffic that its one cache node is saturated. Which mitigation directly addresses this?",
+      "options": [
+        "Switch the eviction policy from LRU to FIFO",
+        "Reduce the cache size to force earlier eviction",
+        "Raise the global TTL so the key never expires",
+        "Replicate the hot key across multiple nodes (or add a small local in-process cache) so reads fan out instead of hammering one node"
+      ],
+      "answer": 3,
+      "explain": "A hot key overloads whichever shard owns it, so the fix is to spread its reads — replicate the key to several nodes or front it with a per-app-server local cache. Eviction policy and TTL tuning don't relieve a single overloaded node."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the difference between write-through and write-back caching, and when you'd accept the durability risk of write-back.",
+      "points": [
+        "Write-through writes cache and DB synchronously — always consistent, slower writes, no data-loss window.",
+        "Write-back writes to cache and flushes to DB asynchronously — much faster writes, but a crash before flush loses buffered writes.",
+        "Choose write-back when write throughput/latency matters more than never losing a recent write (e.g. metrics, counters, view counts, ephemeral state).",
+        "Mitigate the risk with replication of the cache, batching flushes, or accepting bounded loss for that data class."
+      ],
+      "answer": "Write-through updates the cache and the database in the same synchronous operation, so the DB is always current but every write pays for two writes. Write-back only writes the cache and flushes to the DB asynchronously, which is far faster but opens a window where a node crash loses unflushed writes. I'd accept write-back for high-volume, loss-tolerant data like counters or metrics — ideally with cache replication or bounded batching to cap how much I could lose — and stick with write-through for anything I can't afford to drop."
+    }
+  ]
+}

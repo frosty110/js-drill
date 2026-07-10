@@ -1,0 +1,161 @@
+{
+  "id": "c03",
+  "chapter": 3,
+  "part": "Traffic & Edge",
+  "title": "CDN & Edge",
+  "summary": "How a content delivery network caches assets close to users to cut latency and offload the origin: pull vs push distribution, edge PoPs, TTL and Cache-Control headers, purge/cache-busting, origin shielding, and running compute at the edge.",
+  "keyTakeaways": [
+    "A CDN caches primarily static assets at edge PoPs near users; with edge rules it can also cache dynamic or personalized responses.",
+    "Pull CDN (origin-pull) lazily fetches on the first request (a miss), so origin content is only copied when demanded; push CDN has you upload assets ahead of time, good for large or infrequently changing files.",
+    "Freshness is governed by TTL via Cache-Control: max-age (browser/shared) and s-maxage (shared caches like CDNs).",
+    "You invalidate stale content by purging the CDN or, more robustly, by cache-busting with versioned/fingerprinted URLs so a new asset gets a new URL.",
+    "Origin shielding designates a mid-tier cache that all edges pull through, collapsing requests and shrinking origin load on a miss.",
+    "CDNs cut latency via geographic proximity, fewer network hops, and terminating TLS/TCP near the user, while offloading bytes from the origin.",
+    "Edge compute runs logic (auth, A/B tests, personalization, redirects) at the PoP so it happens close to the user instead of at the origin."
+  ],
+  "questions": [
+    {
+      "q": "What does a CDN primarily cache, and what is the caveat?",
+      "options": [
+        "Only database rows; it cannot serve files",
+        "Primarily static assets (images, CSS, JS, video), though with edge rules it can also cache dynamic or personalized responses",
+        "Only fully dynamic pages; static files must come from the origin",
+        "Nothing is cached; a CDN only shortens the network path"
+      ],
+      "answer": 1,
+      "explain": "CDNs shine at caching static, cacheable assets close to users, but modern edge configuration (cache keys, vary rules, edge compute) lets them cache dynamic or personalized content too. A CDN does more than shorten paths — caching is its core job."
+    },
+    {
+      "q": "In a pull (origin-pull) CDN, what happens on the very first request for an asset?",
+      "options": [
+        "The origin is bypassed and the asset is generated at the edge",
+        "It is served instantly from the edge because assets were uploaded in advance",
+        "It is a cache miss: the edge fetches the asset from the origin, caches it, then serves it — subsequent requests are hits",
+        "It is rejected until an admin manually pushes the file"
+      ],
+      "answer": 2,
+      "explain": "A pull CDN populates lazily: the first request for an object misses, the edge pulls it from the origin and caches it per its TTL, and later requests are served from the edge. That first-request latency penalty is the tradeoff for not having to pre-upload everything."
+    },
+    {
+      "q": "When is a push CDN preferable to a pull CDN?",
+      "options": [
+        "When you never want to manage what is stored at the edge",
+        "When content changes on every single request",
+        "When traffic is unpredictable and you want the CDN to fetch on demand",
+        "For large or infrequently changing assets where you'd rather upload once and avoid origin-pull misses and repeated origin fetches"
+      ],
+      "answer": 3,
+      "explain": "Push CDNs work well for big, stable files (installers, large media) you upload proactively so users never pay a first-miss origin fetch and the origin isn't repeatedly pulled. The cost is you must manage uploads and expiry yourself, whereas pull is more hands-off for frequently changing catalogs."
+    },
+    {
+      "q": "What is an edge PoP (point of presence) in a CDN?",
+      "options": [
+        "A geographically distributed cluster of edge/cache servers located near users to serve cached content",
+        "The DNS resolver that maps hostnames to IPs",
+        "A database replica used for analytics",
+        "The single origin server that holds the authoritative copy of all content"
+      ],
+      "answer": 0,
+      "explain": "A PoP is a cluster of edge servers placed in many locations worldwide so requests are served from a nearby cache rather than the distant origin. The origin remains the single source of truth that PoPs pull from on a miss."
+    },
+    {
+      "q": "Which HTTP header directive specifically controls how long a shared cache like a CDN may consider a response fresh, overriding max-age for that shared cache?",
+      "options": [
+        "Cache-Control: private",
+        "Cache-Control: s-maxage",
+        "Cache-Control: must-revalidate",
+        "Cache-Control: no-store"
+      ],
+      "answer": 1,
+      "explain": "s-maxage sets the freshness lifetime for shared caches (CDNs/proxies) and takes precedence over max-age for them, letting you cache longer at the edge than in browsers. no-store forbids caching, and private restricts a response to the browser only."
+    },
+    {
+      "q": "What does Cache-Control: max-age=3600 tell a cache?",
+      "options": [
+        "The origin will push an update every 3600 seconds",
+        "The asset may only be stored by the CDN, not the browser",
+        "The response may be reused as fresh for up to 3600 seconds before it must be revalidated or refetched",
+        "The response must be deleted after exactly 3600 requests"
+      ],
+      "answer": 2,
+      "explain": "max-age defines the freshness window in seconds; within it a cache serves the stored copy without contacting the origin, and after it the entry is stale and must be revalidated or refetched. It counts time, not requests, and applies to both browser and shared caches unless s-maxage overrides."
+    },
+    {
+      "q": "Why is versioned/fingerprinted URL cache-busting (e.g. app.a1b2c3.js) often preferred over issuing CDN purges?",
+      "options": [
+        "Because fingerprinting disables caching entirely for safety",
+        "Because purges permanently delete the origin file",
+        "Because purges are impossible on a pull CDN",
+        "Because a content hash in the filename means a changed asset gets a brand-new URL, so caches never serve a stale version and you can set very long TTLs"
+      ],
+      "answer": 3,
+      "explain": "When the URL changes with the content, old and new assets are distinct cache entries, so clients and edges immediately request the new URL and stale copies simply age out — letting you cache aggressively (immutable, long max-age). Explicit purges work too but are slower to propagate and must be triggered on every change."
+    },
+    {
+      "q": "What problem does origin shielding solve?",
+      "options": [
+        "It designates a mid-tier cache that edge PoPs pull through, so a cache miss collapses to one origin request instead of many, reducing origin load",
+        "It blocks all dynamic content from reaching the origin",
+        "It replaces DNS-based routing with anycast",
+        "It encrypts traffic between the user and the edge"
+      ],
+      "answer": 0,
+      "explain": "Without a shield, a miss at many edge PoPs can each independently hit the origin; a shield PoP sits between the edges and origin so those misses funnel through one cache, collapsing requests and cutting origin traffic. It is about offloading the origin, not about encryption or routing."
+    },
+    {
+      "q": "Which is a primary reason a CDN reduces latency for users?",
+      "options": [
+        "It runs the origin's database at every edge",
+        "Geographic proximity plus fewer network hops, and terminating TLS/TCP near the user, so round trips are shorter",
+        "It compresses all responses to zero bytes",
+        "It replaces HTTP with a proprietary protocol end to end"
+      ],
+      "answer": 1,
+      "explain": "Serving from a nearby PoP shortens the physical distance and number of hops, and terminating TLS/TCP at the edge lets the expensive handshakes complete over a short RTT. These proximity effects, not running the whole database everywhere, are what cut latency."
+    },
+    {
+      "q": "Besides latency, what is the other major benefit a CDN provides to the origin?",
+      "options": [
+        "It makes all content dynamic",
+        "It guarantees strong consistency for database writes",
+        "It offloads traffic: cached hits are served from the edge, so the origin handles far fewer requests and less bandwidth",
+        "It eliminates the need for a load balancer"
+      ],
+      "answer": 2,
+      "explain": "Every edge hit is a request the origin never sees, so the CDN absorbs the bulk of read traffic and bandwidth — critical for spikes and large media. It does not provide database consistency guarantees or remove the need for balancing behind the origin."
+    },
+    {
+      "q": "What is edge compute in the context of a CDN?",
+      "options": [
+        "A batch job that recompresses cached assets nightly",
+        "The DNS resolution step performed before caching",
+        "Running the origin's monolith at a single central data center",
+        "Executing application logic (auth checks, A/B tests, redirects, personalization) at the edge PoP, close to the user, instead of at the origin"
+      ],
+      "answer": 3,
+      "explain": "Edge compute runs small functions on the PoP so decisions like authentication, request rewriting, A/B assignment, or personalization happen near the user with minimal round trips, rather than traveling to the origin. It pushes logic — not just cached bytes — to the edge."
+    },
+    {
+      "q": "A user reports still seeing an old logo after you deployed a new one to the same URL. What is the most likely cause?",
+      "options": [
+        "The old asset is still fresh in caches (browser and/or CDN) under its TTL, so the stale copy is served until it expires or is purged",
+        "The origin failed to receive the new file",
+        "Edge compute rewrote the response",
+        "The CDN never caches images"
+      ],
+      "answer": 0,
+      "explain": "Reusing the same URL means caches keep serving the still-fresh old bytes until the TTL lapses or you purge; this is exactly why fingerprinted URLs are preferred. A purge or a version-bumped filename forces clients to fetch the new asset immediately."
+    },
+    {
+      "q": "How can a CDN serve dynamic or personalized content without breaking caching for everyone?",
+      "options": [
+        "It cannot; dynamic content always bypasses the CDN",
+        "By varying the cache key (e.g. on a cookie, header, or geo) or using edge compute so each variant is cached separately for the right audience",
+        "By disabling TTLs so nothing is ever stored",
+        "By pushing every user's page to every PoP in advance"
+      ],
+      "answer": 1,
+      "explain": "Including the distinguishing input (cookie, Vary header, geo, device) in the cache key gives each variant its own cache entry, and edge compute can assemble personalized responses at the PoP. Done carelessly this fragments the cache, so you cache only what genuinely varies."
+    }
+  ]
+}

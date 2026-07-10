@@ -1,0 +1,159 @@
+{
+  "id": "p07",
+  "num": 7,
+  "part": "Realtime & Write-Heavy Systems",
+  "title": "Design a Notification System",
+  "summary": "A fan-out service that delivers notifications across many channels (mobile push via APNS/FCM, email, SMS, in-app) reliably and at spike scale. The signature challenge is a queue-decoupled, per-channel worker pipeline with user preferences, dedup/idempotency, retries with backoff + dead-letter, and priority lanes.",
+  "keyTakeaways": [
+    "Decouple producers from delivery with a queue: `producer -> topic/queue -> per-channel worker pool`, so an event spike (or a slow provider) never blocks the caller.",
+    "Hide each provider (APNS, FCM, SES/SMTP, Twilio) behind a uniform `ChannelAdapter` interface so the pipeline is provider-agnostic and adapters can be swapped or added.",
+    "Consult a preferences/opt-out + rate-limit + quiet-hours check BEFORE templating/sending; store templates centrally and render per locale.",
+    "Idempotency (dedup on a notification/event key) prevents duplicate sends from at-least-once queue redelivery and producer retries.",
+    "Retries use exponential backoff + jitter; exhausted messages go to a dead-letter queue for inspection, not silent loss.",
+    "Priority lanes (separate queues) keep OTP/2FA and transactional traffic ahead of bulk marketing so latency-critical messages aren't stuck behind a campaign.",
+    "APNS/FCM device tokens rotate and go stale; feedback from the provider must prune dead tokens or delivery rate silently rots."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a notification system. What functional and non-functional requirements would you nail down before designing? Interviewer has said 'push, email, and SMS, used by other internal services.'",
+      "points": [
+        "Functional: multiple channels (mobile push APNS/FCM, email, SMS, optionally in-app/web push); a send API other services call; user preferences/opt-out per channel and per category; templating/localization; delivery status/tracking.",
+        "Types of traffic: transactional (OTP, receipts) vs promotional/bulk (campaigns) vs system alerts — they have different priority and consent rules.",
+        "Non-functional: high availability, at-least-once delivery with dedup (not exactly-once), spike tolerance, low latency for OTP (seconds), high throughput for bulk.",
+        "Explicitly out of scope up front: we don't compose business logic; callers pass an event/notification and a target user or template.",
+        "Scale target and read:write shape — this is a write/fan-out-heavy system; reads (status queries) are secondary."
+      ],
+      "answer": "I'd confirm the channels (push via APNS/FCM, email, SMS, maybe in-app) and that the system is called by other services via a send API — we deliver, we don't author business content. Key axes are traffic class (transactional/OTP vs bulk marketing vs alerts), which drive priority and consent handling. Non-functionally I'd target high availability, spike tolerance, and at-least-once delivery with dedup — exactly-once across third-party providers is unrealistic, so idempotency + user-visible-duplicate avoidance is the real goal. It's a write-heavy fan-out system; status reads are secondary."
+    },
+    {
+      "type": "open",
+      "prompt": "Do a capacity estimate. Assume 100M daily active users and that each averages 5 notifications/day across channels. Work out the write QPS, peak, and rough queue/throughput needs.",
+      "points": [
+        "Total sends/day = 100M x 5 = 500M/day.",
+        "Average QPS = 500M / 86,400s approx 5.8k/s.",
+        "Peak is spiky (campaign blasts, morning OTP surge): assume 5-10x average, so plan for ~30-60k sends/s peak.",
+        "Fan-out multiplies work: one 'notify user' event may hit 2-3 channels, so worker-side dispatch QPS is a small multiple of ingest QPS.",
+        "Storage: a delivery/status record ~500 bytes x 500M/day approx 250 GB/day of log-ish data; retain 30-90 days -> tier to cheap storage / expire.",
+        "Provider limits matter more than our own: APNS/FCM/Twilio each throttle, so peak is often provider-bound, which is exactly why the queue exists as a shock absorber."
+      ],
+      "answer": "500M sends/day is ~5.8k/s average, but the load is bursty — campaign blasts and morning OTP surges push peak to maybe 30-60k/s, so I'd size for ~10x average. Fan-out means one event can produce 2-3 channel sends, so worker dispatch QPS runs a bit above ingest. Status records at ~500 bytes over 500M/day is ~250 GB/day, retained 30-90 days on cheap storage with TTL. Crucially, sustained peak is usually bounded by APNS/FCM/Twilio throttles, not our compute — which is the whole reason the queue sits in the middle as a shock absorber."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the core API other services call to send a notification. What are the endpoints and the key fields?",
+      "points": [
+        "`POST /v1/notifications` with body: `{ userId | recipients, templateId, data (template vars), channels?, category, priority, idempotencyKey }`.",
+        "Return `202 Accepted` with a `notificationId` — the call is async; delivery happens off the queue, not inline.",
+        "`idempotencyKey` (caller-supplied) makes retried POSTs safe — same key returns the same `notificationId` without re-enqueueing.",
+        "`GET /v1/notifications/{id}` returns per-channel delivery status (queued/sent/delivered/failed).",
+        "Preference/registration endpoints: `POST /v1/devices` to register a push token; `PUT /v1/users/{id}/preferences` for opt-out and channel/category settings.",
+        "`category` + `priority` let the system route to the right queue lane and apply the right consent rules."
+      ],
+      "answer": "The core is `POST /v1/notifications` taking a target (userId or explicit recipients), a `templateId` plus `data` for variables, optional `channels`, a `category`, `priority`, and a caller-supplied `idempotencyKey`. It returns `202` with a `notificationId` — delivery is async off the queue. That idempotency key makes client retries safe. Around it sit `GET /v1/notifications/{id}` for status, `POST /v1/devices` to register push tokens, and a preferences endpoint for opt-out and per-category channel settings."
+    },
+    {
+      "type": "open",
+      "prompt": "Sketch the high-level architecture and the key data model. Name the components in the delivery path.",
+      "points": [
+        "Ingest API tier -> validation + idempotency check -> enqueue onto a message queue/topic (Kafka or SQS/SNS), partitioned by priority/channel.",
+        "Notification/dispatch workers consume, expand fan-out (user -> devices/addresses), run preference + rate-limit + dedup checks, render template, then hand off to per-channel worker pools.",
+        "Channel workers wrap `ChannelAdapter`s (APNS, FCM, SES/SMTP, Twilio) that do the actual provider call and normalize responses.",
+        "Stores: user/preferences DB, device-token store (per user, per platform), template store, and an append-heavy notification/status store (Cassandra/DynamoDB-style, keyed by notificationId or userId+time).",
+        "A retry/DLQ path and a status/callback consumer that ingests provider delivery receipts (APNS feedback, email opens/bounces).",
+        "Data model: Notification(id, userId, category, status, createdAt), DeliveryAttempt(notificationId, channel, provider, state, attempts), Device(userId, platform, token, active), Preference(userId, category, channel, enabled)."
+      ],
+      "answer": "The API tier validates, dedups on the idempotency key, and enqueues onto a partitioned queue. Dispatch workers pull events, expand fan-out from user to concrete devices/addresses, run preference + rate-limit + dedup checks, render the template, and route to per-channel worker pools. Each channel worker wraps a `ChannelAdapter` for APNS/FCM/SES/Twilio that makes the provider call and normalizes the result. Backing stores are a preferences DB, a device-token store, a template store, and a write-heavy status store (e.g. Cassandra/Dynamo) keyed by notificationId. A DLQ handles exhausted retries and a callback consumer folds in provider receipts (delivered/bounced/opened).",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Caller\n  participant API as Ingest API\n  participant Q as Queue\n  participant DW as Dispatch worker\n  participant CW as Channel worker\n  participant P as Provider\n  C->>API: POST /v1/notifications (idempotencyKey)\n  API-->>C: 202 notificationId\n  API->>Q: enqueue\n  Q->>DW: consume\n  DW->>DW: prefs + dedup + render\n  DW->>CW: per-channel task\n  CW->>P: ChannelAdapter.send\n  P-->>CW: accepted / retryable / fail",
+        "caption": "Request flow"
+      }
+    },
+    {
+      "type": "mc",
+      "q": "Why put a durable message queue between the ingest API and the channel senders, rather than having the API call APNS/FCM/Twilio synchronously?",
+      "options": [
+        "It guarantees exactly-once delivery to the end device, which synchronous calls cannot provide.",
+        "It decouples ingest from delivery so spikes and slow/failing providers are absorbed as backlog instead of blocking or dropping caller requests, and enables independent scaling + retries.",
+        "It removes the need for idempotency keys because queues never deliver a message twice.",
+        "It lets the API tier render templates faster by caching them in the broker."
+      ],
+      "answer": 1,
+      "explain": "The queue is a shock absorber and a decoupler: bursts and slow third-party providers become backlog the workers drain at their own rate, callers get a fast `202`, workers scale independently, and failed sends can be retried off the queue. It does NOT give exactly-once (queues are at-least-once, which is exactly why you still need idempotency/dedup), and it isn't a template cache.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: walk through the fan-out delivery pipeline for one 'notify user 42' event, and explain how the ChannelAdapter abstraction keeps it provider-agnostic.",
+      "points": [
+        "Dispatch worker resolves user 42 -> their enabled channels and concrete endpoints: N device tokens (iOS via APNS, Android via FCM), an email, a phone number.",
+        "For each (channel, endpoint) it emits a delivery task onto that channel's queue — this is the fan-out multiplication (1 event -> several sends).",
+        "Each channel worker pool calls a common `ChannelAdapter.send(renderedMessage, endpoint)` interface; the APNS/FCM/SES/Twilio adapters implement the provider-specific protocol, auth, and payload shape behind it.",
+        "Adapters normalize provider responses into a common result (accepted / retryable-error / permanent-failure / invalid-token) so the pipeline handles all channels uniformly.",
+        "Rendering happens once per channel (channels have different payload formats/limits — SMS 160 chars, push payload size caps) using the template + user locale.",
+        "New channel = new adapter, no pipeline change; a flaky provider is isolated to its own worker pool and queue so it can't stall other channels."
+      ],
+      "answer": "The dispatch worker resolves user 42 into concrete endpoints — say two iOS tokens, one Android token, an email, and a phone number — and emits a delivery task per (channel, endpoint), which is where fan-out multiplies one event into several sends. Each channel's worker pool calls a uniform `ChannelAdapter.send(message, endpoint)`; the APNS/FCM/SES/Twilio implementations handle provider auth, payload shape, and limits behind that interface and normalize responses into accepted / retryable / permanent-fail / bad-token. Rendering is per-channel because formats differ (SMS 160 chars, push payload caps). Adding a channel is just a new adapter, and isolating each provider to its own pool means one flaky provider can't stall the others.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "Queues are at-least-once and callers retry on timeout, so the same logical notification can reach a worker multiple times. What is the most robust way to avoid the user seeing duplicate messages?",
+      "options": [
+        "Rely on the message broker's ordering guarantee to ensure each message is processed once.",
+        "Have each channel worker sleep a random interval so concurrent duplicates naturally separate in time.",
+        "Store a dedup/idempotency key (event or notification id) in a fast store with a TTL and atomically check-and-set it before sending; skip the send if the key already fired.",
+        "Delete the message from the queue before sending so it can never be redelivered."
+      ],
+      "answer": 2,
+      "explain": "Dedup needs an idempotency key persisted with an atomic check-and-set (e.g. Redis `SET key NX EX ttl` or a conditional DB write) so that only the first processing of a given key actually sends; redeliveries and caller retries find the key set and no-op. Broker ordering doesn't imply single delivery; sleeping is a race, not a fix; and deleting-before-send turns at-least-once into at-most-once (you'll silently lose messages on a worker crash after delete).",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "How do you handle a channel send that fails? Design the retry, backoff, and dead-letter behavior, and distinguish transient from permanent failures.",
+      "points": [
+        "Classify the normalized adapter result: transient (provider 5xx, timeout, throttled/429) -> retry; permanent (invalid token, unsubscribed, hard email bounce) -> do not retry, take corrective action.",
+        "Retries use exponential backoff with jitter (e.g. 1s, 2s, 4s... capped) to avoid hammering a recovering provider and to spread thundering-herd retries.",
+        "Bound retries (e.g. max 5 attempts or a time budget); track attempt count on the delivery record.",
+        "After exhaustion, move the message to a dead-letter queue for inspection/alerting/manual replay — never silently drop.",
+        "Permanent failures feed back: invalid APNS/FCM tokens are pruned from the device store; hard email bounces suppress future sends to that address.",
+        "Respect provider throttle signals (429/Retry-After) by slowing that channel's worker, not just blind-retrying."
+      ],
+      "answer": "First classify the adapter's normalized result: transient errors (5xx, timeouts, 429 throttles) get retried; permanent ones (invalid token, unsubscribed, hard bounce) don't. Retries use exponential backoff with jitter and a bounded attempt count tracked on the delivery record, so we don't hammer a recovering provider. When retries are exhausted the message goes to a dead-letter queue for alerting and manual replay rather than being dropped. Permanent failures also feed back into state — dead push tokens get pruned, bounced emails suppressed — and 429/Retry-After signals throttle that channel's workers instead of blind retrying."
+    },
+    {
+      "type": "open",
+      "prompt": "How do user preferences, rate limiting, and priority lanes fit in? Where in the pipeline do these checks belong, and why?",
+      "points": [
+        "Preference/opt-out + quiet-hours + consent checks run in the dispatch worker BEFORE templating/sending, so we never render or pay a provider for a message we shouldn't send.",
+        "Per-user rate limiting (e.g. max N marketing pushes/day) prevents notification fatigue; enforced with a counter (Redis) keyed by user+category+window.",
+        "Priority lanes = separate queues/topics per priority: OTP/2FA and transactional get a high-priority lane with dedicated workers; bulk campaigns get a lower lane that can lag.",
+        "This keeps a marketing blast from starving latency-critical OTPs — a fairness/isolation concern, solved structurally by separate queues rather than in-app sorting.",
+        "Transactional messages typically bypass user opt-out (you can't opt out of a security code) while promotional respects it — category drives the rule.",
+        "Global provider rate limits are also enforced at the channel-worker layer (token-bucket per provider) to stay within APNS/FCM/Twilio quotas."
+      ],
+      "answer": "Preference, opt-out, quiet-hours, and per-user rate-limit checks run in the dispatch worker before we template or call a provider — no point rendering a message we're not allowed to send. Rate limits use a Redis counter keyed by user+category+window to fight notification fatigue. Priority is structural: separate queue lanes per priority with dedicated workers, so an OTP never queues behind a million-message campaign — that isolation is far more reliable than sorting inside one queue. Category also governs consent: you can opt out of marketing but not a 2FA code. Finally the channel-worker layer holds per-provider token buckets to respect APNS/FCM/Twilio quotas."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level: what breaks at scale, and what are the key failure modes and tradeoffs? Cover provider outages, stale tokens, hot campaigns, and consistency.",
+      "points": [
+        "Provider outage: a channel (e.g. APNS) goes down -> its queue backs up; the queue absorbs it and workers drain on recovery, but you need alerting on queue depth/age and possibly a fallback channel for critical messages.",
+        "Token rot: push tokens rotate constantly; without pruning on provider feedback, effective delivery rate silently decays — reconciliation of the device store is essential.",
+        "Hot campaign / thundering herd: a 100M-user blast can saturate a provider and starve other traffic — priority lanes + per-provider throttling + scheduling/spreading the blast over time mitigate it.",
+        "At-least-once means occasional duplicates on the boundary (send succeeds but ack lost); dedup windows shrink but can't eliminate this — accept it, don't chase exactly-once across third parties.",
+        "Consistency: status store is eventually consistent; a `GET status` right after send may read `queued`. That's fine for this domain — favor availability over strong consistency.",
+        "Multi-region: run regional pipelines close to users/providers; keep preferences replicated; ensure idempotency keys are globally scoped so a cross-region retry still dedups.",
+        "Cost/backpressure: unbounded retries + fan-out can amplify load during an incident; circuit-break failing providers and shed/queue low-priority traffic first."
+      ],
+      "answer": "The main failure modes are provider outages (a channel's queue backs up — the queue absorbs it, but you alert on queue age and may fail critical messages over to another channel), and token rot (push tokens rotate, so without pruning on provider feedback your real delivery rate quietly decays). Hot campaigns cause thundering-herd on a provider and can starve other traffic, which priority lanes, per-provider token buckets, and spreading the blast over time address. I'd be explicit that at-least-once delivery means rare boundary duplicates that dedup windows shrink but can't fully remove — chasing exactly-once across third parties isn't worth it. The status store is eventually consistent, which is acceptable here since we favor availability. For multi-region I'd run regional pipelines with replicated preferences and globally-scoped idempotency keys, and circuit-break failing providers while shedding low-priority traffic first to protect OTPs."
+    }
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  Prod([Caller service]) --> API[\"Ingest API\"]\n  API --> Q[[Priority queue]]\n  Q --> DW([Dispatch workers])\n  DW --> PREF[(\"Prefs + device tokens\")]\n  DW --> CW([Channel workers])\n  CW --> PROV[\"APNS / FCM / SES / Twilio\"]\n  CW -.->|exhausted| DLQ[[Dead-letter queue]]",
+    "caption": "High-level architecture"
+  }
+}

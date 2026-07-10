@@ -1,0 +1,198 @@
+{
+  "id": "ch04",
+  "chapter": 4,
+  "part": "Part I: Foundations of Data Systems",
+  "title": "Encoding and Evolution",
+  "summary": "How data is encoded (serialized) for storage or transmission and how those encodings let applications evolve. Because old and new code and data coexist during rolling upgrades, formats must preserve backward and forward compatibility across databases, services, and message brokers.",
+  "keyTakeaways": [
+    "Backward compatibility = new code can read data written by old code; forward compatibility = old code can read data written by new code.",
+    "Rolling upgrades mean old and new versions run simultaneously, so both compatibility directions matter.",
+    "Language-specific serialization (Java Serializable, Python pickle) is convenient but ties data to one language and has security, versioning, and efficiency problems.",
+    "JSON/XML/CSV are textual and interoperable but ambiguous about numbers and have weak/optional schema support.",
+    "Thrift and Protocol Buffers use required schemas with numeric field tags; Avro uses writer's and reader's schemas resolved by field name with no tag numbers.",
+    "Three modes of dataflow: through databases, through services (REST/RPC), and through asynchronous message brokers.",
+    "RPC tries to make a network call look like a local one, but the network adds latency, partial failure, timeouts, and non-idempotency that local calls do not have."
+  ],
+  "questions": [
+    {
+      "q": "In DDIA's terms, what does backward compatibility mean?",
+      "options": [
+        "New code can read data that was written by older code",
+        "Old code can read data that was written by newer code",
+        "Two different services can exchange data over the network",
+        "Data can be re-encoded from one format into another without loss"
+      ],
+      "answer": 0,
+      "explain": "Backward compatibility means newer code can still read older data. Forward compatibility is the opposite and harder case: older code must tolerate data written by newer code (for example by ignoring fields it does not recognize)."
+    },
+    {
+      "q": "Why do rolling upgrades make BOTH forward and backward compatibility necessary?",
+      "options": [
+        "Because the database is offline during the upgrade, so all data must be re-encoded",
+        "Because new and old versions of the code (and the data they write) run at the same time during the rollout",
+        "Because encoding is always slower than decoding, so both must be optimized",
+        "Because every client must upgrade before any server does"
+      ],
+      "answer": 1,
+      "explain": "In a staged/rolling deployment, some nodes run new code while others still run old code, so newer nodes must read older data (backward) and older nodes must tolerate data from newer nodes (forward). Both directions coexist for the duration of the rollout."
+    },
+    {
+      "q": "Which is a real drawback of language-specific serialization formats like Java's Serializable or Python's pickle?",
+      "options": [
+        "They require a separately maintained schema definition file",
+        "They cannot represent nested objects",
+        "They tie data to a single programming language and carry security, versioning, and efficiency problems",
+        "They are always more compact than binary schema-based formats"
+      ],
+      "answer": 2,
+      "explain": "Built-in language serializers couple your persisted data to one language, can execute arbitrary code on decode (a security risk), and tend to neglect versioning and efficiency. They also do not require an explicit external schema, which is one reason their compatibility story is weak."
+    },
+    {
+      "q": "What is a well-known ambiguity of JSON as a data format?",
+      "options": [
+        "It cannot represent nested arrays or objects",
+        "It requires a schema to be sent alongside every message",
+        "It has no way to distinguish integers from floats, and large integers can lose precision",
+        "It stores binary data more efficiently than any binary format"
+      ],
+      "answer": 2,
+      "explain": "JSON does not distinguish integers from floating-point numbers and lacks precision control, so large numbers (e.g. integers above 2^53) can be silently mangled by parsers using IEEE 754 doubles. JSON also has no native binary type, so binary data must be Base64-encoded, inflating its size."
+    },
+    {
+      "q": "How do Thrift and Protocol Buffers identify fields in their binary encoding?",
+      "options": [
+        "By the field's name, matched between a writer's and a reader's schema",
+        "By numeric field tags declared in the schema, not by field name",
+        "By the field's byte offset within a fixed-layout record",
+        "By a hash of the field's type and value"
+      ],
+      "answer": 1,
+      "explain": "Thrift and Protocol Buffers reference each field by a numeric tag defined in the schema, so the encoded bytes contain tag numbers rather than field names. This is why you can freely rename a field but must never change or reuse its tag number."
+    },
+    {
+      "q": "With Protocol Buffers/Thrift, how do you add a new field while preserving forward and backward compatibility?",
+      "options": [
+        "Reuse an existing tag number so old readers still find the field",
+        "Mark it required so every reader is forced to handle it",
+        "Change the field's name to signal the new version to old readers",
+        "Add it with a new, unused tag number, and make it optional or give it a default value"
+      ],
+      "answer": 3,
+      "explain": "A new field must get a fresh tag number and cannot be `required`; old readers simply skip an unknown tag (forward compatible), and new readers see the field missing in old data and fall back to a default (backward compatible). Making it required would break old writers, and reusing a tag would corrupt interpretation."
+    },
+    {
+      "q": "How does Avro decide what each encoded value means, given that its binary encoding contains no field tags or names?",
+      "options": [
+        "By reading a self-describing header embedded before every record",
+        "By resolving the writer's schema against the reader's schema, matching fields by name",
+        "By numeric field tags, exactly like Protocol Buffers",
+        "By requiring the writer and reader to use byte-identical schemas"
+      ],
+      "answer": 1,
+      "explain": "Avro's encoding is just concatenated values with no tags, so decoding requires the exact writer's schema; the Avro library then resolves it against the reader's schema, matching fields by name and filling in defaults or dropping fields as needed. The two schemas need only be compatible, not identical."
+    },
+    {
+      "q": "Why does DDIA note that Avro is especially friendly to dynamically generated schemas?",
+      "options": [
+        "Because it assigns tag numbers automatically at encode time",
+        "Because it embeds the full schema in every single record",
+        "Because fields are matched by name, so a schema regenerated from a changing database needs no manually maintained, stable tag numbers",
+        "Because it forbids schema changes, guaranteeing stability"
+      ],
+      "answer": 2,
+      "explain": "Since Avro matches fields by name rather than by hand-assigned tag numbers, you can regenerate a schema from, say, a relational table whenever its columns change without worrying about keeping tag numbers stable. Thrift/Protobuf would require carefully preserving each field's numeric tag."
+    },
+    {
+      "q": "Which is a genuine merit of schema-based binary encodings (Thrift, Protobuf, Avro) that DDIA lists?",
+      "options": [
+        "They are human-readable without any tooling",
+        "They can be decoded without knowing the schema",
+        "They are more compact, double as up-to-date documentation, and enable compatibility checks before deployment",
+        "They eliminate the need for forward or backward compatibility"
+      ],
+      "answer": 2,
+      "explain": "Because the schema is explicit, these formats can drop field names from the payload (more compact), the schema itself serves as accurate documentation, and tooling can check schema changes for compatibility before rollout, plus generate typed code. They are not human-readable and still require thinking about compatibility."
+    },
+    {
+      "q": "For dataflow through a database, why does DDIA warn about an old service rewriting a record it read?",
+      "options": [
+        "Because the database will reject writes from old code entirely",
+        "Because old code may not know about newer fields and can drop them when it reads, modifies, and writes the record back",
+        "Because writes to a database are never forward compatible",
+        "Because the database re-encodes every record on write, losing precision"
+      ],
+      "answer": 1,
+      "explain": "Data in a database can outlive the code, so a value written by new code may be read by old code; the danger is that old code, unaware of a new field, silently drops it during a read-modify-write cycle. Preserving unknown fields through such round-trips is the fix DDIA recommends."
+    },
+    {
+      "q": "What is the core critique DDIA makes of RPC frameworks?",
+      "options": [
+        "They cannot pass complex data structures as arguments",
+        "They require both endpoints to be written in the same language",
+        "They try to make a network request look like a local function call, hiding that the network adds latency, partial failure, timeouts, and non-idempotency",
+        "They are always slower than REST over HTTP"
+      ],
+      "answer": 2,
+      "explain": "The 'location transparency' goal of RPC is fundamentally leaky: a network call can be slow, time out, or fail partway with no way to know if it executed, and retries may not be safe unless the operation is idempotent, whereas a local call has none of these hazards. This is why modern RPC frameworks make the remote nature explicit."
+    },
+    {
+      "q": "In the message-broker (asynchronous messaging) style of dataflow, how does the sender relate to the recipient?",
+      "options": [
+        "The sender calls the recipient directly and blocks for the response, like RPC",
+        "The sender writes a message to a broker/queue and does not wait for or usually expect a direct reply; the broker delivers it to consumers",
+        "The sender and recipient must share the same in-memory address space",
+        "The sender embeds the recipient's schema in every message so no broker is needed"
+      ],
+      "answer": 1,
+      "explain": "With a message broker, the producer sends a message to a named queue/topic and the broker delivers it to one or more consumers; this decouples sender and receiver in time and identity, and the sender normally does not block on a reply. Blocking request/response is the RPC model, not the async messaging model."
+    },
+    {
+      "q": "How does the actor model relate to the network's messiness, per DDIA?",
+      "options": [
+        "It hides the network so completely that message loss cannot happen",
+        "It already assumes messages may be lost and communication is asynchronous, so it maps naturally onto distributed message passing",
+        "It requires all actors to run in a single process for correctness",
+        "It replaces message passing with shared mutable memory between actors"
+      ],
+      "answer": 1,
+      "explain": "The actor model communicates only by asynchronous messages and already tolerates message loss even on one node, so extending it across machines (a distributed actor framework) fits the network's realities more naturally than the RPC pretense of a local call. Actors avoid shared mutable state by design."
+    },
+    {
+      "type": "open",
+      "prompt": "You need to add a field to a Protobuf/Thrift message and remove another, then deploy via a rolling upgrade where old and new code run at once. Walk through exactly how you keep both backward and forward compatibility.",
+      "points": [
+        "Rolling upgrade means old and new code coexist, so new code must read old data (backward) AND old code must tolerate new data (forward).",
+        "Add the new field with a fresh, never-before-used tag number — never reuse an old tag.",
+        "Make the new field optional or give it a default so new readers can handle old records that lack it (backward compat).",
+        "Old readers skip unknown tag numbers, so a new field is safely ignored by old code (forward compat) — but never mark a new field required.",
+        "To remove a field, only remove an optional one, and retire (never reuse) its tag number so future messages can't be misinterpreted.",
+        "Renaming is free since encoding uses tag numbers, not names."
+      ],
+      "answer": "The rolling upgrade means both directions matter: new nodes read old data and old nodes must survive new data. For the added field I give it a brand-new tag number and make it optional/defaulted — old readers just skip the unknown tag (forward compatible) and new readers fall back to the default on old records (backward compatible); I never make a new field required. For the removal I only drop an optional field and permanently retire its tag number so it's never reused and misread later. Renames are safe because Protobuf/Thrift key everything on numeric tags, not field names."
+    },
+    {
+      "type": "open",
+      "prompt": "You're picking a binary encoding for a pipeline where the schema is auto-generated from a frequently-changing database table and dumped to files. Would you choose Avro or Protobuf, and why? When would the answer flip?",
+      "points": [
+        "Avro matches fields by name and uses no manually-assigned tag numbers, so a schema regenerated from a changing table needs no stable tag bookkeeping — ideal for dynamically generated schemas.",
+        "Avro decoding needs the exact writer's schema, which fits file/archive use where you can store the schema once per large file.",
+        "Avro resolves writer's vs reader's schema by name, filling defaults/dropping fields, so evolution stays clean.",
+        "Protobuf/Thrift require hand-stable tag numbers, which is friction when the schema is auto-regenerated constantly.",
+        "Flip to Protobuf when you have a hand-maintained schema, want mature cross-language tooling/RPC (gRPC), or per-message overhead of shipping/looking up the writer schema is undesirable."
+      ],
+      "answer": "I'd choose Avro. Because it matches fields by name and has no hand-assigned tag numbers, a schema regenerated every time the table changes needs no fragile tag bookkeeping, and its writer's-schema/reader's-schema resolution handles added/dropped columns cleanly by name. It also fits the file-dump case, where I can store the writer's schema once per large file rather than per record. The answer flips to Protobuf when the schema is hand-maintained and stable, or when I want its mature cross-language tooling and gRPC — then stable tag numbers are an asset, not a burden."
+    },
+    {
+      "type": "open",
+      "prompt": "An old version of a service reads a record, edits one field, and writes it back — but the record was written by newer code with fields the old code doesn't know about. What goes wrong, and how do you prevent it?",
+      "points": [
+        "Data in a database can outlive the code, so old code will encounter records written by newer code (the forward-compatibility case).",
+        "The danger is a read-modify-write cycle: old code deserializes into its model, which has no place for the unknown new fields, and silently drops them on write-back.",
+        "This is data loss even though nothing errors — the new fields just vanish.",
+        "Fix: preserve unknown/unrecognized fields through the round-trip (carry them untouched) rather than dropping them.",
+        "Schema-tag formats (Protobuf/Avro) and careful code can keep unknown fields; naive object-mapping that only knows current fields is the trap."
+      ],
+      "answer": "The problem is the classic read-modify-write hazard: because data outlives code, the old service reads a record written by newer code, but its object model has no slot for the newer fields, so when it writes the record back it silently drops them — real data loss with no error. The fix is to preserve unknown fields through the round-trip: carry any unrecognized fields untouched and re-emit them on write, rather than materializing only the fields this version knows about. That's a place where thoughtless object-mapping bites you, and why the encoding and the write path both need to respect fields the current code doesn't understand."
+    }
+  ]
+}

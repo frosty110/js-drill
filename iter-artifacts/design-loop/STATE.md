@@ -9,7 +9,7 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 - **Phase:** P1 · Navigation shell — mobile bar shipped; palette + parity audit remain (desktop rail deferred to P4 by design)
 - **Overall progress:** 1 / 11 phases complete, P1 ~half
 - **Decided:** nav = **adaptive rail ↔ bottom bar** (D01); theming = **dark-first, light-ready** (D02); visual = **Ink & Amber / minimal** (D03); isolated **`ds/` layer** (D04); inventory pass = **zero capability retirements, chrome-only replacement** (D05).
-- **Last slice shipped:** P1 slice 1 — **mobile bottom nav** (≤767px): Today/Browse/Practice/Progress on the ds/ layer, wired via synthetic clicks to today-btn/hamburger/topbar-mobile-menu/dashboard-btn; hamburger + mobile 📊/📂 icons hidden (stay in DOM as click targets); L3 hides the bar (Run bar owns bottom); audio dock lifts above it; SW v19 precaches new files. Probe `tools/cdp/p1-nav-smoke.js` 15/15.
+- **Last slice shipped:** **Global Ink & Amber retheme (D06, user-directed)** — tools/retheme-ink-amber.py swept ~1,190 lines (hex + rgba maps) across css/, index.html, tokens.css, js/app, sync, diagnostic + system-design pages; Tailwind Play-CDN palette remap for utility classes; ink-on-amber contrast fixes on filled buttons. All surfaces verified via 35-shot capture (shots/02-retheme/). Before that, P1 slice 1: mobile bottom nav (≤767px, probe 15/15).
 - **Next slice (recommended):** **P2 · Today home** — the landing surface with one-tap next rep (due > weak > path). It gives the nav its real default destination + programmatic active state (deferred contrarian note), and it's J1, the highest-value job. Alternative: P1 palette redesign (lower user value; do after home).
 - **Blocked on:** nothing.
 
@@ -36,6 +36,7 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 
 ### Iteration log (newest first — one line each)
 <!-- YYYY-MM-DD · iter N · phase · slice shipped · rubric delta · shots ref -->
+- 2026-07-10 · iter 3 · D06 retheme · global Ink & Amber sweep (~1,190 lines + Tailwind remap + contrast fixes; user-directed acceleration) · whole family visually transformed · shots/02-retheme/
 - 2026-07-10 · iter 2 · P1 · mobile bottom nav (4 tabs, ds/ layer, L3-immersive, dock-lift; contrarian BLOCK on dock fixed) · Phone-fit ↑ (thumb bar vs corner icons) · Decisions ↑ (4 labeled destinations vs 3 unlabeled icons + hamburger) · shots/01-p1-nav/
 - 2026-07-10 · iter 1 · P0 · before-shots (35) + INVENTORY verdicts (D05) + sandbox CDN-vendor probe infra · baseline captured · shots/00-before/
 - 2026-07-10 · iter 0 · P0 · ds/tokens.css + ds/components.css v1 + gallery; D01–D04 locked · n/a · —

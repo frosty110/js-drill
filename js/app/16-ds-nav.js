@@ -1,0 +1,67 @@
+// ── 16: ds-nav — adaptive navigation shell (design-loop P1, slice 1) ────────
+// The redesign's primary navigation (decision D01: bottom tab bar on mobile,
+// left rail on desktop). THIS SLICE SHIPS THE MOBILE BOTTOM BAR ONLY —
+// css/06-ds-nav.css hides it ≥900px until the desktop rail lands alongside the
+// P4 Browse surface (the rail needs a surface to sit next to; the current
+// 320px sidebar already fills that slot).
+//
+// Interim wiring (until P2/P3/P4/P5 build the real destinations, each tab
+// synthetically clicks the existing launcher for the closest current
+// equivalent — the same contract the command palette uses):
+//   Today    → #today-btn        (Today's Plan — becomes the P2 home)
+//   Browse   → #hamburger        (lesson-list drawer — becomes P4 Browse)
+//   Practice → #topbar-mobile-menu (category launcher — becomes P3 launcher)
+//   Progress → #dashboard-btn    (unified Dashboard — becomes P5 Progress)
+//
+// Interop rules (see css/06-ds-nav.css):
+//   · L3 tab renders a sticky bottom Run bar → the nav hides there
+//     (immersive-rep pattern; L3 is the at-desk tier per PROFILE.md).
+//   · The audio dock lifts above the bar (mini-player-above-tabs pattern).
+//   · Redundant mobile topbar chrome (#hamburger, #topbar-dashboard-mobile,
+//     #topbar-mobile-menu) is hidden — the buttons STAY in the DOM as
+//     synthetic-click targets; capability is unchanged (D05).
+//
+// No state, no saveProgress — pure chrome. Active-tab highlight is pure CSS
+// (body.sidebar-open → Browse; body:has(.dashboard-page) → Progress).
+
+(() => {
+  const NAV_ITEMS = [
+    { key: 'today', label: 'Today', target: 'today-btn',
+      icon: '<path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/>' },
+    { key: 'browse', label: 'Browse', target: 'hamburger',
+      icon: '<rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="15" width="7" height="5" rx="1.5"/><rect x="14" y="15" width="7" height="5" rx="1.5"/>' },
+    { key: 'practice', label: 'Practice', target: 'topbar-mobile-menu',
+      icon: '<path d="M13 2 4 14h6l-1 8 9-12h-6z"/>' },
+    { key: 'progress', label: 'Progress', target: 'dashboard-btn',
+      icon: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>' },
+  ];
+
+  function mountDsNav() {
+    if (document.getElementById('ds-appnav')) return;
+    const nav = document.createElement('nav');
+    nav.id = 'ds-appnav';
+    nav.className = 'ds-appnav';
+    nav.setAttribute('aria-label', 'Primary');
+    for (const item of NAV_ITEMS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ds-navitem';
+      btn.dataset.nav = item.key;
+      btn.innerHTML =
+        `<svg viewBox="0 0 24 24" aria-hidden="true">${item.icon}</svg>${item.label}`;
+      btn.addEventListener('click', (e) => {
+        // Don't let this event bubble to document-level close-on-outside
+        // handlers — they'd instantly close whatever the synthetic click
+        // below just opened (bit the Practice → topbar dropdown flow).
+        e.stopPropagation();
+        const target = document.getElementById(item.target);
+        if (target) target.click();
+      });
+      nav.appendChild(btn);
+    }
+    document.body.appendChild(nav);
+  }
+
+  // Slices are deferred so the DOM is parsed by the time this runs.
+  mountDsNav();
+})();

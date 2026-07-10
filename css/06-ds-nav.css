@@ -1,0 +1,53 @@
+/* ── 06: ds-nav — app-side integration for the redesign's navigation shell ──
+   (design-loop P1, slice 1 — see js/app/16-ds-nav.js for the wiring story.)
+
+   The nav COMPONENT itself lives in ds/components.css (.ds-appnav/.ds-navitem,
+   built on ds/tokens.css). This file holds only the APP-SPECIFIC interop:
+   which viewports show it, what legacy chrome it replaces, and how it
+   coexists with the app's bottom-anchored surfaces (L3 Run bar, audio dock).
+   Keeping app selectors out of ds/components.css preserves D04's isolation
+   (the ds/ layer stays a pure, reusable system). Load AFTER ds/components.css.
+
+   BREAKPOINT: the bar shows ≤767px — matching the drawer/hamburger breakpoint
+   in css/02-sidebar.css, NOT the ds rail breakpoint (900). Between 768–899px
+   the static sidebar is already visible, so a Browse tab that toggles
+   body.sidebar-open would light up and do nothing (contrarian review,
+   2026-07-10). When the desktop rail lands with P4, the breakpoints unify. */
+
+@media (min-width: 768px) {
+  #ds-appnav { display: none; }
+}
+
+/* The audio dock owns bottom:0 by default (its inline style deliberately has
+   no `bottom` — see index.html — so these rules can position it). */
+#audio-dock { bottom: 0; }
+
+@media (max-width: 767px) {
+  /* Buttons in the bar (the component styles <a>-agnostically; these are
+     <button>s) — neutralize UA button chrome. */
+  #ds-appnav .ds-navitem { background: none; border: none; padding: 0; font-family: inherit; }
+
+  /* Content never hides under the fixed bar. */
+  main.app-main { padding-bottom: calc(var(--ds-nav-h) + env(safe-area-inset-bottom)); }
+
+  /* The audio dock docks ABOVE the nav (mini-player-above-tab-bar pattern). */
+  #audio-dock { bottom: calc(var(--ds-nav-h) + env(safe-area-inset-bottom)); }
+
+  /* Redundant legacy mobile chrome retires visually — the bar replaces it.
+     The elements stay in the DOM as synthetic-click targets (D05 contract). */
+  #hamburger, #topbar-dashboard-mobile, #topbar-mobile-menu { display: none; }
+
+  /* With the floating hamburger gone the drawer backdrop can cover the full
+     viewport (it previously started below the hamburger so it stayed tappable). */
+  body.sidebar-open .sidebar-backdrop { top: 0; }
+
+  /* Immersive L3: the sticky Run bar owns the bottom edge — the nav yields.
+     (L3 is the at-desk tier; on mobile the rep matters more than the chrome.) */
+  body:has(.l3-actions) #ds-appnav { display: none; }
+  body:has(.l3-actions) main.app-main { padding-bottom: 0; }
+  body:has(.l3-actions) #audio-dock { bottom: 0; }
+
+  /* Active-destination highlight — pure CSS, derived from app state classes. */
+  body.sidebar-open #ds-appnav [data-nav="browse"],
+  body:has(.dashboard-page) #ds-appnav [data-nav="progress"] { color: var(--ds-accent); }
+}

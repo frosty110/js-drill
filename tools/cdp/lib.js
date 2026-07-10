@@ -216,6 +216,34 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
 
   await rawSend('Page.navigate', { url });
   await new Promise(r => setTimeout(r, waitForLoadMs));
+
+  // The app registers a cache-first service worker (service-worker.js). A
+  // probe tab spun up after a previous probe installed it gets the CACHED app
+  // shell — Network.setCacheDisabled does NOT bypass SW caches, so freshly
+  // edited files silently don't load (bit the P1 nav probe: desktop tab got a
+  // stale index.html without the new script tag). Neutralize: unregister all
+  // SWs + delete CacheStorage, then reload so this probe sees live bytes.
+  const swControlled = await (async () => {
+    try {
+      const r = await rawSend('Runtime.evaluate', {
+        expression: `(async () => {
+          if (!('serviceWorker' in navigator)) return false;
+          const regs = await navigator.serviceWorker.getRegistrations();
+          const had = regs.length > 0 || !!navigator.serviceWorker.controller;
+          await Promise.all(regs.map(reg => reg.unregister()));
+          if (typeof caches !== 'undefined') {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+          }
+          return had;
+        })()`, returnByValue: true, awaitPromise: true });
+      return !!r.result?.value;
+    } catch (_) { return false; }
+  })();
+  if (swControlled) {
+    await rawSend('Page.reload', { ignoreCache: true });
+    await new Promise(r => setTimeout(r, waitForLoadMs));
+  }
   // Note on cache busting after a code edit: Network.setCacheDisabled
   // (above) is the lighter-touch option but sometimes loses to Chrome's
   // preload scanner on recently-visited URLs. Probes that run right after

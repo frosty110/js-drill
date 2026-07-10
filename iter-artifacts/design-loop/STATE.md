@@ -8,14 +8,12 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 ## Current status
 - **Phase:** P0 · Foundation & alignment
 - **Overall progress:** 0 / 11 phases complete
-- **Last slice shipped:** — (none yet; workspace just scaffolded)
-- **Next slice:** P0 → capture before-screenshots + ratify VISION/nav-model (bootstrap)
-- **Blocked on:** user sign-off of the primary nav model + visual direction (P0)
+- **Decided:** nav model = **adaptive rail ↔ bottom bar** (D01); theming = **dark-first, light-ready tokens** (D02).
+- **Next slice:** produce **2–3 visual-direction mockups** of the Home surface (OD2) → user picks → then P0 tokens/`components.css` pass.
+- **Blocked on:** user selecting a visual direction from the mockups.
 
 ## Open decisions (resolve before building the shell)
-1. **Primary nav model** — bottom tab bar (recommended) vs. adaptive rail vs. hub-and-spoke home. → needs sign-off (see `DECISIONS.md`).
-2. **Visual direction** — the specific accent/type/mood within the design language. → needs sign-off.
-3. **Light + dark** or dark-only for v1?
+1. **Visual direction (OD2)** — pending mockup selection (default family: Calm Focus). See `DECISIONS.md`.
 
 ## Learnings (append tight bullets as you go)
 - (none yet)

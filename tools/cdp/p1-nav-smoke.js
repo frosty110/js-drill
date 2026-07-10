@@ -60,12 +60,33 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   await m.snap('02-browse-drawer');
   await m.click('#sidebar-backdrop'); await m.sleep(400);
 
-  // Today tab opens Today's Plan.
-  await m.click('[data-nav="today"]'); await m.sleep(500);
-  const todayOpen = await m.eval(`getComputedStyle(document.getElementById('today-modal')).display !== 'none'`);
-  m.assert(todayOpen, "Today opens Today's Plan");
-  await m.snap('03-today');
-  await m.click('#today-close'); await m.sleep(300);
+  // Today tab opens the Today HOME page (P2) with a one-tap next rep.
+  await m.click('[data-nav="today"]'); await m.sleep(700);
+  const home = await m.eval(`(() => {
+    const page = document.querySelector('.today-home-page');
+    if (!page) return { page: false };
+    return {
+      page: true,
+      greeting: /Good (morning|afternoon|evening)/.test(page.querySelector('.ds-title')?.textContent || ''),
+      hero: !!page.querySelector('[data-today-start]'),
+      stats: page.querySelectorAll('.ds-stat').length,
+      ariaCurrent: document.querySelector('[data-nav="today"]')?.getAttribute('aria-current') === 'page',
+    };
+  })()`);
+  m.assert(home.page, 'Today opens the Today home page');
+  m.assert(home.greeting, 'home shows a time-of-day greeting');
+  m.assert(home.hero, 'home shows the hero Start CTA');
+  m.assert(home.stats === 3, `home shows 3 stat tiles (got ${home.stats})`);
+  m.assert(home.ariaCurrent, 'Today nav item carries aria-current="page"');
+  await m.snap('03-today-home');
+
+  // Hero Start routes into the picked lesson (one tap → drilling).
+  const heroId = await m.eval(`document.querySelector('[data-today-start]')?.getAttribute('data-lesson-id')`);
+  await m.click('[data-today-start]'); await m.sleep(900);
+  const landed = await m.eval(`typeof state !== 'undefined' && state.currentLessonId`);
+  m.assert(landed === heroId, `Start routes into the picked lesson (${landed} === ${heroId})`);
+  await m.snap('03b-hero-landed');
+  await m.eval(`document.getElementById('today-home-btn').click()`); await m.sleep(400);
 
   // Practice tab opens the category launcher.
   await m.click('[data-nav="practice"]'); await m.sleep(500);
@@ -110,6 +131,26 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   m.assert(l3.navHidden, 'nav hides on L3 (immersive rep)');
   m.assert(l3.runBarAtBottom, `L3 Run bar owns the viewport bottom (${JSON.stringify(l3)})`);
   await m.snap('06-l3-immersive');
+
+  // Streak grace rule (contrarian catch): a mid-streak user who hasn't
+  // drilled TODAY yet still sees their streak — with "keep it today" copy —
+  // not "Start a streak".
+  await m.evalAwait(`(async () => {
+    const day = 86400000, now = Date.now();
+    const seed = JSON.parse(localStorage.getItem('jsdrill.progress.v1'));
+    seed.history = { 'two-sum': [
+      { at: now - day, event: 'L1-pass' },
+      { at: now - 2 * day, event: 'L1-pass' },
+    ]};
+    localStorage.setItem('jsdrill.progress.v1', JSON.stringify(seed));
+  })()`);
+  await m.eval(`history.replaceState(null, '', location.pathname)`);
+  await m.reload();
+  await m.waitFor(`document.querySelector('#ds-appnav')`, { timeoutMs: 6000 });
+  await m.click('[data-nav="today"]'); await m.sleep(600);
+  const graceChip = await m.eval(`document.querySelector('.today-home-page .ds-chip--accent')?.textContent || ''`);
+  m.assert(/2-day · keep it today/.test(graceChip),
+    `pre-drill mid-streak shows grace copy (got ${JSON.stringify(graceChip)})`);
 
   console.log('\n===== mobile =====');
   const mr = m.report();

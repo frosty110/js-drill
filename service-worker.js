@@ -37,6 +37,7 @@ const APP_SHELL = [
   './js/app/14-init-core.js',
   './js/app/15-init-features-boot.js',
   './js/app/16-ds-nav.js',
+  './js/app/17-today-home.js',
   './css/01-base.css',
   './css/02-sidebar.css',
   './css/03-tabs.css',

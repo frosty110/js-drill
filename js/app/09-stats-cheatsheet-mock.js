@@ -667,7 +667,12 @@ function dailyPlan() {
   const seen = new Set();
   const plan = [];
   const add = (id, why) => {
-    if (id && !seen.has(id)) { seen.add(id); plan.push({ id, why }); }
+    // Guard every branch (not just path) against ids whose lesson no longer
+    // exists or is a stub — a stale review/weakness id would otherwise become
+    // a dead CTA (raw-id title, Start selects nothing) on the Today home hero.
+    if (id && !seen.has(id) && findLesson(id)?.status === 'full') {
+      seen.add(id); plan.push({ id, why });
+    }
   };
   for (const id of dueReviewIds().slice(0, 3)) add(id, 'review due');
   add(topWeakLessonId(), 'weak spot');

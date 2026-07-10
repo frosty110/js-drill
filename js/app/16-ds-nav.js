@@ -8,7 +8,7 @@
 // Interim wiring (until P2/P3/P4/P5 build the real destinations, each tab
 // synthetically clicks the existing launcher for the closest current
 // equivalent — the same contract the command palette uses):
-//   Today    → #today-btn        (Today's Plan — becomes the P2 home)
+//   Today    → #today-home-btn   (Today home page — js/app/17-today-home.js)
 //   Browse   → #hamburger        (lesson-list drawer — becomes P4 Browse)
 //   Practice → #topbar-mobile-menu (category launcher — becomes P3 launcher)
 //   Progress → #dashboard-btn    (unified Dashboard — becomes P5 Progress)
@@ -26,7 +26,7 @@
 
 (() => {
   const NAV_ITEMS = [
-    { key: 'today', label: 'Today', target: 'today-btn',
+    { key: 'today', label: 'Today', target: 'today-home-btn',
       icon: '<path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/>' },
     { key: 'browse', label: 'Browse', target: 'hamburger',
       icon: '<rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="15" width="7" height="5" rx="1.5"/><rect x="14" y="15" width="7" height="5" rx="1.5"/>' },
@@ -60,6 +60,24 @@
       nav.appendChild(btn);
     }
     document.body.appendChild(nav);
+
+    // Programmatic active state (a11y) — the visual highlight is pure CSS
+    // (body:has(.today-home-page/.dashboard-page) in css/06-ds-nav.css);
+    // aria-current must track the RENDERED page, not the last nav tap (the
+    // hero Start button, palette, and sidebar all swap the page without
+    // touching the nav). A childList observer on #lesson-shell fires on
+    // exactly those swaps — cheap, and keeps the attribute truthful.
+    const syncCurrent = () => {
+      const current = document.querySelector('.today-home-page') ? 'today'
+        : document.querySelector('.dashboard-page') ? 'progress' : null;
+      nav.querySelectorAll('.ds-navitem').forEach(b => {
+        if (b.dataset.nav === current) b.setAttribute('aria-current', 'page');
+        else b.removeAttribute('aria-current');
+      });
+    };
+    const shell = document.getElementById('lesson-shell');
+    if (shell) new MutationObserver(syncCurrent).observe(shell, { childList: true });
+    syncCurrent();
   }
 
   // Slices are deferred so the DOM is parsed by the time this runs.

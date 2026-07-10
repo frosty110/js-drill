@@ -539,12 +539,17 @@ function renderLesson() {
   if (!lesson || lesson.status === 'stub') { renderEmpty(shell); return; }
   const content = CONTENT[lesson.id];
   if (!content) {
-    // Cache miss — kick off fetch and re-render when it lands. Race-safe:
-    // if the user navigates away before this resolves, we drop the result.
-    shell.innerHTML = '<div class="text-slate-500 text-sm p-8 text-center">Loading…</div>';
+    // Cache miss — kick off fetch and re-render when it lands. Race-safe two
+    // ways: if the user navigates to another lesson we drop the result, and
+    // if another surface took over the shell meanwhile (a #/m/<mode> boot
+    // dispatch rendering Today/Browse/Progress right after this placeholder)
+    // the loading marker is gone and we leave that surface alone — without
+    // this, the async re-render clobbered every shell-page deep link.
+    shell.innerHTML = '<div class="text-slate-500 text-sm p-8 text-center" data-lesson-loading>Loading…</div>';
     loadLessonContent(lesson.id).then(() => {
-      if (state.currentLessonId === lesson.id) renderLesson();
+      if (state.currentLessonId === lesson.id && shell.querySelector('[data-lesson-loading]')) renderLesson();
     }).catch(err => {
+      if (!shell.querySelector('[data-lesson-loading]')) return;
       shell.innerHTML = '<div class="p-6 text-red-300 text-sm">Could not load lesson: ' + (err && err.message ? err.message : err) + '</div>';
     });
     return;

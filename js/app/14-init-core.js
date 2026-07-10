@@ -981,7 +981,13 @@ function initAtRiskModal() {
     }
     atRiskModal.style.display = 'block';
   }
-  document.getElementById('at-risk-btn').addEventListener('click', openAtRisk);
+  // Design-loop P5: At Risk is absorbed into the Progress surface's "Fix
+  // first" section (INVENTORY MERGE→Progress). The pill + #/m/at-risk land
+  // there, focused on that section; the legacy modal stays as fallback.
+  document.getElementById('at-risk-btn').addEventListener('click', () => {
+    if (typeof openProgress === 'function') openProgress({ focus: 'attention' });
+    else openAtRisk();
+  });
   document.getElementById('at-risk-close').addEventListener('click', () => atRiskModal.style.display = 'none');
   atRiskModal.addEventListener('click', (e) => {
     if (e.target === atRiskModal) atRiskModal.style.display = 'none';
@@ -1947,6 +1953,12 @@ function renderDailyInto(rootEl) {
 // stats/activity bodies re-render #lesson-shell themselves (selectLesson /
 // startXSession), so their close-callback is a no-op here.
 function openDashboard() {
+  // Design-loop P5: the unified Progress surface (js/app/20-progress.js)
+  // replaced the legacy dashboard body. Delegate so every existing route
+  // (#/m/dashboard, stats-btn, streak-map-btn, rail Progress) lands there.
+  // The legacy renderers below stay as the reference implementation until
+  // their remaining callers/probes retire (see design-loop STATE.md).
+  if (typeof openProgress === 'function') return openProgress();
   const shell = document.getElementById('lesson-shell');
   if (!shell) return;
   shell.innerHTML = `

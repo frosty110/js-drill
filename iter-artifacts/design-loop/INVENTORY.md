@@ -28,7 +28,7 @@ Target IA (D01): **Today · Browse · Practice · Progress** (+ Settings via gea
 | Settings dropdown | `#topbar-dropdown` (⚙️) | MERGE→Settings | P6 grouped Settings panel |
 | Command palette | `palette-*` | KEEP | The long-tail power path; redesign in P1 |
 | Cram progress widget | `#topbar-cram-progress` | MERGE→Today | Home shows active-plan progress ambiently |
-| Session heatstrip | `#heatstrip-wrap` | MERGE→Progress | Facts-only session summary joins the unified Progress surface |
+| Session heatstrip | `#heatstrip-wrap` | MERGE→Progress | **Landed (P5):** session summary line in Progress "Today"; sidebar strip dies with the drawer (P4 part 3) |
 | Surface toggle (Problems ⇄ Reference) | `.surface-toggle` | MERGE→Browse | Becomes a Browse facet/segment |
 | System Design link | `#topbar-system-design` | KEEP | Separate page; nav entry point stays (family-unified in P8) |
 | Diagnostic page | `diagnostic.html` | KEEP | Separate page; family-unified in P8 |
@@ -49,8 +49,8 @@ heart. **KEEP**, redesign in P7.
 | `weak-btn` (weak spots) | MERGE→Practice | Launcher entry; also feeds Today queue |
 | `lucky-btn` (random pick) | DEMOTE | Palette + launcher long tail |
 | `path-btn` (Plan View filter) | MERGE→Browse | Sidebar view filter → Browse facet |
-| `at-risk-btn` (decay radar) | MERGE→Progress | P5 unified surface (roadmap) |
-| `resurrect-btn` (long-overdue) | MERGE→Progress | P5 unified surface (roadmap) |
+| `at-risk-btn` (decay radar) | MERGE→Progress | **Landed (P5):** modal chrome retired; btn + `#/m/at-risk` open Progress "Fix first" (same rows/routes) |
+| `resurrect-btn` (long-overdue) | MERGE→Progress | **Landed (P5):** Progress "Fix first" action row; direct-jump button behavior kept |
 
 **Drills** (the long tail — grouped & progressively disclosed in the P3
 launcher; every one also palette- and `#/m/`-reachable)
@@ -71,10 +71,10 @@ launcher; every one also palette- and `#/m/`-reachable)
 **Review / insights**
 | Mode | Verdict | Notes |
 |---|---|---|
-| `dashboard-btn` | MERGE→Progress | The existing unified Dashboard seeds the P5 Progress surface |
-| `stats-btn` `streak-map-btn` | MERGE→Progress | Already route to Dashboard today; stay merged |
+| `dashboard-btn` | MERGE→Progress | **Landed (P5):** openDashboard delegates to the ds openProgress (js/app/20-progress.js) |
+| `stats-btn` `streak-map-btn` | MERGE→Progress | **Landed (P5):** route to the ds Progress page (stats in Mastery/More-insights; streak map in Activity) |
 | `mechanics-btn` | MERGE→Browse | Browse-by-idiom index (list + matrix) |
-| `reveal-replay-btn` | MERGE→Progress | Ranked repair queue lives with Progress; feeds Today |
+| `reveal-replay-btn` | MERGE→Progress | **Landed (P5):** Progress "Fix first" action row; direct-jump button behavior kept |
 | `repair-filter-btn` | MERGE→Browse | Sidebar view filter → Browse facet |
 | `shuffle-btn` | DEMOTE | Palette + keyboard (`s`) only |
 

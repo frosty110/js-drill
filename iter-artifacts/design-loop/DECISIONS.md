@@ -23,6 +23,34 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D09 · Progress = one ds surface; long-tail stats behind disclosure; At-Risk modal chrome retires  (2026-07-10 · iter 9)
+Decision: The nav's Progress destination is the new ds `.progress-page`
+(js/app/20-progress.js): Today snapshot → Activity → **Fix first** → Mastery,
+with the ~10 lifetime-stat tiles the legacy Dashboard always showed (drill
+accuracies, self-rescue, miss tags, half-life, section retention, calibration,
+time invested, mock bests) moved behind ONE "More insights" `<details>`
+(PRINCIPLES #1/#5 — the glanceable arc stays under two screens; the long tail
+is available, not shouting). Three absorption calls: (a) the standalone
+**At-Risk modal's chrome retires** — `#at-risk-btn` and `#/m/at-risk` now open
+Progress focused on Fix first, which renders the same ranked rows (7) with the
+same chips + tap-to-drill (modal DOM + openAtRisk stay in index.html/14-init
+as unused fallback, D05-style); (b) **Resurrect and Reveal-Replay keep their
+one-tap direct-jump buttons** — Progress adds action rows that synthetically
+click them, so the queues finally have a visible home without slowing the
+autopilot path; (c) the **session heatstrip's facts-only summary** joins the
+Today section (the sidebar strip itself dies with the drawer in P4 part 3).
+`openDashboard` delegates to `openProgress`; the legacy renderers remain as
+the delegation fallback until their probes retire. Charts follow the dataviz
+method: status colors reserved (good=solved / warn=miss, CVD-validated),
+one-hue sequential heatmap ramp added as `--ds-viz-*` tokens.
+Rationale: VISION "from → to" row 3 (one coherent Progress surface); PROFILE
+"progress at a glance" without a menu maze; zero capability retired.
+Alternatives considered: rewriting the legacy renderers in place (rejected:
+keeps the kitchen-sink IA and legacy styling); dropping the long-tail tiles
+(rejected: capability retirement without usage evidence).
+Reversible? Yes — one-line delegation in openDashboard + the at-risk-btn
+handler; revert restores the legacy Dashboard wholesale.
+
 ## D08 · Desktop chrome = ds rail; permanent sidebar retires to a drawer  (2026-07-10 · iter 8)
 Decision: At ≥768px the ds rail (Today / Browse / Practice / Progress +
 Search ⌘K / Settings aux items at its foot) is the primary navigation. The

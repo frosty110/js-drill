@@ -33,7 +33,7 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 - ◐ Lessons/tracks/faceted-filter/search as a first-class surface — **Browse page SHIPPED** (search + segments + accordion + rows, #/m/browse); **desktop rail SHIPPED** (P4b: permanent sidebar → off-canvas drawer at every viewport, topbar menus retired, 768px unified breakpoint). Part 3 remaining: migrate drawer power-filters (Plan View / Hide Mastered / Repair / facets) into the page, IME-safe in-place search filtering.
 
 ## P5 · Progress
-- ☐ Unify Dashboard / Stats / Streak / At-Risk / Resurrect into one coherent surface
+- ☑ Unify Dashboard / Stats / Streak / At-Risk / Resurrect into one coherent surface — **Progress page SHIPPED** (js/app/20-progress.js + css/07-ds-progress.css, all-ds: Today snapshot w/ session summary → Activity (7d chips + 14d stacked bars + 60d one-hue heatmap w/ tap-day drill routes) → Fix first (At-Risk rows + Resurrect + Reveal-Replay actions) → Mastery (overall + per-track meters) → More insights `<details>` (drill lifetimes, self-rescue, miss tags, half-life, retention, calibration, time invested, mock bests). openDashboard delegates; at-risk-btn/#/m/at-risk land focused on Fix first. Bonus fix: `#/m/<mode>` boot deep-links no longer clobbered by the async lesson-content re-render.
 
 ## P6 · Settings
 - ☐ One grouped Settings panel (Display · Feedback & haptics · Data & sync · Install & offline)

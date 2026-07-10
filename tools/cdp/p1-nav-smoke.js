@@ -53,11 +53,47 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   m.assert(noHScroll, 'no horizontal scroll at 390px');
   await m.snap('01-reference-with-nav');
 
-  // Browse tab opens the drawer (and highlights).
-  await m.click('[data-nav="browse"]'); await m.sleep(500);
+  // Browse tab opens the Browse PAGE (P4a): search + track segments +
+  // section accordion + tappable lesson rows.
+  await m.click('[data-nav="browse"]'); await m.sleep(600);
+  const browse = await m.eval(`(() => {
+    const page = document.querySelector('.browse-page');
+    if (!page) return { page: false };
+    return {
+      page: true,
+      search: !!page.querySelector('[data-browse-search]'),
+      tracks: page.querySelectorAll('[data-browse-track]').length,
+      sections: page.querySelectorAll('.browse-section').length,
+      rows: page.querySelectorAll('[data-browse-lesson]').length,
+    };
+  })()`);
+  m.assert(browse.page, 'Browse opens the Browse page');
+  m.assert(browse.search && browse.tracks === 3, `Browse has search + 3 track segments (${JSON.stringify(browse)})`);
+  m.assert(browse.sections >= 3 && browse.rows >= 10, `Browse lists sections + lessons (${browse.sections} sections, ${browse.rows} rows)`);
+  await m.snap('02-browse-page');
+
+  // Search narrows across tracks; a row tap routes into the lesson.
+  await m.eval(`(() => {
+    const s = document.querySelector('[data-browse-search]');
+    s.value = 'two sum';
+    s.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await m.sleep(400);
+  const found = await m.eval(`(() => {
+    const rows = [...document.querySelectorAll('[data-browse-lesson]')];
+    return { count: rows.length, hasTwoSum: rows.some(r => r.dataset.browseLesson === 'two-sum') };
+  })()`);
+  m.assert(found.hasTwoSum && found.count < 10, `search narrows to matches (${JSON.stringify(found)})`);
+  await m.click('[data-browse-lesson="two-sum"]'); await m.sleep(800);
+  const browsed = await m.eval(`state.currentLessonId`);
+  m.assert(browsed === 'two-sum', `Browse row routes into the lesson (got ${browsed})`);
+  await m.eval(`document.getElementById('browse-btn').click()`); await m.sleep(400);
+
+  // "All filters" keeps the drawer's power tools one tap away.
+  await m.click('[data-browse-more]'); await m.sleep(500);
   const drawerOpen = await m.eval(`document.body.classList.contains('sidebar-open')`);
-  m.assert(drawerOpen, 'Browse opens the lesson drawer');
-  await m.snap('02-browse-drawer');
+  m.assert(drawerOpen, 'All-filters row opens the legacy drawer (capability preserved)');
+  await m.snap('02b-browse-drawer-via-filters');
   await m.click('#sidebar-backdrop'); await m.sleep(400);
 
   // Today tab opens the Today HOME page (P2) with a one-tap next rep.

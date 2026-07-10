@@ -779,7 +779,10 @@ function initSearchAndKeyboard() {
 
     if (e.key === '/' && !inEditable) {
       e.preventDefault();
-      searchInput.focus();
+      // When the Browse page is open, `/` targets ITS visible search — the
+      // drawer's input may be off-screen on mobile (contrarian, iter 7).
+      const browseSearch = document.querySelector('.browse-page [data-browse-search]');
+      (browseSearch || searchInput).focus();
       return;
     }
     if (e.key === '?' && !inEditable) {

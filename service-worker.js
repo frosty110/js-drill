@@ -14,7 +14,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v19-ds-nav-2026-07-10';
+const CACHE_VERSION = 'jsdrill-v20-redesign-shell-2026-07-10';
 const APP_SHELL = [
   './',
   './index.html',
@@ -39,6 +39,7 @@ const APP_SHELL = [
   './js/app/16-ds-nav.js',
   './js/app/17-today-home.js',
   './js/app/18-practice-launcher.js',
+  './js/app/19-browse.js',
   './css/01-base.css',
   './css/02-sidebar.css',
   './css/03-tabs.css',

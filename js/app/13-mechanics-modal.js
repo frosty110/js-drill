@@ -43,7 +43,7 @@ async function openMechanicsModal() {
   _mechanicsPrevView = 'list';
   _mechanicsSelectedId = null;
   const body = document.getElementById('mechanics-body');
-  if (body) body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Loading mechanics…</div>`;
+  if (body) body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">Loading mechanics…</div>`;
   modal.style.display = 'block';
   await ensureMechanicIndex();
   // Diagnostic-aware default: when ≥1 transfer gap exists (mastered in one
@@ -80,7 +80,7 @@ async function openMechanicsDetail(mechId) {
   const modal = document.getElementById('mechanics-modal');
   if (!modal) return;
   const body = document.getElementById('mechanics-body');
-  if (body) body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Loading mechanic…</div>`;
+  if (body) body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">Loading mechanic…</div>`;
   modal.style.display = 'block';
   await ensureMechanicIndex();
   const m = MECHANICS.find(x => x.id === mechId);
@@ -116,8 +116,8 @@ function renderMechanicsModal() {
   const matrixBtn = document.getElementById('mechanics-view-matrix');
   if (toggleEl && listBtn && matrixBtn) {
     toggleEl.style.display = _mechanicsView === 'detail' ? 'none' : 'flex';
-    const activeStyle = 'background: rgba(217,70,239,0.18); color: #f0abfc; border: 1px solid rgba(217,70,239,0.4); border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 500; cursor: pointer;';
-    const inactiveStyle = 'background: transparent; color: #94a3b8; border: 1px solid #334155; border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 500; cursor: pointer;';
+    const activeStyle = 'background: rgba(245,182,43,0.18); color: #ffce5a; border: 1px solid rgba(245,182,43,0.4); border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 500; cursor: pointer;';
+    const inactiveStyle = 'background: transparent; color: #9aa0aa; border: 1px solid #363a43; border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 500; cursor: pointer;';
     listBtn.setAttribute('style', _mechanicsView === 'list' ? activeStyle : inactiveStyle);
     matrixBtn.setAttribute('style', _mechanicsView === 'matrix' ? activeStyle : inactiveStyle);
   }
@@ -176,7 +176,7 @@ function renderMechanicsModal() {
 
 function _renderMechanicsListHtml() {
   if (!MECHANICS.length) {
-    return `<div style="color:#94a3b8;text-align:center;padding:24px 0;">No mechanics defined.</div>`;
+    return `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">No mechanics defined.</div>`;
   }
   // Group by category, preserving category order from the registry; within
   // a category, sort by lesson count desc so the user's most-frequented
@@ -214,15 +214,15 @@ function _renderMechanicsListHtml() {
       return b.total - a.total || a.m.label.localeCompare(b.m.label);
     });
     if (!items.length) continue;
-    html += `<div data-mech-cat="${escapeHtml(cat.id)}" style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#a5b4fc;margin-top:14px;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(165,180,252,0.4);">${escapeHtml(cat.label)}</div>`;
+    html += `<div data-mech-cat="${escapeHtml(cat.id)}" style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#ffce5a;margin-top:14px;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(255,206,90,0.4);">${escapeHtml(cat.label)}</div>`;
     for (const { m, total, mastered } of items) {
       const empty = total === 0;
       const masteredAll = total > 0 && mastered === total;
-      const badgeColor = masteredAll ? '#34d399' : (mastered > 0 ? '#67e8f9' : '#94a3b8');
+      const badgeColor = masteredAll ? '#34d399' : (mastered > 0 ? '#ffce5a' : '#9aa0aa');
       const pct = total ? ` · ${Math.round((mastered / total) * 100)}%` : '';
       const cursor = empty ? 'default' : 'pointer';
       const opacity = empty ? '0.5' : '1';
-      html += `<button data-mech-id="${escapeHtml(m.id)}" ${empty ? 'disabled' : ''} style="text-align:left; padding:10px 12px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:${cursor}; opacity:${opacity};">
+      html += `<button data-mech-id="${escapeHtml(m.id)}" ${empty ? 'disabled' : ''} style="text-align:left; padding:10px 12px; border-radius:8px; background:#262930; border:1px solid #363a43; color:#eef0f2; cursor:${cursor}; opacity:${opacity};">
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
           <span style="font-weight:600;">${escapeHtml(m.label)}</span>
           <span style="color:${badgeColor}; font-size:11px; white-space:nowrap;">${mastered}/${total}${pct}</span>
@@ -284,38 +284,38 @@ function _mechanicsTrackMatrix() {
 function _renderMechanicsMatrixHtml() {
   const rows = _mechanicsTrackMatrix();
   if (!rows.length) {
-    return `<div style="color:#94a3b8;text-align:center;padding:24px 0;">No mechanics yet.</div>`;
+    return `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">No mechanics yet.</div>`;
   }
   const transferGapCount = rows.filter(r => r.transferGap).length;
   const tracks = ['syntax', 'patterns', 'applied'];
   let html = '';
   if (transferGapCount > 0) {
-    html += `<div style="font-size:11px; color:#fbbf24; background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.25); border-radius:6px; padding:6px 10px; margin-bottom:10px;">⚠ ${transferGapCount} transfer gap${transferGapCount === 1 ? '' : 's'} — mechanics mastered in one track but not another. Listed first.</div>`;
+    html += `<div style="font-size:11px; color:#f5b62b; background:rgba(245,182,43,0.08); border:1px solid rgba(245,182,43,0.25); border-radius:6px; padding:6px 10px; margin-bottom:10px;">⚠ ${transferGapCount} transfer gap${transferGapCount === 1 ? '' : 's'} — mechanics mastered in one track but not another. Listed first.</div>`;
   }
   // Header row.
-  html += `<div style="display:grid; grid-template-columns: 1fr 56px 56px 56px; gap:4px; padding:4px 8px; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">
+  html += `<div style="display:grid; grid-template-columns: 1fr 56px 56px 56px; gap:4px; padding:4px 8px; font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em;">
     <div></div>
     <div style="text-align:center;">Syntax</div>
     <div style="text-align:center;">Pattern</div>
     <div style="text-align:center;">Applied</div>
   </div>`;
   for (const row of rows) {
-    const gapMarker = row.transferGap ? `<span style="color:#fbbf24; margin-right:4px;" title="Transfer gap">⚠</span>` : '';
-    html += `<div style="display:grid; grid-template-columns: 1fr 56px 56px 56px; gap:4px; padding:6px 8px; align-items:center; background:#1e293b; border:1px solid ${row.transferGap ? 'rgba(251,191,36,0.35)' : '#334155'}; border-radius:6px;">
-      <div style="font-size:12.5px; color:#e2e8f0; font-weight:500; overflow:hidden; text-overflow:ellipsis;">${gapMarker}${escapeHtml(row.label)}</div>`;
+    const gapMarker = row.transferGap ? `<span style="color:#f5b62b; margin-right:4px;" title="Transfer gap">⚠</span>` : '';
+    html += `<div style="display:grid; grid-template-columns: 1fr 56px 56px 56px; gap:4px; padding:6px 8px; align-items:center; background:#262930; border:1px solid ${row.transferGap ? 'rgba(245,182,43,0.35)' : '#363a43'}; border-radius:6px;">
+      <div style="font-size:12.5px; color:#eef0f2; font-weight:500; overflow:hidden; text-overflow:ellipsis;">${gapMarker}${escapeHtml(row.label)}</div>`;
     for (const t of tracks) {
       const cell = row.perTrack[t];
       if (cell.total === 0) {
-        html += `<div style="text-align:center; font-size:10px; color:#475569;">—</div>`;
+        html += `<div style="text-align:center; font-size:10px; color:#4a4f58;">—</div>`;
         continue;
       }
       // Color depth = mastery ratio; transparent at 0%, full at 100%.
       const ratio = cell.mastered / cell.total;
-      let bg = '#1e293b', fg = '#94a3b8';
+      let bg = '#262930', fg = '#9aa0aa';
       if (ratio === 1) { bg = 'rgba(52,211,153,0.22)'; fg = '#d1fae5'; }
-      else if (ratio >= 0.5) { bg = 'rgba(103,232,249,0.18)'; fg = '#cffafe'; }
-      else if (ratio > 0) { bg = 'rgba(251,191,36,0.15)'; fg = '#fde68a'; }
-      else { bg = 'rgba(148,163,184,0.08)'; fg = '#94a3b8'; }
+      else if (ratio >= 0.5) { bg = 'rgba(255,206,90,0.18)'; fg = '#ffedc2'; }
+      else if (ratio > 0) { bg = 'rgba(245,182,43,0.15)'; fg = '#fde68a'; }
+      else { bg = 'rgba(154,160,170,0.08)'; fg = '#9aa0aa'; }
       html += `<button data-mech-cell="${escapeHtml(row.id)}" data-mech-cell-track="${escapeHtml(t)}" type="button" title="${escapeHtml(row.label)} in ${escapeHtml(t)} — tap to drill" style="background:${bg}; color:${fg}; border:1px solid rgba(255,255,255,0.05); border-radius:4px; padding:4px 0; cursor:pointer; font-size:11px; font-weight:600; font-variant-numeric: tabular-nums;">${cell.mastered}/${cell.total}</button>`;
     }
     html += `</div>`;
@@ -330,15 +330,15 @@ function _renderMechanicsDetailHtml(m) {
   let html = '';
   // Snippet — the canonical shape of this mechanic. Plain <pre> rather than
   // CodeMirror runMode keeps the modal lightweight; it's a glance surface.
-  html += `<div style="background:#020617; border:1px solid #1e293b; border-radius:8px; padding:12px; margin-bottom:14px;">
-    <pre style="margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12.5px; color:#e2e8f0; white-space:pre-wrap; word-break: break-word;">${escapeHtml(m.snippet)}</pre>
+  html += `<div style="background:#0a0b0d; border:1px solid #262930; border-radius:8px; padding:12px; margin-bottom:14px;">
+    <pre style="margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12.5px; color:#eef0f2; white-space:pre-wrap; word-break: break-word;">${escapeHtml(m.snippet)}</pre>
   </div>`;
   html += `<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">
-    <span style="color:#cbd5e1; font-size:13px; font-weight:600;">${total} lesson${total === 1 ? '' : 's'}</span>
-    <span style="color:#94a3b8; font-size:12px;">${mastered}/${total} mastered</span>
+    <span style="color:#c4c9cf; font-size:13px; font-weight:600;">${total} lesson${total === 1 ? '' : 's'}</span>
+    <span style="color:#9aa0aa; font-size:12px;">${mastered}/${total} mastered</span>
   </div>`;
   if (!sorted.length) {
-    html += `<div style="color:#94a3b8;text-align:center;padding:24px 0;">No lessons tagged with this mechanic yet.</div>`;
+    html += `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">No lessons tagged with this mechanic yet.</div>`;
     return html;
   }
   html += `<div style="display:flex; flex-direction:column; gap:6px;">`;
@@ -346,15 +346,15 @@ function _renderMechanicsDetailHtml(m) {
     const lesson = findLesson(id);
     if (!lesson) continue;
     const overall = lessonOverallStatus(id);
-    const dotColor = overall === 'mastered' ? '#34d399' : (overall === 'in_progress' ? '#facc15' : '#475569');
+    const dotColor = overall === 'mastered' ? '#34d399' : (overall === 'in_progress' ? '#facc15' : '#4a4f58');
     const tagBits = [];
-    if (isDueForReview(id)) tagBits.push(`<span style="color:#67e8f9; font-size:11px;">🕒 due</span>`);
+    if (isDueForReview(id)) tagBits.push(`<span style="color:#ffce5a; font-size:11px;">🕒 due</span>`);
     if (state.weakness[id]) tagBits.push(`<span style="color:#fdba74; font-size:11px;">⚠ weak</span>`);
     const trackMeta = TRACK_PILLS[lesson.track] || TRACK_PILLS.patterns;
-    html += `<button data-lesson-id="${escapeHtml(id)}" style="text-align:left; padding:10px 12px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+    html += `<button data-lesson-id="${escapeHtml(id)}" style="text-align:left; padding:10px 12px; border-radius:8px; background:#262930; border:1px solid #363a43; color:#eef0f2; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px;">
       <span style="display:flex; align-items:center; gap:8px; min-width:0; overflow:hidden;">
         <span style="width:8px; height:8px; border-radius:50%; background:${dotColor}; flex:0 0 auto;" aria-hidden="true"></span>
-        <span style="color:#94a3b8; font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; flex:0 0 auto;">${escapeHtml(trackMeta.label)}</span>
+        <span style="color:#9aa0aa; font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; flex:0 0 auto;">${escapeHtml(trackMeta.label)}</span>
         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(lesson.title)}</span>
       </span>
       <span style="display:flex; gap:8px; flex:0 0 auto;">${tagBits.join(' ')}</span>

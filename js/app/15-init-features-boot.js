@@ -205,7 +205,7 @@ function _renderClarifyRitual(body, lesson, content) {
             saveProgress();
             _clarifySessionCompleted.add(lesson.id);
             const progress = cardEl.querySelector('[data-clarify-progress]');
-            if (progress) progress.innerHTML = '<strong style="color:#a3e635">✓ Ritual complete — unlocking editor…</strong>';
+            if (progress) progress.innerHTML = '<strong style="color:#ffce5a">✓ Ritual complete — unlocking editor…</strong>';
             setTimeout(() => renderLesson(), 700);
           } else {
             saveProgress();

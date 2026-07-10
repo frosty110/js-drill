@@ -121,15 +121,15 @@ function renderConversation(body, content) {
   section.innerHTML = `
     <div class="mb-2 flex items-center justify-between gap-2">
       <div class="text-xs text-slate-500 uppercase tracking-wider">Interview walk-through</div>
-      <button data-action="conv-listen" style="background:#fbbf24; color:#0f172a; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600;">🎧 Listen</button>
+      <button data-action="conv-listen" style="background:#f5b62b; color:#17181c; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600;">🎧 Listen</button>
     </div>
-    <div class="conv-drill-route mb-3 p-3 rounded-lg" style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25);">
+    <div class="conv-drill-route mb-3 p-3 rounded-lg" style="background:rgba(245,182,43,0.08); border:1px solid rgba(245,182,43,0.25);">
       <div class="flex items-center justify-between gap-3 flex-wrap">
         <div class="text-sm text-slate-300">
           <span class="font-medium text-cyan-300">Reading is the prep.</span>
           <span class="text-slate-400">Run the cross-lesson Conversation Drill to actually recall which section a snippet belongs to.</span>
         </div>
-        <button data-action="conv-drill-route" style="background:#0891b2; color:#f8fafc; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:600; white-space:nowrap;">🎬 Drill recall →</button>
+        <button data-action="conv-drill-route" style="background:#e0a41e; color:#ffffff; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:600; white-space:nowrap;">🎬 Drill recall →</button>
       </div>
     </div>
     ${intro}
@@ -687,7 +687,7 @@ function renderReference(body, content) {
            mechanics-list category divider) so the rusty engineer's highest-value
            refresh-cues (the gotchas) read as a clear section rather than footer
            noise. Appended "· N" announces scope before the user scrolls. -->
-      <div data-ref-notes-header style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#a5b4fc;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(165,180,252,0.4);">Notes · ${ref.notes.length}</div>
+      <div data-ref-notes-header style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#ffce5a;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(255,206,90,0.4);">Notes · ${ref.notes.length}</div>
       <ul class="space-y-2">
         ${ref.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600">▸</span><span>${escapeHtml(n)}</span></li>`).join('')}
       </ul>
@@ -698,7 +698,7 @@ function renderReference(body, content) {
            vs pairwise divide-and-conquer). Conversation tab often names a
            second pattern in prose; this surface ships the code. Validator
            runs each alternate and asserts the output matches L3.expectedOutput. -->
-      <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#fbbf24;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(251,191,36,0.4);">Alternate solutions · ${ref.alternates.length}</div>
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#f5b62b;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(245,182,43,0.4);">Alternate solutions · ${ref.alternates.length}</div>
       <div class="ref-alternates-list">
         ${ref.alternates.map((alt, i) => `
           <details class="ref-alternate">

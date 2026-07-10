@@ -77,12 +77,12 @@ function _renderCalibrationTile() {
   const formatSec = (s) => s >= 60 ? `${Math.round(s/60)}m` : `${Math.round(s)}s`;
   return `
     <div data-calibration-tile style="margin-top: 18px;">
-      <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">⏱ Calibration · top ${top.length} miscalibrated mechanic${top.length === 1 ? '' : 's'}</div>
-      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">Median |actual − estimate| per mechanic from your L3-pass history. Higher = bigger gap between your time bucket and actual seconds.</div>
+      <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">⏱ Calibration · top ${top.length} miscalibrated mechanic${top.length === 1 ? '' : 's'}</div>
+      <div style="font-size: 11px; color: #9aa0aa; margin-bottom: 8px;">Median |actual − estimate| per mechanic from your L3-pass history. Higher = bigger gap between your time bucket and actual seconds.</div>
       ${top.map(r => `
-        <div data-cal-row data-mech-id="${escapeHtml(r.id)}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #1e293b; border-radius: 6px; margin-bottom: 4px;">
-          <span style="color: #cbd5e1; font-size: 13px;">${escapeHtml(r.label)}</span>
-          <span style="color: #fbbf24; font-size: 13px; font-variant-numeric: tabular-nums;">${formatSec(r.median)} <span style="color: #64748b; font-size: 11px;">· ${r.count}×</span></span>
+        <div data-cal-row data-mech-id="${escapeHtml(r.id)}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #262930; border-radius: 6px; margin-bottom: 4px;">
+          <span style="color: #c4c9cf; font-size: 13px;">${escapeHtml(r.label)}</span>
+          <span style="color: #f5b62b; font-size: 13px; font-variant-numeric: tabular-nums;">${formatSec(r.median)} <span style="color: #6b7079; font-size: 11px;">· ${r.count}×</span></span>
         </div>
       `).join('')}
     </div>
@@ -141,17 +141,17 @@ function _renderTimeInvestedTile() {
   };
   return `
     <div data-time-invested-tile style="margin-top: 18px;">
-      <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">⏳ Time invested · top ${topN.length} section${topN.length === 1 ? '' : 's'} <span style="color:#475569;">· ${formatMs(totalMs)} total</span></div>
-      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">Inferred from event timestamps — consecutive events within 5min count as session time (capped at 5min per gap). Effort-allocation complement to 🧭 Track Balance above.</div>
+      <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">⏳ Time invested · top ${topN.length} section${topN.length === 1 ? '' : 's'} <span style="color:#4a4f58;">· ${formatMs(totalMs)} total</span></div>
+      <div style="font-size: 11px; color: #9aa0aa; margin-bottom: 8px;">Inferred from event timestamps — consecutive events within 5min count as session time (capped at 5min per gap). Effort-allocation complement to 🧭 Track Balance above.</div>
       ${topN.map(r => {
         const pct = Math.round((r.ms / maxMs) * 100);
         return `
           <div style="display: grid; grid-template-columns: 130px 1fr 60px; gap: 8px; align-items: center; padding: 4px 0;">
-            <span style="color: #cbd5e1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(r.section)}">${escapeHtml(r.section)}</span>
-            <div style="height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden;">
-              <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #67e8f9, #a78bfa);"></div>
+            <span style="color: #c4c9cf; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(r.section)}">${escapeHtml(r.section)}</span>
+            <div style="height: 8px; background: #262930; border-radius: 4px; overflow: hidden;">
+              <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #ffce5a, #ffce5a);"></div>
             </div>
-            <span style="color: #94a3b8; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right;">${formatMs(r.ms)}</span>
+            <span style="color: #9aa0aa; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right;">${formatMs(r.ms)}</span>
           </div>
         `;
       }).join('')}
@@ -213,7 +213,7 @@ async function openCheatsheetModal() {
     _cheatsheetTrack = (cur && cur.track) || 'patterns';
   }
   const body = document.getElementById('cheatsheet-body');
-  if (body) body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Loading cheatsheet…</div>`;
+  if (body) body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">Loading cheatsheet…</div>`;
   const searchInput = document.getElementById('cheatsheet-search');
   if (searchInput) searchInput.value = _cheatsheetSearch;
   modal.style.display = 'block';
@@ -237,9 +237,9 @@ function renderCheatsheetTabs() {
   ];
   tabs.innerHTML = trackDefs.map(t => {
     const active = t.id === _cheatsheetTrack;
-    const bg = active ? '#1e293b' : 'transparent';
-    const color = active ? '#f8fafc' : '#94a3b8';
-    const border = active ? '#334155' : '#1e293b';
+    const bg = active ? '#262930' : 'transparent';
+    const color = active ? '#ffffff' : '#9aa0aa';
+    const border = active ? '#363a43' : '#262930';
     return `<button data-cs-track="${t.id}" style="background:${bg};color:${color};border:1px solid ${border};border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">${t.label}</button>`;
   }).join('');
   tabs.querySelectorAll('[data-cs-track]').forEach(btn => {
@@ -267,7 +267,7 @@ function renderCheatsheetBody() {
     : fullLessons;
 
   if (!filtered.length) {
-    body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">No lessons match.</div>`;
+    body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">No lessons match.</div>`;
     return;
   }
 
@@ -282,9 +282,9 @@ function renderCheatsheetBody() {
     // Default-open the current lesson's section, OR all sections when the
     // user is actively filtering (search-results expectation is "show me").
     const sectionOpen = q || section === curSection || _cheatsheetExpandAll;
-    html += `<details data-cs-section="${escapeHtml(section)}"${sectionOpen ? ' open' : ''} style="margin-bottom:8px;border:1px solid #1e293b;border-radius:8px;background:#0b1220;">
-      <summary style="padding:8px 12px;cursor:pointer;color:#cbd5e1;font-weight:600;font-size:13px;">
-        ${escapeHtml(section)} <span style="color:#64748b;font-weight:400;font-size:11px;">· ${lessons.length}</span>
+    html += `<details data-cs-section="${escapeHtml(section)}"${sectionOpen ? ' open' : ''} style="margin-bottom:8px;border:1px solid #262930;border-radius:8px;background:#0e0f12;">
+      <summary style="padding:8px 12px;cursor:pointer;color:#c4c9cf;font-weight:600;font-size:13px;">
+        ${escapeHtml(section)} <span style="color:#6b7079;font-weight:400;font-size:11px;">· ${lessons.length}</span>
       </summary>
       <div style="padding:4px 8px 10px 8px;display:flex;flex-direction:column;gap:4px;">`;
     for (const lesson of lessons) {
@@ -294,50 +294,50 @@ function renderCheatsheetBody() {
       // it's the lesson the user is currently on, OR they're searching, OR
       // they've hit "Expand all" — matches the "browse titles, drill in on demand" flow.
       const lessonOpen = q || lesson.id === curLessonId || _cheatsheetExpandAll;
-      const desc = c.description ? `<div style="color:#94a3b8;font-size:12px;margin:2px 0 6px 0;">${escapeHtml(c.description)}</div>` : '';
+      const desc = c.description ? `<div style="color:#9aa0aa;font-size:12px;margin:2px 0 6px 0;">${escapeHtml(c.description)}</div>` : '';
       // Primary approach + complexity header — mirrors the alternate chip
       // pattern so the cheatsheet's "two solutions visible side-by-side" view
       // surfaces complexity for BOTH the canonical and its alternates.
       const approachHtml = (c.reference && (c.reference.approach || c.reference.complexity))
         ? `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0 4px 0;flex-wrap:wrap;">
-            ${c.reference.approach ? `<strong style="color:#f1f5f9;font-size:12.5px;">${escapeHtml(c.reference.approach)}</strong>` : '<span></span>'}
-            ${c.reference.complexity ? `<span style="color:#fbbf24;font-size:10.5px;font-family:ui-monospace,monospace;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);padding:1px 6px;border-radius:999px;white-space:nowrap;" title="time / space">${escapeHtml(c.reference.complexity)}</span>` : ''}
+            ${c.reference.approach ? `<strong style="color:#eef0f2;font-size:12.5px;">${escapeHtml(c.reference.approach)}</strong>` : '<span></span>'}
+            ${c.reference.complexity ? `<span style="color:#f5b62b;font-size:10.5px;font-family:ui-monospace,monospace;background:rgba(245,182,43,0.08);border:1px solid rgba(245,182,43,0.25);padding:1px 6px;border-radius:999px;white-space:nowrap;" title="time / space">${escapeHtml(c.reference.complexity)}</span>` : ''}
           </div>`
         : '';
       const notesHtml = (c.reference && c.reference.notes && c.reference.notes.length)
-        ? `<ul style="margin:6px 0 0 0;padding-left:18px;color:#cbd5e1;font-size:12px;">${c.reference.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
+        ? `<ul style="margin:6px 0 0 0;padding-left:18px;color:#c4c9cf;font-size:12px;">${c.reference.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
         : '';
       // Alternates surface — collapsed by default so the primary canonical
       // stays the readable thing; users opt in to compare approaches.
       const altHtml = (c.reference && Array.isArray(c.reference.alternates) && c.reference.alternates.length)
-        ? `<details style="margin-top:8px;border-left:2px solid rgba(251,191,36,0.35);padding-left:8px;">
-            <summary style="cursor:pointer;color:#fbbf24;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;padding:2px 0;">Alternates · ${c.reference.alternates.length}</summary>
+        ? `<details style="margin-top:8px;border-left:2px solid rgba(245,182,43,0.35);padding-left:8px;">
+            <summary style="cursor:pointer;color:#f5b62b;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;padding:2px 0;">Alternates · ${c.reference.alternates.length}</summary>
             <div style="margin-top:6px;display:flex;flex-direction:column;gap:8px;">
               ${c.reference.alternates.map(alt => `
-                <div style="border:1px solid #1e293b;border-radius:6px;padding:8px 10px;background:#020617;">
+                <div style="border:1px solid #262930;border-radius:6px;padding:8px 10px;background:#0a0b0d;">
                   <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
-                    <strong style="color:#f1f5f9;font-size:12.5px;">${escapeHtml(alt.label || '')}</strong>
-                    ${alt.complexity ? `<span style="color:#fbbf24;font-size:10.5px;font-family:ui-monospace,monospace;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);padding:1px 6px;border-radius:999px;white-space:nowrap;">${escapeHtml(alt.complexity)}</span>` : ''}
+                    <strong style="color:#eef0f2;font-size:12.5px;">${escapeHtml(alt.label || '')}</strong>
+                    ${alt.complexity ? `<span style="color:#f5b62b;font-size:10.5px;font-family:ui-monospace,monospace;background:rgba(245,182,43,0.08);border:1px solid rgba(245,182,43,0.25);padding:1px 6px;border-radius:999px;white-space:nowrap;">${escapeHtml(alt.complexity)}</span>` : ''}
                   </div>
-                  ${alt.when ? `<div style="color:#94a3b8;font-size:11.5px;font-style:italic;margin:4px 0 6px 0;">${escapeHtml(alt.when)}</div>` : ''}
-                  <pre style="margin:0;padding:6px 8px;background:#020617;border:1px solid #1e293b;border-radius:4px;overflow-x:auto;font-size:11px;line-height:1.4;white-space:pre;color:#cbd5e1;">${escapeHtml(alt.code || '')}</pre>
-                  ${Array.isArray(alt.notes) && alt.notes.length ? `<ul style="margin:6px 0 0 0;padding-left:16px;color:#cbd5e1;font-size:11.5px;">${alt.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}
+                  ${alt.when ? `<div style="color:#9aa0aa;font-size:11.5px;font-style:italic;margin:4px 0 6px 0;">${escapeHtml(alt.when)}</div>` : ''}
+                  <pre style="margin:0;padding:6px 8px;background:#0a0b0d;border:1px solid #262930;border-radius:4px;overflow-x:auto;font-size:11px;line-height:1.4;white-space:pre;color:#c4c9cf;">${escapeHtml(alt.code || '')}</pre>
+                  ${Array.isArray(alt.notes) && alt.notes.length ? `<ul style="margin:6px 0 0 0;padding-left:16px;color:#c4c9cf;font-size:11.5px;">${alt.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}
                 </div>
               `).join('')}
             </div>
           </details>`
         : '';
-      html += `<details data-cs-lesson="${escapeHtml(lesson.id)}"${lessonOpen ? ' open' : ''} class="cs-lesson" style="border-left:2px solid #1e293b;padding:2px 0 2px 8px;">
-        <summary style="cursor:pointer;color:#e2e8f0;font-weight:600;font-size:13px;padding:4px 0;">
+      html += `<details data-cs-lesson="${escapeHtml(lesson.id)}"${lessonOpen ? ' open' : ''} class="cs-lesson" style="border-left:2px solid #262930;padding:2px 0 2px 8px;">
+        <summary style="cursor:pointer;color:#eef0f2;font-weight:600;font-size:13px;padding:4px 0;">
           ${escapeHtml(lesson.title)}
         </summary>
         <div style="padding:4px 0 6px 0;">
           ${desc}
           ${approachHtml}
-          <pre class="cm-s-dracula" data-cs-code="${escapeHtml(lesson.id)}" style="margin:0;padding:8px 10px;background:#020617;border:1px solid #1e293b;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.45;white-space:pre;"></pre>
+          <pre class="cm-s-dracula" data-cs-code="${escapeHtml(lesson.id)}" style="margin:0;padding:8px 10px;background:#0a0b0d;border:1px solid #262930;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.45;white-space:pre;"></pre>
           ${notesHtml}
           ${altHtml}
-          <button data-cs-goto="${escapeHtml(lesson.id)}" style="background:none;border:1px solid #1e293b;color:#67e8f9;font-size:11px;cursor:pointer;padding:4px 8px;border-radius:4px;margin-top:8px;">Open lesson →</button>
+          <button data-cs-goto="${escapeHtml(lesson.id)}" style="background:none;border:1px solid #262930;color:#ffce5a;font-size:11px;cursor:pointer;padding:4px 8px;border-radius:4px;margin-top:8px;">Open lesson →</button>
         </div>
       </details>`;
     }

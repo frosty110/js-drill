@@ -23,6 +23,25 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D06 · Global retheme NOW — visible transformation before structural rebuilds  (2026-07-10 · iter 3, user decision)
+Decision: Reverse the D04 default of "new look arrives only as each surface is
+structurally rebuilt." The user reviewed iter-2 output ("it looks like the same
+design") and chose **Global retheme now**: map the entire legacy palette
+(Tailwind slate/blue ramps, legacy tokens.css, hardcoded hexes in css/ +
+index.html + js/app inline styles) onto the Ink & Amber roles immediately, so
+every screen adopts the new visual language within 1–2 iterations. Structural
+rebuilds (P2 home, P3 launcher, P4 browse, P5 progress, P7 drill screens)
+continue on top; token purity still arrives with those rebuilds.
+Rationale: the staged plan delivered no perceivable transformation after two
+iterations; the user wants the design to LOOK new now, accepting the broader
+regression surface in exchange (mitigated by the probe suite + screenshots).
+Mechanism: Tailwind Play-CDN config palette remap (slate→ink, blue/sky→amber,
+status ramps tuned to ds values) + legacy tokens.css value swap + hex sweep in
+css/*.css, index.html inline styles, js/app template strings + targeted
+contrast fixes (white-on-amber → accent-ink).
+Reversible? Yes — palette maps and hex sweeps are pure value changes; git
+revert restores the blue/slate look wholesale.
+
 ## D05 · P0 inventory pass — zero capability retirements; topbar chrome replaced  (2026-07-10 · iter 1)
 Decision: The full ~60-mode inventory verdict pass (see `INVENTORY.md`) retires
 **no capability**. The only RETIRE is the topbar-of-dropdowns *chrome* itself —

@@ -908,7 +908,7 @@ function initAtRiskModal() {
     const rows = _atRiskRows(7);
     const body = document.getElementById('at-risk-body');
     if (!rows.length) {
-      body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">All clear — no wobbly or revealed lessons! 🎉</div>`;
+      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">All clear — no wobbly or revealed lessons! 🎉</div>`;
     } else {
       // iter 33 (refine): urgency-shape inventory above the cards. ADHD/phone
       // user sees the distribution upfront ("2 DUE NOW · 1 SOON · 1 NO-SR")
@@ -921,31 +921,31 @@ function initAtRiskModal() {
       const invParts = [];
       if (dueNow) invParts.push(`<span style="color:#fca5a5;">${dueNow} DUE NOW</span>`);
       if (soon)   invParts.push(`<span style="color:#fdba74;">${soon} SOON</span>`);
-      if (noSr)   invParts.push(`<span style="color:#94a3b8;">${noSr} NO-SR</span>`);
+      if (noSr)   invParts.push(`<span style="color:#9aa0aa;">${noSr} NO-SR</span>`);
       const inventoryHtml = invParts.length >= 1
-        ? `<div data-at-risk-inventory style="display:flex;gap:10px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:12px;padding:6px 0 6px 10px;border-left:2px solid rgba(165,180,252,0.4);color:#a5b4fc;">${invParts.join(`<span style="color:#475569;">·</span>`)}</div>`
+        ? `<div data-at-risk-inventory style="display:flex;gap:10px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:12px;padding:6px 0 6px 10px;border-left:2px solid rgba(255,206,90,0.4);color:#ffce5a;">${invParts.join(`<span style="color:#4a4f58;">·</span>`)}</div>`
         : '';
       body.innerHTML = inventoryHtml + rows.map(r => {
         const dueChip = r.isDue
           ? `<span style="color:#fca5a5; font-size:11px; background:rgba(248,113,113,0.12); border:1px solid rgba(248,113,113,0.3); border-radius:999px; padding:2px 8px; font-weight:600;">DUE NOW</span>`
           : r.daysTilDue !== null
             ? `<span style="color:#fdba74; font-size:11px; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3); border-radius:999px; padding:2px 8px;">in ${r.daysTilDue}d</span>`
-            : `<span style="color:#64748b; font-size:11px;">no SR</span>`;
+            : `<span style="color:#6b7079; font-size:11px;">no SR</span>`;
         const missBadge = r.weaknessCount > 0
           ? `<span style="color:#fdba74; font-size:11px;">⚠ ${r.weaknessCount}×</span>`
           : '';
         const revealDot = r.revealedLevels.length > 0
-          ? `<span style="color:#e9d5ff; font-size:11px; background:rgba(192,132,252,0.12); border:1px solid rgba(192,132,252,0.3); border-radius:999px; padding:2px 8px;" title="Mastered with reveal — drill clean to clear">🃏 ${escapeHtml(r.revealedLevels.join('+'))}</span>`
+          ? `<span style="color:#e9d5ff; font-size:11px; background:rgba(255,206,90,0.12); border:1px solid rgba(255,206,90,0.3); border-radius:999px; padding:2px 8px;" title="Mastered with reveal — drill clean to clear">🃏 ${escapeHtml(r.revealedLevels.join('+'))}</span>`
           : '';
-        return `<button data-lesson-id="${escapeHtml(r.lessonId)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:pointer; display:flex; flex-direction:column; gap:6px;">
+        return `<button data-lesson-id="${escapeHtml(r.lessonId)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#262930; border:1px solid #363a43; color:#eef0f2; cursor:pointer; display:flex; flex-direction:column; gap:6px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-            <span style="font-size:14px; font-weight:500; color:#e2e8f0;">${escapeHtml(r.title)}</span>
+            <span style="font-size:14px; font-weight:500; color:#eef0f2;">${escapeHtml(r.title)}</span>
             ${dueChip}
           </div>
-          <div style="display:flex; gap:8px; align-items:center; font-size:11px; color:#94a3b8;">
+          <div style="display:flex; gap:8px; align-items:center; font-size:11px; color:#9aa0aa;">
             <span>${escapeHtml(r.section)}</span>
-            ${missBadge ? `<span style="color:#475569;">·</span>${missBadge}` : ''}
-            ${revealDot ? `<span style="color:#475569;">·</span>${revealDot}` : ''}
+            ${missBadge ? `<span style="color:#4a4f58;">·</span>${missBadge}` : ''}
+            ${revealDot ? `<span style="color:#4a4f58;">·</span>${revealDot}` : ''}
           </div>
         </button>`;
       }).join('');
@@ -997,19 +997,19 @@ function renderActivityInto(rootEl, closeFn) {
   const rateStr = rate >= 10 ? String(Math.round(rate)) : rate.toFixed(1);
   const successRate = (wkPass + wkMiss) > 0 ? Math.round(wkPass / (wkPass + wkMiss) * 100) : null;
   const streakLine = streak > 0
-    ? `🔥 <strong style="color:#fbbf24;">${streak}-day streak</strong>${todayActive ? '' : ` · <span style="color:#fca5a5;">drill today to keep it</span>`}`
-    : `<span style="color:#94a3b8;">No streak yet — one solve today starts it 🔥</span>`;
+    ? `🔥 <strong style="color:#f5b62b;">${streak}-day streak</strong>${todayActive ? '' : ` · <span style="color:#fca5a5;">drill today to keep it</span>`}`
+    : `<span style="color:#9aa0aa;">No streak yet — one solve today starts it 🔥</span>`;
   const chip = (label, value, color) =>
-    `<div style="flex:1; background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:8px 10px; text-align:center;">
+    `<div style="flex:1; background:#17181c; border:1px solid #262930; border-radius:8px; padding:8px 10px; text-align:center;">
        <div style="font-size:18px; font-weight:700; color:${color};">${value}</div>
-       <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.04em;">${label}</div>
+       <div style="font-size:10px; color:#9aa0aa; text-transform:uppercase; letter-spacing:0.04em;">${label}</div>
      </div>`;
   const summaryHtml = `
     <div style="font-size:13px; margin-bottom:10px;">${streakLine}</div>
     <div style="display:flex; gap:8px; margin-bottom:16px;">
       ${chip('Solved · 7d', wkPass, '#34d399')}
-      ${chip('Per day', rateStr, '#67e8f9')}
-      ${chip('First-try', successRate === null ? '—' : successRate + '%', '#a78bfa')}
+      ${chip('Per day', rateStr, '#ffce5a')}
+      ${chip('First-try', successRate === null ? '—' : successRate + '%', '#ffce5a')}
     </div>`;
 
   // ── 14-day rate bars: height = reps that day, green=solved with amber=miss
@@ -1019,20 +1019,20 @@ function renderActivityInto(rootEl, closeFn) {
   const barMax = Math.max(1, ...last14.map(b => b.passes + b.misses));
   const CH = 54;
   const barsHtml = `
-    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Last 14 days · solved/day</div>
+    <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Last 14 days · solved/day</div>
     <div style="display:flex; align-items:flex-end; gap:3px; height:${CH}px; margin-bottom:4px;">
       ${last14.map((b, i) => {
         const ph = Math.round((b.passes / barMax) * CH);
         const mh = Math.round((b.misses / barMax) * CH);
         const isToday = i === last14.length - 1;
         const tip = `${b.dateLabel}: ${b.passes} solved${b.misses ? `, ${b.misses} miss` : ''}`;
-        return `<div title="${escapeHtml(tip)}" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:${CH}px;${isToday ? ' outline:1px solid #475569; outline-offset:1px; border-radius:2px;' : ''}">
+        return `<div title="${escapeHtml(tip)}" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:${CH}px;${isToday ? ' outline:1px solid #4a4f58; outline-offset:1px; border-radius:2px;' : ''}">
           ${mh ? `<div style="height:${mh}px; background:#f59e0b; border-radius:2px 2px 0 0;"></div>` : ''}
           <div style="height:${ph}px; min-height:${b.passes ? '2px' : '0'}; background:#34d399; border-radius:${mh ? '0' : '2px 2px 0 0'};"></div>
         </div>`;
       }).join('')}
     </div>
-    <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#64748b; margin-bottom:18px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#6b7079; margin-bottom:18px;">
       <span>${escapeHtml(last14[0].dateLabel)}</span>
       <span style="display:flex; gap:10px;"><span><span style="color:#34d399;">■</span> solved</span><span><span style="color:#f59e0b;">■</span> miss</span></span>
       <span>Today</span>
@@ -1041,10 +1041,10 @@ function renderActivityInto(rootEl, closeFn) {
   rootEl.innerHTML = `
     ${summaryHtml}
     ${barsHtml}
-    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">60-day consistency</div>
-    <div data-act-tooltip style="margin-bottom: 8px; min-height: 22px; font-size: 12px; color: #94a3b8;"></div>
+    <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">60-day consistency</div>
+    <div data-act-tooltip style="margin-bottom: 8px; min-height: 22px; font-size: 12px; color: #9aa0aa;"></div>
     <div data-act-grid style="display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px;"></div>
-    <div data-act-legend style="margin-top: 14px; display: flex; gap: 8px; align-items: center; font-size: 11px; color: #64748b;"></div>`;
+    <div data-act-legend style="margin-top: 14px; display: flex; gap: 8px; align-items: center; font-size: 11px; color: #6b7079;"></div>`;
   {
     const max = buckets.reduce((m, b) => Math.max(m, b.total), 0);
     const grid = rootEl.querySelector('[data-act-grid]');
@@ -1061,14 +1061,14 @@ function renderActivityInto(rootEl, closeFn) {
       if (pct < 0.75) return 3;
       return 4;
     };
-    const tierColors = ['#1e293b', '#064e3b', '#065f46', '#10b981', '#34d399'];
+    const tierColors = ['#262930', '#064e3b', '#065f46', '#10b981', '#34d399'];
     const tierTitles = ['none', 'light', 'medium', 'heavy', 'peak'];
     grid.innerHTML = buckets.map((b, idx) => {
       const t = tier(b.total);
-      return `<button class="streak-cell" data-streak-idx="${idx}" type="button" title="${escapeHtml(b.dateLabel)} · ${b.total} event${b.total === 1 ? '' : 's'}" aria-label="${escapeHtml(b.dateLabel)}: ${b.total} events" style="aspect-ratio: 1; background: ${tierColors[t]}; border: 1px solid #0f172a; border-radius: 3px; cursor: ${b.total > 0 ? 'pointer' : 'default'}; padding: 0;"></button>`;
+      return `<button class="streak-cell" data-streak-idx="${idx}" type="button" title="${escapeHtml(b.dateLabel)} · ${b.total} event${b.total === 1 ? '' : 's'}" aria-label="${escapeHtml(b.dateLabel)}: ${b.total} events" style="aspect-ratio: 1; background: ${tierColors[t]}; border: 1px solid #17181c; border-radius: 3px; cursor: ${b.total > 0 ? 'pointer' : 'default'}; padding: 0;"></button>`;
     }).join('');
     // Legend swatches.
-    legend.innerHTML = `<span>Less</span>` + tierColors.map((c, i) => `<span style="display:inline-block; width:12px; height:12px; background:${c}; border:1px solid #0f172a; border-radius:3px;" title="${tierTitles[i]}"></span>`).join('') + `<span>More</span>`;
+    legend.innerHTML = `<span>Less</span>` + tierColors.map((c, i) => `<span style="display:inline-block; width:12px; height:12px; background:${c}; border:1px solid #17181c; border-radius:3px;" title="${tierTitles[i]}"></span>`).join('') + `<span>More</span>`;
     // iter eval-2026-05-30 (Phase 4-A): forward-looking default
     // tooltip — past-only "X events across Y days" is vanity-adjacent.
     // Compute the user's peak streak (max consecutive active-day run)
@@ -1088,7 +1088,7 @@ function renderActivityInto(rootEl, closeFn) {
       gapDays++;
     }
     if (totalAll === 0) {
-      tooltip.innerHTML = `<span style="color:#475569;">No history yet — drill anything to start the map.</span>`;
+      tooltip.innerHTML = `<span style="color:#4a4f58;">No history yet — drill anything to start the map.</span>`;
     } else {
       const gapStr = gapDays === 0
         ? `drilled today ✓`
@@ -1104,10 +1104,10 @@ function renderActivityInto(rootEl, closeFn) {
       const detail = (e) => {
         const b = buckets[+cell.dataset.streakIdx];
         if (b.total === 0) {
-          tooltip.innerHTML = `<span style="color:#475569;">${escapeHtml(b.dateLabel)} — no activity</span>`;
+          tooltip.innerHTML = `<span style="color:#4a4f58;">${escapeHtml(b.dateLabel)} — no activity</span>`;
           return;
         }
-        const head = `<strong style="color:#cbd5e1;">${escapeHtml(b.dateLabel)}</strong> · ${b.total} event${b.total === 1 ? '' : 's'} · <span style="color:#34d399;">${b.passes} pass</span>${b.misses > 0 ? ` · <span style="color:#f87171;">${b.misses} miss</span>` : ''}`;
+        const head = `<strong style="color:#c4c9cf;">${escapeHtml(b.dateLabel)}</strong> · ${b.total} event${b.total === 1 ? '' : 's'} · <span style="color:#34d399;">${b.passes} pass</span>${b.misses > 0 ? ` · <span style="color:#f87171;">${b.misses} miss</span>` : ''}`;
         // Tap (not just hover) on a day with misses → show drill routes.
         // Hover stays informational only.
         const isClick = e && (e.type === 'click' || e.type === 'pointerdown');
@@ -1221,19 +1221,19 @@ function initAudioPlayer() {
       const rows = bySection.get(section).map(ep => {
         const isPlaying = _audioLessonId === ep.lessonId && _audioQueue;
         const marker = isPlaying
-          ? '<span style="color:#fbbf24;">●</span>'
-          : '<span style="color:#64748b;">▶</span>';
-        return `<button class="audio-episode" data-ep-id="${escapeHtml(ep.lessonId)}" style="text-align:left; background:#1e293b; border-radius:6px; padding:8px 12px; color:#f1f5f9; display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; border:1px solid ${isPlaying ? '#fbbf24' : 'transparent'};">
+          ? '<span style="color:#f5b62b;">●</span>'
+          : '<span style="color:#6b7079;">▶</span>';
+        return `<button class="audio-episode" data-ep-id="${escapeHtml(ep.lessonId)}" style="text-align:left; background:#262930; border-radius:6px; padding:8px 12px; color:#eef0f2; display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; border:1px solid ${isPlaying ? '#f5b62b' : 'transparent'};">
           <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(ep.title)}</span>
           ${marker}
         </button>`;
       }).join('');
       return `<div style="display:flex; flex-direction:column; gap:4px; margin-top:14px;">
-        <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; padding:0 4px;">${escapeHtml(section)}  ·  ${bySection.get(section).length}</div>
+        <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.5px; padding:0 4px;">${escapeHtml(section)}  ·  ${bySection.get(section).length}</div>
         ${rows}
       </div>`;
     }).join('');
-    playlistEl.innerHTML = blocks || '<div style="color:#64748b; font-size:13px; padding:12px;">No episodes yet.</div>';
+    playlistEl.innerHTML = blocks || '<div style="color:#6b7079; font-size:13px; padding:12px;">No episodes yet.</div>';
     playlistEl.querySelectorAll('.audio-episode').forEach(btn => {
       btn.addEventListener('click', () => startEpisode(btn.dataset.epId));
     });
@@ -1524,18 +1524,18 @@ function initHeatstrip() {
     const body = document.getElementById('heatstrip-modal-body');
     if (!body) return;
     if (!sum.eventCount) {
-      body.innerHTML = `<div style="color:#64748b;">No session active. Tap any lesson to start.</div>`;
+      body.innerHTML = `<div style="color:#6b7079;">No session active. Tap any lesson to start.</div>`;
     } else {
       const minLabel = sum.minActive === 1 ? '1 minute' : `${sum.minActive} minutes`;
       const lessLabel = sum.lessonsTouched === 1 ? '1 lesson' : `${sum.lessonsTouched} lessons`;
       const passLabel = sum.passes === 1 ? '1 pass' : `${sum.passes} passes`;
       const missLine = sum.missCount > 0
-        ? `<div><span style="color:#94a3b8;">L1 misses recorded:</span> <span style="color:#cbd5e1;">${sum.missCount}</span></div>`
+        ? `<div><span style="color:#9aa0aa;">L1 misses recorded:</span> <span style="color:#c4c9cf;">${sum.missCount}</span></div>`
         : '';
       body.innerHTML = `
-        <div><span style="color:#94a3b8;">Active for:</span> <span style="color:#cbd5e1;">${minLabel}</span></div>
-        <div><span style="color:#94a3b8;">Lessons touched:</span> <span style="color:#cbd5e1;">${lessLabel}</span></div>
-        <div><span style="color:#94a3b8;">Passes (L1+L2+L3):</span> <span style="color:#cbd5e1;">${passLabel}</span></div>
+        <div><span style="color:#9aa0aa;">Active for:</span> <span style="color:#c4c9cf;">${minLabel}</span></div>
+        <div><span style="color:#9aa0aa;">Lessons touched:</span> <span style="color:#c4c9cf;">${lessLabel}</span></div>
+        <div><span style="color:#9aa0aa;">Passes (L1+L2+L3):</span> <span style="color:#c4c9cf;">${passLabel}</span></div>
         ${missLine}
       `;
     }
@@ -1591,24 +1591,24 @@ function renderStatsInto(statsBodyEl, _close) {
     // roadmap #3 (constraint-aware B#5 — allocation balance across track
     // axis). Pure tally over progress × manifest.track; zero new state.
     const compassRows = [
-      { id: 'syntax',   label: 'Syntax',   color: '#67e8f9', ...syntaxStats },
-      { id: 'patterns', label: 'Pattern',  color: '#a78bfa', ...patternsStats },
-      { id: 'applied',  label: 'Applied',  color: '#fbcfe8', ...appliedStats }
+      { id: 'syntax',   label: 'Syntax',   color: '#ffce5a', ...syntaxStats },
+      { id: 'patterns', label: 'Pattern',  color: '#ffce5a', ...patternsStats },
+      { id: 'applied',  label: 'Applied',  color: '#ffedc2', ...appliedStats }
     ].map(r => ({ ...r, pct: r.total > 0 ? Math.round((r.mastered / r.total) * 100) : 0 }));
     const leastCovered = compassRows.filter(r => r.total > 0).sort((a, b) => a.pct - b.pct)[0];
     const compassNudge = leastCovered
-      ? `<div style="font-size:11px; color:#94a3b8; margin-top:6px;">Least covered: <strong style="color:${leastCovered.color};">${escapeHtml(leastCovered.label)}</strong> · ${leastCovered.mastered}/${leastCovered.total} (${leastCovered.pct}%)</div>`
+      ? `<div style="font-size:11px; color:#9aa0aa; margin-top:6px;">Least covered: <strong style="color:${leastCovered.color};">${escapeHtml(leastCovered.label)}</strong> · ${leastCovered.mastered}/${leastCovered.total} (${leastCovered.pct}%)</div>`
       : '';
     const compassHtml = `
-      <div style="margin-bottom: 14px; padding: 12px 14px; background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;">
-        <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">🧭 Track Balance</div>
+      <div style="margin-bottom: 14px; padding: 12px 14px; background: #17181c; border: 1px solid #262930; border-radius: 8px;">
+        <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">🧭 Track Balance</div>
         ${compassRows.map(r => `
           <div style="display:grid; grid-template-columns: 70px 1fr 70px; gap:8px; align-items:center; padding:3px 0;">
             <span style="font-size:12px; color:${r.color}; font-weight:600;">${escapeHtml(r.label)}</span>
-            <div style="height:8px; background:#1e293b; border-radius:4px; overflow:hidden;">
+            <div style="height:8px; background:#262930; border-radius:4px; overflow:hidden;">
               <div style="width:${r.pct}%; height:100%; background:${r.color};"></div>
             </div>
-            <span style="font-size:11px; color:#94a3b8; font-variant-numeric:tabular-nums; text-align:right;">${r.mastered}/${r.total} · ${r.pct}%</span>
+            <span style="font-size:11px; color:#9aa0aa; font-variant-numeric:tabular-nums; text-align:right;">${r.mastered}/${r.total} · ${r.pct}%</span>
           </div>
         `).join('')}
         ${compassNudge}
@@ -1617,95 +1617,95 @@ function renderStatsInto(statsBodyEl, _close) {
 
     statsBodyEl.innerHTML = `${compassHtml}
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-        <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
-          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Mastered</div>
+        <div style="background: #262930; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em;">Mastered</div>
           <div style="font-size: 28px; color: #10b981; font-weight: 700;">${mastered} / ${fullLessons.length}<span style="font-size: 14px; color: #6ee7b7; font-weight: 500; margin-left: 6px;">· ${fullLessons.length ? Math.round(mastered / fullLessons.length * 100) : 0}%</span></div>
         </div>
-        <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
-          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">In Progress</div>
+        <div style="background: #262930; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em;">In Progress</div>
           <div style="font-size: 28px; color: #f59e0b; font-weight: 700;">${inProgress}</div>
         </div>
       </div>
       <div style="margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
-        <div data-track-stat="syntax" style="background: #1e293b; padding: 12px; border-radius: 8px;">
-          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Syntax</div>
-          <div style="font-size: 22px; color: #93c5fd; font-weight: 700;">${syntaxStats.mastered} / ${syntaxStats.total}</div>
+        <div data-track-stat="syntax" style="background: #262930; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em;">Syntax</div>
+          <div style="font-size: 22px; color: #ffce5a; font-weight: 700;">${syntaxStats.mastered} / ${syntaxStats.total}</div>
         </div>
-        <div data-track-stat="patterns" style="background: #1e293b; padding: 12px; border-radius: 8px;">
-          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Patterns</div>
-          <div style="font-size: 22px; color: #c4b5fd; font-weight: 700;">${patternsStats.mastered} / ${patternsStats.total}</div>
+        <div data-track-stat="patterns" style="background: #262930; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em;">Patterns</div>
+          <div style="font-size: 22px; color: #ffdd8a; font-weight: 700;">${patternsStats.mastered} / ${patternsStats.total}</div>
         </div>
-        <div data-track-stat="applied" style="background: #1e293b; padding: 12px; border-radius: 8px;">
-          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Applied</div>
-          <div style="font-size: 22px; color: #fcd34d; font-weight: 700;">${appliedStats.mastered} / ${appliedStats.total}</div>
+        <div data-track-stat="applied" style="background: #262930; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em;">Applied</div>
+          <div style="font-size: 22px; color: #ffce5a; font-weight: 700;">${appliedStats.mastered} / ${appliedStats.total}</div>
         </div>
       </div>
       <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 12px;">
-        <div style="background: rgba(34,211,238,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(34,211,238,0.2);">
-          <div style="color: #94a3b8;">Due for review</div>
-          <div style="color: #67e8f9; font-size: 18px; font-weight: 600;">${due}</div>
+        <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.2);">
+          <div style="color: #9aa0aa;">Due for review</div>
+          <div style="color: #ffce5a; font-size: 18px; font-weight: 600;">${due}</div>
         </div>
         <div style="background: rgba(251,146,60,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(251,146,60,0.2);">
-          <div style="color: #94a3b8;">Weak spots</div>
+          <div style="color: #9aa0aa;">Weak spots</div>
           <div style="color: #fdba74; font-size: 18px; font-weight: 600;">${weakCount}</div>
         </div>
-        <div style="background: rgba(244,114,182,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(244,114,182,0.2);">
-          <div style="color: #94a3b8;">Avg mock time</div>
-          <div style="color: #fbcfe8; font-size: 18px; font-weight: 600;">${avgMockMs ? formatTime(avgMockMs) : '—'}</div>
+        <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.2);">
+          <div style="color: #9aa0aa;">Avg mock time</div>
+          <div style="color: #ffedc2; font-size: 18px; font-weight: 600;">${avgMockMs ? formatTime(avgMockMs) : '—'}</div>
         </div>
       </div>
       ${(state.recognize?.attempts || 0) > 0 ? `
         <div style="margin-top: 8px;">
-          <div style="background: rgba(251,191,36,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(251,191,36,0.2); display: flex; justify-content: space-between; align-items: center;">
+          <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.2); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #94a3b8; font-size: 12px;">🔎 Recognize lifetime <span style="color: #64748b; font-weight: 400;">(incl. 🎯 Reverse)</span></div>
-              <div style="color: #fcd34d; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.recognize.correct} / ${state.recognize.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.recognize.correct / state.recognize.attempts * 100)}%)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">🔎 Recognize lifetime <span style="color: #6b7079; font-weight: 400;">(incl. 🎯 Reverse)</span></div>
+              <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.recognize.correct} / ${state.recognize.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.recognize.correct / state.recognize.attempts * 100)}%)</span></div>
             </div>
-            <button data-action="open-recognize-from-stats" style="background: rgba(251,191,36,0.16); color: #fcd34d; border: 1px solid rgba(251,191,36,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Drill →</button>
+            <button data-action="open-recognize-from-stats" style="background: rgba(245,182,43,0.16); color: #ffce5a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Drill →</button>
           </div>
         </div>
       ` : ''}
       ${(state.gotcha?.attempts || 0) > 0 ? `
         <div style="margin-top: 8px;">
-          <div style="background: rgba(244,114,182,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(244,114,182,0.25); display: flex; justify-content: space-between; align-items: center;">
+          <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #94a3b8; font-size: 12px;">🎯 Crux lifetime <span style="color: #64748b; font-weight: 400;">(key-trick recall)</span></div>
-              <div style="color: #fbcfe8; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.gotcha.correct} / ${state.gotcha.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.gotcha.correct / state.gotcha.attempts * 100)}%)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">🎯 Crux lifetime <span style="color: #6b7079; font-weight: 400;">(key-trick recall)</span></div>
+              <div style="color: #ffedc2; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.gotcha.correct} / ${state.gotcha.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.gotcha.correct / state.gotcha.attempts * 100)}%)</span></div>
             </div>
-            <button data-action="open-gotcha-from-stats" style="background: rgba(244,114,182,0.16); color: #fbcfe8; border: 1px solid rgba(244,114,182,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Recall →</button>
+            <button data-action="open-gotcha-from-stats" style="background: rgba(255,206,90,0.16); color: #ffedc2; border: 1px solid rgba(255,206,90,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Recall →</button>
           </div>
         </div>
       ` : ''}
       ${(state.claim?.attempts || 0) > 0 ? `
         <div style="margin-top: 8px;">
-          <div style="background: rgba(20,184,166,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(20,184,166,0.25); display: flex; justify-content: space-between; align-items: center;">
+          <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #94a3b8; font-size: 12px;">📐 Claim lifetime <span style="color: #64748b; font-weight: 400;">(smell-test complexity)</span></div>
-              <div style="color: #5eead4; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.claim.correct} / ${state.claim.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.claim.correct / state.claim.attempts * 100)}%)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">📐 Claim lifetime <span style="color: #6b7079; font-weight: 400;">(smell-test complexity)</span></div>
+              <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.claim.correct} / ${state.claim.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.claim.correct / state.claim.attempts * 100)}%)</span></div>
             </div>
-            <button data-action="open-claim-from-stats" style="background: rgba(20,184,166,0.16); color: #5eead4; border: 1px solid rgba(20,184,166,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Spin →</button>
+            <button data-action="open-claim-from-stats" style="background: rgba(245,182,43,0.16); color: #ffce5a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Spin →</button>
           </div>
         </div>
       ` : ''}
       ${(state.crystal?.attempts || 0) > 0 ? `
         <div style="margin-top: 8px;">
-          <div style="background: rgba(168,85,247,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(168,85,247,0.25); display: flex; justify-content: space-between; align-items: center;">
+          <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #94a3b8; font-size: 12px;">🔮 Predict lifetime <span style="color: #64748b; font-weight: 400;">(mental-execution)</span></div>
-              <div style="color: #d8b4fe; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.crystal.correct} / ${state.crystal.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.crystal.correct / state.crystal.attempts * 100)}%)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">🔮 Predict lifetime <span style="color: #6b7079; font-weight: 400;">(mental-execution)</span></div>
+              <div style="color: #ffdd8a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.crystal.correct} / ${state.crystal.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.crystal.correct / state.crystal.attempts * 100)}%)</span></div>
             </div>
-            <button data-action="open-crystal-from-stats" style="background: rgba(168,85,247,0.16); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Predict →</button>
+            <button data-action="open-crystal-from-stats" style="background: rgba(245,182,43,0.16); color: #ffdd8a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Predict →</button>
           </div>
         </div>
       ` : ''}
       ${(state.bugHunt?.attempts || 0) > 0 ? `
         <div style="margin-top: 8px;">
-          <div style="background: rgba(103,232,249,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(103,232,249,0.25); display: flex; justify-content: space-between; align-items: center;">
+          <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #94a3b8; font-size: 12px;">🪲 Bug-Hunt lifetime <span style="color: #64748b; font-weight: 400;">(spot the operator flip)</span></div>
-              <div style="color: #67e8f9; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.bugHunt.correct} / ${state.bugHunt.attempts} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${Math.round(state.bugHunt.correct / state.bugHunt.attempts * 100)}%)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">🪲 Bug-Hunt lifetime <span style="color: #6b7079; font-weight: 400;">(spot the operator flip)</span></div>
+              <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.bugHunt.correct} / ${state.bugHunt.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.bugHunt.correct / state.bugHunt.attempts * 100)}%)</span></div>
             </div>
-            <button data-action="open-bughunt-from-stats" style="background: rgba(103,232,249,0.16); color: #67e8f9; border: 1px solid rgba(103,232,249,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Hunt →</button>
+            <button data-action="open-bughunt-from-stats" style="background: rgba(255,206,90,0.16); color: #ffce5a; border: 1px solid rgba(255,206,90,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Hunt →</button>
           </div>
         </div>
       ` : ''}
@@ -1717,7 +1717,7 @@ function renderStatsInto(statsBodyEl, _close) {
         // tile stays quiet for users new to L3.
         const sr = _selfRescueRateGlobal();
         if (sr.total === 0) return '';
-        const tone = sr.rate >= 70 ? '#86efac' : sr.rate >= 40 ? '#fcd34d' : '#fdba74';
+        const tone = sr.rate >= 70 ? '#86efac' : sr.rate >= 40 ? '#ffce5a' : '#fdba74';
         const borderTone = sr.rate >= 70 ? 'rgba(134,239,172,0.3)' : sr.rate >= 40 ? 'rgba(252,211,77,0.3)' : 'rgba(253,186,116,0.3)';
         const bgTone = sr.rate >= 70 ? 'rgba(134,239,172,0.08)' : sr.rate >= 40 ? 'rgba(252,211,77,0.08)' : 'rgba(253,186,116,0.08)';
         return `
@@ -1725,11 +1725,11 @@ function renderStatsInto(statsBodyEl, _close) {
           <div style="background: ${bgTone}; padding: 10px; border-radius: 6px; border: 1px solid ${borderTone};">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <div style="color: #94a3b8; font-size: 12px;">🎯 Self-rescue rate <span style="color: #64748b; font-weight: 400;">(zero-hint L3 passes)</span></div>
-                <div style="color: ${tone}; font-size: 16px; font-weight: 600; margin-top: 2px;">${sr.zeroHint} / ${sr.total} <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">(${sr.rate}%)</span></div>
+                <div style="color: #9aa0aa; font-size: 12px;">🎯 Self-rescue rate <span style="color: #6b7079; font-weight: 400;">(zero-hint L3 passes)</span></div>
+                <div style="color: ${tone}; font-size: 16px; font-weight: 600; margin-top: 2px;">${sr.zeroHint} / ${sr.total} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${sr.rate}%)</span></div>
               </div>
             </div>
-            <div style="color: #64748b; font-size: 10px; margin-top: 4px;">since you started L3 drilling — hint events captured per attempt</div>
+            <div style="color: #6b7079; font-size: 10px; margin-top: 4px;">since you started L3 drilling — hint events captured per attempt</div>
           </div>
         </div>
         `;
@@ -1746,14 +1746,14 @@ function renderStatsInto(statsBodyEl, _close) {
         const total = top.reduce((s, r) => s + r.count, 0);
         return `
         <div style="margin-top: 8px;">
-          <div style="background: rgba(192,132,252,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(192,132,252,0.2);">
-            <div style="color: #94a3b8; font-size: 12px; margin-bottom: 6px;">🏷 Top miss patterns <span style="color: #64748b; font-weight: 400;">(${total} tagged · tap to drill)</span></div>
+          <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.2);">
+            <div style="color: #9aa0aa; font-size: 12px; margin-bottom: 6px;">🏷 Top miss patterns <span style="color: #6b7079; font-weight: 400;">(${total} tagged · tap to drill)</span></div>
             <div style="display: flex; flex-wrap: wrap; gap: 6px;" data-mistake-tag-tiles>
               ${top.map(row => {
                 const route = row.topLessons && row.topLessons[0] ? row.topLessons[0].lessonId : '';
                 const interactive = route ? 'cursor: pointer;' : 'cursor: default; opacity: 0.7;';
                 const title = route ? `Drill most-recent ${escapeHtml(row.label)} miss` : `No routable lesson for ${escapeHtml(row.label)}`;
-                return `<button type="button" data-mistake-route="${escapeHtml(route)}" title="${title}" style="background: rgba(192,132,252,0.15); color: #e9d5ff; border: 1px solid rgba(192,132,252,0.3); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 500; ${interactive}">${escapeHtml(row.label)} <span style="color: #a78bfa; margin-left: 2px;">×${row.count}</span></button>`;
+                return `<button type="button" data-mistake-route="${escapeHtml(route)}" title="${title}" style="background: rgba(255,206,90,0.15); color: #e9d5ff; border: 1px solid rgba(255,206,90,0.3); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 500; ${interactive}">${escapeHtml(row.label)} <span style="color: #ffce5a; margin-left: 2px;">×${row.count}</span></button>`;
               }).join('')}
             </div>
           </div>
@@ -1777,8 +1777,8 @@ function renderStatsInto(statsBodyEl, _close) {
         };
         return `
         <div style="margin-top: 8px;">
-          <div style="background: rgba(125,211,252,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(125,211,252,0.2);">
-            <div style="color: #94a3b8; font-size: 12px; margin-bottom: 6px;">📈 Mastery Half-Life <span style="color: #64748b; font-weight: 400;">(${total} lesson${total === 1 ? '' : 's'} with ≥2 L3 passes)</span></div>
+          <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.2);">
+            <div style="color: #9aa0aa; font-size: 12px; margin-bottom: 6px;">📈 Mastery Half-Life <span style="color: #6b7079; font-weight: 400;">(${total} lesson${total === 1 ? '' : 's'} with ≥2 L3 passes)</span></div>
             <div class="half-life-buckets">
               <div class="half-life-bucket"><span class="half-life-dot sticky"></span><span class="half-life-label">Sticky</span><span class="half-life-count">${hl.sticky}</span><span class="half-life-range">&gt;${HALF_LIFE_STICKY_DAYS}d</span></div>
               <div class="half-life-bucket"><span class="half-life-dot normal"></span><span class="half-life-label">Normal</span><span class="half-life-count">${hl.normal}</span><span class="half-life-range">${HALF_LIFE_NORMAL_DAYS}-${HALF_LIFE_STICKY_DAYS}d</span></div>
@@ -1794,14 +1794,14 @@ function renderStatsInto(statsBodyEl, _close) {
                 }).join('')}
               </div>
             ` : ''}
-            <div style="color: #64748b; font-size: 10px; margin-top: 6px;">since you started L3 drilling — median gap between consecutive passes</div>
+            <div style="color: #6b7079; font-size: 10px; margin-top: 6px;">since you started L3 drilling — median gap between consecutive passes</div>
           </div>
         </div>
         `;
       })()}
       ${_renderSectionRetentionBlock(14)}
       ${state.calibrateOn === false ? `
-        <div data-calibration-hint style="margin-top: 18px; padding: 10px 12px; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.3); border-radius: 8px; font-size: 12px; color: #fde68a; line-height: 1.5;">
+        <div data-calibration-hint style="margin-top: 18px; padding: 10px 12px; background: rgba(245,182,43,0.08); border: 1px solid rgba(245,182,43,0.3); border-radius: 8px; font-size: 12px; color: #fde68a; line-height: 1.5;">
           💡 <strong>⏱ Calibration</strong> not tracking yet — turn on from <strong>⚙️ Settings → ⏱ Calibrate</strong> to log your time-to-solve per mechanic and see your top miscalibrated patterns here.
         </div>
       ` : ''}
@@ -1809,18 +1809,18 @@ function renderStatsInto(statsBodyEl, _close) {
       ${_renderTimeInvestedTile()}
       ${bestTimesEntries.length ? `
         <div style="margin-top: 18px;">
-          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Mock interview personal bests</div>
+          <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Mock interview personal bests</div>
           <div style="max-height: 200px; overflow-y: auto; font-family: 'SF Mono', monospace; font-size: 12px;">
             ${bestTimesEntries
               .sort((a, b) => a[1] - b[1])
               .map(([id, ms]) => {
                 const l = findLesson(id);
-                return `<div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1e293b;"><span style="color: #cbd5e1;">${escapeHtml(l?.title || id)}</span><span style="color: #fbcfe8;">${formatTime(ms)}</span></div>`;
+                return `<div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #262930;"><span style="color: #c4c9cf;">${escapeHtml(l?.title || id)}</span><span style="color: #ffedc2;">${formatTime(ms)}</span></div>`;
               }).join('')}
           </div>
         </div>
       ` : ''}
-      <div style="margin-top: 16px; text-align: center; color: #64748b; font-size: 11px;">Streak this session: ${state.streak}</div>
+      <div style="margin-top: 16px; text-align: center; color: #6b7079; font-size: 11px;">Streak this session: ${state.streak}</div>
     `;
     // iter 51: wire the Recognize Drill-from-Stats button (only present when lifetime attempts > 0).
     statsBodyEl.querySelector('[data-action="open-recognize-from-stats"]')?.addEventListener('click', () => {
@@ -1899,21 +1899,21 @@ function renderDailyInto(rootEl) {
   // "progress at a glance". Encouraging when ahead, neutral-honest otherwise.
   const delta = (today.passes || 0) - (yest.passes || 0);
   let deltaLine;
-  if (!today.passes && !today.misses) deltaLine = `<span style="color:#64748b;">No reps logged yet today — one drill counts.</span>`;
+  if (!today.passes && !today.misses) deltaLine = `<span style="color:#6b7079;">No reps logged yet today — one drill counts.</span>`;
   else if (delta > 0) deltaLine = `<span style="color:#34d399;">▲ ${delta} more solved than yesterday — keep going.</span>`;
-  else if (delta < 0) deltaLine = `<span style="color:#94a3b8;">▼ ${-delta} fewer than yesterday so far.</span>`;
-  else deltaLine = `<span style="color:#94a3b8;">On pace with yesterday.</span>`;
+  else if (delta < 0) deltaLine = `<span style="color:#9aa0aa;">▼ ${-delta} fewer than yesterday so far.</span>`;
+  else deltaLine = `<span style="color:#9aa0aa;">On pace with yesterday.</span>`;
   const tile = (label, value, color, bg, border) =>
     `<div style="background:${bg}; padding:10px 12px; border-radius:8px; border:1px solid ${border};">
-       <div style="font-size:11px; color:#94a3b8;">${label}</div>
+       <div style="font-size:11px; color:#9aa0aa;">${label}</div>
        <div style="font-size:20px; font-weight:700; color:${color};">${value}</div>
      </div>`;
   rootEl.innerHTML = `
-    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">📆 Today</div>
+    <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">📆 Today</div>
     <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
       ${tile('Solved today', today.passes || 0, '#34d399', 'rgba(52,211,153,0.08)', 'rgba(52,211,153,0.25)')}
       ${tile('Missed today', today.misses || 0, '#f87171', 'rgba(248,113,113,0.08)', 'rgba(248,113,113,0.25)')}
-      ${tile('Due now', due, '#67e8f9', 'rgba(34,211,238,0.08)', 'rgba(34,211,238,0.25)')}
+      ${tile('Due now', due, '#ffce5a', 'rgba(245,182,43,0.08)', 'rgba(245,182,43,0.25)')}
       ${tile('Weak spots', weak, '#fdba74', 'rgba(251,146,60,0.08)', 'rgba(251,146,60,0.25)')}
     </div>
     <div style="margin-top:8px; font-size:12px;">${deltaLine}</div>`;
@@ -1976,7 +1976,7 @@ function initTodaysPlanModal() {
     const plan = dailyPlan();
     const body = document.getElementById('today-body');
     if (!plan.length) {
-      body.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">Nothing queued — you're caught up! 🎉<br><br>Pick a lesson from the sidebar or try Mock Interview.</div>`;
+      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">Nothing queued — you're caught up! 🎉<br><br>Pick a lesson from the sidebar or try Mock Interview.</div>`;
     } else {
       // Iter 10: PRIMARY autopilot CTA. Surfaces the smartest pick (plan[0]
       // — dailyPlan ranks SR-due first, then weak, then path) as a single
@@ -1993,11 +1993,11 @@ function initTodaysPlanModal() {
       // match the per-card why-tag pills below for cross-visual consistency.
       const whyCounts = plan.reduce((acc, p) => { acc[p.why] = (acc[p.why] || 0) + 1; return acc; }, {});
       const invParts = [];
-      if (whyCounts['review due']) invParts.push(`<span style="color:#67e8f9;">${whyCounts['review due']} due</span>`);
+      if (whyCounts['review due']) invParts.push(`<span style="color:#ffce5a;">${whyCounts['review due']} due</span>`);
       if (whyCounts['weak spot'])  invParts.push(`<span style="color:#fdba74;">${whyCounts['weak spot']} weak</span>`);
-      if (whyCounts['next on plan']) invParts.push(`<span style="color:#93c5fd;">${whyCounts['next on plan']} on path</span>`);
+      if (whyCounts['next on plan']) invParts.push(`<span style="color:#ffce5a;">${whyCounts['next on plan']} on path</span>`);
       const inventoryHtml = invParts.length >= 2
-        ? `<div data-today-inventory style="display:flex;justify-content:center;gap:10px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin:-8px 0 10px;color:#94a3b8;">${invParts.join(`<span style="color:#475569;">·</span>`)}</div>`
+        ? `<div data-today-inventory style="display:flex;justify-content:center;gap:10px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin:-8px 0 10px;color:#9aa0aa;">${invParts.join(`<span style="color:#4a4f58;">·</span>`)}</div>`
         : '';
       const primaryCta = `
         <button data-action="start-first" data-lesson-id="${escapeHtml(first.id)}" style="text-align:left;width:100%;padding:14px 16px;border-radius:8px;background:rgba(52,211,153,0.14);border:1px solid rgba(52,211,153,0.55);color:#ecfdf5;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:inherit;margin-bottom:14px;">
@@ -2009,7 +2009,7 @@ function initTodaysPlanModal() {
           <span style="color:#34d399;font-size:18px;flex-shrink:0;">➜</span>
         </button>
         ${inventoryHtml}
-        <div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:0.08em;text-align:center;margin:0 0 8px;">— Or pick another —</div>
+        <div style="font-size:10px;color:#4a4f58;text-transform:uppercase;letter-spacing:0.08em;text-align:center;margin:0 0 8px;">— Or pick another —</div>
       `;
       // iter 42 (refine): start the "OR PICK ANOTHER" list at plan[1] —
       // plan[0] is already represented by the green START CTA above, so
@@ -2018,15 +2018,15 @@ function initTodaysPlanModal() {
       // are unchanged; click-handlers still wire to data-lesson-id.
       body.innerHTML = primaryCta + plan.slice(1).map(({ id, why }) => {
         const lesson = findLesson(id);
-        const colors = { 'review due': '#67e8f9', 'next on plan': '#93c5fd', 'weak spot': '#fdba74' };
-        const tint =   { 'review due': 'rgba(103,232,249,0.12)', 'next on plan': 'rgba(147,197,253,0.12)', 'weak spot': 'rgba(253,186,116,0.14)' };
-        const tagColor = colors[why] || '#94a3b8';
-        const tagBg = tint[why] || 'rgba(148,163,184,0.10)';
+        const colors = { 'review due': '#ffce5a', 'next on plan': '#ffce5a', 'weak spot': '#fdba74' };
+        const tint =   { 'review due': 'rgba(255,206,90,0.12)', 'next on plan': 'rgba(255,206,90,0.12)', 'weak spot': 'rgba(253,186,116,0.14)' };
+        const tagColor = colors[why] || '#9aa0aa';
+        const tagBg = tint[why] || 'rgba(154,160,170,0.10)';
         // Stack title + why-tag vertically so the tag stays visible on mobile —
         // the prior `flex justify-between` row clipped long titles' tags off
         // the right edge on 375px viewports (PROFILE-stated 80% phone use).
-        return `<button data-lesson-id="${escapeHtml(id)}" data-why="${escapeHtml(why)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; cursor:pointer; display:flex; flex-direction:column; align-items:stretch; gap:6px;">
-          <span style="display:block;"><span style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-right:8px;">${escapeHtml((TRACK_PILLS[lesson?.track] || TRACK_PILLS.patterns).label)}</span>${escapeHtml(lesson?.title || id)}</span>
+        return `<button data-lesson-id="${escapeHtml(id)}" data-why="${escapeHtml(why)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#262930; border:1px solid #363a43; color:#eef0f2; cursor:pointer; display:flex; flex-direction:column; align-items:stretch; gap:6px;">
+          <span style="display:block;"><span style="color:#9aa0aa; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-right:8px;">${escapeHtml((TRACK_PILLS[lesson?.track] || TRACK_PILLS.patterns).label)}</span>${escapeHtml(lesson?.title || id)}</span>
           <span data-why-tag style="align-self:flex-start; color:${tagColor}; background:${tagBg}; font-size:11px; font-weight:500; padding:2px 8px; border-radius:999px; letter-spacing:0.01em;">${escapeHtml(why)}</span>
         </button>`;
       }).join('');
@@ -2067,28 +2067,28 @@ function initTodaysPlanModal() {
         const done = isCramTaskDone(t);
         const lesson = t.lessonId ? findLesson(t.lessonId) : null;
         const lessonTitle = lesson ? lesson.title : '';
-        const minsBadge = t.mins != null ? `<span style="font-size:11px;color:#64748b;">~${t.mins} min</span>` : '';
+        const minsBadge = t.mins != null ? `<span style="font-size:11px;color:#6b7079;">~${t.mins} min</span>` : '';
         const checkAttr = t.lessonId ? 'disabled' : '';
         const checkTitle = t.lessonId ? 'Ticks automatically when you master the linked lesson' : 'Tap to mark done';
         const lessonBtn = t.lessonId
-          ? `<button data-cram-open="${escapeHtml(t.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;font-weight:500;">Open →</button>`
+          ? `<button data-cram-open="${escapeHtml(t.lessonId)}" style="background:#262930;color:#ffce5a;border:none;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;font-weight:500;">Open →</button>`
           : '';
-        const lessonBadge = lessonTitle ? `: <strong style="color:#e2e8f0;">${escapeHtml(lessonTitle)}</strong>` : '';
-        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid #1e293b;${done ? 'opacity:0.55;' : ''}">
+        const lessonBadge = lessonTitle ? `: <strong style="color:#eef0f2;">${escapeHtml(lessonTitle)}</strong>` : '';
+        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid #262930;${done ? 'opacity:0.55;' : ''}">
           <input type="checkbox" data-cram-check="${escapeHtml(t.id)}" ${done ? 'checked' : ''} ${checkAttr} title="${escapeHtml(checkTitle)}" style="margin-top:3px;cursor:${t.lessonId ? 'default' : 'pointer'};" />
           <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;line-height:1.5;color:#cbd5e1;${done ? 'text-decoration:line-through;' : ''}">${escapeHtml(t.label)}${lessonBadge}</div>
+            <div style="font-size:13px;line-height:1.5;color:#c4c9cf;${done ? 'text-decoration:line-through;' : ''}">${escapeHtml(t.label)}${lessonBadge}</div>
             <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">${minsBadge}${lessonBtn}</div>
           </div>
         </div>`;
       }).join('');
-      return `<details ${blockComplete ? '' : 'open'} style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;margin-bottom:8px;">
+      return `<details ${blockComplete ? '' : 'open'} style="background:#0e0f12;border:1px solid #262930;border-radius:8px;margin-bottom:8px;">
         <summary style="padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;list-style:none;">
           <span style="display:flex;flex-direction:column;min-width:0;">
-            <span style="font-size:14px;font-weight:600;color:#e2e8f0;">${escapeHtml(block.title)}</span>
-            <span style="font-size:11px;color:#64748b;">${escapeHtml(block.duration || '')}</span>
+            <span style="font-size:14px;font-weight:600;color:#eef0f2;">${escapeHtml(block.title)}</span>
+            <span style="font-size:11px;color:#6b7079;">${escapeHtml(block.duration || '')}</span>
           </span>
-          <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:${blockComplete ? '#34d399' : '#1e293b'};color:${blockComplete ? '#0f172a' : '#cbd5e1'};font-variant-numeric:tabular-nums;flex-shrink:0;">${blockDone}/${blockTotal}</span>
+          <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:${blockComplete ? '#34d399' : '#262930'};color:${blockComplete ? '#17181c' : '#c4c9cf'};font-variant-numeric:tabular-nums;flex-shrink:0;">${blockDone}/${blockTotal}</span>
         </summary>
         <div style="padding:0 14px 12px;">${tasksHtml}</div>
       </details>`;
@@ -2099,12 +2099,12 @@ function initTodaysPlanModal() {
     const reviewIds = dueIds.filter(id => cramLessonSet.has(id));
     const reviewHtml = reviewIds.length
       ? `<div style="margin-top:14px;">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#67e8f9;font-weight:600;margin-bottom:8px;">Review from earlier days · ${reviewIds.length} due</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#ffce5a;font-weight:600;margin-bottom:8px;">Review from earlier days · ${reviewIds.length} due</div>
           ${reviewIds.map(id => {
             const l = findLesson(id);
-            return `<button data-cram-open="${escapeHtml(id)}" style="text-align:left;padding:10px 12px;border-radius:6px;background:#0b1220;border:1px solid #1e293b;color:#e2e8f0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:6px;font-family:inherit;">
+            return `<button data-cram-open="${escapeHtml(id)}" style="text-align:left;padding:10px 12px;border-radius:6px;background:#0e0f12;border:1px solid #262930;color:#eef0f2;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:6px;font-family:inherit;">
               <span style="font-size:13px;">${escapeHtml(l?.title || id)}</span>
-              <span style="color:#67e8f9;font-size:11px;">SR due</span>
+              <span style="color:#ffce5a;font-size:11px;">SR due</span>
             </button>`;
           }).join('')}
         </div>`
@@ -2114,7 +2114,7 @@ function initTodaysPlanModal() {
     const weakHtml = (weakId && !reviewIds.includes(weakId))
       ? (() => { const l = findLesson(weakId); return `<div style="margin-top:14px;">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#fdba74;font-weight:600;margin-bottom:8px;">Weak spot</div>
-          <button data-cram-open="${escapeHtml(weakId)}" style="text-align:left;padding:10px 12px;border-radius:6px;background:#0b1220;border:1px solid #1e293b;color:#e2e8f0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;font-family:inherit;">
+          <button data-cram-open="${escapeHtml(weakId)}" style="text-align:left;padding:10px 12px;border-radius:6px;background:#0e0f12;border:1px solid #262930;color:#eef0f2;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;font-family:inherit;">
             <span style="font-size:13px;">${escapeHtml(l?.title || weakId)}</span>
             <span style="color:#fdba74;font-size:11px;">L1 miss</span>
           </button>
@@ -2122,15 +2122,15 @@ function initTodaysPlanModal() {
       : '';
 
     const checkpointsHtml = (day.checkpoints && day.checkpoints.length)
-      ? `<div style="margin-top:14px;background:#0b1220;border-left:3px solid #34d399;border-radius:8px;padding:12px 14px;">
+      ? `<div style="margin-top:14px;background:#0e0f12;border-left:3px solid #34d399;border-radius:8px;padding:12px 14px;">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#34d399;font-weight:600;margin-bottom:6px;">End-of-day checkpoints</div>
-          <ul style="margin:0;padding-left:18px;color:#94a3b8;font-size:13px;line-height:1.5;">${day.checkpoints.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+          <ul style="margin:0;padding-left:18px;color:#9aa0aa;font-size:13px;line-height:1.5;">${day.checkpoints.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
         </div>`
       : '';
 
     body.innerHTML = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="flex:1;height:8px;background:#1e293b;border-radius:4px;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#38bdf8,#34d399);width:${pct}%;border-radius:4px;"></div></div>
-        <div style="font-size:12px;color:#94a3b8;font-variant-numeric:tabular-nums;min-width:60px;text-align:right;">${doneTasks}/${totalTasks} · ${pct}%</div>
+        <div style="flex:1;height:8px;background:#262930;border-radius:4px;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#f5b62b,#34d399);width:${pct}%;border-radius:4px;"></div></div>
+        <div style="font-size:12px;color:#9aa0aa;font-variant-numeric:tabular-nums;min-width:60px;text-align:right;">${doneTasks}/${totalTasks} · ${pct}%</div>
       </div>
       ${blocksHtml}
       ${reviewHtml}

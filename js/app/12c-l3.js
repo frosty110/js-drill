@@ -95,7 +95,7 @@ function renderL3(body, lesson, content) {
        </div>`
     : '';
   const bestBadge = bestMs
-    ? `<span class="pill" style="background:rgba(244,114,182,0.15);color:#fbcfe8">⏱ Best: ${formatTime(bestMs)}</span>`
+    ? `<span class="pill" style="background:rgba(255,206,90,0.15);color:#ffedc2">⏱ Best: ${formatTime(bestMs)}</span>`
     : '';
   // Trend chip — show the rolling history of mock times so the user can see
   // whether they're improving across attempts, not just whether they hit a
@@ -120,7 +120,7 @@ function renderL3(body, lesson, content) {
           // pulls the {ms, attemptIdx} pair to render the detail tile.
           return `<button class="mock-reel-cell" data-mock-attempt="${i}" type="button" title="Attempt ${i + 1} of ${history.length}">${label}</button>`;
         });
-        return `<span class="pill mono mock-reel" data-mock-reel title="Tap a cell for attempt detail. Most recent rightmost." style="background:rgba(244,114,182,0.08);color:#fbcfe8;letter-spacing:0.02em;display:inline-flex;align-items:center;gap:6px;padding-top:1px;padding-bottom:1px">${cells.join('<span style="color:#475569">·</span>')}</span>`;
+        return `<span class="pill mono mock-reel" data-mock-reel title="Tap a cell for attempt detail. Most recent rightmost." style="background:rgba(255,206,90,0.08);color:#ffedc2;letter-spacing:0.02em;display:inline-flex;align-items:center;gap:6px;padding-top:1px;padding-bottom:1px">${cells.join('<span style="color:#4a4f58">·</span>')}</span>`;
       })()
     : '';
   const slopeBadge = (() => {
@@ -129,10 +129,10 @@ function renderL3(body, lesson, content) {
     const delta = first - last; // positive = faster on last attempt = improving
     const pct = Math.abs(delta) / first;
     let arrow, tone, label;
-    if (pct < 0.05) { arrow = '→'; tone = '#94a3b8'; label = 'holding'; }
+    if (pct < 0.05) { arrow = '→'; tone = '#9aa0aa'; label = 'holding'; }
     else if (delta > 0) { arrow = '↓'; tone = '#34d399'; label = `${formatTime(Math.abs(delta))} faster vs first`; }
-    else { arrow = '↑'; tone = '#fbbf24'; label = `${formatTime(Math.abs(delta))} slower vs first`; }
-    return `<span class="pill mono" title="${escapeHtml(history.length)}-attempt trend (last vs first)" style="background:rgba(${tone === '#34d399' ? '52,211,153' : tone === '#fbbf24' ? '251,191,36' : '148,163,184'},0.10);color:${tone};letter-spacing:0.02em">${arrow} ${escapeHtml(label)}</span>`;
+    else { arrow = '↑'; tone = '#f5b62b'; label = `${formatTime(Math.abs(delta))} slower vs first`; }
+    return `<span class="pill mono" title="${escapeHtml(history.length)}-attempt trend (last vs first)" style="background:rgba(${tone === '#34d399' ? '52,211,153' : tone === '#f5b62b' ? '251,191,36' : '148,163,184'},0.10);color:${tone};letter-spacing:0.02em">${arrow} ${escapeHtml(label)}</span>`;
   })();
 
   wrap.innerHTML = `
@@ -189,7 +189,7 @@ function renderL3(body, lesson, content) {
     `}
     <textarea id="drill-editor"></textarea>
     <div class="l3-actions mt-3 flex items-center gap-2 flex-wrap">
-      <button class="primary" data-action="run">Run <span class="text-blue-200">(⌘↵)</span></button>
+      <button class="primary" data-action="run">Run <span class="text-amber-900">(⌘↵)</span></button>
       ${isMock ? '' : '<button class="secondary" data-action="hint" data-hint-btn>💡 Hint</button>'}
       ${isMock || !Array.isArray(drill.criticalLines) || drill.criticalLines.length === 0 ? '' : `<button class="secondary" data-action="critical-fill" data-critical-btn title="Pre-fill the editor with the canonical; you fill just the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'}">🎯 Critical lines</button>`}
       ${isMock ? '' : '<button class="secondary" data-action="diff">Compare to canonical</button>'}

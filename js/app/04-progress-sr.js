@@ -648,7 +648,7 @@ function srBadgeHtml(lessonId, kind) {
   const text = kind === 'demote'
     ? `Interval shortened — next review ${when}.`
     : `Next review ${when}.`;
-  return ` <span style="color:#94a3b8">${escapeHtml(text)}</span>`;
+  return ` <span style="color:#9aa0aa">${escapeHtml(text)}</span>`;
 }
 function formatDueRelative(lessonId) {
   const r = state.reviews[lessonId];
@@ -970,10 +970,10 @@ function renderSparkline(lessonId) {
     'L1-pass': '#34d399', // emerald — concept correct
     'L1-miss': '#f87171', // rose — concept miss
     'L2-pass': '#34d399', // emerald — fill correct
-    'L3-pass': '#60a5fa'  // sky — full implementation
+    'L3-pass': '#ffce5a'  // sky — full implementation
   };
   const ticks = recent.map(e => {
-    const color = colorMap[e.event] || '#64748b';
+    const color = colorMap[e.event] || '#6b7079';
     const day = new Date(e.at).toISOString().slice(0, 10);
     return `<span class="sparkline-tick" style="display:inline-block;width:3px;height:10px;margin:0 1px;background:${color}" title="${day} ${e.event}"></span>`;
   }).join('');

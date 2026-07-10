@@ -692,15 +692,15 @@
       #sync-chip {
         position: fixed; top: 10px; right: 12px; z-index: 70;
         display: inline-flex; align-items: center; gap: 6px;
-        background: rgba(15,23,42,0.85); border: 1px solid #1e293b;
-        color: #cbd5e1; font: 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+        background: rgba(23,24,28,0.85); border: 1px solid #262930;
+        color: #c4c9cf; font: 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         padding: 6px 10px; border-radius: 999px; cursor: pointer;
         backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
         transition: border-color .15s, color .15s;
       }
-      #sync-chip:hover { border-color: #475569; color: #e2e8f0; }
+      #sync-chip:hover { border-color: #4a4f58; color: #eef0f2; }
       #sync-chip .sync-dot {
-        width: 6px; height: 6px; border-radius: 50%; background: #64748b;
+        width: 6px; height: 6px; border-radius: 50%; background: #6b7079;
       }
       #sync-chip.is-on .sync-dot { background: #22c55e; }
       #sync-chip.is-syncing .sync-dot { background: #facc15; animation: syncPulse 1s infinite; }
@@ -712,42 +712,42 @@
       }
       #sync-modal.is-open { display: flex; }
       #sync-modal .panel {
-        background: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
+        background: #17181c; border: 1px solid #262930; border-radius: 12px;
         padding: 22px; max-width: 380px; width: 92vw;
-        color: #e2e8f0; font: 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+        color: #eef0f2; font: 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       }
-      #sync-modal h2 { margin: 0 0 6px 0; font-size: 17px; font-weight: 700; color: #f8fafc; }
-      #sync-modal p { margin: 0 0 14px 0; font-size: 12.5px; color: #94a3b8; }
-      #sync-modal label { display: block; font-size: 12px; color: #94a3b8; margin: 10px 0 4px; }
+      #sync-modal h2 { margin: 0 0 6px 0; font-size: 17px; font-weight: 700; color: #ffffff; }
+      #sync-modal p { margin: 0 0 14px 0; font-size: 12.5px; color: #9aa0aa; }
+      #sync-modal label { display: block; font-size: 12px; color: #9aa0aa; margin: 10px 0 4px; }
       #sync-modal input {
-        width: 100%; background: #020617; border: 1px solid #1e293b; border-radius: 6px;
-        padding: 8px 10px; color: #e2e8f0; font: 14px ui-monospace,Menlo,monospace;
+        width: 100%; background: #0a0b0d; border: 1px solid #262930; border-radius: 6px;
+        padding: 8px 10px; color: #eef0f2; font: 14px ui-monospace,Menlo,monospace;
       }
-      #sync-modal input:focus { outline: none; border-color: #38bdf8; }
+      #sync-modal input:focus { outline: none; border-color: #f5b62b; }
       #sync-modal .row { display: flex; gap: 8px; margin-top: 14px; }
       #sync-modal button.primary {
-        flex: 1; background: #2563eb; border: 0; border-radius: 6px; padding: 9px 12px;
+        flex: 1; background: #e0a41e; border: 0; border-radius: 6px; padding: 9px 12px;
         color: white; font-weight: 600; font-size: 13px; cursor: pointer;
       }
       #sync-modal button.primary:disabled { opacity: .5; cursor: not-allowed; }
       #sync-modal button.ghost {
-        background: transparent; border: 1px solid #334155; color: #cbd5e1;
+        background: transparent; border: 1px solid #363a43; color: #c4c9cf;
         border-radius: 6px; padding: 9px 12px; font-size: 13px; cursor: pointer;
       }
       #sync-modal .err { color: #fca5a5; font-size: 12px; margin-top: 8px; min-height: 16px; }
       #sync-modal .ok  { color: #86efac; font-size: 12px; margin-top: 8px; min-height: 16px; }
       #sync-modal .user-row {
         display: flex; align-items: center; justify-content: space-between; gap: 8px;
-        background: #020617; border: 1px solid #1e293b; border-radius: 6px;
+        background: #0a0b0d; border: 1px solid #262930; border-radius: 6px;
         padding: 10px 12px; font-size: 13px;
       }
-      #sync-modal .user-row .email { color: #e2e8f0; word-break: break-all; }
+      #sync-modal .user-row .email { color: #eef0f2; word-break: break-all; }
       #sync-modal .linkbtn {
         display: block; margin: 14px auto 0; background: none; border: 0; padding: 4px;
-        color: #60a5fa; font-size: 12px; cursor: pointer; text-decoration: underline;
+        color: #ffce5a; font-size: 12px; cursor: pointer; text-decoration: underline;
       }
-      #sync-modal .linkbtn:hover { color: #93c5fd; }
-      #sync-modal .hr { height: 1px; background: #1e293b; margin: 16px 0 6px; border: 0; }
+      #sync-modal .linkbtn:hover { color: #ffce5a; }
+      #sync-modal .hr { height: 1px; background: #262930; margin: 16px 0 6px; border: 0; }
     `;
     document.head.appendChild(style);
 
@@ -780,7 +780,7 @@
         </div>
         <div data-view="awaiting-code" style="display:none">
           <h2>Check your email</h2>
-          <p>Enter the 6-digit code we sent to <span data-email-echo style="color:#e2e8f0"></span>. (You can also click the link in the email.)</p>
+          <p>Enter the 6-digit code we sent to <span data-email-echo style="color:#eef0f2"></span>. (You can also click the link in the email.)</p>
           <label for="sync-code">Code</label>
           <input id="sync-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" />
           <div class="row">

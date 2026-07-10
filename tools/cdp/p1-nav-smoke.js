@@ -88,15 +88,43 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   await m.snap('03b-hero-landed');
   await m.eval(`document.getElementById('today-home-btn').click()`); await m.sleep(400);
 
-  // Practice tab opens the category launcher.
+  // Practice tab opens the ds-sheet launcher (P3) — grouped, bottom-anchored.
   await m.click('[data-nav="practice"]'); await m.sleep(500);
-  const practiceOpen = await m.eval(`(() => {
-    const d = document.getElementById('topbar-dropdown');
-    return d && !d.classList.contains('hidden');
+  const launcher = await m.eval(`(() => {
+    const sc = document.getElementById('practice-launcher');
+    if (!sc || !sc.classList.contains('is-open')) return { open: false };
+    const sheet = sc.querySelector('.ds-sheet');
+    const r = sheet.getBoundingClientRect();
+    const rows = [...sc.querySelectorAll('[data-btn-id], [data-action]')];
+    const groups = sc.querySelectorAll('.ds-label').length;
+    return { open: true, bottomAnchored: r.bottom >= innerHeight - 2, groups,
+             rowCount: rows.length,
+             minRowH: Math.min(...rows.map(x => x.getBoundingClientRect().height || 999)) };
   })()`);
-  m.assert(practiceOpen, 'Practice opens the mode launcher');
-  await m.snap('04-practice');
-  await m.eval(`document.body.click()`); await m.sleep(300);
+  m.assert(launcher.open, 'Practice opens the launcher sheet');
+  m.assert(launcher.bottomAnchored, `launcher is bottom-anchored (${JSON.stringify(launcher)})`);
+  m.assert(launcher.groups >= 3, `launcher has grouped sections (got ${launcher.groups})`);
+  m.assert(launcher.rowCount >= 8 && launcher.minRowH >= 44,
+    `launcher rows present + ≥44px (${launcher.rowCount} rows, minH ${launcher.minRowH})`);
+  await m.snap('04-practice-launcher');
+
+  // A concrete row launches its mode and closes the sheet (Rapid-Fire).
+  const hasRapid = await m.eval(`!!document.querySelector('#practice-launcher [data-btn-id="rapid-fire-btn"]')`);
+  if (hasRapid) {
+    await m.click('#practice-launcher [data-btn-id="rapid-fire-btn"]'); await m.sleep(700);
+    const launched = await m.eval(`(() => ({
+      closed: !document.getElementById('practice-launcher').classList.contains('is-open'),
+      rapid: !!document.querySelector('.rapid-fire-page, [data-rapid], #rapid-fire-modal') ||
+             (document.getElementById('lesson-shell')?.textContent || '').includes('Rapid'),
+    }))()`);
+    m.assert(launched.closed, 'sheet closes after launching a mode');
+    m.assert(launched.rapid, 'tapped row actually launches its mode (Rapid-Fire)');
+    await m.snap('04b-rapid-launched');
+  } else {
+    m.assert(false, 'rapid-fire row missing from launcher');
+  }
+  await m.reload();
+  await m.waitFor(`document.querySelector('#ds-appnav')`, { timeoutMs: 6000 });
 
   // Progress tab opens the Dashboard.
   await m.click('[data-nav="progress"]'); await m.sleep(800);

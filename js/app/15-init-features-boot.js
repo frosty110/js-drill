@@ -576,6 +576,31 @@ const TOPBAR_MENU_TAXONOMY = {
   }
 };
 
+// "Pick one" smart-routing cascade: due reviews → weak spots → at-risk →
+// fresh (lucky) → mastered (shuffle). The first chip with a non-zero count
+// wins — same triage logic the sidebar pills surface, but the routing is done
+// for the user. Shared by the topbar dropdown AND the Practice launcher sheet
+// (js/app/18-practice-launcher.js). Returns the button element to click.
+function topbarPickSmartTarget() {
+  const countOf = (id) => {
+    const el = document.getElementById(id);
+    return el ? parseInt(el.textContent || '0', 10) || 0 : 0;
+  };
+  const cascade = [
+    ['review-count', 'review-btn'],
+    ['weak-count', 'weak-btn'],
+    ['at-risk-count', 'at-risk-btn'],
+    [null, 'lucky-btn'],
+    [null, 'shuffle-btn']
+  ];
+  for (const [countId, btnId] of cascade) {
+    if (countId && !countOf(countId)) continue;
+    const btn = document.getElementById(btnId);
+    if (btn) return btn; // lucky/shuffle always exist as fallbacks
+  }
+  return null;
+}
+
 // Pull display data from the sidebar button itself so the taxonomy stays
 // DRY: button label is the source of truth, descriptions come from the
 // `title` attribute the sidebar buttons already populate for hover-help.
@@ -886,28 +911,7 @@ function initTopbarDropdowns() {
       return;
     }
     if (action === 'pick-smart') {
-      // Cascade: due reviews → weak spots → at-risk → fresh (lucky) →
-      // mastered (shuffle). The first chip with a non-zero count wins —
-      // matches the same triage logic the sidebar pills surface, but
-      // does the routing for the user.
-      const countOf = (id) => {
-        const el = document.getElementById(id);
-        return el ? parseInt(el.textContent || '0', 10) || 0 : 0;
-      };
-      const cascade = [
-        ['review-count', 'review-btn'],
-        ['weak-count', 'weak-btn'],
-        ['at-risk-count', 'at-risk-btn'],
-        [null, 'lucky-btn'],
-        [null, 'shuffle-btn']
-      ];
-      let picked = null;
-      for (const [countId, btnId] of cascade) {
-        if (countId && !countOf(countId)) continue;
-        const btn = document.getElementById(btnId);
-        if (btn && btn.offsetParent !== null) { picked = btn; break; }
-        if (btn) { picked = btn; break; } // fallback even if hidden — lucky/shuffle always exist
-      }
+      const picked = topbarPickSmartTarget();
       if (!picked) return;
       close();
       picked.click();

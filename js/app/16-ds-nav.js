@@ -10,7 +10,7 @@
 // equivalent — the same contract the command palette uses):
 //   Today    → #today-home-btn   (Today home page — js/app/17-today-home.js)
 //   Browse   → #hamburger        (lesson-list drawer — becomes P4 Browse)
-//   Practice → #topbar-mobile-menu (category launcher — becomes P3 launcher)
+//   Practice → #practice-launcher-btn (ds-sheet launcher — 18-practice-launcher.js)
 //   Progress → #dashboard-btn    (unified Dashboard — becomes P5 Progress)
 //
 // Interop rules (see css/06-ds-nav.css):
@@ -30,7 +30,7 @@
       icon: '<path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/>' },
     { key: 'browse', label: 'Browse', target: 'hamburger',
       icon: '<rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="15" width="7" height="5" rx="1.5"/><rect x="14" y="15" width="7" height="5" rx="1.5"/>' },
-    { key: 'practice', label: 'Practice', target: 'topbar-mobile-menu',
+    { key: 'practice', label: 'Practice', target: 'practice-launcher-btn',
       icon: '<path d="M13 2 4 14h6l-1 8 9-12h-6z"/>' },
     { key: 'progress', label: 'Progress', target: 'dashboard-btn',
       icon: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>' },

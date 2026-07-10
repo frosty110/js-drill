@@ -46,7 +46,7 @@ for (const topic of registry.topics) {
   const validParts = new Set((manifest.parts || []).map(p => p.name));
   const manifestIds = manifest.chapters.map(c => c.id);
   const diskFiles = fs.readdirSync(dir)
-    .filter(f => /^(ch|s|c)\d\d\.json$/.test(f)).map(f => f.replace(/\.json$/, ''));
+    .filter(f => /^(ch|s|c|p)\d\d\.json$/.test(f)).map(f => f.replace(/\.json$/, ''));
 
   for (const id of manifestIds) if (!diskFiles.includes(id)) fail(t, `manifest lists ${id} but ${id}.json missing`);
   for (const id of diskFiles) if (!manifestIds.includes(id)) fail(t, `${id}.json on disk but not in manifest`);
@@ -77,6 +77,7 @@ for (const topic of registry.topics) {
     }
 
     const mcAnswers = new Set();
+    let mcCount = 0;
     ch.questions.forEach((q, i) => {
       const qat = `${at} q${i}`;
       totalQ++;
@@ -88,7 +89,7 @@ for (const topic of registry.topics) {
         if (!q.answer || !String(q.answer).trim()) fail(qat, 'open: empty answer');
         if (q.options) fail(qat, 'open: should not have options');
       } else {
-        totalMC++;
+        totalMC++; mcCount++;
         if (!q.q || !String(q.q).trim()) fail(qat, 'mc: empty stem');
         if (!Array.isArray(q.options) || q.options.length !== 4) fail(qat, `mc: needs exactly 4 options, got ${q.options ? q.options.length : 0}`);
         else {
@@ -100,7 +101,9 @@ for (const topic of registry.topics) {
         if (!q.explain || !String(q.explain).trim()) fail(qat, 'mc: missing explain');
       }
     });
-    if (mcAnswers.size && mcAnswers.size < 2) fail(at, 'MC correct-answer index never varies — likely an authoring bug');
+    // Only meaningful when a unit has enough MC to expect spread; walkthrough
+    // units (design problems) intentionally carry just 2-3 MC checks.
+    if (mcCount >= 4 && mcAnswers.size < 2) fail(at, 'MC correct-answer index never varies — likely an authoring bug');
   }
 }
 

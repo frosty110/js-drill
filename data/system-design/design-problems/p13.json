@@ -1,0 +1,146 @@
+{
+  "id": "p13",
+  "num": 13,
+  "part": "Storage, Infra & Transactions",
+  "title": "Design a File Sync / Object Storage Service",
+  "summary": "A Dropbox/S3-style service that stores files durably and keeps them in sync across a user's devices. The signature challenge is transferring only the bytes that changed: split files into content-addressed chunks, dedup them globally, and separate a metadata service (file → chunk list, versions) from the raw blob store.",
+  "keyTakeaways": [
+    "Split each file into content-defined chunks (~4 MB); hash each chunk (e.g. SHA-256) and store it once — the hash IS the key (content-addressed dedup).",
+    "Separate the metadata service (file → ordered chunk-hash list, versions, ACLs) from the chunk/blob store (immutable content-addressed blobs).",
+    "Sync = compare the local and server chunk-hash lists; upload/download only the missing chunk hashes (the delta), not the whole file.",
+    "Resolve concurrent edits with per-file versions + last-writer-wins or explicit conflicted-copy files; the metadata service is the source of truth for ordering.",
+    "Serve downloads through a CDN and blob store (S3); keep the metadata DB small and strongly consistent while blobs live in cheap object storage.",
+    "Versioning falls out for free — a new version is just a new chunk-list pointing mostly at existing chunks.",
+    "Notify other devices of changes via a long-poll/websocket notification service rather than clients polling metadata."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a file sync / object storage service (Dropbox-style). What are the core functional requirements, and what non-functional properties dominate the design?",
+      "points": [
+        "Functional: upload/download files, sync across a user's devices, share files/folders, view & restore prior versions.",
+        "Sync must transfer only changed bytes, not re-upload whole files on small edits.",
+        "Non-functional: durability is paramount (never lose a byte — 11 nines), high availability, read-heavy download traffic.",
+        "Consistency: metadata should be strongly consistent (a device must see the latest version list); blob content is immutable so it's trivially consistent.",
+        "Clarify scale: total users, active devices/user, avg file size & count, edit frequency."
+      ],
+      "answer": "Core features are upload, download, multi-device sync, sharing, and versioning/restore. The dominant non-functionals are durability (we must never lose data — target ~11 nines) and efficient sync: a 1-byte edit to a 1 GB file must not re-upload a gigabyte. Metadata (the file→version→chunk mapping) needs strong consistency so a device always sees the newest version, while the actual chunk bytes are immutable and content-addressed, so they're consistent by construction. I'd confirm scale — order of hundreds of millions of users, a few devices each — before sizing."
+    },
+    {
+      "type": "open",
+      "prompt": "Do a back-of-envelope capacity estimate: storage, write bandwidth, and metadata QPS for ~100M daily active users.",
+      "points": [
+        "Users: assume 500M registered, 100M DAU, ~2 devices each.",
+        "Storage: if each user stores ~50 GB, 500M × 50 GB = 25 EB raw — dedup + tiering cuts the effective footprint materially.",
+        "Writes: say 100M DAU each save ~10 files/day → 1B file-writes/day ≈ ~12k writes/sec average, ~5× peak ≈ 60k/sec.",
+        "Bandwidth: 1B writes/day × avg changed-delta ~1 MB ≈ 1 PB/day upload ≈ ~12 GB/sec.",
+        "Reads/downloads dominate (higher read:write); served largely from CDN/blob store, not the metadata DB.",
+        "Metadata QPS is far higher than file QPS — every sync poll/notification hits it — so keep metadata rows small."
+      ],
+      "answer": "Take 500M registered, 100M DAU, ~2 devices each, ~50 GB stored per user. Raw storage is 500M × 50 GB ≈ 25 EB, which dedup and tiering meaningfully shrink. If each DAU saves ~10 files/day that's ~1B writes/day ≈ 12k writes/sec average and ~60k/sec at peak. With chunk-level dedup the average uploaded delta is far below full-file size — call it ~1 MB — so ~1 PB/day of upload bandwidth, roughly 12 GB/sec. Downloads exceed uploads and are served from the CDN/blob store, so the metadata DB mostly fields sync/notification traffic — which is why metadata rows must stay tiny."
+    },
+    {
+      "type": "open",
+      "prompt": "Sketch the core API for the sync client and the metadata service.",
+      "points": [
+        "`GET /files/{id}/metadata` → current version + ordered chunk-hash list.",
+        "`POST /chunks/exists` with a list of chunk hashes → which the server already has (dedup check before upload).",
+        "`PUT /chunks/{hash}` → upload a single missing chunk's bytes (idempotent; hash verifies content).",
+        "`POST /files/{id}/commit` → commit a new version = {ordered chunk-hash list, size, mtime} once all chunks exist.",
+        "`GET /changes?cursor=...` (long-poll) → server pushes 'files X,Y changed' so clients sync incrementally.",
+        "Chunk uploads/downloads may use presigned URLs directly to the blob store to bypass the app tier."
+      ],
+      "answer": "The client first calls `GET /files/{id}/metadata` to learn the server's chunk-hash list, diffs it locally, then `POST /chunks/exists` to find which of its new chunk hashes the server is missing, `PUT /chunks/{hash}` for each (often via presigned URL straight to the blob store), and finally `POST /files/{id}/commit` with the new ordered chunk-hash list to atomically publish a version. A long-poll `GET /changes?cursor=` lets the server notify other devices to pull. Uploads are idempotent because a chunk's hash both names it and verifies it."
+    },
+    {
+      "type": "open",
+      "prompt": "Lay out the high-level architecture and the key data model. What are the major components and the core tables?",
+      "points": [
+        "Components: client sync engine, LB/API tier, metadata service + DB, block/chunk service + blob store (S3), notification service, CDN.",
+        "Files table: file_id, owner, name, current_version_id, ACL.",
+        "FileVersion table: version_id, file_id, ordered list of chunk hashes, size, created_at.",
+        "Chunk table (content-addressed): chunk_hash (PK), blob location, size, refcount.",
+        "Blob store holds immutable chunk bytes keyed by hash; metadata DB holds the small relational rows.",
+        "Notification/queue service fans out change events to a user's other devices."
+      ],
+      "answer": "A client sync engine talks to an API tier behind a load balancer. Two data planes sit behind it: a metadata service backed by a strongly-consistent DB, and a block service backed by object storage (S3) plus a CDN for reads. The schema is small: a `Files` row (owner, name, pointer to current version, ACL), a `FileVersion` row per version holding the ordered list of chunk hashes, and a content-addressed `Chunks` table mapping chunk_hash → blob location + refcount. The blob store keeps the actual immutable bytes keyed by hash; a notification service pushes change events to a user's other devices."
+    },
+    {
+      "type": "mc",
+      "q": "For deduplication and efficient sync, why chunk-level content-addressed dedup rather than whole-file dedup?",
+      "options": [
+        "Whole-file hashing is cryptographically weaker than hashing smaller chunks, so chunking is needed for integrity.",
+        "A small edit changes only the chunks it touches, so you re-upload a few KB–MB instead of the whole file, and identical chunks across files/users are stored once.",
+        "Object stores like S3 reject objects larger than one chunk, forcing files to be split.",
+        "Chunk-level dedup lets the metadata DB store the full file inline, avoiding a separate blob store."
+      ],
+      "answer": 1,
+      "explain": "The point of chunking is delta transfer + global dedup: editing one region of a large file only rewrites the affected chunks, and because chunks are keyed by their content hash, a chunk that already exists (from this file's history, another file, or another user) is never uploaded or stored again. Whole-file dedup only helps when two files are byte-for-byte identical — useless for the common case of a small edit to a big file."
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: walk through the sync algorithm when a user edits a large file on one device. How do you transfer only the delta?",
+      "points": [
+        "Client splits the file into chunks (fixed-size, or content-defined chunking so an insert doesn't shift all boundaries) and hashes each.",
+        "Client compares its new chunk-hash list to the last-synced list (from metadata) to find changed/new chunk hashes.",
+        "Client asks the server which of those hashes it already has (`/chunks/exists`); uploads only the truly-missing chunks.",
+        "Client commits a new FileVersion referencing the full ordered chunk-hash list (mostly reused hashes + a few new ones).",
+        "Content-defined chunking (rolling hash à la rsync) keeps chunk boundaries stable under insertions, maximizing reuse.",
+        "Other devices are notified, fetch the new chunk list, and download only chunks they lack."
+      ],
+      "answer": "The client re-chunks the edited file and hashes each chunk. Using content-defined chunking (a rolling-hash boundary like rsync) means inserting bytes only shifts the boundaries of the affected region, so most chunk hashes are unchanged. It diffs the new hash list against the last-synced list, asks the server which new hashes are missing, uploads just those chunks, and commits a new version whose chunk list is mostly reused hashes plus a handful of new ones. Downstream devices get a change notification, fetch the new chunk list, and pull only the chunks they don't already have — so a 1-byte edit to a 1 GB file moves a few MB, not a gigabyte."
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how do you resolve conflicts when two devices edit the same file offline and then both sync?",
+      "points": [
+        "The metadata service is the single source of truth for version ordering; commits attach the base version they edited from.",
+        "If a commit's base version is no longer current, that's a conflict (the other device already advanced it).",
+        "Simple resolution: keep both — accept one as the new version and write the other as a 'conflicted copy' file the user reconciles.",
+        "Alternative: last-writer-wins by timestamp for low-stakes data, but that silently drops an edit — usually undesirable for files.",
+        "Because chunks are immutable and content-addressed, no chunk is ever lost in a conflict — only the metadata pointer is contested.",
+        "For collaborative text specifically you'd move to OT/CRDTs, but general file sync uses conflicted-copies."
+      ],
+      "answer": "Every commit records the base version it edited from, and the metadata service serializes commits per file. When the second device commits against a base that's no longer current, the server detects the conflict. Dropbox-style resolution keeps both edits: one becomes the new version and the other is written as a 'conflicted copy (Device B)' file for the user to merge — never silently discarding work. Because chunks are immutable and content-addressed, neither edit's bytes are lost; only the metadata pointer is contested. Last-writer-wins is simpler but drops an edit, so it's reserved for low-stakes data; true collaborative editing needs OT/CRDTs, a different problem."
+    },
+    {
+      "type": "mc",
+      "q": "Why separate the metadata service/DB from the chunk/blob store, rather than storing file bytes directly in the metadata database?",
+      "options": [
+        "Because relational databases cannot store binary data at all.",
+        "Because blobs must be strongly consistent while metadata can be eventually consistent.",
+        "So the small, strongly-consistent metadata (paths, versions, chunk lists) scales and stays fast independently of the huge, immutable, cheaply-stored blob data served from object storage/CDN.",
+        "To avoid ever needing a CDN, since the metadata DB can serve downloads directly."
+      ],
+      "answer": 2,
+      "explain": "The two data planes have opposite characteristics. Metadata is small, mutable, relational, and needs strong consistency and low-latency transactions — a good fit for a scaled SQL/NoSQL DB. Chunk bytes are enormous, immutable, and content-addressed — a perfect fit for cheap, durable object storage fronted by a CDN. Coupling them would bloat the DB and throttle metadata operations behind petabytes of blob I/O. (RDBMSs can store blobs, but doing so at this scale is exactly the mistake to avoid.)"
+    },
+    {
+      "type": "open",
+      "prompt": "How do you serve downloads efficiently and support versioning/restore?",
+      "points": [
+        "Downloads: resolve file → chunk list from metadata, then fetch chunk bytes from the blob store, cached at a CDN edge close to the user.",
+        "Chunks are immutable and content-addressed, so they're perfectly cacheable (no invalidation needed).",
+        "Versioning is nearly free: each FileVersion is just another ordered chunk-hash list; a new version reuses most existing chunks.",
+        "Restore = point current_version_id back at an older FileVersion — an O(1) metadata update, no data copy.",
+        "Garbage-collect chunks only when refcount hits zero across all versions/files (careful with the dedup refcount).",
+        "Retention policy caps history (e.g. 30/180 days) to bound storage."
+      ],
+      "answer": "A download resolves the file's chunk list from metadata, then streams the chunks from the blob store, cached at a CDN edge — and because chunks are immutable, content-addressed blobs, they cache forever with no invalidation. Versioning comes almost for free: each version is just another ordered chunk-hash list that reuses most of the prior version's chunks, so history costs only the changed chunks. Restore is an O(1) metadata pointer flip back to an old version with zero byte-copying. The catch is garbage collection: a chunk can only be deleted when its dedup refcount reaches zero across every version and user, and a retention window bounds how much history we keep."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level: what breaks at scale, and what are the key failure modes and tradeoffs?",
+      "points": [
+        "Metadata hot spots: a huge shared folder or a single very active user's chunk-list reads/writes — partition metadata by user/file_id.",
+        "Notification fan-out: millions of long-poll connections — need a scalable connection/notification tier, not DB polling.",
+        "Refcount/GC correctness under concurrency: deleting a chunk that a concurrent upload just re-referenced (race) — use safe refcounting / delayed GC.",
+        "Durability: replicate blobs across AZs/regions; erasure coding to cut cost vs full replication.",
+        "Consistency tradeoff: strongly-consistent metadata vs eventual delivery of change notifications (a device may lag a few seconds).",
+        "Chunking cost: content-defined chunking is CPU-heavy on the client; tune chunk size (dedup ratio vs metadata overhead).",
+        "Thundering herd on a popular shared file — CDN absorbs reads; presigned URLs offload the app tier."
+      ],
+      "answer": "The metadata plane is the first thing to strain: hot files/shared folders and heavy sync polling — so partition metadata by user/file and push change detection into a scalable notification tier (long-poll/websocket) instead of DB polling. Durability comes from replicating blobs across AZs/regions, with erasure coding to cut cost versus 3× replication. The subtle correctness bug is dedup garbage collection: a chunk's refcount can race with a concurrent upload re-referencing it, so GC must be delayed/safe. The core tradeoffs are strongly-consistent metadata versus eventually-delivered notifications (devices may lag seconds), and chunk size — smaller chunks dedup better but explode metadata and client CPU. The CDN and presigned URLs keep the read path off the app tier entirely."
+    }
+  ]
+}

@@ -379,9 +379,17 @@ async function startChapter(t, chId) {
   const ch = await loadChapter(t, chId);
   progress.lastTopic = t; progress.lastChapter = chId; persist();
   const items = chapterItems(t, ch);
-  const due = shuffle(items.filter(it => isDue(it.key)));
-  const rest = shuffle(items.filter(it => !isDue(it.key)));
-  session = { topic: t, title: ch.title, items: due.concat(rest), pos: 0, right: 0, gained: 0, streak: 0, answered: false };
+  let ordered;
+  if (META[t] && META[t].ordered) {
+    // Walkthrough topics (e.g. design problems) play the full arc in authored
+    // order — requirements → estimation → deep dives read as one coherent pass.
+    ordered = items;
+  } else {
+    const due = shuffle(items.filter(it => isDue(it.key)));
+    const rest = shuffle(items.filter(it => !isDue(it.key)));
+    ordered = due.concat(rest);
+  }
+  session = { topic: t, title: ch.title, items: ordered, pos: 0, right: 0, gained: 0, streak: 0, answered: false };
   renderQuestion();
 }
 

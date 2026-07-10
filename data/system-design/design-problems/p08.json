@@ -1,0 +1,133 @@
+{
+  "id": "p08",
+  "num": 8,
+  "part": "Realtime & Write-Heavy Systems",
+  "title": "Design a Distributed Rate Limiter",
+  "summary": "A shared service (or middleware) that caps how many requests a client may make per time window across a fleet of servers. The signature challenge is the DISTRIBUTED part: a counter shared across nodes, the read-modify-write race, and fixing it atomically — plus choosing an algorithm (token bucket vs sliding window) and returning a correct 429 + Retry-After.",
+  "keyTakeaways": [
+    "Pick the algorithm for the property you need: token bucket allows controlled bursts; sliding-window-counter gives smooth, accurate limits without fixed-window edge spikes.",
+    "The core distributed problem is a shared counter with a read-modify-write race: independent GET-then-SET on multiple nodes double-counts under concurrency.",
+    "Fix it atomically at the store: `INCR` + `EXPIRE` or a single Redis Lua script so check-and-decrement is one indivisible operation.",
+    "Enforce at the edge/API gateway as middleware so bad traffic is rejected before it reaches (and costs) backend services.",
+    "Key the limit deliberately: per API key, per user id, or per IP — each has different abuse/fairness properties.",
+    "Return HTTP `429 Too Many Requests` with a `Retry-After` header (and ideally `X-RateLimit-Remaining`/`Reset`) so well-behaved clients back off correctly.",
+    "For extreme scale, trade a little accuracy for latency: local per-node token pre-allocation / approximate counting reduces round-trips to the shared store."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a rate limiter. What are the functional and non-functional requirements, and what design questions do you ask first?",
+      "points": [
+        "Functional: limit requests per client per window (e.g. 100 req/min); support different rules per endpoint/tier; return a clear rejection (429) with retry guidance.",
+        "What is the limiting key — user id, API key, IP, or a combination? And is the limit global or per-endpoint?",
+        "Where does it run — client, a standalone service, or middleware at the API gateway/edge (the usual answer)?",
+        "Non-functional: low added latency (single-digit ms), high availability (must fail open or closed deliberately), horizontally scalable, accurate enough that clients aren't wrongly throttled.",
+        "Behavior on limit-store failure: fail open (allow, prioritize availability) vs fail closed (reject, prioritize protection) — a real decision to state.",
+        "Distributed by nature: many gateway nodes must share one view of each client's usage."
+      ],
+      "answer": "I'd confirm we're capping requests per client per time window, with rules that can vary by endpoint or customer tier, and returning a 429 with retry info. The first questions are: what's the key (user, API key, IP, or combo), is it global or per-endpoint, and where does it run — almost always as middleware at the API gateway so we reject before backend cost. Non-functionally it must add only a few ms, be highly available, scale horizontally, and be accurate enough not to falsely throttle. A concrete decision to surface is fail-open vs fail-closed when the limit store is unreachable. And it's inherently distributed — many gateway nodes need one shared view of each client's usage."
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the load and the counter store's requirements. Assume the gateway fronts 1M req/s at peak across a fleet of nodes.",
+      "points": [
+        "Every request does at least one rate-limit check -> the limit store sees ~1M ops/s, roughly 1:1 with request rate.",
+        "That's a lot for a single node; Redis handles ~100k-200k ops/s per instance, so you need sharding/clustering (by key) to reach 1M/s.",
+        "State size is tiny per key: a counter + expiry is a few dozen bytes; even 100M active keys is a few GB — fits in memory.",
+        "Latency budget: the check must be sub-millisecond to low-single-digit ms so it doesn't dominate request latency; co-locate the store (same region/AZ) with the gateway.",
+        "Read:write is effectively all writes — every check increments — so the store must be write-optimized (in-memory, atomic increment).",
+        "Hot keys: a single abusive client or a shared IP (NAT/corporate) can concentrate load on one shard — a real hotspot to plan for."
+      ],
+      "answer": "At 1M req/s and one check per request the limit store sees ~1M ops/s. A single Redis node does ~100-200k ops/s, so you shard by key across a cluster to reach that. The state itself is tiny — a counter plus TTL is tens of bytes, so even 100M active keys is a few GB, easily in memory. The tight constraint is latency: the check has to be sub-ms to a couple ms and co-located with the gateway, because it's on every request's hot path. It's a write-dominated workload — every check mutates a counter — so an in-memory store with atomic increments is the right tool. The lurking risk is hot keys: one abusive client or a shared NAT IP piles onto a single shard."
+    },
+    {
+      "type": "mc",
+      "q": "You need to allow clients to burst briefly above their steady rate (e.g. a client that's quiet then fires 20 requests) while still enforcing an average of 10 req/s. Which algorithm fits best?",
+      "options": [
+        "Token bucket — refill tokens at the steady rate into a bucket with capacity > 1, spend one per request.",
+        "Fixed-window counter — reset a count every second.",
+        "A simple leaky-bucket queue that forces a perfectly constant output rate with no burst.",
+        "Sliding-window log storing every request timestamp and counting the last second."
+      ],
+      "answer": 0,
+      "explain": "Token bucket refills at the average rate but lets the bucket accumulate up to its capacity, so an idle client can spend a burst of saved tokens and then is limited to the refill rate — exactly 'allow bursts, enforce average.' Fixed-window is crude and has edge-spike doubling; a leaky-bucket enforcing constant output specifically disallows bursts; a sliding-window log is accurate but heavier and is about smoothing, not intentional bursting."
+    },
+    {
+      "type": "open",
+      "prompt": "Compare token bucket and sliding-window-counter, and explain the fixed-window edge-spike problem the sliding window fixes.",
+      "points": [
+        "Fixed window (e.g. per calendar minute) is simple but a client can send the full limit at 0:59 and the full limit again at 1:00 — up to 2x the limit across a 2-second span (the boundary spike).",
+        "Sliding-window-counter fixes this by weighting the previous window's count by the fraction of it still inside the rolling window: `count = current + prev * overlap` — smooth, near-accurate, and cheap (two counters, not a full log).",
+        "Sliding-window LOG (every timestamp) is exact but memory-heavy and slower; the counter approximation is the usual production choice.",
+        "Token bucket is about burst allowance + steady refill; it's naturally O(1) state (tokens + last-refill timestamp).",
+        "Tradeoff: token bucket = tunable bursts; sliding-window-counter = accurate smooth ceilings without boundary doubling.",
+        "Both need atomic updates in the distributed setting — the algorithm choice doesn't remove the shared-state race."
+      ],
+      "answer": "Fixed-window's flaw is the boundary spike: a client can send its whole quota at 0:59 and again at 1:00, doubling the effective rate across two seconds. Sliding-window-counter fixes that cheaply by blending the previous window's count weighted by how much of it still overlaps the rolling window — `current + prev * overlapFraction` — giving a smooth, near-accurate ceiling with just two counters instead of a full timestamp log. Token bucket is a different goal: refill at the steady rate into a capacity-N bucket to permit intentional bursts, with O(1) state. So I'd reach for token bucket when controlled bursting matters and sliding-window-counter when I need an accurate smooth cap — and note both still need atomic updates once distributed."
+    },
+    {
+      "type": "open",
+      "prompt": "This is the crux: the counter is shared across many gateway nodes. Explain the read-modify-write race and how you make the check-and-increment atomic.",
+      "points": [
+        "Race: node A does GET count (=99, limit 100), node B does GET count (=99) concurrently, both see 'under limit', both SET/INCR to 100+, and two requests pass when only one should — classic lost-update / TOCTOU.",
+        "Naive fix (client-side lock) adds latency and doesn't scale; the correct fix pushes atomicity into the shared store.",
+        "Redis `INCR key` is atomic and returns the new value in one round-trip; pair it with `EXPIRE` on first increment (or `SET key 1 EX window NX`) to bound the window.",
+        "The check and the increment must be one operation: use `INCR` then compare the returned value to the limit, or a Lua script so 'read counter, check limit, increment or reject, set TTL' executes indivisibly server-side.",
+        "Lua script is preferred for token-bucket / sliding-window logic because it bundles multiple reads+writes (tokens, timestamp) into a single atomic server-side execution — no interleaving.",
+        "This gives correctness across arbitrarily many nodes because the single-threaded store serializes all mutations to a given key."
+      ],
+      "answer": "The race is a lost update / time-of-check-to-time-of-use: two nodes both GET count=99 under a limit of 100, both conclude 'allowed', and both increment — so two requests pass when one should. Client-side locking is slow and doesn't scale, so you push atomicity into the store. Redis `INCR` is atomic and returns the new value in one round-trip, so you `INCR` and compare the result to the limit, using `EXPIRE`/`SET NX EX` to bound the window. For token-bucket or sliding-window logic that touches multiple fields, a Lua script bundles 'read tokens, check, decrement, set TTL' into one indivisible server-side execution. Because Redis serializes operations per key, this stays correct no matter how many gateway nodes there are."
+    },
+    {
+      "type": "mc",
+      "q": "In a Redis-backed fixed/sliding window, why is `INCR` combined with setting a TTL preferred over a client-side `GET` then `SET count+1`?",
+      "options": [
+        "`INCR` compresses the counter so it uses less memory than a `SET`.",
+        "`INCR` is a single atomic server-side operation returning the new value, eliminating the read-modify-write race that two concurrent `GET`+`SET` clients would hit.",
+        "`GET`+`SET` cannot set an expiry, so the key would leak forever.",
+        "`INCR` automatically shards the key across the Redis cluster for you."
+      ],
+      "answer": 1,
+      "explain": "The point is atomicity: `INCR` reads-and-increments in one indivisible server-side step and returns the result, so concurrent callers can't both see the pre-increment value and double-count. `GET`+`SET` from two clients is the classic lost-update race. (`GET`+`SET` can technically set a TTL separately, `INCR` isn't a compression or auto-sharding feature — those options are distractors.)"
+    },
+    {
+      "type": "open",
+      "prompt": "Where do you enforce the limit, and how do you key it? Discuss gateway/edge placement and per-user vs per-IP vs per-API-key keying.",
+      "points": [
+        "Enforce as middleware at the API gateway / edge — reject over-limit traffic before it consumes backend, auth, or DB resources; a dedicated service or sidecar is the alternative but the gateway is standard.",
+        "Per-API-key: best for B2B/partner APIs — stable identity, tied to a plan/tier, clean quota accounting.",
+        "Per-user id: fair per-account limiting for authenticated traffic; needs the request authenticated first (so runs after auth).",
+        "Per-IP: the only option for unauthenticated/login endpoints, but blunt — shared NAT/corporate IPs punish many users, and attackers rotate IPs; good for coarse abuse defense.",
+        "Often combined/layered: per-IP on the login endpoint, per-API-key for the API, per-user for expensive actions.",
+        "The key determines the Redis key namespace (e.g. `rl:{apiKey}:{endpoint}:{window}`), which also determines shard distribution and hot-key risk."
+      ],
+      "answer": "I'd enforce it as middleware at the API gateway so over-limit requests die before touching backend, auth, or DB — a standalone limiter service is the alternative but the gateway is standard. Keying is a deliberate choice: per-API-key is cleanest for partner APIs since it maps to a plan and a stable identity; per-user is the fair choice for authenticated traffic but has to run after auth; per-IP is the only lever for unauthenticated endpoints like login but is blunt because shared NAT IPs punish innocents and attackers rotate addresses. In practice you layer them — per-IP on login, per-key on the API, per-user on expensive actions. The chosen key becomes the Redis key namespace, which also drives shard distribution and hot-key exposure."
+    },
+    {
+      "type": "open",
+      "prompt": "At 1M req/s a shared-store round-trip per request is expensive. How do you trade accuracy for latency, and what's the cost?",
+      "points": [
+        "Local pre-allocation: each gateway node checks out a batch/lease of tokens from the central store periodically and spends them locally, only syncing when the batch runs low — cuts central round-trips by the batch factor.",
+        "This makes the global limit approximate: a node holding unused leased tokens plus others can let total throughput slightly exceed/undershoot the exact limit at window edges.",
+        "Alternative: two-tier — a local per-node token bucket sized to node_share = global_limit / node_count, with periodic rebalancing; correct if traffic is evenly balanced, drifts if not.",
+        "Sticky routing (hash client -> a specific node/shard) keeps a client's counter local and exact, at the cost of load-balancing flexibility and rebalancing on node changes.",
+        "The explicit tradeoff: perfectly accurate limits require a synchronous atomic op per request (latency + a central bottleneck); approximate local counting removes the round-trip but allows small overshoot.",
+        "For most products a few-percent overshoot is fine; for hard security limits (login attempts) keep it strict/central."
+      ],
+      "answer": "The trick is to stop hitting the central store on every request. Each gateway node leases a batch of tokens from Redis periodically and spends them locally, syncing only when the batch drains — that cuts central round-trips by the batch factor. The cost is that the global limit becomes approximate: leased-but-unused tokens across nodes let real throughput drift a bit around the exact cap at window edges. Variants include a two-tier local bucket sized to `global_limit / node_count`, or sticky-hashing each client to one node so its counter stays local and exact at the price of load-balancing flexibility. So the fundamental tradeoff is exactness (a synchronous atomic op per request, plus a central bottleneck) versus latency (local approximate counting with small overshoot) — fine for product limits, but I'd keep security-critical limits like login attempts strict and central."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the client-facing behavior and the failure modes. What does the response look like, and what happens when the limit store is down?",
+      "points": [
+        "Return HTTP `429 Too Many Requests` when over limit, with a `Retry-After` header (seconds until the window resets) so well-behaved clients back off.",
+        "Include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers on all responses so clients can self-throttle before being rejected.",
+        "Store-down decision: fail-open (allow traffic, protect availability, risk backend overload) vs fail-closed (reject, protect backend, hurt availability) — choose per endpoint; often fail-open for general API, fail-closed for abuse-prone ones.",
+        "Redis HA: replicas + failover; a brief failover window may lose recent counts — acceptable given limits are approximate anyway.",
+        "Hot-key / abusive client: a single key can saturate one shard; mitigate with local caching of 'already-blocked' verdicts and short-circuiting obvious abusers without a store hit.",
+        "Observability: emit metrics on throttle rate per key/endpoint to catch misconfigured limits and detect attacks."
+      ],
+      "answer": "Over-limit requests get a `429` with a `Retry-After` telling the client when to try again, and I'd put `X-RateLimit-Limit/Remaining/Reset` on every response so good clients throttle themselves before getting rejected. The important failure decision is what happens when the limit store is unreachable: fail-open preserves availability but risks backend overload, fail-closed protects the backend but drops legitimate traffic — I'd pick per endpoint, typically fail-open for the general API and fail-closed for abuse-prone paths, and run Redis with replicas/failover accepting that a failover may lose a few seconds of counts (fine since limits are already approximate). For hot keys I'd cache 'already blocked' verdicts locally to short-circuit abusers without a store round-trip, and emit throttle-rate metrics per key to catch both attacks and misconfigured limits."
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "id": "p15",
+  "num": 15,
+  "part": "Storage, Infra & Transactions",
+  "title": "Design a Payment System (Wallet / Ledger)",
+  "summary": "A system that moves money correctly — charging cards, crediting wallets, paying out — where integrity beats timeliness. The signature concerns are idempotency (exactly-once charge despite retries), a double-entry ledger for auditable correctness, and orchestrating an external gateway with saga/compensation while staying PCI-compliant.",
+  "keyTakeaways": [
+    "Idempotency: the client supplies an idempotency key per payment intent; the server dedupes on it so retries never double-charge (exactly-once effect).",
+    "Record money movement in a double-entry ledger — every transaction has balanced debit and credit entries — for correctness, auditability, and reconciliation.",
+    "Payments need strong consistency / ACID on the ledger; correctness and integrity outrank latency.",
+    "Use auth-then-capture: authorize (hold) funds first, capture later — enabling holds, partial captures, and cancellations.",
+    "Integrate an external payment gateway (Stripe/Adyen) and coordinate multi-step flows with a saga + compensating transactions, since you can't 2PC across an external provider.",
+    "Reconcile internal ledger against the gateway/bank settlement files daily to catch drift.",
+    "PCI: tokenize card data via the gateway — never store raw PAN/CVV yourself; keep card data out of your systems entirely."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a payment system (say, a wallet + charge/payout service). What are the functional requirements, and what non-functional property outranks everything else?",
+      "points": [
+        "Functional: charge a customer (card → merchant), maintain wallet balances, payouts/withdrawals, refunds, transaction history.",
+        "Correctness/integrity is paramount — never double-charge, never lose or create money; every cent must be accounted for.",
+        "Strong consistency / ACID on balances; availability matters but integrity > timeliness (better to delay than to be wrong).",
+        "Auditability & compliance: full immutable history, PCI-DSS for card data, regulatory reporting.",
+        "Exactly-once semantics under retries and network failures.",
+        "Clarify: currencies/FX, sync vs async settlement, which flows (P2P, card-present, payouts)."
+      ],
+      "answer": "Functionally: charge customers (card to merchant), hold and move wallet balances, do payouts and refunds, and expose a transaction history. The overriding non-functional is integrity — we must never double-charge, lose, or conjure money; every cent reconciles. That demands strong, ACID consistency on the ledger, exactly-once effects under retries, and complete auditability, plus PCI compliance for card data. Crucially, integrity beats timeliness: it's acceptable to be slightly slow or eventually-settled, never to be wrong. I'd clarify currencies/FX, whether settlement is sync or async, and which flows are in scope."
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the scale and note why the numbers are smaller but the correctness bar is higher than a typical read-heavy system.",
+      "points": [
+        "Assume a large merchant platform: ~10M transactions/day ≈ ~115 TPS average, ~5–10× peak ≈ ~1k TPS (Black Friday spikes higher).",
+        "Writes matter far more than reads — each payment is a durable, consistent write, not a cache hit.",
+        "Ledger storage: each txn produces a few immutable entries; ~10M/day × ~4 entries × ~few hundred bytes ≈ low tens of GB/day — retained for years for audit.",
+        "QPS is modest vs social systems, but every write must be ACID and durable — you can't drop or approximate one.",
+        "Read load: dashboards/statements, reconciliation batch jobs — can hit replicas.",
+        "Growth is bounded and predictable; correctness, not throughput, is the scaling challenge."
+      ],
+      "answer": "Even a big platform is only ~10M transactions/day ≈ ~115 TPS average and maybe ~1k TPS at peak — modest compared to a social feed. The twist is that every one of those is a durable, ACID write, not a cache read, so throughput isn't the hard part; correctness is. Ledger data is a few immutable entries per transaction — order of tens of GB/day — retained for years for audit and regulation. Reads (statements, reconciliation jobs) go to replicas. So we size for guaranteed-correct writes and long-term auditable storage, not for raw QPS."
+    },
+    {
+      "type": "open",
+      "prompt": "Sketch the core API, and show how the idempotency key appears in it.",
+      "points": [
+        "`POST /payments` with body {amount, currency, source token, idempotency_key} → creates/charges a payment intent.",
+        "The idempotency_key (client-generated, per logical payment) makes retries safe: same key → same result, no second charge.",
+        "`POST /payments/{id}/capture` and `/refund`, `/cancel` for the auth-then-capture lifecycle.",
+        "`GET /payments/{id}` → status; `GET /wallets/{id}` → balance & history.",
+        "Idempotency keys are stored with the resulting outcome and a TTL; a repeat returns the stored result.",
+        "Use tokenized card references, never raw PAN, in requests."
+      ],
+      "answer": "`POST /payments` takes {amount, currency, source_token, idempotency_key} and returns a payment intent. The idempotency_key is client-generated per logical payment: the server stores it alongside the outcome, so any retry with the same key returns the original result instead of charging again. The lifecycle continues with `POST /payments/{id}/capture`, `/refund`, and `/cancel` for auth-then-capture, plus `GET /payments/{id}` and `GET /wallets/{id}` for status and balance. Requests always carry a tokenized card reference, never a raw card number."
+    },
+    {
+      "type": "open",
+      "prompt": "Lay out the high-level architecture and the ledger data model. What components and tables?",
+      "points": [
+        "Components: API/payment service, ACID ledger DB (RDBMS, e.g. Postgres), idempotency store, wallet service, gateway integration, async workers + queue, reconciliation service.",
+        "Ledger: an append-only, immutable `entries` table — each row is (account_id, transaction_id, debit/credit, amount, currency, timestamp).",
+        "Every transaction writes ≥2 balanced entries (double-entry): total debits == total credits.",
+        "Accounts table (user wallets, merchant accounts, fee/clearing accounts, a bank/settlement account).",
+        "Balances are derived from (or materialized from) ledger entries, updated in the same ACID transaction.",
+        "Idempotency table keyed by idempotency_key → {status, response, created_at}.",
+        "Outbox pattern + queue to drive external gateway calls reliably."
+      ],
+      "answer": "A payment service sits in front of an ACID ledger DB (Postgres-class), an idempotency store, a wallet/balance service, a gateway-integration service, and async workers behind a queue, plus a reconciliation service. The heart is a double-entry ledger: an append-only, immutable `entries` table of (account_id, transaction_id, debit/credit, amount, currency, ts), where every transaction writes at least two balanced entries so debits equal credits. There's an `accounts` table for user wallets, merchant accounts, and internal fee/clearing/settlement accounts; balances are materialized from the ledger inside the same transaction. An `idempotency` table keyed by the client key holds the stored outcome, and an outbox + queue drives external gateway calls reliably."
+    },
+    {
+      "type": "mc",
+      "q": "A client sends `POST /payments` but the network drops the response, so it retries the same request. How do idempotency keys guarantee the customer is charged exactly once?",
+      "options": [
+        "The server compares amount and card number; if they match a recent charge it assumes a duplicate and skips it.",
+        "The server atomically records the client-supplied idempotency key with the first request's outcome; a retry with the same key returns the stored result instead of executing the charge again.",
+        "The payment gateway detects duplicate charges automatically, so the server needs no special handling.",
+        "The server locks the customer's account for 24 hours after any charge to block repeats."
+      ],
+      "answer": 1,
+      "explain": "The client generates one idempotency key per logical payment and reuses it on every retry. On the first request the server records the key and its result in the same atomic transaction as the charge; any later request bearing that key short-circuits and returns the stored outcome, so the charge executes exactly once regardless of retries or timeouts. Matching on amount+card is unsafe (a customer may legitimately pay the same amount twice), and you can't rely on the gateway alone because the duplicate may occur before the gateway is ever called."
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: explain the double-entry ledger. Why model money movement this way instead of just incrementing/decrementing a balance column?",
+      "points": [
+        "Every transaction is recorded as balanced debit + credit entries across accounts; sum of debits == sum of credits, always.",
+        "Balance is derived from immutable entries, so you have a complete, tamper-evident audit trail — nothing is overwritten.",
+        "Correctness invariant: money is conserved — it always moves FROM one account TO another, never appears or vanishes.",
+        "A raw balance column loses history, is hard to audit, and is easy to corrupt with a single bad update.",
+        "Reconciliation and dispute resolution become possible because every cent traces to a pair of entries.",
+        "Entries are append-only; corrections are new compensating entries (reversals), not edits."
+      ],
+      "answer": "Double-entry records each money movement as balanced debit and credit entries across accounts, so debits always equal credits and money is conserved — it moves from one account to another and never appears or vanishes. Balances are derived from these immutable, append-only entries, which gives a complete, tamper-evident audit trail; a correction is a new reversing entry, never an edit. A single mutable balance column throws all that away: no history, hard to audit, and one bad `UPDATE` silently corrupts the truth. With a ledger, every cent traces to a pair of entries, which is exactly what makes reconciliation and dispute resolution possible — the reason banks have used it for centuries."
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: walk the auth-then-capture flow through an external gateway, and explain how you coordinate the distributed steps reliably.",
+      "points": [
+        "Authorize: place a hold on the customer's card via the gateway (funds reserved, not moved) — write a pending ledger entry.",
+        "Capture: later settle the held funds (on ship/confirm), possibly partial; then post the final balanced ledger entries.",
+        "You can't run 2PC across an external gateway, so use a saga: a sequence of local steps each with a compensating action.",
+        "If a downstream step fails, run compensations (e.g. void the authorization, reverse the ledger entry) to unwind.",
+        "Drive external calls from a durable outbox/queue with retries + idempotency keys so a step is exactly-once despite failures.",
+        "Handle gateway webhooks/async callbacks to confirm final state; never assume the sync response is final.",
+        "State machine per payment: initiated → authorized → captured/failed → settled/refunded."
+      ],
+      "answer": "First authorize — ask the gateway to hold funds on the card without moving them, and write a pending ledger entry. Later capture — settle the hold (possibly partially) when the order ships, then post the final balanced entries. Because you can't run two-phase commit across an external provider, you model the multi-step flow as a saga: each local step has a compensating action, so if capture fails you void the authorization and reverse the pending entry to unwind cleanly. External calls are driven from a durable outbox/queue with retries and idempotency keys so each step is effectively exactly-once, and you reconcile final state from the gateway's async webhooks rather than trusting the synchronous response. The whole thing is a per-payment state machine: initiated → authorized → captured → settled, with failure/refund branches."
+    },
+    {
+      "type": "mc",
+      "q": "What is the correct PCI-DSS-aligned way to handle the customer's card number in this system?",
+      "options": [
+        "Encrypt the full card number (PAN) and CVV and store them in your primary database for reuse.",
+        "Store a salted hash of the card number so it can't be reversed but can still be compared.",
+        "Tokenize card data through the payment gateway/vault and store only the opaque token; never let raw PAN/CVV touch or persist in your systems.",
+        "Store the card number only in application logs, which are access-controlled."
+      ],
+      "answer": 2,
+      "explain": "The safest posture is to keep cardholder data entirely out of your systems: the card is tokenized by the gateway/vault (often captured directly by their client SDK), and you only ever store and use the opaque token. That shrinks your PCI scope dramatically and eliminates the risk of a breach exposing PANs. Storing encrypted or hashed PANs still puts sensitive data in scope, and CVV must never be stored at all; card data in logs is a classic, serious violation."
+    },
+    {
+      "type": "open",
+      "prompt": "What is reconciliation, and why is it essential even with an ACID ledger and idempotency?",
+      "points": [
+        "Reconciliation = periodically (daily) compare your internal ledger against the gateway/bank settlement reports to detect drift.",
+        "Your system and the external provider are separate sources of truth; async webhooks can be missed, delayed, or duplicated.",
+        "Catches: charges that settled at the bank but weren't recorded internally (or vice versa), fee discrepancies, FX rounding, missed refunds.",
+        "Discrepancies are resolved by posting compensating ledger entries and alerting/flagging for manual review.",
+        "Idempotency prevents double-execution but not divergence between two independent systems.",
+        "It's a financial-integrity safety net and a compliance requirement."
+      ],
+      "answer": "Reconciliation is the periodic (usually daily) process of comparing your internal ledger against the settlement files the gateway or bank produces, to catch any divergence. It's essential because your system and the provider are independent sources of truth connected by async webhooks that can be dropped, delayed, or duplicated — so despite ACID writes and idempotency, the two can drift (a charge settles at the bank but wasn't recorded, a refund is missed, fees or FX round differently). When they disagree you post compensating entries and flag the case for review. Idempotency stops double-execution within your system; only reconciliation catches disagreement between two systems, which is why it's both an integrity safety net and a compliance requirement."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level: what breaks or gets dangerous at scale, and what are the key failure modes and tradeoffs?",
+      "points": [
+        "Hot account contention: a single merchant/clearing account's row is a write bottleneck under high TPS — shard/aggregate or use per-shard sub-accounts netted periodically.",
+        "Consistency vs availability: you deliberately choose consistency — refuse/queue rather than risk a wrong balance (integrity > timeliness).",
+        "Partial failures: gateway timeouts where you don't know if the charge landed — resolve via idempotency + reconciliation, never blind retry.",
+        "Exactly-once across systems is impossible in general; you achieve exactly-once EFFECT via idempotency keys + compensations + reconciliation.",
+        "Scaling an ACID RDBMS: functional partitioning, careful sharding by account, read replicas for reporting.",
+        "Fraud, chargebacks, and disputes are first-class flows, not afterthoughts.",
+        "Regulatory: data residency, retention, PCI scope, audit immutability.",
+        "Multi-currency/FX introduces rounding and rate-timing correctness issues."
+      ],
+      "answer": "The classic scaling pain is hot-account contention — a shared merchant or clearing account row becomes a write bottleneck at high TPS, so you use per-shard sub-accounts netted periodically. Architecturally you deliberately pick consistency over availability: if you can't guarantee a correct balance you queue or refuse rather than risk being wrong, because integrity beats timeliness. The dangerous failure mode is the ambiguous gateway timeout where you don't know if the charge landed — you never blind-retry; you resolve it with idempotency keys plus reconciliation, since true exactly-once across two systems is impossible and you can only achieve the exactly-once effect via idempotency, compensation, and reconciliation. On top of that, fraud/chargebacks, PCI scope, audit immutability, data-residency regulation, and multi-currency FX rounding are all first-class concerns rather than edge cases."
+    }
+  ]
+}

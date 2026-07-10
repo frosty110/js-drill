@@ -1,0 +1,128 @@
+{
+  "id": "p03",
+  "num": 3,
+  "part": "Feeds & Read-Heavy Systems",
+  "title": "Design a Photo-Sharing Service",
+  "summary": "An Instagram-style service where users upload photos, follow others, and browse a media-rich feed. The signature challenge is separating heavy binary media (blob storage + CDN) from lightweight metadata (a DB), processing uploads asynchronously into multiple sizes, and generating a feed over a media-heavy read-dominated workload.",
+  "keyTakeaways": [
+    "Store the photo bytes in blob storage (S3) and serve them via CDN; keep only metadata + the media URL in the DB — never blobs in the DB.",
+    "Upload is a two-phase flow: write the original to blob storage, then enqueue async resize/thumbnail/transcode work.",
+    "A queue-driven media pipeline generates multiple sizes (thumbnail, feed, full) so clients fetch the right resolution.",
+    "Metadata (photoId, ownerId, caption, mediaUrls, ts) lives in a sharded DB keyed by photo or user.",
+    "Feed generation reuses fan-out (push/pull hybrid), but the feed carries media URLs, not bytes — hydration is a CDN fetch.",
+    "The workload is overwhelmingly read-heavy and bandwidth-dominated; CDN hit rate is the primary scaling lever.",
+    "Decoupling media from metadata lets each scale independently — blob storage for capacity, DB for query, CDN for delivery."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Open the design: functional and non-functional requirements for a photo-sharing service, and what makes it different from a text feed.",
+      "points": [
+        "Functional: upload photos (with caption); follow users; view a media feed; view a user's profile grid; like/comment (optional).",
+        "Non-functional: highly read-heavy, bandwidth-dominated (media is MBs, not KBs), low feed/media latency, high durability (never lose a user's photos).",
+        "Durability of media is paramount — photos are irreplaceable, so replicated blob storage.",
+        "The differentiator vs a text feed: large binary payloads, so storage/delivery of bytes dominates over the metadata/feed logic.",
+        "Confirm scale: DAU, uploads/day, avg photo size, read:write ratio, follower distribution."
+      ],
+      "answer": "Functionally: upload photos with captions, follow users, browse a media-rich home feed and profile grids, and optionally like/comment. Non-functionally it's extremely read-heavy and bandwidth-dominated — payloads are megabytes, not kilobytes — so I optimize media delivery latency and, critically, durability, because a user's photos are irreplaceable. What sets it apart from a text feed is exactly that binary weight: the hard part shifts from feed logic to storing and delivering bytes cheaply and durably. I'd confirm DAU, uploads/day, average photo size, and the follower distribution up front."
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate capacity. Assume 100M DAU, 10M photo uploads/day, average stored size 2MB (across all generated variants), and a 100:1 read:view ratio. Derive upload QPS, new storage/day and /year, and read bandwidth.",
+      "points": [
+        "Uploads: 10M/day ÷ 86,400 ≈ 116 uploads/s; peak ~2–3× ≈ 300/s.",
+        "New media storage: 10M × 2MB = 20 TB/day → ~7.3 PB/year (before replication; ~22 PB at 3× replication).",
+        "Views: 100:1 → 1B photo-views/day ÷ 86,400 ≈ ~11.6K reads/s; peak ≈ 23K+/s.",
+        "Read bandwidth: at ~200KB per delivered (feed-size) image, 1B views/day ≈ 200 TB/day egress — served from CDN, not origin.",
+        "Metadata is tiny by comparison (~1KB/photo) — the cost and scale story is entirely media bytes + egress."
+      ],
+      "answer": "10M uploads/day is only ~116/s, ~300/s at peak — writes are modest. But at 2MB stored per photo across variants that's 20 TB/day of new media, ~7.3 PB/year before replication and roughly 22 PB at 3× durability. On the read side, 100:1 gives 1B photo-views/day, ~12K reads/s, and at ~200KB per delivered feed image that's on the order of 200 TB/day of egress — which is why this must be served from CDN, not origin. Metadata is a rounding error at ~1KB/photo; the entire cost and scale story is media bytes and bandwidth."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the upload and read APIs. How does a client upload a large photo, and how does it fetch feed media?",
+      "points": [
+        "Upload: request a pre-signed/direct upload URL, PUT the bytes straight to blob storage (bypassing the app tier), then POST /photos {mediaKey, caption} to register metadata.",
+        "Alternatively POST /photos multipart → app streams to blob store (simpler but app-tier bandwidth cost).",
+        "Register returns photoId; processing status is async.",
+        "Read: GET /feed?cursor=&limit → returns metadata + CDN media URLs per size; client picks resolution.",
+        "GET /users/{id}/photos for the profile grid (thumbnails)."
+      ],
+      "answer": "For upload I prefer a direct-to-blob flow: the client asks for a pre-signed URL, PUTs the bytes straight to S3 (bypassing the app tier so we don't pay app bandwidth), then calls `POST /photos {mediaKey, caption}` to register metadata and returns a photoId, with processing done async. Reads are metadata-plus-URLs: `GET /feed?cursor=&limit` returns each post's metadata and a set of CDN URLs (thumbnail/feed/full) so the client fetches the right resolution directly from the CDN, and `GET /users/{id}/photos` backs the thumbnail profile grid."
+    },
+    {
+      "type": "open",
+      "prompt": "Give the high-level architecture and the data model, emphasizing the media/metadata split.",
+      "points": [
+        "Components: app tier, blob storage (S3) for originals + variants, CDN for delivery, metadata DB (sharded), a queue + worker pool for processing, feed service.",
+        "Media path is fully separate from metadata: blobs in S3, URLs/metadata in the DB.",
+        "Data model: Photos{photoId, ownerId, caption, mediaKeys{thumb,feed,full}, createdAt, status}; Follows{followerId, followeeId}; Feed{userId → [photoId...]}.",
+        "Feed rows carry photoIds → hydrate to metadata → resolve to CDN URLs; bytes never touch the DB or feed store.",
+        "Each layer scales independently: S3 for capacity/durability, DB for queries, CDN for egress, workers for processing throughput."
+      ],
+      "answer": "The key move is separating media from metadata. Photo bytes — original and generated variants — live in blob storage (S3) and are delivered by CDN; the DB holds only metadata and the media keys/URLs. Components are an app tier, S3, CDN, a sharded metadata DB, and a queue with a worker pool for processing, plus a feed service. The model is `Photos{photoId, ownerId, caption, mediaKeys{thumb,feed,full}, createdAt, status}`, `Follows`, and per-user `Feed{userId → [photoId…]}`. Feed rows carry photo IDs that hydrate to metadata and resolve to CDN URLs — bytes never touch the DB or the feed store — so blob storage, the DB, the CDN, and the worker pool each scale on their own axis."
+    },
+    {
+      "type": "mc",
+      "q": "Where should the actual photo bytes be stored, and how served?",
+      "options": [
+        "As BLOB columns in the relational metadata DB, served through the app tier",
+        "In distributed blob/object storage (e.g. S3) with only the URL/key in the DB, served via CDN",
+        "In Redis alongside the feed post IDs for fast access",
+        "On the app servers' local disks, load-balanced across them"
+      ],
+      "answer": 1,
+      "explain": "Photos are large, immutable binaries — object storage (S3) is built for exactly this: cheap, effectively unbounded, replicated for durability. The DB stores just the key/URL and metadata so it stays small and queryable, and delivery goes through a CDN to serve the bandwidth close to users. BLOBs in the DB bloat it and kill query performance; Redis is expensive RAM for MB payloads; and local app-server disks aren't durable or shareable."
+    },
+    {
+      "type": "open",
+      "prompt": "Crux deep dive: design the asynchronous media-processing pipeline. Why async, what runs, and what does the client see before processing finishes?",
+      "points": [
+        "Why async: resizing/transcoding a 2MB+ image takes seconds — doing it inline blocks the upload and couples user latency to CPU work.",
+        "Flow: original lands in S3 → an event/message goes on a queue → a worker pool pulls jobs and generates thumbnail/feed/full variants (+ format transcode, EXIF strip, moderation).",
+        "Workers write variants back to S3 and update the photo's status/mediaKeys in the DB.",
+        "Client sees status=processing (show original or a placeholder), flips to ready when variants exist — or upload is confirmed immediately and variants appear shortly after.",
+        "Queue gives elasticity + retry + backpressure: spikes buffer, failed jobs retry, workers scale independently.",
+        "Idempotent workers (keyed on photoId+variant) so retries don't duplicate work."
+      ],
+      "answer": "Resizing and transcoding a multi-megabyte image takes seconds of CPU, so doing it inline would block the upload and tie user latency to that work — hence async. The original lands in S3, which emits an event onto a queue; a worker pool pulls jobs and produces the variants (thumbnail, feed, full), transcodes format, strips EXIF, and runs moderation, then writes them back to S3 and updates the photo's `status` and `mediaKeys` in the DB. The client gets an immediate upload confirmation with `status=processing` — showing the original or a placeholder — and flips to ready once variants exist. The queue is what makes this robust: it buffers upload spikes, retries failed jobs, applies backpressure, and lets processing workers scale independently, with jobs keyed by photoId+variant so retries stay idempotent."
+    },
+    {
+      "type": "mc",
+      "q": "The service is overwhelmingly read-heavy and bandwidth-dominated. What is the single most important lever for scaling media delivery?",
+      "options": [
+        "Adding read replicas to the metadata database",
+        "Sharding the feed store across more Redis nodes",
+        "Maximizing CDN cache hit rate so most image bytes are served from edge caches, not origin/S3",
+        "Vertically scaling the app tier with more CPU"
+      ],
+      "answer": 2,
+      "explain": "The dominant cost and latency is delivering hundreds of TB/day of image bytes, and photo access is power-law skewed toward recent/popular content — so a high CDN cache hit rate means the vast majority of bytes are served from edge caches near users, sparing origin/S3 bandwidth and slashing latency. Metadata replicas, feed-store shards, and app CPU all matter, but they address the tiny metadata/logic side, not the bytes that actually saturate the system."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain feed generation here. How do you reuse push/pull fan-out, and what's the media-heavy twist versus a text feed?",
+      "points": [
+        "Reuse the same hybrid fan-out: push photoIds into follower feeds for normal users, pull for high-follower accounts, merge at read.",
+        "The feed stores lightweight photoIds/metadata refs — NOT media — so fan-out amplification is cheap regardless of photo size.",
+        "The twist is hydration: after assembling photoIds, resolve each to its CDN variant URLs; the actual bytes are fetched by the client from the CDN.",
+        "Serve the right resolution per surface — thumbnails for grids, feed-size for scroll, full for detail — to control bandwidth.",
+        "Prefetch/lazy-load and progressive images to keep the media feed responsive on mobile."
+      ],
+      "answer": "Feed generation reuses the same push/pull hybrid: for normal users I fan out photoIds into follower timelines on write, for high-follower accounts I pull at read time, and merge the two. The crucial point is that the feed carries only lightweight photoId/metadata references, never media, so fan-out is just as cheap as a text feed regardless of the 2MB payloads. The media-heavy twist is hydration: once I have the photoIds I resolve each to its CDN variant URLs and the client fetches the bytes directly from the CDN, choosing thumbnail for grids, feed-size for scrolling, and full for detail. Serving the right resolution per surface, plus lazy-loading and progressive images, is what keeps a media feed responsive on mobile."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level: cover durability, failure modes, and scale tradeoffs — what breaks, and how do you keep photos safe and delivery fast globally?",
+      "points": [
+        "Durability: replicate blob storage across zones/regions (S3 multi-AZ + cross-region replication); metadata and blobs must not diverge — write blob first, then metadata, and reconcile orphans.",
+        "Failure: worker crash mid-processing → idempotent retry from the original; DB points to a not-yet-ready variant → serve original or placeholder until status=ready.",
+        "Orphan/consistency: garbage-collect blobs whose metadata write failed; treat metadata as source of truth for 'exists'.",
+        "Global delivery: geo-distributed CDN + regional S3 replicas so users fetch from a nearby edge; upload to nearest region.",
+        "Hot content: a viral photo is a CDN hot object — edge caching absorbs it; origin shielding prevents an origin stampede.",
+        "Cost tradeoff: tiered storage (hot recent photos on fast storage, cold archives to cheaper/Glacier), and cap generated variants to control storage multiplication."
+      ],
+      "answer": "Durability comes first: blobs are replicated multi-AZ and cross-region, and I order writes blob-first then metadata, treating metadata as the source of truth for existence and garbage-collecting orphaned blobs whose metadata write failed. Failure modes are handled by idempotent workers that reprocess from the durable original, and by serving the original or a placeholder whenever the DB references a variant that isn't ready yet. Globally, a geo-distributed CDN over regional S3 replicas lets users fetch from a nearby edge and upload to the nearest region; a viral photo becomes a hot CDN object that edge caching plus origin shielding absorb without stampeding S3. The main tradeoff is cost — I'd tier storage so hot recent photos sit on fast storage and cold archives move to cheaper/Glacier, and cap the number of generated variants since each one multiplies petabyte-scale storage."
+    }
+  ]
+}

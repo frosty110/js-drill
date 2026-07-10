@@ -1,0 +1,133 @@
+{
+  "id": "p12",
+  "num": 12,
+  "part": "Storage, Infra & Transactions",
+  "title": "Design a Distributed Cache",
+  "summary": "A Redis/Memcached-cluster-style in-memory cache spread across many nodes, sitting in front of a slower datastore. The signature challenge is distributing keys across nodes so that adding or removing a node remaps as few keys as possible — consistent hashing — while handling replication, eviction, the hot-key problem, and cache-DB coherence.",
+  "keyTakeaways": [
+    "Consistent hashing maps both keys and nodes onto a hash ring so adding/removing a node remaps only ~1/N of keys, versus `hash % N` which remaps almost everything.",
+    "Virtual nodes (many ring points per physical node) smooth load imbalance and make rebalancing incremental when a node joins/leaves.",
+    "Replication (a key's data on N successor nodes on the ring) provides availability and read scaling; the tradeoff is consistency vs. staleness on replicas.",
+    "Eviction under memory pressure is typically LRU (or LFU/allkeys-lru), independent of TTL-based expiration which removes keys after a time bound.",
+    "The hot-key problem — one key's traffic overwhelming its single shard — is mitigated by replicating/duplicating that key across nodes, client-side local caching, or key-splitting.",
+    "Cache-DB coherence depends on the write policy: cache-aside (lazy load + invalidate on write), write-through (write cache+DB synchronously), or write-back (write cache, flush to DB async) — each trades consistency for latency/durability.",
+    "The cache is a volatile performance layer; persistence (Redis AOF/RDB snapshots) is optional and for warm-restart, not the source of truth."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a distributed in-memory cache (Redis/Memcached-cluster style). What are the functional requirements and the non-functional targets?",
+      "points": [
+        "Functional: GET/SET/DELETE by key with TTL; data distributed across many nodes so total capacity exceeds one machine; transparent to clients (they don't track which node holds a key).",
+        "Elastic membership: nodes can be added/removed (scale, failure) with minimal disruption to existing keys.",
+        "Non-functional: sub-millisecond p99 GET latency; very high throughput (hundreds of K to millions of ops/sec); high availability across node failures.",
+        "Consistency model: typically eventual/best-effort — a cache miss or slightly stale value is acceptable because the DB is the source of truth.",
+        "Scale target: state it — e.g. cache 10s of TB of hot data across dozens/hundreds of nodes, offloading a DB doing far fewer QPS.",
+        "Clarify: is it look-aside (app manages cache) or read-through (cache manages DB), and what's the acceptable staleness / eviction behavior?"
+      ],
+      "answer": "Functionally it's GET/SET/DELETE with TTLs, with data spread across many nodes so aggregate capacity beats one box, and the distribution is transparent so clients don't manually route keys. Membership has to be elastic — nodes join and leave for scaling and failures with minimal key movement. Non-functionally I want sub-millisecond p99 reads, very high throughput, and high availability, and I can accept eventual consistency and occasional staleness because the backing DB is the real source of truth. I'd pin down the scale (tens of TB of hot data across dozens of nodes), whether it's look-aside or read-through, and the acceptable staleness before designing."
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate capacity: from a DB QPS and hit rate, derive cache QPS, node count for memory, and node count for throughput.",
+      "points": [
+        "Assume the app needs 1M reads/sec and we target a 95% cache hit rate → ~950K cache GETs served from RAM, only ~50K reads fall through to the DB.",
+        "Memory: say 10 TB of hot working set; a node with 64 GB usable RAM holds ~64 GB → ~160 nodes for capacity alone (plus replication factor).",
+        "Throughput: a single Redis/Memcached node handles ~100-200K ops/sec → 1M ops/sec needs ~5-10 nodes for raw throughput; memory (160 nodes) dominates here.",
+        "Replication factor of 2-3 multiplies node count (160 × 2 ≈ 320 nodes) for availability.",
+        "Bandwidth: avg value ~1 KB × 1M ops/s ≈ ~1 GB/s aggregate → well within a fleet's NICs but worth spreading.",
+        "Hit rate is the highest-leverage number: pushing 95%→99% cuts DB fallthrough 5×, so sizing to hold the working set matters more than raw node count."
+      ],
+      "answer": "Say the app does 1M reads/sec at a 95% hit rate: the cache serves ~950K from RAM and only ~50K leak through to the DB. Sizing is memory-bound — a 10 TB hot set on 64 GB nodes is ~160 nodes for capacity, and with a replication factor of 2-3 that's ~320-480 nodes, whereas raw throughput (1M ops/s at ~150K/node) would only need a handful. So memory dominates node count, not ops. The number I'd optimize hardest is hit rate, because moving 95% to 99% cuts DB fallthrough fivefold, which is why holding the full working set matters more than piling on nodes."
+    },
+    {
+      "type": "open",
+      "prompt": "Sketch the architecture and the request path for a GET and a SET. How does a client find the node holding a key?",
+      "points": [
+        "Nodes form a cluster; each owns a slice of the keyspace determined by consistent hashing (or hash slots, as in Redis Cluster's 16384 slots).",
+        "Key routing: a smart client (or a proxy like twemproxy/Envoy) hashes the key to locate the owning node — no central lookup on the hot path.",
+        "GET: client hashes key → contacts owner node → RAM lookup → hit returns value; miss returns nil and the app loads from DB + populates cache (cache-aside).",
+        "SET: client hashes key → owner node stores value in memory with optional TTL; replicated to successor/replica nodes.",
+        "Membership/topology: gossip or a coordination service distributes the ring/slot map so clients know the current layout and re-route on changes (MOVED/ASK redirects in Redis Cluster).",
+        "No single front-door bottleneck: routing is client- or proxy-side, keeping the path one network hop."
+      ],
+      "answer": "The nodes form a cluster where each owns a slice of the keyspace via consistent hashing (Redis Cluster formalizes this as 16384 hash slots). A GET is one hop: a smart client or a proxy hashes the key, contacts the owning node, and returns the value on a hit; on a miss it's nil and the app loads from the DB and populates the cache (cache-aside). A SET similarly hashes to the owner, stores in RAM with an optional TTL, and replicates to the successor replica nodes. Clients learn the ring/slot map through gossip or a coordinator and re-route when it changes — Redis Cluster does this with MOVED/ASK redirects — so there's no central lookup service on the hot path and every request stays a single network hop."
+    },
+    {
+      "type": "mc",
+      "options": [
+        "`hash(key) % N` can collide two keys to the same node, but consistent hashing guarantees no collisions",
+        "With `% N`, changing N (adding/removing a node) remaps almost every key; consistent hashing remaps only ~1/N of keys on membership change",
+        "Consistent hashing is faster to compute per request than a modulo",
+        "`% N` cannot support replication, while consistent hashing can"
+      ],
+      "answer": 1,
+      "explain": "The whole point is minimal remapping on membership change. With `hash % N`, changing N shifts the modulus so nearly every key maps to a different node — a mass cache miss / rehash storm. Consistent hashing places keys and nodes on a ring, so adding or removing a node only reassigns the keys in that node's arc — about 1/N of them — leaving the rest untouched. Modulo is actually cheaper to compute and both schemes can replicate, so those options are wrong; the differentiator is remap cost under scaling/failure.",
+      "q": "Why distribute keys with consistent hashing instead of `node = hash(key) % N`?"
+    },
+    {
+      "type": "open",
+      "prompt": "The signature deep-dive: explain consistent hashing in detail — the ring, what happens when a node joins/leaves, and why virtual nodes are needed.",
+      "points": [
+        "Hash both keys and node IDs onto the same fixed ring (e.g. 0..2^32-1); a key is owned by the first node encountered clockwise from the key's hash.",
+        "Add a node: it takes over only the keys in the arc between it and its predecessor — those keys move from one successor; everything else is untouched (~1/N moved).",
+        "Remove/fail a node: its keys fall to the next node clockwise; again only that node's arc is affected, no global reshuffle.",
+        "Naive placement is uneven: with few nodes the arcs are unequal, so some nodes get far more keys/load (skew).",
+        "Virtual nodes: each physical node is hashed to many ring points (e.g. 100-200 vnodes), so its ownership is many small arcs spread around the ring — smoothing load and making joins/leaves move many small chunks from many nodes (even rebalancing).",
+        "Vnodes also let heterogeneous hardware carry proportional load (more vnodes = bigger share)."
+      ],
+      "answer": "You hash both keys and node identifiers onto one fixed ring, and a key belongs to the first node clockwise from where it lands. When a node joins, it only claims the arc between itself and its predecessor, so roughly 1/N of keys move off a single successor and nothing else shifts; when a node leaves, its arc simply falls to the next node clockwise — no global reshuffle either way, which is the property `hash % N` lacks. The catch is that with few nodes the arcs are uneven and load skews, so I give each physical node many virtual points on the ring — a hundred or more vnodes — which breaks its ownership into many small arcs scattered around the ring. That smooths the load distribution, makes a join/leave pull many small chunks from many nodes instead of hammering one neighbor, and lets bigger machines take proportionally more vnodes."
+    },
+    {
+      "type": "open",
+      "prompt": "Walk through eviction and expiration. Contrast TTL expiration with LRU eviction, and explain how Redis actually approximates LRU.",
+      "points": [
+        "TTL expiration: a key is removed once its time-to-live elapses, independent of memory pressure — Redis uses lazy expiry (on access) + a periodic sampling sweep, not a timer per key.",
+        "Eviction: triggered by the memory limit (maxmemory), it removes keys to make room even if they haven't expired — this is the LRU/LFU policy.",
+        "LRU evicts the least-recently-used key; policies like `allkeys-lru` consider all keys, `volatile-lru` only keys with a TTL set.",
+        "True LRU needs a global ordering (a linked list touched on every access) — expensive at high throughput and memory.",
+        "Redis approximates LRU by sampling: it picks a small random set of keys and evicts the least-recently-used among the sample, storing a coarse idle timestamp per key rather than maintaining a full ordered list.",
+        "LFU (least-frequently-used) is offered as an alternative when recency is a poor signal (a key hit once won't stay hot)."
+      ],
+      "answer": "TTL expiration and eviction are different mechanisms. TTL removes a key when its time-to-live elapses regardless of memory — Redis does it lazily on access plus a periodic random sampling sweep rather than a per-key timer. Eviction fires when you hit the memory limit and must free space even for un-expired keys, governed by a policy like `allkeys-lru` (all keys) or `volatile-lru` (only keys with TTLs). The subtlety is that true LRU would need a global access-ordered list touched on every read, which is too costly at cache throughput, so Redis approximates it: it samples a handful of random keys and evicts the least-recently-used of that sample using a coarse idle timestamp, and offers LFU when frequency is a better hotness signal than recency."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the hot-key problem: one key gets so much traffic it overwhelms the single shard that owns it. Why does consistent hashing not solve this, and what are the mitigations?",
+      "points": [
+        "Consistent hashing balances key COUNT across nodes, not traffic — a single extremely popular key still lives on one node, so that node's traffic spikes regardless of good key distribution.",
+        "Symptom: one shard saturates CPU/network while others idle; the hot key becomes a hotspot and single point of contention.",
+        "Mitigation 1 — replicate/duplicate the hot key across multiple nodes and have clients read from a random replica, spreading read load.",
+        "Mitigation 2 — client-side / local (in-process) cache for the hottest keys so most reads never hit the cluster at all (near-cache).",
+        "Mitigation 3 — key-splitting: shard the value under suffixed keys (`key#1..#K`) across nodes and pick one at random per read (works when reads dominate and slight duplication is fine).",
+        "Detect hot keys via sampling/metrics so mitigations can be applied dynamically; write-heavy hot keys are harder (need fan-out on write) than read-heavy ones."
+      ],
+      "answer": "Consistent hashing only balances how many keys sit on each node, not how much traffic each key attracts — so a single viral key still resolves to one node, and that node melts while its peers idle. It's a genuine hotspot and single point of contention that better key distribution can't fix. The mitigations all spread that one key's load: replicate it across several nodes and read from a random replica; put a small in-process near-cache in front of the cluster so the hottest reads never leave the app; or split the key into `key#1..#K` variants placed on different nodes and pick one per read. Read-heavy hot keys are the easy case — I detect them via sampling and apply these dynamically — whereas a write-heavy hot key is harder because every replica has to be kept current."
+    },
+    {
+      "type": "mc",
+      "options": [
+        "Write-back (write to cache, flush to DB asynchronously) — strong consistency, at the cost of memory",
+        "Cache-aside with no invalidation — strong consistency, at the cost of latency",
+        "Write-through (write cache and DB synchronously on every write) — reads see fresh data, at the cost of higher write latency",
+        "TTL-only expiration with no write path — strong consistency, at the cost of eviction accuracy"
+      ],
+      "answer": 2,
+      "explain": "Write-through updates the cache and the DB together on every write, so a subsequent read hits an already-fresh cache entry — strong read-after-write consistency — but every write pays the cost of two synchronous writes (higher write latency, and it caches data that may never be read). Write-back risks data loss and staleness because the DB lags behind the cache. Cache-aside without invalidation serves stale values until the entry expires. TTL-only has no write path at all, so it's stale within the TTL window. Write-through is the consistency-favoring choice, trading write latency for read freshness.",
+      "q": "Your app reads user profiles from a cache in front of a SQL DB. Which write policy gives the strongest read-after-write consistency, and what does it cost?"
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level: cover replication and cache-DB coherence, and the failure/consistency tradeoffs — including the thundering-herd on expiry.",
+      "points": [
+        "Replication: keep each key on N successor nodes on the ring (leader + replicas); replicas serve reads and enable failover, but async replication means a replica can serve a slightly stale value (consistency vs. availability tradeoff).",
+        "Coherence policy choice: cache-aside (invalidate/delete on DB write, lazy repopulate) is the common default; write-through for read-after-write freshness; write-back for write-heavy throughput at durability risk.",
+        "Invalidation over update: on a DB write, deleting the cache key is safer than updating it (avoids races that leave a stale value cached) — 'invalidate, don't update'.",
+        "Thundering herd / cache stampede: when a hot key expires, many concurrent misses all hit the DB at once — mitigate with a mutex/single-flight (one loader populates, others wait), or early/probabilistic refresh before expiry.",
+        "Failure modes: node loss triggers ~1/N key remap (consistent hashing) and replica promotion; a cold node after restart causes a miss surge → warm it or stagger.",
+        "Overall stance: the cache is a volatile accelerator, the DB is truth; accept bounded staleness, size for hit rate, and design so a total cache loss degrades (DB load spike) rather than corrupts."
+      ],
+      "answer": "I replicate each key to N successor nodes so replicas serve reads and cover failover, accepting that async replication can hand back a slightly stale value — the classic availability-over-consistency trade. For coherence I default to cache-aside and, crucially, invalidate-don't-update on a DB write, because deleting the key avoids the races that can leave a stale value pinned; I'd reach for write-through only when read-after-write freshness is required. The nasty failure is the cache stampede — a hot key expires and a thousand concurrent misses stampede the DB — which I fix with single-flight/mutex so one request repopulates while the rest wait, or probabilistic early refresh before expiry. On node loss, consistent hashing limits remap to ~1/N and a replica gets promoted, and I warm or stagger cold restarts to avoid a miss surge. The guiding stance is that the cache is a volatile accelerator and the DB is truth, so I size for hit rate and design a total cache loss to merely spike DB load, never corrupt data."
+    }
+  ]
+}

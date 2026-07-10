@@ -26,6 +26,38 @@ const path = require('path');
 const HOST = 'localhost'; // Chrome 148 restricts devtools to localhost; do not change.
 const PORT = 9222;
 
+// ── Vendored CDN assets ─────────────────────────────────────────────────────
+// Sandboxed environments (e.g. Claude Code remote containers) block the CDN
+// domains the app loads (cdn.tailwindcss.com, cdnjs.cloudflare.com,
+// cdn.jsdelivr.net) while allowing registry.npmjs.org. `bash
+// tools/cdp/fetch-vendor.sh` downloads npm-mirror copies into tools/cdp/vendor/
+// (gitignored); when that dir exists, connect() transparently serves those
+// bytes for the matching CDN URLs via CDP Fetch interception — so probes see
+// the fully-styled app. No-op when vendor/ is absent (normal dev machines).
+const VENDOR_DIR = path.join(__dirname, 'vendor');
+const CM = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16';
+const VENDOR_ROUTES = [ // [url-prefix, vendor-relative file, content-type]
+  ['https://cdn.tailwindcss.com', 'tailwind/3.4.10/tailwindcss.js', 'application/javascript'],
+  [`${CM}/codemirror.min.css`, 'codemirror/lib/codemirror.css', 'text/css'],
+  [`${CM}/theme/dracula.min.css`, 'codemirror/theme/dracula.css', 'text/css'],
+  [`${CM}/codemirror.min.js`, 'codemirror/lib/codemirror.js', 'application/javascript'],
+  [`${CM}/mode/javascript/javascript.min.js`, 'codemirror/mode/javascript/javascript.js', 'application/javascript'],
+  [`${CM}/addon/edit/closebrackets.min.js`, 'codemirror/addon/edit/closebrackets.js', 'application/javascript'],
+  [`${CM}/addon/edit/matchbrackets.min.js`, 'codemirror/addon/edit/matchbrackets.js', 'application/javascript'],
+  [`${CM}/addon/runmode/runmode.min.js`, 'codemirror/addon/runmode/runmode.js', 'application/javascript'],
+  ['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', 'supabase/dist/umd/supabase.js', 'application/javascript'],
+  ['https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js', 'mermaid/dist/mermaid.min.js', 'application/javascript'],
+];
+function resolveVendor(url) {
+  for (const [prefix, rel, type] of VENDOR_ROUTES) {
+    if (url === prefix || url.startsWith(prefix + '/') || url.startsWith(prefix + '?')) {
+      const file = path.join(VENDOR_DIR, rel);
+      if (fs.existsSync(file)) return { file, type };
+    }
+  }
+  return null;
+}
+
 function get(p) {
   return new Promise((res, rej) => {
     http.get(`http://${HOST}:${PORT}${p}`, r => {
@@ -125,6 +157,21 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
       requestUrls.set(m.params.requestId, m.params.request.url);
     } else if (m.method === 'Network.loadingFailed') {
       networkErrors.push({ url: requestUrls.get(m.params.requestId) || '(unknown)', error: m.params.errorText });
+    } else if (m.method === 'Fetch.requestPaused') {
+      const { requestId, request } = m.params;
+      const hit = resolveVendor(request.url);
+      if (hit) {
+        rawSend('Fetch.fulfillRequest', {
+          requestId, responseCode: 200,
+          responseHeaders: [
+            { name: 'Content-Type', value: hit.type },
+            { name: 'Access-Control-Allow-Origin', value: '*' },
+          ],
+          body: fs.readFileSync(hit.file).toString('base64'),
+        }).catch(() => {});
+      } else {
+        rawSend('Fetch.continueRequest', { requestId }).catch(() => {});
+      }
     } else if (m.method === 'Network.responseReceived') {
       const r = m.params.response;
       // favicon.ico is requested by the browser but the app intentionally
@@ -144,6 +191,15 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
   // session. Discovered while smoke-testing the 🎧 Audio prototype: HTML
   // cachebust query bust the document but Chrome still returned cached JS.
   await rawSend('Network.setCacheDisabled', { cacheDisabled: true });
+
+  // Serve vendored CDN assets when available (see VENDOR_ROUTES above).
+  if (fs.existsSync(VENDOR_DIR)) {
+    await rawSend('Fetch.enable', { patterns: [
+      { urlPattern: 'https://cdn.tailwindcss.com*' },
+      { urlPattern: 'https://cdnjs.cloudflare.com/*' },
+      { urlPattern: 'https://cdn.jsdelivr.net/*' },
+    ]});
+  }
 
   if (mobile) {
     // iPhone 13 mini viewport — the PROFILE.md mobile target.

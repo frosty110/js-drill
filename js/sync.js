@@ -1,7 +1,8 @@
-// Cross-device sync for the three localStorage blobs:
-//   - jsdrill.progress.v1   (main drill app)
-//   - jsdrill.prep.v1       (prep dashboard)
-//   - jsdrill.diagnostic.v1 (4-day diagnostic)
+// Cross-device sync for the four localStorage blobs:
+//   - jsdrill.progress.v1     (main drill app)
+//   - jsdrill.prep.v1         (prep dashboard — FROZEN legacy blob, no live writer)
+//   - jsdrill.diagnostic.v1   (4-day diagnostic)
+//   - jsdrill.systemdesign.v1 (System Design drill — Leitner boxes)
 //
 // Architecture (per CLAUDE.md "shared UI + storage contract"):
 //   - js/storage.js  → single source of truth for localStorage I/O
@@ -12,15 +13,50 @@
 // DrillStorage. Sync is purely additive.
 //
 // Sync model:
-//   - One Postgres row per user, holding all three blobs bundled into a
-//     single JSONB column shaped as { progress, prep, diagnostic }. See
-//     supabase/migrations/001_user_progress.sql.
-//   - On sign-in:    pull cloud → merge per-field per-blob with local →
+//   - One Postgres row per user, holding all four blobs bundled into a
+//     single JSONB column shaped as { progress, prep, diagnostic, systemdesign }
+//     plus an optional top-level `resetAt` (see "Authoritative writes" below).
+//     See supabase/migrations/001_user_progress.sql — no migration was needed
+//     for systemdesign/resetAt; the envelope is a client convention.
+//   - On sign-in:    ownership check first (see "Cross-account guard"), then
+//                    pull cloud → merge per-field per-blob with local →
 //                    save each merged blob locally → push merged bundle to cloud.
-//   - On local save (any of the three blobs): debounced 500ms push of the
-//                    whole bundle.
+//   - On local save (any of the four blobs): debounced 500ms push of the
+//                    whole bundle. A pending debounce is flushed immediately on
+//                    visibilitychange→hidden so the phone user's last rep isn't
+//                    lost when they swipe the PWA away.
 //   - On focus / every 30s: pull cloud → if cloud.updated_at advanced since
 //                    last pull, merge with local and save locally.
+//
+// Cross-account guard (owner marker):
+//   The auth user id of the account the local blobs belong to is stored in the
+//   UNSYNCED key jsdrill.sync.owner.v1 (DrillStorage.load/saveSyncOwner). On
+//   sign-in, if the marker exists and differs from the new session's user id
+//   AND there is local data, we do NOT merge — the user is asked whether to
+//   replace local with the new account's cloud data (OK → replace-local pull,
+//   no push of the old user's data; Cancel → sign out, local data untouched).
+//   This prevents user A's history from being absorbed into user B's row on a
+//   shared device. Sign-out keeps both local data and the marker, so the same
+//   user re-signing-in stays frictionless.
+//
+// Authoritative writes (resetAt channel):
+//   Reset-all and Restore-from-backup must REPLACE the cloud row and every
+//   other device's local copy — the normal union/OR/MAX merge would resurrect
+//   everything. DrillSync.resetCloud() cancels any pending debounce, stamps
+//   data.resetAt = now (persisted device-locally in jsdrill.sync.reset.v1 so
+//   later routine pushes keep carrying it), and pushes immediately (plain
+//   upsert, bypassing CAS). Every doPull compares cloud resetAt against the
+//   device's lastResetSeenAt: newer → adopt cloud wholesale (no merge, push
+//   suppressed) and fire drill:sync-pulled with detail.replaced = true.
+//
+// Concurrency (CAS push):
+//   doPush is compare-and-swap when we know the row: UPDATE … WHERE user_id
+//   AND updated_at = lastSeenUpdatedAt. Zero rows affected → someone else
+//   pushed since our last pull → pull-merge-push instead (max 2 retries).
+//   Plain upsert remains only for the no-row bootstrap and resetCloud paths.
+//   doPush also refuses (warn + skip) to push a progress blob whose __v is
+//   LOWER than the last-pulled cloud __v — a stale service-worker-pinned
+//   client must not downgrade the row's schema.
 //
 // Backward-compat read: an earlier shipped version stored the main blob
 // directly in `data`. doPull() detects that (top-level __v) and wraps it
@@ -36,10 +72,26 @@
 //     progress[id][L1|L2|L3]: OR of 'passed'      (any pass on any device wins)
 //     bestTimes[id]:           MIN                 (faster time wins)
 //     mockHistory[id]:         concat + sort desc + cap to last 5
-//     revealed[id][level]:     OR                  (once revealed, always revealed)
+//     revealed[id][level]:     OR of set flags, EXCEPT a timestamped clear wins
+//                              when newer. Reveal Replay's clean-pass invariant
+//                              deletes the flag and stamps
+//                              revealedClearedAt[id][level]; reveals stamp
+//                              revealedAt[id][level]. Merge keeps the flag only
+//                              if the newest event across both devices is a SET
+//                              (legacy untimestamped flags count as set-at-0, so
+//                              any clear beats them; a re-reveal after a clear
+//                              wins again). revealedAt / revealedClearedAt
+//                              themselves merge per-key MAX.
 //     reviews[id]:             greater lastPassedAt wins
 //     weakness[id]:            OR                  (flagged on any device → flagged)
 //     partialL1[id]:           OR                  (L1 passed <100% on any device → amber ✓)
+//                              ACCEPTED LIMITATION: the app clears weakness /
+//                              partialL1 on a clean pass, and OR-merge can
+//                              resurrect a stale flag from another device. This
+//                              pair self-heals on the next clean pass, so the
+//                              timestamped-clear machinery is deliberately
+//                              scoped to `revealed` only (the user-visible
+//                              ringed-dot invariant).
 //     history[id] / misses[id]: UNION events + dedupe + sort + cap 50
 //                              (consistency map / activity / streak / mistake
 //                               tagging aggregate BOTH devices — mergeEventLog)
@@ -47,17 +99,29 @@
 //     claim, gotcha, swapBench, convDrill, traceHop, notesDrill,
 //     mechConstellation, reverseWalk, notesLocate, match, whatif, mutate,
 //     phoneScreen, constraintShift, flash, walkthrough, glossaryQuiz,
-//     cramReview, commandUsage:
-//                              ADDITIVE (mergeAdditive) — SUM counters, MAX
-//                              timestamps/records, MIN best-times, OR booleans,
-//                              prefer-local active sessions
+//     cramReview, commandUsage, clarify, hotseat, timeCalibration:
+//                              ADDITIVE (mergeAdditive) — MAX counters (NOT
+//                              SUM: the merge must be idempotent, or every
+//                              cross-device round-trip re-adds the other
+//                              side's totals and counters inflate without any
+//                              drilling; MAX stably undercounts instead — the
+//                              exact-total fix would be a per-device G-counter,
+//                              recorded as a follow-up), MAX timestamps/records,
+//                              MIN best-times, OR booleans, prefer-local
+//                              active sessions
+//     cramTaskChecks[taskId]:  OR                  (4-Day Cram checkboxes — a
+//                              check on any device counts, like prep.completed)
 //     welcomed:                OR
 //     lastLessonId / lastTab / starterPath / hideMastered / sidebarTrack
 //     + all other settings/device scalars (adhdMode, fontScale, subscribedPathId,
 //       surface, tagFilter, …):
 //                              prefer LOCAL        (active device wins device-state)
+//     (The full explicit-vs-prefer-local key registry lives in
+//      EXPLICIT_MERGE_KEYS / PREFER_LOCAL_KEYS below and is parity-checked
+//      against saveProgress by tools/check-sync-coverage.js.)
 //
-//   prep (jsdrill.prep.v1):
+//   prep (jsdrill.prep.v1) — FROZEN legacy blob (prep.html was dissolved; no
+//   live page writes it). Kept so historical data still syncs; do not extend:
 //     completed[taskId]:       OR
 //     expanded[blockId]:       OR
 //     reviewed[itemId]:        greater lastReviewedAt wins (and max familiarity)
@@ -70,6 +134,17 @@
 //     timeOnStep[step]:        MAX                 (cumulative time)
 //     startedAt:               MIN                 (earliest start wins)
 //     currentStep:             prefer LOCAL
+//
+//   systemdesign (jsdrill.systemdesign.v1):
+//     boxes["topic/unit/qIdx"]: UNION of keys. When both sides hold a key, the
+//                              entry with the GREATER `last` wins box + due as
+//                              a unit (most-recent grade is the scheduling
+//                              truth — a miss that reset the box IS the truth,
+//                              exact analogue of reviews[id] / prep.reviewed),
+//                              then seen / good / again each take MAX of the
+//                              two sides (lifetime counters; MAX not SUM for
+//                              idempotence — see the additive rule above).
+//     lastTopic / lastChapter: prefer LOCAL        (device/session state)
 //
 //   __v on every blob: max
 //
@@ -90,6 +165,7 @@
   let supa = null;                    // Supabase client (null until init succeeds)
   let session = null;                 // current auth session (null when signed out)
   let lastSeenUpdatedAt = null;       // server timestamp of last pull/push
+  let lastPulledProgressV = 0;        // cloud progress.__v at last pull (downgrade guard)
   let pushTimer = null;
   let pollTimer = null;
   let authCallbacks = [];
@@ -179,6 +255,21 @@
     return doPull({ silent: false });
   };
 
+  // Authoritative write: replace the cloud row with the CURRENT local bundle
+  // and stamp resetAt so every other device adopts it wholesale (replace, not
+  // merge) on its next pull. Used by Reset-all and Restore-from-backup — the
+  // two flows where union-merge semantics would silently undo the user's
+  // intent. See the "Authoritative writes" header section.
+  Sync.resetCloud = async function () {
+    if (!session || !supa) return;
+    if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+    const now = Date.now();
+    if (root.DrillStorage && root.DrillStorage.saveSyncResetMarkers) {
+      root.DrillStorage.saveSyncResetMarkers({ resetAt: now, lastResetSeenAt: now });
+    }
+    await doPush({ force: true });
+  };
+
   // ============================================================================
   // INIT
   // ============================================================================
@@ -212,6 +303,20 @@
     // Pull on window focus + on a slow interval, so an edit on the laptop
     // shows up on the phone within ~30s even if the laptop never refreshes.
     root.addEventListener('focus', () => { if (session) doPull({ silent: true }); });
+
+    // P2 flush: the mobile-primary user's classic gesture — answer the last
+    // L1, swipe the PWA away — would otherwise lose the 500ms-debounced push.
+    // visibilitychange→hidden is the only reliable mobile signal; the push
+    // rides a plain fetch (allowed while hidden, best-effort).
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && pushTimer) {
+          clearTimeout(pushTimer);
+          pushTimer = null;
+          doPush().catch(() => {});
+        }
+      });
+    }
   };
 
   // ============================================================================
@@ -224,11 +329,51 @@
     });
   }
 
+  // Pure decision for what a fresh sign-in should do with the local blobs.
+  // Exposed via _testInternals so the cross-account guard is unit-testable.
+  //   'merge'           → safe to pull-merge-push (same owner, first-ever
+  //                       sign-in bootstrap, or nothing local to bleed).
+  //   'confirm-replace' → local data belongs to a DIFFERENT account; ask the
+  //                       user before touching anything, never auto-merge.
+  function decideSignInAction(owner, uid, localHasData) {
+    if (owner === uid) return 'merge';
+    if (!localHasData) return 'merge';   // nothing to bleed either way
+    if (owner == null) return 'merge';   // first-ever sign-in on this device
+    return 'confirm-replace';
+  }
+
   async function onSignedIn() {
     try {
+      const uid = session.user.id;
+      const St = root.DrillStorage;
+      const owner = St && St.loadSyncOwner ? St.loadSyncOwner() : null;
+      const local = loadLocalBundle();
+      const localHasData = !!(local.progress || local.prep || local.diagnostic || local.systemdesign);
+
+      if (decideSignInAction(owner, uid, localHasData) === 'confirm-replace') {
+        // Cross-account guard (P0-2): this device's blobs belong to another
+        // account. Merging would upload user A's history into user B's row.
+        const email = (session.user && session.user.email) || 'this account';
+        const ok = root.confirm(
+          'This device has local progress from a different account. Replace it with ' +
+          email + "'s cloud progress? (Cancel keeps local data and signs out.)"
+        );
+        if (!ok) {
+          console.info('[sync] sign-in cancelled: local data belongs to another account.');
+          await Sync.signOut();
+          return;
+        }
+        await doPull({ silent: true, replaceLocal: true });
+        if (St && St.saveSyncOwner) St.saveSyncOwner(uid);
+        // Reload so no page's in-memory state can clobber the replaced blobs.
+        root.location.reload();
+        return;
+      }
+
       // First pull-and-merge, then push the merged blob so cloud reflects
       // anything the just-signed-in device had locally that the cloud didn't.
-      const merged = await doPull({ silent: true, mergeAndPush: true });
+      await doPull({ silent: true, mergeAndPush: true });
+      if (St && St.saveSyncOwner) St.saveSyncOwner(uid);
       startPolling();
       console.info('[sync] signed in; merged + pushed.');
     } catch (e) {
@@ -262,9 +407,10 @@
 
   function loadLocalBundle() {
     return {
-      progress:   root.DrillStorage.loadAppProgress(),
-      prep:       root.DrillStorage.loadPrepState(),
-      diagnostic: root.DrillStorage.loadDiagnostic()
+      progress:     root.DrillStorage.loadAppProgress(),
+      prep:         root.DrillStorage.loadPrepState(),
+      diagnostic:   root.DrillStorage.loadDiagnostic(),
+      systemdesign: root.DrillStorage.loadSystemDesign()
     };
   }
 
@@ -272,33 +418,93 @@
   // directly in `data` (top-level __v + progress, bestTimes, etc.). Detect
   // that legacy shape and wrap it into the new bundle envelope.
   function normalizeCloudBundle(raw) {
-    if (!raw || typeof raw !== 'object') return { progress: null, prep: null, diagnostic: null };
+    if (!raw || typeof raw !== 'object') {
+      return { progress: null, prep: null, diagnostic: null, systemdesign: null };
+    }
     if (typeof raw.__v === 'number') {
       // Legacy shape — the whole row IS the main-app blob.
-      return { progress: raw, prep: null, diagnostic: null };
+      return { progress: raw, prep: null, diagnostic: null, systemdesign: null };
     }
     return {
-      progress:   raw.progress   || null,
-      prep:       raw.prep       || null,
-      diagnostic: raw.diagnostic || null
+      progress:     raw.progress     || null,
+      prep:         raw.prep         || null,
+      diagnostic:   raw.diagnostic   || null,
+      systemdesign: raw.systemdesign || null
     };
   }
 
-  async function doPush() {
+  // Write the cloud bundle OVER the local blobs — no merge. Used by the
+  // cross-account replace path and the resetAt channel. Cloud-null blobs are
+  // written as empty versioned shells so stale local data can't linger.
+  function replaceLocalWithCloud(cloud) {
+    const St = root.DrillStorage;
+    suppressNextPush = true;
+    try {
+      St.saveAppProgress(cloud.progress || { __v: 6 });
+      St.savePrepState(stripVersion(cloud.prep) || {});
+      St.saveDiagnostic(stripVersion(cloud.diagnostic) || {});
+      St.saveSystemDesign(stripVersion(cloud.systemdesign) || { boxes: {} });
+    } finally {
+      suppressNextPush = false;
+    }
+  }
+
+  async function doPush(opts) {
+    opts = opts || {};
+    const depth = opts.depth || 0;
     if (!session || !supa) return;
     const bundle = loadLocalBundle();
     // Nothing to push at all? Skip.
-    if (!bundle.progress && !bundle.prep && !bundle.diagnostic) return;
+    if (!bundle.progress && !bundle.prep && !bundle.diagnostic && !bundle.systemdesign) return;
+
+    // Schema-downgrade guard: a stale (service-worker-pinned) client must not
+    // replace a newer-schema row with its older shape.
+    if (!opts.force && bundle.progress && lastPulledProgressV &&
+        (bundle.progress.__v || 0) < lastPulledProgressV) {
+      console.warn('[sync] push skipped: local progress __v=' + bundle.progress.__v +
+        ' is older than cloud __v=' + lastPulledProgressV);
+      return;
+    }
+
+    // Carry the authoritative-reset marker forward on every push so a routine
+    // upsert can't strip it from the row (other devices key off it).
+    const payload = Object.assign({}, bundle);
+    const markers = (root.DrillStorage.loadSyncResetMarkers && root.DrillStorage.loadSyncResetMarkers()) || {};
+    if (markers.resetAt) payload.resetAt = markers.resetAt;
+
+    // CAS path: only replace the row we last saw. Zero rows affected means a
+    // concurrent device pushed since our pull → pull-merge-push instead.
+    if (!opts.force && lastSeenUpdatedAt) {
+      const { data, error } = await supa
+        .from(TABLE)
+        .update({ data: payload })
+        .eq('user_id', session.user.id)
+        .eq('updated_at', lastSeenUpdatedAt)
+        .select('updated_at');
+      if (error) throw error;
+      if (data && data.length) {
+        lastSeenUpdatedAt = data[0].updated_at;
+        return;
+      }
+      if (depth < 2) {
+        await doPull({ silent: true, mergeAndPush: true, pushDepth: depth + 1 });
+      } else {
+        console.warn('[sync] push conflict retries exhausted; next local write re-arms.');
+      }
+      return;
+    }
+
+    // Bootstrap (no known row) or forced authoritative write → plain upsert.
     const { data, error } = await supa
       .from(TABLE)
-      .upsert({ user_id: session.user.id, data: bundle }, { onConflict: 'user_id' })
+      .upsert({ user_id: session.user.id, data: payload }, { onConflict: 'user_id' })
       .select('updated_at')
       .single();
     if (error) throw error;
     if (data && data.updated_at) lastSeenUpdatedAt = data.updated_at;
   }
 
-  async function doPull({ silent, mergeAndPush } = {}) {
+  async function doPull({ silent, mergeAndPush, replaceLocal, pushDepth } = {}) {
     if (!session || !supa) return null;
     const { data, error } = await supa
       .from(TABLE)
@@ -310,23 +516,56 @@
       return null;
     }
 
-    // No row yet → first time signing in on any device. Push local up.
+    // No row yet → first time signing in on any device.
     if (!data) {
       lastSeenUpdatedAt = null;
-      if (session) await doPush();
+      if (replaceLocal) {
+        // Cross-account adopt with no cloud row: the new account has nothing —
+        // clearing local is the whole point (keep nothing of the old owner's).
+        replaceLocalWithCloud({ progress: null, prep: null, diagnostic: null, systemdesign: null });
+        return null;
+      }
+      if (session) await doPush({ depth: pushDepth || 0 });
       return null;
     }
 
-    if (!mergeAndPush && lastSeenUpdatedAt && data.updated_at === lastSeenUpdatedAt) {
+    if (!mergeAndPush && !replaceLocal && lastSeenUpdatedAt && data.updated_at === lastSeenUpdatedAt) {
       return null;
+    }
+
+    const cloud = normalizeCloudBundle(data.data);
+    if (cloud.progress && typeof cloud.progress.__v === 'number') {
+      lastPulledProgressV = Math.max(lastPulledProgressV, cloud.progress.__v);
+    }
+
+    // Authoritative-reset channel: if the cloud row carries a resetAt newer
+    // than anything this device has adopted, the row is the result of a Reset
+    // or Restore — adopt it wholesale. Merging would union the cleared data
+    // right back (the "reset never sticks" bug).
+    const St = root.DrillStorage;
+    const cloudResetAt = (data.data && typeof data.data === 'object' && typeof data.data.resetAt === 'number')
+      ? data.data.resetAt : 0;
+    const markers = (St.loadSyncResetMarkers && St.loadSyncResetMarkers()) || {};
+    const mustReplace = replaceLocal || (cloudResetAt && cloudResetAt > (markers.lastResetSeenAt || 0));
+
+    if (mustReplace) {
+      replaceLocalWithCloud(cloud);
+      if (St.saveSyncResetMarkers && cloudResetAt) {
+        // Adopt the marker: future pushes from this device keep carrying it,
+        // and this device never re-replaces on the same generation.
+        St.saveSyncResetMarkers({ resetAt: cloudResetAt, lastResetSeenAt: cloudResetAt });
+      }
+      lastSeenUpdatedAt = data.updated_at;
+      root.dispatchEvent(new CustomEvent('drill:sync-pulled', { detail: { merged: cloud, replaced: true } }));
+      return cloud;
     }
 
     const local = loadLocalBundle();
-    const cloud = normalizeCloudBundle(data.data);
     const merged = {
-      progress:   mergeProgress(local.progress, cloud.progress),
-      prep:       mergePrep(local.prep, cloud.prep),
-      diagnostic: mergeDiagnostic(local.diagnostic, cloud.diagnostic)
+      progress:     mergeProgress(local.progress, cloud.progress),
+      prep:         mergePrep(local.prep, cloud.prep),
+      diagnostic:   mergeDiagnostic(local.diagnostic, cloud.diagnostic),
+      systemdesign: mergeSystemDesign(local.systemdesign, cloud.systemdesign)
     };
 
     // Save each merged sub-blob locally. Event dispatch is synchronous, so
@@ -334,9 +573,10 @@
     // listener for exactly these writes and nothing else.
     suppressNextPush = true;
     try {
-      if (merged.progress)   root.DrillStorage.saveAppProgress(merged.progress);
-      if (merged.prep)       root.DrillStorage.savePrepState(stripVersion(merged.prep));
-      if (merged.diagnostic) root.DrillStorage.saveDiagnostic(stripVersion(merged.diagnostic));
+      if (merged.progress)     root.DrillStorage.saveAppProgress(merged.progress);
+      if (merged.prep)         root.DrillStorage.savePrepState(stripVersion(merged.prep));
+      if (merged.diagnostic)   root.DrillStorage.saveDiagnostic(stripVersion(merged.diagnostic));
+      if (merged.systemdesign) root.DrillStorage.saveSystemDesign(stripVersion(merged.systemdesign));
     } finally {
       suppressNextPush = false;
     }
@@ -344,7 +584,7 @@
 
     root.dispatchEvent(new CustomEvent('drill:sync-pulled', { detail: { merged } }));
 
-    if (mergeAndPush) await doPush();
+    if (mergeAndPush) await doPush({ depth: pushDepth || 0 });
     return merged;
   }
 
@@ -397,7 +637,15 @@
   //   number + key ~ /At$|lastRunAt/        → MAX   (timestamps: keep latest)
   //   number + key ~ /best|streak|familiar/ → MAX   (records: keep best)
   //   number + key === 'interval'           → MAX   (SR interval: never sum)
-  //   number (any other)                    → SUM   (attempts/correct/sessions…)
+  //   number (any other)                    → MAX   (attempts/correct/sessions…
+  //                                                  MAX not SUM: the merge must
+  //                                                  be IDEMPOTENT — SUM re-added
+  //                                                  the other side's totals on
+  //                                                  every cross-device round-trip
+  //                                                  and counters inflated without
+  //                                                  drilling. MAX undercounts
+  //                                                  stably; exact totals would
+  //                                                  need a per-device G-counter.)
   //   boolean                               → OR
   //   array                                 → union by identity
   //   object, key === 'session'             → prefer LOCAL (active session snapshot)
@@ -409,9 +657,7 @@
     if (b === undefined || b === null) return a;
     const ta = typeof a, tb = typeof b;
     if (ta === 'number' && tb === 'number') {
-      if (key === 'interval' || /At$/.test(key) || key === 'lastRunAt') return Math.max(a, b);
-      if (/best|streak|familiar/i.test(key)) return Math.max(a, b);
-      return a + b;
+      return Math.max(a, b);
     }
     if (ta === 'boolean' || tb === 'boolean') return !!(a || b);
     if (Array.isArray(a) || Array.isArray(b)) {
@@ -443,15 +689,40 @@
   }
 
   // Lifetime drill stats + per-lesson counter maps that accumulate across
-  // devices. Each is run through mergeAdditive so totals SUM (and the
-  // consistency/activity surfaces reflect both devices). Previously every one
-  // of these fell through mergeProgress and was DROPPED on each sync.
+  // devices. Each is run through mergeAdditive (MAX counters / MAX records /
+  // OR booleans — see above) so the consistency/activity surfaces reflect
+  // both devices. Previously every one of these fell through mergeProgress
+  // and was DROPPED on each sync.
   const ADDITIVE_STAT_KEYS = [
     'recognize', 'rapidFire', 'warmup', 'speedrun', 'gauntlet', 'bugHunt',
     'crystal', 'claim', 'gotcha', 'swapBench', 'convDrill', 'traceHop',
     'notesDrill', 'mechConstellation', 'reverseWalk', 'notesLocate', 'match',
     'whatif', 'mutate', 'phoneScreen', 'constraintShift', 'flash', 'walkthrough',
-    'glossaryQuiz', 'cramReview', 'commandUsage'
+    'glossaryQuiz', 'cramReview', 'commandUsage', 'clarify', 'hotseat',
+    'timeCalibration'
+  ];
+
+  // Fields handled by a NAMED merge block inside mergeProgress. Kept as data
+  // (not just code) so tools/check-sync-coverage.js can parity-check every
+  // saveProgress key against { EXPLICIT_MERGE_KEYS ∪ ADDITIVE_STAT_KEYS ∪
+  // PREFER_LOCAL_KEYS } — a new state field that lands in saveProgress without
+  // a conscious merge decision fails the guard instead of silently riding the
+  // carry-over base forever.
+  const EXPLICIT_MERGE_KEYS = [
+    '__v', 'progress', 'bestTimes', 'mockHistory', 'revealed', 'revealedAt',
+    'revealedClearedAt', 'partialL1', 'reviews', 'weakness', 'welcomed',
+    'history', 'misses', 'cramTaskChecks'
+  ];
+
+  // Device-state / settings scalars that DELIBERATELY ride the carry-over
+  // base ({ ...cloud, ...local } = prefer LOCAL). Listing a key here is the
+  // documented "this never converges across devices, by design" decision.
+  const PREFER_LOCAL_KEYS = [
+    'lastLessonId', 'lastTab', 'starterPath', 'starterPathTrack',
+    'offlinePack', 'syncHintShown', 'clarifyRitualOn', 'hotseatOn',
+    'calibrateOn', 'paceBarOn', 'hapticOn', 'adhdMode', 'fontScale',
+    'subscribedPathId', 'cramView', 'hideMastered', 'repairFilter',
+    'tagFilter', 'tagFilterOpen', 'sidebarTrack', 'surface', 'surfaceCtx'
   ];
 
   function mergeProgress(local, cloud) {
@@ -505,14 +776,30 @@
       merged.mockHistory[id] = all.slice(0, 5);
     }
 
-    // revealed[id][level]: OR of true
+    // revealed[id][level]: OR of set flags, EXCEPT a newer timestamped clear
+    // wins. Reveal Replay's clean-pass invariant deletes the flag and stamps
+    // revealedClearedAt[id][level]; reveals stamp revealedAt[id][level]. A
+    // legacy flag with no set-timestamp counts as set-at-0, so any recorded
+    // clear beats it; a re-reveal AFTER a clear (newer revealedAt) wins again.
+    merged.revealedAt        = mergeNestedMax(local.revealedAt, cloud.revealedAt);
+    merged.revealedClearedAt = mergeNestedMax(local.revealedClearedAt, cloud.revealedClearedAt);
     merged.revealed = {};
     for (const id of unionKeys(local.revealed, cloud.revealed)) {
       const a = (local.revealed && local.revealed[id]) || {};
       const b = (cloud.revealed && cloud.revealed[id]) || {};
       const m = {};
       for (const level of unionKeys(a, b)) {
-        if (a[level] || b[level]) m[level] = true;
+        if (!(a[level] || b[level])) continue;
+        const setAt = Math.max(
+          a[level] ? nestedTs(local.revealedAt, id, level) : -1,
+          b[level] ? nestedTs(cloud.revealedAt, id, level) : -1
+        );
+        const clearedAt = Math.max(
+          nestedTs(local.revealedClearedAt, id, level),
+          nestedTs(cloud.revealedClearedAt, id, level)
+        );
+        if (clearedAt > setAt) continue; // newest event is a clear → stays cleared
+        m[level] = true;
       }
       if (Object.keys(m).length) merged.revealed[id] = m;
     }
@@ -540,6 +827,17 @@
     for (const id of unionKeys(local.partialL1, cloud.partialL1)) {
       const v = (local.partialL1 && local.partialL1[id]) || (cloud.partialL1 && cloud.partialL1[id]);
       if (v) merged.partialL1[id] = true;
+    }
+
+    // cramTaskChecks[taskId]: OR — 4-Day Cram checkboxes are completions, not
+    // device state; a check made on the laptop must appear on the phone
+    // (same semantics as prep.completed).
+    merged.cramTaskChecks = {};
+    for (const id of unionKeys(local.cramTaskChecks, cloud.cramTaskChecks)) {
+      if ((local.cramTaskChecks && local.cramTaskChecks[id]) ||
+          (cloud.cramTaskChecks && cloud.cramTaskChecks[id])) {
+        merged.cramTaskChecks[id] = true;
+      }
     }
 
     // welcomed: OR
@@ -674,6 +972,62 @@
     return merged;
   }
 
+  function mergeSystemDesign(local, cloud) {
+    if (!local && !cloud) return null;
+    if (!local) return cloud;
+    if (!cloud) return local;
+
+    // Carry-over base (see mergeProgress) — unlisted fields prefer local
+    // instead of being dropped.
+    const merged = { ...cloud, ...local };
+    merged.__v = Math.max(local.__v || 0, cloud.__v || 0, 1);
+
+    // boxes["topic/unit/qIdx"]: UNION of keys; per shared key the entry with
+    // the GREATER `last` wins { box, due } as a unit (the most recent grade is
+    // the scheduling truth — even a miss that reset the box), then the
+    // lifetime counters seen/good/again each take MAX (idempotent, not SUM).
+    merged.boxes = {};
+    for (const key of unionKeys(local.boxes, cloud.boxes)) {
+      const l = local.boxes && local.boxes[key];
+      const c = cloud.boxes && cloud.boxes[key];
+      if (!l) { merged.boxes[key] = c; continue; }
+      if (!c) { merged.boxes[key] = l; continue; }
+      const winner = (l.last || 0) >= (c.last || 0) ? l : c;
+      merged.boxes[key] = Object.assign({}, winner, {
+        seen:  Math.max(l.seen  || 0, c.seen  || 0),
+        good:  Math.max(l.good  || 0, c.good  || 0),
+        again: Math.max(l.again || 0, c.again || 0)
+      });
+    }
+
+    // lastTopic / lastChapter: device/session state → prefer LOCAL (fall back
+    // to cloud when local never visited a topic, i.e. holds null).
+    for (const key of ['lastTopic', 'lastChapter']) {
+      merged[key] = (local[key] != null) ? local[key]
+                  : (cloud[key] != null) ? cloud[key]
+                  : (local[key] !== undefined ? local[key] : cloud[key]);
+    }
+
+    return merged;
+  }
+
+  // Per-key MAX over a two-level timestamp map { id: { level: epochMs } }.
+  function mergeNestedMax(a, b) {
+    const out = {};
+    for (const id of unionKeys(a, b)) {
+      const ai = (a && a[id]) || {};
+      const bi = (b && b[id]) || {};
+      const m = {};
+      for (const k of unionKeys(ai, bi)) m[k] = Math.max(ai[k] || 0, bi[k] || 0);
+      if (Object.keys(m).length) out[id] = m;
+    }
+    return out;
+  }
+
+  function nestedTs(map, id, key) {
+    return (map && map[id] && typeof map[id][key] === 'number') ? map[id][key] : 0;
+  }
+
   function unionKeys(a, b) {
     const out = new Set();
     if (a) for (const k of Object.keys(a)) out.add(k);
@@ -705,6 +1059,16 @@
       #sync-chip.is-on .sync-dot { background: #22c55e; }
       #sync-chip.is-syncing .sync-dot { background: #facc15; animation: syncPulse 1s infinite; }
       @keyframes syncPulse { 50% { opacity: .35; } }
+      /* nav-audit P2-7: drill sessions own the top-right corner (Exit button
+         + progress bar) — measured @390px the chip intersected Rapid-Fire's
+         Exit and overlaid its timer track. Hide the ambient chip while any
+         session shell is rendered; it returns the moment the session ends. */
+      body:has(#lesson-shell .recognize-shell) #sync-chip,
+      body:has(#lesson-shell .rapid-shell) #sync-chip,
+      body:has(#lesson-shell .bug-shell) #sync-chip,
+      body:has(#lesson-shell .warmup-shell) #sync-chip,
+      body:has(#lesson-shell .speedrun-shell) #sync-chip,
+      body:has(#lesson-shell .gauntlet-shell) #sync-chip { display: none; }
 
       #sync-modal {
         position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.6);
@@ -992,7 +1356,9 @@
   // Internal pure functions exposed for unit testing only. Not part of the
   // public API; treat as private. See tools/cdp/sync-merge.js.
   Sync._testInternals = {
-    mergeProgress, mergePrep, mergeDiagnostic, normalizeCloudBundle
+    mergeProgress, mergePrep, mergeDiagnostic, mergeSystemDesign,
+    normalizeCloudBundle, decideSignInAction,
+    EXPLICIT_MERGE_KEYS, PREFER_LOCAL_KEYS, ADDITIVE_STAT_KEYS
   };
 
   root.DrillSync = Sync;

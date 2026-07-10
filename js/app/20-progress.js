@@ -197,7 +197,24 @@ function _progAttentionHtml() {
       <span class="ds-row__chev">›</span>
     </button>` : '';
 
-  const body = riskRows + resRow + revealRow;
+  // Bridge — cross-track transfer gaps (nav-audit P2-3). With the sidebar
+  // retired (D10) the old count-pill was the mode's last glanceable channel;
+  // this row gives the transfer-opportunity signal its visible home
+  // (INVENTORY verdict MERGE→Progress). Same synthetic-click contract as
+  // Resurrect / Reveal-Replay. Empty until MECHANIC_INDEX lazy-builds — the
+  // same gating the old pill had.
+  const bridges = typeof _bridgeCandidates === 'function' ? _bridgeCandidates() : [];
+  const bridgeRow = bridges.length ? `
+    <button type="button" class="ds-row prog-rowbtn" data-prog-action="bridge">
+      <span class="ds-row__badge">${dsIcon('layers', 16)}</span>
+      <div class="ds-row__main">
+        <b>Bridge ${bridges.length} transfer gap${bridges.length === 1 ? '' : 's'}</b>
+        <span>You know this mechanic in another track — ride the transfer</span>
+      </div>
+      <span class="ds-row__chev">›</span>
+    </button>` : '';
+
+  const body = riskRows + resRow + revealRow + bridgeRow;
   const card = body
     ? `<div class="ds-card ds-card--flat" style="padding: var(--ds-s1) var(--ds-s4);">${body}</div>`
     : `<div class="ds-card ds-card--flat" style="text-align: center; padding: var(--ds-s5);">
@@ -489,7 +506,7 @@ function _wireProgress(shell, buckets) {
   }));
   shell.querySelectorAll('[data-prog-action]').forEach(b => b.addEventListener('click', () => {
     // Same one-tap direct actions the sidebar pills fire (D05 contract).
-    const target = { resurrect: 'resurrect-btn', 'reveal-replay': 'reveal-replay-btn' }[b.getAttribute('data-prog-action')];
+    const target = { resurrect: 'resurrect-btn', 'reveal-replay': 'reveal-replay-btn', bridge: 'bridge-btn' }[b.getAttribute('data-prog-action')];
     const btn = target && document.getElementById(target);
     if (btn) btn.click();
   }));

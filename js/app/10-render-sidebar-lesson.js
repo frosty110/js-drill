@@ -444,8 +444,46 @@ function _parseHash() {
 // slug is that id minus the '-btn' suffix (mock-btn → mock). Fire-and-forget:
 // opening the surface is enough; the URL normalizes back to the lesson on the
 // next selectLesson/_updateHash. Returns true if a surface was opened.
+//
+// nav-audit P2-5: toggle-like slugs must NOT synth-click their button from a
+// URL — a bookmarked / history-recalled `#/m/hide-mastered` silently flipped
+// the setting on every visit, `#/m/install` threw (prompt() needs a user
+// gesture), and `#/m/reset` presented a data-destruction confirm as the first
+// paint. Those routes now open the surface that OWNS the toggle instead:
+// Browse (with its filter panel open) for view filters, the settings dropdown
+// (P6's Settings surface later) for everything else. The user lands where the
+// control lives and flips it deliberately.
+const MODE_ROUTE_SURFACE = {
+  'hide-mastered': 'browse',
+  'path': 'browse',
+  'repair-filter': 'browse',
+  'clarify-ritual': 'settings',
+  'hotseat': 'settings',
+  'calibrate': 'settings',
+  'pace-bar': 'settings',
+  'haptic': 'settings',
+  'adhd-mode': 'settings',
+  'font-size': 'settings',
+  'install': 'settings',
+  'reset': 'settings'
+};
+
 function _dispatchModeRoute(mode) {
   if (!mode) return false;
+  const surface = MODE_ROUTE_SURFACE[mode];
+  if (surface === 'browse') {
+    // Open Browse with the Filters disclosure expanded so the toggle the URL
+    // named is on screen (tagFilterOpen is the panel's persisted state).
+    state.tagFilterOpen = true;
+    const browseBtn = document.getElementById('browse-btn');
+    if (browseBtn) { browseBtn.click(); return true; }
+    return false;
+  }
+  if (surface === 'settings') {
+    const settingsBtn = document.getElementById('topbar-settings');
+    if (settingsBtn) { settingsBtn.click(); return true; }
+    return false;
+  }
   const btn = document.getElementById(mode + '-btn');
   if (btn) { btn.click(); return true; }
   return false;

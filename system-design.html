@@ -737,6 +737,19 @@ document.getElementById('home-btn').addEventListener('click', renderTopics);
 document.getElementById('stats-btn').addEventListener('click', openStats);
 document.getElementById('stats-modal').addEventListener('click', e => { if (e.target.id === 'stats-modal') closeStats(); });
 
+// Sync re-hydrate: js/sync.js pulls can rewrite jsdrill.systemdesign.v1 in the
+// background (merge or replace). Without this, the page's boot-time in-memory
+// `progress` clobbers the pulled data on its next persist(). Reload the blob
+// and, when the user is between drills, repaint the current screen so due
+// counts/mastery reflect the pull; an active drill session keeps running
+// (grade() re-reads progress.boxes per grade, so nothing is lost).
+window.addEventListener('drill:sync-pulled', () => {
+  progress = load();
+  if (!session) {
+    (curTopic ? renderTopicHome(curTopic) : renderTopics()).catch(() => {});
+  }
+});
+
 renderTopics().catch(err => {
   document.getElementById('app').innerHTML =
     `<div class="empty">Couldn't load content.<br><small>${esc(err.message)}</small><br><br>

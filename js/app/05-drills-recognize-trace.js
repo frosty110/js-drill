@@ -25,18 +25,15 @@ function _recognizeBuildDeck() {
 }
 
 async function startRecognizeSession() {
-  // Backfill: load content for the first N patterns lessons so the deck builder
-  // has prompts to work with (most are stub-loaded). Limit to avoid mass fetch.
-  const patternsLessons = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full').slice(0, 30);
-  for (const l of patternsLessons) {
-    if (!CONTENT[l.id]) {
-      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
-      if (Object.keys(CONTENT).length >= 12) break;  // enough variety
-    }
-  }
+  // Predicate-targeted preload (nav-audit P1-3): load until enough patterns
+  // lessons carry an L3 prompt (the deck's real requirement) — the old raw
+  // CONTENT-count heuristic could stop before enough prompts existed and
+  // dead-end a fresh session into a native alert().
+  const patternsLessons = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full');
+  await _preloadUntil(patternsLessons, c => !!(c && c.L3 && c.L3.prompt), { want: 8, cap: 30 });
   const deck = _recognizeBuildDeck();
   if (!deck || deck.length < 3) {
-    alert('Recognize needs more loaded patterns lessons. Click around a few patterns first, then try again.');
+    _drillEmptyState('Recognize', "Couldn't build a deck — not enough patterns lessons loaded yet.", { retry: startRecognizeSession });
     return;
   }
   let idx = 0, correct = 0, startedAt = Date.now(), times = [];
@@ -170,7 +167,7 @@ async function startBigOSession() {
   }
   const deck = _bigOBuildDeck();
   if (!deck || deck.length < 5) {
-    alert('Big-O drill needs more loaded lessons. Click around a few patterns lessons first, then try again.');
+    _drillEmptyState('Big-O', "Couldn't build a deck — not enough lesson content loaded yet.", { retry: startBigOSession });
     return;
   }
   // Reuse Rapid-Fire's session shell directly — same deck shape, same
@@ -286,7 +283,7 @@ function _cruxBuildAiPrompt(card, userAnswer) {
 async function startCruxSession() {
   const pool = await _cruxBuildPool();
   if (!pool || pool.length < 4) {
-    alert('Crux needs more lessons with an authored key-trick. Click around a few Patterns problems first, then try again.');
+    _drillEmptyState('Crux', "Couldn't build a deck — not enough lessons with an authored key-trick loaded yet.", { retry: startCruxSession });
     return;
   }
   const shell = document.getElementById('lesson-shell');
@@ -573,7 +570,7 @@ async function _convDrillBuildDeck() {
 async function startConvDrillSession() {
   const deck = await _convDrillBuildDeck();
   if (!deck || deck.length < 4) {
-    alert('Conversation Drill needs more loaded lessons. Click around a few Patterns lessons first, then try again.');
+    _drillEmptyState('Conversation Drill', "Couldn't build a deck — not enough lessons with conversations loaded yet.", { retry: startConvDrillSession });
     return;
   }
   state.convDrill.sessions++;
@@ -777,7 +774,7 @@ function _traceHopFormatState(stateObj) {
 async function startTraceHopSession() {
   const deck = await _traceHopBuildDeck();
   if (!deck || deck.length < 4) {
-    alert('Trace-Hop needs more lessons with walkthroughs. Click around a few Patterns lessons first, then try again.');
+    _drillEmptyState('Trace-Hop', "Couldn't build a deck — not enough lessons with walkthroughs loaded yet.", { retry: startTraceHopSession });
     return;
   }
   state.traceHop.sessions++;
@@ -1046,7 +1043,7 @@ async function _notesDrillBuildDeck() {
 async function startNotesDrillSession() {
   const deck = await _notesDrillBuildDeck();
   if (!deck || deck.length < 4) {
-    alert('Notes Drill needs more loaded lessons. Click around a few first, then try again.');
+    _drillEmptyState('Notes Drill', "Couldn't build a deck — not enough lesson content loaded yet.", { retry: startNotesDrillSession });
     return;
   }
   state.notesDrill.sessions++;

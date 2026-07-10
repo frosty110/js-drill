@@ -64,6 +64,11 @@
     if (it.action === 'pick-smart') {
       return `<button class="ds-row" data-action="pick-smart" style="width:100%; text-align:left; background:none; border:0; cursor:pointer; min-height: var(--ds-tap);">${badge}${main}${chev}</button>`;
     }
+    if (it.action === 'href') {
+      // Plain link row (nav-audit P1-2) — a real <a> so modifier-click /
+      // "Open in New Tab" work natively; onRowTap just closes the sheet.
+      return `<a class="ds-row" data-action="href" href="${escapeHtml(it.href)}" style="width:100%; text-align:left; text-decoration:none; color:inherit; cursor:pointer; min-height: var(--ds-tap);">${badge}${main}${chev}</a>`;
+    }
     return `<button class="ds-row" data-btn-id="${escapeHtml(it.id)}" style="width:100%; text-align:left; background:none; border:0; cursor:pointer; min-height: var(--ds-tap);">${badge}${main}${chev}</button>`;
   }
 
@@ -91,6 +96,11 @@
     const row = e.target.closest('[data-action], [data-btn-id]');
     if (!row) return;
     e.stopPropagation();
+    if (row.dataset.action === 'href') {
+      // Real page link — no preventDefault, the anchor navigates natively.
+      closeSheet();
+      return;
+    }
     let target = null;
     if (row.dataset.action === 'shuffle') {
       const ids = (row.dataset.shuffleIds || '').split(',').filter(Boolean);

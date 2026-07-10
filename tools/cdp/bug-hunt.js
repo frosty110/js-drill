@@ -7,15 +7,35 @@
 // correct/wrong with line-num feedback; lifetime stats accumulate in
 // state.bugHunt. First §9B (Code Evaluation Skills) surface.
 
+const http = require('http');
 const { ensureServer, ensureChrome, connect } = require('./lib');
 
 const URL = process.argv[2] || 'http://localhost:8765/';
 const OUT = process.argv[3] || '/tmp/jsdrill-bug-hunt';
 
+// Close any leftover tabs pointing at the app origin — the freeze-regression
+// phase abandons a tab if the watchdog trips (same recovery pattern as
+// tools/cdp/audit-nav-deeplink.js).
+function closeTabsMatching(substr) {
+  return new Promise(res => {
+    http.get('http://localhost:9222/json', r => {
+      let b = ''; r.on('data', d => b += d);
+      r.on('end', () => {
+        try {
+          const tabs = JSON.parse(b).filter(t => t.type === 'page' && (t.url || '').includes(substr));
+          let n = tabs.length;
+          if (!n) return res();
+          for (const t of tabs) http.get(`http://localhost:9222/json/close/${t.id}`, () => { if (--n === 0) res(); }).on('error', () => { if (--n === 0) res(); });
+        } catch (_) { res(); }
+      });
+    }).on('error', () => res());
+  });
+}
+
 (async () => {
   await ensureServer({ port: 8765 });
   await ensureChrome();
-  const s = await connect({ url: URL, mobile: true, outDir: OUT });
+  let s = await connect({ url: URL, mobile: true, outDir: OUT });
 
   await s.evalAwait(`localStorage.setItem('jsdrill.progress.v1', JSON.stringify({
     __v: 6, welcomed: true,
@@ -96,6 +116,48 @@ const OUT = process.argv[3] || '/tmp/jsdrill-bug-hunt';
     sessions: state.bugHunt?.sessions || 0
   })`);
   console.log(stats.attempts >= 1 && stats.sessions >= 1 ? `PASS: state.bugHunt accumulated (${stats.attempts} attempts, ${stats.sessions} sessions)` : `FAIL: bugHunt stats not saved (attempts=${stats.attempts}, sessions=${stats.sessions})`);
+
+  // ── Phase 6 (nav-audit P1-1 regression): cold-boot #/m/bug-hunt 10× and
+  //    assert the renderer never hard-freezes. Pre-fix this froze 2/2 (a
+  //    boundary-flip mutation of a two-pointer/binary-search canonical made
+  //    runCode's synchronous `new Function` spin forever). Post-fix, mutants
+  //    run via runCodeBudgeted (loop-iteration guard), so every boot must
+  //    resolve to a Bug-Hunt card OR the in-shell empty state while the page
+  //    stays responsive to a trivial eval. Watchdog + fresh-tab recovery
+  //    mirror tools/cdp/audit-nav-deeplink.js.
+  const BOOTS = 10;
+  let freezes = 0, resolvedBoots = 0;
+  for (let i = 0; i < BOOTS; i++) {
+    const runOne = (async () => {
+      await s.eval(`location.href = location.pathname + '#/m/bug-hunt'`);
+      await s.eval(`setTimeout(() => location.reload(), 30); true`);
+      await s.sleep(2000);
+      await s.waitFor(`typeof CURRICULUM !== 'undefined' && CURRICULUM.length > 0`, { timeoutMs: 10000 });
+      // Deck build runs async after boot dispatch — wait for a card or the
+      // empty state (both render inside .bug-shell).
+      await s.waitFor(`!!document.querySelector('.bug-line, [data-action="drill-empty-back"], .bug-shell .bug-summary-actions')`, { timeoutMs: 20000 });
+      return s.eval(`1 + 1`); // responsiveness proof — times out if the main thread is pegged
+    })();
+    try {
+      const two = await Promise.race([
+        runOne,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('WATCHDOG: page unresponsive')), 26000)),
+      ]);
+      if (two === 2) resolvedBoots++;
+    } catch (e) {
+      freezes++;
+      console.log(`  boot ${i + 1}/${BOOTS}: FROZE (${String(e.message).slice(0, 60)})`);
+      try { await s.close(); } catch (_) {}
+      await closeTabsMatching('8765');
+      s = await connect({ url: URL, mobile: true, outDir: OUT });
+    }
+    try { await s.eval(`history.replaceState(null,'',location.pathname)`); } catch (_) {}
+    process.stdout.write(`${i + 1} `);
+  }
+  console.log();
+  console.log(freezes === 0 && resolvedBoots === BOOTS
+    ? `PASS: ${resolvedBoots}/${BOOTS} cold #/m/bug-hunt boots resolved with the page responsive (0 freezes)`
+    : `FAIL: freeze regression — ${freezes} frozen boots, ${resolvedBoots}/${BOOTS} resolved`);
 
   await s.close();
 })().catch(err => { console.error(err); process.exit(1); });

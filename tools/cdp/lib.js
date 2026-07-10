@@ -129,6 +129,7 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
   let id = 1;
   const pending = new Map();
   const consoleMsgs = [];
+  const dialogs = [];   // native alert/confirm/prompt — auto-dismissed so probes never hang
   const networkErrors = [];
   const requestUrls = new Map();
   const assertions = [];
@@ -153,6 +154,12 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
       consoleMsgs.push({ type: m.params.type, text: txt });
     } else if (m.method === 'Runtime.exceptionThrown') {
       consoleMsgs.push({ type: 'exception', text: m.params.exceptionDetails.text + ' ' + (m.params.exceptionDetails.exception?.description || '') });
+    } else if (m.method === 'Page.javascriptDialogOpening') {
+      // A native alert()/confirm() BLOCKS the page (and every pending
+      // Runtime.evaluate) until dismissed — a probe without this handler
+      // hangs forever the first time the app throws an alert. Record + cancel.
+      dialogs.push({ type: m.params.type, message: m.params.message });
+      rawSend('Page.handleJavaScriptDialog', { accept: false }).catch(() => {});
     } else if (m.method === 'Network.requestWillBeSent') {
       requestUrls.set(m.params.requestId, m.params.request.url);
     } else if (m.method === 'Network.loadingFailed') {
@@ -252,7 +259,7 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
 
   let snapCounter = 0;
   const session = {
-    consoleMsgs, networkErrors, assertions,
+    consoleMsgs, networkErrors, assertions, dialogs,
 
     async eval(expression, { awaitPromise = false, returnByValue = true } = {}) {
       const r = await rawSend('Runtime.evaluate', { expression, returnByValue, awaitPromise });

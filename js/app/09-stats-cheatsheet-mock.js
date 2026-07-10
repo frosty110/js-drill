@@ -803,6 +803,11 @@ function markPassed(lessonId, level) {
     if (state.revealed[lessonId] && Object.keys(state.revealed[lessonId]).length === 0) {
       delete state.revealed[lessonId];
     }
+    // Timestamp the CLEAR so sync doesn't OR-resurrect the ring from another
+    // device's stale flag — the newest set/clear event wins in the merge.
+    state.revealedClearedAt = state.revealedClearedAt || {};
+    state.revealedClearedAt[lessonId] = state.revealedClearedAt[lessonId] || {};
+    state.revealedClearedAt[lessonId][level] = Date.now();
     clearedRevealFlag = true;
   }
   state.progress[lessonId][level] = 'passed';

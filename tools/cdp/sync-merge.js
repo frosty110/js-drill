@@ -43,17 +43,24 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
      return { hasProgress: !!n.progress, vMatch: n.progress.__v === 6, prepNull: n.prep === null };`,
     { hasProgress: true, vMatch: true, prepNull: true });
 
-  await check('normalize: new bundle shape passes through',
+  await check('normalize: new bundle shape passes through (incl. systemdesign)',
     `const n = window.DrillSync._testInternals.normalizeCloudBundle({
-       progress: {__v: 6}, prep: {__v: 1, completed: {a: true}}, diagnostic: {__v: 1}
+       progress: {__v: 6}, prep: {__v: 1, completed: {a: true}}, diagnostic: {__v: 1},
+       systemdesign: {__v: 1, boxes: {'ddia/ch01/0': {box: 2}}}
      });
-     return { hasAll: !!n.progress && !!n.prep && !!n.diagnostic, prepCompleted: n.prep.completed.a };`,
-    { hasAll: true, prepCompleted: true });
+     return { hasAll: !!n.progress && !!n.prep && !!n.diagnostic && !!n.systemdesign,
+              prepCompleted: n.prep.completed.a, sdBox: n.systemdesign.boxes['ddia/ch01/0'].box };`,
+    { hasAll: true, prepCompleted: true, sdBox: 2 });
 
-  await check('normalize: null input returns triple-null bundle',
+  await check('normalize: legacy __v-shape yields systemdesign null',
+    `const n = window.DrillSync._testInternals.normalizeCloudBundle({__v: 6, progress: {}});
+     return n.systemdesign;`,
+    null);
+
+  await check('normalize: null input returns quad-null bundle',
     `const n = window.DrillSync._testInternals.normalizeCloudBundle(null);
-     return { p: n.progress, pr: n.prep, d: n.diagnostic };`,
-    { p: null, pr: null, d: null });
+     return { p: n.progress, pr: n.prep, d: n.diagnostic, s: n.systemdesign };`,
+    { p: null, pr: null, d: null, s: null });
 
   // ============================================================================
   // mergeProgress: spot-check the levels that mattered most in design
@@ -209,49 +216,126 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
     2);
 
   // ============================================================================
-  // Additive lifetime drill stats: SUM counters, MAX timestamps/records.
+  // Additive lifetime drill stats: MAX counters (idempotent — SUM inflated on
+  // every cross-device round-trip, audit P1-1), MAX timestamps/records.
   // ============================================================================
-  await check('additive: recognize SUM attempts+correct across devices',
+  await check('additive: recognize MAX attempts+correct (not SUM)',
     `const m = window.DrillSync._testInternals.mergeProgress(
        { __v: 6, recognize: { attempts: 10, correct: 7 } },
        { __v: 6, recognize: { attempts: 4, correct: 3 } });
      return m.recognize;`,
-    { attempts: 14, correct: 10 });
+    { attempts: 10, correct: 7 });
 
-  await check('additive: lastRunAt MAX, bestStreak MAX, counters SUM',
+  await check('additive: merge is IDEMPOTENT (re-merging cloud is a no-op)',
+    `const T = window.DrillSync._testInternals;
+     const a = { __v: 6, recognize: { attempts: 10, correct: 7, lastRunAt: 100 } };
+     const b = { __v: 6, recognize: { attempts: 4, correct: 3, lastRunAt: 50 } };
+     const once = T.mergeProgress(a, b);
+     const twice = T.mergeProgress(once, b);   // device pulls the same cloud again
+     const thrice = T.mergeProgress(b, twice); // and the other direction
+     return { stable: JSON.stringify(once.recognize) === JSON.stringify(twice.recognize)
+                   && JSON.stringify(once.recognize) === JSON.stringify(thrice.recognize),
+              val: once.recognize };`,
+    { stable: true, val: { attempts: 10, correct: 7, lastRunAt: 100 } });
+
+  await check('additive: lastRunAt MAX, bestStreak MAX, counters MAX',
     `const m = window.DrillSync._testInternals.mergeProgress(
        { __v: 6, rapidFire: { attempts: 5, correct: 2, bestStreak: 8, lastRunAt: 100 } },
        { __v: 6, rapidFire: { attempts: 3, correct: 3, bestStreak: 12, lastRunAt: 50 } });
      return m.rapidFire;`,
-    { attempts: 8, correct: 5, bestStreak: 12, lastRunAt: 100 });
+    { attempts: 5, correct: 3, bestStreak: 12, lastRunAt: 100 });
 
   await check('additive: speedrun.bests per-section MIN (fastest time)',
     `const m = window.DrillSync._testInternals.mergeProgress(
        { __v: 6, speedrun: { sessions: 1, bests: { arrays: 9000 } } },
        { __v: 6, speedrun: { sessions: 2, bests: { arrays: 7000, trees: 5000 } } });
      return m.speedrun;`,
-    { sessions: 3, bests: { arrays: 7000, trees: 5000 } });
+    { sessions: 2, bests: { arrays: 7000, trees: 5000 } });
 
   await check('additive: glossaryQuiz.session prefers local (active session)',
     `const m = window.DrillSync._testInternals.mergeProgress(
        { __v: 6, glossaryQuiz: { attempts: 2, correct: 1, session: { index: 4 } } },
        { __v: 6, glossaryQuiz: { attempts: 1, correct: 1, session: { index: 9 } } });
      return { a: m.glossaryQuiz.attempts, idx: m.glossaryQuiz.session.index };`,
-    { a: 3, idx: 4 });
+    { a: 2, idx: 4 });
 
-  await check('additive: commandUsage SUM per command',
+  await check('additive: commandUsage MAX per command',
     `const m = window.DrillSync._testInternals.mergeProgress(
        { __v: 6, commandUsage: { open_stats: 3, open_mock: 1 } },
        { __v: 6, commandUsage: { open_stats: 2, open_recognize: 5 } });
      return m.commandUsage;`,
-    { open_stats: 5, open_mock: 1, open_recognize: 5 });
+    { open_stats: 3, open_mock: 1, open_recognize: 5 });
 
-  await check('additive: walkthrough per-lesson counters SUM, scrubbed OR',
+  await check('additive: walkthrough per-lesson counters MAX, scrubbed OR',
     `const m = window.DrillSync._testInternals.mergeProgress(
        { __v: 6, walkthrough: { x: { quizAttempts: 2, quizCorrect: 1, scrubbed: false, lastRunAt: 10 } } },
        { __v: 6, walkthrough: { x: { quizAttempts: 1, quizCorrect: 1, scrubbed: true, lastRunAt: 99 } } });
      return m.walkthrough.x;`,
-    { quizAttempts: 3, quizCorrect: 2, scrubbed: true, lastRunAt: 99 });
+    { quizAttempts: 2, quizCorrect: 1, scrubbed: true, lastRunAt: 99 });
+
+  // ============================================================================
+  // P1-2: previously-unregistered fields now merge (clarify / hotseat /
+  // timeCalibration → additive; cramTaskChecks → OR).
+  // ============================================================================
+  await check('clarify: counters MAX, lastRunAt MAX (was prefer-local clobber)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, clarify: { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 } },
+       { __v: 6, clarify: { attempts: 8, correct: 6, completed: 5, sessions: 3, lastRunAt: 500 } });
+     return m.clarify;`,
+    { attempts: 8, correct: 6, completed: 5, sessions: 3, lastRunAt: 500 });
+
+  await check('hotseat: counters MAX across devices',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, hotseat: { attempts: 4, correct: 2, sessions: 1, lastRunAt: 90 } },
+       { __v: 6, hotseat: { attempts: 2, correct: 2, sessions: 2, lastRunAt: 40 } });
+     return m.hotseat;`,
+    { attempts: 4, correct: 2, sessions: 2, lastRunAt: 90 });
+
+  await check('timeCalibration: byMechanic recurses per-mechanic, meta MAX',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, timeCalibration: { byMechanic: { reduce: { estimates: 3, passes: 2 } }, meta: { estimates: 3, skips: 1, passes: 2 } } },
+       { __v: 6, timeCalibration: { byMechanic: { reduce: { estimates: 1, passes: 4 }, heap: { estimates: 2 } }, meta: { estimates: 4, skips: 0, passes: 4 } } });
+     return m.timeCalibration;`,
+    { byMechanic: { reduce: { estimates: 3, passes: 4 }, heap: { estimates: 2 } }, meta: { estimates: 4, skips: 1, passes: 4 } });
+
+  await check('cramTaskChecks: OR across devices (laptop check shows on phone)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, cramTaskChecks: { t1: true } },
+       { __v: 6, cramTaskChecks: { t2: true } });
+     return m.cramTaskChecks;`,
+    { t1: true, t2: true });
+
+  // ============================================================================
+  // P1-3: revealed — timestamped clear beats a stale flag; a newer re-reveal
+  // beats a stale clear; legacy untimestamped flags still OR.
+  // ============================================================================
+  await check('revealed: newer CLEAR survives merge with stale flag (clean-pass invariant)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, revealed: {}, revealedAt: { x: { L3: 100 } }, revealedClearedAt: { x: { L3: 200 } } },
+       { __v: 6, revealed: { x: { L3: true } }, revealedAt: { x: { L3: 100 } } });
+     return { flag: !!(m.revealed.x && m.revealed.x.L3), clearedAt: m.revealedClearedAt.x.L3 };`,
+    { flag: false, clearedAt: 200 });
+
+  await check('revealed: newer RE-REVEAL beats a stale clear',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, revealed: { x: { L3: true } }, revealedAt: { x: { L3: 300 } }, revealedClearedAt: { x: { L3: 200 } } },
+       { __v: 6, revealed: {}, revealedClearedAt: { x: { L3: 200 } } });
+     return m.revealed.x;`,
+    { L3: true });
+
+  await check('revealed: legacy untimestamped flags still OR (no timestamps anywhere)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, revealed: { a: { L2: true } } },
+       { __v: 6, revealed: { a: { L3: true }, b: { L2: true } } });
+     return m.revealed;`,
+    { a: { L2: true, L3: true }, b: { L2: true } });
+
+  await check('revealed: clear beats a LEGACY untimestamped flag (set-at-0)',
+    `const m = window.DrillSync._testInternals.mergeProgress(
+       { __v: 6, revealed: {}, revealedClearedAt: { x: { L2: 50 } } },
+       { __v: 6, revealed: { x: { L2: true } } });
+     return m.revealed.x === undefined;`,
+    true);
 
   // ============================================================================
   // Carry-over base: settings/device scalars NOT explicitly policied survive.
@@ -269,6 +353,77 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
        { __v: 6, fontScale: 1.2 });
      return { a: m.adhdMode, f: m.fontScale };`,
     { a: true, f: 1.2 });
+
+  // ============================================================================
+  // P0-1: mergeSystemDesign — the fourth blob (jsdrill.systemdesign.v1).
+  // ============================================================================
+  await check('sysdesign: boxes UNION across different keys (phone+laptop)',
+    `const m = window.DrillSync._testInternals.mergeSystemDesign(
+       { __v: 1, boxes: { 'ddia/ch01/0': { box: 1, seen: 1, good: 1, again: 0, due: 10, last: 5 } } },
+       { __v: 1, boxes: { 'ddia/ch02/3': { box: 3, seen: 4, good: 3, again: 1, due: 90, last: 80 } } });
+     return { a: m.boxes['ddia/ch01/0'].box, b: m.boxes['ddia/ch02/3'].box };`,
+    { a: 1, b: 3 });
+
+  await check('sysdesign: same key — greater last wins box/due as a unit (miss-reset is the truth)',
+    `const m = window.DrillSync._testInternals.mergeSystemDesign(
+       { __v: 1, boxes: { k: { box: 2, seen: 1, good: 0, again: 1, due: 900, last: 200 } } },
+       { __v: 1, boxes: { k: { box: 4, seen: 1, good: 1, again: 0, due: 500, last: 100 } } });
+     return { box: m.boxes.k.box, due: m.boxes.k.due };`,
+    { box: 2, due: 900 });
+
+  await check('sysdesign: seen/good/again take MAX not SUM (+ idempotence)',
+    `const T = window.DrillSync._testInternals;
+     const l = { __v: 1, boxes: { k: { box: 3, seen: 10, good: 7, again: 3, due: 50, last: 200 } } };
+     const c = { __v: 1, boxes: { k: { box: 2, seen: 6, good: 5, again: 1, due: 40, last: 100 } } };
+     const once = T.mergeSystemDesign(l, c);
+     const twice = T.mergeSystemDesign(once, c);
+     const thrice = T.mergeSystemDesign(c, once);
+     return { seen: once.boxes.k.seen, good: once.boxes.k.good, again: once.boxes.k.again,
+              stable: JSON.stringify(once.boxes) === JSON.stringify(twice.boxes)
+                   && JSON.stringify(once.boxes) === JSON.stringify(thrice.boxes) };`,
+    { seen: 10, good: 7, again: 3, stable: true });
+
+  await check('sysdesign: lastTopic/lastChapter prefer local',
+    `const m = window.DrillSync._testInternals.mergeSystemDesign(
+       { __v: 1, boxes: {}, lastTopic: 'ddia', lastChapter: 'ch03' },
+       { __v: 1, boxes: {}, lastTopic: 'blocks', lastChapter: 'c01' });
+     return { t: m.lastTopic, c: m.lastChapter };`,
+    { t: 'ddia', c: 'ch03' });
+
+  await check('sysdesign: local null passes cloud through',
+    `const m = window.DrillSync._testInternals.mergeSystemDesign(null,
+       { __v: 1, boxes: { k: { box: 2 } } });
+     return m.boxes.k.box;`,
+    2);
+
+  await check('sysdesign: cloud null passes local through',
+    `const m = window.DrillSync._testInternals.mergeSystemDesign(
+       { __v: 1, boxes: { k: { box: 5 } } }, null);
+     return m.boxes.k.box;`,
+    5);
+
+  await check('sysdesign: both null returns null; __v MAX otherwise',
+    `const T = window.DrillSync._testInternals;
+     const n = T.mergeSystemDesign(null, null);
+     const m = T.mergeSystemDesign({ __v: 1, boxes: {} }, { __v: 3, boxes: {} });
+     return { n: n, v: m.__v };`,
+    { n: null, v: 3 });
+
+  // ============================================================================
+  // P0-2: cross-account guard decision function.
+  // ============================================================================
+  await check('signin-guard: same owner → merge; null owner → merge (bootstrap)',
+    `const d = window.DrillSync._testInternals.decideSignInAction;
+     return { same: d('uid-a', 'uid-a', true), fresh: d(null, 'uid-a', true) };`,
+    { same: 'merge', fresh: 'merge' });
+
+  await check('signin-guard: DIFFERENT owner with local data → confirm-replace (never auto-merge)',
+    `return window.DrillSync._testInternals.decideSignInAction('uid-a', 'uid-b', true);`,
+    'confirm-replace');
+
+  await check('signin-guard: different owner but NO local data → merge (nothing to bleed)',
+    `return window.DrillSync._testInternals.decideSignInAction('uid-a', 'uid-b', false);`,
+    'merge');
 
   s.report();
   await s.close();

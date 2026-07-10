@@ -78,6 +78,16 @@ function _paletteBuildIndex() {
     hint: 'Standalone memorization drill — DDIA, building blocks, design problems',
     action: () => { window.location.href = 'system-design.html'; }
   });
+  // (0c) Diagnostic — nav-audit P1-2: its only other in-app link renders in
+  // the one-time welcome modal, so returning users had zero doors to the
+  // page that feeds the autopilot's gap signal (PROFILE § Study intent #2).
+  items.push({
+    id: 'link:diagnostic',
+    label: 'Diagnostic (43 questions)',
+    kind: 'mode',
+    hint: 'Baseline your gaps — feeds the autopilot pick',
+    action: () => { window.location.href = 'diagnostic.html'; }
+  });
   // (1) Sidebar buttons — synthetic click invokes existing handlers.
   document.querySelectorAll('aside button[id], #sidebar-main-buttons button[id]').forEach(btn => {
     const id = btn.id;
@@ -403,10 +413,19 @@ function initSidebarActions() {
       state.mockHistory = {};
       state.reviews = {};
       state.revealed = {};
+      state.revealedAt = {};
+      state.revealedClearedAt = {};
       state.weakness = {};
       state.lastLessonId = null;
       state.lastTab = null;
       saveProgress();
+      // Synced user: make the reset cloud-authoritative. resetCloud() cancels
+      // the 500ms debounce (so a poll can't union the old data back before the
+      // push lands), pushes immediately, and stamps data.resetAt so every
+      // OTHER device replaces its local copy instead of merge-resurrecting.
+      if (window.DrillSync && window.DrillSync.getCurrentUser && window.DrillSync.getCurrentUser()) {
+        window.DrillSync.resetCloud().catch(err => console.warn('cloud reset push failed:', err));
+      }
       updateStreakUI();
       updateReviewBadge();
       renderSidebar();
@@ -2295,9 +2314,11 @@ function initHelpModal() {
 //  BACKUP / RESTORE — JSON download + file-input replace
 // ──────────────────────────────────────────────────────────────────────────
 function initBackupRestore() {
-  // Backup — JSON download of all progress / reviews / bestTimes
+  // Backup — JSON download of all progress / reviews / bestTimes.
+  // Read through DrillStorage (the storage contract), not raw localStorage.
   document.getElementById('backup-btn').addEventListener('click', () => {
-    const raw = localStorage.getItem(LS_KEY) || JSON.stringify({ __v: 4, progress: state.progress });
+    const parsed = window.DrillStorage ? window.DrillStorage.loadAppProgress() : null;
+    const raw = parsed ? JSON.stringify(parsed) : JSON.stringify({ __v: 6, progress: state.progress });
     const blob = new Blob([raw], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2323,9 +2344,27 @@ function initBackupRestore() {
         // Sanity-check the shape before writing
         if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid backup shape');
         if (!confirm('Restore this backup? Your current progress will be replaced.')) return;
-        localStorage.setItem(LS_KEY, ev.target.result);
-        alert('Backup restored. Reloading…');
-        location.reload();
+        // Write through DrillStorage so the storage-written event fires (a raw
+        // setItem bypassed sync entirely — the restored blob never pushed, and
+        // the post-reload pull-merge half-undid the rollback).
+        if (window.DrillStorage) window.DrillStorage.saveAppProgress(parsed);
+        else localStorage.setItem(LS_KEY, ev.target.result);
+        const finish = () => {
+          alert('Backup restored. Reloading…');
+          location.reload();
+        };
+        // Signed-in: a restore is a point-in-time ROLLBACK, so it must be
+        // cloud-authoritative like Reset — push immediately (bypassing the
+        // debounce) and stamp resetAt so other devices replace instead of
+        // union-merging their newer state back in.
+        if (window.DrillSync && window.DrillSync.getCurrentUser && window.DrillSync.getCurrentUser() && window.DrillSync.resetCloud) {
+          window.DrillSync.resetCloud().then(finish, (err) => {
+            console.warn('cloud restore push failed:', err);
+            finish();
+          });
+        } else {
+          finish();
+        }
       } catch (err) {
         alert('Could not restore backup: ' + err.message);
       }
@@ -2378,6 +2417,13 @@ function initBootTail() {
     // Don't re-render the current lesson — that wipes the editor.
     // Just refresh the header indicators in place.
     if (state.currentLessonId) updateLessonHeaderInPlace();
+  });
+  // Sync REPLACE events (cross-account adopt / cloud reset-restore adoption)
+  // rewrite localStorage wholesale. A reload is the only safe response — any
+  // in-memory state this page still holds would clobber the replaced blobs on
+  // its next saveProgress() and push the stale data back to the cloud.
+  window.addEventListener('drill:sync-pulled', (e) => {
+    if (e && e.detail && e.detail.replaced) location.reload();
   });
   // Reflect persisted hide-mastered toggle on its button
   if (state.hideMastered) {

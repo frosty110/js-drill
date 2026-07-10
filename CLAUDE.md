@@ -167,18 +167,23 @@ in iter-35):
 - **Static code blocks** → CodeMirror `runMode` (Dracula theme). Same scripts
   as `index.html` head.
 - **Cross-device sync** → `js/sync.js`, exposed as `window.DrillSync`. Optional
-  layer that mirrors all three localStorage blobs (`jsdrill.progress.v1`,
-  `jsdrill.prep.v1`, `jsdrill.diagnostic.v1`) to Supabase when the user signs in
-  (email OTP). One Postgres row per user holding `{ progress, prep, diagnostic }`
-  as JSONB. Every page that already includes `js/storage.js` should also include
+  layer that mirrors all four localStorage blobs (`jsdrill.progress.v1`,
+  `jsdrill.prep.v1`, `jsdrill.diagnostic.v1`, `jsdrill.systemdesign.v1`) to
+  Supabase when the user signs in (email OTP). One Postgres row per user holding
+  `{ progress, prep, diagnostic, systemdesign }` (plus an optional `resetAt`
+  authoritative-write marker) as JSONB. Every page that already includes
+  `js/storage.js` should also include
   the four sync scripts in this order: `@supabase/supabase-js` (CDN) →
   `js/supabase-config.js` → `js/supabase-client.js` → `js/sync.js`. The script
   auto-mounts a fixed top-right "Sync" chip. App behavior is unchanged when the
   user is signed out or `SUPABASE_CONFIG` is empty — sync is purely additive.
   Per-blob, per-field merge policies live in the header comment of `js/sync.js`
-  (set-additive fields union per-id; device-state scalars prefer local). When
+  (set-additive fields union per-id; lifetime counters merge MAX for idempotence;
+  device-state scalars prefer local). When
   you add a new sub-blob or change a merge rule, update both `js/sync.js`'s
-  header docs and `tools/cdp/sync-merge.js` (unit tests for every rule).
+  header docs and `tools/cdp/sync-merge.js` (unit tests for every rule), and a
+  new `saveProgress` field must be registered in one of `js/sync.js`'s three
+  key registries — `node tools/check-sync-coverage.js` enforces the parity.
 
 Before authoring a new page or adding a feature that touches state or styles,
 **run the `.claude/skills/ui-consistency/` skill** — it documents the

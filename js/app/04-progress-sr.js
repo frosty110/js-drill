@@ -29,6 +29,11 @@ function loadProgress() {
     state.bestTimes = parsed.bestTimes || {};
     state.mockHistory = parsed.mockHistory || {};
     state.revealed = parsed.revealed || {};
+    // Timestamp sidecars for the revealed flags (sync merge: newest set/clear
+    // event wins). Legacy users (fields absent) get {} — their flags merge as
+    // set-at-0, so any recorded clear beats them.
+    state.revealedAt = parsed.revealedAt && typeof parsed.revealedAt === 'object' ? parsed.revealedAt : {};
+    state.revealedClearedAt = parsed.revealedClearedAt && typeof parsed.revealedClearedAt === 'object' ? parsed.revealedClearedAt : {};
     // L1 partial-pass flags: lessons passed at ≥80%/miss-one but not 100%.
     // Legacy users (field absent) get {} — every prior pass was a clean 100%,
     // so no lesson should be retro-flagged orange.
@@ -378,7 +383,7 @@ function loadProgress() {
       if (mutated) saveProgress();
     }
   } catch (e) {
-    state.progress = {}; state.bestTimes = {}; state.revealed = {}; state.partialL1 = {}; state.mockHistory = {}; state.history = {};
+    state.progress = {}; state.bestTimes = {}; state.revealed = {}; state.revealedAt = {}; state.revealedClearedAt = {}; state.partialL1 = {}; state.mockHistory = {}; state.history = {};
   }
 }
 function saveProgress() {
@@ -389,6 +394,8 @@ function saveProgress() {
     bestTimes: state.bestTimes,
     mockHistory: state.mockHistory,
     revealed: state.revealed,
+    revealedAt: state.revealedAt,
+    revealedClearedAt: state.revealedClearedAt,
     partialL1: state.partialL1,
     lastLessonId: state.currentLessonId,
     lastTab: state.currentTab,
@@ -682,6 +689,11 @@ const _revealedInCurrentAttempt = {};
 function markRevealed(lessonId, level) {
   state.revealed[lessonId] = state.revealed[lessonId] || {};
   state.revealed[lessonId][level] = true;
+  // Timestamp the SET so the sync merge can arbitrate against a clear from
+  // another device by recency (newest event wins).
+  state.revealedAt = state.revealedAt || {};
+  state.revealedAt[lessonId] = state.revealedAt[lessonId] || {};
+  state.revealedAt[lessonId][level] = Date.now();
   _revealedInCurrentAttempt[lessonId] = _revealedInCurrentAttempt[lessonId] || {};
   _revealedInCurrentAttempt[lessonId][level] = true;
   // Loss-side SR gradient: revealing the answer on a due lesson means the

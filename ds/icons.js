@@ -20,6 +20,7 @@ const DS_ICONS = {
   zap: '<path d="M13 2 4 14h6l-1 8 9-12h-6z"/>',
   chart: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
+  funnel: '<path d="M4 4h16l-6.5 8v6l-3 2v-8z"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.1-3 4"/><path d="M12 17.5h.01"/>',
   sliders: '<path d="M21 6h-7"/><path d="M10 6H3"/><circle cx="12" cy="6" r="2"/><path d="M21 12h-3"/><path d="M14 12H3"/><circle cx="16" cy="12" r="2"/><path d="M21 18h-9"/><path d="M8 18H3"/><circle cx="10" cy="18" r="2"/>',
   code: '<path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/>',

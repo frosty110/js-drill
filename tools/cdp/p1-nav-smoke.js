@@ -93,12 +93,19 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   m.assert(browsed === 'two-sum', `Browse row routes into the lesson (got ${browsed})`);
   await m.eval(`document.getElementById('browse-btn').click()`); await m.sleep(400);
 
-  // "All filters" keeps the drawer's power tools one tap away.
-  await m.click('[data-browse-more]'); await m.sleep(500);
-  const drawerOpen = await m.eval(`document.body.classList.contains('sidebar-open')`);
-  m.assert(drawerOpen, 'All-filters row opens the legacy drawer (capability preserved)');
-  await m.snap('02b-browse-drawer-via-filters');
-  await m.click('#sidebar-backdrop'); await m.sleep(400);
+  // The power filters are first-class on the page (P4 part 3) — the drawer
+  // they lived in is retired and never opens.
+  await m.click('[data-bf="toggle-panel"]'); await m.sleep(400);
+  const filters = await m.eval(`(() => ({
+    panel: !!document.querySelector('.browse-filter-panel'),
+    viewChips: ['plan', 'hide-mastered', 'repair'].every(k => !!document.querySelector('[data-bf="' + k + '"]')),
+    drawerClosed: !document.body.classList.contains('sidebar-open'),
+    asideHidden: getComputedStyle(document.querySelector('aside.app-sidebar')).display === 'none',
+  }))()`);
+  m.assert(filters.panel && filters.viewChips, `Browse carries the power filters in-page (${JSON.stringify(filters)})`);
+  m.assert(filters.drawerClosed && filters.asideHidden, 'legacy drawer retired (never renders)');
+  await m.snap('02b-browse-filters-in-page');
+  await m.click('[data-bf="toggle-panel"]'); await m.sleep(300);
 
   // Today tab opens the Today HOME page (P2) with a one-tap next rep.
   await m.click('[data-nav="today"]'); await m.sleep(700);

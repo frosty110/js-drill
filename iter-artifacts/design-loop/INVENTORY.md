@@ -24,11 +24,11 @@ Target IA (D01): **Today · Browse · Practice · Progress** (+ Settings via gea
 | Surface | Today | Verdict | Notes |
 |---|---|---|---|
 | Topbar (4 dropdowns + links + icons) | `#topbar` | RETIRE (chrome only — D05) | Replaced by the P1 adaptive nav; every item remapped below |
-| Sidebar (nav, track tabs, filter, search) | `#sidebar-nav` | MERGE→Browse | Becomes the P4 Browse surface (first-class, not a cramped drawer) |
+| Sidebar (nav, track tabs, filter, search) | `#sidebar-nav` | MERGE→Browse | **Landed (P4c/D10):** Browse page owns search/segments/filters/list; drawer retired (aside stays in DOM as synthetic-click host); plan switcher lives in Browse's filter panel |
 | Settings dropdown | `#topbar-dropdown` (⚙️) | MERGE→Settings | P6 grouped Settings panel |
 | Command palette | `palette-*` | KEEP | The long-tail power path; redesign in P1 |
 | Cram progress widget | `#topbar-cram-progress` | MERGE→Today | Home shows active-plan progress ambiently |
-| Session heatstrip | `#heatstrip-wrap` | MERGE→Progress | **Landed (P5):** session summary line in Progress "Today"; sidebar strip dies with the drawer (P4 part 3) |
+| Session heatstrip | `#heatstrip-wrap` | MERGE→Progress | **Landed (P5 + P4c):** session summary line in Progress "Today"; the sidebar strip died with the drawer (D10) |
 | Surface toggle (Problems ⇄ Reference) | `.surface-toggle` | MERGE→Browse | Becomes a Browse facet/segment |
 | System Design link | `#topbar-system-design` | KEEP | Separate page; nav entry point stays (family-unified in P8) |
 | Diagnostic page | `diagnostic.html` | KEEP | Separate page; family-unified in P8 |
@@ -48,7 +48,7 @@ heart. **KEEP**, redesign in P7.
 | `mock-btn` (Mock Interview) | MERGE→Practice | Prominent launcher entry |
 | `weak-btn` (weak spots) | MERGE→Practice | Launcher entry; also feeds Today queue |
 | `lucky-btn` (random pick) | DEMOTE | Palette + launcher long tail |
-| `path-btn` (Plan View filter) | MERGE→Browse | Sidebar view filter → Browse facet |
+| `path-btn` (Plan View filter) | MERGE→Browse | **Landed (P4c):** "Plan view" toggle + scope chips in Browse's filter panel (same starterPath/starterPathTrack state) |
 | `at-risk-btn` (decay radar) | MERGE→Progress | **Landed (P5):** modal chrome retired; btn + `#/m/at-risk` open Progress "Fix first" (same rows/routes) |
 | `resurrect-btn` (long-overdue) | MERGE→Progress | **Landed (P5):** Progress "Fix first" action row; direct-jump button behavior kept |
 
@@ -75,7 +75,7 @@ launcher; every one also palette- and `#/m/`-reachable)
 | `stats-btn` `streak-map-btn` | MERGE→Progress | **Landed (P5):** route to the ds Progress page (stats in Mastery/More-insights; streak map in Activity) |
 | `mechanics-btn` | MERGE→Browse | Browse-by-idiom index (list + matrix) |
 | `reveal-replay-btn` | MERGE→Progress | **Landed (P5):** Progress "Fix first" action row; direct-jump button behavior kept |
-| `repair-filter-btn` | MERGE→Browse | Sidebar view filter → Browse facet |
+| `repair-filter-btn` | MERGE→Browse | **Landed (P4c):** "Needs work" toggle in Browse's filter panel; now spans all tracks (D10) |
 | `shuffle-btn` | DEMOTE | Palette + keyboard (`s`) only |
 
 **Cram**
@@ -96,7 +96,7 @@ launcher; every one also palette- and `#/m/`-reachable)
 **Other**
 | Mode | Verdict | Notes |
 |---|---|---|
-| `hide-mastered-btn` | MERGE→Browse | View filter → Browse facet |
+| `hide-mastered-btn` | MERGE→Browse | **Landed (P4c):** "Hide mastered" toggle in Browse's filter panel (due reviews stay visible; yields under Needs work) |
 | Sync chip (`js/sync.js`) | SETTINGS | Status stays ambient; controls move to Data & sync |
 
 ## How to use this in a slice

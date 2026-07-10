@@ -789,19 +789,13 @@ function initSearchAndKeyboard() {
 
     if (e.key === '/' && !inEditable) {
       e.preventDefault();
-      // When the Browse page is open, `/` targets ITS visible search — the
-      // drawer's input may be off-screen on mobile (contrarian, iter 7).
+      // When the Browse page is open, `/` targets ITS search field (the
+      // page's own filterable list). Everywhere else it opens the command
+      // palette — the redesign's search surface. (The drawer that used to
+      // own `/` retired in P4 part 3; Browse carries its filters now.)
       const browseSearch = document.querySelector('.browse-page [data-browse-search]');
       if (browseSearch) { browseSearch.focus(); return; }
-      // The sidebar search lives in an off-canvas drawer at every viewport
-      // since the P4b rail (transformed off-screen, not display:none) —
-      // focusing it while the drawer is closed silently no-ops, so route
-      // `/` to the palette (the redesign's search surface) instead.
-      if (!document.body.classList.contains('sidebar-open') && typeof _paletteOpen === 'function') {
-        _paletteOpen();
-        return;
-      }
-      searchInput.focus();
+      if (typeof _paletteOpen === 'function') _paletteOpen();
       return;
     }
     if (e.key === '?' && !inEditable) {
@@ -907,11 +901,17 @@ function initCommandPalette() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-//  MOBILE DRAWER — hamburger + backdrop
+//  DRAWER — retired (design-loop P4 part 3, D10). The Browse page carries the
+//  sidebar's search / filters / lesson list as first-class ds controls at
+//  every viewport, so the off-canvas drawer never opens. #hamburger stays in
+//  the DOM (display:none, css/06-ds-nav.css) and redirects any residual
+//  synthetic click to Browse; the backdrop handler is a defensive
+//  close-if-somehow-open.
 // ──────────────────────────────────────────────────────────────────────────
 function initMobileDrawer() {
   document.getElementById('hamburger').addEventListener('click', () => {
-    document.body.classList.toggle('sidebar-open');
+    document.body.classList.remove('sidebar-open');
+    if (typeof openBrowse === 'function') openBrowse();
   });
   document.getElementById('sidebar-backdrop').addEventListener('click', () => {
     document.body.classList.remove('sidebar-open');

@@ -23,6 +23,42 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D10 · Browse owns the power filters; the off-canvas drawer retires  (2026-07-10 · iter 10)
+Decision: The drawer's power tools become first-class ds controls on the
+Browse page — one "Filters" disclosure (persisted via the existing
+`tagFilterOpen`) holding three view toggles (**Plan view** with its
+All/Syntax/Patterns/Applied scope chips · **Hide mastered** · **Needs work**,
+the 🛠 Repair filter renamed to say what it means) + the four tag-facet
+groups + the **study-plan switcher row** (was the drawer's "Plan:" chip; same
+`openPathModal`) + a Clear-all. All filters read/write the SAME persisted
+state fields the drawer used (starterPath/starterPathTrack, hideMastered,
+repairFilter, tagFilter/tagFilterOpen) — nothing resets. The off-canvas
+drawer itself RETIRES (never renders; `display:none` in css/06-ds-nav.css):
+Browse's "All filters" row is gone, `#hamburger` redirects any residual
+synthetic click to Browse, and `/` = Browse-search on the page / palette
+everywhere else. The aside STAYS in the DOM — its hidden buttons are
+synthetic-click targets for the palette/launcher/settings (D05), and
+renderSidebar keeps painting into it harmlessly. Retired with it: the
+sidebar header (progress bar → Progress page), the drawer search input
+(Browse search + palette), and the session-heatstrip STRIP (its facts-only
+summary already lives in Progress "Today" per D09; the heatstrip modal DOM
+stays as dead fallback). One deliberate widening: **Needs work spans all
+tracks** (the drawer scoped repair to the active surface — an invisible
+scoping the page-level view drops; strictly more reachable). Row attention
+chips derive from the repair-index rank (overdue > due > weak > reveal) in
+ds status colors, replacing the drawer's emoji icons (D07).
+Rationale: completes P4 (VISION "from → to" row 1 — Browse as THE
+first-class find-a-lesson surface); kills the last legacy chrome the rail
+flow leaned on; J5 ≤2 taps preserved with fewer surfaces to understand.
+Alternatives considered: keeping the drawer as an "advanced" fallback
+(rejected: two homes for the same filters = drift + a second mental model);
+persisting Browse's search query like the drawer's state.searchQuery
+(rejected: a stale query is a "where did my lessons go?" trap — fresh Browse
+starts clean).
+Reversible? Yes — the retirement is 3 display:none rules + the Browse
+part-3 render block; a revert restores the drawer wholesale (its DOM and
+handlers never left).
+
 ## D09 · Progress = one ds surface; long-tail stats behind disclosure; At-Risk modal chrome retires  (2026-07-10 · iter 9)
 Decision: The nav's Progress destination is the new ds `.progress-page`
 (js/app/20-progress.js): Today snapshot → Activity → **Fix first** → Mastery,

@@ -102,27 +102,26 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p4b-rail';
   d.assert(browse.current, 'Browse carries aria-current="page"');
   await d.snap('03-rail-browse');
 
-  // 4 · Browse "All filters" opens the drawer OVER the rail.
-  await d.click('[data-browse-more]'); await d.sleep(500);
-  const drawer = await d.eval(`(() => {
-    const aside = document.querySelector('aside.app-sidebar');
-    const r = aside.getBoundingClientRect();
-    const nav = document.getElementById('ds-appnav');
+  // 4 · The power filters are first-class on the Browse page (P4 part 3);
+  // the drawer they lived in is retired and never renders.
+  await d.click('[data-bf="toggle-panel"]'); await d.sleep(400);
+  const filters = await d.eval(`(() => {
+    const chip = k => document.querySelector('[data-bf="' + k + '"]');
     return {
-      open: document.body.classList.contains('sidebar-open') && r.left === 0 && r.width > 200,
-      backdrop: getComputedStyle(document.getElementById('sidebar-backdrop')).display === 'block',
-      aboveRail: parseInt(getComputedStyle(aside).zIndex, 10) > parseInt(getComputedStyle(nav).zIndex, 10),
-      filters: ['path-btn', 'hide-mastered-btn', 'repair-filter-btn'].every(id => {
-        const el = document.getElementById(id);
-        return el && el.getBoundingClientRect().width > 0;
-      }),
+      panel: !!document.querySelector('.browse-filter-panel'),
+      viewChips: ['plan', 'hide-mastered', 'repair'].every(k => !!chip(k)),
+      facets: document.querySelectorAll('.browse-filter-panel [data-facet]').length,
+      planRow: !!chip('switch-plan'),
+      drawerRetired: !document.body.classList.contains('sidebar-open')
+        && getComputedStyle(document.querySelector('aside.app-sidebar')).display === 'none',
     };
   })()`);
-  d.assert(drawer.open, `All-filters opens the drawer on desktop (${JSON.stringify(drawer)})`);
-  d.assert(drawer.backdrop && drawer.aboveRail, 'drawer + backdrop cover the rail (z-order)');
-  d.assert(drawer.filters, 'power filters (Plan View / Hide Mastered / Repair) reachable in the drawer');
-  await d.snap('04-drawer-over-rail');
-  await d.click('#sidebar-backdrop'); await d.sleep(400);
+  d.assert(filters.panel && filters.viewChips, `power filters (Plan View / Hide Mastered / Needs work) live on the page (${JSON.stringify(filters)})`);
+  d.assert(filters.facets >= 4, `tag facets render in the filter panel (${filters.facets} chips)`);
+  d.assert(filters.planRow, 'study-plan switcher reachable from the filter panel');
+  d.assert(filters.drawerRetired, 'legacy drawer retired (never renders)');
+  await d.snap('04-filters-in-page');
+  await d.click('[data-bf="toggle-panel"]'); await d.sleep(300);
 
   // 5 · Practice launcher + Progress.
   await d.click('#ds-appnav [data-nav="practice"]'); await d.sleep(500);

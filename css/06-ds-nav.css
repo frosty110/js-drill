@@ -20,10 +20,19 @@
 #ds-appnav .ds-navitem { background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; }
 
 /* Active-destination highlight. aria-current is kept truthful by the
-   #lesson-shell observer in js/app/16-ds-nav.js; the drawer (Browse's power
-   filters) lights Browse while open at any viewport. */
-#ds-appnav .ds-navitem[aria-current="page"],
-body.sidebar-open #ds-appnav [data-nav="browse"] { color: var(--ds-accent); }
+   #lesson-shell observer in js/app/16-ds-nav.js. */
+#ds-appnav .ds-navitem[aria-current="page"] { color: var(--ds-accent); }
+
+/* ── The off-canvas drawer retires (P4 part 3, D10) ────────────────────────
+   Browse owns search / filters / the lesson list at every viewport, so the
+   legacy sidebar never renders. The aside STAYS in the DOM: its hidden
+   buttons are synthetic-click targets for the palette / launcher / rail
+   (D05 contract), and renderSidebar keeps painting into it harmlessly.
+   ID selectors deliberately out-specify the legacy .sidebar-open rules in
+   css/02-sidebar.css. */
+aside.app-sidebar { display: none; }
+#sidebar-backdrop { display: none; }
+#hamburger { display: none; }
 
 /* The audio dock owns bottom:0 by default (its inline style deliberately has
    no `bottom` — see index.html — so these rules can position it). */
@@ -46,11 +55,7 @@ body.sidebar-open #ds-appnav [data-nav="browse"] { color: var(--ds-accent); }
 
   /* Redundant legacy mobile chrome retires visually — the bar replaces it.
      The elements stay in the DOM as synthetic-click targets (D05 contract). */
-  #hamburger, #topbar-dashboard-mobile, #topbar-mobile-menu { display: none; }
-
-  /* With the floating hamburger gone the drawer backdrop can cover the full
-     viewport (it previously started below the hamburger so it stayed tappable). */
-  body.sidebar-open .sidebar-backdrop { top: 0; }
+  #topbar-dashboard-mobile, #topbar-mobile-menu { display: none; }
 
   /* Immersive L3: the sticky Run bar owns the bottom edge — the nav yields.
      (L3 is the at-desk tier; on mobile the rep matters more than the chrome.) */
@@ -59,18 +64,13 @@ body.sidebar-open #ds-appnav [data-nav="browse"] { color: var(--ds-accent); }
   body:has(.l3-actions) #audio-dock { bottom: 0; }
 }
 
-/* Browse accordion: hide the native disclosure marker (rows carry their own
-   affordances) — the page renders at every viewport. */
-.browse-section summary::-webkit-details-marker { display: none; }
-
 /* ── Desktop (≥768px): the ds rail is the primary navigation (P4b) ────────
    The topbar dropdown menus and the permanent sidebar retire; the rail
    (Today / Browse / Practice / Progress + Search ⌘K / Settings) + the Browse
-   page + the Practice launcher + the palette replace them. Capability is
+   page (which carries the power filters as first-class controls since P4
+   part 3) + the Practice launcher + the palette replace them. Capability is
    preserved (D05): every retired trigger stays in the DOM as a synthetic-
-   click target, and the sidebar becomes an off-canvas drawer holding its
-   power filters (Plan View / Hide Mastered / Repair / facets) — opened from
-   Browse's "All filters" row until P4 part 3 migrates them into the page. */
+   click target. */
 @media (min-width: 768px) {
   /* The rail slots under the topbar (which keeps wordmark / Problems⇄Reference
      toggle / Plan / System Design link / icon strip). The component's own
@@ -86,24 +86,6 @@ body.sidebar-open #ds-appnav [data-nav="browse"] { color: var(--ds-accent); }
   /* The stage clears the fixed rail. */
   .app-stage { padding-left: var(--ds-rail-w); }
 
-  /* Permanent sidebar → off-canvas drawer (same pattern the phone uses).
-     Opened via the hidden #hamburger's synthetic click (Browse "All filters").
-     z-order: drawer 45 / backdrop 40 / rail 30 — the drawer covers the rail. */
-  aside.app-sidebar {
-    position: fixed;
-    top: calc(48px + env(safe-area-inset-top));
-    left: 0; bottom: 0;
-    z-index: 45;
-    transform: translateX(-100%);
-    transition: transform 0.22s ease-out;
-    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.4);
-  }
-  body.sidebar-open aside.app-sidebar { transform: translateX(0); }
-  body.sidebar-open .sidebar-backdrop {
-    display: block;
-    top: calc(48px + env(safe-area-inset-top));
-  }
-
   /* Topbar dropdown menus retire (Practice/Drills/Train/Review → the rail's
      Practice launcher + palette; Dashboard → the rail's Progress). The
      System Design link stays — it's a separate page with no rail slot yet. */
@@ -118,6 +100,3 @@ body.sidebar-open #ds-appnav [data-nav="browse"] { color: var(--ds-accent); }
   #audio-dock { left: var(--ds-rail-w); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  aside.app-sidebar { transition: none; }
-}

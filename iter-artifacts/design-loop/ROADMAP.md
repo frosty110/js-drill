@@ -22,7 +22,7 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 - ☐ Route/keyboard parity audit (every deep-link + shortcut still resolves)
 
 ## P2 · Home / "next rep"
-- ☐ Landing = one-tap next rep (due > weak > path, diagnostic-biased) + ambient progress
+- ◐ Landing = one-tap next rep + ambient progress — **Today home SHIPPED** (hero pick due>weak>recent-miss>path, streak chip w/ grace rule, 3 stat tiles, THEN queue, #/m/today-home; matches ratified mock C). Remaining: diagnostic-signal bias in the pick; make home the BOOT default (needs a decision vs J3 resume — ask user); desktop entry (P4 rail).
 - ☐ First-run experience (designed, gets to a first rep fast)
 
 ## P3 · Practice launcher

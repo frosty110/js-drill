@@ -23,6 +23,22 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D05 · P0 inventory pass — zero capability retirements; topbar chrome replaced  (2026-07-10 · iter 1)
+Decision: The full ~60-mode inventory verdict pass (see `INVENTORY.md`) retires
+**no capability**. The only RETIRE is the topbar-of-dropdowns *chrome* itself —
+its contents all remap: home/next-rep signals → **Today**; drills + train modes
+→ **Practice** launcher; insight/repair surfaces → **Progress**; lesson list,
+filters, mechanics, cheatsheet + cram references → **Browse**; toggles
+(rituals, display, haptics, install/offline, data) → **Settings**; `lucky`,
+`shuffle`, `ai-coach` → DEMOTE (palette/launcher long tail only).
+Rationale: PROFILE user needs fewer, calmer entry points, not fewer
+capabilities. Every mode stays reachable via new IA + `#/m/<mode>` + palette
+(the reachability contract), so nothing the user drilled with disappears.
+Alternatives considered: retiring low-value niche drills outright (rejected for
+P0 — no usage data to justify; can revisit per-mode later with evidence).
+Reversible? Yes — verdicts are a plan; nothing is deleted until P1+ slices land,
+and each slice re-verifies reachability before commit.
+
 ## D03 · Visual direction = "Ink & Amber" (minimal)  (2026-07-10 · iter 0)
 Decision: Mood **C** from the Home mockups — near-monochrome ink neutrals
 (`#0e0f12` base), a single confident **warm amber** accent (`#f5b62b`), heavier

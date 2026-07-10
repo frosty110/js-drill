@@ -33,7 +33,7 @@
       <div class="ds-sheet ds-sheet--scroll" role="dialog" aria-modal="true" aria-label="Practice launcher">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--ds-s2);">
           <h2 class="ds-h2">Practice</h2>
-          <button class="ds-iconbtn" data-launcher-close aria-label="Close">✕</button>
+          <button class="ds-iconbtn" data-launcher-close aria-label="Close">${dsIcon('x', 18)}</button>
         </div>
         <div data-launcher-body></div>
       </div>`;
@@ -48,7 +48,13 @@
   }
 
   function rowHtml(it) {
-    const badge = `<span class="ds-row__badge" aria-hidden="true">${escapeHtml(it.emoji || '·')}</span>`;
+    // Stroke line-icons only in chrome (decision D07) — emoji reads as
+    // placeholder design. Icon by taxonomy `icon` key or DS_MODE_ICONS map;
+    // fallback = the label's initial in the badge tile.
+    const iconName = it.icon || DS_MODE_ICONS[it.id];
+    const badge = `<span class="ds-row__badge" aria-hidden="true">${
+      iconName ? dsIcon(iconName, 16) : escapeHtml((it.label || '?').charAt(0))
+    }</span>`;
     const main = `<div class="ds-row__main"><b>${escapeHtml(it.label)}</b>${it.desc ? `<span style="display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(it.desc)}</span>` : ''}</div>`;
     const chev = `<span class="ds-row__chev">›</span>`;
     if (it.action === 'shuffle') {

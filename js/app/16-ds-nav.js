@@ -80,6 +80,29 @@
     syncCurrent();
   }
 
+  // Topbar chrome: swap emoji glyphs for the ds stroke icon set (D07 — emoji
+  // is banned from chrome). Labels/tooltips are untouched; only the glyph
+  // span / button face changes. Legacy surfaces (sidebar buttons, palette)
+  // convert when their phases land — they retire or migrate anyway.
+  function upgradeTopbarIcons() {
+    if (typeof dsIcon !== 'function') return;
+    const swaps = [
+      ['.surface-seg[data-surface="problems"] [aria-hidden]', 'code', 15],
+      ['.surface-seg[data-surface="reference"] [aria-hidden]', 'book-open', 15],
+      ['#topbar-plan [aria-hidden]', 'clipboard-list', 15],
+      ['#palette-trigger', 'search', 19],
+      ['#topbar-help', 'help', 19],
+      ['#topbar-settings', 'sliders', 19],
+      ['#topbar-dashboard-mobile', 'chart', 19],
+      ['#topbar-mobile-menu', 'grid', 19],
+    ];
+    for (const [sel, name, size] of swaps) {
+      const el = document.querySelector(sel);
+      if (el) el.innerHTML = dsIcon(name, size);
+    }
+  }
+
   // Slices are deferred so the DOM is parsed by the time this runs.
   mountDsNav();
+  upgradeTopbarIcons();
 })();

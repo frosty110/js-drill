@@ -160,6 +160,37 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   m.assert(l3.runBarAtBottom, `L3 Run bar owns the viewport bottom (${JSON.stringify(l3)})`);
   await m.snap('06-l3-immersive');
 
+  // Chrome carries stroke icons, not emoji (D07). Check the VISIBLE chrome:
+  // topbar controls, bottom nav, launcher sheet, Today home page.
+  const emojiScan = await m.eval(`(() => {
+    const EMOJI = /[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}\\u{FE0F}]/u;
+    const visText = (root) => {
+      let out = '';
+      const walk = (n) => {
+        if (n.nodeType === 3) { out += n.textContent; return; }
+        if (n.nodeType !== 1) return;
+        const cs = getComputedStyle(n);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return;
+        for (const c of n.childNodes) walk(c);
+      };
+      if (root) walk(root);
+      return out;
+    };
+    document.getElementById('today-home-btn').click();
+    const zones = {
+      topbar: visText(document.getElementById('topbar')),
+      nav: visText(document.getElementById('ds-appnav')),
+      today: visText(document.querySelector('.today-home-page')),
+    };
+    document.getElementById('practice-launcher-btn').click();
+    zones.launcher = visText(document.querySelector('#practice-launcher .ds-sheet'));
+    document.querySelector('[data-launcher-close]')?.click();
+    const offenders = Object.entries(zones).filter(([, t]) => EMOJI.test(t || '')).map(([k, t]) => k + ':' + (t.match(EMOJI) || [])[0]);
+    return { offenders };
+  })()`);
+  m.assert(emojiScan.offenders.length === 0,
+    `no emoji in visible chrome (offenders: ${JSON.stringify(emojiScan.offenders)})`);
+
   // Streak grace rule (contrarian catch): a mid-streak user who hasn't
   // drilled TODAY yet still sees their streak — with "keep it today" copy —
   // not "Start a streak".

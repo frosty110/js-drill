@@ -65,11 +65,12 @@ function openTodayHome() {
   const lvlMeta = firstLevel ? _TODAY_LEVEL_META[firstLevel] : null;
   const trackLabel = firstLesson ? (TRACK_PILLS[firstLesson.track] || TRACK_PILLS.patterns).label : '';
 
+  const flame = dsIcon('flame', 13);
   const streakChip = streak > 0
     ? (todayActive
-        ? `<span class="ds-chip ds-chip--accent">🔥 ${streak}-day streak</span>`
-        : `<span class="ds-chip ds-chip--accent">🔥 ${streak}-day · keep it today</span>`)
-    : `<span class="ds-chip">Start a streak 🔥</span>`;
+        ? `<span class="ds-chip ds-chip--accent">${flame}${streak}-day streak</span>`
+        : `<span class="ds-chip ds-chip--accent">${flame}${streak}-day · keep it today</span>`)
+    : `<span class="ds-chip">${flame}Start a streak</span>`;
 
   const heroHtml = first ? `
     <div class="ds-card" style="margin-top: var(--ds-s5);">
@@ -85,12 +86,12 @@ function openTodayHome() {
       <button class="ds-btn ds-btn--primary ds-btn--lg ds-btn--block" data-today-start data-lesson-id="${escapeHtml(first.id)}">Start&nbsp;&nbsp;→</button>
     </div>` : `
     <div class="ds-card" style="margin-top: var(--ds-s5); text-align:center;">
-      <p style="font-size: 40px; margin: 6px 0 10px;">🎉</p>
+      <p style="margin: 6px 0 10px; color: var(--ds-good);">${dsIcon('check-circle', 44)}</p>
       <h2 class="ds-h2" style="margin: 0 0 6px;">All clear</h2>
       <p class="ds-dim" style="margin: 0 0 16px;">Reviews done, no weak spots waiting. Sharpen something anyway?</p>
       <div style="display:flex; gap: var(--ds-s2);">
-        <button class="ds-btn ds-btn--ghost" style="flex:1;" data-today-mode="shuffle">🎲 Shuffle</button>
-        <button class="ds-btn ds-btn--ghost" style="flex:1;" data-today-mode="mock">🎯 Mock</button>
+        <button class="ds-btn ds-btn--ghost" style="flex:1;" data-today-mode="shuffle">${dsIcon('dice', 16)}Shuffle</button>
+        <button class="ds-btn ds-btn--ghost" style="flex:1;" data-today-mode="mock">${dsIcon('target', 16)}Mock</button>
       </div>
     </div>`;
 

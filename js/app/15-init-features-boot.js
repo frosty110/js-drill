@@ -533,7 +533,7 @@ const TOPBAR_MENU_TAXONOMY = {
     items: [
       'today-btn',
       'mock-btn',
-      { emoji: '🎲', label: 'Pick one', desc: 'Smart-pick: if you have due reviews / weak spots / at-risk lessons it routes you there, else picks a random fresh lesson or mastered one.', action: 'pick-smart' },
+      { emoji: '🎲', icon: 'dice', label: 'Pick one', desc: 'Smart-pick: if you have due reviews / weak spots / at-risk lessons it routes you there, else picks a random fresh lesson or mastered one.', action: 'pick-smart' },
       'warmup-btn',
       'audio-btn'
     ]
@@ -542,10 +542,10 @@ const TOPBAR_MENU_TAXONOMY = {
     label: 'Drill',
     blurb: 'Pick a recall family — taps launch a random member.',
     items: [
-      { emoji: '🧠', label: 'Run it in your head', desc: 'Random pick across Predict / What-If / Trace-Hop / Reverse-Walk — mental execution drills.', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
-      { emoji: '🔧', label: 'Judge a code change', desc: 'Random pick across Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap — change-impact drills.', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
-      { emoji: '🧭', label: 'Name the pattern', desc: 'Random pick across Recognize / Reverse / Constellation / Match — pattern-identification drills.', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
-      { emoji: '📝', label: 'Recall the traps', desc: 'Random pick across Notes-Cloze / Notes-Locate / Crux — trick & gotcha recall drills.', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
+      { emoji: '🧠', icon: 'eye', label: 'Run it in your head', desc: 'Random pick across Predict / What-If / Trace-Hop / Reverse-Walk — mental execution drills.', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
+      { emoji: '🔧', icon: 'wrench', label: 'Judge a code change', desc: 'Random pick across Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap — change-impact drills.', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
+      { emoji: '🧭', icon: 'compass', label: 'Name the pattern', desc: 'Random pick across Recognize / Reverse / Constellation / Match — pattern-identification drills.', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
+      { emoji: '📝', icon: 'file-text', label: 'Recall the traps', desc: 'Random pick across Notes-Cloze / Notes-Locate / Crux — trick & gotcha recall drills.', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
       'conv-drill-btn'
     ]
   },

@@ -23,6 +23,23 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D07 · Icon language = stroke line-icons; no emoji in chrome  (2026-07-10 · iter 6, user decision)
+Decision: The user rejected emoji as UI iconography ("the icons don't look
+professional enough — they look silly"). All *chrome* — nav, launcher rows,
+topbar controls, page headers, stat/badge accents — uses a single stroke
+line-icon set (`ds/icons.js`: 24×24, stroke=currentColor, fill=none, width
+1.9, round caps — the language the bottom nav already used). Emoji remains
+acceptable ONLY inside authored lesson content and celebratory moments (e.g.
+a pass toast), never as an affordance icon.
+Rationale: consistency + restraint (PRINCIPLES #6, quality bar "would this
+pass in Linear/Things?"); emoji renders differently per platform and reads
+as placeholder design.
+Rollout: new surfaces (launcher, Today home, topbar) immediately; legacy
+surfaces (sidebar buttons, palette rows, old dropdowns) convert as their
+phases land (P4/P5) since they retire or migrate anyway.
+Reversible? Yes — dsIcon() call sites; emoji strings still live on the hidden
+buttons.
+
 ## D06 · Global retheme NOW — visible transformation before structural rebuilds  (2026-07-10 · iter 3, user decision)
 Decision: Reverse the D04 default of "new look arrives only as each surface is
 structurally rebuilt." The user reviewed iter-2 output ("it looks like the same

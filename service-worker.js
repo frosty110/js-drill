@@ -47,6 +47,7 @@ const APP_SHELL = [
   './css/06-ds-nav.css',
   './ds/tokens.css',
   './ds/components.css',
+  './ds/icons.js',
   './tokens.css',
   './js/storage.js',
   './js/sync.js',

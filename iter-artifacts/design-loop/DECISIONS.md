@@ -17,17 +17,34 @@ Reversible? <yes/no + how>
 ---
 
 ## OPEN (awaiting resolution — do not build past these until decided)
-
-### OD2 · Visual direction  *(pending mockup selection)*
-User chose to pick from pixels. Default family is **Calm Focus** (editorial dark,
-restraint, one accent). Phase 0 renders **2–3 sample-screen mockups** in distinct
-premium moods; user selects one, then it's recorded as resolved and drives the
-`tokens.css`/`components.css` pass. Do not lock `components.css` colors/type until
-this resolves.
+- (none)
 
 ---
 
 ## RESOLVED
+
+## D03 · Visual direction = "Ink & Amber" (minimal)  (2026-07-10 · iter 0)
+Decision: Mood **C** from the Home mockups — near-monochrome ink neutrals
+(`#0e0f12` base), a single confident **warm amber** accent (`#f5b62b`), heavier
+sans display type, maximal restraint. Status colors reserved strictly for status.
+Rationale: the most austere/focused of the three — serious, calm, zero noise;
+best fit for an ADHD-prone professional doing minutes-long reps. Amber accent is
+a token (hue trivially tunable later).
+Alternatives considered: A · Midnight Cyan (rejected: safest but least
+distinctive); B · Warm Indigo editorial (close 2nd; serif elegance, but C's
+restraint won for focus).
+Reversible? Yes — palette lives in `ds/tokens.css`; hue/warmth are token flips.
+
+## D04 · Design system ships as an isolated `ds/` layer  (2026-07-10 · iter 0)
+Decision: The redesign's tokens + components live in a new `ds/` layer
+(`ds/tokens.css`, `ds/components.css`, `ds/gallery.html`) — *additive*, not a
+mutation of the legacy `tokens.css`. Existing pages keep their current styles
+until intentionally migrated (P8). Legacy `tokens.css` is retired/merged at the
+end.
+Rationale: prevents a half-migrated live restyle (changing legacy `--accent` to
+amber would instantly recolor diagnostic.html + system-design.html mid-redesign).
+Keeps every slice independently green and reversible.
+Reversible? Yes — `ds/` can be deleted without touching shipped pages.
 
 ## D01 · Primary navigation model = adaptive rail ↔ bottom bar  (2026-07-10 · iter 0)
 Decision: **Adaptive navigation** — a bottom tab bar on mobile (thumb-first) that

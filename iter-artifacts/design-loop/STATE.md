@@ -8,12 +8,13 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 ## Current status
 - **Phase:** P0 · Foundation & alignment
 - **Overall progress:** 0 / 11 phases complete
-- **Decided:** nav model = **adaptive rail ↔ bottom bar** (D01); theming = **dark-first, light-ready tokens** (D02).
-- **Next slice:** produce **2–3 visual-direction mockups** of the Home surface (OD2) → user picks → then P0 tokens/`components.css` pass.
-- **Blocked on:** user selecting a visual direction from the mockups.
+- **Decided:** nav = **adaptive rail ↔ bottom bar** (D01); theming = **dark-first, light-ready** (D02); visual = **Ink & Amber / minimal** (D03); isolated **`ds/` layer** (D04).
+- **Last slice shipped:** P0 design-system foundation — `ds/tokens.css` + `ds/components.css` v1 + `ds/gallery.html` (verified: adaptive nav mobile↔desktop, light flip, 0 console errors).
+- **Next slice:** P1 → build the **navigation shell** (Today/Browse/Practice/Progress) on the ds/ layer, OR finish P0 (before-screenshots + INVENTORY verdicts). Recommend nav shell next — it's the spine everything hangs on.
+- **Blocked on:** nothing.
 
-## Open decisions (resolve before building the shell)
-1. **Visual direction (OD2)** — pending mockup selection (default family: Calm Focus). See `DECISIONS.md`.
+## Open decisions
+- (none — all resolved; see `DECISIONS.md`)
 
 ## Learnings (append tight bullets as you go)
 - (none yet)

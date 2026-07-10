@@ -10,11 +10,11 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 
 ## P0 · Foundation & alignment  *(do first; some slices gate everything)*
 - ☐ Capture **before** screenshots of every major surface @390px + desktop → `shots/00-before/`
-- ☐ Ratify `VISION.md` + lock the **primary nav model** & **visual direction** (AskUserQuestion) → `DECISIONS.md`
+- ☑ Ratify VISION + lock nav model (D01), theming (D02), visual direction (D03), isolated `ds/` layer (D04) → `DECISIONS.md`
 - ☐ Fill `INVENTORY.md` — every mode/surface with a keep/merge/demote/retire verdict
-- ☐ Design tokens pass: extend `tokens.css` (spacing scale, type scale, elevation, motion vars); remove ad-hoc values
-- ☐ Build `components.css` v1: buttons, cards, options, tags, chips, sheets, modals, nav bar, progress — on tokens
-- ☐ Iconography + a11y baseline (focus ring, reduced-motion scaffold)
+- ☑ Design tokens pass: `ds/tokens.css` — Ink & Amber semantic roles (light-ready), 8pt spacing, type scale, radii, elevation, motion
+- ☑ Build `components.css` v1: `ds/components.css` — buttons, cards, options (+states), chips/tags, stats, fields, progress, list rows, sheet/modal, adaptive nav (bottom bar ↔ rail); verified via `ds/gallery.html`
+- ◐ Iconography + a11y baseline (nav icons + focus-visible + reduced-motion done; broader icon set TBD)
 
 ## P1 · Navigation shell
 - ☐ Thumb-first primary nav (bottom tab bar mobile / adaptive desktop) replacing the topbar-of-dropdowns

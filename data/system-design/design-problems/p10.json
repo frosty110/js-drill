@@ -64,7 +64,12 @@
         "Data model: `documents(id, snapshot, snapshotRev, updatedAt)` + `operations(docId, rev, userId, op, ts)` append-only; presence in an in-memory/ephemeral store (Redis pub/sub).",
         "Pub/sub layer (e.g. Redis) so multiple gateway nodes serving the same doc receive each broadcast."
       ],
-      "answer": "Clients hold a local model with optimistic apply and a buffer of un-acked ops. A stateless WebSocket gateway fleet terminates connections and consistent-hashes each to a per-document coordinator that is the single serialization point: it assigns monotonic revisions, transforms or accepts ops, and fans out. Durability is an append-only per-doc operation log ordered by revision, with a periodic materialized snapshot so a joining client doesn't replay from zero. So the schema is a `documents` row (latest snapshot + its revision) plus an append-only `operations` table keyed by (docId, rev); presence is ephemeral in Redis, and Redis pub/sub bridges the op broadcast across gateway nodes serving the same doc."
+      "answer": "Clients hold a local model with optimistic apply and a buffer of un-acked ops. A stateless WebSocket gateway fleet terminates connections and consistent-hashes each to a per-document coordinator that is the single serialization point: it assigns monotonic revisions, transforms or accepts ops, and fans out. Durability is an append-only per-doc operation log ordered by revision, with a periodic materialized snapshot so a joining client doesn't replay from zero. So the schema is a `documents` row (latest snapshot + its revision) plus an append-only `operations` table keyed by (docId, rev); presence is ephemeral in Redis, and Redis pub/sub bridges the op broadcast across gateway nodes serving the same doc.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Client\n  participant GW as WS Gateway\n  participant CO as Coordinator\n  participant LOG as Op Log\n  participant O as Other Clients\n  C->>C: apply edit locally (optimistic)\n  C->>GW: send op with baseRev\n  GW->>CO: forward op\n  CO->>CO: assign rev + transform\n  CO->>LOG: append op\n  CO-->>C: ack rev\n  CO->>O: broadcast op",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -145,5 +150,10 @@
       ],
       "answer": "The per-document coordinator is both a bottleneck and a single point of failure, so I make it a leader with a hot standby and treat the durable op log as the recoverable truth — on failover a new owner replays snapshot-plus-tail and connections re-home via consistent hashing on docId. Hot documents are handled by splitting the thousands of passive viewers (broadcast-only) from the handful of actual editors and fanning out through a pub/sub tree instead of hammering the coordinator. I bound storage by snapshotting and truncating the log, and for CRDTs I only garbage-collect tombstones once a delete is causally stable across replicas. Geographically I pin a document's coordinator near its active editors and migrate if that population moves, accepting that the system is eventually/strongly-eventually consistent — it guarantees convergence, not linearizability, which is exactly what an editor should trade for."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C([\"Client Editor<br/>optimistic apply\"]) --> GW[\"WS Gateway fleet\"]\n  GW --> CO[\"Per-doc Coordinator<br/>serialize + OT/CRDT\"]\n  CO --> LOG[(\"Op Log<br/>append-only\")]\n  CO --> SNAP[(\"Snapshot store\")]\n  CO --> PS[[\"Redis pub/sub\"]]\n  PS --> GW",
+    "caption": "High-level architecture"
+  }
 }

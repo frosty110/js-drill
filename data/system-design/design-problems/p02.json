@@ -60,7 +60,12 @@
         "Feed read: fetch the user's cached list of post IDs → hydrate bodies from posts DB/cache → rank → return.",
         "Data model: Posts{postId, authorId, content, createdAt}; Follows{followerId, followeeId}; Feed{userId → [postId...] capped}."
       ],
-      "answer": "Four services: a post service (writes to the Posts DB), a graph service (Follows), a queue-driven fan-out service, and a feed service. When a post is created, it's persisted and an event goes onto a queue; fan-out workers append the post ID into each follower's capped Redis timeline. On read, the feed service pulls the user's list of post IDs, hydrates bodies from the posts store/cache, ranks them, and returns a page. The model is three shapes: `Posts{postId, authorId, content, createdAt}`, `Follows{followerId, followeeId}`, and per-user `Feed{userId → [postId…]}` capped to a few hundred entries."
+      "answer": "Four services: a post service (writes to the Posts DB), a graph service (Follows), a queue-driven fan-out service, and a feed service. When a post is created, it's persisted and an event goes onto a queue; fan-out workers append the post ID into each follower's capped Redis timeline. On read, the feed service pulls the user's list of post IDs, hydrates bodies from the posts store/cache, ranks them, and returns a page. The model is three shapes: `Posts{postId, authorId, content, createdAt}`, `Follows{followerId, followeeId}`, and per-user `Feed{userId → [postId…]}` capped to a few hundred entries.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Client\n  participant F as Feed Service\n  participant FC as Feed Cache\n  participant DB as Posts DB\n  C->>F: GET /feed?cursor\n  F->>FC: read pushed post IDs\n  FC-->>F: precomputed IDs\n  F->>DB: pull recent celebrity posts\n  DB-->>F: celebrity post IDs\n  F->>DB: hydrate + rank merged set\n  F-->>C: ranked page + nextCursor",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -127,5 +132,10 @@
       ],
       "answer": "Under naive push, a 100M-follower post means 100M feed-writes in a burst — a thundering herd that melts the fan-out tier. The hybrid sidesteps it: a celebrity post is written once and pulled at read time, so there's no write fan-out at all. The correlated read spike — everyone opening the app to see it — is absorbed by caching that single hot post and serving it from cache/CDN, replicating the entry if it becomes a hot key. Any fan-out that does happen goes through a queue with backpressure so workers drain at a controlled rate instead of synchronously. The remaining failure modes — cache eviction, worker lag — are handled by rebuilding feeds from the posts DB on miss and accepting eventual consistency, since a post arriving a few seconds late is an acceptable price for availability."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C([Client]) --> LB[Load Balancer]\n  LB --> POST[Post Service]\n  LB --> FEED[Feed Service]\n  POST --> PDB[(Posts DB)]\n  POST --> Q[[Fan-out Queue]]\n  Q --> W[Fan-out Workers]\n  W --> FC[(\"Feed Cache (Redis)\")]\n  FEED --> FC\n  FEED -->|\"pull celebrity posts\"| PDB",
+    "caption": "High-level architecture"
+  }
 }

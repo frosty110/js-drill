@@ -65,7 +65,12 @@
         "Idempotency table keyed by idempotency_key → {status, response, created_at}.",
         "Outbox pattern + queue to drive external gateway calls reliably."
       ],
-      "answer": "A payment service sits in front of an ACID ledger DB (Postgres-class), an idempotency store, a wallet/balance service, a gateway-integration service, and async workers behind a queue, plus a reconciliation service. The heart is a double-entry ledger: an append-only, immutable `entries` table of (account_id, transaction_id, debit/credit, amount, currency, ts), where every transaction writes at least two balanced entries so debits equal credits. There's an `accounts` table for user wallets, merchant accounts, and internal fee/clearing/settlement accounts; balances are materialized from the ledger inside the same transaction. An `idempotency` table keyed by the client key holds the stored outcome, and an outbox + queue drives external gateway calls reliably."
+      "answer": "A payment service sits in front of an ACID ledger DB (Postgres-class), an idempotency store, a wallet/balance service, a gateway-integration service, and async workers behind a queue, plus a reconciliation service. The heart is a double-entry ledger: an append-only, immutable `entries` table of (account_id, transaction_id, debit/credit, amount, currency, ts), where every transaction writes at least two balanced entries so debits equal credits. There's an `accounts` table for user wallets, merchant accounts, and internal fee/clearing/settlement accounts; balances are materialized from the ledger inside the same transaction. An `idempotency` table keyed by the client key holds the stored outcome, and an outbox + queue drives external gateway calls reliably.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Client\n  participant API as Payment API\n  participant L as Ledger DB\n  participant G as Gateway\n  C->>API: POST /payments (idempotency_key)\n  API->>L: record key, write pending entry\n  API->>G: authorize (hold funds)\n  G-->>API: authorized\n  C->>API: POST /payments/id/capture\n  API->>G: capture funds\n  G-->>API: settled\n  API->>L: post balanced debit/credit",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -149,5 +154,10 @@
       ],
       "answer": "The classic scaling pain is hot-account contention — a shared merchant or clearing account row becomes a write bottleneck at high TPS, so you use per-shard sub-accounts netted periodically. Architecturally you deliberately pick consistency over availability: if you can't guarantee a correct balance you queue or refuse rather than risk being wrong, because integrity beats timeliness. The dangerous failure mode is the ambiguous gateway timeout where you don't know if the charge landed — you never blind-retry; you resolve it with idempotency keys plus reconciliation, since true exactly-once across two systems is impossible and you can only achieve the exactly-once effect via idempotency, compensation, and reconciliation. On top of that, fraud/chargebacks, PCI scope, audit immutability, data-residency regulation, and multi-currency FX rounding are all first-class concerns rather than edge cases."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C[\"Client\"]\n  API[\"Payment Service\"]\n  IDMP[(\"Idempotency Store\")]\n  L[(\"Ledger DB\")]\n  Q[[\"Outbox / Queue\"]]\n  GW[\"Gateway Integration\"]\n  EXT[\"External Gateway\"]\n  R[\"Reconciliation\"]\n  C -->|\"POST /payments + key\"| API\n  API --> IDMP\n  API --> L\n  API --> Q\n  Q --> GW\n  GW --> EXT\n  EXT -.->|\"webhook\"| API\n  R -.->|\"daily compare\"| L",
+    "caption": "High-level architecture"
+  }
 }

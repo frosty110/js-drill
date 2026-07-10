@@ -48,7 +48,12 @@
         "Distributed: partition the frontier by host (consistent hashing) so one host maps to one worker/queue for politeness; workers are stateless and horizontally scalable.",
         "A scheduler/prioritizer decides recrawl timing and URL priority feeding the frontier."
       ],
-      "answer": "A seed enters the URL frontier, a prioritized politeness-aware queue partitioned by host so each domain funnels to one worker. A fetcher pops a URL, resolves DNS from a cache, downloads the HTML, and a parser extracts links. Each extracted link is normalized and checked against a URL-seen set (a Bloom filter or sharded KV) before re-entering the frontier; the page body is fingerprinted against a content-seen store and, if new, written to the content/blob store for indexing. Around this sit a robots.txt cache, a DNS cache, and a scheduler that assigns priority and decides recrawl timing. Workers are stateless and scale horizontally; host-partitioning is what makes politeness enforceable across the fleet."
+      "answer": "A seed enters the URL frontier, a prioritized politeness-aware queue partitioned by host so each domain funnels to one worker. A fetcher pops a URL, resolves DNS from a cache, downloads the HTML, and a parser extracts links. Each extracted link is normalized and checked against a URL-seen set (a Bloom filter or sharded KV) before re-entering the frontier; the page body is fingerprinted against a content-seen store and, if new, written to the content/blob store for indexing. Around this sit a robots.txt cache, a DNS cache, and a scheduler that assigns priority and decides recrawl timing. Workers are stateless and scale horizontally; host-partitioning is what makes politeness enforceable across the fleet.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant F as Frontier\n  participant W as Fetcher\n  participant D as DNS cache\n  participant H as Host\n  participant P as Parser\n  participant S as Stores\n  F->>W: pop URL (politeness ok)\n  W->>D: resolve host\n  D-->>W: IP (cached)\n  W->>H: GET page\n  H-->>W: HTML\n  W->>P: parse + extract links\n  P->>S: fingerprint + store if new\n  P->>F: enqueue new URLs (dedup)",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -117,5 +122,10 @@
       ],
       "answer": "Recrawl frequency shouldn't be uniform — it should scale with each page's observed change rate and its importance. I estimate change rate by comparing content fingerprints across crawls and adaptively lengthen the interval for stable pages and shorten it for volatile ones, weighting by an importance signal like inbound links or traffic so budget flows to pages users actually see. Because crawl budget (fetches/sec) is fixed, this is fundamentally an allocation tradeoff: every recrawl of an unchanged low-value page is a new page not discovered, so freshness competes with coverage under the politeness ceiling. Cheap signals — sitemaps, Last-Modified/ETag with conditional GETs returning 304 — let me detect no-change without paying full bandwidth, and I back off erroring hosts with jittered retries to avoid synchronized recrawl storms."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  Seed([Seed URLs]) --> Frontier[[\"URL Frontier<br/>(per-host, prioritized)\"]]\n  Frontier --> Fetcher([Fetcher workers])\n  Fetcher --> DNS[(DNS cache)]\n  Fetcher --> Parser[\"Parser / link extractor\"]\n  Parser --> Dedup{\"URL seen?\"}\n  Dedup -->|new| Frontier\n  Parser --> Store[(Content store)]",
+    "caption": "High-level architecture"
+  }
 }

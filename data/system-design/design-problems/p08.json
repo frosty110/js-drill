@@ -104,7 +104,12 @@
         "Often combined/layered: per-IP on the login endpoint, per-API-key for the API, per-user for expensive actions.",
         "The key determines the Redis key namespace (e.g. `rl:{apiKey}:{endpoint}:{window}`), which also determines shard distribution and hot-key risk."
       ],
-      "answer": "I'd enforce it as middleware at the API gateway so over-limit requests die before touching backend, auth, or DB — a standalone limiter service is the alternative but the gateway is standard. Keying is a deliberate choice: per-API-key is cleanest for partner APIs since it maps to a plan and a stable identity; per-user is the fair choice for authenticated traffic but has to run after auth; per-IP is the only lever for unauthenticated endpoints like login but is blunt because shared NAT IPs punish innocents and attackers rotate addresses. In practice you layer them — per-IP on login, per-key on the API, per-user on expensive actions. The chosen key becomes the Redis key namespace, which also drives shard distribution and hot-key exposure."
+      "answer": "I'd enforce it as middleware at the API gateway so over-limit requests die before touching backend, auth, or DB — a standalone limiter service is the alternative but the gateway is standard. Keying is a deliberate choice: per-API-key is cleanest for partner APIs since it maps to a plan and a stable identity; per-user is the fair choice for authenticated traffic but has to run after auth; per-IP is the only lever for unauthenticated endpoints like login but is blunt because shared NAT IPs punish innocents and attackers rotate addresses. In practice you layer them — per-IP on login, per-key on the API, per-user on expensive actions. The chosen key becomes the Redis key namespace, which also drives shard distribution and hot-key exposure.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Client\n  participant GW as Gateway\n  participant R as Redis\n  participant BE as Backend\n  C->>GW: request\n  GW->>R: INCR rl key (atomic)\n  R-->>GW: new count\n  alt under limit\n    GW->>BE: forward request\n    BE-->>C: 200 OK\n  else over limit\n    GW-->>C: 429 Retry-After\n  end",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "open",
@@ -132,5 +137,10 @@
       ],
       "answer": "Over-limit requests get a `429` with a `Retry-After` telling the client when to try again, and I'd put `X-RateLimit-Limit/Remaining/Reset` on every response so good clients throttle themselves before getting rejected. The important failure decision is what happens when the limit store is unreachable: fail-open preserves availability but risks backend overload, fail-closed protects the backend but drops legitimate traffic — I'd pick per endpoint, typically fail-open for the general API and fail-closed for abuse-prone paths, and run Redis with replicas/failover accepting that a failover may lose a few seconds of counts (fine since limits are already approximate). For hot keys I'd cache 'already blocked' verdicts locally to short-circuit abusers without a store round-trip, and emit throttle-rate metrics per key to catch both attacks and misconfigured limits."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  Client([Client]) --> GW[\"API gateway<br/>(rate-limit middleware)\"]\n  GW -->|\"INCR + EXPIRE\"| R[(Redis counter cluster)]\n  R -->|\"count vs limit\"| GW\n  GW -->|allowed| BE[\"Backend services\"]\n  GW -.->|over limit| RJ[\"429 Retry-After\"]",
+    "caption": "High-level architecture"
+  }
 }

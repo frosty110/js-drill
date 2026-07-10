@@ -52,7 +52,12 @@
         "Hold state carries a TTL (hold_expires_at) that a sweeper enforces.",
         "State machine per seat: available → held → booked (or back to available on expiry/cancel)."
       ],
-      "answer": "The write path is small: `POST /events/{id}/holds` with the chosen seat_ids attempts a hold and returns a hold_id + expiry (or 409 if a seat's already taken), `POST /holds/{id}/confirm` finalizes with payment, and `DELETE /holds/{id}` releases. The data model centers on a `Seat` row per (event_id, seat_id) carrying state (available/held/booked), held_by, hold_expires_at, and a version column for optimistic concurrency, plus a `Booking` row linking user, seats, status, and payment. Each seat is a little state machine — available → held → booked — that falls back to available when the TTL expires or the user cancels."
+      "answer": "The write path is small: `POST /events/{id}/holds` with the chosen seat_ids attempts a hold and returns a hold_id + expiry (or 409 if a seat's already taken), `POST /holds/{id}/confirm` finalizes with payment, and `DELETE /holds/{id}` releases. The data model centers on a `Seat` row per (event_id, seat_id) carrying state (available/held/booked), held_by, hold_expires_at, and a version column for optimistic concurrency, plus a `Booking` row linking user, seats, status, and payment. Each seat is a little state machine — available → held → booked — that falls back to available when the TTL expires or the user cancels.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant U as User\n  participant W as Waiting Room\n  participant B as Booking Service\n  participant D as Seat DB\n  U->>W: enter on-sale\n  W-->>U: admit token\n  U->>B: POST /holds (seat_ids)\n  B->>D: claim available to held\n  D-->>B: rows=1 win, else 409\n  B-->>U: hold_id + TTL\n  U->>B: confirm + payment\n  B->>D: held to booked if valid",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -136,5 +141,10 @@
       ],
       "answer": "The fundamental wall is hot-row contention on the most-wanted seats, which the waiting room, fast atomic claims, and microsecond-short locks exist to manage. The subtle correctness risk is hold expiry — sweeper lag or clock skew can leak or prematurely free seats — so we combine lazy and active expiry and trust a single authoritative DB clock. We consciously choose consistency over availability: never oversell, even if that means queuing or rejecting users under overload. Real-world failure modes include scalper bots (rate limits, CAPTCHA, per-user caps), the payment-succeeds-as-hold-expires race (idempotency + reconciliation + refund), and the fact that the seat map changes constantly so reads can be slightly stale as long as the DB claim stays authoritative. And to avoid cross-region double-booking, each event's inventory lives in one authoritative region with reads replicated out."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C[\"Client\"]\n  WR[\"Virtual Waiting Room\"]\n  Q[[\"Admission Queue\"]]\n  API[\"Booking Service\"]\n  INV[(\"Seat Inventory DB\")]\n  SW[\"TTL Sweeper\"]\n  PAY[\"Payment Service\"]\n  C -->|\"on-sale burst\"| WR\n  WR --> Q\n  Q -->|\"rate-limited admit\"| API\n  API -->|\"atomic hold claim\"| INV\n  API --> PAY\n  SW -.->|\"release expired holds\"| INV",
+    "caption": "High-level architecture"
+  }
 }

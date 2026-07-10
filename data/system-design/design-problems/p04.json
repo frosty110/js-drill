@@ -60,7 +60,12 @@
         "Search/browse index (e.g. Elasticsearch) is a separate derived store fed from metadata.",
         "CDN + edge caches sit between viewers and origin object storage."
       ],
-      "answer": "I split control plane from data plane. The data plane is object storage holding the immutable master and all transcoded segments, fronted by a CDN — that's where the petabytes and terabits live. The control plane is a metadata service over a DB with a `videos` row (id, uploader, title, status, duration, manifest_url) and a `renditions` table, plus the transcoding queue+workers and the view-count pipeline. Flow: upload lands in the blob store, a storage event enqueues a transcode job, workers write segments back and flip the video's status to `ready`, and a separate search index is derived from metadata."
+      "answer": "I split control plane from data plane. The data plane is object storage holding the immutable master and all transcoded segments, fronted by a CDN — that's where the petabytes and terabits live. The control plane is a metadata service over a DB with a `videos` row (id, uploader, title, status, duration, manifest_url) and a `renditions` table, plus the transcoding queue+workers and the view-count pipeline. Flow: upload lands in the blob store, a storage event enqueues a transcode job, workers write segments back and flip the video's status to `ready`, and a separate search index is derived from metadata.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Player\n  participant CDN as CDN Edge\n  participant A as Metadata Service\n  participant S3 as Object Storage\n  C->>A: GET /videos/{id}\n  A-->>C: metadata + manifest URL\n  C->>CDN: GET manifest (.m3u8)\n  CDN-->>C: rendition list\n  C->>CDN: GET next segment at chosen bitrate\n  CDN->>S3: cache-miss fill\n  CDN-->>C: segment bytes\n  C->>C: measure throughput, pick next bitrate",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "open",
@@ -128,5 +133,10 @@
       ],
       "answer": "At global scale the CDN is what absorbs virality — a hot video is served from edge caches so origin only sees cache-fills, and I'd pre-warm known-popular content to PoPs. Geographically I route to the nearest edge with regional origins, replicating popular renditions and pull-through-caching the long tail. The long tail is also a cost problem, so cold videos tier down to archival storage and I'd consider transcoding rare renditions lazily on first request rather than eagerly for everything. Uploads spike, so the queue plus an autoscaled worker pool smooths bursts. Throughout, metadata and view counts are allowed to be eventually consistent, but the creator's master is durably replicated across AZs/regions because that's the one thing we can never regenerate."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C([Client]) -->|\"upload direct\"| S3[(\"Object Storage (master + segments)\")]\n  C --> APP[Metadata Service]\n  APP --> DB[(Metadata DB)]\n  S3 -->|\"upload event\"| Q[[Transcode Queue]]\n  Q --> W[Transcode Workers]\n  W -->|\"write segments\"| S3\n  W --> DB\n  CDN[\"CDN / Edge\"] --> S3\n  C -->|\"stream segments\"| CDN",
+    "caption": "High-level architecture"
+  }
 }

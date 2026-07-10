@@ -51,7 +51,12 @@
         "Distribute the built trie/shards to serving nodes (blue-green swap or incremental patch).",
         "Optional: separate personalization service layered at query time."
       ],
-      "answer": "The serving API is essentially one endpoint: `GET /suggest?q=prefix` returning ~10 ranked completions, tiny and edge-cacheable for hot prefixes. Behind it is an offline pipeline: query logs are aggregated (map-reduce or a streaming job) over a rolling window into per-query frequency scores, then a build job constructs the trie and precomputes each node's top-K completions from those scores. The built trie/shards are pushed to the in-memory serving fleet via a blue-green swap or incremental patch. Personalization, if any, is a thin layer applied at query time on top of the global ranked base."
+      "answer": "The serving API is essentially one endpoint: `GET /suggest?q=prefix` returning ~10 ranked completions, tiny and edge-cacheable for hot prefixes. Behind it is an offline pipeline: query logs are aggregated (map-reduce or a streaming job) over a rolling window into per-query frequency scores, then a build job constructs the trie and precomputes each node's top-K completions from those scores. The built trie/shards are pushed to the in-memory serving fleet via a blue-green swap or incremental patch. Personalization, if any, is a thin layer applied at query time on top of the global ranked base.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant U as User\n  participant CDN as Edge Cache\n  participant S as Suggest Service\n  participant T as Trie Shard\n  U->>CDN: GET /suggest?q=newy\n  CDN->>S: cache miss, forward prefix\n  S->>T: walk prefix chars, O(len)\n  T-->>S: precomputed top-K list\n  S-->>CDN: top-10 completions\n  CDN-->>U: 200 suggestions",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "open",
@@ -65,7 +70,12 @@
         "Optionally compress with a radix/Patricia trie to collapse single-child chains."
       ],
       "answer": "It's a trie where each root-to-node path spells a prefix, and crucially each node stores a precomputed cache of its top-K most-popular completions with scores. A request walks the trie character by character — O(prefix length), independent of corpus size — and returns the node's cached list directly, with no per-request scanning or sorting. Those top-K lists are computed bottom-up at build time by merging children's lists up to the root. It deliberately trades memory (the popular completions are duplicated up the tree) for a lookup that's essentially a pointer walk. A radix/Patricia trie collapses single-child chains to save space.",
-      "crux": true
+      "crux": true,
+      "diagram": {
+        "kind": "svg",
+        "code": "<svg viewBox=\"0 0 360 270\" role=\"img\" aria-label=\"Trie with precomputed top-K\">\n<g stroke=\"#94a3b8\" stroke-width=\"1.5\"><line x1=\"180\" y1=\"48\" x2=\"180\" y2=\"82\"/><line x1=\"180\" y1=\"110\" x2=\"180\" y2=\"144\"/><line x1=\"180\" y1=\"172\" x2=\"112\" y2=\"206\"/><line x1=\"180\" y1=\"172\" x2=\"180\" y2=\"206\"/><line x1=\"180\" y1=\"172\" x2=\"248\" y2=\"206\"/></g>\n<g fill=\"#1e293b\" stroke=\"#38bdf8\" stroke-width=\"1.5\"><circle cx=\"180\" cy=\"34\" r=\"15\"/><circle cx=\"180\" cy=\"96\" r=\"15\"/><circle cx=\"180\" cy=\"158\" r=\"15\"/><circle cx=\"112\" cy=\"220\" r=\"15\"/><circle cx=\"180\" cy=\"220\" r=\"15\"/><circle cx=\"248\" cy=\"220\" r=\"15\"/></g>\n<g fill=\"#e2e8f0\" font-size=\"13\" font-weight=\"600\" text-anchor=\"middle\"><text x=\"180\" y=\"39\">•</text><text x=\"180\" y=\"101\">c</text><text x=\"180\" y=\"163\">a</text><text x=\"112\" y=\"225\">t</text><text x=\"180\" y=\"225\">r</text><text x=\"248\" y=\"225\">n</text></g>\n<g fill=\"#64748b\" font-size=\"11\" text-anchor=\"middle\"><text x=\"112\" y=\"250\">cat</text><text x=\"180\" y=\"250\">car</text><text x=\"248\" y=\"250\">can</text></g>\n<rect x=\"230\" y=\"146\" width=\"126\" height=\"24\" rx=\"5\" fill=\"#0f2233\" stroke=\"#334155\"/><text x=\"293\" y=\"162\" fill=\"#fde68a\" font-size=\"10.5\" text-anchor=\"middle\">prefix \"ca\" → top-K cached</text></svg>",
+        "caption": "Trie with precomputed top-K"
+      }
     },
     {
       "type": "mc",
@@ -133,5 +143,10 @@
       ],
       "answer": "The first failure mode is hot shards — single-letter prefixes carry a huge share of traffic, so they must be replicated and edge-cached or they melt. Memory is the next pressure: duplicating top-K up the trie is expensive, so we tune K, apply radix compression, and cap the corpus. There's a core freshness-vs-cost tradeoff in the rebuild interval, and real production concerns around filtering spam/offensive suggestions and handling multilingual scripts. Two things people underestimate: typo tolerance is a genuinely separate, harder problem (edit-distance or n-gram matching, not a plain prefix trie), and personalization defeats simple edge caching because responses become per-user, so it must stay a cheap re-rank on a cacheable global base."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C[\"Client + Debounce\"]\n  CDN[\"Edge / CDN Cache\"]\n  S[\"Suggest Service\"]\n  T[(\"In-Memory Trie Shards\")]\n  LOGS[(\"Query Logs\")]\n  AGG[\"Aggregation Job\"]\n  BUILD[\"Trie Build Job\"]\n  C -->|\"GET /suggest\"| CDN\n  CDN -->|\"cache miss\"| S\n  S --> T\n  LOGS --> AGG\n  AGG --> BUILD\n  BUILD -.->|\"push shards\"| T\n  CDN -.->|\"cache hit\"| C",
+    "caption": "High-level architecture"
+  }
 }

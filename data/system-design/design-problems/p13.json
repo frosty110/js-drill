@@ -63,7 +63,12 @@
         "Blob store holds immutable chunk bytes keyed by hash; metadata DB holds the small relational rows.",
         "Notification/queue service fans out change events to a user's other devices."
       ],
-      "answer": "A client sync engine talks to an API tier behind a load balancer. Two data planes sit behind it: a metadata service backed by a strongly-consistent DB, and a block service backed by object storage (S3) plus a CDN for reads. The schema is small: a `Files` row (owner, name, pointer to current version, ACL), a `FileVersion` row per version holding the ordered list of chunk hashes, and a content-addressed `Chunks` table mapping chunk_hash → blob location + refcount. The blob store keeps the actual immutable bytes keyed by hash; a notification service pushes change events to a user's other devices."
+      "answer": "A client sync engine talks to an API tier behind a load balancer. Two data planes sit behind it: a metadata service backed by a strongly-consistent DB, and a block service backed by object storage (S3) plus a CDN for reads. The schema is small: a `Files` row (owner, name, pointer to current version, ACL), a `FileVersion` row per version holding the ordered list of chunk hashes, and a content-addressed `Chunks` table mapping chunk_hash → blob location + refcount. The blob store keeps the actual immutable bytes keyed by hash; a notification service pushes change events to a user's other devices.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Client\n  participant API as Metadata API\n  participant BS as Block/Blob Store\n  participant N as Notify Service\n  C->>API: GET /files/id/metadata\n  API-->>C: current chunk-hash list\n  C->>API: POST /chunks/exists (new hashes)\n  API-->>C: missing hashes only\n  C->>BS: PUT /chunks/hash (delta chunks)\n  C->>API: POST /files/id/commit (new version)\n  API->>N: change event\n  N-->>C: notify other devices",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -145,5 +150,10 @@
       ],
       "answer": "The metadata plane is the first thing to strain: hot files/shared folders and heavy sync polling — so partition metadata by user/file and push change detection into a scalable notification tier (long-poll/websocket) instead of DB polling. Durability comes from replicating blobs across AZs/regions, with erasure coding to cut cost versus 3× replication. The subtle correctness bug is dedup garbage collection: a chunk's refcount can race with a concurrent upload re-referencing it, so GC must be delayed/safe. The core tradeoffs are strongly-consistent metadata versus eventually-delivered notifications (devices may lag seconds), and chunk size — smaller chunks dedup better but explode metadata and client CPU. The CDN and presigned URLs keep the read path off the app tier entirely."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C[\"Client Sync Engine\"]\n  LB[\"LB / API Tier\"]\n  MS[\"Metadata Service\"]\n  MDB[(\"Metadata DB\")]\n  BS[\"Block Service\"]\n  BLOB[(\"Blob Store / S3\")]\n  CDN[\"CDN\"]\n  N[\"Notification Service\"]\n  C -->|\"metadata + commit\"| LB\n  LB --> MS\n  MS --> MDB\n  LB -->|\"chunk exists / put\"| BS\n  BS --> BLOB\n  BLOB --> CDN\n  CDN -->|\"download\"| C\n  MS -.-> N\n  N -.->|\"change events\"| C",
+    "caption": "High-level architecture"
+  }
 }

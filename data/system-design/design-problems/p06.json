@@ -49,7 +49,12 @@
         "Receipts: ack frames flow back — `delivered` when the recipient's device receives it, `read` when opened.",
         "History/other ops (fetch older messages, create group) can be plain REST since they're pull-based."
       ],
-      "answer": "The receive path is what breaks plain HTTP: the server needs to push an incoming message the instant it arrives, and request/response can't do that without polling, which is laggy and wasteful. So on login the client opens a persistent WebSocket to a connection server, which registers user→socket in a session store. Sending is a `sendMessage(conversationId, clientMsgId, body)` frame; the server persists it, assigns the authoritative id and sequence number, acks the sender, and routes it to recipients over their sockets. The `clientMsgId` gives idempotency across retries, and delivered/read receipts flow back as their own frames. Pull-style operations like fetching history or creating a group can stay ordinary REST."
+      "answer": "The receive path is what breaks plain HTTP: the server needs to push an incoming message the instant it arrives, and request/response can't do that without polling, which is laggy and wasteful. So on login the client opens a persistent WebSocket to a connection server, which registers user→socket in a session store. Sending is a `sendMessage(conversationId, clientMsgId, body)` frame; the server persists it, assigns the authoritative id and sequence number, acks the sender, and routes it to recipients over their sockets. The `clientMsgId` gives idempotency across retries, and delivered/read receipts flow back as their own frames. Pull-style operations like fetching history or creating a group can stay ordinary REST.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant A as Client A\n  participant S1 as Chat srv A\n  participant DB as Msg store\n  participant SS as Session svc\n  participant S2 as Chat srv B\n  participant B as Client B\n  A->>S1: sendMessage(convId, body)\n  S1->>DB: persist + assign seq\n  S1-->>A: ack\n  S1->>SS: locate recipient B\n  SS-->>S1: B on srv S2\n  S1->>S2: forward message\n  S2->>B: push over socket",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -119,5 +124,10 @@
       ],
       "answer": "For 1:1 and small groups, write-fanout — deliver to each member on send — is simplest and fine. It breaks for very large groups because every message is N× amplified; a thousand-member active group turns one send into a thousand deliveries. There I switch to fan-out-on-read or a hybrid: small groups push, huge groups behave like a feed that members pull with caching. Globally, users connect to their nearest gateway and cross-region messages route between regions, with the session/presence service replicated or reachable cross-region so we can still locate a recipient's socket. To keep ordering sane I pin each conversation's sequence authority to one owning partition so regions don't mint conflicting sequence numbers. Failures are handled by reconnect-and-resume: the client re-registers and replays from its last-acked cursor, so a connection-server crash loses no messages, and per-recipient queues plus push fallback keep one slow member from stalling delivery to everyone else."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  A([Client A]) --> S1[\"Chat server A\"]\n  S1 --> DB[(Message store)]\n  S1 --> SESS[(Session store)]\n  S1 -->|route| S2[\"Chat server B\"]\n  S2 --> B([Client B])\n  S1 -.->|offline| PUSH[[\"APNS / FCM\"]]",
+    "caption": "High-level architecture"
+  }
 }

@@ -60,7 +60,12 @@
         "Writes go to the DB (source of truth) and populate the cache.",
         "No joins needed — it's a KV lookup by primary key (the code)."
       ],
-      "answer": "Client requests hit a CDN/edge, then a load balancer fronting a stateless app tier. The app reads cache-first (Redis) and falls back to a KV/DB store that is the source of truth; the data model is one row keyed by the short code: `{code, longUrl, createdAt, expiresAt?, ownerId?, clickCount?}`. Redirects are a single primary-key lookup — no joins — so a partitioned KV store shines. Writes persist to the DB and warm the cache. Because it's a pure key lookup, this scales horizontally by sharding on the code."
+      "answer": "Client requests hit a CDN/edge, then a load balancer fronting a stateless app tier. The app reads cache-first (Redis) and falls back to a KV/DB store that is the source of truth; the data model is one row keyed by the short code: `{code, longUrl, createdAt, expiresAt?, ownerId?, clickCount?}`. Redirects are a single primary-key lookup — no joins — so a partitioned KV store shines. Writes persist to the DB and warm the cache. Because it's a pure key lookup, this scales horizontally by sharding on the code.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Client\n  participant A as App Tier\n  participant R as Redis Cache\n  participant DB as KV Store\n  C->>A: GET /{code}\n  A->>R: lookup code\n  R-->>A: miss\n  A->>DB: point-read code\n  DB-->>A: longUrl\n  A->>R: backfill code to longUrl\n  A-->>C: 301 redirect to longUrl",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -139,5 +144,10 @@
       ],
       "answer": "Custom aliases live in the same code namespace, so I reserve them atomically and reject clashes with generated codes. Expiry is a stored `expiresAt` enforced lazily on read (404 if past) plus a background reaper — never a synchronous delete. The real hot-spot is analytics: incrementing a counter per redirect turns every click into a write on a hot key, so I emit click events asynchronously to a queue/stream and aggregate offline (or use approximate counters). For geography I replicate the immutable, read-only mapping to every region for local redirects and route creates to a primary or give regions disjoint ID ranges to avoid collisions. Because a mapping never changes once written, I lean toward availability over strict consistency — a present-but-slightly-stale link beats a failed redirect — while rate-limiting creates and screening targets for abuse."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C([Client]) --> CDN[\"CDN / Edge\"]\n  CDN --> LB[Load Balancer]\n  LB --> APP[\"App Tier (stateless)\"]\n  APP -->|\"read-first\"| CACHE[(Redis Cache)]\n  APP --> KV[(\"KV Store (source of truth)\")]\n  KGS[[Key-Gen Service]] -->|\"claim code batch\"| APP\n  CACHE -.->|\"miss: backfill\"| KV",
+    "caption": "High-level architecture"
+  }
 }

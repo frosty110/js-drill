@@ -63,7 +63,12 @@
         "A retry/DLQ path and a status/callback consumer that ingests provider delivery receipts (APNS feedback, email opens/bounces).",
         "Data model: Notification(id, userId, category, status, createdAt), DeliveryAttempt(notificationId, channel, provider, state, attempts), Device(userId, platform, token, active), Preference(userId, category, channel, enabled)."
       ],
-      "answer": "The API tier validates, dedups on the idempotency key, and enqueues onto a partitioned queue. Dispatch workers pull events, expand fan-out from user to concrete devices/addresses, run preference + rate-limit + dedup checks, render the template, and route to per-channel worker pools. Each channel worker wraps a `ChannelAdapter` for APNS/FCM/SES/Twilio that makes the provider call and normalizes the result. Backing stores are a preferences DB, a device-token store, a template store, and a write-heavy status store (e.g. Cassandra/Dynamo) keyed by notificationId. A DLQ handles exhausted retries and a callback consumer folds in provider receipts (delivered/bounced/opened)."
+      "answer": "The API tier validates, dedups on the idempotency key, and enqueues onto a partitioned queue. Dispatch workers pull events, expand fan-out from user to concrete devices/addresses, run preference + rate-limit + dedup checks, render the template, and route to per-channel worker pools. Each channel worker wraps a `ChannelAdapter` for APNS/FCM/SES/Twilio that makes the provider call and normalizes the result. Backing stores are a preferences DB, a device-token store, a template store, and a write-heavy status store (e.g. Cassandra/Dynamo) keyed by notificationId. A DLQ handles exhausted retries and a callback consumer folds in provider receipts (delivered/bounced/opened).",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Caller\n  participant API as Ingest API\n  participant Q as Queue\n  participant DW as Dispatch worker\n  participant CW as Channel worker\n  participant P as Provider\n  C->>API: POST /v1/notifications (idempotencyKey)\n  API-->>C: 202 notificationId\n  API->>Q: enqueue\n  Q->>DW: consume\n  DW->>DW: prefs + dedup + render\n  DW->>CW: per-channel task\n  CW->>P: ChannelAdapter.send\n  P-->>CW: accepted / retryable / fail",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -145,5 +150,10 @@
       ],
       "answer": "The main failure modes are provider outages (a channel's queue backs up — the queue absorbs it, but you alert on queue age and may fail critical messages over to another channel), and token rot (push tokens rotate, so without pruning on provider feedback your real delivery rate quietly decays). Hot campaigns cause thundering-herd on a provider and can starve other traffic, which priority lanes, per-provider token buckets, and spreading the blast over time address. I'd be explicit that at-least-once delivery means rare boundary duplicates that dedup windows shrink but can't fully remove — chasing exactly-once across third parties isn't worth it. The status store is eventually consistent, which is acceptable here since we favor availability. For multi-region I'd run regional pipelines with replicated preferences and globally-scoped idempotency keys, and circuit-break failing providers while shedding low-priority traffic first to protect OTPs."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  Prod([Caller service]) --> API[\"Ingest API\"]\n  API --> Q[[Priority queue]]\n  Q --> DW([Dispatch workers])\n  DW --> PREF[(\"Prefs + device tokens\")]\n  DW --> CW([Channel workers])\n  CW --> PROV[\"APNS / FCM / SES / Twilio\"]\n  CW -.->|exhausted| DLQ[[Dead-letter queue]]",
+    "caption": "High-level architecture"
+  }
 }

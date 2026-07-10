@@ -51,7 +51,12 @@
         "Membership/topology: gossip or a coordination service distributes the ring/slot map so clients know the current layout and re-route on changes (MOVED/ASK redirects in Redis Cluster).",
         "No single front-door bottleneck: routing is client- or proxy-side, keeping the path one network hop."
       ],
-      "answer": "The nodes form a cluster where each owns a slice of the keyspace via consistent hashing (Redis Cluster formalizes this as 16384 hash slots). A GET is one hop: a smart client or a proxy hashes the key, contacts the owning node, and returns the value on a hit; on a miss it's nil and the app loads from the DB and populates the cache (cache-aside). A SET similarly hashes to the owner, stores in RAM with an optional TTL, and replicates to the successor replica nodes. Clients learn the ring/slot map through gossip or a coordinator and re-route when it changes — Redis Cluster does this with MOVED/ASK redirects — so there's no central lookup service on the hot path and every request stays a single network hop."
+      "answer": "The nodes form a cluster where each owns a slice of the keyspace via consistent hashing (Redis Cluster formalizes this as 16384 hash slots). A GET is one hop: a smart client or a proxy hashes the key, contacts the owning node, and returns the value on a hit; on a miss it's nil and the app loads from the DB and populates the cache (cache-aside). A SET similarly hashes to the owner, stores in RAM with an optional TTL, and replicates to the successor replica nodes. Clients learn the ring/slot map through gossip or a coordinator and re-route when it changes — Redis Cluster does this with MOVED/ASK redirects — so there's no central lookup service on the hot path and every request stays a single network hop.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant C as Client\n  participant N as Cache Node\n  participant DB as Backing DB\n  C->>C: hash key to owner node\n  C->>N: GET key\n  N-->>C: miss (nil)\n  C->>DB: load value\n  C->>N: SET key (cache-aside)\n  N-->>C: stored",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -78,7 +83,12 @@
         "Vnodes also let heterogeneous hardware carry proportional load (more vnodes = bigger share)."
       ],
       "answer": "You hash both keys and node identifiers onto one fixed ring, and a key belongs to the first node clockwise from where it lands. When a node joins, it only claims the arc between itself and its predecessor, so roughly 1/N of keys move off a single successor and nothing else shifts; when a node leaves, its arc simply falls to the next node clockwise — no global reshuffle either way, which is the property `hash % N` lacks. The catch is that with few nodes the arcs are uneven and load skews, so I give each physical node many virtual points on the ring — a hundred or more vnodes — which breaks its ownership into many small arcs scattered around the ring. That smooths the load distribution, makes a join/leave pull many small chunks from many nodes instead of hammering one neighbor, and lets bigger machines take proportionally more vnodes.",
-      "crux": true
+      "crux": true,
+      "diagram": {
+        "kind": "svg",
+        "code": "<svg viewBox=\"0 0 340 350\" role=\"img\" aria-label=\"Consistent hashing ring\">\n<defs><marker id=\"ar\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M0 0 L10 5 L0 10 z\" fill=\"#f59e0b\"/></marker></defs>\n<circle cx=\"170\" cy=\"170\" r=\"120\" fill=\"none\" stroke=\"#334155\" stroke-width=\"2\" stroke-dasharray=\"4 5\"/>\n<circle cx=\"274\" cy=\"230\" r=\"11\" fill=\"#38bdf8\"/><text x=\"292\" y=\"248\" fill=\"#e2e8f0\" font-size=\"13\" font-weight=\"600\">N1</text>\n<circle cx=\"110\" cy=\"274\" r=\"11\" fill=\"#38bdf8\"/><text x=\"92\" y=\"298\" fill=\"#e2e8f0\" font-size=\"13\" font-weight=\"600\" text-anchor=\"middle\">N2</text>\n<circle cx=\"66\" cy=\"110\" r=\"11\" fill=\"#38bdf8\"/><text x=\"40\" y=\"106\" fill=\"#e2e8f0\" font-size=\"13\" font-weight=\"600\">N3</text>\n<circle cx=\"230\" cy=\"66\" r=\"11\" fill=\"#38bdf8\"/><text x=\"248\" y=\"60\" fill=\"#e2e8f0\" font-size=\"13\" font-weight=\"600\">N4</text>\n<circle cx=\"201\" cy=\"286\" r=\"6\" fill=\"#f59e0b\"/><path d=\"M207 283 L268 235\" stroke=\"#f59e0b\" stroke-width=\"1.6\" fill=\"none\" marker-end=\"url(#ar)\"/><text x=\"196\" y=\"308\" fill=\"#fde68a\" font-size=\"11\" text-anchor=\"middle\">key A → next node (N1)</text>\n<circle cx=\"139\" cy=\"55\" r=\"6\" fill=\"#f59e0b\"/><path d=\"M145 57 L224 66\" stroke=\"#f59e0b\" stroke-width=\"1.6\" fill=\"none\" marker-end=\"url(#ar)\"/><text x=\"118\" y=\"44\" fill=\"#fde68a\" font-size=\"11\" text-anchor=\"middle\">key B → N4</text>\n<text x=\"170\" y=\"176\" fill=\"#64748b\" font-size=\"12\" text-anchor=\"middle\">hash ring</text>\n<text x=\"170\" y=\"338\" fill=\"#94a3b8\" font-size=\"11\" text-anchor=\"middle\">add/remove a node → only ~1/N keys move</text></svg>",
+        "caption": "Consistent hashing ring"
+      }
     },
     {
       "type": "open",
@@ -132,5 +142,10 @@
       ],
       "answer": "I replicate each key to N successor nodes so replicas serve reads and cover failover, accepting that async replication can hand back a slightly stale value — the classic availability-over-consistency trade. For coherence I default to cache-aside and, crucially, invalidate-don't-update on a DB write, because deleting the key avoids the races that can leave a stale value pinned; I'd reach for write-through only when read-after-write freshness is required. The nasty failure is the cache stampede — a hot key expires and a thousand concurrent misses stampede the DB — which I fix with single-flight/mutex so one request repopulates while the rest wait, or probabilistic early refresh before expiry. On node loss, consistent hashing limits remap to ~1/N and a replica gets promoted, and I warm or stagger cold restarts to avoid a miss surge. The guiding stance is that the cache is a volatile accelerator and the DB is truth, so I size for hit rate and design a total cache loss to merely spike DB load, never corrupt data."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  C([\"App / Smart Client\"]) -->|\"hash(key)\"| N1[\"Cache Node<br/>owner\"]\n  C --> N2[\"Cache Node\"]\n  C --> N3[\"Cache Node\"]\n  N1 -.->|\"replicate\"| N2\n  N1 -->|\"miss\"| DB[(\"Backing DB\")]",
+    "caption": "High-level architecture"
+  }
 }

@@ -51,7 +51,12 @@
         "Trip is the durable transactional record; DriverLocation is the ephemeral hot-path record.",
         "Fare/surge and ETA are computed via a pricing service using per-region supply/demand."
       ],
-      "answer": "Drivers call a high-frequency `POST /drivers/{id}/location` and a `PUT status`, and receive ride offers over a persistent WebSocket/push channel rather than polling. Riders `POST /rides` with pickup/dropoff and product type, get back a rideId with estimated fare and ETA, then track via `GET /rides/{id}` or a live channel; cancel is symmetric. The key entities split cleanly: `Trip` is the durable transactional record (rider, driver, state, locations, fare, timestamps), while `DriverLocation` (driverId, lat/lng, geo cell, updatedAt) is the ephemeral in-memory hot-path record. Pricing/ETA come from a service that reads per-region supply and demand."
+      "answer": "Drivers call a high-frequency `POST /drivers/{id}/location` and a `PUT status`, and receive ride offers over a persistent WebSocket/push channel rather than polling. Riders `POST /rides` with pickup/dropoff and product type, get back a rideId with estimated fare and ETA, then track via `GET /rides/{id}` or a live channel; cancel is symmetric. The key entities split cleanly: `Trip` is the durable transactional record (rider, driver, state, locations, fare, timestamps), while `DriverLocation` (driverId, lat/lng, geo cell, updatedAt) is the ephemeral in-memory hot-path record. Pricing/ETA come from a service that reads per-region supply and demand.",
+      "diagram": {
+        "kind": "mermaid",
+        "code": "sequenceDiagram\n  participant D as Driver App\n  participant R as Rider App\n  participant GW as Gateway\n  participant GEO as Geo Index\n  participant M as Matching\n  participant DB as Trip DB\n  D->>GEO: POST location every 4s\n  R->>GW: POST /rides\n  GW->>M: find nearby drivers\n  M->>GEO: query cell plus neighbors\n  GEO-->>M: candidate drivers\n  M->>M: atomic claim driver\n  M->>DB: persist trip (matched)\n  M-->>R: driver assigned + ETA",
+        "caption": "Request flow"
+      }
     },
     {
       "type": "mc",
@@ -78,7 +83,12 @@
         "Updates: a moving driver may cross cell boundaries, so an update can mean removing from the old cell bucket and adding to the new one."
       ],
       "answer": "You bucket drivers into geo cells so 'nearby' becomes 'same or adjacent cell.' Geohash interleaves lat/lng bits into a base32 string where nearby points share a prefix; you query the rider's cell plus its 8 neighbors to catch drivers just across a boundary — simple but a fixed grid. A QuadTree subdivides finer where drivers are dense (downtown) and coarser where sparse, adapting to distribution at the cost of tree maintenance as drivers move. Google S2 uses a Hilbert curve over a cube-projected sphere for 1D cell ids with strong locality and no polar distortion, so it handles Earth's curvature best. The live index sits in memory — Redis GEO or an in-memory grid — because 250k updates/s can't hit a durable DB on the hot path. A query grabs candidates from the rider's cell and neighbors, filters to available drivers within the true haversine radius, and ranks; a driver crossing a boundary is removed from the old bucket and added to the new one.",
-      "crux": true
+      "crux": true,
+      "diagram": {
+        "kind": "svg",
+        "code": "<svg viewBox=\"0 0 320 300\" role=\"img\" aria-label=\"Geospatial grid query\">\n<g stroke=\"#334155\" stroke-width=\"1.5\" fill=\"none\"><rect x=\"55\" y=\"40\" width=\"70\" height=\"70\"/><rect x=\"125\" y=\"40\" width=\"70\" height=\"70\"/><rect x=\"195\" y=\"40\" width=\"70\" height=\"70\"/><rect x=\"55\" y=\"110\" width=\"70\" height=\"70\"/><rect x=\"195\" y=\"110\" width=\"70\" height=\"70\"/><rect x=\"55\" y=\"180\" width=\"70\" height=\"70\"/><rect x=\"125\" y=\"180\" width=\"70\" height=\"70\"/><rect x=\"195\" y=\"180\" width=\"70\" height=\"70\"/></g>\n<rect x=\"125\" y=\"110\" width=\"70\" height=\"70\" fill=\"rgba(56,189,248,0.14)\" stroke=\"#38bdf8\" stroke-width=\"2\"/>\n<g fill=\"#38bdf8\"><circle cx=\"150\" cy=\"135\" r=\"5\"/><circle cx=\"172\" cy=\"158\" r=\"5\"/><circle cx=\"90\" cy=\"90\" r=\"5\"/><circle cx=\"230\" cy=\"150\" r=\"5\"/><circle cx=\"160\" cy=\"210\" r=\"5\"/></g>\n<path d=\"M160 145 l-7 12 h14 z\" fill=\"#f59e0b\"/><circle cx=\"160\" cy=\"140\" r=\"5\" fill=\"#f59e0b\"/>\n<text x=\"160\" y=\"30\" fill=\"#94a3b8\" font-size=\"11\" text-anchor=\"middle\">hash lat/lng → a cell (geohash / S2)</text>\n<text x=\"160\" y=\"278\" fill=\"#fde68a\" font-size=\"11\" text-anchor=\"middle\">query rider's cell + 8 neighbors for nearby drivers</text></svg>",
+        "caption": "Geospatial cell index"
+      }
     },
     {
       "type": "open",
@@ -134,5 +144,10 @@
       ],
       "answer": "The defining decision is separating the write-heavy in-memory location/geo plane from the durable trip/payment plane so a 250k-ping/s firehose can never endanger transactional data — different stores, scaled independently. I'd geo-partition by city/region so a rider and nearby drivers share a shard with little cross-region traffic, and accept that dense downtown cells at rush hour become hotspots, mitigated by adaptive subdivision and per-cell capacity. I'd be explicit on the consistency split: location is eventually consistent and best-effort (stale-by-seconds is fine), but assignment is strongly consistent via an atomic claim. Failure handling leans on timeouts — an offer times out and releases the driver, a driver heartbeat timeout marks them stale so they're not matched, and persisted trip state survives restarts. To keep write cost down I'd throttle and dedup pings and only sample location history asynchronously, keeping the durable store off the hot path, while managing the WebSocket layer for offers/tracking with reconnection and polling fallback."
     }
-  ]
+  ],
+  "diagram": {
+    "kind": "mermaid",
+    "code": "flowchart LR\n  R([\"Rider App\"]) --> GW[\"API Gateway\"]\n  D([\"Driver App\"]) --> GW\n  GW --> LOC[\"Location Service<br/>in-memory geo index\"]\n  GW --> MATCH[\"Matching / Dispatch\"]\n  MATCH --> LOC\n  MATCH --> TRIP[(\"Trip DB\")]\n  MATCH --> PRICE[\"Pricing / ETA\"]",
+    "caption": "High-level architecture"
+  }
 }

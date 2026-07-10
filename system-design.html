@@ -13,6 +13,9 @@
 <script src="js/supabase-config.js"></script>
 <script src="js/supabase-client.js"></script>
 <script src="js/sync.js" defer></script>
+<!-- Diagrams-as-code. Loaded from CDN; the app degrades gracefully (shows the
+     diagram source) if it's unavailable, so nothing else depends on it. -->
+<script defer src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
   :root { --bg: var(--bg-elevated); }
   *{box-sizing:border-box}
@@ -117,6 +120,14 @@
   .key-ideas h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
   .key-ideas ul{margin:0;padding-left:20px}
   .key-ideas li{margin:8px 0;font-size:14.5px;line-height:1.55;color:var(--text)}
+
+  /* ── Diagrams (Mermaid / inline SVG) ────────────────────────────────── */
+  .diagram-slot{margin:16px 0 4px}
+  .diagram-cap{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 6px}
+  .diagram-box{overflow-x:auto;background:#0b1220;border:1px solid var(--panel-2);border-radius:10px;padding:14px;text-align:center}
+  .diagram-box svg{max-width:100%;height:auto}
+  .diagram-src{overflow-x:auto;background:#0b1220;border:1px solid var(--panel-2);border-radius:10px;padding:12px;
+    font:12px/1.5 var(--font-mono);color:var(--muted);white-space:pre;margin:0;text-align:left}
 
   /* ── Drill session ──────────────────────────────────────────────────── */
   #progress-wrap{height:6px;background:var(--panel);border-radius:3px;overflow:hidden;margin-bottom:6px}
@@ -273,6 +284,41 @@ async function loadTopicChapters(t) { const m = await loadMeta(t); await Promise
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function fmt(s) { return esc(s).replace(/`([^`]+)`/g, '<code>$1</code>'); }
 function shuffle(a) { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[r[i], r[j]] = [r[j], r[i]]; } return r; }
+// ── Diagrams ────────────────────────────────────────────────────────────
+let _mermaidReady = false, _mmdCounter = 0;
+function initMermaid() {
+  if (_mermaidReady) return true;
+  if (!window.mermaid) return false;   // CDN not loaded (offline / blocked) → caller falls back
+  try {
+    window.mermaid.initialize({
+      startOnLoad: false, securityLevel: 'loose', theme: 'base',
+      themeVariables: {
+        background: '#0b1220', primaryColor: '#1e293b', primaryTextColor: '#e2e8f0',
+        primaryBorderColor: '#38bdf8', lineColor: '#94a3b8', secondaryColor: '#0f2233',
+        tertiaryColor: '#0b1220', clusterBkg: '#0f2233',
+        fontFamily: '-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif', fontSize: '14px'
+      }
+    });
+    _mermaidReady = true;
+  } catch (e) { /* leave false */ }
+  return _mermaidReady;
+}
+// Render a { kind:'mermaid'|'svg', code, caption } diagram into `el`. Degrades to
+// showing the source if mermaid isn't available so the page never depends on the CDN.
+async function renderDiagramInto(el, diagram) {
+  if (!el || !diagram || !diagram.code) return;
+  const cap = diagram.caption ? `<div class="diagram-cap">${esc(diagram.caption)}</div>` : '';
+  if (diagram.kind === 'svg') { el.innerHTML = cap + `<div class="diagram-box">${diagram.code}</div>`; return; }
+  if (initMermaid()) {
+    try {
+      const { svg } = await window.mermaid.render('mmd' + (_mmdCounter++), diagram.code);
+      el.innerHTML = cap + `<div class="diagram-box">${svg}</div>`;
+      return;
+    } catch (e) { /* fall through to source */ }
+  }
+  el.innerHTML = cap + `<pre class="diagram-src">${esc(diagram.code)}</pre>`;
+}
+
 function unitAbbrev(t) { return (META[t] && META[t].unitAbbrev) || 'Ch'; }
 function chNum(c) { return c.num != null ? c.num : c.chapter; }
 // One chapter's drillable items (MC + open), each with a stable SR key.
@@ -408,6 +454,7 @@ async function renderChapterDetail(t, chId) {
       <p class="detail-summary">${fmt(ch.summary || '')}</p>
       <div class="detail-prog"><span class="bar"><i style="width:${cs.total ? Math.round(cs.mastered / cs.total * 100) : 0}%"></i></span>
         <span class="ch-frac">${cs.mastered}/${cs.total} mastered</span>${cs.due ? ` · <span class="ch-due">${cs.due} due</span>` : ''}</div>
+      ${ch.diagram ? `<div class="diagram-slot" id="arch-slot"></div>` : ''}
       ${takeaways.length ? `
         <div class="key-ideas">
           <h3>💡 Key ideas${cruxCount ? ' — the crux to memorize' : ''}</h3>
@@ -421,6 +468,7 @@ async function renderChapterDetail(t, chId) {
   document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
   document.getElementById('drill-all').addEventListener('click', () => startChapter(t, chId));
   const cx = document.getElementById('drill-crux'); if (cx) cx.addEventListener('click', () => startCrux(t, chId));
+  if (ch.diagram) renderDiagramInto(document.getElementById('arch-slot'), ch.diagram);
   window.scrollTo(0, 0);
 }
 
@@ -542,7 +590,9 @@ function selectAnswer(choice) {
     else el.classList.add('muted');
   });
   document.getElementById('explain-slot').innerHTML =
-    `<div class="explain ${correct ? 'correct' : 'wrong'}"><span class="verdict ${correct ? 'correct' : 'wrong'}">${correct ? '✓ Correct.' : '✗ Not quite.'}</span>${fmt(q.explain)}</div>`;
+    `<div class="explain ${correct ? 'correct' : 'wrong'}"><span class="verdict ${correct ? 'correct' : 'wrong'}">${correct ? '✓ Correct.' : '✗ Not quite.'}</span>${fmt(q.explain)}</div>`
+    + (q.diagram ? `<div class="diagram-slot" id="mc-diag"></div>` : '');
+  if (q.diagram) renderDiagramInto(document.getElementById('mc-diag'), q.diagram);
   showNext();
 }
 
@@ -556,7 +606,9 @@ function revealOpen() {
       <h4>Key points to hit</h4>
       <ul>${(q.points || []).map(p => `<li>${fmt(p)}</li>`).join('')}</ul>
       <div class="ans">${fmt(q.answer || '')}</div>
+      ${q.diagram ? `<div class="diagram-slot" id="reveal-diag"></div>` : ''}
     </div>`;
+  if (q.diagram) renderDiagramInto(document.getElementById('reveal-diag'), q.diagram);
   document.getElementById('action-bar').innerHTML = `
     <button class="cta again" data-g="again">Missed</button>
     <button class="cta partial" data-g="partial">Partial</button>

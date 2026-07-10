@@ -75,7 +75,8 @@
         "It lets the API tier render templates faster by caching them in the broker."
       ],
       "answer": 1,
-      "explain": "The queue is a shock absorber and a decoupler: bursts and slow third-party providers become backlog the workers drain at their own rate, callers get a fast `202`, workers scale independently, and failed sends can be retried off the queue. It does NOT give exactly-once (queues are at-least-once, which is exactly why you still need idempotency/dedup), and it isn't a template cache."
+      "explain": "The queue is a shock absorber and a decoupler: bursts and slow third-party providers become backlog the workers drain at their own rate, callers get a fast `202`, workers scale independently, and failed sends can be retried off the queue. It does NOT give exactly-once (queues are at-least-once, which is exactly why you still need idempotency/dedup), and it isn't a template cache.",
+      "crux": true
     },
     {
       "type": "open",
@@ -88,7 +89,8 @@
         "Rendering happens once per channel (channels have different payload formats/limits — SMS 160 chars, push payload size caps) using the template + user locale.",
         "New channel = new adapter, no pipeline change; a flaky provider is isolated to its own worker pool and queue so it can't stall other channels."
       ],
-      "answer": "The dispatch worker resolves user 42 into concrete endpoints — say two iOS tokens, one Android token, an email, and a phone number — and emits a delivery task per (channel, endpoint), which is where fan-out multiplies one event into several sends. Each channel's worker pool calls a uniform `ChannelAdapter.send(message, endpoint)`; the APNS/FCM/SES/Twilio implementations handle provider auth, payload shape, and limits behind that interface and normalize responses into accepted / retryable / permanent-fail / bad-token. Rendering is per-channel because formats differ (SMS 160 chars, push payload caps). Adding a channel is just a new adapter, and isolating each provider to its own pool means one flaky provider can't stall the others."
+      "answer": "The dispatch worker resolves user 42 into concrete endpoints — say two iOS tokens, one Android token, an email, and a phone number — and emits a delivery task per (channel, endpoint), which is where fan-out multiplies one event into several sends. Each channel's worker pool calls a uniform `ChannelAdapter.send(message, endpoint)`; the APNS/FCM/SES/Twilio implementations handle provider auth, payload shape, and limits behind that interface and normalize responses into accepted / retryable / permanent-fail / bad-token. Rendering is per-channel because formats differ (SMS 160 chars, push payload caps). Adding a channel is just a new adapter, and isolating each provider to its own pool means one flaky provider can't stall the others.",
+      "crux": true
     },
     {
       "type": "mc",
@@ -100,7 +102,8 @@
         "Delete the message from the queue before sending so it can never be redelivered."
       ],
       "answer": 2,
-      "explain": "Dedup needs an idempotency key persisted with an atomic check-and-set (e.g. Redis `SET key NX EX ttl` or a conditional DB write) so that only the first processing of a given key actually sends; redeliveries and caller retries find the key set and no-op. Broker ordering doesn't imply single delivery; sleeping is a race, not a fix; and deleting-before-send turns at-least-once into at-most-once (you'll silently lose messages on a worker crash after delete)."
+      "explain": "Dedup needs an idempotency key persisted with an atomic check-and-set (e.g. Redis `SET key NX EX ttl` or a conditional DB write) so that only the first processing of a given key actually sends; redeliveries and caller retries find the key set and no-op. Broker ordering doesn't imply single delivery; sleeping is a race, not a fix; and deleting-before-send turns at-least-once into at-most-once (you'll silently lose messages on a worker crash after delete).",
+      "crux": true
     },
     {
       "type": "open",

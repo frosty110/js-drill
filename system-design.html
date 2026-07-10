@@ -105,6 +105,19 @@
   .ch-due{font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap}
   .ch-chevron{color:var(--dim);font-size:18px}
 
+  /* ── Unit detail (key ideas + drill-mode picker) ────────────────────── */
+  .detail{background:var(--panel);border:1px solid var(--panel-2);border-radius:var(--radius-lg);padding:22px}
+  .detail-tag{display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);
+    background:var(--panel-2);padding:3px 9px;border-radius:4px;font-weight:600}
+  .detail-title{margin:12px 0 6px;font-size:22px;color:var(--text-strong);line-height:1.25}
+  .detail-summary{margin:0;color:var(--text);font-size:15px;line-height:1.55}
+  .detail-prog{display:flex;align-items:center;gap:8px;margin:16px 0;font-size:12px;color:var(--muted)}
+  .key-ideas{margin:18px 0 4px;background:#12203a;border:1px solid var(--panel-2);border-left:3px solid var(--accent);
+    border-radius:10px;padding:16px 18px}
+  .key-ideas h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .key-ideas ul{margin:0;padding-left:20px}
+  .key-ideas li{margin:8px 0;font-size:14.5px;line-height:1.55;color:var(--text)}
+
   /* ── Drill session ──────────────────────────────────────────────────── */
   #progress-wrap{height:6px;background:var(--panel);border-radius:3px;overflow:hidden;margin-bottom:6px}
   #progress-bar{height:100%;background:var(--accent);width:0;transition:width .25s}
@@ -366,9 +379,48 @@ async function renderTopicHome(t) {
   }
   app.innerHTML = html;
   document.getElementById('to-topics').addEventListener('click', renderTopics);
-  app.querySelectorAll('.ch-card').forEach(el => el.addEventListener('click', () => startChapter(t, el.dataset.ch)));
+  app.querySelectorAll('.ch-card').forEach(el => el.addEventListener('click', () => renderChapterDetail(t, el.dataset.ch)));
   const mb = document.getElementById('mixed-btn'); if (mb) mb.addEventListener('click', () => startMixed(t));
-  const rb = document.getElementById('resume-btn'); if (rb) rb.addEventListener('click', () => startChapter(t, resume));
+  const rb = document.getElementById('resume-btn'); if (rb) rb.addEventListener('click', () => renderChapterDetail(t, resume));
+  window.scrollTo(0, 0);
+}
+
+// ============================================================================
+// UNIT DETAIL — key ideas + choose a drill mode
+// ============================================================================
+async function renderChapterDetail(t, chId) {
+  session = null; curTopic = t;
+  progress.lastTopic = t; progress.lastChapter = chId; persist();
+  document.getElementById('stats-btn').hidden = false;
+  const app = document.getElementById('app');
+  const ch = await loadChapter(t, chId);
+  const items = chapterItems(t, ch);
+  const cs = chapterStats(t, ch);
+  const cruxCount = items.filter(it => it.q.crux).length;
+  const takeaways = ch.keyTakeaways || [];
+  const label = `${unitAbbrev(t)} ${chNum(ch)}`;
+
+  app.innerHTML = `
+    <button class="crumb" id="to-chapters">‹ ${esc(META[t].title)}</button>
+    <div class="detail">
+      <div class="detail-tag">${esc(label)}</div>
+      <h2 class="detail-title">${esc(ch.title)}</h2>
+      <p class="detail-summary">${fmt(ch.summary || '')}</p>
+      <div class="detail-prog"><span class="bar"><i style="width:${cs.total ? Math.round(cs.mastered / cs.total * 100) : 0}%"></i></span>
+        <span class="ch-frac">${cs.mastered}/${cs.total} mastered</span>${cs.due ? ` · <span class="ch-due">${cs.due} due</span>` : ''}</div>
+      ${takeaways.length ? `
+        <div class="key-ideas">
+          <h3>💡 Key ideas${cruxCount ? ' — the crux to memorize' : ''}</h3>
+          <ul>${takeaways.map(k => `<li>${fmt(k)}</li>`).join('')}</ul>
+        </div>` : ''}
+      <div class="cta-row">
+        <button class="cta primary" id="drill-all">▶ Drill all <span class="due-pill" style="background:rgba(15,23,42,.25);color:inherit">${items.length}</span></button>
+        ${cruxCount ? `<button class="cta ghost" id="drill-crux">⚡ Crux only <span class="due-pill" style="background:#3b2a5c;color:#d8b4fe">${cruxCount}</span></button>` : ''}
+      </div>
+    </div>`;
+  document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
+  document.getElementById('drill-all').addEventListener('click', () => startChapter(t, chId));
+  const cx = document.getElementById('drill-crux'); if (cx) cx.addEventListener('click', () => startCrux(t, chId));
   window.scrollTo(0, 0);
 }
 
@@ -389,7 +441,16 @@ async function startChapter(t, chId) {
     const rest = shuffle(items.filter(it => !isDue(it.key)));
     ordered = due.concat(rest);
   }
-  session = { topic: t, title: ch.title, items: ordered, pos: 0, right: 0, gained: 0, streak: 0, answered: false };
+  session = { topic: t, chId, mode: 'all', title: ch.title, items: ordered, pos: 0, right: 0, gained: 0, streak: 0, answered: false };
+  renderQuestion();
+}
+
+// Crux drill — only the curated signature questions, in authored order.
+async function startCrux(t, chId) {
+  const ch = await loadChapter(t, chId);
+  progress.lastTopic = t; progress.lastChapter = chId; persist();
+  const items = chapterItems(t, ch).filter(it => it.q.crux);
+  session = { topic: t, chId, mode: 'crux', title: `${ch.title} · Crux`, items, pos: 0, right: 0, gained: 0, streak: 0, answered: false };
   renderQuestion();
 }
 
@@ -536,13 +597,15 @@ function renderSummary() {
       <p class="sub">${pct}% on this ${session.mixed ? 'mixed review' : 'set'}.</p>
       ${session.gained ? `<div class="gained">🎯 ${session.gained} new item${session.gained === 1 ? '' : 's'} mastered</div>` : ''}
       <div class="cta-row" style="justify-content:center;margin-top:22px">
-        <button class="cta primary" id="again-btn">${session.mixed ? '⚡ Another mixed set' : '↻ Drill again'}</button>
-        <button class="cta ghost" id="back-btn">← All chapters</button>
+        <button class="cta primary" id="again-btn">${session.mixed ? '⚡ Another mixed set' : (session.mode === 'crux' ? '⚡ Crux again' : '↻ Drill again')}</button>
+        <button class="cta ghost" id="back-btn">${session.mixed ? '← All chapters' : '← Back'}</button>
       </div>
     </div>`;
-  document.getElementById('back-btn').addEventListener('click', () => renderTopicHome(t));
-  const firstCh = session.items.length ? session.items[0].chId : progress.lastChapter;
-  document.getElementById('again-btn').addEventListener('click', () => session.mixed ? startMixed(t) : startChapter(t, firstCh));
+  const chId = session.chId;
+  const mode = session.mode;
+  document.getElementById('back-btn').addEventListener('click', () => session.mixed ? renderTopicHome(t) : renderChapterDetail(t, chId));
+  document.getElementById('again-btn').addEventListener('click', () =>
+    session.mixed ? startMixed(t) : (mode === 'crux' ? startCrux(t, chId) : startChapter(t, chId)));
   window.scrollTo(0, 0);
 }
 

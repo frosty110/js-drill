@@ -75,7 +75,8 @@
         "Chunk-level dedup lets the metadata DB store the full file inline, avoiding a separate blob store."
       ],
       "answer": 1,
-      "explain": "The point of chunking is delta transfer + global dedup: editing one region of a large file only rewrites the affected chunks, and because chunks are keyed by their content hash, a chunk that already exists (from this file's history, another file, or another user) is never uploaded or stored again. Whole-file dedup only helps when two files are byte-for-byte identical — useless for the common case of a small edit to a big file."
+      "explain": "The point of chunking is delta transfer + global dedup: editing one region of a large file only rewrites the affected chunks, and because chunks are keyed by their content hash, a chunk that already exists (from this file's history, another file, or another user) is never uploaded or stored again. Whole-file dedup only helps when two files are byte-for-byte identical — useless for the common case of a small edit to a big file.",
+      "crux": true
     },
     {
       "type": "open",
@@ -88,7 +89,8 @@
         "Content-defined chunking (rolling hash à la rsync) keeps chunk boundaries stable under insertions, maximizing reuse.",
         "Other devices are notified, fetch the new chunk list, and download only chunks they lack."
       ],
-      "answer": "The client re-chunks the edited file and hashes each chunk. Using content-defined chunking (a rolling-hash boundary like rsync) means inserting bytes only shifts the boundaries of the affected region, so most chunk hashes are unchanged. It diffs the new hash list against the last-synced list, asks the server which new hashes are missing, uploads just those chunks, and commits a new version whose chunk list is mostly reused hashes plus a handful of new ones. Downstream devices get a change notification, fetch the new chunk list, and pull only the chunks they don't already have — so a 1-byte edit to a 1 GB file moves a few MB, not a gigabyte."
+      "answer": "The client re-chunks the edited file and hashes each chunk. Using content-defined chunking (a rolling-hash boundary like rsync) means inserting bytes only shifts the boundaries of the affected region, so most chunk hashes are unchanged. It diffs the new hash list against the last-synced list, asks the server which new hashes are missing, uploads just those chunks, and commits a new version whose chunk list is mostly reused hashes plus a handful of new ones. Downstream devices get a change notification, fetch the new chunk list, and pull only the chunks they don't already have — so a 1-byte edit to a 1 GB file moves a few MB, not a gigabyte.",
+      "crux": true
     },
     {
       "type": "open",
@@ -113,7 +115,8 @@
         "To avoid ever needing a CDN, since the metadata DB can serve downloads directly."
       ],
       "answer": 2,
-      "explain": "The two data planes have opposite characteristics. Metadata is small, mutable, relational, and needs strong consistency and low-latency transactions — a good fit for a scaled SQL/NoSQL DB. Chunk bytes are enormous, immutable, and content-addressed — a perfect fit for cheap, durable object storage fronted by a CDN. Coupling them would bloat the DB and throttle metadata operations behind petabytes of blob I/O. (RDBMSs can store blobs, but doing so at this scale is exactly the mistake to avoid.)"
+      "explain": "The two data planes have opposite characteristics. Metadata is small, mutable, relational, and needs strong consistency and low-latency transactions — a good fit for a scaled SQL/NoSQL DB. Chunk bytes are enormous, immutable, and content-addressed — a perfect fit for cheap, durable object storage fronted by a CDN. Coupling them would bloat the DB and throttle metadata operations behind petabytes of blob I/O. (RDBMSs can store blobs, but doing so at this scale is exactly the mistake to avoid.)",
+      "crux": true
     },
     {
       "type": "open",

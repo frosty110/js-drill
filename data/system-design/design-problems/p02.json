@@ -72,7 +72,8 @@
         "Pull requires strong consistency while push only works with strong consistency"
       ],
       "answer": 1,
-      "explain": "Push (fan-out-on-write) does the work at post time, copying the post into every follower's feed — so reads are a cheap lookup of a precomputed list, but a post by a high-follower account causes millions of writes. Pull (fan-out-on-read) does nothing at write time and instead gathers and merges each followee's recent posts when the feed is requested — cheap writes, but every read repeats an expensive scatter-gather. The whole design tension is where you pay: at write time (push) or read time (pull)."
+      "explain": "Push (fan-out-on-write) does the work at post time, copying the post into every follower's feed — so reads are a cheap lookup of a precomputed list, but a post by a high-follower account causes millions of writes. Pull (fan-out-on-read) does nothing at write time and instead gathers and merges each followee's recent posts when the feed is requested — cheap writes, but every read repeats an expensive scatter-gather. The whole design tension is where you pay: at write time (push) or read time (pull).",
+      "crux": true
     },
     {
       "type": "open",
@@ -85,7 +86,8 @@
         "Threshold is tunable and can be per-account; avoids both million-write fan-out AND merging thousands of followees on every read.",
         "Edge cases: a user who follows only celebrities gets a pure-pull feed; recompute/backfill on follow changes."
       ],
-      "answer": "I split authors by follower count. Normal users are pushed: their post is fanned out through the queue into each follower's precomputed timeline. Celebrities — anyone above a tunable threshold, say tens of thousands of followers — are NOT fanned out; their post is stored once. At read time I load the viewer's precomputed push feed and then pull the recent posts of the handful of celebrities they follow, merging and ranking the two sets. Because a celebrity's post is a single hot cache entry read by millions, the pull side is a cheap cache hit rather than N database reads. This gets the best of both: no million-write thundering herd on a celebrity post, and no thousand-followee scatter-gather on a normal read — with the threshold tunable per account."
+      "answer": "I split authors by follower count. Normal users are pushed: their post is fanned out through the queue into each follower's precomputed timeline. Celebrities — anyone above a tunable threshold, say tens of thousands of followers — are NOT fanned out; their post is stored once. At read time I load the viewer's precomputed push feed and then pull the recent posts of the handful of celebrities they follow, merging and ranking the two sets. Because a celebrity's post is a single hot cache entry read by millions, the pull side is a cheap cache hit rather than N database reads. This gets the best of both: no million-write thundering herd on a celebrity post, and no thousand-followee scatter-gather on a normal read — with the threshold tunable per account.",
+      "crux": true
     },
     {
       "type": "mc",
@@ -97,7 +99,8 @@
         "Random sampling of posts to avoid duplicates"
       ],
       "answer": 0,
-      "explain": "Cursor (keyset) pagination anchors the next page to the last item the client saw — its ID, score, or timestamp — so newly-inserted top-of-feed posts don't shift the pages and you never see duplicates or skips. OFFSET pagination breaks precisely here: inserting posts at the top shifts every row, so page 2 repeats or drops items. Re-fetching everything and random sampling are wasteful and don't guarantee stable ordering."
+      "explain": "Cursor (keyset) pagination anchors the next page to the last item the client saw — its ID, score, or timestamp — so newly-inserted top-of-feed posts don't shift the pages and you never see duplicates or skips. OFFSET pagination breaks precisely here: inserting posts at the top shifts every row, so page 2 repeats or drops items. Re-fetching everything and random sampling are wasteful and don't guarantee stable ordering.",
+      "crux": true
     },
     {
       "type": "open",

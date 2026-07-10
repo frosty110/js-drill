@@ -61,7 +61,8 @@
         "All users must connect to the same single chat server, so cross-server routing never happens"
       ],
       "answer": 1,
-      "explain": "With sockets spread across many servers, delivery requires knowing WHERE a user is connected: a session/presence service maps userId → server (or connection id), so the sender's server looks up the recipient and forwards the message to the exact server holding that socket, commonly through a message broker/pub-sub keyed by server or user. Broadcasting to the whole fleet wastes N× bandwidth, DB polling adds latency and load, and a single shared server obviously doesn't scale to millions of connections."
+      "explain": "With sockets spread across many servers, delivery requires knowing WHERE a user is connected: a session/presence service maps userId → server (or connection id), so the sender's server looks up the recipient and forwards the message to the exact server holding that socket, commonly through a message broker/pub-sub keyed by server or user. Broadcasting to the whole fleet wastes N× bandwidth, DB polling adds latency and load, and a single shared server obviously doesn't scale to millions of connections.",
+      "crux": true
     },
     {
       "type": "open",
@@ -88,7 +89,8 @@
         "Idempotency: B may reconnect and re-request; delivery cursor + message ids prevent duplicates.",
         "Retention: queued/undelivered messages persist until delivered or a TTL; multi-device means per-device cursors."
       ],
-      "answer": "Because B has no live socket, the message can't be pushed, so store-and-forward kicks in: it's durably persisted first, the presence lookup shows B offline, and it's marked queued against B's delivery cursor. I then fire a push through APNS or FCM so B's phone notifies the user. When B's app reconnects it syncs from its last-acked sequence and the server streams everything after that cursor down the new socket, advancing the cursor as B acks — which also emits the `delivered` receipt back to A, and `read` when B opens the chat. The per-user cursor plus stable message ids make re-syncs idempotent so B never sees duplicates, and with multiple devices each device keeps its own cursor. Undelivered messages persist until delivered or a TTL expires."
+      "answer": "Because B has no live socket, the message can't be pushed, so store-and-forward kicks in: it's durably persisted first, the presence lookup shows B offline, and it's marked queued against B's delivery cursor. I then fire a push through APNS or FCM so B's phone notifies the user. When B's app reconnects it syncs from its last-acked sequence and the server streams everything after that cursor down the new socket, advancing the cursor as B acks — which also emits the `delivered` receipt back to A, and `read` when B opens the chat. The per-user cursor plus stable message ids make re-syncs idempotent so B never sees duplicates, and with multiple devices each device keeps its own cursor. Undelivered messages persist until delivered or a TTL expires.",
+      "crux": true
     },
     {
       "type": "mc",
@@ -100,7 +102,8 @@
         "Client heartbeats every N seconds refresh a TTL'd entry in an in-memory store (e.g. Redis); absence of heartbeats expires the entry to offline, and updates propagate via pub/sub — accepting eventual consistency"
       ],
       "answer": 3,
-      "explain": "Presence is extremely high-churn and low-stakes, so the standard approach is heartbeat-driven soft state: clients send periodic heartbeats that refresh a TTL'd key in an in-memory store like Redis, the key expiring to 'offline' if heartbeats stop, with changes fanned out via pub/sub to interested contacts. It's deliberately eventually consistent. Hitting the primary DB on every flicker would melt it, an N×N peer mesh is absurd, and server-initiated per-second polling doesn't scale to hundreds of millions of devices."
+      "explain": "Presence is extremely high-churn and low-stakes, so the standard approach is heartbeat-driven soft state: clients send periodic heartbeats that refresh a TTL'd key in an in-memory store like Redis, the key expiring to 'offline' if heartbeats stop, with changes fanned out via pub/sub to interested contacts. It's deliberately eventually consistent. Hitting the primary DB on every flicker would melt it, an N×N peer mesh is absurd, and server-initiated per-second polling doesn't scale to hundreds of millions of devices.",
+      "crux": true
     },
     {
       "type": "open",

@@ -63,7 +63,8 @@
         "The right answer is a hash index on the exact lat/lng, which makes nearest-neighbor an O(1) lookup."
       ],
       "answer": 2,
-      "explain": "A composite B-tree sorts by latitude first, so 'within 2 km' forces a range scan over a latitude band that still contains points arbitrarily far away in longitude — it can't express 2D nearness. Geospatial indexes solve this: geohash and Google S2 interleave/curve the two dimensions into a single ordered key so nearby points share prefixes/ranges, and a QuadTree recursively subdivides space so a proximity query descends to the relevant cells. A hash index destroys locality entirely (O(1) only for exact-point equality, useless for 'nearby')."
+      "explain": "A composite B-tree sorts by latitude first, so 'within 2 km' forces a range scan over a latitude band that still contains points arbitrarily far away in longitude — it can't express 2D nearness. Geospatial indexes solve this: geohash and Google S2 interleave/curve the two dimensions into a single ordered key so nearby points share prefixes/ranges, and a QuadTree recursively subdivides space so a proximity query descends to the relevant cells. A hash index destroys locality entirely (O(1) only for exact-point equality, useless for 'nearby').",
+      "crux": true
     },
     {
       "type": "open",
@@ -76,7 +77,8 @@
         "Query: compute the rider's cell, gather candidate drivers in that cell and adjacent cells, filter to available + true haversine distance <= radius, then rank.",
         "Updates: a moving driver may cross cell boundaries, so an update can mean removing from the old cell bucket and adding to the new one."
       ],
-      "answer": "You bucket drivers into geo cells so 'nearby' becomes 'same or adjacent cell.' Geohash interleaves lat/lng bits into a base32 string where nearby points share a prefix; you query the rider's cell plus its 8 neighbors to catch drivers just across a boundary — simple but a fixed grid. A QuadTree subdivides finer where drivers are dense (downtown) and coarser where sparse, adapting to distribution at the cost of tree maintenance as drivers move. Google S2 uses a Hilbert curve over a cube-projected sphere for 1D cell ids with strong locality and no polar distortion, so it handles Earth's curvature best. The live index sits in memory — Redis GEO or an in-memory grid — because 250k updates/s can't hit a durable DB on the hot path. A query grabs candidates from the rider's cell and neighbors, filters to available drivers within the true haversine radius, and ranks; a driver crossing a boundary is removed from the old bucket and added to the new one."
+      "answer": "You bucket drivers into geo cells so 'nearby' becomes 'same or adjacent cell.' Geohash interleaves lat/lng bits into a base32 string where nearby points share a prefix; you query the rider's cell plus its 8 neighbors to catch drivers just across a boundary — simple but a fixed grid. A QuadTree subdivides finer where drivers are dense (downtown) and coarser where sparse, adapting to distribution at the cost of tree maintenance as drivers move. Google S2 uses a Hilbert curve over a cube-projected sphere for 1D cell ids with strong locality and no polar distortion, so it handles Earth's curvature best. The live index sits in memory — Redis GEO or an in-memory grid — because 250k updates/s can't hit a durable DB on the hot path. A query grabs candidates from the rider's cell and neighbors, filters to available drivers within the true haversine radius, and ranks; a driver crossing a boundary is removed from the old bucket and added to the new one.",
+      "crux": true
     },
     {
       "type": "open",
@@ -102,7 +104,8 @@
         "Send the offer to both riders' apps and let the driver's phone decide, with no server-side coordination."
       ],
       "answer": 1,
-      "explain": "Assignment must be strongly consistent: the driver's availability is flipped with an atomic compare-and-set (or a short-lived lock / conditional DB write) so exactly one dispatcher wins the transition available -> reserved, and the other's write fails and it retries with the next candidate. Relying on eventual consistency guarantees nothing (both can read 'available'); id-ordering doesn't prevent the double write; and pushing the decision to the phone with no server coordination is exactly the race you must prevent."
+      "explain": "Assignment must be strongly consistent: the driver's availability is flipped with an atomic compare-and-set (or a short-lived lock / conditional DB write) so exactly one dispatcher wins the transition available -> reserved, and the other's write fails and it retries with the next candidate. Relying on eventual consistency guarantees nothing (both can read 'available'); id-ordering doesn't prevent the double write; and pushing the decision to the phone with no server coordination is exactly the race you must prevent.",
+      "crux": true
     },
     {
       "type": "open",

@@ -60,7 +60,8 @@
         "One queue per fetcher thread, filled by randomly assigning each newly discovered URL to a thread"
       ],
       "answer": 1,
-      "explain": "The classic Mercator-style frontier uses front queues for prioritization feeding back queues that are each mapped to a single host, with a heap of (next-fetch-time, back-queue) so a worker only pulls a host's URL once its politeness delay has elapsed. This enforces per-domain serialization and rate limiting while still allowing high aggregate throughput across many hosts. A single global FIFO would let many threads hit the same popular domain at once (impolite), and the other options ignore politeness entirely."
+      "explain": "The classic Mercator-style frontier uses front queues for prioritization feeding back queues that are each mapped to a single host, with a heap of (next-fetch-time, back-queue) so a worker only pulls a host's URL once its politeness delay has elapsed. This enforces per-domain serialization and rate limiting while still allowing high aggregate throughput across many hosts. A single global FIFO would let many threads hit the same popular domain at once (impolite), and the other options ignore politeness entirely.",
+      "crux": true
     },
     {
       "type": "open",
@@ -72,7 +73,8 @@
         "Bloom filter tradeoff: tiny memory for billions of URLs, but false positives can wrongly skip a URL; size it for an acceptable FP rate, or back it with an exact store.",
         "Scale: both sets are sharded/distributed (consistent hashing on the URL/fingerprint) since they hold billions of entries."
       ],
-      "answer": "Two different duplicates. First, URL-seen: I canonicalize the URL — normalize the host, drop fragments and default ports, strip/sort volatile query params — then test it against a URL-seen set, typically a Bloom filter for billions of URLs in modest RAM, tolerating rare false positives or backing it with an exact store. But URL dedup can't catch the same content served under many URLs — session-id links, tracking params, mirrors, print vs. mobile pages — so I also fingerprint the page body and check a content-seen store, using an exact hash for identical bytes and a SimHash/MinHash for near-duplicates. You need both because one guards against redundant fetching and the other against redundant indexing, and neither implies the other. At scale both sets are sharded by hash."
+      "answer": "Two different duplicates. First, URL-seen: I canonicalize the URL — normalize the host, drop fragments and default ports, strip/sort volatile query params — then test it against a URL-seen set, typically a Bloom filter for billions of URLs in modest RAM, tolerating rare false positives or backing it with an exact store. But URL dedup can't catch the same content served under many URLs — session-id links, tracking params, mirrors, print vs. mobile pages — so I also fingerprint the page body and check a content-seen store, using an exact hash for identical bytes and a SimHash/MinHash for near-duplicates. You need both because one guards against redundant fetching and the other against redundant indexing, and neither implies the other. At scale both sets are sharded by hash.",
+      "crux": true
     },
     {
       "type": "mc",
@@ -98,7 +100,8 @@
         "Timeouts + circuit breakers for slow/malicious hosts; malformed-HTML tolerant parsing.",
         "Prioritization by page importance (e.g. PageRank-ish signals) naturally starves low-value trap regions."
       ],
-      "answer": "Traps are infinite or near-infinite generated spaces, so I bound the crawl several ways: a max depth from seeds, a per-domain page budget so no single site swallows the crawler, and URL-pattern heuristics that spot endless query permutations, incrementing calendar params, or repeating path segments and de-prioritize or drop them. Content fingerprinting is a second net — a trap that regenerates near-identical pages gets caught by near-duplicate detection and stops being indexed. On top of that I obey robots.txt and crawl-delay, add fetch timeouts and per-host circuit breakers for slow or hostile servers, and parse defensively. Finally, prioritizing by page importance naturally starves low-value trap regions of crawl budget."
+      "answer": "Traps are infinite or near-infinite generated spaces, so I bound the crawl several ways: a max depth from seeds, a per-domain page budget so no single site swallows the crawler, and URL-pattern heuristics that spot endless query permutations, incrementing calendar params, or repeating path segments and de-prioritize or drop them. Content fingerprinting is a second net — a trap that regenerates near-identical pages gets caught by near-duplicate detection and stops being indexed. On top of that I obey robots.txt and crawl-delay, add fetch timeouts and per-host circuit breakers for slow or hostile servers, and parse defensively. Finally, prioritizing by page importance naturally starves low-value trap regions of crawl budget.",
+      "crux": true
     },
     {
       "type": "open",

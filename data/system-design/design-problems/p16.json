@@ -64,7 +64,8 @@
         "Eventual consistency: accept both bookings and cancel one later via a background reconciliation job."
       ],
       "answer": 1,
-      "explain": "The winning pattern is a short atomic claim that flips the seat available→held in one race-safe step (a conditional/`FOR UPDATE` update or a unique-constraint insert on (event,seat)), giving the loser an immediate 409, with a TTL so the seat returns if payment stalls. Crucially the lock or claim is held only for the instant of the state flip, not across the user's payment — holding a pessimistic DB lock through a multi-minute checkout would serialize and collapse under flash-sale load. Pure optimistic-until-payment wastes users' time by letting many people pay for a seat only one can get, and eventual consistency literally oversells, which is unacceptable."
+      "explain": "The winning pattern is a short atomic claim that flips the seat available→held in one race-safe step (a conditional/`FOR UPDATE` update or a unique-constraint insert on (event,seat)), giving the loser an immediate 409, with a TTL so the seat returns if payment stalls. Crucially the lock or claim is held only for the instant of the state flip, not across the user's payment — holding a pessimistic DB lock through a multi-minute checkout would serialize and collapse under flash-sale load. Pure optimistic-until-payment wastes users' time by letting many people pay for a seat only one can get, and eventual consistency literally oversells, which is unacceptable.",
+      "crux": true
     },
     {
       "type": "open",
@@ -78,7 +79,8 @@
         "On confirm, transition held→booked only if the hold is still valid and owned by that user.",
         "Idempotency on confirm so a retry doesn't double-book or double-charge."
       ],
-      "answer": "The claim is a single conditional write — `UPDATE seat SET state='held', held_by=?, expires_at=now()+ttl WHERE seat_id=? AND state='available'` — where the database serializes the two racers so exactly one gets rows-affected=1 and wins; the other sees zero rows and gets a 409. (Equivalently, a unique-constraint hold row on (event,seat) or a Redis `SETNX` lock with TTL.) The TTL — say 5–10 minutes — lets the winner pay without freezing the seat forever. Expiry is enforced two ways: lazily, by treating a hold whose expires_at has passed as available on the next claim, and actively, via a background sweeper that resets timed-out holds. Confirm flips held→booked only if the hold is still valid and owned by that user, and it's idempotent so a retry never double-books or double-charges."
+      "answer": "The claim is a single conditional write — `UPDATE seat SET state='held', held_by=?, expires_at=now()+ttl WHERE seat_id=? AND state='available'` — where the database serializes the two racers so exactly one gets rows-affected=1 and wins; the other sees zero rows and gets a 409. (Equivalently, a unique-constraint hold row on (event,seat) or a Redis `SETNX` lock with TTL.) The TTL — say 5–10 minutes — lets the winner pay without freezing the seat forever. Expiry is enforced two ways: lazily, by treating a hold whose expires_at has passed as available on the next claim, and actively, via a background sweeper that resets timed-out holds. Confirm flips held→booked only if the hold is still valid and owned by that user, and it's idempotent so a retry never double-books or double-charges.",
+      "crux": true
     },
     {
       "type": "open",
@@ -92,7 +94,8 @@
         "Implemented with a queue (e.g. Redis/Kafka) + an admission controller issuing time-boxed entry tokens.",
         "Protects downstream services (inventory DB, payment) from overload and cascading failure."
       ],
-      "answer": "During an on-sale, millions arrive at once, and letting them all pound the inventory DB is a thundering herd that melts the hot seat rows. The virtual waiting room sits in front and admits users into the real booking flow at a controlled rate the backend can serialize — each user gets a queue position and a token, and an admission controller (backed by a Redis/Kafka queue) lets them through in FIFO batches as capacity frees. That decouples the enormous arrival burst from the bounded booking throughput, smoothing the spike into a steady stream while giving users a fair, visible position instead of random timeouts. It's fundamentally back-pressure: protect the inventory and payment services from overload and cascading failure by throttling admission, not by scaling the contended write path infinitely."
+      "answer": "During an on-sale, millions arrive at once, and letting them all pound the inventory DB is a thundering herd that melts the hot seat rows. The virtual waiting room sits in front and admits users into the real booking flow at a controlled rate the backend can serialize — each user gets a queue position and a token, and an admission controller (backed by a Redis/Kafka queue) lets them through in FIFO batches as capacity frees. That decouples the enormous arrival burst from the bounded booking throughput, smoothing the spike into a steady stream while giving users a fair, visible position instead of random timeouts. It's fundamentally back-pressure: protect the inventory and payment services from overload and cascading failure by throttling admission, not by scaling the contended write path infinitely.",
+      "crux": true
     },
     {
       "type": "open",

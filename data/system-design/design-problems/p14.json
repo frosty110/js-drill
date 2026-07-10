@@ -64,7 +64,8 @@
         "Trades memory (duplicating top-K up the tree) for query speed.",
         "Optionally compress with a radix/Patricia trie to collapse single-child chains."
       ],
-      "answer": "It's a trie where each root-to-node path spells a prefix, and crucially each node stores a precomputed cache of its top-K most-popular completions with scores. A request walks the trie character by character — O(prefix length), independent of corpus size — and returns the node's cached list directly, with no per-request scanning or sorting. Those top-K lists are computed bottom-up at build time by merging children's lists up to the root. It deliberately trades memory (the popular completions are duplicated up the tree) for a lookup that's essentially a pointer walk. A radix/Patricia trie collapses single-child chains to save space."
+      "answer": "It's a trie where each root-to-node path spells a prefix, and crucially each node stores a precomputed cache of its top-K most-popular completions with scores. A request walks the trie character by character — O(prefix length), independent of corpus size — and returns the node's cached list directly, with no per-request scanning or sorting. Those top-K lists are computed bottom-up at build time by merging children's lists up to the root. It deliberately trades memory (the popular completions are duplicated up the tree) for a lookup that's essentially a pointer walk. A radix/Patricia trie collapses single-child chains to save space.",
+      "crux": true
     },
     {
       "type": "mc",
@@ -76,7 +77,8 @@
         "The trie guarantees strong consistency of suggestion freshness, which the database cannot provide."
       ],
       "answer": 1,
-      "explain": "`LIKE 'prefix%'` (no leading wildcard) can use a B-tree index to find the matching range, but for a hot prefix like 'a' that range is enormous and the DB must still gather and sort by frequency on every keystroke — impossible at hundreds of thousands of QPS within 100ms. The trie moves that ranking work offline: each node already holds its top-K, so serving a request is just walking the prefix and returning a cached list. The tradeoff is memory and staleness (the trie is rebuilt periodically), which is exactly the right trade for autocomplete."
+      "explain": "`LIKE 'prefix%'` (no leading wildcard) can use a B-tree index to find the matching range, but for a hot prefix like 'a' that range is enormous and the DB must still gather and sort by frequency on every keystroke — impossible at hundreds of thousands of QPS within 100ms. The trie moves that ranking work offline: each node already holds its top-K, so serving a request is just walking the prefix and returning a cached list. The tradeoff is memory and staleness (the trie is rebuilt periodically), which is exactly the right trade for autocomplete.",
+      "crux": true
     },
     {
       "type": "open",
@@ -89,7 +91,8 @@
         "Practical middle ground: batch-rebuild the base + a fast streaming layer for trending terms, merged at query time.",
         "Freshness requirement usually allows minutes/hours, so batch is acceptable for most of the corpus."
       ],
-      "answer": "The default is a batch/offline rebuild: aggregate query logs and rebuild or patch the trie hourly or daily. Real-time per-keystroke updates are hard for three reasons — the write volume is astronomical (every search would mutate the structure), a single frequency bump invalidates the precomputed top-K of every ancestor node up to the root, and mutating a shared in-memory trie while it serves ~1M reads/sec demands careful copy-on-write or locking. Since freshness usually only needs to be minutes-to-hours, batch is fine for the bulk of the corpus, with an optional lightweight streaming layer for genuinely trending terms merged in at query time."
+      "answer": "The default is a batch/offline rebuild: aggregate query logs and rebuild or patch the trie hourly or daily. Real-time per-keystroke updates are hard for three reasons — the write volume is astronomical (every search would mutate the structure), a single frequency bump invalidates the precomputed top-K of every ancestor node up to the root, and mutating a shared in-memory trie while it serves ~1M reads/sec demands careful copy-on-write or locking. Since freshness usually only needs to be minutes-to-hours, batch is fine for the bulk of the corpus, with an optional lightweight streaming layer for genuinely trending terms merged in at query time.",
+      "crux": true
     },
     {
       "type": "open",

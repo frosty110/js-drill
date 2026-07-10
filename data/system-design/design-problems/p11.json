@@ -63,7 +63,8 @@
       ],
       "answer": 1,
       "explain": "The sorted set amortizes ordering into each write (an O(log N) skiplist insert), so top-K is an O(log N + K) range read and a user's rank is an O(log N) `ZREVRANK` — always fresh, no re-sort. The SQL approach re-derives the order per query, which is expensive at scale and hard to cache because scores change constantly, invalidating any cached page. SQL can compute rank (via window functions/counts) and is in fact the more durable store — so those options are wrong; the real reason is the sorted-set's always-sorted structure and read complexity.",
-      "q": "Why use a Redis sorted set instead of storing scores in SQL and running `SELECT ... ORDER BY score DESC LIMIT 100` on each read?"
+      "q": "Why use a Redis sorted set instead of storing scores in SQL and running `SELECT ... ORDER BY score DESC LIMIT 100` on each read?",
+      "crux": true
     },
     {
       "type": "open",
@@ -76,7 +77,8 @@
         "Keep per-shard counts/boundaries cached so the 'count higher shards' step is O(#shards); rebalance bands as the score distribution drifts.",
         "If exact rank isn't required, approximate it: histogram/percentile buckets give 'top ~5%' in O(1) and dodge cross-shard fan-out entirely — a common real-world compromise."
       ],
-      "answer": "On one node `ZREVRANK` is a cheap O(log N), so the pain only starts when the board outgrows a single node and shards. Exact rank is fundamentally global — it's the count of everyone above you — so no single shard can answer it alone. The trick is to shard by score range rather than by user: each shard owns a contiguous band, so a user's global rank is the summed cardinality of all strictly-higher shards plus its local `ZREVRANK` within its own band, which is a fan-out over the number of shards, not a full scan. I cache each shard's boundaries and counts so the 'count above' step is O(#shards), and rebalance bands as the distribution drifts. When exact rank isn't truly needed, I'd switch to percentile buckets — 'you're in the top 3%' — which is O(1) and sidesteps the cross-shard fan-out entirely."
+      "answer": "On one node `ZREVRANK` is a cheap O(log N), so the pain only starts when the board outgrows a single node and shards. Exact rank is fundamentally global — it's the count of everyone above you — so no single shard can answer it alone. The trick is to shard by score range rather than by user: each shard owns a contiguous band, so a user's global rank is the summed cardinality of all strictly-higher shards plus its local `ZREVRANK` within its own band, which is a fan-out over the number of shards, not a full scan. I cache each shard's boundaries and counts so the 'count above' step is O(#shards), and rebalance bands as the distribution drifts. When exact rank isn't truly needed, I'd switch to percentile buckets — 'you're in the top 3%' — which is O(1) and sidesteps the cross-shard fan-out entirely.",
+      "crux": true
     },
     {
       "type": "open",
@@ -101,7 +103,8 @@
       ],
       "answer": 2,
       "explain": "Range-sharding by score means the top-K lives in (or starts at) the highest-score shard, so top-100 is answered from essentially one shard instead of scatter-gathering from all of them. Hash-by-user spreads a given score band across every shard, forcing you to query all shards and merge for any top-K or rank query. A single write shard just recreates the single-node bottleneck, and random assignment has the same scatter-gather problem as hashing. Range-sharding aligns the physical layout with the query (ordering), which is the whole point.",
-      "q": "You shard the leaderboard across nodes to fit memory. To answer 'top 100 globally' efficiently, which sharding scheme is best?"
+      "q": "You shard the leaderboard across nodes to fit memory. To answer 'top 100 globally' efficiently, which sharding scheme is best?",
+      "crux": true
     },
     {
       "type": "open",

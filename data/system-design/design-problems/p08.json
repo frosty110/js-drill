@@ -63,7 +63,8 @@
         "Tradeoff: token bucket = tunable bursts; sliding-window-counter = accurate smooth ceilings without boundary doubling.",
         "Both need atomic updates in the distributed setting — the algorithm choice doesn't remove the shared-state race."
       ],
-      "answer": "Fixed-window's flaw is the boundary spike: a client can send its whole quota at 0:59 and again at 1:00, doubling the effective rate across two seconds. Sliding-window-counter fixes that cheaply by blending the previous window's count weighted by how much of it still overlaps the rolling window — `current + prev * overlapFraction` — giving a smooth, near-accurate ceiling with just two counters instead of a full timestamp log. Token bucket is a different goal: refill at the steady rate into a capacity-N bucket to permit intentional bursts, with O(1) state. So I'd reach for token bucket when controlled bursting matters and sliding-window-counter when I need an accurate smooth cap — and note both still need atomic updates once distributed."
+      "answer": "Fixed-window's flaw is the boundary spike: a client can send its whole quota at 0:59 and again at 1:00, doubling the effective rate across two seconds. Sliding-window-counter fixes that cheaply by blending the previous window's count weighted by how much of it still overlaps the rolling window — `current + prev * overlapFraction` — giving a smooth, near-accurate ceiling with just two counters instead of a full timestamp log. Token bucket is a different goal: refill at the steady rate into a capacity-N bucket to permit intentional bursts, with O(1) state. So I'd reach for token bucket when controlled bursting matters and sliding-window-counter when I need an accurate smooth cap — and note both still need atomic updates once distributed.",
+      "crux": true
     },
     {
       "type": "open",
@@ -76,7 +77,8 @@
         "Lua script is preferred for token-bucket / sliding-window logic because it bundles multiple reads+writes (tokens, timestamp) into a single atomic server-side execution — no interleaving.",
         "This gives correctness across arbitrarily many nodes because the single-threaded store serializes all mutations to a given key."
       ],
-      "answer": "The race is a lost update / time-of-check-to-time-of-use: two nodes both GET count=99 under a limit of 100, both conclude 'allowed', and both increment — so two requests pass when one should. Client-side locking is slow and doesn't scale, so you push atomicity into the store. Redis `INCR` is atomic and returns the new value in one round-trip, so you `INCR` and compare the result to the limit, using `EXPIRE`/`SET NX EX` to bound the window. For token-bucket or sliding-window logic that touches multiple fields, a Lua script bundles 'read tokens, check, decrement, set TTL' into one indivisible server-side execution. Because Redis serializes operations per key, this stays correct no matter how many gateway nodes there are."
+      "answer": "The race is a lost update / time-of-check-to-time-of-use: two nodes both GET count=99 under a limit of 100, both conclude 'allowed', and both increment — so two requests pass when one should. Client-side locking is slow and doesn't scale, so you push atomicity into the store. Redis `INCR` is atomic and returns the new value in one round-trip, so you `INCR` and compare the result to the limit, using `EXPIRE`/`SET NX EX` to bound the window. For token-bucket or sliding-window logic that touches multiple fields, a Lua script bundles 'read tokens, check, decrement, set TTL' into one indivisible server-side execution. Because Redis serializes operations per key, this stays correct no matter how many gateway nodes there are.",
+      "crux": true
     },
     {
       "type": "mc",
@@ -88,7 +90,8 @@
         "`INCR` automatically shards the key across the Redis cluster for you."
       ],
       "answer": 1,
-      "explain": "The point is atomicity: `INCR` reads-and-increments in one indivisible server-side step and returns the result, so concurrent callers can't both see the pre-increment value and double-count. `GET`+`SET` from two clients is the classic lost-update race. (`GET`+`SET` can technically set a TTL separately, `INCR` isn't a compression or auto-sharding feature — those options are distractors.)"
+      "explain": "The point is atomicity: `INCR` reads-and-increments in one indivisible server-side step and returns the result, so concurrent callers can't both see the pre-increment value and double-count. `GET`+`SET` from two clients is the classic lost-update race. (`GET`+`SET` can technically set a TTL separately, `INCR` isn't a compression or auto-sharding feature — those options are distractors.)",
+      "crux": true
     },
     {
       "type": "open",

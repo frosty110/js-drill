@@ -63,7 +63,8 @@
       ],
       "answer": 1,
       "explain": "The whole point is minimal remapping on membership change. With `hash % N`, changing N shifts the modulus so nearly every key maps to a different node — a mass cache miss / rehash storm. Consistent hashing places keys and nodes on a ring, so adding or removing a node only reassigns the keys in that node's arc — about 1/N of them — leaving the rest untouched. Modulo is actually cheaper to compute and both schemes can replicate, so those options are wrong; the differentiator is remap cost under scaling/failure.",
-      "q": "Why distribute keys with consistent hashing instead of `node = hash(key) % N`?"
+      "q": "Why distribute keys with consistent hashing instead of `node = hash(key) % N`?",
+      "crux": true
     },
     {
       "type": "open",
@@ -76,7 +77,8 @@
         "Virtual nodes: each physical node is hashed to many ring points (e.g. 100-200 vnodes), so its ownership is many small arcs spread around the ring — smoothing load and making joins/leaves move many small chunks from many nodes (even rebalancing).",
         "Vnodes also let heterogeneous hardware carry proportional load (more vnodes = bigger share)."
       ],
-      "answer": "You hash both keys and node identifiers onto one fixed ring, and a key belongs to the first node clockwise from where it lands. When a node joins, it only claims the arc between itself and its predecessor, so roughly 1/N of keys move off a single successor and nothing else shifts; when a node leaves, its arc simply falls to the next node clockwise — no global reshuffle either way, which is the property `hash % N` lacks. The catch is that with few nodes the arcs are uneven and load skews, so I give each physical node many virtual points on the ring — a hundred or more vnodes — which breaks its ownership into many small arcs scattered around the ring. That smooths the load distribution, makes a join/leave pull many small chunks from many nodes instead of hammering one neighbor, and lets bigger machines take proportionally more vnodes."
+      "answer": "You hash both keys and node identifiers onto one fixed ring, and a key belongs to the first node clockwise from where it lands. When a node joins, it only claims the arc between itself and its predecessor, so roughly 1/N of keys move off a single successor and nothing else shifts; when a node leaves, its arc simply falls to the next node clockwise — no global reshuffle either way, which is the property `hash % N` lacks. The catch is that with few nodes the arcs are uneven and load skews, so I give each physical node many virtual points on the ring — a hundred or more vnodes — which breaks its ownership into many small arcs scattered around the ring. That smooths the load distribution, makes a join/leave pull many small chunks from many nodes instead of hammering one neighbor, and lets bigger machines take proportionally more vnodes.",
+      "crux": true
     },
     {
       "type": "open",
@@ -102,7 +104,8 @@
         "Mitigation 3 — key-splitting: shard the value under suffixed keys (`key#1..#K`) across nodes and pick one at random per read (works when reads dominate and slight duplication is fine).",
         "Detect hot keys via sampling/metrics so mitigations can be applied dynamically; write-heavy hot keys are harder (need fan-out on write) than read-heavy ones."
       ],
-      "answer": "Consistent hashing only balances how many keys sit on each node, not how much traffic each key attracts — so a single viral key still resolves to one node, and that node melts while its peers idle. It's a genuine hotspot and single point of contention that better key distribution can't fix. The mitigations all spread that one key's load: replicate it across several nodes and read from a random replica; put a small in-process near-cache in front of the cluster so the hottest reads never leave the app; or split the key into `key#1..#K` variants placed on different nodes and pick one per read. Read-heavy hot keys are the easy case — I detect them via sampling and apply these dynamically — whereas a write-heavy hot key is harder because every replica has to be kept current."
+      "answer": "Consistent hashing only balances how many keys sit on each node, not how much traffic each key attracts — so a single viral key still resolves to one node, and that node melts while its peers idle. It's a genuine hotspot and single point of contention that better key distribution can't fix. The mitigations all spread that one key's load: replicate it across several nodes and read from a random replica; put a small in-process near-cache in front of the cluster so the hottest reads never leave the app; or split the key into `key#1..#K` variants placed on different nodes and pick one per read. Read-heavy hot keys are the easy case — I detect them via sampling and apply these dynamically — whereas a write-heavy hot key is harder because every replica has to be kept current.",
+      "crux": true
     },
     {
       "type": "mc",

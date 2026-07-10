@@ -72,7 +72,8 @@
         "On the app servers' local disks, load-balanced across them"
       ],
       "answer": 1,
-      "explain": "Photos are large, immutable binaries — object storage (S3) is built for exactly this: cheap, effectively unbounded, replicated for durability. The DB stores just the key/URL and metadata so it stays small and queryable, and delivery goes through a CDN to serve the bandwidth close to users. BLOBs in the DB bloat it and kill query performance; Redis is expensive RAM for MB payloads; and local app-server disks aren't durable or shareable."
+      "explain": "Photos are large, immutable binaries — object storage (S3) is built for exactly this: cheap, effectively unbounded, replicated for durability. The DB stores just the key/URL and metadata so it stays small and queryable, and delivery goes through a CDN to serve the bandwidth close to users. BLOBs in the DB bloat it and kill query performance; Redis is expensive RAM for MB payloads; and local app-server disks aren't durable or shareable.",
+      "crux": true
     },
     {
       "type": "open",
@@ -85,7 +86,8 @@
         "Queue gives elasticity + retry + backpressure: spikes buffer, failed jobs retry, workers scale independently.",
         "Idempotent workers (keyed on photoId+variant) so retries don't duplicate work."
       ],
-      "answer": "Resizing and transcoding a multi-megabyte image takes seconds of CPU, so doing it inline would block the upload and tie user latency to that work — hence async. The original lands in S3, which emits an event onto a queue; a worker pool pulls jobs and produces the variants (thumbnail, feed, full), transcodes format, strips EXIF, and runs moderation, then writes them back to S3 and updates the photo's `status` and `mediaKeys` in the DB. The client gets an immediate upload confirmation with `status=processing` — showing the original or a placeholder — and flips to ready once variants exist. The queue is what makes this robust: it buffers upload spikes, retries failed jobs, applies backpressure, and lets processing workers scale independently, with jobs keyed by photoId+variant so retries stay idempotent."
+      "answer": "Resizing and transcoding a multi-megabyte image takes seconds of CPU, so doing it inline would block the upload and tie user latency to that work — hence async. The original lands in S3, which emits an event onto a queue; a worker pool pulls jobs and produces the variants (thumbnail, feed, full), transcodes format, strips EXIF, and runs moderation, then writes them back to S3 and updates the photo's `status` and `mediaKeys` in the DB. The client gets an immediate upload confirmation with `status=processing` — showing the original or a placeholder — and flips to ready once variants exist. The queue is what makes this robust: it buffers upload spikes, retries failed jobs, applies backpressure, and lets processing workers scale independently, with jobs keyed by photoId+variant so retries stay idempotent.",
+      "crux": true
     },
     {
       "type": "mc",
@@ -97,7 +99,8 @@
         "Vertically scaling the app tier with more CPU"
       ],
       "answer": 2,
-      "explain": "The dominant cost and latency is delivering hundreds of TB/day of image bytes, and photo access is power-law skewed toward recent/popular content — so a high CDN cache hit rate means the vast majority of bytes are served from edge caches near users, sparing origin/S3 bandwidth and slashing latency. Metadata replicas, feed-store shards, and app CPU all matter, but they address the tiny metadata/logic side, not the bytes that actually saturate the system."
+      "explain": "The dominant cost and latency is delivering hundreds of TB/day of image bytes, and photo access is power-law skewed toward recent/popular content — so a high CDN cache hit rate means the vast majority of bytes are served from edge caches near users, sparing origin/S3 bandwidth and slashing latency. Metadata replicas, feed-store shards, and app CPU all matter, but they address the tiny metadata/logic side, not the bytes that actually saturate the system.",
+      "crux": true
     },
     {
       "type": "open",

@@ -116,6 +116,44 @@
   };
 
   // ============================================================================
+  // SYNC MARKERS — device-local, NEVER part of any synced bundle
+  // ============================================================================
+  // Small unsynced scalars that js/sync.js needs to make cloud writes safe:
+  //   - owner:   which auth user id the local blobs belong to. Written after a
+  //              successful signed-in merge+push. Lets sync.js detect a sign-in
+  //              by a DIFFERENT account on the same device (cross-account bleed
+  //              guard) instead of silently merging user A's history into
+  //              user B's row.
+  //   - reset:   { resetAt, lastResetSeenAt } — the cloud-authoritative reset/
+  //              restore channel. resetAt is stamped into the pushed bundle so
+  //              other devices REPLACE local with cloud instead of union-merging
+  //              the cleared data back; lastResetSeenAt records the newest
+  //              cloud resetAt this device has already adopted.
+  // These fire NO write event (they must never trigger a push themselves).
+  Storage.SYNC_OWNER_KEY = 'jsdrill.sync.owner.v1';
+
+  Storage.loadSyncOwner = function () {
+    try { return localStorage.getItem(Storage.SYNC_OWNER_KEY) || null; }
+    catch (e) { return null; }
+  };
+
+  Storage.saveSyncOwner = function (uid) {
+    try { localStorage.setItem(Storage.SYNC_OWNER_KEY, String(uid)); }
+    catch (e) { console.warn('storage write failed for', Storage.SYNC_OWNER_KEY, e); }
+  };
+
+  Storage.SYNC_RESET_KEY = 'jsdrill.sync.reset.v1';
+
+  /** Returns { resetAt?, lastResetSeenAt? } — empty object when unset. */
+  Storage.loadSyncResetMarkers = function () {
+    return _readRaw(Storage.SYNC_RESET_KEY) || {};
+  };
+
+  Storage.saveSyncResetMarkers = function (markers) {
+    _safeSave(Storage.SYNC_RESET_KEY, markers || {});
+  };
+
+  // ============================================================================
   // CROSS-APP BRIDGE
   // ============================================================================
   // Prep + diagnostic need to (a) READ main-app progress to auto-check
@@ -198,8 +236,8 @@
 
   // Optional layers (js/sync.js) listen for this without creating a
   // circular dependency. `detail.key` is 'progress' | 'prep' | 'diagnostic'
-  // so consumers can be selective if they want — sync.js debounce-pushes
-  // the whole bundle on any write.
+  // | 'systemdesign' so consumers can be selective if they want — sync.js
+  // debounce-pushes the whole bundle on any write.
   function _fireWriteEvent(key) {
     if (typeof root.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
     try {

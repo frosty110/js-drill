@@ -1,0 +1,102 @@
+/* ── 06: ds-nav — app-side integration for the redesign's navigation shell ──
+   (design-loop P1 slice 1 = mobile bottom bar; P4b = desktop rail — see
+   js/app/16-ds-nav.js for the wiring story.)
+
+   The nav COMPONENT itself lives in ds/components.css (.ds-appnav/.ds-navitem,
+   built on ds/tokens.css): bottom tab bar ≤767px, left rail ≥768px (D01).
+   This file holds only the APP-SPECIFIC interop: what legacy chrome the nav
+   replaces at each viewport, and how it coexists with the app's other
+   fixed-position surfaces (topbar, drawer, L3 Run bar, audio dock). Keeping
+   app selectors out of ds/components.css preserves D04's isolation (the ds/
+   layer stays a pure, reusable system). Load AFTER ds/components.css.
+
+   BREAKPOINT: 768px everywhere — the drawer/hamburger breakpoint in
+   css/02-sidebar.css, the topbar collapse in css/05-shell-chrome.css and the
+   ds rail all flip together (P4b unified them; the interim 900px rail
+   breakpoint is gone). */
+
+/* Nav items are <button>s (the component styles <a>-agnostically) —
+   neutralize UA button chrome at every viewport. */
+#ds-appnav .ds-navitem { background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; }
+
+/* Active-destination highlight. aria-current is kept truthful by the
+   #lesson-shell observer in js/app/16-ds-nav.js. */
+#ds-appnav .ds-navitem[aria-current="page"] { color: var(--ds-accent); }
+
+/* ── The off-canvas drawer retires (P4 part 3, D10) ────────────────────────
+   Browse owns search / filters / the lesson list at every viewport, so the
+   legacy sidebar never renders. The aside STAYS in the DOM: its hidden
+   buttons are synthetic-click targets for the palette / launcher / rail
+   (D05 contract), and renderSidebar keeps painting into it harmlessly.
+   ID selectors deliberately out-specify the legacy .sidebar-open rules in
+   css/02-sidebar.css. */
+aside.app-sidebar { display: none; }
+#sidebar-backdrop { display: none; }
+#hamburger { display: none; }
+
+/* The audio dock owns bottom:0 by default (its inline style deliberately has
+   no `bottom` — see index.html — so these rules can position it). */
+#audio-dock { bottom: 0; }
+
+/* Topbar controls carry ds stroke icons (D07) — center the svg glyph in the
+   button face at every viewport. */
+.topbar-icon, .surface-seg [aria-hidden], #topbar-plan [aria-hidden] {
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.topbar-icon svg, .surface-seg svg, #topbar-plan svg { display: block; }
+.surface-seg, #topbar-plan { display: inline-flex; align-items: center; gap: 5px; }
+
+@media (max-width: 767px) {
+  /* Content never hides under the fixed bar. */
+  main.app-main { padding-bottom: calc(var(--ds-nav-h) + env(safe-area-inset-bottom)); }
+
+  /* The audio dock docks ABOVE the nav (mini-player-above-tab-bar pattern). */
+  #audio-dock { bottom: calc(var(--ds-nav-h) + env(safe-area-inset-bottom)); }
+
+  /* Redundant legacy mobile chrome retires visually — the bar replaces it.
+     The elements stay in the DOM as synthetic-click targets (D05 contract). */
+  #topbar-dashboard-mobile, #topbar-mobile-menu { display: none; }
+
+  /* Immersive L3: the sticky Run bar owns the bottom edge — the nav yields.
+     (L3 is the at-desk tier; on mobile the rep matters more than the chrome.) */
+  body:has(.l3-actions) #ds-appnav { display: none; }
+  body:has(.l3-actions) main.app-main { padding-bottom: 0; }
+  body:has(.l3-actions) #audio-dock { bottom: 0; }
+}
+
+/* ── Desktop (≥768px): the ds rail is the primary navigation (P4b) ────────
+   The topbar dropdown menus and the permanent sidebar retire; the rail
+   (Today / Browse / Practice / Progress + Search ⌘K / Settings) + the Browse
+   page (which carries the power filters as first-class controls since P4
+   part 3) + the Practice launcher + the palette replace them. Capability is
+   preserved (D05): every retired trigger stays in the DOM as a synthetic-
+   click target. */
+@media (min-width: 768px) {
+  /* The rail slots under the topbar (which keeps wordmark / Problems⇄Reference
+     toggle / Plan / System Design link / icon strip). The component's own
+     rules make it a fixed 100vh column; this trims it to the stage height. */
+  #ds-appnav { top: calc(48px + env(safe-area-inset-top)); height: auto; bottom: 0; }
+  /* Full-bleed session shells hide the topbar — the rail takes the full edge. */
+  body.in-session #ds-appnav { top: 0; }
+  /* Restore the component's rail item padding (the button-neutralize rule
+     above outranks the .ds-navitem rail rule by specificity). */
+  #ds-appnav .ds-navitem { padding: 0 var(--ds-s3); }
+  #ds-appnav .ds-navitem[aria-current="page"] { background: var(--ds-accent-soft); }
+
+  /* The stage clears the fixed rail. */
+  .app-stage { padding-left: var(--ds-rail-w); }
+
+  /* Topbar dropdown menus retire (Practice/Drills/Train/Review → the rail's
+     Practice launcher + palette; Dashboard → the rail's Progress). The
+     System Design link stays — it's a separate page with no rail slot yet. */
+  .topbar-menus .topbar-menu[data-menu], #topbar-dashboard { display: none; }
+
+  /* Mobile-only topbar icons stay hidden at desktop — the global icon-
+     centering rule above (D07) outranks 05-shell-chrome's base display:none
+     by cascade order, so re-assert it here. */
+  #topbar-dashboard-mobile, #topbar-mobile-menu { display: none; }
+
+  /* The audio dock yields the rail's width (it spans the content area only). */
+  #audio-dock { left: var(--ds-rail-w); }
+}
+

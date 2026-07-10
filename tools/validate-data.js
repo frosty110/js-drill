@@ -85,6 +85,11 @@ const onDisk = new Set();
 for (const sec of fs.readdirSync(DATA)) {
   const p = path.join(DATA, sec);
   if (!fs.statSync(p).isDirectory()) continue;
+  // data/system-design/ is the standalone system-design drill's content tree
+  // (its own registry + per-topic dirs), not a lesson section — it has its own
+  // validator (tools/validate-system-design.js). Its topics.json was tripping
+  // the drift scan as "on disk but not in manifest".
+  if (sec === 'system-design') continue;
   for (const f of fs.readdirSync(p)) {
     if (!f.endsWith('.json')) continue;
     onDisk.add(`${sec}/${f}`);

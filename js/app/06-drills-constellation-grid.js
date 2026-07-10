@@ -1079,7 +1079,7 @@ function startSectionGrid() {
       </div>
       <div class="sg-legend">
         <span class="sg-legend-swatch" style="background:rgba(248,113,113,0.6);"></span> 0% mastered
-        <span class="sg-legend-swatch" style="background:rgba(251,191,36,0.6);"></span> 50%
+        <span class="sg-legend-swatch" style="background:rgba(245,182,43,0.6);"></span> 50%
         <span class="sg-legend-swatch" style="background:rgba(52,211,153,0.6);"></span> 100%
       </div>
     </div>

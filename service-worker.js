@@ -14,7 +14,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v18-password-login-2026-06-01';
+const CACHE_VERSION = 'jsdrill-v23-p4c-browse-filters-2026-07-10';
 const APP_SHELL = [
   './',
   './index.html',
@@ -36,11 +36,22 @@ const APP_SHELL = [
   './js/app/13-mechanics-modal.js',
   './js/app/14-init-core.js',
   './js/app/15-init-features-boot.js',
+  './js/app/16-ds-nav.js',
+  './js/app/17-today-home.js',
+  './js/app/18-practice-launcher.js',
+  './js/app/19-browse.js',
+  './js/app/20-progress.js',
   './css/01-base.css',
   './css/02-sidebar.css',
   './css/03-tabs.css',
   './css/04-drills.css',
   './css/05-shell-chrome.css',
+  './css/06-ds-nav.css',
+  './css/07-ds-progress.css',
+  './css/08-ds-browse.css',
+  './ds/tokens.css',
+  './ds/components.css',
+  './ds/icons.js',
   './tokens.css',
   './js/storage.js',
   './js/sync.js',

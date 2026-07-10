@@ -72,20 +72,20 @@ function _cramRenderTaskRow(task, opts = {}) {
   if (opts.openOnly && done) return '';
   const lesson = task.lessonId ? findLesson(task.lessonId) : null;
   const lessonTitle = lesson ? lesson.title : '';
-  const minsBadge = task.mins != null ? `<span style="font-size:11px;color:#64748b;">~${task.mins} min</span>` : '';
+  const minsBadge = task.mins != null ? `<span style="font-size:11px;color:#6b7079;">~${task.mins} min</span>` : '';
   const checkAttr = task.lessonId ? 'disabled' : '';
   const checkTitle = task.lessonId ? 'Ticks automatically when you master the linked lesson' : 'Tap to mark done';
   const lessonBtn = task.lessonId
-    ? `<button data-cram-open="${escapeHtml(task.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;font-weight:500;">Open →</button>`
+    ? `<button data-cram-open="${escapeHtml(task.lessonId)}" style="background:#262930;color:#ffce5a;border:none;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;font-weight:500;">Open →</button>`
     : '';
   const redoBtn = (!task.lessonId && done)
     ? `<button data-cram-redo="${escapeHtml(task.id)}" title="Re-open this task" style="background:none;border:none;color:#fdba74;cursor:pointer;font-size:11px;text-decoration:underline;">↻ redo</button>`
     : '';
-  const lessonBadge = lessonTitle ? `: <strong style="color:#e2e8f0;">${escapeHtml(lessonTitle)}</strong>` : '';
-  return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid #1e293b;${done ? 'opacity:0.55;' : ''}">
+  const lessonBadge = lessonTitle ? `: <strong style="color:#eef0f2;">${escapeHtml(lessonTitle)}</strong>` : '';
+  return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid #262930;${done ? 'opacity:0.55;' : ''}">
     <input type="checkbox" data-cram-check="${escapeHtml(task.id)}" ${done ? 'checked' : ''} ${checkAttr} title="${escapeHtml(checkTitle)}" style="margin-top:3px;cursor:${task.lessonId ? 'default' : 'pointer'};" />
     <div style="flex:1;min-width:0;">
-      <div style="font-size:13px;line-height:1.5;color:#cbd5e1;${done ? 'text-decoration:line-through;' : ''}">${escapeHtml(task.label)}${lessonBadge}</div>
+      <div style="font-size:13px;line-height:1.5;color:#c4c9cf;${done ? 'text-decoration:line-through;' : ''}">${escapeHtml(task.label)}${lessonBadge}</div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap;">${minsBadge}${lessonBtn}${redoBtn}</div>
     </div>
   </div>`;
@@ -102,32 +102,32 @@ function _cramRenderDayBody(day, dayIdx, opts = {}) {
     const tasksHtml = block.tasks.map(t => _cramRenderTaskRow(t, { openOnly })).join('');
     if (openOnly && blockDone === blockTotal) return '';
     const expanded = !(collapseDone && blockComplete);
-    return `<details ${expanded ? 'open' : ''} style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;margin-bottom:8px;">
+    return `<details ${expanded ? 'open' : ''} style="background:#0e0f12;border:1px solid #262930;border-radius:8px;margin-bottom:8px;">
       <summary style="padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;list-style:none;">
         <span style="display:flex;flex-direction:column;min-width:0;">
-          <span style="font-size:14px;font-weight:600;color:#e2e8f0;">${escapeHtml(block.title)}</span>
-          <span style="font-size:11px;color:#64748b;">${escapeHtml(block.duration || '')}</span>
+          <span style="font-size:14px;font-weight:600;color:#eef0f2;">${escapeHtml(block.title)}</span>
+          <span style="font-size:11px;color:#6b7079;">${escapeHtml(block.duration || '')}</span>
         </span>
-        <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:${blockComplete ? '#34d399' : '#1e293b'};color:${blockComplete ? '#0f172a' : '#cbd5e1'};font-variant-numeric:tabular-nums;flex-shrink:0;">${blockDone}/${blockTotal}</span>
+        <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:${blockComplete ? '#34d399' : '#262930'};color:${blockComplete ? '#17181c' : '#c4c9cf'};font-variant-numeric:tabular-nums;flex-shrink:0;">${blockDone}/${blockTotal}</span>
       </summary>
       <div style="padding:0 14px 12px;">${tasksHtml}</div>
     </details>`;
   }).join('');
   const checkpoints = (day.checkpoints && day.checkpoints.length && !openOnly)
-    ? `<div style="margin-top:12px;background:#0b1220;border-left:3px solid #34d399;border-radius:8px;padding:12px 14px;">
+    ? `<div style="margin-top:12px;background:#0e0f12;border-left:3px solid #34d399;border-radius:8px;padding:12px 14px;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#34d399;font-weight:600;margin-bottom:6px;">End-of-day checkpoints</div>
-        <ul style="margin:0;padding-left:18px;color:#94a3b8;font-size:13px;line-height:1.5;">${day.checkpoints.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+        <ul style="margin:0;padding-left:18px;color:#9aa0aa;font-size:13px;line-height:1.5;">${day.checkpoints.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
       </div>`
     : '';
   const header = `<div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;">
       <div style="flex:1;min-width:0;">
-        <div style="font-size:16px;font-weight:700;color:#e2e8f0;">Day ${day.day} — ${escapeHtml(day.title)}</div>
-        <div style="font-size:12px;color:#94a3b8;">${escapeHtml(day.date || '')}</div>
+        <div style="font-size:16px;font-weight:700;color:#eef0f2;">Day ${day.day} — ${escapeHtml(day.title)}</div>
+        <div style="font-size:12px;color:#9aa0aa;">${escapeHtml(day.date || '')}</div>
       </div>
       <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;">
-        <div style="width:80px;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#38bdf8,#34d399);width:${p.pct}%;"></div></div>
-        <span style="font-size:12px;color:#94a3b8;font-variant-numeric:tabular-nums;">${p.done}/${p.total}</span>
-        ${opts.allowRedrill && !openOnly ? `<button data-cram-redrill-day="${dayIdx}" title="Reset this day's manual ticks (lesson mastery stays)" style="background:#1e293b;color:#fdba74;border:none;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer;">🎯 Re-drill</button>` : ''}
+        <div style="width:80px;height:6px;background:#262930;border-radius:3px;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#f5b62b,#34d399);width:${p.pct}%;"></div></div>
+        <span style="font-size:12px;color:#9aa0aa;font-variant-numeric:tabular-nums;">${p.done}/${p.total}</span>
+        ${opts.allowRedrill && !openOnly ? `<button data-cram-redrill-day="${dayIdx}" title="Reset this day's manual ticks (lesson mastery stays)" style="background:#262930;color:#fdba74;border:none;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer;">🎯 Re-drill</button>` : ''}
       </div>
     </div>`;
   return `<div data-cram-day-section="${dayIdx}">${header}${blocksHtml}${checkpoints}</div>`;
@@ -150,17 +150,17 @@ function renderCramHome(path) {
     const isActive = (view.mode === 'today' && i === effectiveTodayIdx) ||
                      (view.mode === 'day' && i === view.dayIndex) ||
                      (view.mode === 'open-from' && i === view.dayIndex);
-    const border = isActive ? '#34d399' : (isToday ? '#67e8f9' : '#1e293b');
-    const bg = isActive ? 'rgba(52,211,153,0.10)' : '#0b1220';
-    return `<button data-cram-day="${i}" style="flex-shrink:0;background:${bg};border:1.5px solid ${border};border-radius:8px;padding:8px 12px;cursor:pointer;color:#cbd5e1;font-family:inherit;text-align:left;min-width:84px;">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;font-weight:600;">Day ${i + 1}${isToday ? ' · today' : ''}</div>
-      <div style="font-size:12px;font-weight:600;color:#cbd5e1;margin-top:2px;">${escapeHtml(d.title.slice(0, 22))}</div>
-      <div style="font-size:11px;color:${p.done === p.total ? '#34d399' : '#94a3b8'};font-variant-numeric:tabular-nums;margin-top:3px;">${p.done}/${p.total} · ${p.pct}%</div>
+    const border = isActive ? '#34d399' : (isToday ? '#ffce5a' : '#262930');
+    const bg = isActive ? 'rgba(52,211,153,0.10)' : '#0e0f12';
+    return `<button data-cram-day="${i}" style="flex-shrink:0;background:${bg};border:1.5px solid ${border};border-radius:8px;padding:8px 12px;cursor:pointer;color:#c4c9cf;font-family:inherit;text-align:left;min-width:84px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#6b7079;font-weight:600;">Day ${i + 1}${isToday ? ' · today' : ''}</div>
+      <div style="font-size:12px;font-weight:600;color:#c4c9cf;margin-top:2px;">${escapeHtml(d.title.slice(0, 22))}</div>
+      <div style="font-size:11px;color:${p.done === p.total ? '#34d399' : '#9aa0aa'};font-variant-numeric:tabular-nums;margin-top:3px;">${p.done}/${p.total} · ${p.pct}%</div>
     </button>`;
   }).join('');
   const allActive = view.mode === 'all';
-  const allChip = `<button data-cram-all style="flex-shrink:0;background:${allActive ? 'rgba(52,211,153,0.10)' : '#0b1220'};border:1.5px solid ${allActive ? '#34d399' : '#1e293b'};border-radius:8px;padding:8px 12px;cursor:pointer;color:#cbd5e1;font-family:inherit;min-width:60px;">
-    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;font-weight:600;">View</div>
+  const allChip = `<button data-cram-all style="flex-shrink:0;background:${allActive ? 'rgba(52,211,153,0.10)' : '#0e0f12'};border:1.5px solid ${allActive ? '#34d399' : '#262930'};border-radius:8px;padding:8px 12px;cursor:pointer;color:#c4c9cf;font-family:inherit;min-width:60px;">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#6b7079;font-weight:600;">View</div>
     <div style="font-size:12px;font-weight:600;margin-top:2px;">All days</div>
   </button>`;
   const stripHtml = `<div style="display:flex;gap:8px;overflow-x:auto;padding:6px 2px 14px;-webkit-overflow-scrolling:touch;">${stripChips}${allChip}</div>`;
@@ -177,7 +177,7 @@ function renderCramHome(path) {
     if (carryover.length) {
       carryoverHtml = `<div style="background:rgba(249,115,22,0.10);border:1px solid rgba(249,115,22,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#fdba74;font-weight:700;margin-bottom:8px;">⚠ Carryover · unfinished from earlier days</div>
-        ${carryover.map(c => `<button data-cram-open-from="${c.idx}" style="display:block;width:100%;text-align:left;background:#0b1220;border:1px solid #1e293b;border-radius:6px;padding:8px 12px;margin-top:6px;color:#e2e8f0;cursor:pointer;font-family:inherit;">
+        ${carryover.map(c => `<button data-cram-open-from="${c.idx}" style="display:block;width:100%;text-align:left;background:#0e0f12;border:1px solid #262930;border-radius:6px;padding:8px 12px;margin-top:6px;color:#eef0f2;cursor:pointer;font-family:inherit;">
           <span style="font-size:13px;">${c.open} open from <strong>Day ${c.idx + 1} — ${escapeHtml(c.title)}</strong></span>
           <span style="float:right;color:#fdba74;font-size:11px;">Focus →</span>
         </button>`).join('')}
@@ -190,7 +190,7 @@ function renderCramHome(path) {
     const openByDefault = todayIdx <= 0 && view.mode === 'today';
     rocksHtml = `<details ${openByDefault ? 'open' : ''} style="background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.25);border-radius:10px;padding:8px 14px;margin-bottom:14px;">
       <summary style="cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#fdba74;font-weight:700;list-style:none;">⚠ ${path.bigRocks.length} Big Rocks · the gaps to close</summary>
-      <ol style="margin:8px 0 4px;padding-left:22px;font-size:13px;color:#cbd5e1;line-height:1.6;">
+      <ol style="margin:8px 0 4px;padding-left:22px;font-size:13px;color:#c4c9cf;line-height:1.6;">
         ${path.bigRocks.map(r => `<li><strong style="color:#fdba74;">${escapeHtml(r.rock)}</strong> — ${escapeHtml(r.detail)}</li>`).join('')}
       </ol>
     </details>`;
@@ -198,7 +198,7 @@ function renderCramHome(path) {
 
   let endedHtml = '';
   if (isPastEnd && (view.mode === 'today' || view.mode === 'day')) {
-    endedHtml = `<div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#cbd5e1;">
+    endedHtml = `<div style="background:rgba(245,182,43,0.08);border:1px solid rgba(245,182,43,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#c4c9cf;">
       ✓ Cram cycle complete. Spaced review keeps every lesson you covered alive — check 🕒 Review for what's due today.
     </div>`;
   }
@@ -215,10 +215,10 @@ function renderCramHome(path) {
 
   shell.innerHTML = `<div style="max-width:760px;margin:0 auto;padding:0;">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px;">
-      <h1 style="font-size:20px;font-weight:700;color:#f8fafc;margin:0;">⏱ ${escapeHtml(path.label)}</h1>
-      <span style="font-size:12px;color:#94a3b8;">${isPastEnd ? 'cycle complete' : `Day ${todayIdx + 1} of ${path.days.length}`}</span>
+      <h1 style="font-size:20px;font-weight:700;color:#ffffff;margin:0;">⏱ ${escapeHtml(path.label)}</h1>
+      <span style="font-size:12px;color:#9aa0aa;">${isPastEnd ? 'cycle complete' : `Day ${todayIdx + 1} of ${path.days.length}`}</span>
     </div>
-    <div style="font-size:13px;color:#94a3b8;margin-bottom:10px;">${escapeHtml(path.blurb || '')}</div>
+    <div style="font-size:13px;color:#9aa0aa;margin-bottom:10px;">${escapeHtml(path.blurb || '')}</div>
     ${stripHtml}
     ${endedHtml}
     ${rocksHtml}
@@ -322,17 +322,17 @@ function renderPlanHomeLessons(shell, path) {
   const nextLesson = nextId ? findLesson(nextId) : null;
   const label = (path && path.label) || 'All Lessons';
   const blurb = (path && path.blurb) || 'Drill across the full curriculum.';
-  const qBtn = (id, txt) => `<button data-plan-q="${id}" style="background:#0b1220;border:1px solid #334155;border-radius:9px;padding:9px 13px;color:#cbd5e1;cursor:pointer;font:inherit;">${txt}</button>`;
+  const qBtn = (id, txt) => `<button data-plan-q="${id}" style="background:#0e0f12;border:1px solid #363a43;border-radius:9px;padding:9px 13px;color:#c4c9cf;cursor:pointer;font:inherit;">${txt}</button>`;
   shell.innerHTML = `<div style="max-width:760px;margin:0 auto;">
-    <h1 style="font-size:22px;font-weight:700;color:#f8fafc;margin:0 0 2px;">📋 ${escapeHtml(label)}</h1>
-    <div style="font-size:13px;color:#94a3b8;margin-bottom:14px;">${escapeHtml(blurb)}</div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:6px;max-width:520px;"><span>${mastered} / ${total} mastered</span><span>${pct}%</span></div>
-    <div style="height:8px;background:#1e293b;border-radius:999px;overflow:hidden;max-width:520px;margin-bottom:18px;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#38bdf8,#34d399);"></div></div>
+    <h1 style="font-size:22px;font-weight:700;color:#ffffff;margin:0 0 2px;">📋 ${escapeHtml(label)}</h1>
+    <div style="font-size:13px;color:#9aa0aa;margin-bottom:14px;">${escapeHtml(blurb)}</div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#9aa0aa;margin-bottom:6px;max-width:520px;"><span>${mastered} / ${total} mastered</span><span>${pct}%</span></div>
+    <div style="height:8px;background:#262930;border-radius:999px;overflow:hidden;max-width:520px;margin-bottom:18px;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#f5b62b,#34d399);"></div></div>
     ${nextLesson ? `<button data-plan-continue style="display:inline-flex;align-items:center;gap:8px;background:#059669;color:#ecfdf5;border:0;border-radius:10px;padding:11px 18px;font:inherit;font-weight:700;cursor:pointer;">▶ Continue · ${escapeHtml(nextLesson.title)}</button>` : ''}
     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
       ${qBtn('today-btn', "📅 Today's session")}${qBtn('warmup-btn', '🌅 Warmup')}${qBtn('lucky-btn', '🍀 Lucky')}${qBtn('shuffle-btn', '🎲 Shuffle')}
     </div>
-    <div style="font-size:12px;color:#64748b;margin-top:18px;">Switch plan in the sidebar. Cross-plan stats live in Reflect.</div>
+    <div style="font-size:12px;color:#6b7079;margin-top:18px;">Switch plan in the sidebar. Cross-plan stats live in Reflect.</div>
   </div>`;
   const cont = shell.querySelector('[data-plan-continue]');
   if (cont && nextId) cont.addEventListener('click', () => selectLesson(nextId));
@@ -407,14 +407,14 @@ async function openCramCheatModal() {
     .map(r => {
       const lesson = r.lessonId ? findLesson(r.lessonId) : null;
       const lessonBadge = lesson
-        ? `<button data-cram-ref-lesson="${escapeHtml(r.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;">${escapeHtml(lesson.title)} →</button>`
+        ? `<button data-cram-ref-lesson="${escapeHtml(r.lessonId)}" style="background:#262930;color:#ffce5a;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;">${escapeHtml(lesson.title)} →</button>`
         : '';
-      return `<div style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;">
-        <div style="font-size:11px;color:#94a3b8;font-style:italic;line-height:1.5;">${escapeHtml(r.trigger)}</div>
-        <div style="font-size:14px;color:#e2e8f0;margin-top:6px;font-weight:500;">${escapeHtml(r.pattern)}</div>
+      return `<div style="background:#0e0f12;border:1px solid #262930;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:11px;color:#9aa0aa;font-style:italic;line-height:1.5;">${escapeHtml(r.trigger)}</div>
+        <div style="font-size:14px;color:#eef0f2;margin-top:6px;font-weight:500;">${escapeHtml(r.pattern)}</div>
         ${lessonBadge ? `<div style="margin-top:8px;">${lessonBadge}</div>` : ''}
       </div>`;
-    }).join('') || `<div style="color:#64748b;text-align:center;padding:24px;font-size:13px;">No rows match.</div>`;
+    }).join('') || `<div style="color:#6b7079;text-align:center;padding:24px;font-size:13px;">No rows match.</div>`;
   _openCramRefModal({
     title: '⚡ Cheat — which pattern when?',
     sub: 'Cue → pattern → tap to drill the canonical lesson.',
@@ -431,20 +431,20 @@ async function openCramGlossaryModal() {
   const renderQuizCta = () => {
     const sess = state.glossaryQuiz && state.glossaryQuiz.session;
     if (sess && sess.queue && sess.index < sess.queue.length) {
-      return `<div style="position:sticky;top:0;background:#0f172a;z-index:1;display:flex;gap:8px;padding-bottom:6px;">
-        <button data-glossquiz-resume style="flex:1;background:#0e7490;color:#cffafe;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">▶ Resume quiz · ${sess.index + 1}/${sess.queue.length}</button>
-        <button data-glossquiz-restart title="Discard the in-progress quiz and start fresh" style="background:#1e293b;color:#94a3b8;border:none;border-radius:8px;padding:10px 12px;font-size:13px;cursor:pointer;font-family:inherit;">↻</button>
+      return `<div style="position:sticky;top:0;background:#17181c;z-index:1;display:flex;gap:8px;padding-bottom:6px;">
+        <button data-glossquiz-resume style="flex:1;background:#0e7490;color:#ffedc2;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">▶ Resume quiz · ${sess.index + 1}/${sess.queue.length}</button>
+        <button data-glossquiz-restart title="Discard the in-progress quiz and start fresh" style="background:#262930;color:#9aa0aa;border:none;border-radius:8px;padding:10px 12px;font-size:13px;cursor:pointer;font-family:inherit;">↻</button>
       </div>`;
     }
-    return `<button data-glossquiz-start style="position:sticky;top:0;z-index:1;width:100%;background:#0e7490;color:#cffafe;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🎯 Quiz me (${Math.min(GLOSSARY_QUIZ_LEN, total)} questions)</button>`;
+    return `<button data-glossquiz-start style="position:sticky;top:0;z-index:1;width:100%;background:#0e7490;color:#ffedc2;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🎯 Quiz me (${Math.min(GLOSSARY_QUIZ_LEN, total)} questions)</button>`;
   };
   const renderTerms = (q) => CRAM_REFS.glossary
     .filter(t => _matchesSearch(q, t.term, t.def, t.where))
-    .map(t => `<div style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;">
-      <div style="font-size:14px;font-weight:600;color:#67e8f9;margin-bottom:4px;">${escapeHtml(t.term)}</div>
-      <div style="font-size:13px;color:#e2e8f0;line-height:1.55;">${escapeHtml(t.def)}</div>
-      ${t.where ? `<div style="font-size:11px;color:#94a3b8;margin-top:8px;padding-top:8px;border-top:1px solid #1e293b;"><strong style="color:#64748b;">Where:</strong> ${escapeHtml(t.where)}</div>` : ''}
-    </div>`).join('') || `<div style="color:#64748b;text-align:center;padding:24px;font-size:13px;">No terms match.</div>`;
+    .map(t => `<div style="background:#0e0f12;border:1px solid #262930;border-radius:8px;padding:12px 14px;">
+      <div style="font-size:14px;font-weight:600;color:#ffce5a;margin-bottom:4px;">${escapeHtml(t.term)}</div>
+      <div style="font-size:13px;color:#eef0f2;line-height:1.55;">${escapeHtml(t.def)}</div>
+      ${t.where ? `<div style="font-size:11px;color:#9aa0aa;margin-top:8px;padding-top:8px;border-top:1px solid #262930;"><strong style="color:#6b7079;">Where:</strong> ${escapeHtml(t.where)}</div>` : ''}
+    </div>`).join('') || `<div style="color:#6b7079;text-align:center;padding:24px;font-size:13px;">No terms match.</div>`;
   _openCramRefModal({
     title: `🅰 Glossary — ${total} interview terms`,
     sub: 'Definitions and where each term shows up in problems.',
@@ -536,11 +536,11 @@ function renderGlossaryQuizSession() {
     titleEl.textContent = '🎯 Glossary Quiz · done';
     subEl.textContent = `${sess.correctCount} / ${total} correct`;
     body.innerHTML = `<div style="text-align:center;padding:30px 12px;">
-      <div style="font-size:48px;font-weight:700;color:${pct >= 70 ? '#34d399' : '#fbbf24'};font-variant-numeric:tabular-nums;line-height:1;">${pct}%</div>
-      <div style="color:#94a3b8;font-size:14px;margin-top:6px;">recall</div>
+      <div style="font-size:48px;font-weight:700;color:${pct >= 70 ? '#34d399' : '#f5b62b'};font-variant-numeric:tabular-nums;line-height:1;">${pct}%</div>
+      <div style="color:#9aa0aa;font-size:14px;margin-top:6px;">recall</div>
       <div style="display:flex;justify-content:center;gap:10px;margin-top:22px;flex-wrap:wrap;">
-        <button data-glossquiz-retake style="background:#34d399;color:#0f172a;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Retake</button>
-        <button data-glossquiz-done style="background:#1e293b;color:#e2e8f0;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Back to glossary</button>
+        <button data-glossquiz-retake style="background:#34d399;color:#17181c;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Retake</button>
+        <button data-glossquiz-done style="background:#262930;color:#eef0f2;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Back to glossary</button>
       </div>
     </div>`;
     body.querySelector('[data-glossquiz-retake]').addEventListener('click', () => {
@@ -567,37 +567,37 @@ function renderGlossaryQuizSession() {
   subEl.textContent = `Score so far: ${sess.correctCount}/${sess.index}${sess.index ? ` (${Math.round(100*sess.correctCount/sess.index)}%)` : ''}`;
 
   const optionsHtml = card.options.map((opt, i) => {
-    let bg = '#0b1220', border = '#1e293b', color = '#e2e8f0';
+    let bg = '#0e0f12', border = '#262930', color = '#eef0f2';
     if (revealed) {
       if (i === card.correctIdx) { bg = '#064e3b'; border = '#34d399'; color = '#d1fae5'; }
       else if (i === sess.picked) { bg = '#7f1d1d'; border = '#f87171'; color = '#fecaca'; }
     }
     const letter = String.fromCharCode(65 + i);
     return `<button data-glossquiz-pick="${i}" ${revealed ? 'disabled' : ''} style="display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;background:${bg};border:1px solid ${border};border-radius:8px;padding:12px 14px;color:${color};font-size:14px;line-height:1.5;cursor:${revealed ? 'default' : 'pointer'};font-family:inherit;">
-      <span style="font-weight:700;color:#67e8f9;font-size:13px;min-width:18px;">${letter}</span>
+      <span style="font-weight:700;color:#ffce5a;font-size:13px;min-width:18px;">${letter}</span>
       <span style="flex:1;">${escapeHtml(opt)}</span>
     </button>`;
   }).join('');
 
   const feedbackHtml = revealed
-    ? `<div style="background:#0b1220;border-left:3px solid ${sess.picked === card.correctIdx ? '#34d399' : '#f87171'};border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:#e2e8f0;line-height:1.55;">
+    ? `<div style="background:#0e0f12;border-left:3px solid ${sess.picked === card.correctIdx ? '#34d399' : '#f87171'};border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:#eef0f2;line-height:1.55;">
         <div style="font-size:11px;color:${sess.picked === card.correctIdx ? '#34d399' : '#f87171'};text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px;">${sess.picked === card.correctIdx ? '✓ Correct' : '✗ Not quite'}</div>
-        <div><strong style="color:#67e8f9;">${escapeHtml(card.term)}</strong> — ${escapeHtml(card.def)}</div>
-        ${card.where ? `<div style="font-size:12px;color:#94a3b8;margin-top:8px;padding-top:8px;border-top:1px solid #1e293b;"><strong style="color:#64748b;">Where:</strong> ${escapeHtml(card.where)}</div>` : ''}
+        <div><strong style="color:#ffce5a;">${escapeHtml(card.term)}</strong> — ${escapeHtml(card.def)}</div>
+        ${card.where ? `<div style="font-size:12px;color:#9aa0aa;margin-top:8px;padding-top:8px;border-top:1px solid #262930;"><strong style="color:#6b7079;">Where:</strong> ${escapeHtml(card.where)}</div>` : ''}
       </div>`
     : '';
 
   body.innerHTML = `<div style="display:flex;flex-direction:column;min-height:280px;">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-      <button data-glossquiz-back title="Exit quiz" style="background:transparent;border:none;color:#64748b;font-size:18px;line-height:1;cursor:pointer;padding:0 6px;font-family:inherit;">←</button>
-      <div style="flex:1;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#67e8f9;width:${pct}%;transition:width .25s;"></div></div>
-      <div style="font-size:11px;color:#94a3b8;font-variant-numeric:tabular-nums;min-width:50px;text-align:right;">${sess.index + 1}/${sess.queue.length}</div>
+      <button data-glossquiz-back title="Exit quiz" style="background:transparent;border:none;color:#6b7079;font-size:18px;line-height:1;cursor:pointer;padding:0 6px;font-family:inherit;">←</button>
+      <div style="flex:1;height:6px;background:#262930;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#ffce5a;width:${pct}%;transition:width .25s;"></div></div>
+      <div style="font-size:11px;color:#9aa0aa;font-variant-numeric:tabular-nums;min-width:50px;text-align:right;">${sess.index + 1}/${sess.queue.length}</div>
     </div>
-    <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">${escapeHtml(promptSub)}</div>
-    <div style="font-size:${isTerm2Def ? '22px' : '14px'};font-weight:${isTerm2Def ? '700' : '500'};color:#f8fafc;line-height:1.4;margin-bottom:16px;">${escapeHtml(promptText)}</div>
+    <div style="font-size:11px;color:#9aa0aa;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">${escapeHtml(promptSub)}</div>
+    <div style="font-size:${isTerm2Def ? '22px' : '14px'};font-weight:${isTerm2Def ? '700' : '500'};color:#ffffff;line-height:1.4;margin-bottom:16px;">${escapeHtml(promptText)}</div>
     <div style="display:flex;flex-direction:column;gap:8px;">${optionsHtml}</div>
     ${feedbackHtml}
-    ${revealed ? `<div style="margin-top:16px;"><button data-glossquiz-next style="width:100%;padding:12px;border-radius:8px;border:none;background:#34d399;color:#0f172a;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">${sess.index + 1 >= sess.queue.length ? 'See results →' : 'Next →'}</button></div>` : ''}
+    ${revealed ? `<div style="margin-top:16px;"><button data-glossquiz-next style="width:100%;padding:12px;border-radius:8px;border:none;background:#34d399;color:#17181c;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">${sess.index + 1 >= sess.queue.length ? 'See results →' : 'Next →'}</button></div>` : ''}
   </div>`;
 
   body.querySelectorAll('[data-glossquiz-pick]').forEach(btn => {
@@ -639,10 +639,10 @@ async function openCramBehaviorModal() {
   _openCramRefModal({
     title: '🎤 Interview Behavior',
     sub: 'The 8-step say-this-in-the-interview ritual.',
-    bodyHtml: CRAM_REFS.behavior.map(c => `<div style="background:#0b1220;border-left:3px solid #67e8f9;border-radius:8px;padding:12px 14px;">
-      <div style="font-size:11px;color:#67e8f9;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px;">${escapeHtml(c.num)}</div>
-      <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:6px;">${escapeHtml(c.title)}</div>
-      <div style="font-size:13px;color:#cbd5e1;line-height:1.55;">${escapeHtml(c.body)}</div>
+    bodyHtml: CRAM_REFS.behavior.map(c => `<div style="background:#0e0f12;border-left:3px solid #ffce5a;border-radius:8px;padding:12px 14px;">
+      <div style="font-size:11px;color:#ffce5a;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px;">${escapeHtml(c.num)}</div>
+      <div style="font-size:14px;font-weight:600;color:#eef0f2;margin-bottom:6px;">${escapeHtml(c.title)}</div>
+      <div style="font-size:13px;color:#c4c9cf;line-height:1.55;">${escapeHtml(c.body)}</div>
     </div>`).join('')
   });
 }
@@ -656,17 +656,17 @@ function openCramShapesModal() {
     bodyHtml: CRAM_CODE_SHAPES.map(s => {
       const lesson = findLesson(s.lessonId);
       const mastered = window.DrillStorage && window.DrillStorage.isLessonFullyDone(s.lessonId);
-      const dotColor = mastered ? '#34d399' : '#475569';
-      return `<div style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;">
+      const dotColor = mastered ? '#34d399' : '#4a4f58';
+      return `<div style="background:#0e0f12;border:1px solid #262930;border-radius:8px;padding:12px 14px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:center;gap:8px;">
               <span style="width:8px;height:8px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span>
-              <span style="font-size:14px;font-weight:600;color:#e2e8f0;">${escapeHtml(s.title)}</span>
+              <span style="font-size:14px;font-weight:600;color:#eef0f2;">${escapeHtml(s.title)}</span>
             </div>
-            <div style="font-size:13px;color:#94a3b8;margin-top:6px;line-height:1.5;">${escapeHtml(s.note)}</div>
+            <div style="font-size:13px;color:#9aa0aa;margin-top:6px;line-height:1.5;">${escapeHtml(s.note)}</div>
           </div>
-          <button data-cram-ref-lesson="${escapeHtml(s.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;flex-shrink:0;">${lesson ? 'Drill →' : 'Missing'}</button>
+          <button data-cram-ref-lesson="${escapeHtml(s.lessonId)}" style="background:#262930;color:#ffce5a;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;flex-shrink:0;">${lesson ? 'Drill →' : 'Missing'}</button>
         </div>
       </div>`;
     }).join(''),
@@ -764,7 +764,7 @@ async function openCramReviewModal() {
       _openCramRefModal({
         title: '🔁 Cram Review · all caught up',
         sub: 'No items due right now. Items resurface as their interval lapses (0 → 1 → 2 → 4 days).',
-        bodyHtml: `<div style="text-align:center;padding:24px;color:#94a3b8;font-size:13px;">✓ Nothing due — come back tomorrow.</div>`
+        bodyHtml: `<div style="text-align:center;padding:24px;color:#9aa0aa;font-size:13px;">✓ Nothing due — come back tomorrow.</div>`
       });
       return;
     }
@@ -792,13 +792,13 @@ function renderCramReviewSession() {
     subEl.textContent = 'Fuzzy items resurface tomorrow. Got-it items advance one tier (1 → 2 → 4 days).';
     body.innerHTML = `<div style="text-align:center;padding:30px 12px;">
       <div style="font-size:48px;font-weight:700;color:#34d399;font-variant-numeric:tabular-nums;line-height:1;">${pct}%</div>
-      <div style="color:#94a3b8;font-size:14px;margin-top:6px;">recalled</div>
+      <div style="color:#9aa0aa;font-size:14px;margin-top:6px;">recalled</div>
       <div style="display:flex;justify-content:center;gap:18px;margin:18px 0;">
-        <div style="text-align:center;"><div style="font-size:22px;color:#34d399;font-weight:600;">${sess.gotIt}</div><div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">got it</div></div>
-        <div style="text-align:center;"><div style="font-size:22px;color:#f87171;font-weight:600;">${sess.fuzzy}</div><div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">fuzzy</div></div>
-        <div style="text-align:center;"><div style="font-size:22px;font-weight:600;">${sess.queue.length}</div><div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">total</div></div>
+        <div style="text-align:center;"><div style="font-size:22px;color:#34d399;font-weight:600;">${sess.gotIt}</div><div style="font-size:11px;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em;">got it</div></div>
+        <div style="text-align:center;"><div style="font-size:22px;color:#f87171;font-weight:600;">${sess.fuzzy}</div><div style="font-size:11px;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em;">fuzzy</div></div>
+        <div style="text-align:center;"><div style="font-size:22px;font-weight:600;">${sess.queue.length}</div><div style="font-size:11px;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em;">total</div></div>
       </div>
-      <button data-cram-review-done style="background:#34d399;color:#0f172a;border:none;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Done</button>
+      <button data-cram-review-done style="background:#34d399;color:#17181c;border:none;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Done</button>
     </div>`;
     body.querySelector('[data-cram-review-done]').addEventListener('click', () => {
       state.cramReview.session = null;
@@ -826,27 +826,27 @@ function renderCramReviewSession() {
   })[it.type] || '';
 
   const answerHtml = sess.revealed
-    ? `<div style="background:#0b1220;border-left:3px solid #34d399;border-radius:8px;padding:14px;margin:12px 0;font-size:14px;color:#e2e8f0;line-height:1.6;">
+    ? `<div style="background:#0e0f12;border-left:3px solid #34d399;border-radius:8px;padding:14px;margin:12px 0;font-size:14px;color:#eef0f2;line-height:1.6;">
         <div style="font-size:11px;color:#34d399;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px;">Answer</div>
         ${escapeHtml(it.answer)}
-        ${it.where ? `<div style="font-size:12px;color:#94a3b8;margin-top:8px;padding-top:8px;border-top:1px solid #1e293b;">${escapeHtml(it.where)}</div>` : ''}
-        ${it.lessonId ? `<div style="margin-top:10px;"><button data-cram-review-open="${escapeHtml(it.lessonId)}" style="background:#1e293b;color:#67e8f9;border:none;border-radius:5px;padding:4px 12px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;">Open the lesson →</button></div>` : ''}
+        ${it.where ? `<div style="font-size:12px;color:#9aa0aa;margin-top:8px;padding-top:8px;border-top:1px solid #262930;">${escapeHtml(it.where)}</div>` : ''}
+        ${it.lessonId ? `<div style="margin-top:10px;"><button data-cram-review-open="${escapeHtml(it.lessonId)}" style="background:#262930;color:#ffce5a;border:none;border-radius:5px;padding:4px 12px;font-size:11px;cursor:pointer;font-weight:500;font-family:inherit;">Open the lesson →</button></div>` : ''}
       </div>`
     : '';
 
   body.innerHTML = `<div style="display:flex;flex-direction:column;min-height:280px;">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-      <div style="flex:1;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#67e8f9;width:${pct}%;transition:width .25s;"></div></div>
-      <div style="font-size:11px;color:#94a3b8;font-variant-numeric:tabular-nums;min-width:50px;text-align:right;">${sess.index + 1}/${sess.queue.length}</div>
+      <div style="flex:1;height:6px;background:#262930;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#ffce5a;width:${pct}%;transition:width .25s;"></div></div>
+      <div style="font-size:11px;color:#9aa0aa;font-variant-numeric:tabular-nums;min-width:50px;text-align:right;">${sess.index + 1}/${sess.queue.length}</div>
     </div>
-    <div style="font-size:17px;font-weight:600;color:#f8fafc;line-height:1.4;margin-bottom:10px;">${escapeHtml(it.prompt)}</div>
-    ${promptSub ? `<div style="font-size:12px;color:#94a3b8;margin-bottom:12px;line-height:1.5;">${escapeHtml(promptSub)}</div>` : ''}
+    <div style="font-size:17px;font-weight:600;color:#ffffff;line-height:1.4;margin-bottom:10px;">${escapeHtml(it.prompt)}</div>
+    ${promptSub ? `<div style="font-size:12px;color:#9aa0aa;margin-bottom:12px;line-height:1.5;">${escapeHtml(promptSub)}</div>` : ''}
     ${answerHtml}
     <div style="margin-top:auto;padding-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
       ${!sess.revealed
-        ? `<button data-cram-review-peek style="flex:1;min-width:140px;padding:12px;border-radius:8px;border:none;background:#1e293b;color:#e2e8f0;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Peek 👀</button>`
+        ? `<button data-cram-review-peek style="flex:1;min-width:140px;padding:12px;border-radius:8px;border:none;background:#262930;color:#eef0f2;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Peek 👀</button>`
         : `<button data-cram-review-fuzzy style="flex:1;min-width:120px;padding:12px;border-radius:8px;border:none;background:#7f1d1d;color:#fecaca;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Fuzzy ✗</button>
-           <button data-cram-review-gotit style="flex:1;min-width:120px;padding:12px;border-radius:8px;border:none;background:#34d399;color:#0f172a;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Got it ✓</button>`}
+           <button data-cram-review-gotit style="flex:1;min-width:120px;padding:12px;border-radius:8px;border:none;background:#34d399;color:#17181c;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Got it ✓</button>`}
     </div>
   </div>`;
 
@@ -997,13 +997,13 @@ function openPathModal(opts = {}) {
   const cardsHtml = PATHS.map(p => {
     const active = !welcome && p.id === currentId;
     const recommended = !active && p.id === recommendedId;
-    const border = active ? '#34d399' : recommended ? '#34d399' : '#1e293b';
-    const bg = active ? 'rgba(52,211,153,0.08)' : recommended ? 'rgba(52,211,153,0.06)' : '#0b1220';
+    const border = active ? '#34d399' : recommended ? '#34d399' : '#262930';
+    const bg = active ? 'rgba(52,211,153,0.08)' : recommended ? 'rgba(52,211,153,0.06)' : '#0e0f12';
     const tag = active
       ? `<span style="color:#34d399;font-size:13px;">● Current</span>`
       : (welcome
-          ? `<span style="color:#64748b;font-size:13px;">Pick →</span>`
-          : `<span style="color:#64748b;font-size:13px;">Switch →</span>`);
+          ? `<span style="color:#6b7079;font-size:13px;">Pick →</span>`
+          : `<span style="color:#6b7079;font-size:13px;">Switch →</span>`);
     const recommendedBanner = recommended
       ? `<span data-recommended style="display:inline-block;align-self:flex-start;color:#34d399;background:rgba(52,211,153,0.14);font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;">⭐ Recommended — most users start here</span>`
       : '';
@@ -1016,10 +1016,10 @@ function openPathModal(opts = {}) {
     const lead = splitIdx > 0 ? blurb.slice(0, splitIdx).trim() : '';
     const tail = splitIdx > 0 ? blurb.slice(splitIdx).trim() : blurb;
     const blurbHtml = lead
-      ? `<span data-blurb-lead style="color:#cbd5e1;font-size:12px;font-weight:500;line-height:1.5;">${escapeHtml(lead)}</span>
-         <span style="color:#94a3b8;font-size:12px;line-height:1.5;">${escapeHtml(tail)}</span>`
-      : `<span style="color:#94a3b8;font-size:12px;line-height:1.5;">${escapeHtml(blurb)}</span>`;
-    return `<button data-path-id="${escapeHtml(p.id)}" style="text-align:left;padding:14px 16px;border-radius:8px;background:${bg};border:1px solid ${border};color:#e2e8f0;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
+      ? `<span data-blurb-lead style="color:#c4c9cf;font-size:12px;font-weight:500;line-height:1.5;">${escapeHtml(lead)}</span>
+         <span style="color:#9aa0aa;font-size:12px;line-height:1.5;">${escapeHtml(tail)}</span>`
+      : `<span style="color:#9aa0aa;font-size:12px;line-height:1.5;">${escapeHtml(blurb)}</span>`;
+    return `<button data-path-id="${escapeHtml(p.id)}" style="text-align:left;padding:14px 16px;border-radius:8px;background:${bg};border:1px solid ${border};color:#eef0f2;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
       ${recommendedBanner}
       <span style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <span style="font-weight:600;font-size:14px;">${escapeHtml(p.icon || '')} ${escapeHtml(p.label)}</span>
@@ -1029,9 +1029,9 @@ function openPathModal(opts = {}) {
     </button>`;
   }).join('');
   const footerHtml = welcome
-    ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #1e293b;display:flex;flex-direction:column;gap:8px;">
-        <a href="diagnostic.html" style="color:#67e8f9;font-size:12px;text-decoration:none;">🩺 Or start with a 43-question diagnostic →</a>
-        <button data-action="browse-on-own" style="background:none;border:none;color:#64748b;font-size:12px;cursor:pointer;text-align:left;padding:0;">Browse on my own (no path)</button>
+    ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #262930;display:flex;flex-direction:column;gap:8px;">
+        <a href="diagnostic.html" style="color:#ffce5a;font-size:12px;text-decoration:none;">🩺 Or start with a 43-question diagnostic →</a>
+        <button data-action="browse-on-own" style="background:none;border:none;color:#6b7079;font-size:12px;cursor:pointer;text-align:left;padding:0;">Browse on my own (no path)</button>
       </div>`
     : '';
   body.innerHTML = cardsHtml + footerHtml;

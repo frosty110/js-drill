@@ -205,7 +205,7 @@ function _renderClarifyRitual(body, lesson, content) {
             saveProgress();
             _clarifySessionCompleted.add(lesson.id);
             const progress = cardEl.querySelector('[data-clarify-progress]');
-            if (progress) progress.innerHTML = '<strong style="color:#a3e635">✓ Ritual complete — unlocking editor…</strong>';
+            if (progress) progress.innerHTML = '<strong style="color:#ffce5a">✓ Ritual complete — unlocking editor…</strong>';
             setTimeout(() => renderLesson(), 700);
           } else {
             saveProgress();
@@ -533,7 +533,7 @@ const TOPBAR_MENU_TAXONOMY = {
     items: [
       'today-btn',
       'mock-btn',
-      { emoji: '🎲', label: 'Pick one', desc: 'Smart-pick: if you have due reviews / weak spots / at-risk lessons it routes you there, else picks a random fresh lesson or mastered one.', action: 'pick-smart' },
+      { emoji: '🎲', icon: 'dice', label: 'Pick one', desc: 'Smart-pick: if you have due reviews / weak spots / at-risk lessons it routes you there, else picks a random fresh lesson or mastered one.', action: 'pick-smart' },
       'warmup-btn',
       'audio-btn'
     ]
@@ -542,10 +542,10 @@ const TOPBAR_MENU_TAXONOMY = {
     label: 'Drill',
     blurb: 'Pick a recall family — taps launch a random member.',
     items: [
-      { emoji: '🧠', label: 'Run it in your head', desc: 'Random pick across Predict / What-If / Trace-Hop / Reverse-Walk — mental execution drills.', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
-      { emoji: '🔧', label: 'Judge a code change', desc: 'Random pick across Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap — change-impact drills.', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
-      { emoji: '🧭', label: 'Name the pattern', desc: 'Random pick across Recognize / Reverse / Constellation / Match — pattern-identification drills.', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
-      { emoji: '📝', label: 'Recall the traps', desc: 'Random pick across Notes-Cloze / Notes-Locate / Crux — trick & gotcha recall drills.', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
+      { emoji: '🧠', icon: 'eye', label: 'Run it in your head', desc: 'Random pick across Predict / What-If / Trace-Hop / Reverse-Walk — mental execution drills.', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
+      { emoji: '🔧', icon: 'wrench', label: 'Judge a code change', desc: 'Random pick across Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap — change-impact drills.', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
+      { emoji: '🧭', icon: 'compass', label: 'Name the pattern', desc: 'Random pick across Recognize / Reverse / Constellation / Match — pattern-identification drills.', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
+      { emoji: '📝', icon: 'file-text', label: 'Recall the traps', desc: 'Random pick across Notes-Cloze / Notes-Locate / Crux — trick & gotcha recall drills.', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
       'conv-drill-btn'
     ]
   },
@@ -571,10 +571,35 @@ const TOPBAR_MENU_TAXONOMY = {
     label: 'Settings',
     blurb: 'Toggles, data, and account.',
     // 🧭 Plan View + 👁 Hide Mastered are NOT here — they're view filters that
-    // live on the sidebar (under the Path chip), not in this menu.
+    // live on the Browse page's filter panel (P4 part 3), not in this menu.
     items: ['clarify-ritual-btn', 'hotseat-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'adhd-mode-btn', 'font-size-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
   }
 };
+
+// "Pick one" smart-routing cascade: due reviews → weak spots → at-risk →
+// fresh (lucky) → mastered (shuffle). The first chip with a non-zero count
+// wins — same triage logic the sidebar pills surface, but the routing is done
+// for the user. Shared by the topbar dropdown AND the Practice launcher sheet
+// (js/app/18-practice-launcher.js). Returns the button element to click.
+function topbarPickSmartTarget() {
+  const countOf = (id) => {
+    const el = document.getElementById(id);
+    return el ? parseInt(el.textContent || '0', 10) || 0 : 0;
+  };
+  const cascade = [
+    ['review-count', 'review-btn'],
+    ['weak-count', 'weak-btn'],
+    ['at-risk-count', 'at-risk-btn'],
+    [null, 'lucky-btn'],
+    [null, 'shuffle-btn']
+  ];
+  for (const [countId, btnId] of cascade) {
+    if (countId && !countOf(countId)) continue;
+    const btn = document.getElementById(btnId);
+    if (btn) return btn; // lucky/shuffle always exist as fallbacks
+  }
+  return null;
+}
 
 // Pull display data from the sidebar button itself so the taxonomy stays
 // DRY: button label is the source of truth, descriptions come from the
@@ -886,28 +911,7 @@ function initTopbarDropdowns() {
       return;
     }
     if (action === 'pick-smart') {
-      // Cascade: due reviews → weak spots → at-risk → fresh (lucky) →
-      // mastered (shuffle). The first chip with a non-zero count wins —
-      // matches the same triage logic the sidebar pills surface, but
-      // does the routing for the user.
-      const countOf = (id) => {
-        const el = document.getElementById(id);
-        return el ? parseInt(el.textContent || '0', 10) || 0 : 0;
-      };
-      const cascade = [
-        ['review-count', 'review-btn'],
-        ['weak-count', 'weak-btn'],
-        ['at-risk-count', 'at-risk-btn'],
-        [null, 'lucky-btn'],
-        [null, 'shuffle-btn']
-      ];
-      let picked = null;
-      for (const [countId, btnId] of cascade) {
-        if (countId && !countOf(countId)) continue;
-        const btn = document.getElementById(btnId);
-        if (btn && btn.offsetParent !== null) { picked = btn; break; }
-        if (btn) { picked = btn; break; } // fallback even if hidden — lucky/shuffle always exist
-      }
+      const picked = topbarPickSmartTarget();
       if (!picked) return;
       close();
       picked.click();

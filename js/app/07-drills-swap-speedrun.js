@@ -1037,7 +1037,7 @@ async function startWarmupSession() {
   saveProgress();
   let idx = 0, correct = 0;
   const shell = document.getElementById('lesson-shell');
-  const colors = { 'review due': '#67e8f9', 'weak spot': '#fdba74', 'next on plan': '#93c5fd' };
+  const colors = { 'review due': '#ffce5a', 'weak spot': '#fdba74', 'next on plan': '#ffce5a' };
 
   function renderStack() {
     if (idx >= deck.length) {
@@ -1063,7 +1063,7 @@ async function startWarmupSession() {
         <div class="warmup-stack">
           ${ghosts}
           <div class="warmup-card" data-warmup-card style="z-index: 11;">
-            <div class="warmup-card-tag" style="color: ${colors[card.why] || '#94a3b8'};">${escapeHtml(card.why)}</div>
+            <div class="warmup-card-tag" style="color: ${colors[card.why] || '#9aa0aa'};">${escapeHtml(card.why)}</div>
             <div class="warmup-card-meta">${escapeHtml(card.sectionName)} · <span class="warmup-card-lesson">${escapeHtml(card.lessonTitle)}</span></div>
             <div class="warmup-card-question">${escapeHtml(card.q)}</div>
             <div class="warmup-card-options">

@@ -129,15 +129,23 @@ async function _bugHuntFindBreakingMutation(canonical, expected) {
   // tab on Bug-Hunt session start. Variety loss is 30%, but the remaining
   // 7 still cover boundary comparisons (most common bug shape) + equality
   // flips + `|| → &&`. See SAFE_MUTATORS comment above.
+  // nav-audit P1-1: mutants run via runCodeBudgeted — a mutation that turns a
+  // finite loop infinite (boundary flips on binary-search/two-pointer
+  // canonicals) now throws "Iteration budget exceeded" instead of freezing
+  // the tab. A budget-throw IS a behavior change, so `!res.ok` already counts
+  // it as a breaking mutation. The wall-clock cap keeps a worst-case hunt
+  // (many budget-limited runs) from stalling deck build past ~1s per lesson.
+  const huntStart = Date.now();
   const expectedLines = normalizeLines(expected);
   for (const mut of _bugHuntShuffle(SAFE_MUTATORS)) {
     const matches = _bugHuntCollectMatches(canonical, mut.from);
     if (!matches.length) continue;
     for (const pick of _bugHuntShuffle(matches).slice(0, 4)) {
+      if (Date.now() - huntStart > 1200) return null;
       const mutated = canonical.slice(0, pick.start) + mut.to + canonical.slice(pick.end);
       let res;
       try {
-        res = await runCode(mutated);
+        res = await runCodeBudgeted(mutated);
       } catch (_) { continue; }
       // Treat any of these as "breaks": runtime error, output differs, or
       // (subsequence semantics) any expected line missing from actual.
@@ -343,16 +351,23 @@ function _mutateClassify(res, expected) {
 // usable class (rare — most canonicals have plenty of operators to mutate).
 async function _mutateClassifyMutation(canonical, expected) {
   // Use the hang-safe subset (shared with Bug-Hunt since iter 143) — see
-  // SAFE_MUTATORS comment for the hang-protection rationale.
+  // SAFE_MUTATORS comment for the hang-protection rationale. nav-audit P1-1:
+  // additionally run via runCodeBudgeted (belt + suspenders — SAFE_MUTATORS
+  // shrank the risk, the budget guard removes it). A budget-throw mutant is
+  // SKIPPED rather than classified: "loops forever" isn't honestly any of the
+  // 4 consequence classes, so it can't be a fair card.
+  const huntStart = Date.now();
   for (const mut of _bugHuntShuffle(SAFE_MUTATORS)) {
     const matches = _bugHuntCollectMatches(canonical, mut.from);
     if (!matches.length) continue;
     for (const pick of _bugHuntShuffle(matches).slice(0, 3)) {
+      if (Date.now() - huntStart > 1200) return null;
       const mutated = canonical.slice(0, pick.start) + mut.to + canonical.slice(pick.end);
       let res;
       try {
-        res = await runCode(mutated);
+        res = await runCodeBudgeted(mutated);
       } catch (_) { continue; }
+      if (!res.ok && /Iteration budget exceeded/.test(res.output || '')) continue;
       const cls = _mutateClassify(res, expected);
       if (cls === null) continue;
       return {
@@ -412,7 +427,7 @@ async function _mutateBuildDeck() {
 async function startMutateSession() {
   const deck = await _mutateBuildDeck();
   if (!deck || deck.length < 3) {
-    alert('Mutate-and-Predict needs more Patterns/Applied lessons loaded. Try again after clicking around a few lessons.');
+    _drillEmptyState('Mutate-and-Predict', "Couldn't build a deck this round — not enough classifiable mutations landed.", { retry: startMutateSession });
     return;
   }
   state.mutate.sessions++;
@@ -591,7 +606,7 @@ async function _phoneScreenBuildDeck() {
 async function startPhoneScreenSession() {
   const deck = await _phoneScreenBuildDeck();
   if (!deck || deck.length !== 3) {
-    alert('Phone Screen needs more lessons loaded. Try again after clicking around a few syntax + patterns lessons.');
+    _drillEmptyState('Phone Screen', "Couldn't assemble the 3-card session — lesson content didn't finish loading.", { retry: startPhoneScreenSession });
     return;
   }
   state.phoneScreen.sessions++;

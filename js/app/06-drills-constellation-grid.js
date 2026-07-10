@@ -80,7 +80,7 @@ async function _constellationBuildDeck() {
 async function startConstellationSession() {
   const deck = await _constellationBuildDeck();
   if (!deck || deck.length < 4) {
-    alert('Constellation needs more loaded lessons + a populated mechanics registry. Try again in a moment.');
+    _drillEmptyState('Constellation', "Couldn't build a deck — the mechanics registry hasn't finished loading.", { retry: startConstellationSession });
     return;
   }
   state.mechConstellation.sessions++;
@@ -271,7 +271,7 @@ function _reverseWalkRenderFinalState(state) {
 async function startReverseWalkSession() {
   const deck = await _reverseWalkBuildDeck();
   if (!deck || deck.length < 4) {
-    alert('Reverse-Walkthrough needs more lessons with walkthroughs. Click around a few Patterns lessons first, then try again.');
+    _drillEmptyState('Reverse-Walkthrough', "Couldn't build a deck — not enough lessons with walkthroughs loaded yet.", { retry: startReverseWalkSession });
     return;
   }
   state.reverseWalk.sessions++;
@@ -520,7 +520,7 @@ async function _whatifBuildDeck() {
 async function startWhatifSession() {
   const deck = await _whatifBuildDeck();
   if (!deck || deck.length < 4) {
-    alert('What-If needs more lessons with walkthrough examples. Click around a few Patterns lessons first, then try again.');
+    _drillEmptyState('What-If', "Couldn't build a deck — not enough lessons with walkthrough examples loaded yet.", { retry: startWhatifSession });
     return;
   }
   state.whatif.sessions++;
@@ -707,7 +707,7 @@ async function _notesLocateBuildDeck() {
 async function startNotesLocateSession() {
   const deck = await _notesLocateBuildDeck();
   if (!deck || deck.length < 4) {
-    alert('Notes Locate needs more loaded lessons. Click around a few first, then try again.');
+    _drillEmptyState('Notes Locate', "Couldn't build a deck — not enough lesson content loaded yet.", { retry: startNotesLocateSession });
     return;
   }
   state.notesLocate.sessions++;
@@ -861,13 +861,10 @@ async function _matchBuildDeck() {
   const eligible = CURRICULUM.filter(l =>
     l.status === 'full' && (l.track === 'patterns' || l.track === 'applied')
   );
-  const sample = eligible.slice(0, 80);
-  for (const l of sample) {
-    if (!CONTENT[l.id]) {
-      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
-      if (Object.keys(CONTENT).length >= 40) break;
-    }
-  }
+  // Predicate-targeted preload (nav-audit P1-3): load until enough lessons
+  // have a description (the deck's real requirement), not until a raw
+  // CONTENT count — the old heuristic dead-ended fresh sessions into alert().
+  await _preloadUntil(eligible, c => !!(c && c.description), { want: 12, cap: 40 });
   const eligibleLoaded = eligible.filter(l => CONTENT[l.id] && CONTENT[l.id].description);
   if (eligibleLoaded.length < MATCH_OPTIONS) return null;
   // Shuffle + slice for the deck. Direction coin-flipped per card so a session
@@ -889,7 +886,7 @@ async function _matchBuildDeck() {
 async function startMatchSession() {
   const deck = await _matchBuildDeck();
   if (!deck || deck.length < 4) {
-    alert('Match needs more loaded lessons. Click around a few first, then try again.');
+    _drillEmptyState('Match', "Couldn't build a deck — not enough lesson descriptions loaded yet.", { retry: startMatchSession });
     return;
   }
   state.match.sessions++;

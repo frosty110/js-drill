@@ -403,17 +403,19 @@ function _crystalBuildDeck() {
 }
 
 async function startCrystalSession() {
-  // Preload patterns lessons so the pool has variety.
-  const patternsLessons = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full').slice(0, 30);
-  for (const l of patternsLessons) {
-    if (!CONTENT[l.id]) {
-      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
-      if (Object.keys(CONTENT).length >= 20) break;
-    }
-  }
+  // Predicate-targeted preload (nav-audit P1-3): load until enough lessons
+  // satisfy the deck builder's pool test (short-enough canonical + expected
+  // output), not until a raw CONTENT count. The old count heuristic could
+  // stop with 20 loaded lessons of which too few were pool-eligible → alert.
+  const patternsLessons = CURRICULUM.filter(l => l.track === 'patterns' && l.status === 'full');
+  await _preloadUntil(
+    patternsLessons,
+    c => !!(c && c.L3 && c.L3.canonical && c.L3.expectedOutput && c.L3.canonical.split('\n').length <= 30),
+    { want: 14, cap: 30 }
+  );
   const deck = _crystalBuildDeck();
   if (!deck || deck.length < 3) {
-    alert('Predict needs more loaded patterns lessons. Click around a few patterns first, then try again.');
+    _drillEmptyState('Predict', "Couldn't build a deck — not enough short, comparable canonicals loaded yet.", { retry: startCrystalSession });
     return;
   }
   state.crystal.sessions++;
@@ -628,20 +630,20 @@ function _reverseBuildDeck() {
 }
 
 async function startReverseSession() {
-  // Preload broad sample of patterns + applied lessons so the pool has
-  // variety. Applied I/O shapes added per eval-2026-05-30 salvage.
+  // Predicate-targeted preload (nav-audit P1-3): the deck needs lessons whose
+  // L3 carries prompt + expectedOutput + a parseable console.log invocation —
+  // the old raw-count heuristic ("18 in CONTENT") deterministically alerted on
+  // a fresh session. Applied I/O shapes included per eval-2026-05-30 salvage.
   const preloadable = CURRICULUM
-    .filter(l => (l.track === 'patterns' || l.track === 'applied') && l.status === 'full')
-    .slice(0, 30);
-  for (const l of preloadable) {
-    if (!CONTENT[l.id]) {
-      try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
-      if (Object.keys(CONTENT).length >= 18) break;
-    }
-  }
+    .filter(l => (l.track === 'patterns' || l.track === 'applied') && l.status === 'full');
+  await _preloadUntil(
+    preloadable,
+    c => !!(c && c.L3 && c.L3.canonical && c.L3.expectedOutput && c.L3.prompt && _reverseExtractInvocation(c.L3.canonical)),
+    { want: 10, cap: 30 }
+  );
   const deck = _reverseBuildDeck();
   if (!deck || deck.length < 3) {
-    alert('Reverse needs more loaded patterns lessons. Click around a few patterns first, then try again.');
+    _drillEmptyState('Reverse', "Couldn't build a deck — not enough lessons with a readable input/output trace loaded yet.", { retry: startReverseSession });
     return;
   }
   let idx = 0, correct = 0;
@@ -832,7 +834,7 @@ async function startRapidFireSession() {
   }
   const deck = _rapidFireBuildDeck();
   if (!deck || deck.length < 5) {
-    alert('Rapid-Fire needs more loaded lessons. Click around a few lessons first, then try again.');
+    _drillEmptyState('Rapid-Fire', "Couldn't build a deck — not enough lesson content loaded yet.", { retry: startRapidFireSession });
     return;
   }
   return _runRapidFireWithDeck(deck, { label: '⚡ Rapid', againFn: startRapidFireSession });

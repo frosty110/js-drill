@@ -9,7 +9,7 @@ const {
   stripCommentsForDiff, lcsDiffRows, normalizeForDiff, inlineWordDiff,
   colorizeInto, renderFlash
 } = window.DrillUtil;
-const { formatArg, runCode } = window.DrillRunner;
+const { formatArg, runCode, runCodeBudgeted } = window.DrillRunner;
 
 // ──────────────────────────────────────────────────────────────────────────
 //  CONTENT LOADER (replaces the inline CURRICULUM + CONTENT data blocks)
@@ -71,6 +71,52 @@ async function loadLessonContent(lessonId) {
 async function ensureAllContentLoaded() {
   const ids = CURRICULUM.filter(l => l.status === 'full').map(l => l.id);
   await Promise.all(ids.map(loadLessonContent));
+}
+
+// Predicate-targeted preloader (nav-audit P1-3). Deck-starved drills used to
+// stop pre-loading at a raw CONTENT-count heuristic ("18 lessons loaded")
+// regardless of whether the loaded lessons actually satisfied the deck's
+// eligibility test — a fresh session then dead-ended into a native alert().
+// This loads lessons from `lessons` (in order) until `want` of them satisfy
+// `predicate(CONTENT[id])`, or `cap` fetches have been spent. Returns the
+// number of satisfying lessons (callers still verify their deck builds).
+async function _preloadUntil(lessons, predicate, opts = {}) {
+  const want = opts.want ?? 8;
+  const cap = opts.cap ?? 30;
+  const count = () => lessons.reduce((n, l) => n + (predicate(CONTENT[l.id]) ? 1 : 0), 0);
+  let fetched = 0;
+  for (const l of lessons) {
+    if (count() >= want || fetched >= cap) break;
+    if (CONTENT[l.id]) continue;
+    try { await loadLessonContent(l.id); } catch (_) { /* skip */ }
+    fetched++;
+  }
+  return count();
+}
+
+// In-shell empty state for drill launch paths (nav-audit P1-3) — replaces the
+// blocking native alert() dead-ends ("Click around a few patterns first…").
+// Same shape Bug-Hunt's empty state already uses: message + Back into
+// renderLesson(), plus an optional Try-again that re-invokes the starter
+// (deck builds are probabilistic — a retry often succeeds). Native alert()
+// stays banned from launch paths. Plain-text chrome only (D07 — no emoji).
+function _drillEmptyState(title, message, opts = {}) {
+  const shell = document.getElementById('lesson-shell');
+  if (!shell) return;
+  const retryBtn = typeof opts.retry === 'function'
+    ? `<button class="primary" data-action="drill-empty-retry">Try again</button>` : '';
+  shell.innerHTML = `
+    <div class="bug-shell">
+      <div class="bug-loading">${escapeHtml(title)}</div>
+      <p style="color: var(--text-dim, #9aa1ab); font-size: 0.9rem; margin: 10px 0 0; text-align: center;">${escapeHtml(message)}</p>
+      <div class="bug-summary-actions">
+        ${retryBtn}
+        <button class="secondary" data-action="drill-empty-back">Back</button>
+      </div>
+    </div>`;
+  const retry = shell.querySelector('[data-action="drill-empty-retry"]');
+  if (retry) retry.addEventListener('click', () => opts.retry());
+  shell.querySelector('[data-action="drill-empty-back"]').addEventListener('click', () => renderLesson());
 }
 
 // ──────────────────────────────────────────────────────────────────────────

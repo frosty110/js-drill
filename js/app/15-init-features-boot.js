@@ -535,7 +535,13 @@ const TOPBAR_MENU_TAXONOMY = {
       'mock-btn',
       { emoji: '🎲', icon: 'dice', label: 'Pick one', desc: 'Smart-pick: if you have due reviews / weak spots / at-risk lessons it routes you there, else picks a random fresh lesson or mastered one.', action: 'pick-smart' },
       'warmup-btn',
-      'audio-btn'
+      'audio-btn',
+      // nav-audit P1-2 / P2-1: the two standalone pages get real launcher rows
+      // (action:'href' — a plain link row). Diagnostic previously had ZERO
+      // entry points after first run; System Design was palette-only on the
+      // phone. Both rows die in P8 when page unification lands.
+      { icon: 'clipboard-list', label: 'Diagnostic', desc: '43-question baseline — retake every few weeks', action: 'href', href: 'diagnostic.html' },
+      { icon: 'book-open', label: 'System Design', desc: 'DDIA · building blocks · 16 design problems', action: 'href', href: 'system-design.html' }
     ]
   },
   drills: {
@@ -700,6 +706,16 @@ function renderTopbarMenuContents(menuKey) {
           <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
           <span class="topbar-item-name">${escapeHtml(it.label)}</span>
         </button>`;
+    }
+    // Plain page-link rows (nav-audit P1-2): a real anchor to another page
+    // (diagnostic.html / system-design.html). The delegated handler closes the
+    // dropdown and lets the browser navigate.
+    if (it.action === 'href') {
+      return `
+        <a class="topbar-item" role="menuitem" data-action="href" href="${escapeHtml(it.href)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
+          <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji || '')}</span>
+          <span class="topbar-item-name">${escapeHtml(it.label)}</span>
+        </a>`;
     }
     // Concrete mode items render as ANCHORS pointing at #/m/<slug> (slug = the
     // button id minus '-btn'). The href is what makes cmd+click / middle-click /
@@ -889,6 +905,10 @@ function initTopbarDropdowns() {
     }
     const item = e.target.closest('.topbar-item');
     if (!item) return;
+    // Plain page-link rows (action:'href') navigate natively — close the
+    // panel and let the anchor's default click do the rest (no preventDefault,
+    // so modifier-clicks open a new tab too).
+    if (item.dataset.action === 'href') { close(); return; }
     // Anchor items carry href="#/m/<mode>". On a modifier/middle click, bail
     // WITHOUT preventDefault/stopPropagation so the browser opens that hash in a
     // NEW TAB natively (right-click "Open in New Tab" needs no JS at all). Plain

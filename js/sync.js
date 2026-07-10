@@ -1059,6 +1059,16 @@
       #sync-chip.is-on .sync-dot { background: #22c55e; }
       #sync-chip.is-syncing .sync-dot { background: #facc15; animation: syncPulse 1s infinite; }
       @keyframes syncPulse { 50% { opacity: .35; } }
+      /* nav-audit P2-7: drill sessions own the top-right corner (Exit button
+         + progress bar) — measured @390px the chip intersected Rapid-Fire's
+         Exit and overlaid its timer track. Hide the ambient chip while any
+         session shell is rendered; it returns the moment the session ends. */
+      body:has(#lesson-shell .recognize-shell) #sync-chip,
+      body:has(#lesson-shell .rapid-shell) #sync-chip,
+      body:has(#lesson-shell .bug-shell) #sync-chip,
+      body:has(#lesson-shell .warmup-shell) #sync-chip,
+      body:has(#lesson-shell .speedrun-shell) #sync-chip,
+      body:has(#lesson-shell .gauntlet-shell) #sync-chip { display: none; }
 
       #sync-modal {
         position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.6);

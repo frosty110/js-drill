@@ -89,5 +89,63 @@
     }
   };
 
+  // ── Iteration-budget guard for DRILL-GENERATED code (nav-audit P1-1) ──────
+  // A single-operator mutation of a canonical (e.g. `lo < hi` → `lo <= hi`)
+  // can stop a loop's pointers from progressing, and runCode's `new Function`
+  // body is SYNCHRONOUS — un-interruptible from the page, so a mutant that
+  // loops forever freezes the tab (reproduced 2/2 on #/m/bug-hunt cold boot).
+  // Before running, source-transform the code: inject a shared counter check
+  // at the top of every `for`/`while` loop body so runaway loops throw instead
+  // of spinning. A scanner-level transform is acceptable because the inputs
+  // are the app's own canonicals + single-operator mutants (the validator bans
+  // do/while and the comma operator; canonical style braces loop bodies) —
+  // NOT arbitrary user code. User-typed L2/L3 paths keep plain runCode
+  // semantics, unchanged.
+  R.injectLoopGuard = function (code, budget) {
+    const max = budget || 2e6;
+    const GUARD = ` if (++__iterGuard > ${max}) throw new Error('Iteration budget exceeded (possible infinite loop)');`;
+    const re = /\b(?:for|while)\s*\(/g;
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = re.exec(code)) !== null) {
+      // Walk from the keyword's '(' to its balanced ')', skipping quoted spans.
+      let j = m.index + m[0].length;
+      let depth = 1;
+      while (j < code.length && depth > 0) {
+        const ch = code[j];
+        if (ch === '"' || ch === "'" || ch === '`') {
+          const q = ch;
+          j++;
+          while (j < code.length && code[j] !== q) {
+            if (code[j] === '\\') j++;
+            j++;
+          }
+        } else if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        j++;
+      }
+      // j = char after the closing ')'. Skip whitespace; inject after '{' when
+      // the body is braced (canonical style always braces). A braceless body
+      // is left unguarded — same exposure as before, never worse.
+      let k = j;
+      while (k < code.length && /\s/.test(code[k])) k++;
+      if (code[k] === '{') {
+        out += code.slice(last, k + 1) + GUARD;
+        last = k + 1;
+      }
+      re.lastIndex = j;
+    }
+    out += code.slice(last);
+    return 'let __iterGuard = 0;\n' + out;
+  };
+
+  // Budgeted runner — same grading semantics as runCode, but the code is
+  // loop-guard-transformed first. A budget overrun surfaces as a normal
+  // { ok: false } result whose output contains "Iteration budget exceeded".
+  R.runCodeBudgeted = async function (code, opts) {
+    return R.runCode(R.injectLoopGuard(code, opts && opts.maxIterations));
+  };
+
   root.DrillRunner = R;
 })(typeof window !== 'undefined' ? window : this);

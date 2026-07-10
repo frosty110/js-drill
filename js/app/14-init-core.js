@@ -78,6 +78,16 @@ function _paletteBuildIndex() {
     hint: 'Standalone memorization drill — DDIA, building blocks, design problems',
     action: () => { window.location.href = 'system-design.html'; }
   });
+  // (0c) Diagnostic — nav-audit P1-2: its only other in-app link renders in
+  // the one-time welcome modal, so returning users had zero doors to the
+  // page that feeds the autopilot's gap signal (PROFILE § Study intent #2).
+  items.push({
+    id: 'link:diagnostic',
+    label: 'Diagnostic (43 questions)',
+    kind: 'mode',
+    hint: 'Baseline your gaps — feeds the autopilot pick',
+    action: () => { window.location.href = 'diagnostic.html'; }
+  });
   // (1) Sidebar buttons — synthetic click invokes existing handlers.
   document.querySelectorAll('aside button[id], #sidebar-main-buttons button[id]').forEach(btn => {
     const id = btn.id;

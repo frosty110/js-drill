@@ -23,6 +23,32 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D08 · Desktop chrome = ds rail; permanent sidebar retires to a drawer  (2026-07-10 · iter 8)
+Decision: At ≥768px the ds rail (Today / Browse / Practice / Progress +
+Search ⌘K / Settings aux items at its foot) is the primary navigation. The
+topbar dropdown menus (Practice/Drills/Train/Review) and the Dashboard link
+retire (display:none — DOM + handlers stay per D05); the permanent 320px
+sidebar becomes an off-canvas drawer at EVERY viewport (opened via Browse's
+"All filters"; holds Plan View / Hide Mastered / Repair / facets until P4
+part 3 migrates them). Breakpoints unify at 768px (the interim 900px rail
+threshold is gone). Two deliberate retentions: (a) the topbar keeps its
+wordmark / Problems⇄Reference toggle / Plan / System Design link / icon
+strip — System Design has no rail slot and the icon strip's fate is P6's
+call; (b) `/` now falls back to the command palette whenever the drawer is
+closed (the sidebar search is off-canvas everywhere), and System Design
+gained a palette entry (it was UNREACHABLE on mobile before — net
+capability gain).
+Rationale: completes D01's adaptive nav; desktop gets the same calm 4-
+destination model as the phone instead of a topbar of dropdowns (PRINCIPLES
+#5 progressive disclosure; VISION "from → to" row 1).
+Alternatives considered: keeping the permanent sidebar next to the rail
+(rejected: two competing lesson-list surfaces, Browse page already owns
+that job); hiding the topbar icon strip in favor of rail-only affordances
+(rejected for now: the settings dropdown anchors to the topbar ⚙, and help
+would lose its only pointer affordance — revisit in P6).
+Reversible? Yes — css/06-ds-nav.css desktop block + the ds/components.css
+breakpoint value; a revert restores the permanent sidebar wholesale.
+
 ## D07 · Icon language = stroke line-icons; no emoji in chrome  (2026-07-10 · iter 6, user decision)
 Decision: The user rejected emoji as UI iconography ("the icons don't look
 professional enough — they look silly"). All *chrome* — nav, launcher rows,

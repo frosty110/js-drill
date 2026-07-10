@@ -35,12 +35,16 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   const bar = await m.eval(`(() => {
     const nav = document.getElementById('ds-appnav');
     const r = nav.getBoundingClientRect();
-    const items = [...nav.querySelectorAll('.ds-navitem')].map(b => b.getBoundingClientRect());
+    // Rail-only aux items (Search/Settings, P4b) are display:none in bar mode —
+    // measure the VISIBLE items only.
+    const items = [...nav.querySelectorAll('.ds-navitem')]
+      .filter(b => getComputedStyle(b).display !== 'none')
+      .map(b => b.getBoundingClientRect());
     return { visible: r.height > 0 && r.bottom <= innerHeight + 1, count: items.length,
              minH: Math.min(...items.map(i => i.height)), minW: Math.min(...items.map(i => i.width)) };
   })()`);
   m.assert(bar.visible, `nav bar visible & pinned to viewport bottom (${JSON.stringify(bar)})`);
-  m.assert(bar.count === 4, `4 nav items (got ${bar.count})`);
+  m.assert(bar.count === 4, `4 visible nav items (got ${bar.count})`);
   m.assert(bar.minH >= 44 && bar.minW >= 44, `items ≥44px targets (minH=${bar.minH}, minW=${bar.minW})`);
 
   // Redundant legacy chrome hidden.
@@ -255,14 +259,20 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   const d = await connect({ url: 'http://localhost:8765/', mobile: false,
     viewport: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
     outDir: path.join(OUT, 'desktop'), waitForLoadMs: 2600 });
+  // P4b: desktop now renders the ds RAIL (deep coverage in p4b-rail.js).
   const desktop = await d.eval(`(() => {
     const nav = document.getElementById('ds-appnav');
-    const menus = document.querySelectorAll('.topbar-menu');
-    return { navHidden: getComputedStyle(nav).display === 'none', menuCount: menus.length };
+    const r = nav.getBoundingClientRect();
+    const menus = [...document.querySelectorAll('.topbar-menu[data-menu]')];
+    const aside = document.querySelector('aside.app-sidebar').getBoundingClientRect();
+    return { rail: getComputedStyle(nav).display !== 'none' && r.left === 0 && r.width >= 200 && r.height >= 400,
+             menusHidden: menus.every(m => getComputedStyle(m).display === 'none'),
+             sidebarOffCanvas: aside.right <= 0 };
   })()`);
-  d.assert(desktop.navHidden, 'bar hidden on desktop (rail lands with P4)');
-  d.assert(desktop.menuCount >= 4, `desktop topbar intact (${desktop.menuCount} menus)`);
-  await d.snap('01-desktop-unchanged');
+  d.assert(desktop.rail, `desktop shows the ds rail (P4b) (${JSON.stringify(desktop)})`);
+  d.assert(desktop.menusHidden, 'topbar dropdown menus retired on desktop');
+  d.assert(desktop.sidebarOffCanvas, 'permanent sidebar retired to off-canvas drawer');
+  await d.snap('01-desktop-rail');
   console.log('\n===== desktop =====');
   const dr = d.report();
   await d.close();

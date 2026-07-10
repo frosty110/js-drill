@@ -1,28 +1,32 @@
-// ── 16: ds-nav — adaptive navigation shell (design-loop P1, slice 1) ────────
-// The redesign's primary navigation (decision D01: bottom tab bar on mobile,
-// left rail on desktop). THIS SLICE SHIPS THE MOBILE BOTTOM BAR ONLY —
-// css/06-ds-nav.css hides it ≥900px until the desktop rail lands alongside the
-// P4 Browse surface (the rail needs a surface to sit next to; the current
-// 320px sidebar already fills that slot).
+// ── 16: ds-nav — adaptive navigation shell (design-loop P1 + P4b) ───────────
+// The redesign's primary navigation (decision D01): a bottom tab bar ≤767px,
+// a left rail ≥768px. The rail carries the same 4 destinations plus two aux
+// items at its foot — Search (⌘K → command palette) and Settings — replacing
+// the desktop topbar dropdown menus and the permanent sidebar (which becomes
+// an off-canvas drawer for its power filters; see css/06-ds-nav.css).
 //
-// Interim wiring (until P2/P3/P4/P5 build the real destinations, each tab
-// synthetically clicks the existing launcher for the closest current
-// equivalent — the same contract the command palette uses):
+// Wiring: each item synthetically clicks the canonical launcher button — the
+// same contract the command palette uses:
 //   Today    → #today-home-btn   (Today home page — js/app/17-today-home.js)
 //   Browse   → #browse-btn       (Browse page — js/app/19-browse.js)
 //   Practice → #practice-launcher-btn (ds-sheet launcher — 18-practice-launcher.js)
 //   Progress → #dashboard-btn    (unified Dashboard — becomes P5 Progress)
+//   Search   → #palette-trigger  (command palette, rail only)
+//   Settings → #topbar-settings  (settings dropdown, rail only — P6 replaces
+//              it with a real Settings surface)
 //
 // Interop rules (see css/06-ds-nav.css):
-//   · L3 tab renders a sticky bottom Run bar → the nav hides there
-//     (immersive-rep pattern; L3 is the at-desk tier per PROFILE.md).
-//   · The audio dock lifts above the bar (mini-player-above-tabs pattern).
-//   · Redundant mobile topbar chrome (#hamburger, #topbar-dashboard-mobile,
-//     #topbar-mobile-menu) is hidden — the buttons STAY in the DOM as
-//     synthetic-click targets; capability is unchanged (D05).
+//   · Mobile: L3's sticky Run bar owns the bottom edge → the bar hides there
+//     (immersive-rep pattern; L3 is the at-desk tier per PROFILE.md). The
+//     audio dock lifts above the bar (mini-player-above-tabs pattern).
+//   · Desktop: the rail slots under the topbar; the audio dock yields the
+//     rail's width; the drawer/backdrop cover the rail when open.
+//   · Retired chrome (#hamburger, mobile topbar icons, desktop dropdown
+//     menus) STAYS in the DOM as synthetic-click targets; capability is
+//     unchanged (D05).
 //
-// No state, no saveProgress — pure chrome. Active-tab highlight is pure CSS
-// (body.sidebar-open → Browse; body:has(.dashboard-page) → Progress).
+// No state, no saveProgress — pure chrome. Active-item highlight is CSS over
+// aria-current (kept truthful by the #lesson-shell observer below).
 
 (() => {
   const NAV_ITEMS = [
@@ -36,29 +40,48 @@
       icon: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>' },
   ];
 
+  // Rail-only aux items (ds/components.css hides them in bottom-bar mode —
+  // the phone reaches search/settings from the topbar icon strip instead).
+  const AUX_ITEMS = [
+    { key: 'palette', label: 'Search', hint: '⌘K', target: 'palette-trigger',
+      title: 'Command palette · ⌘K / Ctrl-K · search modes, lessons, sections',
+      icon: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>' },
+    { key: 'settings', label: 'Settings', target: 'topbar-settings',
+      title: 'Settings — toggles, data, reset',
+      icon: '<path d="M21 6h-7"/><path d="M10 6H3"/><circle cx="12" cy="6" r="2"/><path d="M21 12h-3"/><path d="M14 12H3"/><circle cx="16" cy="12" r="2"/><path d="M21 18h-9"/><path d="M8 18H3"/><circle cx="10" cy="18" r="2"/>' },
+  ];
+
+  function navButton(item, extraClass) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ds-navitem' + (extraClass ? ' ' + extraClass : '');
+    btn.dataset.nav = item.key;
+    if (item.title) btn.title = item.title;
+    btn.innerHTML =
+      `<svg viewBox="0 0 24 24" aria-hidden="true">${item.icon}</svg>${item.label}` +
+      (item.hint ? `<span class="ds-navitem__hint" aria-hidden="true">${item.hint}</span>` : '');
+    btn.addEventListener('click', (e) => {
+      // Don't let this event bubble to document-level close-on-outside
+      // handlers — they'd instantly close whatever the synthetic click
+      // below just opened (bit the Practice → topbar dropdown flow).
+      e.stopPropagation();
+      const target = document.getElementById(item.target);
+      if (target) target.click();
+    });
+    return btn;
+  }
+
   function mountDsNav() {
     if (document.getElementById('ds-appnav')) return;
     const nav = document.createElement('nav');
     nav.id = 'ds-appnav';
     nav.className = 'ds-appnav';
     nav.setAttribute('aria-label', 'Primary');
-    for (const item of NAV_ITEMS) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'ds-navitem';
-      btn.dataset.nav = item.key;
-      btn.innerHTML =
-        `<svg viewBox="0 0 24 24" aria-hidden="true">${item.icon}</svg>${item.label}`;
-      btn.addEventListener('click', (e) => {
-        // Don't let this event bubble to document-level close-on-outside
-        // handlers — they'd instantly close whatever the synthetic click
-        // below just opened (bit the Practice → topbar dropdown flow).
-        e.stopPropagation();
-        const target = document.getElementById(item.target);
-        if (target) target.click();
-      });
-      nav.appendChild(btn);
-    }
+    for (const item of NAV_ITEMS) nav.appendChild(navButton(item));
+    const spacer = document.createElement('div');
+    spacer.className = 'ds-appnav__spacer';
+    nav.appendChild(spacer);
+    for (const item of AUX_ITEMS) nav.appendChild(navButton(item, 'ds-navitem--aux'));
     document.body.appendChild(nav);
 
     // Programmatic active state (a11y) — the visual highlight is pure CSS

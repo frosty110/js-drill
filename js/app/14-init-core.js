@@ -68,6 +68,16 @@ function _paletteBuildIndex() {
     hint: 'Daily progress, activity, and mastery in one view',
     action: () => { if (typeof openDashboard === 'function') openDashboard(); }
   });
+  // (0b) System Design — a separate page whose only other entry point is the
+  // desktop topbar link (hidden ≤767px, and the dropdown menus retired with
+  // the P4b rail). The palette keeps it reachable from every viewport.
+  items.push({
+    id: 'link:system-design',
+    label: 'System Design',
+    kind: 'mode',
+    hint: 'Standalone memorization drill — DDIA, building blocks, design problems',
+    action: () => { window.location.href = 'system-design.html'; }
+  });
   // (1) Sidebar buttons — synthetic click invokes existing handlers.
   document.querySelectorAll('aside button[id], #sidebar-main-buttons button[id]').forEach(btn => {
     const id = btn.id;
@@ -782,7 +792,16 @@ function initSearchAndKeyboard() {
       // When the Browse page is open, `/` targets ITS visible search — the
       // drawer's input may be off-screen on mobile (contrarian, iter 7).
       const browseSearch = document.querySelector('.browse-page [data-browse-search]');
-      (browseSearch || searchInput).focus();
+      if (browseSearch) { browseSearch.focus(); return; }
+      // The sidebar search lives in an off-canvas drawer at every viewport
+      // since the P4b rail (transformed off-screen, not display:none) —
+      // focusing it while the drawer is closed silently no-ops, so route
+      // `/` to the palette (the redesign's search surface) instead.
+      if (!document.body.classList.contains('sidebar-open') && typeof _paletteOpen === 'function') {
+        _paletteOpen();
+        return;
+      }
+      searchInput.focus();
       return;
     }
     if (e.key === '?' && !inEditable) {

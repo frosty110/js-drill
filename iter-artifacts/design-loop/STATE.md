@@ -6,11 +6,11 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 ---
 
 ## Current status
-- **Phase:** P1 · Navigation shell — mobile bar shipped; palette + parity audit remain (desktop rail deferred to P4 by design)
-- **Overall progress:** 1 / 11 phases complete, P1 ~half
-- **Decided:** nav = **adaptive rail ↔ bottom bar** (D01); theming = **dark-first, light-ready** (D02); visual = **Ink & Amber / minimal** (D03); isolated **`ds/` layer** (D04); inventory pass = **zero capability retirements, chrome-only replacement** (D05).
-- **Last slice shipped:** **P4a Browse page** — search (all-track) + 3 track segments (syncs sidebarTrack+surface) + section accordion w/ mastery bars + lesson rows (dots, due/weak chips); drawer power-filters one tap deep; `/` retargets visible search; SW v20. Probe 32/32; contrarian PASS (3 fixes adopted).
-- **Next slice (recommended):** **P4b · Desktop rail** — flip ≥768px to the ds rail (Today/Browse/Practice/Progress + palette/settings), retire the permanent sidebar + topbar dropdown menus on desktop (Browse page + launcher sheet already work there), unify breakpoints. This completes the D01 adaptive nav and gives desktop the new home. Alternatives: P5 Progress redesign; drawer-filter migration into Browse.
+- **Phase:** P1 nav shell **structurally complete** (bar + rail = D01 done); P4 Browse at part 2 of 3; next battleground = P5 Progress / P1 palette restyle / P4 part 3
+- **Overall progress:** 2 / 11 phases complete (P0, P1-nav), P2–P4 each ~⅔
+- **Decided:** nav = **adaptive rail ↔ bottom bar** (D01); theming = **dark-first, light-ready** (D02); visual = **Ink & Amber / minimal** (D03); isolated **`ds/` layer** (D04); inventory pass = **zero capability retirements, chrome-only replacement** (D05); **desktop rail replaces sidebar+dropdowns, sidebar → drawer everywhere** (D08).
+- **Last slice shipped:** **P4b Desktop rail** — ≥768px shows the ds rail (4 destinations + Search ⌘K/Settings foot) under the topbar; topbar dropdowns + Dashboard link retired; permanent sidebar → off-canvas drawer (Browse "All filters" opens it; power filters intact); breakpoints unified at 768; `/` falls back to palette when drawer closed; System Design added to palette (was unreachable on mobile); 2 desktop-topbar leak fixes (mobile-only icons, phantom cram chip); SW v21. Probes: p4b-rail 35/35 (1280+820+390), p1-nav-smoke 33/33, validator 920/920, zero console errors.
+- **Next slice (recommended):** **P5 · Progress redesign** — the rail's Progress destination renders the legacy-styled Dashboard; rebuild it as ONE coherent ds surface (daily → activity → mastery, absorbing At-Risk/Resurrect entry points). Alternatives: P1 palette restyle onto ds (rail Search now spotlights it); P4 part 3 (migrate drawer filters into Browse, kill the drawer).
 - **Blocked on:** nothing.
 
 ## Open decisions
@@ -26,6 +26,10 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 - `tools/cdp/lib.js ensureChrome` uses macOS `open -na`; on Linux start Chromium manually: `/opt/pw-browsers/chromium --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-jsdrill --headless=new --no-sandbox` (lib then detects it as already-up).
 - `npm install --no-save ws` needed once per container for the probes.
 - `before-shots.js` takes an outRoot argv — reuse it for the P10 after-sweep (`node tools/cdp/before-shots.js iter-artifacts/design-loop/shots/99-after`).
+- Probes sharing one Chrome share one ORIGIN: a later `connect()` inherits the localStorage + lastTab the previous section saved (a desktop run ending on L3 made the next mobile boot hide the nav). Every probe section must seed its own state + strip the hash + reload.
+- `offsetParent === null` does NOT detect the off-canvas drawer (it's transformed, not display:none) — gate on `body.classList.contains('sidebar-open')` instead.
+- Global rules in css/06-ds-nav.css can silently out-cascade equal-specificity `display:none` rules in 05-shell-chrome (same 0,1,0, later file wins) — the D07 `.topbar-icon` centering rule un-hid the mobile-only topbar icons on desktop for 2 iters. When adding a global rule over legacy chrome classes, grep for `display: none` on the same class.
+- P4b deferred (for P6): rail Settings synth-clicks #topbar-settings so the settings dropdown opens anchored top-right (spatially disconnected from the rail foot); topbar 🔍/?/⚙ icon strip is now redundant with the rail foot — P6's Settings surface should resolve both. Drawer box-shadow is a hardcoded rgba mirroring legacy 02-sidebar (drawer dies/restyles in P4 part 3). Reference-tab toggles (Flash/Cinema/Notes→Code) still carry emoji — converts with P7 per D07 rollout.
 
 ## Guardrail reminders
 - Every iteration: independently green (`node tools/validate-data.js`), browser-tested @390px + desktop, committed per convention.
@@ -36,7 +40,7 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 
 ### Iteration log (newest first — one line each)
 <!-- YYYY-MM-DD · iter N · phase · slice shipped · rubric delta · shots ref -->
-- 2026-07-10 · iter 7 · P4a · Browse page (search/segments/accordion/rows; drawer filters 1 tap deep; 32/32; contrarian PASS + 3 fixes) · Phone-fit ↑ · Decisions ↑ (J5 ≤2 taps) · shots/05-p4a-browse/
+- 2026-07-10 · iter 8 · P4b · Desktop rail (≥768 rail + Search/Settings foot; dropdowns+Dashboard link retired; sidebar→drawer; 768 unified; `/`→palette fallback; System Design→palette; 35/35 + 33/33; self-review, 2 topbar-leak fixes) · Decisions ↑↑ (desktop: 4 calm destinations vs 6-menu topbar) · ADHD-fit ↑ (S2 at-desk) · shots/06-p4b-rail/
 - 2026-07-10 · iter 6 · D07 icons (user-directed) · ds/icons.js stroke set replaces emoji in nav/launcher/topbar/home; no-emoji probe gate · craft bar ↑ (Linear-tier chrome) · shots/04-p3-launcher/ (refreshed)
 - 2026-07-10 · iter 5 · P3 · Practice launcher bottom sheet (taxonomy-derived, 4 groups, 26/26 probe; contrarian PASS) · Decisions ↑ (grouped disclosure at the thumb) · ADHD-fit ↑ (no more top-menu eye-jump) · shots/04-p3-launcher/
 - 2026-07-10 · iter 4 · P2 · Today home (hero next-rep + streak grace + stat tiles + THEN; mock-C-faithful; contrarian BLOCK fixed) · Autopilot ↑↑ (J1 = 1 tap) · Progress-visible ↑ (ambient tiles/streak) · shots/03-p2-home/

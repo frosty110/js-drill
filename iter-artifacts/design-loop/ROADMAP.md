@@ -17,7 +17,7 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 - ◐ Iconography + a11y baseline (nav icons + focus-visible + reduced-motion done; broader icon set TBD)
 
 ## P1 · Navigation shell
-- ☐ Thumb-first primary nav (bottom tab bar mobile / adaptive desktop) replacing the topbar-of-dropdowns
+- ◐ Thumb-first primary nav — **mobile bottom bar SHIPPED** (≤767px; Today/Browse/Practice/Progress wired to existing surfaces via synthetic click; L3-immersive hide; audio-dock lift). Desktop rail lands with P4 (breakpoints unify then). Deferred from contrarian review: nav-above-drawer z-order (P4) · Practice label collision (P3) · programmatic active state + aria-current (P2).
 - ☐ Command palette redesigned as the long-tail power path (reaches any `#/m/<mode>`)
 - ☐ Route/keyboard parity audit (every deep-link + shortcut still resolves)
 

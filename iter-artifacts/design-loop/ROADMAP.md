@@ -30,7 +30,7 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 - ☑ Long-tail modes grouped & progressively disclosed here + palette (sheet = grouped browse; ⌘K = search; deferred: insights sub-labels if cram lists grow)
 
 ## P4 · Browse
-- ☐ Lessons/tracks/faceted-filter/search as a first-class surface (not a cramped drawer)
+- ◐ Lessons/tracks/faceted-filter/search as a first-class surface — **Browse page SHIPPED** (search + segments + accordion + rows, #/m/browse). Part 2 remaining: desktop rail (retire permanent sidebar + topbar menus, unify breakpoints), migrate drawer power-filters (Plan View / Hide Mastered / Repair / facets) into the page, IME-safe in-place search filtering.
 
 ## P5 · Progress
 - ☐ Unify Dashboard / Stats / Streak / At-Risk / Resurrect into one coherent surface

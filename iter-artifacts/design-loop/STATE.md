@@ -9,8 +9,8 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 - **Phase:** P1 · Navigation shell — mobile bar shipped; palette + parity audit remain (desktop rail deferred to P4 by design)
 - **Overall progress:** 1 / 11 phases complete, P1 ~half
 - **Decided:** nav = **adaptive rail ↔ bottom bar** (D01); theming = **dark-first, light-ready** (D02); visual = **Ink & Amber / minimal** (D03); isolated **`ds/` layer** (D04); inventory pass = **zero capability retirements, chrome-only replacement** (D05).
-- **Last slice shipped:** **P3 Practice launcher** — bottom-sheet (ds-scrim z60/ds-sheet--scroll) from TOPBAR_MENU_TAXONOMY: Sessions / Drills-by-recall-family / Streams / Review&reference; pick-smart cascade extracted to shared topbarPickSmartTarget(); probe 26/26; contrarian PASS (hairline + scrim-z fixes adopted).
-- **Next slice (recommended):** **P4 · Browse** — lessons/tracks/filter/search as a first-class surface + the desktop rail (unifies breakpoints, retires topbar menus, gives desktop the Today home entry). Biggest remaining structural piece. Alternatives: P2 first-run; boot-default-to-home (needs AskUserQuestion — J3 tension).
+- **Last slice shipped:** **P4a Browse page** — search (all-track) + 3 track segments (syncs sidebarTrack+surface) + section accordion w/ mastery bars + lesson rows (dots, due/weak chips); drawer power-filters one tap deep; `/` retargets visible search; SW v20. Probe 32/32; contrarian PASS (3 fixes adopted).
+- **Next slice (recommended):** **P4b · Desktop rail** — flip ≥768px to the ds rail (Today/Browse/Practice/Progress + palette/settings), retire the permanent sidebar + topbar dropdown menus on desktop (Browse page + launcher sheet already work there), unify breakpoints. This completes the D01 adaptive nav and gives desktop the new home. Alternatives: P5 Progress redesign; drawer-filter migration into Browse.
 - **Blocked on:** nothing.
 
 ## Open decisions
@@ -36,6 +36,7 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 
 ### Iteration log (newest first — one line each)
 <!-- YYYY-MM-DD · iter N · phase · slice shipped · rubric delta · shots ref -->
+- 2026-07-10 · iter 7 · P4a · Browse page (search/segments/accordion/rows; drawer filters 1 tap deep; 32/32; contrarian PASS + 3 fixes) · Phone-fit ↑ · Decisions ↑ (J5 ≤2 taps) · shots/05-p4a-browse/
 - 2026-07-10 · iter 6 · D07 icons (user-directed) · ds/icons.js stroke set replaces emoji in nav/launcher/topbar/home; no-emoji probe gate · craft bar ↑ (Linear-tier chrome) · shots/04-p3-launcher/ (refreshed)
 - 2026-07-10 · iter 5 · P3 · Practice launcher bottom sheet (taxonomy-derived, 4 groups, 26/26 probe; contrarian PASS) · Decisions ↑ (grouped disclosure at the thumb) · ADHD-fit ↑ (no more top-menu eye-jump) · shots/04-p3-launcher/
 - 2026-07-10 · iter 4 · P2 · Today home (hero next-rep + streak grace + stat tiles + THEN; mock-C-faithful; contrarian BLOCK fixed) · Autopilot ↑↑ (J1 = 1 tap) · Progress-visible ↑ (ambient tiles/streak) · shots/03-p2-home/

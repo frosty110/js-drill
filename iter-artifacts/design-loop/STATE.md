@@ -9,8 +9,8 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 - **Phase:** P1 · Navigation shell — mobile bar shipped; palette + parity audit remain (desktop rail deferred to P4 by design)
 - **Overall progress:** 1 / 11 phases complete, P1 ~half
 - **Decided:** nav = **adaptive rail ↔ bottom bar** (D01); theming = **dark-first, light-ready** (D02); visual = **Ink & Amber / minimal** (D03); isolated **`ds/` layer** (D04); inventory pass = **zero capability retirements, chrome-only replacement** (D05).
-- **Last slice shipped:** **P2 Today home** (matches user-ratified mock C): greeting + streak chip (grace rule), hero next-up card (dailyPlan pick) with amber Start, 3 stat tiles, THEN queue; #/m/today-home; aria-current via MutationObserver; dailyPlan stale-id guard. Probe 21/21. Contrarian BLOCK (streak chip false pre-drill) fixed + regression-tested.
-- **Next slice (recommended):** **P3 · Practice launcher** — replaces the top-anchored interim dropdown the nav's Practice tab opens (contrarian noted the eye-jump + label collision); a bottom-sheet launcher with grouped modes on ds/ components. Alternatives: P2 first-run experience; boot-default-to-home (needs AskUserQuestion — J3 tension).
+- **Last slice shipped:** **P3 Practice launcher** — bottom-sheet (ds-scrim z60/ds-sheet--scroll) from TOPBAR_MENU_TAXONOMY: Sessions / Drills-by-recall-family / Streams / Review&reference; pick-smart cascade extracted to shared topbarPickSmartTarget(); probe 26/26; contrarian PASS (hairline + scrim-z fixes adopted).
+- **Next slice (recommended):** **P4 · Browse** — lessons/tracks/filter/search as a first-class surface + the desktop rail (unifies breakpoints, retires topbar menus, gives desktop the Today home entry). Biggest remaining structural piece. Alternatives: P2 first-run; boot-default-to-home (needs AskUserQuestion — J3 tension).
 - **Blocked on:** nothing.
 
 ## Open decisions
@@ -36,6 +36,7 @@ update at the end.** Keep it short — it's a control surface, not a diary.
 
 ### Iteration log (newest first — one line each)
 <!-- YYYY-MM-DD · iter N · phase · slice shipped · rubric delta · shots ref -->
+- 2026-07-10 · iter 5 · P3 · Practice launcher bottom sheet (taxonomy-derived, 4 groups, 26/26 probe; contrarian PASS) · Decisions ↑ (grouped disclosure at the thumb) · ADHD-fit ↑ (no more top-menu eye-jump) · shots/04-p3-launcher/
 - 2026-07-10 · iter 4 · P2 · Today home (hero next-rep + streak grace + stat tiles + THEN; mock-C-faithful; contrarian BLOCK fixed) · Autopilot ↑↑ (J1 = 1 tap) · Progress-visible ↑ (ambient tiles/streak) · shots/03-p2-home/
 - 2026-07-10 · iter 3 · D06 retheme · global Ink & Amber sweep (~1,190 lines + Tailwind remap + contrast fixes; user-directed acceleration) · whole family visually transformed · shots/02-retheme/
 - 2026-07-10 · iter 2 · P1 · mobile bottom nav (4 tabs, ds/ layer, L3-immersive, dock-lift; contrarian BLOCK on dock fixed) · Phone-fit ↑ (thumb bar vs corner icons) · Decisions ↑ (4 labeled destinations vs 3 unlabeled icons + hamburger) · shots/01-p1-nav/

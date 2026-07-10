@@ -26,8 +26,8 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 - ☐ First-run experience (designed, gets to a first rep fast)
 
 ## P3 · Practice launcher
-- ☐ One contextual launcher replacing Practice/Drills/Train/Review menus
-- ☐ Long-tail modes grouped & progressively disclosed here + palette
+- ☑ One contextual launcher replacing Practice/Drills/Train/Review menus — **bottom-sheet launcher SHIPPED** (taxonomy-derived, 4 groups, pick-smart/shuffle actions shared with topbar; #/m/practice-launcher). Desktop topbar menus retire with the P4 rail.
+- ☑ Long-tail modes grouped & progressively disclosed here + palette (sheet = grouped browse; ⌘K = search; deferred: insights sub-labels if cram lists grow)
 
 ## P4 · Browse
 - ☐ Lessons/tracks/faceted-filter/search as a first-class surface (not a cramped drawer)

@@ -14,7 +14,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v27-p6-settings-2026-07-10';
+const CACHE_VERSION = 'jsdrill-v28-p8-family-tokens-2026-07-10';
 const APP_SHELL = [
   './',
   './index.html',
@@ -54,7 +54,6 @@ const APP_SHELL = [
   './ds/tokens.css',
   './ds/components.css',
   './ds/icons.js',
-  './tokens.css',
   './js/storage.js',
   './js/sync.js',
   './js/supabase-config.js',

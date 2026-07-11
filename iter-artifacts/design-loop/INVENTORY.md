@@ -30,8 +30,8 @@ Target IA (D01): **Today · Browse · Practice · Progress** (+ Settings via gea
 | Cram progress widget | `#topbar-cram-progress` | MERGE→Today | Home shows active-plan progress ambiently |
 | Session heatstrip | `#heatstrip-wrap` | MERGE→Progress | **Landed (P5 + P4c):** session summary line in Progress "Today"; the sidebar strip died with the drawer (D10) |
 | Surface toggle (Problems ⇄ Reference) | `.surface-toggle` | MERGE→Browse | Becomes a Browse facet/segment |
-| System Design link | `#topbar-system-design` | KEEP | Separate page; nav entry point stays (family-unified in P8) |
-| Diagnostic page | `diagnostic.html` | KEEP | Separate page; family-unified in P8 |
+| System Design link | `#topbar-system-design` | KEEP | Separate page; nav entry point stays. **Family-unified (P8/D12):** system-design.html now on ds/tokens.css + ds/components.css (.ds-opt drill, .ds-btn CTAs, ds-scrim modal); returns via `JS Drill ↗` |
+| Diagnostic page | `diagnostic.html` | KEEP | Separate page. **Family-unified (P8/D12):** diagnostic.html on ds/tokens.css + ds/components.css (.ds-opt questions, .ds-btn nav); returns via `← Drill`; Sync-chip clearance (P2-7) |
 
 ## Core loop (protect above all)
 Reference · Conversation · Walkthrough · L1 · L2 · L3 · reveal — the beating

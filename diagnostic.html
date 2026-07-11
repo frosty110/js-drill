@@ -4,8 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>4-Day Interview Diagnostic</title>
-<!-- Shared design tokens + storage layer. Source of truth across pages. -->
-<link rel="stylesheet" href="tokens.css">
+<!-- One design system across the family (design-loop P8): ds tokens + components
+     (the legacy --bg/--panel/--accent names resolve as aliases inside ds/tokens.css). -->
+<link rel="stylesheet" href="ds/tokens.css">
+<link rel="stylesheet" href="ds/components.css">
+<script src="ds/icons.js"></script>
 <script src="js/storage.js"></script>
 <!-- Optional cross-device sync (Supabase). Skipped at runtime if config missing. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -16,8 +19,8 @@
   :root{
     /* Diagnostic-specific: keep --bg pointing at the elevated tone so the
        diagnostic's full-bleed look (no separate cards) matches its original
-       design. Color palette tokens otherwise come from tokens.css. */
-    --bg: var(--bg-elevated);
+       design. Color palette tokens otherwise come from ds/tokens.css. */
+    --bg: var(--ds-surface);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
@@ -38,26 +41,18 @@
   .tag{display:inline-block;font-size:11px;text-transform:uppercase;
     letter-spacing:.05em;padding:3px 8px;border-radius:4px;
     background:var(--panel-2);color:var(--muted);margin-right:6px}
-  .tag.diff-easy{background:#14532d;color:#bbf7d0}
-  .tag.diff-medium{background:#713f12;color:#fde68a}
-  .tag.diff-hard{background:#7f1d1d;color:#fecaca}
+  .tag.diff-easy{background:var(--good-soft);color:var(--good-soft-fg)}
+  .tag.diff-medium{background:var(--warn-soft);color:var(--warn-soft-fg)}
+  .tag.diff-hard{background:var(--bad-soft);color:var(--bad-soft-fg)}
   .prompt{font-size:17px;line-height:1.55;margin:14px 0 20px;white-space:pre-wrap}
-  .prompt code,.options code,.short code{background:#0e0f12;padding:1px 5px;
+  .prompt code,.ds-options code,.short code{background:var(--ds-bg);padding:1px 5px;
     border-radius:3px;font:13px ui-monospace,SFMono-Regular,Menlo,monospace;
-    color:#fde68a}
-  pre{background:#0e0f12;padding:12px 14px;border-radius:6px;overflow-x:auto;
-    font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:#eef0f2;
+    color:var(--warn-soft-fg)}
+  pre{background:var(--ds-bg);padding:12px 14px;border-radius:6px;overflow-x:auto;
+    font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ds-text);
     margin:10px 0}
-  .options{display:flex;flex-direction:column;gap:8px}
-  .opt{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;
-    background:var(--panel-2);border-radius:8px;cursor:pointer;
-    border:2px solid transparent;transition:all .15s}
-  .opt:hover{background:#4a4f58}
-  .opt.selected{border-color:var(--accent);background:#1e3a5c}
-  .opt-letter{font-weight:600;color:var(--accent);min-width:18px}
-  .opt-body{flex:1}
   textarea{width:100%;min-height:120px;background:var(--panel-2);color:var(--text);
-    border:1px solid #4a4f58;border-radius:8px;padding:12px;font:14px/1.5 inherit;
+    border:1px solid var(--panel-3);border-radius:8px;padding:12px;font:14px/1.5 inherit;
     resize:vertical}
   textarea:focus{outline:none;border-color:var(--accent)}
   .footer-bar{padding:14px 20px;border-top:1px solid var(--panel-2);
@@ -65,11 +60,11 @@
     flex-wrap:wrap}
   .btn{background:var(--panel-2);color:var(--text);border:none;padding:9px 16px;
     border-radius:6px;font-size:14px;cursor:pointer;transition:background .15s}
-  .btn:hover{background:#4a4f58}
-  .btn.primary{background:var(--accent);color:#17181c;font-weight:600}
-  .btn.primary:hover{background:#ffce5a}
-  .btn.good{background:var(--good);color:#17181c;font-weight:600}
-  .btn.good:hover{background:#4ade80}
+  .btn:hover{background:var(--panel-3)}
+  .btn.primary{background:var(--accent);color:var(--bg-elevated);font-weight:600}
+  .btn.primary:hover{background:var(--accent-hover)}
+  .btn.good{background:var(--good);color:var(--bg-elevated);font-weight:600}
+  .btn.good:hover{background:var(--ds-good)}
   .btn:disabled{opacity:.4;cursor:not-allowed}
   .nav-right{display:flex;gap:8px}
   .intro h2{margin-top:0}
@@ -78,7 +73,7 @@
   .pre-q{margin:18px 0}
   .pre-q label{display:block;font-weight:500;margin-bottom:6px}
   .pre-q input,.pre-q select{width:100%;background:var(--panel-2);color:var(--text);
-    border:1px solid #4a4f58;border-radius:6px;padding:10px;font:14px inherit}
+    border:1px solid var(--panel-3);border-radius:6px;padding:10px;font:14px inherit}
   .summary-table{width:100%;border-collapse:collapse;margin:14px 0}
   .summary-table th,.summary-table td{text-align:left;padding:8px 10px;
     border-bottom:1px solid var(--panel-2)}
@@ -86,22 +81,22 @@
     text-transform:uppercase;letter-spacing:.04em}
   .pill{display:inline-block;padding:2px 8px;border-radius:10px;
     font-size:12px;background:var(--panel-2)}
-  .pill.good{background:#14532d;color:#bbf7d0}
-  .pill.warn{background:#713f12;color:#fde68a}
-  .pill.bad{background:#7f1d1d;color:#fecaca}
+  .pill.good{background:var(--good-soft);color:var(--good-soft-fg)}
+  .pill.warn{background:var(--warn-soft);color:var(--warn-soft-fg)}
+  .pill.bad{background:var(--bad-soft);color:var(--bad-soft-fg)}
   /* iter 20 (refine): visually corroborate the "🎯 Drill weakest" CTA's pick
      IN the breakdown table — the ADHD/phone user shouldn't have to scan
      six pills to confirm which row the CTA is pointing at. */
   .summary-table tr.weakest-row td{background:rgba(245,182,43,0.06);
-    border-left:3px solid #f5b62b}
-  .summary-table tr.weakest-row td:first-child{font-weight:600;color:#ffdd8a}
+    border-left:3px solid var(--accent)}
+  .summary-table tr.weakest-row td:first-child{font-weight:600;color:var(--accent-hover)}
   .question-jumper{display:flex;flex-wrap:wrap;gap:4px;margin:14px 0}
   .jump-btn{width:28px;height:28px;border-radius:4px;background:var(--panel-2);
     color:var(--muted);border:1px solid transparent;cursor:pointer;font-size:11px;
     padding:0;display:flex;align-items:center;justify-content:center}
-  .jump-btn.answered{background:#1e3a5c;color:var(--accent)}
+  .jump-btn.answered{background:var(--ds-accent-soft);color:var(--accent)}
   .jump-btn.current{border-color:var(--accent)}
-  .jump-btn.skipped{background:#713f12;color:#fde68a}
+  .jump-btn.skipped{background:var(--warn-soft);color:var(--warn-soft-fg)}
   .hint{font-size:13px;color:var(--muted);margin-top:8px}
   .note{font-size:13px;color:var(--warn);margin-top:8px}
 </style>
@@ -115,11 +110,11 @@
 </header>
 <main><div class="card" id="content"></div></main>
 <div class="footer-bar">
-  <button class="btn" id="prev-btn">← Prev</button>
+  <button class="ds-btn" id="prev-btn">← Prev</button>
   <div class="meta" id="time-meta"></div>
   <div class="nav-right">
-    <button class="btn" id="skip-btn">Skip</button>
-    <button class="btn primary" id="next-btn">Next →</button>
+    <button class="ds-btn" id="skip-btn">Skip</button>
+    <button class="ds-btn ds-btn--primary" id="next-btn">Next →</button>
   </div>
 </div>
 
@@ -664,11 +659,11 @@ function renderQuestion(qIdx) {
   let body = '';
   if (q.type === 'mc') {
     const letters = ['A','B','C','D','E','F'];
-    body = `<div class="options">` +
+    body = `<div class="ds-options">` +
       q.options.map((o, i) => `
-        <div class="opt ${a.value === i ? 'selected' : ''}" data-opt-idx="${i}">
-          <div class="opt-letter">${letters[i]}</div>
-          <div class="opt-body">${mdInline(o)}</div>
+        <div class="ds-opt ${a.value === i ? 'is-selected' : ''}" data-opt-idx="${i}">
+          <div class="ds-opt__key">${letters[i]}</div>
+          <div class="ds-opt__body">${mdInline(o)}</div>
         </div>`).join('') +
       `</div>`;
   } else if (q.type === 'short') {
@@ -691,12 +686,12 @@ function renderQuestion(qIdx) {
   `;
 
   if (q.type === 'mc') {
-    $content.querySelectorAll('.opt').forEach(el => {
+    $content.querySelectorAll('.ds-opt').forEach(el => {
       el.addEventListener('click', () => {
         const idx = parseInt(el.dataset.optIdx, 10);
         recordAnswer(q.id, idx);
-        $content.querySelectorAll('.opt').forEach(o => o.classList.remove('selected'));
-        el.classList.add('selected');
+        $content.querySelectorAll('.ds-opt').forEach(o => o.classList.remove('is-selected'));
+        el.classList.add('is-selected');
       });
     });
   } else if (q.type === 'short') {

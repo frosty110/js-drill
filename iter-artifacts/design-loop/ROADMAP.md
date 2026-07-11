@@ -42,8 +42,9 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 - ☐ L1 redesign · ☐ L2 redesign · ☐ L3 redesign · ☐ Reference/reveal · ☐ Mock · ☐ Walkthrough/Conversation
 
 ## P8 · Unify the family
-- ☐ Migrate `system-design.html` onto `components.css` (kill hardcoded colors)
-- ☐ Migrate `diagnostic.html` onto `components.css`
+- ☑ Migrate `system-design.html` onto `ds/tokens.css` + `ds/components.css` — **DONE**: MC options → `.ds-opt` (amber letter chips), CTAs → `.ds-btn` (kept `.cta` for layout selectors), stats modal → `.ds-scrim`/`.ds-sheet`, all inline hardcoded hex → ds tokens (only the mermaid JS `themeVariables` keep literals). Return path (`JS Drill ↗`) intact.
+- ☑ Migrate `diagnostic.html` onto `ds/tokens.css` + `ds/components.css` — **DONE**: MC options → `.ds-opt`, footer nav → `.ds-btn`, zero raw hex remaining. Return path (`← Drill`) intact + Sync-chip clearance (P2-7).
+- ☑ Retire/merge legacy `tokens.css` (D04) — **DONE**: its palette folded into `ds/tokens.css` as value-exact aliases; root `tokens.css` deleted; index.html + both pages repointed; SW v28. Main app renders identically (appsplit 0 errors); p8-family probe 11/11.
 
 ## P9 · Delight & states
 - ☐ Motion/microinteractions (grade, streak, mastery) · ☐ empty/loading/error/offline states · ☐ light+dark

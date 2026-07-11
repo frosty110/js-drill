@@ -23,6 +23,37 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D12 · Family unified on ds; legacy tokens.css merged as value-exact aliases (not a full recolor)  (2026-07-10 · iter 12)
+Decision: `system-design.html` and `diagnostic.html` migrate onto
+`ds/tokens.css` + `ds/components.css`: their MC options adopt `.ds-opt`
+(+`.ds-opt__key`/`__body`, `.is-correct`/`.is-wrong`/`.is-selected`), CTAs adopt
+`.ds-btn` variants, the system-design stats modal adopts `.ds-scrim`/`.ds-sheet`,
+and every raw hex in their inline `<style>` maps to a ds/alias token (the only
+literals left are system-design's mermaid `themeVariables`, a JS diagram-theme
+config the library needs). The retired root `tokens.css` is **merged into
+ds/tokens.css as a "legacy aliases" block** rather than deleted-and-rewritten:
+surfaces/text/accent/fonts/targets alias straight to their identical-valued
+`--ds-*` role; the few tokens whose value differs from any ds role (status
+greens/reds, `--panel-3`, radii, dracula, shadow) are kept as literals. So the
+merge is **pixel-identical** — it unifies the token SOURCE (one file, no per-page
+fork = the original reason tokens.css existed) WITHOUT recoloring the
+already-shipped main-app chrome, which a P8-era global recolor would risk. The
+full ink-&-amber recolor of the not-yet-rebuilt main-app chrome happens when
+those surfaces are rebuilt (P7) or in the P9/P10 polish, referencing `--ds-*`
+directly; the aliases are the bridge until then. Both pages keep their existing
+return link to `index.html` as the path back into the app.
+Rationale: completes P8 / VISION "from → to" row 4 (per-page hand-rolled CSS +
+duplicated components → one design system used by all pages). Value-exact merge
+keeps every prior slice independently green (no main-app regression) while still
+retiring the second token file.
+Alternatives considered: aliasing legacy names to ds roles even where values
+differ (rejected: would shift the main app's status greens/reds mid-journey — a
+broad, silent regression for a phase whose job is the two standalone pages);
+rewriting both pages' inline styles fully onto `--ds-*` with a global recolor
+(deferred to P7/P9 — bigger regression surface, not P8's job).
+Reversible? Yes — the alias block + the pages' link swaps revert cleanly; git
+restores the old `tokens.css` and hand-rolled `.opt`/`.cta`/`.modal` rules.
+
 ## D11 · Settings = one grouped ds sheet (bottom on mobile, centered panel on desktop); legacy dropdown + desktop topbar icon strip retire  (2026-07-10 · iter 11)
 Decision: The Settings destination is a ds-sheet (`js/app/21-settings.js`
 `openSettings` → `#settings-sheet`, a `.ds-scrim`/`.ds-sheet` overlay identical

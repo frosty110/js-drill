@@ -18,7 +18,7 @@ This skill is the contract that keeps the three in sync.
 
 | Concern | File | What it owns |
 |---|---|---|
-| Design tokens (colors, radii, type, spacing) | `tokens.css` | Every color, radius, font, and spacing constant used across the family. |
+| Design tokens (colors, radii, type, spacing) | `ds/tokens.css` | Every color, radius, font, and spacing constant used across the family. |
 | localStorage I/O | `js/storage.js` (exposed as `window.DrillStorage`) | All reads, writes, schema versioning, and cross-page bridge helpers. |
 | Static code blocks (Reference, L2 templates, Code shapes, Review answers) | CodeMirror `runMode` addon | Syntax-highlighted, Dracula-themed, mobile-readable code. |
 
@@ -37,7 +37,7 @@ Period. No inline forks "just for this page."
 .my-card { background: var(--panel); border: 1px solid var(--panel-2); }
 ```
 
-If you need a new color, add it to `tokens.css` with a semantic name. Don't
+If you need a new color, add it to `ds/tokens.css` with a semantic name. Don't
 hard-code hex in a component file. Don't redeclare a token in a page's `:root`
 block — that just creates a per-page shadow that defeats the whole point.
 
@@ -119,12 +119,12 @@ own styles and scripts:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/runmode/runmode.min.js"></script>
 
 <!-- Shared design tokens + storage layer. Source of truth across pages. -->
-<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="ds/tokens.css">
 <script src="js/storage.js"></script>
 ```
 
 Then your page's own `<style>` and `<script>` go after. Order matters: if your
-page declares `:root { --panel: …; }` AFTER `tokens.css` loads, you shadow the
+page declares `:root { --panel: …; }` AFTER `ds/tokens.css` loads, you shadow the
 shared token. Don't.
 
 ### 5. Verify with the mobile probe
@@ -148,7 +148,7 @@ surface; don't bolt assertions onto unrelated probes.
 
 Before authoring a new page or feature, run through this list:
 
-- [ ] Does this color already exist as a token in `tokens.css`?
+- [ ] Does this color already exist as a token in `ds/tokens.css`?
   → If yes: reference it. If no: add it with a semantic name first, then reference.
 - [ ] Does this UI need to persist state across sessions?
   → If yes: add a method to `DrillStorage`. Don't call `localStorage` directly.
@@ -170,9 +170,9 @@ vars (different colors from main app's Tailwind palette), its own
 that "the code viewer doesn't look good on mobile" and asked "are we not
 reusing components?" — the answer was no, we'd reinvented the wheel.
 
-The fix (iter-35) extracted `tokens.css` + `js/storage.js`, migrated all three
+The fix (iter-35) extracted `ds/tokens.css` + `js/storage.js`, migrated all three
 pages to consume them, and authored this skill so the drift can't recur.
 
 If a future iteration adds a fourth page (e.g., a stats dashboard, a mentor
-board, a shared playground), it MUST consume `tokens.css` and `DrillStorage`.
+board, a shared playground), it MUST consume `ds/tokens.css` and `DrillStorage`.
 No exceptions without a documented reason.

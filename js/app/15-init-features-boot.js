@@ -541,7 +541,7 @@ const TOPBAR_MENU_TAXONOMY = {
       // entry points after first run; System Design was palette-only on the
       // phone. Both rows die in P8 when page unification lands.
       { icon: 'clipboard-list', label: 'Diagnostic', desc: '43-question baseline — retake every few weeks', action: 'href', href: 'diagnostic.html' },
-      { icon: 'book-open', label: 'System Design', desc: 'DDIA · building blocks · 16 design problems', action: 'href', href: 'system-design.html' }
+      { icon: 'sysdesign', label: 'System Design', desc: 'DDIA · building blocks · 16 design problems', action: 'href', href: 'system-design.html' }
     ]
   },
   drills: {

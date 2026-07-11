@@ -113,6 +113,23 @@ function openTodayHome() {
     <p class="ds-label" style="margin: var(--ds-s5) 0 var(--ds-s2);">Then</p>
     <div class="ds-card ds-card--flat" style="padding: var(--ds-s1) var(--ds-s4);">${thenRows}</div>` : '';
 
+  // Explore — a browsable path OFF the JS-lesson loop. System Design lives on a
+  // separate page (system-design.html); the desktop topbar link to it is hidden
+  // ≤767px, so before this the phone user could only reach it via search. The
+  // row synth-clicks the shared hidden #system-design-btn launcher.
+  const exploreHtml = `
+    <p class="ds-label" style="margin: var(--ds-s5) 0 var(--ds-s2);">Explore</p>
+    <div class="ds-card ds-card--flat" style="padding: var(--ds-s1) var(--ds-s4);">
+      <div class="ds-row" data-today-sysdesign role="button" tabindex="0" style="cursor:pointer;">
+        <span class="ds-row__badge" aria-hidden="true">${dsIcon('sysdesign', 16)}</span>
+        <div class="ds-row__main">
+          <b>System Design</b>
+          <span>Memorization drill — DDIA, building blocks, design problems</span>
+        </div>
+        <span class="ds-row__chev">›</span>
+      </div>
+    </div>`;
+
   shell.innerHTML = `
     <div class="ds-root today-home-page" style="max-width: 560px; margin: 0 auto; background: transparent;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--ds-s3);">
@@ -128,6 +145,7 @@ function openTodayHome() {
         <div class="ds-stat"><b>${passesToday}</b><span>Today</span></div>
       </div>
       ${thenHtml}
+      ${exploreHtml}
     </div>`;
 
   // Lazy-enrich the hero with the lesson's one-line description once its JSON
@@ -150,6 +168,12 @@ function openTodayHome() {
       if (btn) btn.click();
     });
   });
+  const sysRow = shell.querySelector('[data-today-sysdesign]');
+  if (sysRow) {
+    const go = () => document.getElementById('system-design-btn')?.click();
+    sysRow.addEventListener('click', go);
+    sysRow.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  }
 
   const main = document.querySelector('.app-main');
   if (main) main.scrollTop = 0;

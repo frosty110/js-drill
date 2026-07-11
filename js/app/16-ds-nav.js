@@ -38,6 +38,12 @@
       icon: '<path d="M13 2 4 14h6l-1 8 9-12h-6z"/>' },
     { key: 'progress', label: 'Progress', target: 'dashboard-btn',
       icon: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>' },
+    // System Design — the standalone drill (separate page). No in-shell page to
+    // highlight (it navigates away), so it never takes aria-current; that's
+    // correct — you've left the SPA. Icon mirrors the `sysdesign` ds icon.
+    { key: 'sysdesign', label: 'Design', target: 'system-design-btn',
+      title: 'System Design — standalone memorization drill (DDIA, building blocks, design problems)',
+      icon: '<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="8.5" y="15" width="7" height="5" rx="1"/><path d="M6.5 8v4M17.5 8v4M6.5 12h11M12 12v3"/>' },
   ];
 
   // Rail-only aux items (ds/components.css hides them in bottom-bar mode —
@@ -125,6 +131,13 @@
       if (el) el.innerHTML = dsIcon(name, size);
     }
   }
+
+  // System Design launcher target: the single click-sink shared by the rail/bar
+  // "Design" item, the Practice launcher's Study row, the Today-home Explore
+  // row, the command palette, and the #/m/system-design deep-link route. It
+  // leaves the SPA for the standalone drill page.
+  const sysBtn = document.getElementById('system-design-btn');
+  if (sysBtn) sysBtn.addEventListener('click', () => { window.location.href = 'system-design.html'; });
 
   // Slices are deferred so the DOM is parsed by the time this runs.
   mountDsNav();

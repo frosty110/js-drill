@@ -72,6 +72,10 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p4b-rail';
     return gone('topbar-dashboard-mobile') && gone('topbar-mobile-menu') && gone('topbar-cram-progress');
   })()`);
   d.assert(topbarClean, 'mobile-only icons + hidden cram chip do not leak into the desktop topbar');
+  // D13: the Problems⇄Reference toggle folds into Browse at desktop (retired
+  // from the topbar; Browse facets/segments + the rail recover the split).
+  const toggleFolded = await d.eval(`(() => { const t = document.querySelector('.surface-toggle'); return !t || getComputedStyle(t).display === 'none'; })()`);
+  d.assert(toggleFolded, 'Problems⇄Reference toggle retired from the desktop topbar (D13)');
   d.assert(chrome.menusHidden, 'topbar dropdown menus (Practice/Drills/Train/Review) retired');
   d.assert(chrome.dashboardHidden, 'topbar Dashboard link retired (rail Progress covers it)');
   d.assert(chrome.systemDesignVisible, 'System Design topbar link kept (capability preserved)');

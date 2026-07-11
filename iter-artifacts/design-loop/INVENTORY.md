@@ -29,7 +29,7 @@ Target IA (D01): **Today · Browse · Practice · Progress** (+ Settings via gea
 | Command palette | `palette-*` | KEEP | The long-tail power path; redesign in P1 |
 | Cram progress widget | `#topbar-cram-progress` | MERGE→Today | Home shows active-plan progress ambiently |
 | Session heatstrip | `#heatstrip-wrap` | MERGE→Progress | **Landed (P5 + P4c):** session summary line in Progress "Today"; the sidebar strip died with the drawer (D10) |
-| Surface toggle (Problems ⇄ Reference) | `.surface-toggle` | MERGE→Browse | Becomes a Browse facet/segment |
+| Surface toggle (Problems ⇄ Reference) | `.surface-toggle` | MERGE→Browse | **Landed (D13, user decision):** retired from the DESKTOP topbar (Browse Type facet + segments + rail recover the split); KEPT on mobile lessons as the inline track-context switcher until P7. DOM + handler stay (synthetic-click; Browse sync independent) |
 | System Design link | `#topbar-system-design` | KEEP | Separate page; nav entry point stays. **Family-unified (P8/D12):** system-design.html now on ds/tokens.css + ds/components.css (.ds-opt drill, .ds-btn CTAs, ds-scrim modal); returns via `JS Drill ↗` |
 | Diagnostic page | `diagnostic.html` | KEEP | Separate page. **Family-unified (P8/D12):** diagnostic.html on ds/tokens.css + ds/components.css (.ds-opt questions, .ds-btn nav); returns via `← Drill`; Sync-chip clearance (P2-7) |
 

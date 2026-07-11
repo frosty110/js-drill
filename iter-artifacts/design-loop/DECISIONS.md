@@ -23,6 +23,29 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D13 · Problems⇄Reference toggle folds into Browse at desktop; stays on mobile lessons  (2026-07-10 · iter 15, user decision)
+Decision: The topbar Problems⇄Reference `.surface-toggle` is retired from the
+DESKTOP topbar (`display:none` at ≥768px in css/06-ds-nav.css, beside the P6
+icon-strip retirement) and KEPT on mobile (≤767px). Its drawer-era job — steering
+the sidebar lesson list — died with D10; Browse's Type facet + track segments
+(plus the desktop rail) already recover the Problems/Reference split, so the
+desktop toggle was redundant chrome. On mobile it stays because it's the only
+inline track-context switcher while viewing a lesson (swap Problems ⇄
+Reference/Syntax without leaving the lesson) — that inline switch has no mobile
+replacement until P7 redesigns lesson chrome. The button + its handler remain in
+the DOM (synthetic-click target; Browse's own segment sync is independent), so
+zero capability is lost (D05).
+Rationale: user chose "fold into Browse; keep on mobile" (the nav-audit P2-6d
+recommendation) — the least-disruptive option that de-clutters the desktop
+topbar (Decisions-budget: persistent chrome ≤4 destinations, D01) without
+stranding the mobile lesson's track switch. Supersedes D08's interim retention
+of the toggle at all viewports.
+Alternatives considered: retire it entirely (rejected by the user — leaves mobile
+lessons without an inline track switch until P7); keep it as-is at all viewports
+(rejected — the desktop redundancy the nav audit flagged).
+Reversible? Yes — one `display:none` rule; a revert restores the toggle on
+desktop (DOM + handler never left). P7 revisits the mobile lesson-chrome switch.
+
 ## D12 · Family unified on ds; legacy tokens.css merged as value-exact aliases (not a full recolor)  (2026-07-10 · iter 12)
 Decision: `system-design.html` and `diagnostic.html` migrate onto
 `ds/tokens.css` + `ds/components.css`: their MC options adopt `.ds-opt`

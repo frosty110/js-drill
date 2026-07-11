@@ -51,6 +51,10 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   const legacyHidden = await m.eval(`['hamburger','topbar-dashboard-mobile','topbar-mobile-menu']
     .every(id => getComputedStyle(document.getElementById(id)).display === 'none')`);
   m.assert(legacyHidden, 'hamburger + mobile topbar icons hidden (replaced by the bar)');
+  // D13: the Problems⇄Reference toggle STAYS on mobile (the only inline
+  // track-context switcher on a lesson until P7); folds into Browse on desktop.
+  const toggleOnMobile = await m.eval(`(() => { const t = document.querySelector('.surface-toggle'); return !!t && getComputedStyle(t).display !== 'none'; })()`);
+  m.assert(toggleOnMobile, 'Problems⇄Reference toggle kept on mobile (track-context switcher, D13)');
 
   // No horizontal overflow.
   const noHScroll = await m.eval(`document.documentElement.scrollWidth <= window.innerWidth`);

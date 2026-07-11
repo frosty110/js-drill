@@ -243,7 +243,7 @@ function renderL1(body, lesson, content) {
   const cardHandles = [];
 
   const wrap = document.createElement('div');
-  wrap.innerHTML = `<div class="mb-4 text-sm text-slate-400">Pick the right answer for each. Pass = miss at most one (≥80%); a perfect run earns a green ✓, otherwise an amber ✓ and the miss is saved to review.</div>`;
+  wrap.innerHTML = `<div class="mb-4 text-sm text-slate-500">Tap an answer for each — pass at ≥80% correct.</div>`;
 
   // Carry-over weak-spot card — one extra L1 question from another lesson
   // the user has flagged, picked once per session and cached. Does NOT
@@ -283,7 +283,7 @@ function renderL1(body, lesson, content) {
       const optEl = document.createElement('div');
       optEl.className = 'mc-option';
       const letter = String.fromCharCode(65 + displayOi);
-      optEl.innerHTML = `<span class="text-slate-500 font-mono text-xs mr-2">${letter}.</span>${escapeHtml(opt)}`;
+      optEl.innerHTML = `<span class="mc-key">${letter}</span><span class="mc-body">${escapeHtml(opt)}</span>`;
       optEl.setAttribute('role', 'button');
       optEl.setAttribute('tabindex', '0');
       optEl.addEventListener('keydown', (e) => {
@@ -352,7 +352,7 @@ function renderL1(body, lesson, content) {
       const optEl = document.createElement('div');
       optEl.className = 'mc-option';
       const letter = String.fromCharCode(65 + displayOi);  // A, B, C, D
-      optEl.innerHTML = `<span class="text-slate-500 font-mono text-xs mr-2">${letter}.</span>${escapeHtml(opt)}`;
+      optEl.innerHTML = `<span class="mc-key">${letter}</span><span class="mc-body">${escapeHtml(opt)}</span>`;
       optEl.setAttribute('role', 'button');
       optEl.setAttribute('tabindex', '0');
       optEl.addEventListener('keydown', (e) => {

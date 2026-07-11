@@ -29,7 +29,7 @@ async function readDom(s) {
       const q = content.L1.questions[origQi];
       const opts = [...c.querySelectorAll('.mc-option')].map(el => {
         // Strip the letter prefix; what remains is the literal option text.
-        const txt = el.textContent.replace(/^\\s*[A-D]\\.\\s*/, '').trim();
+        const txt = (el.querySelector('.mc-body') || el).textContent.replace(/^\\s*[A-D]\\.?\\s*/, '').trim();
         const origOi = q.options.findIndex(o => o.trim() === txt);
         return origOi;
       });
@@ -107,7 +107,7 @@ async function runOne({ mobile, label }) {
       const opts = [...c.querySelectorAll('.mc-option')];
       // Match via stripped text.
       const correctTxt = content.L1.questions[origQi].options[correctOrig].trim();
-      const target = opts.find(el => el.textContent.replace(/^\\s*[A-D]\\.\\s*/, '').trim() === correctTxt);
+      const target = opts.find(el => (el.querySelector('.mc-body') || el).textContent.replace(/^\\s*[A-D]\\.?\\s*/, '').trim() === correctTxt);
       if (!target) return { ok: false, reason: 'no-target', origQi };
       target.click();
       await new Promise(r => setTimeout(r, 80));

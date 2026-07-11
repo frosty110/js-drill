@@ -833,7 +833,17 @@ function initTopbarDropdowns() {
   // "Menu 'dashboard' not configured" stub panel (it has no TOPBAR_MENU_TAXONOMY
   // entry). It wires its own click handler in initDashboardModal().
   const hoverTriggers = [...topbar.querySelectorAll('.topbar-menu:not(.topbar-menu-link)')];
-  if (settingsBtn) hoverTriggers.push(settingsBtn);
+  // ⚙ Settings no longer opens the top-right dropdown (design-loop P6 / D11):
+  // it's the canonical launcher for the ds Settings sheet — the rail/bar
+  // Settings item, the #/m/ toggle routes, and the palette all synth-click it.
+  // Keeping it OUT of hoverTriggers means the legacy dropdown never fires for
+  // settings; a stopPropagation guards the document-level outside-close below.
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof openSettings === 'function') openSettings();
+    });
+  }
   hoverTriggers.forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();

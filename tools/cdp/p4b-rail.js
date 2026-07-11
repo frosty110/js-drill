@@ -1,5 +1,5 @@
 // p4b-rail.js — verify the P4b desktop rail (design-loop, D01 completed).
-// Desktop @1280px: ds rail visible under the topbar (4 destinations + Search/
+// Desktop @1280px: ds rail visible under the topbar (5 destinations + Search/
 // Settings aux items), topbar dropdown menus + permanent sidebar retired,
 // every destination routes, the drawer (power filters) slides OVER the rail,
 // `/` falls back to the palette, System Design stays reachable, L3 keeps the
@@ -50,7 +50,7 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p4b-rail';
   d.assert(rail.left === 0 && rail.width >= 200, `rail is a fixed left column (${JSON.stringify(rail)})`);
   d.assert(rail.top === rail.topbarBottom, `rail starts at the topbar's bottom edge (top=${rail.top}, topbar=${rail.topbarBottom})`);
   d.assert(rail.bottom >= rail.vh - 1, 'rail runs to the viewport bottom');
-  d.assert(rail.visibleItems === 6 && rail.auxItems === 2, `4 destinations + 2 aux items (${rail.visibleItems} visible, ${rail.auxItems} aux)`);
+  d.assert(rail.visibleItems === 7 && rail.auxItems === 2, `5 destinations (incl. Design) + 2 aux items (${rail.visibleItems} visible, ${rail.auxItems} aux)`);
   d.assert(rail.minH >= 44, `rail items ≥44px (minH=${rail.minH})`);
   d.assert(rail.auxAtFoot, 'aux items pushed to the rail foot (spacer works)');
 
@@ -155,15 +155,20 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p4b-rail';
   await d.sleep(300);
   await d.eval(`(() => { const p = document.getElementById('palette-overlay'); if (!p.classList.contains('hidden') && typeof _paletteClose === 'function') _paletteClose(); })()`);
 
+  // P6/D11: rail Settings opens the ds Settings sheet (not the retired top-right
+  // dropdown) — a focused overlay with grouped toggle rows + a close affordance.
   await d.click('#ds-appnav [data-nav="settings"]'); await d.sleep(400);
   const settings = await d.eval(`(() => {
-    const dd = document.getElementById('topbar-dropdown');
-    return { open: !dd.classList.contains('hidden'),
-             items: dd.querySelectorAll('.topbar-item').length };
+    const sh = document.getElementById('settings-sheet');
+    if (!sh) return { open: false, rows: 0, close: false };
+    return { open: sh.classList.contains('is-open'),
+             rows: sh.querySelectorAll('.settings-row').length,
+             close: !!sh.querySelector('[data-settings-close]') };
   })()`);
-  d.assert(settings.open && settings.items >= 5, `rail Settings opens the settings menu (${settings.items} items)`);
+  d.assert(settings.open && settings.rows >= 5 && settings.close,
+    `rail Settings opens the ds Settings sheet (${settings.rows} rows, close affordance ${settings.close})`);
   await d.snap('07-rail-settings');
-  await d.eval(`document.body.click()`); await d.sleep(300);
+  await d.eval(`(() => { const sh = document.getElementById('settings-sheet'); if (sh) sh.querySelector('[data-settings-close]').click(); })()`); await d.sleep(300);
 
   // 7 · `/` with the drawer closed falls back to the palette (search parity).
   await d.eval(`document.getElementById('today-home-btn').click()`); await d.sleep(500);
@@ -229,7 +234,7 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p4b-rail';
              noHScroll: document.documentElement.scrollWidth <= innerWidth };
   })()`);
   m.assert(mob.bar, `bottom bar unchanged at 390px (${JSON.stringify(mob)})`);
-  m.assert(mob.visibleCount === 4, `bar shows exactly the 4 destinations (got ${mob.visibleCount})`);
+  m.assert(mob.visibleCount === 5, `bar shows exactly the 5 destinations incl. Design (got ${mob.visibleCount})`);
   m.assert(mob.auxHidden, 'aux items (Search/Settings) hidden in bar mode');
   m.assert(mob.noHScroll, 'no horizontal scroll at 390px');
   await m.snap('01-mobile-bar-unchanged');

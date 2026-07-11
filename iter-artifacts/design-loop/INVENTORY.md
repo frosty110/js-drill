@@ -25,7 +25,7 @@ Target IA (D01): **Today · Browse · Practice · Progress** (+ Settings via gea
 |---|---|---|---|
 | Topbar (4 dropdowns + links + icons) | `#topbar` | RETIRE (chrome only — D05) | Replaced by the P1 adaptive nav; every item remapped below |
 | Sidebar (nav, track tabs, filter, search) | `#sidebar-nav` | MERGE→Browse | **Landed (P4c/D10):** Browse page owns search/segments/filters/list; drawer retired (aside stays in DOM as synthetic-click host); plan switcher lives in Browse's filter panel |
-| Settings dropdown | `#topbar-dropdown` (⚙️) | MERGE→Settings | P6 grouped Settings panel |
+| Settings dropdown | `#topbar-dropdown` (⚙️) | MERGE→Settings | **Landed (P6/D11):** `#topbar-settings` opens the ds Settings sheet (`openSettings`); the legacy dropdown never fires for settings; desktop 🔍/❓/⚙ strip retired (rail carries them) |
 | Command palette | `palette-*` | KEEP | The long-tail power path; redesign in P1 |
 | Cram progress widget | `#topbar-cram-progress` | MERGE→Today | Home shows active-plan progress ambiently |
 | Session heatstrip | `#heatstrip-wrap` | MERGE→Progress | **Landed (P5 + P4c):** session summary line in Progress "Today"; the sidebar strip died with the drawer (D10) |
@@ -64,7 +64,7 @@ launcher; every one also palette- and `#/m/`-reachable)
 | Mode | Verdict | Notes |
 |---|---|---|
 | `conv-drill-btn` `notes-drill-btn` `notes-locate-btn` `phone-screen-btn` | MERGE→Practice | Interview-arc drills, launcher group |
-| `clarify-ritual-btn` `hotseat-btn` `calibrate-btn` | SETTINGS | They're L3-behavior *toggles*, not modes — "Interview rituals" toggle group |
+| `clarify-ritual-btn` `hotseat-btn` `calibrate-btn` | SETTINGS | **Landed (P6):** "Interview rituals" toggle group in the Settings sheet (each row synth-clicks the hidden btn) |
 | `bridge-btn` (transfer gaps) | MERGE→Progress | Insight surface that routes to lessons |
 | `ai-coach-btn` (weak-spot export) | DEMOTE | Palette-reachable export utility |
 
@@ -87,9 +87,9 @@ launcher; every one also palette- and `#/m/`-reachable)
 **Settings / utility**
 | Mode | Verdict | Notes |
 |---|---|---|
-| `font-size-btn` `haptic-btn` `adhd-mode-btn` `pace-bar-btn` | SETTINGS | Display · Feedback groups |
-| `offline-pack-btn` `install-btn` | SETTINGS | Install & offline group |
-| `backup-btn` `restore-btn` `reset-btn` | SETTINGS | Data & sync group (destructive actions guarded) |
+| `font-size-btn` `haptic-btn` `adhd-mode-btn` `pace-bar-btn` | SETTINGS | **Landed (P6):** Display (font size `.ds-seg` · ADHD · pace bar) + Feedback (haptics, self-gated) groups |
+| `offline-pack-btn` `install-btn` | SETTINGS | **Landed (P6):** Install & offline group (both self-gate on capability) |
+| `backup-btn` `restore-btn` `reset-btn` | SETTINGS | **Landed (P6):** Data & sync group; Reset carries a danger badge + its own confirm guard |
 | `audio-btn` (episodes) | MERGE→Practice | It's a listening mode with a playlist, not a setting |
 | `export-btn` (Cheatsheet) | MERGE→Browse | Quick-reference panel → Browse's Reference segment |
 
@@ -97,7 +97,7 @@ launcher; every one also palette- and `#/m/`-reachable)
 | Mode | Verdict | Notes |
 |---|---|---|
 | `hide-mastered-btn` | MERGE→Browse | **Landed (P4c):** "Hide mastered" toggle in Browse's filter panel (due reviews stay visible; yields under Needs work) |
-| Sync chip (`js/sync.js`) | SETTINGS | Status stays ambient; controls move to Data & sync |
+| Sync chip (`js/sync.js`) | SETTINGS | **Landed (P6):** a "Cross-device sync" row in Data & sync shows live status (signed-in email / local-only) and opens the existing sync modal; the ambient chip stays (session-hidden per nav-audit P2-7). Rebuilding the auth modal on ds is deferred to P8/P9 |
 
 ## How to use this in a slice
 When redesigning a surface, consult this file for what folds into it, update the

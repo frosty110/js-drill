@@ -23,6 +23,47 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D11 · Settings = one grouped ds sheet (bottom on mobile, centered panel on desktop); legacy dropdown + desktop topbar icon strip retire  (2026-07-10 · iter 11)
+Decision: The Settings destination is a ds-sheet (`js/app/21-settings.js`
+`openSettings` → `#settings-sheet`, a `.ds-scrim`/`.ds-sheet` overlay identical
+in presentation to the Practice launcher: bottom sheet ≤639px, centered panel
+≥640px). It groups **Display** (text size M/L/XL segmented, ADHD reading mode,
+Pace bar) · **Feedback** (Haptics) · **Interview rituals** (Clarify-first,
+Hot-seat, Time calibration) · **Data & sync** (Cross-device sync status →
+existing sync modal, Back up, Restore, Reset [danger, own confirm guards it]) ·
+**Install & offline** (Install, Offline pack — both self-gate on capability) ·
+**Help** (Keyboard shortcuts). Every control synth-clicks the SAME hidden
+sidebar `<id>-btn` the retired dropdown drove (D05 contract) → zero new
+`saveProgress` field, zero sync-registry change; the sheet re-renders after each
+flip to reflect the switch. Entry points all resolve here: `#topbar-settings`
+(rewired off the legacy dropdown → `openSettings`), the rail/bar Settings item
+(synth-clicks it), the palette, and `#/m/settings` + every toggle slug
+(`#/m/clarify-ritual`, `/haptic`, `/reset`, `/backup`, `/offline-pack`, …) via
+`MODE_ROUTE_SURFACE` — a routed toggle now OPENS the sheet instead of silently
+flipping (nav-audit P2-5). Retired: the top-right `#topbar-dropdown` for
+settings (nav-audit measured 1,199px from the rail trigger, over the lesson,
+emoji rows, no close), and — at ≥768px — the redundant topbar 🔍/❓/⚙ icon
+strip (the rail already carries Search + Settings 40px away; help folds into
+the sheet's Keyboard-shortcuts row + the `?` key). The three buttons STAY in the
+DOM as synthetic-click targets (D05); mobile keeps the ⚙/🔍/❓ strip (nav-audit
+P2-6b — the bar has no settings slot yet).
+Rationale: completes P6 / VISION "from → to" row 2 (Settings smeared across
+standalone buttons → one grouped surface). Settings is a transient "pop-in,
+toggle, pop-out" panel, not a dwell-in destination — a sheet (which preserves
+the lesson underneath and ships a visible ≥44px close) fits it better than a
+full page swap, and matching the Practice launcher's presentation keeps the two
+nav-reached panels consistent (PRINCIPLES #1 one-focus, #6 one-system).
+Alternatives considered: a full ds page in `#lesson-shell` like Progress
+(rejected: destroys lesson context for a transient adjust, and needs a bespoke
+back affordance the sheet gets for free); a rail-anchored desktop panel
+(rejected: centered-modal consistency with the already-shipped Practice launcher
+won — both are nav-reached pop-in panels and should read identically); rebuilding
+the sync auth modal on ds now (deferred to P8/P9 — the Data & sync row surfaces
+status + opens the existing modal, no auth-path risk in P6).
+Reversible? Yes — revert restores the dropdown wiring (`#topbar-settings` back
+into `initTopbarDropdowns` hoverTriggers) + the desktop `display:none` on the
+icon strip; the hidden buttons + handlers never left.
+
 ## D10 · Browse owns the power filters; the off-canvas drawer retires  (2026-07-10 · iter 10)
 Decision: The drawer's power tools become first-class ds controls on the
 Browse page — one "Filters" disclosure (persisted via the existing

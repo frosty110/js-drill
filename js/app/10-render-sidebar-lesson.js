@@ -450,13 +450,14 @@ function _parseHash() {
 // the setting on every visit, `#/m/install` threw (prompt() needs a user
 // gesture), and `#/m/reset` presented a data-destruction confirm as the first
 // paint. Those routes now open the surface that OWNS the toggle instead:
-// Browse (with its filter panel open) for view filters, the settings dropdown
-// (P6's Settings surface later) for everything else. The user lands where the
-// control lives and flips it deliberately.
+// Browse (with its filter panel open) for view filters, the ds Settings sheet
+// (P6/D11) for everything else. The user lands where the control lives and
+// flips it deliberately.
 const MODE_ROUTE_SURFACE = {
   'hide-mastered': 'browse',
   'path': 'browse',
   'repair-filter': 'browse',
+  'settings': 'settings',
   'clarify-ritual': 'settings',
   'hotseat': 'settings',
   'calibrate': 'settings',
@@ -465,6 +466,9 @@ const MODE_ROUTE_SURFACE = {
   'adhd-mode': 'settings',
   'font-size': 'settings',
   'install': 'settings',
+  'offline-pack': 'settings',
+  'backup': 'settings',
+  'restore': 'settings',
   'reset': 'settings'
 };
 
@@ -480,6 +484,9 @@ function _dispatchModeRoute(mode) {
     return false;
   }
   if (surface === 'settings') {
+    // P6/D11: open the ds Settings sheet — the toggle the URL named lives here
+    // now (not a silent flip, not the retired top-right dropdown).
+    if (typeof openSettings === 'function') { openSettings(); return true; }
     const settingsBtn = document.getElementById('topbar-settings');
     if (settingsBtn) { settingsBtn.click(); return true; }
     return false;

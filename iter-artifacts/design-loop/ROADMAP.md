@@ -28,6 +28,7 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 ## P3 · Practice launcher
 - ☑ One contextual launcher replacing Practice/Drills/Train/Review menus — **bottom-sheet launcher SHIPPED** (taxonomy-derived, 4 groups, pick-smart/shuffle actions shared with topbar; #/m/practice-launcher). Desktop topbar menus retire with the P4 rail.
 - ☑ Long-tail modes grouped & progressively disclosed here + palette (sheet = grouped browse; ⌘K = search; deferred: insights sub-labels if cram lists grow)
+- ☑ **Per-family drill disclosure (nav-audit P2-4 backlog)** — each drill-family row keeps its random-shuffle tap AND gains a ▾ that expands the member list inline, so a specific drill (e.g. Swap-Bench) launches deterministically without the palette keyboard. Members resolve via the same `data-btn-id` synth-click; zero new state. p2-4-family-disclosure 9/9.
 
 ## P4 · Browse
 - ☑ Lessons/tracks/faceted-filter/search as a first-class surface — **Browse page SHIPPED** (search + segments + accordion + rows, #/m/browse); **desktop rail SHIPPED** (P4b: topbar menus retired, 768px unified breakpoint); **power filters SHIPPED** (P4c/D10: Plan view + scope chips / Hide mastered / Needs work / tag facets / plan switcher as one ds Filters disclosure; IME-safe in-place search — input never recreated; **off-canvas drawer RETIRED**, `/` = Browse search on-page / palette elsewhere).

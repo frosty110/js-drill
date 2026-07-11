@@ -148,7 +148,7 @@ function renderL3(body, lesson, content) {
     </div>
     ` : ''}
     <div class="mb-4 text-sm text-slate-400 flex items-center justify-between flex-wrap gap-2">
-      ${isMock ? '' : '<span>Blank editor. Type the canonical solution from memory, then Run. Pass when output matches.</span>'}
+      ${isMock ? '' : '<span>Type the canonical from memory, then Run — pass when the output matches.</span>'}
       <div class="flex items-center gap-2 flex-wrap">${bestBadge}${slopeBadge}${trendBadge}</div>
     </div>
     <div class="mock-reel-tile hidden" data-mock-reel-tile></div>
@@ -190,8 +190,8 @@ function renderL3(body, lesson, content) {
     <textarea id="drill-editor"></textarea>
     <div class="l3-actions mt-3 flex items-center gap-2 flex-wrap">
       <button class="primary" data-action="run">Run <span class="text-amber-900">(⌘↵)</span></button>
-      ${isMock ? '' : '<button class="secondary" data-action="hint" data-hint-btn>💡 Hint</button>'}
-      ${isMock || !Array.isArray(drill.criticalLines) || drill.criticalLines.length === 0 ? '' : `<button class="secondary" data-action="critical-fill" data-critical-btn title="Pre-fill the editor with the canonical; you fill just the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'}">🎯 Critical lines</button>`}
+      ${isMock ? '' : `<button class="secondary" data-action="hint" data-hint-btn>${dsIcon('lightbulb', 15)}Hint</button>`}
+      ${isMock || !Array.isArray(drill.criticalLines) || drill.criticalLines.length === 0 ? '' : `<button class="secondary" data-action="critical-fill" data-critical-btn title="Pre-fill the editor with the canonical; you fill just the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'}">${dsIcon('target', 15)}Critical lines</button>`}
       ${isMock ? '' : '<button class="secondary" data-action="diff">Compare to canonical</button>'}
       ${isMock ? '' : '<button class="secondary" data-action="reveal">Reveal canonical</button>'}
       <button class="secondary" data-action="clear">Clear</button>

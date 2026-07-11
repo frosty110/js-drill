@@ -75,6 +75,9 @@ const DS_ICONS = {
   smartphone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
   'download-cloud': '<path d="M8 17a5 5 0 1 1 1.9-9.6A6 6 0 0 1 21 10.5a4 4 0 0 1-1 7.5"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/>',
   keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/>',
+
+  // drill-screen chrome (P7)
+  lightbulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14c.2-1 .7-1.7 1.4-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.8 1.2 1.5 1.4 2.5"/>',
 };
 
 // Mode-launcher iconography: hidden-button id (or taxonomy `icon` key) → icon.

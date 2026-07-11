@@ -23,6 +23,49 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D14 · Deferred-backlog disposition (each item cleared / accepted / deferred-with-reason)  (2026-07-11 · iter 18)
+Decision: an explicit accounting of every deferred item from the nav + supabase
+audits and the design-loop STATE deferrals, so the backlog is auditable rather
+than an open-ended list:
+- **DONE this cycle:** per-family drill disclosure in the launcher (P2-4, iter
+  14); Problems⇄Reference toggle fold (D13, iter 15); the `mistake-tagging`
+  probe migrated off the retired Stats modal → Progress "Top miss patterns"
+  (iter 13). Bridge transfer-gap row + At-Risk ranked rows already live in
+  Progress "Fix first" (`js/app/20-progress.js`, shipped with the audit fixes).
+- **ACCEPTED as an intentional tradeoff (no change):**
+  · *Consistency-heatmap day-cells <44px* — a 60-cell calendar can't give every
+  cell a 44px target without dominating the screen; the persistent detail line
+  + per-cell `title`/`aria-label` carry the same data on hover/tap/focus. This
+  is the tradeoff every calendar heatmap makes (GitHub, Oura). Cells are
+  keyboard-focusable and the section is informational, not a primary tap path.
+  · *At-Risk "N DUE · M SOON" inventory strip not reproduced* — the per-row
+  attention chips ("due now" / "due in Xd" / "N misses" / "revealed") carry the
+  same signal at higher fidelity than a rolled-up strip; a summary strip would
+  duplicate, not add.
+- **DEFERRED to a dedicated focused slice (with reason):**
+  · *Delete the ~600-line legacy Dashboard/sidebar renderers* (`renderDailyInto`/
+  `renderActivityInto`/`renderStatsInto` + the at-risk modal) — dead code behind
+  the openProgress delegation; safe to keep until the `dashboard-probe`/
+  `dashboard-activity-probe`/`refine-stats-modal`/`at-risk-radar` probes are
+  rewritten-or-retired. Deleting them WITHOUT retiring those probes would go
+  red; it's a probe-cleanup-then-delete slice, not a drive-by.
+  · *Topic-facet chip density in Browse* (~19 wrapping chips) — fine inside the
+  closed-by-default Filters panel; a per-group disclosure is tighter craft but
+  not a blocker.
+  · *Reference-tab Flash/Cinema/Notes toggles still carry emoji* (D07) — their
+  labels change dynamically across ~6-8 `.textContent` sites, so a clean
+  conversion belongs to a holistic Reference-tab redesign (P7), not a piecemeal
+  swap. Same for the system-design page header emoji (📊 Stats / 📇 badge) and
+  the L1 carryover/mistake-strip emoji.
+  · *Weakness-clear call sites left un-timestamped in the P1-3 sync fix* (07/12a
+  slices) — a sync-correctness concern that wants a focused pass over the merge
+  policy, not a rushed edit.
+Rationale: the prompt's closeout bar is "backlog cleared OR explicitly accepted
+in DECISIONS.md" — this entry meets the second half for the items that are
+either intentional tradeoffs or genuinely need a dedicated slice, and records
+the first half for what shipped.
+Reversible? N/A (a disposition record, not a code change).
+
 ## D13 · Problems⇄Reference toggle folds into Browse at desktop; stays on mobile lessons  (2026-07-10 · iter 15, user decision)
 Decision: The topbar Problems⇄Reference `.surface-toggle` is retired from the
 DESKTOP topbar (`display:none` at ≥768px in css/06-ds-nav.css, beside the P6

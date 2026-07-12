@@ -14,7 +14,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v33-l3-chrome-icons-2026-07-11';
+const CACHE_VERSION = 'jsdrill-v34-reference-tab-ds-2026-07-11';
 const APP_SHELL = [
   './',
   './index.html',
@@ -51,6 +51,7 @@ const APP_SHELL = [
   './css/07-ds-progress.css',
   './css/08-ds-browse.css',
   './css/09-ds-settings.css',
+  './css/10-ds-lesson.css',
   './ds/tokens.css',
   './ds/components.css',
   './ds/icons.js',

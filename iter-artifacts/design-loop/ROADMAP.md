@@ -28,6 +28,7 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 ## P3 · Practice launcher
 - ☑ One contextual launcher replacing Practice/Drills/Train/Review menus — **bottom-sheet launcher SHIPPED** (taxonomy-derived, 4 groups, pick-smart/shuffle actions shared with topbar; #/m/practice-launcher). Desktop topbar menus retire with the P4 rail.
 - ☑ Long-tail modes grouped & progressively disclosed here + palette (sheet = grouped browse; ⌘K = search; deferred: insights sub-labels if cram lists grow)
+- ☑ **Per-family drill disclosure (nav-audit P2-4 backlog)** — each drill-family row keeps its random-shuffle tap AND gains a ▾ that expands the member list inline, so a specific drill (e.g. Swap-Bench) launches deterministically without the palette keyboard. Members resolve via the same `data-btn-id` synth-click; zero new state. p2-4-family-disclosure 9/9.
 
 ## P4 · Browse
 - ☑ Lessons/tracks/faceted-filter/search as a first-class surface — **Browse page SHIPPED** (search + segments + accordion + rows, #/m/browse); **desktop rail SHIPPED** (P4b: topbar menus retired, 768px unified breakpoint); **power filters SHIPPED** (P4c/D10: Plan view + scope chips / Hide mastered / Needs work / tag facets / plan switcher as one ds Filters disclosure; IME-safe in-place search — input never recreated; **off-canvas drawer RETIRED**, `/` = Browse search on-page / palette elsewhere).
@@ -36,14 +37,19 @@ shippable slice. Status: ☐ todo · ◐ in progress · ☑ done · ✗ dropped 
 - ☑ Unify Dashboard / Stats / Streak / At-Risk / Resurrect into one coherent surface — **Progress page SHIPPED** (js/app/20-progress.js + css/07-ds-progress.css, all-ds: Today snapshot w/ session summary → Activity (7d chips + 14d stacked bars + 60d one-hue heatmap w/ tap-day drill routes) → Fix first (At-Risk rows + Resurrect + Reveal-Replay actions) → Mastery (overall + per-track meters) → More insights `<details>` (drill lifetimes, self-rescue, miss tags, half-life, retention, calibration, time invested, mock bests). openDashboard delegates; at-risk-btn/#/m/at-risk land focused on Fix first. Bonus fix: `#/m/<mode>` boot deep-links no longer clobbered by the async lesson-content re-render.
 
 ## P6 · Settings
-- ☐ One grouped Settings panel (Display · Feedback & haptics · Data & sync · Install & offline)
+- ☑ One grouped Settings panel — **ds Settings sheet SHIPPED** (`js/app/21-settings.js` + `css/09-ds-settings.css`, D11): Display (text-size M/L/XL · ADHD mode · pace bar) · Feedback (haptics) · Interview rituals (clarify / hot-seat / calibrate) · Data & sync (sync status→modal · backup · restore · reset[danger]) · Install & offline · Keyboard shortcuts. Bottom sheet ≤639px / centered panel ≥640px; ≥44px close; stroke icons, zero emoji. `#topbar-settings` rewired off the legacy dropdown → `openSettings`; rail/bar + palette + `#/m/settings` + every toggle slug route here (silent-flip bug fixed, nav-audit P2-5). Desktop topbar 🔍/❓/⚙ strip retired (rail carries them). p6-settings 21/21 + p4b-rail/p1-nav-smoke updated, all regression probes green.
 
 ## P7 · The drill screens (core loop craft)
-- ☐ L1 redesign · ☐ L2 redesign · ☐ L3 redesign · ☐ Reference/reveal · ☐ Mock · ☐ Walkthrough/Conversation
+- ◐ **L1 redesign — DONE (options)**: L1 answer options now wear the ds MC-option look (letter chip + 2px border + wash-good/bad reveal + mute-on-lock), matching the `.ds-opt` used on Browse / system-design / diagnostic. `.mc-option` restyled to ds tokens (state class names unchanged → 12a-l1.js click/lock logic byte-identical, zero runner risk); verbose preamble trimmed to a one-liner. p7-l1 6/6 + l1-shuffle/mistake-tagging/l1-orange-pass/tab-switch green. *(Remaining L1: the shared lesson header/prompt-card above the tabs — a separate lesson-chrome slice.)*
+- ◐ **App-wide action buttons — DONE**: every `button.primary`/`button.secondary` across L1/L2/L3/drills/mock now wears the ds-btn treatment (ds tokens + ds radius + a **≥44px tap target** — they were ~33px, below the mobile minimum). CSS-only restyle (class names unchanged → data-action handlers + probes intact); font-size held at 13px so there's no horizontal-width reflow (buttons only grow taller + rounder). p7-buttons 6/6 (L2/L3/Mock), appsplit + refine-l2 green.
+- ◐ **L2/L3 chrome polish — DONE**: L3's Hint (💡) + Critical-lines (🎯) action buttons now use ds stroke icons (D07 — new `lightbulb` icon; `target` reused), rendering cleanly in the now-ds buttons; L2 + L3 verbose preambles trimmed to one line (matching L1 — "respect the minute").
+- ◐ **Reference tab — DONE**: Flash/Cinema/Notes→Code toggles → ds chips with stroke icons (💡layers/🎬film/📝file-text; D07, incl. all dynamic label sites via a `_refToggleLabel` helper); Notes + Alternate-solutions section headers tokenized (`.ref-section-header`, was inline hardcoded amber); "Drill from blank" + Conversation "Drill recall" CTAs → ds icons + ds-btn (the recall button also fixed a #e0a41e/white contrast issue). New `css/10-ds-lesson.css`.
+- ☐ L2 body (blanks are intentionally Dracula-matched — appropriate) · ☐ L3 editor body · ☐ Mock body · ☐ Walkthrough tab · ☐ shared lesson header/prompt-card
 
 ## P8 · Unify the family
-- ☐ Migrate `system-design.html` onto `components.css` (kill hardcoded colors)
-- ☐ Migrate `diagnostic.html` onto `components.css`
+- ☑ Migrate `system-design.html` onto `ds/tokens.css` + `ds/components.css` — **DONE**: MC options → `.ds-opt` (amber letter chips), CTAs → `.ds-btn` (kept `.cta` for layout selectors), stats modal → `.ds-scrim`/`.ds-sheet`, all inline hardcoded hex → ds tokens (only the mermaid JS `themeVariables` keep literals). Return path (`JS Drill ↗`) intact.
+- ☑ Migrate `diagnostic.html` onto `ds/tokens.css` + `ds/components.css` — **DONE**: MC options → `.ds-opt`, footer nav → `.ds-btn`, zero raw hex remaining. Return path (`← Drill`) intact + Sync-chip clearance (P2-7).
+- ☑ Retire/merge legacy `tokens.css` (D04) — **DONE**: its palette folded into `ds/tokens.css` as value-exact aliases; root `tokens.css` deleted; index.html + both pages repointed; SW v28. Main app renders identically (appsplit 0 errors); p8-family probe 11/11.
 
 ## P9 · Delight & states
 - ☐ Motion/microinteractions (grade, streak, mastery) · ☐ empty/loading/error/offline states · ☐ light+dark

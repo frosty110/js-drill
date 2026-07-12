@@ -12,8 +12,8 @@
 //   Practice → #practice-launcher-btn (ds-sheet launcher — 18-practice-launcher.js)
 //   Progress → #dashboard-btn    (unified Dashboard — becomes P5 Progress)
 //   Search   → #palette-trigger  (command palette, rail only)
-//   Settings → #topbar-settings  (settings dropdown, rail only — P6 replaces
-//              it with a real Settings surface)
+//   Settings → #topbar-settings  (opens the ds Settings sheet — P6/D11;
+//              js/app/21-settings.js openSettings)
 //
 // Interop rules (see css/06-ds-nav.css):
 //   · Mobile: L3's sticky Run bar owns the bottom edge → the bar hides there

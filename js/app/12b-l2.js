@@ -58,7 +58,7 @@ function renderL2(body, lesson, content) {
   }
 
   const wrap = document.createElement('div');
-  wrap.innerHTML = `<div class="mb-4 text-sm text-slate-400">Fill the blanks so the code prints the expected output. Pass when all exercises produce the expected output.</div>`;
+  wrap.innerHTML = `<div class="mb-4 text-sm text-slate-500">Fill each blank so the code prints the expected output.</div>`;
 
   exercises.forEach((ex, exi) => {
     const card = document.createElement('div');

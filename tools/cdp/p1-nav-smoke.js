@@ -44,13 +44,17 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
              minH: Math.min(...items.map(i => i.height)), minW: Math.min(...items.map(i => i.width)) };
   })()`);
   m.assert(bar.visible, `nav bar visible & pinned to viewport bottom (${JSON.stringify(bar)})`);
-  m.assert(bar.count === 4, `4 visible nav items (got ${bar.count})`);
+  m.assert(bar.count === 5, `5 visible nav items incl. Design (got ${bar.count})`);
   m.assert(bar.minH >= 44 && bar.minW >= 44, `items ≥44px targets (minH=${bar.minH}, minW=${bar.minW})`);
 
   // Redundant legacy chrome hidden.
   const legacyHidden = await m.eval(`['hamburger','topbar-dashboard-mobile','topbar-mobile-menu']
     .every(id => getComputedStyle(document.getElementById(id)).display === 'none')`);
   m.assert(legacyHidden, 'hamburger + mobile topbar icons hidden (replaced by the bar)');
+  // D13: the Problems⇄Reference toggle STAYS on mobile (the only inline
+  // track-context switcher on a lesson until P7); folds into Browse on desktop.
+  const toggleOnMobile = await m.eval(`(() => { const t = document.querySelector('.surface-toggle'); return !!t && getComputedStyle(t).display !== 'none'; })()`);
+  m.assert(toggleOnMobile, 'Problems⇄Reference toggle kept on mobile (track-context switcher, D13)');
 
   // No horizontal overflow.
   const noHScroll = await m.eval(`document.documentElement.scrollWidth <= window.innerWidth`);

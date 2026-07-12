@@ -23,6 +23,144 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D14 · Deferred-backlog disposition (each item cleared / accepted / deferred-with-reason)  (2026-07-11 · iter 18)
+Decision: an explicit accounting of every deferred item from the nav + supabase
+audits and the design-loop STATE deferrals, so the backlog is auditable rather
+than an open-ended list:
+- **DONE this cycle:** per-family drill disclosure in the launcher (P2-4, iter
+  14); Problems⇄Reference toggle fold (D13, iter 15); the `mistake-tagging`
+  probe migrated off the retired Stats modal → Progress "Top miss patterns"
+  (iter 13). Bridge transfer-gap row + At-Risk ranked rows already live in
+  Progress "Fix first" (`js/app/20-progress.js`, shipped with the audit fixes).
+- **ACCEPTED as an intentional tradeoff (no change):**
+  · *Consistency-heatmap day-cells <44px* — a 60-cell calendar can't give every
+  cell a 44px target without dominating the screen; the persistent detail line
+  + per-cell `title`/`aria-label` carry the same data on hover/tap/focus. This
+  is the tradeoff every calendar heatmap makes (GitHub, Oura). Cells are
+  keyboard-focusable and the section is informational, not a primary tap path.
+  · *At-Risk "N DUE · M SOON" inventory strip not reproduced* — the per-row
+  attention chips ("due now" / "due in Xd" / "N misses" / "revealed") carry the
+  same signal at higher fidelity than a rolled-up strip; a summary strip would
+  duplicate, not add.
+- **DEFERRED to a dedicated focused slice (with reason):**
+  · *Delete the ~600-line legacy Dashboard/sidebar renderers* (`renderDailyInto`/
+  `renderActivityInto`/`renderStatsInto` + the at-risk modal) — dead code behind
+  the openProgress delegation; safe to keep until the `dashboard-probe`/
+  `dashboard-activity-probe`/`refine-stats-modal`/`at-risk-radar` probes are
+  rewritten-or-retired. Deleting them WITHOUT retiring those probes would go
+  red; it's a probe-cleanup-then-delete slice, not a drive-by.
+  · *Topic-facet chip density in Browse* (~19 wrapping chips) — fine inside the
+  closed-by-default Filters panel; a per-group disclosure is tighter craft but
+  not a blocker.
+  · *Reference-tab Flash/Cinema/Notes toggles still carry emoji* (D07) — their
+  labels change dynamically across ~6-8 `.textContent` sites, so a clean
+  conversion belongs to a holistic Reference-tab redesign (P7), not a piecemeal
+  swap. Same for the system-design page header emoji (📊 Stats / 📇 badge) and
+  the L1 carryover/mistake-strip emoji.
+  · *Weakness-clear call sites left un-timestamped in the P1-3 sync fix* (07/12a
+  slices) — a sync-correctness concern that wants a focused pass over the merge
+  policy, not a rushed edit.
+Rationale: the prompt's closeout bar is "backlog cleared OR explicitly accepted
+in DECISIONS.md" — this entry meets the second half for the items that are
+either intentional tradeoffs or genuinely need a dedicated slice, and records
+the first half for what shipped.
+Reversible? N/A (a disposition record, not a code change).
+
+## D13 · Problems⇄Reference toggle folds into Browse at desktop; stays on mobile lessons  (2026-07-10 · iter 15, user decision)
+Decision: The topbar Problems⇄Reference `.surface-toggle` is retired from the
+DESKTOP topbar (`display:none` at ≥768px in css/06-ds-nav.css, beside the P6
+icon-strip retirement) and KEPT on mobile (≤767px). Its drawer-era job — steering
+the sidebar lesson list — died with D10; Browse's Type facet + track segments
+(plus the desktop rail) already recover the Problems/Reference split, so the
+desktop toggle was redundant chrome. On mobile it stays because it's the only
+inline track-context switcher while viewing a lesson (swap Problems ⇄
+Reference/Syntax without leaving the lesson) — that inline switch has no mobile
+replacement until P7 redesigns lesson chrome. The button + its handler remain in
+the DOM (synthetic-click target; Browse's own segment sync is independent), so
+zero capability is lost (D05).
+Rationale: user chose "fold into Browse; keep on mobile" (the nav-audit P2-6d
+recommendation) — the least-disruptive option that de-clutters the desktop
+topbar (Decisions-budget: persistent chrome ≤4 destinations, D01) without
+stranding the mobile lesson's track switch. Supersedes D08's interim retention
+of the toggle at all viewports.
+Alternatives considered: retire it entirely (rejected by the user — leaves mobile
+lessons without an inline track switch until P7); keep it as-is at all viewports
+(rejected — the desktop redundancy the nav audit flagged).
+Reversible? Yes — one `display:none` rule; a revert restores the toggle on
+desktop (DOM + handler never left). P7 revisits the mobile lesson-chrome switch.
+
+## D12 · Family unified on ds; legacy tokens.css merged as value-exact aliases (not a full recolor)  (2026-07-10 · iter 12)
+Decision: `system-design.html` and `diagnostic.html` migrate onto
+`ds/tokens.css` + `ds/components.css`: their MC options adopt `.ds-opt`
+(+`.ds-opt__key`/`__body`, `.is-correct`/`.is-wrong`/`.is-selected`), CTAs adopt
+`.ds-btn` variants, the system-design stats modal adopts `.ds-scrim`/`.ds-sheet`,
+and every raw hex in their inline `<style>` maps to a ds/alias token (the only
+literals left are system-design's mermaid `themeVariables`, a JS diagram-theme
+config the library needs). The retired root `tokens.css` is **merged into
+ds/tokens.css as a "legacy aliases" block** rather than deleted-and-rewritten:
+surfaces/text/accent/fonts/targets alias straight to their identical-valued
+`--ds-*` role; the few tokens whose value differs from any ds role (status
+greens/reds, `--panel-3`, radii, dracula, shadow) are kept as literals. So the
+merge is **pixel-identical** — it unifies the token SOURCE (one file, no per-page
+fork = the original reason tokens.css existed) WITHOUT recoloring the
+already-shipped main-app chrome, which a P8-era global recolor would risk. The
+full ink-&-amber recolor of the not-yet-rebuilt main-app chrome happens when
+those surfaces are rebuilt (P7) or in the P9/P10 polish, referencing `--ds-*`
+directly; the aliases are the bridge until then. Both pages keep their existing
+return link to `index.html` as the path back into the app.
+Rationale: completes P8 / VISION "from → to" row 4 (per-page hand-rolled CSS +
+duplicated components → one design system used by all pages). Value-exact merge
+keeps every prior slice independently green (no main-app regression) while still
+retiring the second token file.
+Alternatives considered: aliasing legacy names to ds roles even where values
+differ (rejected: would shift the main app's status greens/reds mid-journey — a
+broad, silent regression for a phase whose job is the two standalone pages);
+rewriting both pages' inline styles fully onto `--ds-*` with a global recolor
+(deferred to P7/P9 — bigger regression surface, not P8's job).
+Reversible? Yes — the alias block + the pages' link swaps revert cleanly; git
+restores the old `tokens.css` and hand-rolled `.opt`/`.cta`/`.modal` rules.
+
+## D11 · Settings = one grouped ds sheet (bottom on mobile, centered panel on desktop); legacy dropdown + desktop topbar icon strip retire  (2026-07-10 · iter 11)
+Decision: The Settings destination is a ds-sheet (`js/app/21-settings.js`
+`openSettings` → `#settings-sheet`, a `.ds-scrim`/`.ds-sheet` overlay identical
+in presentation to the Practice launcher: bottom sheet ≤639px, centered panel
+≥640px). It groups **Display** (text size M/L/XL segmented, ADHD reading mode,
+Pace bar) · **Feedback** (Haptics) · **Interview rituals** (Clarify-first,
+Hot-seat, Time calibration) · **Data & sync** (Cross-device sync status →
+existing sync modal, Back up, Restore, Reset [danger, own confirm guards it]) ·
+**Install & offline** (Install, Offline pack — both self-gate on capability) ·
+**Help** (Keyboard shortcuts). Every control synth-clicks the SAME hidden
+sidebar `<id>-btn` the retired dropdown drove (D05 contract) → zero new
+`saveProgress` field, zero sync-registry change; the sheet re-renders after each
+flip to reflect the switch. Entry points all resolve here: `#topbar-settings`
+(rewired off the legacy dropdown → `openSettings`), the rail/bar Settings item
+(synth-clicks it), the palette, and `#/m/settings` + every toggle slug
+(`#/m/clarify-ritual`, `/haptic`, `/reset`, `/backup`, `/offline-pack`, …) via
+`MODE_ROUTE_SURFACE` — a routed toggle now OPENS the sheet instead of silently
+flipping (nav-audit P2-5). Retired: the top-right `#topbar-dropdown` for
+settings (nav-audit measured 1,199px from the rail trigger, over the lesson,
+emoji rows, no close), and — at ≥768px — the redundant topbar 🔍/❓/⚙ icon
+strip (the rail already carries Search + Settings 40px away; help folds into
+the sheet's Keyboard-shortcuts row + the `?` key). The three buttons STAY in the
+DOM as synthetic-click targets (D05); mobile keeps the ⚙/🔍/❓ strip (nav-audit
+P2-6b — the bar has no settings slot yet).
+Rationale: completes P6 / VISION "from → to" row 2 (Settings smeared across
+standalone buttons → one grouped surface). Settings is a transient "pop-in,
+toggle, pop-out" panel, not a dwell-in destination — a sheet (which preserves
+the lesson underneath and ships a visible ≥44px close) fits it better than a
+full page swap, and matching the Practice launcher's presentation keeps the two
+nav-reached panels consistent (PRINCIPLES #1 one-focus, #6 one-system).
+Alternatives considered: a full ds page in `#lesson-shell` like Progress
+(rejected: destroys lesson context for a transient adjust, and needs a bespoke
+back affordance the sheet gets for free); a rail-anchored desktop panel
+(rejected: centered-modal consistency with the already-shipped Practice launcher
+won — both are nav-reached pop-in panels and should read identically); rebuilding
+the sync auth modal on ds now (deferred to P8/P9 — the Data & sync row surfaces
+status + opens the existing modal, no auth-path risk in P6).
+Reversible? Yes — revert restores the dropdown wiring (`#topbar-settings` back
+into `initTopbarDropdowns` hoverTriggers) + the desktop `display:none` on the
+icon strip; the hidden buttons + handlers never left.
+
 ## D10 · Browse owns the power filters; the off-canvas drawer retires  (2026-07-10 · iter 10)
 Decision: The drawer's power tools become first-class ds controls on the
 Browse page — one "Filters" disclosure (persisted via the existing

@@ -14,7 +14,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v26-sysdesign-nav-2026-07-10';
+const CACHE_VERSION = 'jsdrill-v35-header-cta-icons-2026-07-11';
 const APP_SHELL = [
   './',
   './index.html',
@@ -41,6 +41,7 @@ const APP_SHELL = [
   './js/app/18-practice-launcher.js',
   './js/app/19-browse.js',
   './js/app/20-progress.js',
+  './js/app/21-settings.js',
   './css/01-base.css',
   './css/02-sidebar.css',
   './css/03-tabs.css',
@@ -49,10 +50,11 @@ const APP_SHELL = [
   './css/06-ds-nav.css',
   './css/07-ds-progress.css',
   './css/08-ds-browse.css',
+  './css/09-ds-settings.css',
+  './css/10-ds-lesson.css',
   './ds/tokens.css',
   './ds/components.css',
   './ds/icons.js',
-  './tokens.css',
   './js/storage.js',
   './js/sync.js',
   './js/supabase-config.js',

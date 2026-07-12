@@ -41,23 +41,26 @@ const OUT = process.argv[3] || '/tmp/jsdrill-mistake-tagging';
   const cardCount = await s.evalAwait(`document.querySelectorAll('.mc-option').length`);
   console.log(cardCount > 0 ? `PASS: ${cardCount} MC options rendered` : 'FAIL: no MC options');
 
-  // Find a wrong option to click: pick the first card's first option that is
-  // NOT the answer. We need to read CONTENT to know which is wrong.
-  const wrongInfo = await s.evalAwait(`(() => {
+  // Click a WRONG rendered option of the first question. Options are shuffled
+  // per session, so match on the option TEXT (from .mc-body — the ds letter
+  // chip holds only the letter) rather than assuming render order === content
+  // order. Deterministic regardless of the shuffle.
+  const clickedWrong = await s.evalAwait(`(() => {
     const lesson = CONTENT['${lessonId}'];
-    if (!lesson || !lesson.L1 || !lesson.L1.questions || !lesson.L1.questions[0]) return null;
+    if (!lesson || !lesson.L1 || !lesson.L1.questions || !lesson.L1.questions[0]) return false;
     const q = lesson.L1.questions[0];
-    // Pick first option index that is NOT q.answer.
-    const wrongIdx = q.options.findIndex((_, i) => i !== q.answer);
-    return { wrongIdx, answer: q.answer };
+    const answerTxt = q.options[q.answer].trim();
+    const opts = [...document.querySelectorAll('[data-qi="0"] .mc-option')];
+    const bodyTxt = el => ((el.querySelector('.mc-body') || el).textContent || '').replace(/^\\s*[A-D]\\.?\\s*/, '').trim();
+    const wrong = opts.find(el => bodyTxt(el) !== answerTxt);
+    if (!wrong) return false;
+    wrong.click();
+    return true;
   })()`);
-  if (!wrongInfo || wrongInfo.wrongIdx < 0) {
-    console.log('FAIL: could not find wrong option');
+  if (!clickedWrong) {
+    console.log('FAIL: could not find/click a wrong option');
     process.exit(1);
   }
-
-  // Click the wrong option of the first question.
-  await s.evalAwait(`document.querySelectorAll('[data-qi="0"] .mc-option')[${wrongInfo.wrongIdx}].click()`);
   await s.sleep(400);
   await s.snap('after-wrong-click');
 
@@ -85,29 +88,37 @@ const OUT = process.argv[3] || '/tmp/jsdrill-mistake-tagging';
   const stripGone = await s.evalAwait(`!document.querySelector('[data-mistake-strip]')`);
   console.log(stripGone ? 'PASS: chip strip removed after tag + fade' : 'FAIL: strip still in DOM');
 
-  // Assert 6: open Stats modal, Miss Patterns tile renders.
+  // Assert 6: #stats-btn opens the ds Progress page (P5 retired the Stats modal
+  // into it). "Top miss patterns" lives in the "More insights" <details> — its
+  // content is in the DOM even collapsed, so textContent surfaces the tag.
   await s.evalAwait(`document.getElementById('stats-btn').click()`);
-  await s.sleep(500);
-  await s.snap('stats-with-miss-tile');
-  const tileText = await s.evalAwait(`document.getElementById('stats-body')?.textContent || ''`);
-  const tilePresent = tileText.includes('Top miss patterns');
-  console.log(tilePresent ? 'PASS: 🏷 Top miss patterns tile renders in Stats' : 'FAIL: Stats tile missing');
+  await s.sleep(600);
+  await s.snap('progress-with-miss-tile');
+  const progText = await s.evalAwait(`document.querySelector('.progress-page')?.textContent || ''`);
+  const tilePresent = /Top miss patterns/i.test(progText);
+  console.log(tilePresent ? 'PASS: Top miss patterns insight renders in Progress' : 'FAIL: miss-patterns insight missing');
 
-  const tileShowsTag = tileText.includes('off-by-one');
-  console.log(tileShowsTag ? 'PASS: tile shows tagged "off-by-one"' : 'FAIL: tile does not show the tag');
+  const tileShowsTag = progText.includes('off-by-one');
+  console.log(tileShowsTag ? 'PASS: insight shows tagged "off-by-one"' : 'FAIL: insight does not show the tag');
 
-  // Assert 7: dismiss path — close Stats, trigger another miss, dismiss chip.
-  await s.evalAwait(`document.getElementById('stats-modal').style.display = 'none';`);
-  // Pick the second question; if there's only one, we're done for the
-  // dismiss check.
+  // Assert 7: dismiss path — return to the lesson's L1, trigger another miss,
+  // dismiss the chip strip. (Opening Progress replaced the lesson shell.)
+  await s.evalAwait(`(typeof selectLesson === 'function') && selectLesson('${lessonId}')`);
+  await s.sleep(300);
+  await s.evalAwait(`(typeof selectTab === 'function') && selectTab('L1')`);
+  await s.sleep(400);
   const hasSecondQ = await s.evalAwait(`document.querySelectorAll('[data-qi]').length >= 2`);
   if (hasSecondQ) {
-    const secondWrongIdx = await s.evalAwait(`(() => {
-      const lesson = CONTENT['${lessonId}'];
-      const q = lesson.L1.questions[1];
-      return q.options.findIndex((_, i) => i !== q.answer);
+    // Deterministic wrong click on Q2, shuffle-robust (match on .mc-body text).
+    const clicked2 = await s.evalAwait(`(() => {
+      const q = CONTENT['${lessonId}'].L1.questions[1];
+      const answerTxt = q.options[q.answer].trim();
+      const bodyTxt = el => ((el.querySelector('.mc-body') || el).textContent || '').replace(/^\\s*[A-D]\\.?\\s*/, '').trim();
+      const wrong = [...document.querySelectorAll('[data-qi="1"] .mc-option')].find(el => bodyTxt(el) !== answerTxt);
+      if (!wrong) return false;
+      wrong.click();
+      return true;
     })()`);
-    await s.evalAwait(`document.querySelectorAll('[data-qi="1"] .mc-option')[${secondWrongIdx}].click()`);
     await s.sleep(300);
     const strip2 = await s.evalAwait(`!!document.querySelector('[data-qi="1"]')?.parentElement?.querySelector('[data-mistake-strip]')`);
     if (strip2) {

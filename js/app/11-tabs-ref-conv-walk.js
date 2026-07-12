@@ -129,7 +129,7 @@ function renderConversation(body, content) {
           <span class="font-medium text-cyan-300">Reading is the prep.</span>
           <span class="text-slate-400">Run the cross-lesson Conversation Drill to actually recall which section a snippet belongs to.</span>
         </div>
-        <button data-action="conv-drill-route" style="background:#e0a41e; color:#ffffff; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:600; white-space:nowrap;">🎬 Drill recall →</button>
+        <button class="ds-btn ds-btn--primary" data-action="conv-drill-route" style="min-height:36px; padding:0 12px; font-size:12px; border-radius:6px; white-space:nowrap;">${dsIcon('target', 13)}Drill recall →</button>
       </div>
     </div>
     ${intro}
@@ -658,9 +658,9 @@ function renderReference(body, content) {
     <div class="flex items-center justify-between mb-2">
       <div class="text-xs text-slate-500 uppercase tracking-wider">The thing to memorize</div>
       <div class="flex items-center gap-2">
-        <button class="flash-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">🃏 Flash</button>
-        <button class="cinema-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="cinema-toggle" title="Read+predict-then-verify — every line starts blurred, tap each to reveal in order">🎬 Cinema</button>
-        <button class="bullets-toggle text-xs px-2 py-1 rounded bg-slate-800 text-slate-400" data-action="bullets-toggle" title="Hide canonical, type it from the notes below. Desk-tier 'see concept, recall code' recall direction the L1→L2→L3 ladder doesn't drill (L2 = template + blanks given; L3 = problem prompt only; Bullets→Code = notes-as-prompt, full code recall).">📝 Notes→Code</button>
+        <button class="flash-toggle ref-mode-toggle" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">${dsIcon('layers', 13)}Flash</button>
+        <button class="cinema-toggle ref-mode-toggle" data-action="cinema-toggle" title="Read+predict-then-verify — every line starts blurred, tap each to reveal in order">${dsIcon('film', 13)}Cinema</button>
+        <button class="bullets-toggle ref-mode-toggle" data-action="bullets-toggle" title="Hide canonical, type it from the notes below. Desk-tier 'see concept, recall code' recall direction the L1→L2→L3 ladder doesn't drill (L2 = template + blanks given; L3 = problem prompt only; Bullets→Code = notes-as-prompt, full code recall).">${dsIcon('file-text', 13)}Notes→Code</button>
       </div>
     </div>
     ${ref.approach || ref.complexity ? `
@@ -679,7 +679,7 @@ function renderReference(body, content) {
          this is the second anchor for the same action. -->
     <div class="mt-3 flex items-center justify-end gap-2 text-xs">
       <span class="text-slate-500">Memorized? </span>
-      <button class="secondary px-3 py-1" data-action="start-l1" style="font-size:12px;padding:4px 12px;">🎯 Drill from blank →</button>
+      <button class="secondary px-3 py-1" data-action="start-l1" style="font-size:12px;padding:4px 12px;">${dsIcon('target', 13)}Drill from blank →</button>
     </div>
     <div class="mt-4" data-ref-mechanics></div>
     <div class="mt-6">
@@ -687,7 +687,7 @@ function renderReference(body, content) {
            mechanics-list category divider) so the rusty engineer's highest-value
            refresh-cues (the gotchas) read as a clear section rather than footer
            noise. Appended "· N" announces scope before the user scrolls. -->
-      <div data-ref-notes-header style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#ffce5a;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(255,206,90,0.4);">Notes · ${ref.notes.length}</div>
+      <div data-ref-notes-header class="ref-section-header">Notes · ${ref.notes.length}</div>
       <ul class="space-y-2">
         ${ref.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600">▸</span><span>${escapeHtml(n)}</span></li>`).join('')}
       </ul>
@@ -698,7 +698,7 @@ function renderReference(body, content) {
            vs pairwise divide-and-conquer). Conversation tab often names a
            second pattern in prose; this surface ships the code. Validator
            runs each alternate and asserts the output matches L3.expectedOutput. -->
-      <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#f5b62b;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(245,182,43,0.4);">Alternate solutions · ${ref.alternates.length}</div>
+      <div class="ref-section-header">Alternate solutions · ${ref.alternates.length}</div>
       <div class="ref-alternates-list">
         ${ref.alternates.map((alt, i) => `
           <details class="ref-alternate">
@@ -738,16 +738,19 @@ function renderReference(body, content) {
   const flashBtn = section.querySelector('[data-action="flash-toggle"]');
   const cinemaBtn = section.querySelector('[data-action="cinema-toggle"]');
   const bulletsBtn = section.querySelector('[data-action="bullets-toggle"]');
+  // Set a mode-toggle's label = ds stroke icon + text (D07 — no emoji in the
+  // toggle chrome; the .ref-mode-toggle is inline-flex so icon + text align).
+  const _refToggleLabel = (btn, icon, text) => { btn.innerHTML = dsIcon(icon, 13) + text; };
   function restoreCanonical() {
     flashOn = false;
     cinemaOn = false;
     bulletsOn = false;
     flashBtn.classList.remove('active');
-    flashBtn.textContent = '🃏 Flash';
+    _refToggleLabel(flashBtn, 'layers', 'Flash');
     cinemaBtn.classList.remove('active');
-    cinemaBtn.textContent = '🎬 Cinema';
+    _refToggleLabel(cinemaBtn, 'film', 'Cinema');
     bulletsBtn.classList.remove('active');
-    bulletsBtn.textContent = '📝 Notes→Code';
+    _refToggleLabel(bulletsBtn, 'file-text', 'Notes→Code');
     colorizeInto(codeEl, ref.code);
   }
   // iter eval-2026-05-30: 🃏 Flash now per-token self-rates. Per audits/
@@ -761,7 +764,7 @@ function renderReference(body, content) {
     if (cinemaOn || bulletsOn) restoreCanonical();
     flashOn = !flashOn;
     flashBtn.classList.toggle('active', flashOn);
-    flashBtn.textContent = flashOn ? '🃏 Reveal all' : '🃏 Flash';
+    _refToggleLabel(flashBtn, 'layers', flashOn ? 'Reveal all' : 'Flash');
     if (flashOn) {
       flashSessionBlanks = 0;
       const lessonId = content && content.id;
@@ -799,7 +802,7 @@ function renderReference(body, content) {
     if (flashOn || bulletsOn) restoreCanonical();
     cinemaOn = !cinemaOn;
     cinemaBtn.classList.toggle('active', cinemaOn);
-    cinemaBtn.textContent = cinemaOn ? '🎬 Reveal all' : '🎬 Cinema';
+    _refToggleLabel(cinemaBtn, 'film', cinemaOn ? 'Reveal all' : 'Cinema');
     if (cinemaOn) _renderCinema(codeEl, ref.code);
     else colorizeInto(codeEl, ref.code);
   });
@@ -814,7 +817,7 @@ function renderReference(body, content) {
     if (flashOn || cinemaOn) restoreCanonical();
     bulletsOn = !bulletsOn;
     bulletsBtn.classList.toggle('active', bulletsOn);
-    bulletsBtn.textContent = bulletsOn ? '📝 Reveal canonical' : '📝 Notes→Code';
+    _refToggleLabel(bulletsBtn, 'file-text', bulletsOn ? 'Reveal canonical' : 'Notes→Code');
     if (bulletsOn) _renderBulletsCode(codeEl, content);
     else colorizeInto(codeEl, ref.code);
   });

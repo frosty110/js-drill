@@ -37,6 +37,10 @@ const OUT = process.argv[3] || '/tmp/jsdrill-flash';
 
   if (!seededId) { console.error('FAIL: no full lesson in manifest'); process.exit(1); }
 
+  // Strip any leftover hash before reload — the URL hash wins over seeded
+  // localStorage on boot (STATE.md), so a residual #/<lesson>/<tab> from a prior
+  // probe would land on the wrong tab and hide the Reference-only Flash toggle.
+  await s.eval(`history.replaceState(null, '', location.pathname)`);
   await s.reload();
   await s.sleep(500);
   await s.snap('boot-reference');

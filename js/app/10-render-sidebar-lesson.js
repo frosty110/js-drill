@@ -641,13 +641,13 @@ function renderLesson() {
   const dueDuringMastered = (overall === 'mastered') ? dueReviewIds() : [];
   let nextCta = '';
   if (overall === 'mastered' && dueDuringMastered.length > 0) {
-    const reviewLabel = `🕒 Review ${dueDuringMastered.length} due →`;
+    const reviewLabel = `${dsIcon('clock', 14)}Review ${dueDuringMastered.length} due →`;
     const secondary = nextLessonObj
       ? `<button class="secondary" data-action="goto-next">Next: ${escapeHtml(nextLessonObj.title)}</button>`
       : '';
-    nextCta = `<div class="mt-3 flex items-center gap-2 flex-wrap" data-cta-row><button class="primary" data-action="goto-due-review">${reviewLabel}</button>${secondary}<button class="secondary" data-action="shuffle-here">🎲 Shuffle</button></div>`;
+    nextCta = `<div class="mt-3 flex items-center gap-2 flex-wrap" data-cta-row><button class="primary" data-action="goto-due-review">${reviewLabel}</button>${secondary}<button class="secondary" data-action="shuffle-here">${dsIcon('dice', 14)}Shuffle</button></div>`;
   } else if (overall === 'mastered' && nextLessonObj) {
-    nextCta = `<div class="mt-3 flex items-center gap-2" data-cta-row><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">🎲 Shuffle review</button></div>`;
+    nextCta = `<div class="mt-3 flex items-center gap-2" data-cta-row><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">${dsIcon('dice', 14)}Shuffle review</button></div>`;
   }
   // iter 22 (refine — iter 24 of the refine loop): suppress the abandonment
   // CTAs while a mock interview is active on THIS lesson. The next-lesson /

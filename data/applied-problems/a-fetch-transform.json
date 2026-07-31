@@ -1,0 +1,333 @@
+{
+  "id": "a-fetch-transform",
+  "title": "Fetch & Reshape an API Response",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Call an endpoint, guard the status, then reshape the payload into the shape your app actually wants — the two awaits and the `res.ok` check are sequential algorithm steps, while the reshape itself is collection-transform, so it's a `.filter().map().sort()` chain.",
+  "mechanics": [
+    "promise-chain",
+    "async-iife",
+    "array-chain"
+  ],
+  "conversation": {
+    "intro": "The 'fetch this and turn it into that' interview — usually the warm-up before a UI question. It is graded almost entirely on two things: whether you know `fetch` doesn't throw on a 500, and whether the reshape is defensive about fields the API might omit. Each section has what you'd say out loud and why the move matters.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "The target shape is the spec. Get it exactly, and get the failure contract too.",
+        "say": "\"So I'm calling an endpoint that returns a nested payload, and I need to hand back a flat array in a specific shape — id, a combined full name, a city, and a tag count — filtered to active users and sorted by tag count descending.\"\n\nThe clarifiers:\n• Which fields are guaranteed and which are optional? If `location` can be missing I need optional chaining, and I need to know what the default should be rather than inventing one.\n• Is the response paginated? A `results` array plus a `next` cursor changes this from one call into a loop.\n• What should happen on a non-2xx — throw, or return an empty list? And is a 404 different from a 500 for the caller? I'd default to throwing and let the caller decide.\n• Does the caller want the error to be typed, or is a message enough?\n• Is this called once on mount, or repeatedly? That decides whether I care about caching or an AbortController.",
+        "why": "Asking which fields are optional is what earns you the right to write `?.` without it looking paranoid, and it's the question that surfaces the one record in the fixture that's missing a field — which is almost always deliberately planted. The error-contract question matters because 'what does this return when the server is down' is the follow-up in nearly every version of this problem, and answering it up front means your signature doesn't change halfway through."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "The naive version isn't slower — it's unsafe. Say which part.",
+        "say": "\"The three-line version is:\n\n```\nconst res = await fetch(url);\nconst body = await res.json();\nreturn body.results.map(u => ({ ... }));\n```\n\nThat's not wrong so much as unguarded, in three specific ways.\n\nOne: no status check. `fetch` only rejects on a network-level failure — DNS, connection refused, CORS. A 404 or a 500 resolves perfectly happily with `ok: false`, so this code sails past the error and tries to `.map` over whatever the error page's body parsed to. Usually that's `body.results` being undefined and a TypeError three lines later that points at the wrong place.\n\nTwo: no defense on optional fields, so one record missing `location` takes down the whole transform.\n\nThree: the reshape is inline at the call site, so every caller re-derives the wire format. I'd rather have one function that owns the boundary.\"",
+        "why": "Being precise that `fetch` rejects on network failure but NOT on HTTP error status is the single highest-signal sentence in this whole problem — it's the most common real bug in production JavaScript, and interviewers use this question specifically to see whether you know it. Describing the downstream symptom too ('a TypeError three lines later that points at the wrong place') shows you've actually debugged it rather than just read about it."
+      },
+      {
+        "title": "3. Spot the pattern — guard, parse, then reshape",
+        "prompt": "Two awaits and one chain. Why each piece is where it is.",
+        "say": "\"There are two distinct awaits and they resolve at different moments, which is worth saying explicitly.\n\n`await fetch(url)` resolves as soon as the response HEADERS arrive. At that point I know the status but I have not read a single byte of the body. That's exactly why the `if (!res.ok) throw` guard goes here — I can bail before paying to download and parse a body I'm going to discard.\n\n`await res.json()` is the second one, and it resolves when the body has been streamed and parsed. Two awaits isn't ceremony; it's the protocol.\n\nThen the reshape. This part is pure collection-transform, so it reads as a chain: `filter` the inactive ones out, `map` each record from wire shape to app shape, `sort` by tag count. No index, no early exit, no shared state between elements — so methods beat a `for` loop on intent here.\n\nInside the map, `u.location?.city ?? 'unknown'` does two different jobs. The `?.` stops the whole expression short if `location` is missing, which is what prevents the TypeError. The `??` then supplies the default for null-or-undefined specifically — unlike `||`, it won't clobber a legitimately falsy value like an empty string or a zero. `u.tags?.length ?? 0` is the same pair, and the `?? 0` there is why a user with no tags sorts to the bottom instead of becoming NaN.\"",
+        "why": "Explaining WHY the guard sits between the two awaits — because the first resolves on headers, so you can reject before downloading the body — turns a rote null-check into a deliberate placement. And distinguishing `??` from `||` matters concretely here: with `||`, a user whose tag count is genuinely 0 would still get 0, but a city that's an empty string would silently become 'unknown', which is a data-corrupting default rather than a missing-data default."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "One happy path, one missing-field record, one failure.",
+        "intro": "\"Let me run this against a few payloads.\" The interesting inputs are the record with fields omitted, the non-2xx response, and the empty-after-filter case.",
+        "examples": [
+          {
+            "input": "200 OK, 4 users (one inactive, one missing location+tags)",
+            "output": "Grace(3 tags), Ada(2 tags), Linus(0 tags, city 'unknown')",
+            "note": "The main path. Alan is dropped by the filter for being inactive. Linus has no `location` and no `tags`, so both defaults fire and he sorts last on tagCount 0.",
+            "trace": "res.ok true, status 200 -> guard passes\nbody.results = 4 records\nfilter(active) -> [1 Ada, 3 Grace, 4 Linus]   (2 Alan dropped)\nmap:\n  Ada   -> { id:1, fullName:'Ada Lovelace',   city:'London',   tagCount:2 }\n  Grace -> { id:3, fullName:'Grace Hopper',   city:'New York', tagCount:3 }\n  Linus -> location missing -> ?. short-circuits to undefined -> ?? 'unknown'\n           tags missing     -> ?. short-circuits to undefined -> ?? 0\n        -> { id:4, fullName:'Linus Torvalds', city:'unknown',  tagCount:0 }\nsort by tagCount desc -> [Grace(3), Ada(2), Linus(0)] ✓"
+          },
+          {
+            "input": "503 Service Unavailable",
+            "output": "throws Error('HTTP 503')",
+            "note": "The case the naive version gets wrong. `fetch` RESOLVED here — it did not reject — so without the explicit `res.ok` check we'd proceed to parse an error page and blow up somewhere unrelated.",
+            "trace": "await fetch(url) -> RESOLVES (not rejects) with { ok: false, status: 503 }\nif (!res.ok) -> true -> throw new Error('HTTP 503')\nres.json() is never called -- we bail before downloading the body\ncaller's try/catch sees 'HTTP 503' ✓\n\nContrast, without the guard:\n  body = await res.json()       // parses the error page, maybe {} or {error:...}\n  body.results.filter(...)      // TypeError: Cannot read properties of undefined\n  ...and the stack points at the transform, not at the failed request."
+          },
+          {
+            "input": "200 OK, single inactive user",
+            "output": "[]",
+            "note": "Everything is filtered out. Worth tracing because `map` and `sort` over an empty array are both no-ops that return an empty array rather than throwing — so no special-casing is needed.",
+            "trace": "res.ok true -> guard passes\nbody.results = [{ id:7, active:false, ... }]\nfilter(active) -> []\nmap over []  -> []   (callback never runs)\nsort over [] -> []   (comparator never runs)\nreturn [] ✓  -- the caller renders an empty state, not an error"
+          }
+        ],
+        "why": "The 503 trace is the one to narrate, and specifically the contrast at the bottom: naming where the naive version actually explodes — a TypeError inside the transform, pointing away from the real cause — is what proves you understand the failure mode rather than just reciting the rule. The empty-after-filter case is quick but worth stating, because 'no data' and 'request failed' are different states and a caller has to distinguish them; returning `[]` for one and throwing for the other is what makes that possible."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What else does a real client have to survive?",
+        "say": "\"Beyond the status guard:\n• A 204 No Content, or any empty body, makes `res.json()` reject with a JSON parse error even though the request succeeded. If 204 is a legitimate response I'd check the status or the content-length before parsing.\n• The response is JSON-shaped but not the shape I expect — `body.results` missing entirely because the server returned `{ error: ... }` with a 200. Optional chaining on `body.results ?? []` handles it, though at some point the honest answer is schema validation at the boundary.\n• A malformed record inside a good response — `name` missing, so `u.name.first` throws mid-map and takes out the whole batch. Whether one bad record should kill the batch or be skipped is a product decision worth asking about.\n• Network failure, which is the ONE thing `fetch` does reject on — so the caller needs a catch regardless of my status guard.\n• Timeouts: `fetch` has no built-in timeout, so a hung request hangs forever. `AbortController` with a timer is the fix.\n• If this is a React component, the component may unmount before the promise settles, so the same AbortController does double duty for cancellation.\n• And if I needed to fetch N detail pages after this call, I'd reach for `Promise.all` rather than awaiting in a loop — sequential awaits serialize N round trips end to end, while `Promise.all` overlaps them and finishes in roughly the slowest one.\"",
+        "why": "The 204 point is the second-most-common real bug after the missing status check, and almost nobody raises it unprompted — a successful request whose body cannot be parsed is genuinely surprising the first time you hit it. Mentioning that `fetch` has no timeout is the other one: candidates assume it does, and a hung request that never settles is far worse in a UI than a fast failure."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "The bound is trivial. Spend the time on the boundary argument instead.",
+        "say": "\"Complexity is dominated by the network, not the code. The transform is O(n) for the filter and the map plus O(n log n) for the sort over n records; space is O(n) for the output. If n were large enough for the three passes to matter I'd fuse them into a single loop, but at API-page sizes that's a premature micro-optimization and it costs readability.\n\nThe thing I'd actually defend is the boundary. This function is the only place in the codebase that knows the wire format. Everything downstream sees `{ id, fullName, city, tagCount }`. When the API renames `location` to `address`, exactly one function changes, and I can unit-test the whole reshape by passing a fake fetch — which is why the transport is a parameter rather than a global `fetch` call.\n\nThat injectable-transport trick is the same one the debounce lesson uses for its clock: take the untestable thing as an argument, and the hard-to-test function becomes a pure one.\"",
+        "why": "Turning the wrap-up into an argument about the anti-corruption boundary is the right use of the time, because the algorithmic content here is genuinely thin and the interviewer knows it. Naming dependency injection as the reason the transport is a parameter connects the design to testability concretely — and if the follow-up is 'how would you test this?', you've already answered it."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the fetch-guard-reshape sequence. `input` is the response the transport handed back, so you can step the failure path too. Watch the guard fire BEFORE the body is ever parsed, and watch `?.`/`??` fill in the record that's missing `location` and `tags`.",
+    "examples": [
+      {
+        "label": "200 OK, 4 users (1 inactive dropped, 1 missing fields defaulted)",
+        "input": {
+          "ok": true,
+          "status": 200,
+          "body": {
+            "results": [
+              {
+                "id": 1,
+                "active": true,
+                "name": {
+                  "first": "Ada",
+                  "last": "Lovelace"
+                },
+                "location": {
+                  "city": "London"
+                },
+                "tags": [
+                  "math",
+                  "logic"
+                ]
+              },
+              {
+                "id": 2,
+                "active": false,
+                "name": {
+                  "first": "Alan",
+                  "last": "Turing"
+                },
+                "location": {
+                  "city": "Wilmslow"
+                },
+                "tags": [
+                  "crypto"
+                ]
+              },
+              {
+                "id": 3,
+                "active": true,
+                "name": {
+                  "first": "Grace",
+                  "last": "Hopper"
+                },
+                "location": {
+                  "city": "New York"
+                },
+                "tags": [
+                  "compilers",
+                  "navy",
+                  "cobol"
+                ]
+              },
+              {
+                "id": 4,
+                "active": true,
+                "name": {
+                  "first": "Linus",
+                  "last": "Torvalds"
+                }
+              }
+            ]
+          }
+        },
+        "expected": "[{\"id\":3,\"fullName\":\"Grace Hopper\",\"city\":\"New York\",\"tagCount\":3},{\"id\":1,\"fullName\":\"Ada Lovelace\",\"city\":\"London\",\"tagCount\":2},{\"id\":4,\"fullName\":\"Linus Torvalds\",\"city\":\"unknown\",\"tagCount\":0}]"
+      },
+      {
+        "label": "503 -> fetch RESOLVED, the res.ok guard is what throws",
+        "input": {
+          "ok": false,
+          "status": 503,
+          "body": {}
+        },
+        "expected": "Error: HTTP 503"
+      },
+      {
+        "label": "200 OK but every user inactive -> empty array, not an error",
+        "input": {
+          "ok": true,
+          "status": 200,
+          "body": {
+            "results": [
+              {
+                "id": 7,
+                "active": false,
+                "name": {
+                  "first": "Ken",
+                  "last": "Thompson"
+                },
+                "location": {
+                  "city": "Palo Alto"
+                },
+                "tags": [
+                  "unix"
+                ]
+              }
+            ]
+          }
+        },
+        "expected": "[]"
+      }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const res = input;",
+      "  yield { line: 4, label: `await fetch(url) resolved -> response headers only: ok=${res.ok}, status=${res.status}. The BODY has not been read yet.`, state: { ok: res.ok, status: res.status, step: 'response' } };",
+      "  if (!res.ok) {",
+      "    const message = `HTTP ${res.status}`;",
+      "    yield { line: 6, label: `!res.ok -> throw new Error('${message}'). fetch itself did NOT reject on ${res.status} -- this guard is the only thing turning a bad status into an error.`, state: { ok: res.ok, status: res.status, threw: message, returns: `Error: ${message}` } };",
+      "    return;",
+      "  }",
+      "  const body = res.body;",
+      "  yield { line: 8, label: `second await: res.json() parsed the body -> ${body.results.length} raw records`, state: { status: res.status, raw: body.results.map(u => ({ id: u.id, active: u.active })), step: 'parsed' } };",
+      "  const active = body.results.filter(u => u.active);",
+      "  yield { line: 10, label: `filter(active) -> kept ${active.length} of ${body.results.length} (dropped ids ${JSON.stringify(body.results.filter(u => !u.active).map(u => u.id))})`, state: { keptIds: active.map(u => u.id), droppedIds: body.results.filter(u => !u.active).map(u => u.id) } };",
+      "  const rows = [];",
+      "  for (let i = 0; i < active.length; i++) {",
+      "    const u = active[i];",
+      "    const row = {",
+      "      id: u.id,",
+      "      fullName: `${u.name.first} ${u.name.last}`,",
+      "      city: (u.location && u.location.city !== undefined && u.location.city !== null) ? u.location.city : 'unknown',",
+      "      tagCount: (u.tags !== undefined && u.tags !== null) ? u.tags.length : 0,",
+      "    };",
+      "    rows.push(row);",
+      "    const defaulted = [];",
+      "    if (!u.location) defaulted.push('city (no location object -- ?. short-circuited, then ?? supplied \\'unknown\\')');",
+      "    if (!u.tags) defaulted.push('tagCount (no tags array -- ?? supplied 0)');",
+      "    yield { line: 11, label: `map#${i} id=${u.id} -> ${row.fullName}${defaulted.length ? ' | DEFAULTED: ' + defaulted.join('; ') : ''}`, state: { i, source: u, row, rows: [...rows] } };",
+      "  }",
+      "  const sorted = [...rows].sort((a, b) => b.tagCount - a.tagCount);",
+      "  yield { line: 17, label: `sort by tagCount desc -> ${sorted.map(r => `${r.fullName}(${r.tagCount})`).join(', ')}`, state: { rows, sorted } };",
+      "  yield { line: 18, label: `return ${sorted.length} reshaped rows`, state: { sorted, returns: JSON.stringify(sorted) } };",
+      "}"
+    ]
+  },
+  "reference": {
+    "approach": "await fetch -> res.ok guard -> await res.json() -> filter/map/sort reshape",
+    "complexity": "O(n log n) / O(n)",
+    "code": "// The API's shape is not our shape. Keep the reshape in ONE place so the\n// rest of the app never sees the wire format.\nasync function loadActiveUsers(fetchImpl, url) {\n  const res = await fetchImpl(url);\n  // fetch does NOT reject on 404/500 -- only on network failure. Guard it.\n  if (!res.ok) throw new Error(`HTTP ${res.status}`);\n  // Reading the body is a SECOND await: the first resolved on headers alone.\n  const body = await res.json();\n  return body.results\n    .filter(u => u.active)\n    .map(u => ({\n      id: u.id,\n      fullName: `${u.name.first} ${u.name.last}`,\n      city: u.location?.city ?? 'unknown',\n      tagCount: u.tags?.length ?? 0,\n    }))\n    .sort((a, b) => b.tagCount - a.tagCount);\n}",
+    "notes": [
+      "`fetch` rejects ONLY on network-level failure (DNS, refused, CORS). A 404 or 500 resolves normally with `ok: false`, so without the explicit `res.ok` check you parse the error page and crash later somewhere unrelated.",
+      "Two awaits, two moments: `await fetch(...)` resolves on the response HEADERS; `await res.json()` resolves once the body has streamed and parsed. Putting the guard between them means a bad status bails before downloading a body it would discard.",
+      "The reshape is collection-transform shape — no index, no early exit, no cross-element state — so `.filter().map().sort()` beats a `for` loop on intent.",
+      "`u.location?.city ?? 'unknown'` splits the work: `?.` prevents the TypeError when `location` is absent, `??` supplies the default for null/undefined only. `||` would also clobber a legitimately falsy value like an empty-string city.",
+      "The transport is a PARAMETER, not a global `fetch` call — the same injectable-dependency trick the debounce lesson uses for its clock, and it's what makes the function testable without a network.",
+      "This function is the anti-corruption boundary: it is the only code that knows the wire format, so an API rename touches exactly one place."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "The server returns 500 and the code omits the `if (!res.ok) throw` guard. What actually happens?",
+        "options": [
+          "`await fetch(url)` rejects, so the surrounding try/catch catches it and the transform never runs",
+          "`res.json()` rejects with a status error, producing a clear message that names the 500",
+          "The promise resolves normally with `ok: false`; execution continues, parses the error body, and typically dies later with a TypeError inside the transform that points away from the real cause",
+          "The transform runs and returns an empty array, since an error response has no `results` to map over"
+        ],
+        "answer": 2,
+        "explain": "`fetch` rejects only on network-level failure. Any HTTP status — 404, 500, 503 — is a successful fetch with `ok: false`, which is why the explicit status check is the load-bearing line."
+      },
+      {
+        "q": "Why are there two separate awaits (`await fetchImpl(url)` then `await res.json()`) rather than one?",
+        "options": [
+          "`res.json()` is synchronous; the second await is a defensive habit that has no runtime effect",
+          "The first await resolves once the response HEADERS arrive, so the status is known before any body bytes are read; parsing the streamed body is a second asynchronous step",
+          "The first await resolves the DNS lookup and the second performs the actual request",
+          "Combining them would lose the response status, since `res.json()` discards everything but the parsed body"
+        ],
+        "answer": 1,
+        "explain": "Headers first, body second. That split is exactly why the `res.ok` guard can sit between them and bail before downloading a body it would throw away."
+      },
+      {
+        "q": "The map writes `city: u.location?.city ?? 'unknown'`. What would break if it were `u.location.city || 'unknown'`?",
+        "options": [
+          "Nothing at runtime — `||` and `??` behave identically once optional chaining has already returned undefined",
+          "`||` cannot appear inside an object literal without parentheses, so it would be a syntax error",
+          "Two things: `u.location.city` throws a TypeError when `location` is absent, and `||` would additionally replace a legitimately falsy city (an empty string) with 'unknown'",
+          "`||` evaluates its right side eagerly, so 'unknown' would overwrite every city regardless of the left side"
+        ],
+        "answer": 2,
+        "explain": "`?.` is what prevents the crash on a missing `location`; `??` narrows the default to null/undefined so real-but-falsy values survive. They solve two different problems and both are needed."
+      },
+      {
+        "q": "After this call you must fetch a detail page for each of the N returned users. Why prefer `Promise.all(ids.map(fetchDetail))` over awaiting inside a `for...of` loop?",
+        "options": [
+          "`Promise.all` retries failed requests automatically, while a sequential loop aborts on the first rejection",
+          "A `for...of` loop cannot contain `await`, so the requests would fire without being awaited at all",
+          "`Promise.all` guarantees results come back in completion order, which a sequential loop cannot provide",
+          "Awaiting in a loop serializes the round trips, so total latency is the SUM of N requests; `Promise.all` starts them concurrently so it finishes in roughly the slowest single request"
+        ],
+        "answer": 3,
+        "explain": "Sequential awaits are the classic accidental-serialization bug. `Promise.all` overlaps independent requests — and it preserves input order in its result array, unlike the completion-order claim."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Guard the response status before reading the body. Fill the blanks so the 404 surfaces as a clear error.",
+        "template": "const res = { ok: false, status: 404, json: async () => ({}) };\nasync function load(r) {\n  if (!r.___) throw new ___(`HTTP ${r.___}`);\n  return ___ r.json();\n}\n(async () => {\n  try { await load(res); } catch (e) { console.log(e.message); }\n})();",
+        "blanks": [
+          {
+            "answer": "ok",
+            "hint": "true only for a 2xx status"
+          },
+          {
+            "answer": "Error",
+            "hint": "the standard constructor to throw"
+          },
+          {
+            "answer": "status",
+            "hint": "the numeric HTTP code"
+          },
+          {
+            "answer": "await",
+            "hint": "parsing the body is itself async"
+          }
+        ],
+        "expectedOutput": "HTTP 404"
+      },
+      {
+        "prompt": "Reshape the raw records into the app's shape, defending the record that omits `tags`. Fill the blanks.",
+        "template": "const raw = [\n  { id: 1, active: true, name: { first: 'Ada', last: 'Lovelace' }, tags: ['math', 'logic'] },\n  { id: 2, active: false, name: { first: 'Alan', last: 'Turing' }, tags: ['crypto'] },\n  { id: 3, active: true, name: { first: 'Linus', last: 'Torvalds' } },\n];\nconst rows = raw\n  .___(u => u.active)\n  .map(u => ({ name: `${u.name.first} ${u.name.___}`, tagCount: u.tags___length ___ 0 }));\nconsole.log(JSON.stringify(rows));",
+        "blanks": [
+          {
+            "answer": "filter",
+            "hint": "drop the inactive records first"
+          },
+          {
+            "answer": "last",
+            "hint": "the surname field"
+          },
+          {
+            "answer": "?.",
+            "hint": "short-circuit when tags is missing"
+          },
+          {
+            "answer": "??",
+            "hint": "default for null/undefined only"
+          }
+        ],
+        "expectedOutput": "[{\"name\":\"Ada Lovelace\",\"tagCount\":2},{\"name\":\"Linus Torvalds\",\"tagCount\":0}]"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Write `loadActiveUsers(fetchImpl, url)` that fetches a payload, throws `HTTP <status>` on a non-ok response, and reshapes `results` into `{id, fullName, city, tagCount}` — active users only, missing `location`/`tags` defaulted to `'unknown'`/`0`, sorted by tagCount descending. Then run it against a working transport and a 503 one.",
+    "expectedOutput": "3 Grace Hopper - New York (3 tags)\n1 Ada Lovelace - London (2 tags)\n4 Linus Torvalds - unknown (0 tags)\ncaught: HTTP 503",
+    "canonical": "// The API's shape is not our shape. Keep the reshape in ONE place so the\n// rest of the app never sees the wire format.\nasync function loadActiveUsers(fetchImpl, url) {\n  const res = await fetchImpl(url);\n  // fetch does NOT reject on 404/500 -- only on network failure. Guard it.\n  if (!res.ok) throw new Error(`HTTP ${res.status}`);\n  // Reading the body is a SECOND await: the first resolved on headers alone.\n  const body = await res.json();\n  return body.results\n    .filter(u => u.active)\n    .map(u => ({\n      id: u.id,\n      fullName: `${u.name.first} ${u.name.last}`,\n      city: u.location?.city ?? 'unknown',\n      tagCount: u.tags?.length ?? 0,\n    }))\n    .sort((a, b) => b.tagCount - a.tagCount);\n}\n\n// Stubbed transports -- the same injected-dependency trick the debounce\n// lesson uses for its clock, so the drill runs without a network.\nconst PAYLOAD = {\n  results: [\n    { id: 1, active: true, name: { first: 'Ada', last: 'Lovelace' }, location: { city: 'London' }, tags: ['math', 'logic'] },\n    { id: 2, active: false, name: { first: 'Alan', last: 'Turing' }, location: { city: 'Wilmslow' }, tags: ['crypto'] },\n    { id: 3, active: true, name: { first: 'Grace', last: 'Hopper' }, location: { city: 'New York' }, tags: ['compilers', 'navy', 'cobol'] },\n    { id: 4, active: true, name: { first: 'Linus', last: 'Torvalds' } },\n  ],\n};\nconst okFetch = async () => ({ ok: true, status: 200, json: async () => PAYLOAD });\nconst downFetch = async () => ({ ok: false, status: 503, json: async () => ({}) });\n\n(async () => {\n  const rows = await loadActiveUsers(okFetch, '/api/users');\n  for (const r of rows) {\n    console.log(`${r.id} ${r.fullName} - ${r.city} (${r.tagCount} tags)`);\n  }\n  try {\n    await loadActiveUsers(downFetch, '/api/users');\n  } catch (err) {\n    console.log(`caught: ${err.message}`);\n  }\n})();",
+    "hints": [
+      "`fetch` does not reject on 404/500 — guard with `if (!res.ok) throw new Error(...)` after the first await, before parsing the body.",
+      "Reading the body is a second await: `const body = await res.json()`.",
+      "Reshape with a `.filter().map().sort()` chain, and use `u.location?.city ?? 'unknown'` so an absent field defaults instead of throwing."
+    ]
+  }
+}

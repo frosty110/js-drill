@@ -6,8 +6,8 @@
 
 ## Current state (snapshot — refreshed 2026-05-27, app.js split)
 
-- **166 fully-authored lessons** (`status: 'full'`), 0 stubs
-- **734 verified L2+L3 exercises** (all pass via `node tools/validate-data.js`)
+- **171 fully-authored lessons** (`status: 'full'`), 0 stubs
+- **938 verified L2+L3+walkthrough checks** (all pass via `node tools/validate-data.js`)
 - `index.html` is markup only (~430 lines); `app.css` (~3,955 lines) loads via `<link>`
 - **`app.js` (13.3k lines) was split into 15 ordered slices `js/app/01..15-*.js`** that
   share global scope and load in order (see § File layout). They are plain
@@ -17,9 +17,9 @@
 - Lesson content lives in `data/<section-slug>/<lesson-id>.json`
 - `data/manifest.json` is the sidebar index — loaded on boot, lessons lazy-load on click
 - Three tracks across 29 sections:
-  - **Syntax (55)**: Basics · Arrays · Hash Structures · Modern Syntax · Iterators & Generators · JS Toolbox · Algorithms · Classes · Async · Advanced JS · JS Traps
-  - **Patterns (79)**: Arrays & Hashing · Two Pointers · Sliding Window · Stack · Binary Search · Linked List · Trees · Tries · Heap · Graphs · Greedy · Dynamic Programming · Backtracking · Intervals · Matrix · Bit Manipulation · System Design
-  - **Applied (20)**: Applied Problems — implementation problems (decks, games, hash maps, throttle/debounce, undo-redo, etc.)
+  - **Syntax (44)**: Basics · Arrays · Hash Structures · Modern Syntax · Iterators & Generators · JS Toolbox · Algorithms · Classes · Async · Advanced JS · JS Traps
+  - **Patterns (90)**: Arrays & Hashing · Two Pointers · Sliding Window · Stack · Binary Search · Linked List · Trees · Tries · Heap · Graphs · Greedy · Dynamic Programming · Backtracking · Intervals · Matrix · Bit Manipulation · System Design
+  - **Applied (37)**: Applied Problems — implementation problems (decks, games, hash maps, throttle/debounce, undo-redo, CSV roll-ups, rules engines, fetch-and-reshape, etc.)
 
 ## What this project is
 
@@ -118,7 +118,7 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `tools/cdp/appsplit-smoke.js` | Browser smoke test: app boots, all slices load, no exceptions/404s. |
 | `SELF-IMPROVE-LEDGER.md` | Append-only history sidecar (Mode ledger + Last-touched index) extracted from `SELF-IMPROVE.md` to keep the active directive small. |
 | `diagnostic.html` | 43-question self-diagnostic (standalone page) |
-| `system-design.html` | Standalone **System Design** memorization drill (conceptual recall, no code execution). **Multi-topic**: a topic landing → per-topic chapter list → drill. Topics: **DDIA** (12 ch), **The System Design Interview** (framework + estimation, 7 §), **Building Blocks** (components, 7 §), **Canonical Design Problems** (16 worked problems). Two question types: **MC** and **open** ("explain & apply" — reveal model answer + self-grade). A topic manifest can set `ordered:true` (design problems) so its units drill in authored arc order instead of due-first shuffle. Tapping a unit opens a **detail screen** surfacing the authored `keyTakeaways` as a "Key Ideas" panel + a "Drill all" and (where questions carry `crux:true`) a "Crux only" fast-drill of just the signature questions. **Diagrams**: a unit can carry `diagram` (architecture, shown on the detail screen) and any question can carry `diagram` (shown on reveal) — `{kind:'mermaid'|'svg', code, caption}`. Mermaid loads from CDN and degrades gracefully (shows source) if unavailable; render-gated by `tools/cdp`-style harness. Reuses `ds/tokens.css` + `ds/components.css` + `js/storage.js` (design-loop P8 family unification); Leitner SR under `jsdrill.systemdesign.v1`. Linked from the main app topbar. Content in `data/system-design/<topic>/`. |
+| `system-design.html` | Standalone **System Design** memorization drill (conceptual recall, no code execution). **Multi-topic**: a topic landing → per-topic chapter list → drill. Topics: **DDIA** (12 ch), **The System Design Interview** (framework + estimation, 7 §), **Building Blocks** (components, 7 §), **Canonical Design Problems** (17 worked problems). Two question types: **MC** and **open** ("explain & apply" — reveal model answer + self-grade). A topic manifest can set `ordered:true` (design problems) so its units drill in authored arc order instead of due-first shuffle. Tapping a unit opens a **detail screen** surfacing the authored `keyTakeaways` as a "Key Ideas" panel + a "Drill all" and (where questions carry `crux:true`) a "Crux only" fast-drill of just the signature questions. **Diagrams**: a unit can carry `diagram` (architecture, shown on the detail screen) and any question can carry `diagram` (shown on reveal) — `{kind:'mermaid'|'svg', code, caption}`. Mermaid loads from CDN and degrades gracefully (shows source) if unavailable; render-gated by `tools/cdp`-style harness. Reuses `ds/tokens.css` + `ds/components.css` + `js/storage.js` (design-loop P8 family unification); Leitner SR under `jsdrill.systemdesign.v1`. Linked from the main app topbar. Content in `data/system-design/<topic>/`. |
 | `data/system-design/topics.json` | Registry of system-design topics (`id`, `icon`, `title`, `kind`, `blurb`) that the landing page enumerates. Add a topic by appending here + creating its `<id>/` dir. |
 | `data/system-design/<topic>/` | Per-topic content — `manifest.json` (`parts[]` + `chapters[]`, with optional `unitLabel`/`unitAbbrev`) + per-unit files (`chNN`/`sNN`/`cNN`.json). Each unit's `questions[]` mixes `type:"mc"` (4 options + `answer` index + `explain`) and `type:"open"` (`prompt` + `points[]` rubric + model `answer`). `ddia/AUTHORING-BRIEF.md` + `OPEN-QUESTION-BRIEF.md` document the schema/quality bar. Gated by `tools/validate-system-design.js`. |
 | `tools/validate-system-design.js` | Structural validator across all system-design topics (topics↔manifest↔disk parity, part/chapter coverage, MC 4-unique-options + in-range answer + explain, open prompt/points/answer, MC answer-index variety). |

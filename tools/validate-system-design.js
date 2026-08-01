@@ -25,6 +25,15 @@ const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
 const INFOGRAPHIC_SPECS = readJson(path.join(SD, 'infographic-specs.json')) || {};
 const expectedInfographics = new Set();
 
+const INFOGRAPHIC_VISUAL_TYPES = new Set([
+  'routing-map', 'cache-layers', 'edge-globe', 'queue-conveyor',
+  'token-bucket', 'primitive-toolkit', 'protocol-branches',
+  'three-pillars', 'data-models', 'storage-cutaway',
+  'compatibility-bridge', 'replication-topologies', 'partition-map',
+  'transaction-timeline', 'partial-failure', 'consensus-overlap',
+  'batch-pipeline', 'stream-windows', 'derived-ecosystem'
+]);
+
 const MIN_QUESTIONS = 8;      // MC + open combined, per chapter
 const MIN_TAKEAWAYS = 3;
 const MIN_OPEN_POINTS = 3;
@@ -89,6 +98,9 @@ function validateInfographicSpec(topic, id, where) {
   if (topic === 'design-problems') return;
   const spec = INFOGRAPHIC_SPECS[`${topic}/${id}`];
   if (!spec) { fail(where, 'missing authored entry in infographic-specs.json'); return; }
+  if (!INFOGRAPHIC_VISUAL_TYPES.has(spec.visualType)) {
+    fail(where, `infographic spec needs a registered visualType, got ${JSON.stringify(spec.visualType)}`);
+  }
   if (!spec.coreIdea || !spec.tradeoff) fail(where, 'infographic spec needs coreIdea and tradeoff');
   if (!Array.isArray(spec.flow) || spec.flow.length < 3 || spec.flow.length > 5) fail(where, 'infographic flow needs 3–5 nodes');
   if (!Array.isArray(spec.flowLabels) || spec.flowLabels.length !== spec.flow.length - 1) fail(where, 'infographic flowLabels must connect every adjacent node');

@@ -561,6 +561,7 @@ function topicStats(t) {
 // ============================================================================
 async function renderTopics() {
   session = null; curTopic = null;
+  setRoute('#/');
   document.getElementById('stats-btn').hidden = true;
   const app = document.getElementById('app');
   await loadTopics();
@@ -595,6 +596,7 @@ async function renderTopics() {
 async function renderTopicHome(t) {
   session = null; curTopic = t;
   progress.lastTopic = t; persist();
+  setRoute(`#/${t}`);
   document.getElementById('stats-btn').hidden = false;
   const app = document.getElementById('app');
   const m = await loadMeta(t);
@@ -656,6 +658,7 @@ async function renderTopicHome(t) {
 async function renderChapterDetail(t, chId) {
   session = null; curTopic = t;
   progress.lastTopic = t; progress.lastChapter = chId; persist();
+  setRoute(`#/${t}/${chId}`);
   document.getElementById('stats-btn').hidden = false;
   const app = document.getElementById('app');
   const ch = await loadChapter(t, chId);
@@ -728,6 +731,8 @@ async function startCrux(t, chId) {
 
 async function startMixed(t) {
   await loadTopicChapters(t);
+  progress.lastTopic = t; persist();
+  setRoute(`#/${t}/mixed`);
   let pool = [];
   META[t].chapters.forEach(c => chapterItems(t, CH[t][c.id]).forEach(it => { if (isDue(it.key)) pool.push(it); }));
   if (pool.length < 12) {
@@ -961,6 +966,62 @@ document.addEventListener('keydown', e => {
   } else if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); nextQuestion(); }
 });
 
+// ============================================================================
+// ROUTING — the page had no addressable state before this, so nothing could
+// link INTO it (the main app's Home needed exactly that for its System Design
+// "Continue" and per-topic "Review"). Routes:
+//   #/                       topic landing
+//   #/<topic>                topic home (chapter list)
+//   #/<topic>/<unit>         unit detail (key ideas + drill modes)
+//   #/<topic>/mixed          due-first mixed review, started immediately
+// Screen renders push their route with replaceState (no history spam inside a
+// browsing session); only an EXTERNAL hash change (back/forward, a pasted or
+// deep link) re-renders, so this never fights the click handlers.
+// ============================================================================
+let _routeSuppress = false;
+
+function setRoute(hash) {
+  if (window.location.hash === hash) return;
+  _routeSuppress = true;
+  try { history.replaceState(null, '', hash); } catch (_) { window.location.hash = hash; }
+  // The replaceState above doesn't fire hashchange, but the fallback does —
+  // release the guard on the next tick either way.
+  setTimeout(() => { _routeSuppress = false; }, 0);
+}
+
+function parseRoute() {
+  const raw = (window.location.hash || '').replace(/^#\/?/, '');
+  const parts = raw.split('/').filter(Boolean);
+  if (!parts.length) return { view: 'topics' };
+  const topic = parts[0].replace(/[^a-z0-9-]/gi, '');
+  if (!topic) return { view: 'topics' };
+  if (!parts[1]) return { view: 'topic', topic };
+  const unit = parts[1].replace(/[^a-z0-9-]/gi, '');
+  if (unit === 'mixed') return { view: 'mixed', topic };
+  return { view: 'unit', topic, unit };
+}
+
+async function applyRoute() {
+  const r = parseRoute();
+  await loadTopics();
+  const known = (id) => TOPICS.some(t => t.id === id);
+  try {
+    if (r.view === 'topic' && known(r.topic)) return await renderTopicHome(r.topic);
+    if (r.view === 'mixed' && known(r.topic)) { curTopic = r.topic; return await startMixed(r.topic); }
+    if (r.view === 'unit' && known(r.topic)) {
+      const m = await loadMeta(r.topic);
+      if (m.chapters.some(c => c.id === r.unit)) return await renderChapterDetail(r.topic, r.unit);
+      return await renderTopicHome(r.topic);
+    }
+  } catch (_) { /* fall through to the landing */ }
+  return renderTopics();
+}
+
+window.addEventListener('hashchange', () => {
+  if (_routeSuppress) { _routeSuppress = false; return; }
+  applyRoute().catch(() => {});
+});
+
 document.getElementById('home-btn').addEventListener('click', renderTopics);
 document.getElementById('stats-btn').addEventListener('click', openStats);
 document.getElementById('stats-modal').addEventListener('click', e => { if (e.target.id === 'stats-modal') closeStats(); });
@@ -979,7 +1040,7 @@ window.addEventListener('drill:sync-pulled', () => {
   }
 });
 
-renderTopics().catch(err => {
+applyRoute().catch(err => {
   document.getElementById('app').innerHTML =
     `<div class="empty">Couldn't load content.<br><small>${esc(err.message)}</small><br><br>
      Serve this over http (e.g. <code>python3 -m http.server</code>) — <code>file://</code> can't fetch the JSON.</div>`;

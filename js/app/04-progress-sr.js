@@ -340,6 +340,7 @@ function loadProgress() {
       }
     }
     state.tagFilterOpen = !!parsed.tagFilterOpen;
+    state.homeOpen = (parsed.homeOpen && typeof parsed.homeOpen === 'object') ? { ...parsed.homeOpen } : {};
     state.reviews = parsed.reviews || {};
     state.weakness = parsed.weakness || {};
     state.history = parsed.history || {};
@@ -448,6 +449,7 @@ function saveProgress() {
     repairFilter: state.repairFilter,
     tagFilter: state.tagFilter,
     tagFilterOpen: state.tagFilterOpen,
+    homeOpen: state.homeOpen,
     reviews: state.reviews,
     weakness: state.weakness,
     sidebarTrack: state.sidebarTrack,

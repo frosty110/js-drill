@@ -846,6 +846,10 @@ function markPassed(lessonId, level) {
   // this lesson this session, record the delta against the bucket midpoint
   // per `lesson.mechanics[]` tag. _calibrationRecordPass() handles guards.
   if (level === 'L3' && typeof _calibrationRecordPass === 'function') _calibrationRecordPass(lessonId);
+  // Scoped review session (js/app/23-review.js): a pass on the queue's
+  // current lesson, at or above the level the session asked for, advances to
+  // the next rep. No-op when no session is running.
+  if (typeof _reviewOnLevelPass === 'function') _reviewOnLevelPass(lessonId, level);
 }
 function updateReviewBadge() {
   const btn = document.getElementById('review-btn');

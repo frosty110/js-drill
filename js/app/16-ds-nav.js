@@ -30,7 +30,11 @@
 
 (() => {
   const NAV_ITEMS = [
-    { key: 'today', label: 'Today', target: 'today-home-btn',
+    // Home — the front door (js/app/22-home.js). Replaces the "Today"
+    // destination in the nav; Today's Plan is still one tap away from Home's
+    // More list and keeps its own #/m/today-home route.
+    { key: 'home', label: 'Home', target: 'home-btn',
+      title: 'Home — continue any track, review what’s due',
       icon: '<path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/>' },
     { key: 'browse', label: 'Browse', target: 'browse-btn',
       icon: '<rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="15" width="7" height="5" rx="1.5"/><rect x="14" y="15" width="7" height="5" rx="1.5"/>' },
@@ -97,7 +101,8 @@
     // touching the nav). A childList observer on #lesson-shell fires on
     // exactly those swaps — cheap, and keeps the attribute truthful.
     const syncCurrent = () => {
-      const current = document.querySelector('.today-home-page') ? 'today'
+      const current = document.querySelector('.home-page') ? 'home'
+        : document.querySelector('.today-home-page') ? 'home'
         : document.querySelector('.browse-page') ? 'browse'
         : document.querySelector('.dashboard-page') ? 'progress' : null;
       nav.querySelectorAll('.ds-navitem').forEach(b => {

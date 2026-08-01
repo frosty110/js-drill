@@ -76,7 +76,15 @@ const PROBE = `(() => {
     h1InHead: !!(h1s[0] && head && head.contains(h1s[0])),
     maxWidth: cs.maxWidth,
     pageWidthToken: getComputedStyle(document.documentElement).getPropertyValue('--ds-page-w').trim(),
-    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    // Horizontal overflow can hide inside the real scroll container: .app-main
+    // is overflow-y:auto, which computes overflow-x to auto — a too-wide child
+    // scrolls THERE without ever growing documentElement.scrollWidth. Measure
+    // the document, the scroll owner, and the page box, and take the worst.
+    overflow: Math.max(
+      document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ...[document.querySelector('main.app-main'), page]
+        .filter(Boolean).map(el => el.scrollWidth - el.clientWidth)
+    ),
     navMounted: !!nav,
     navItems: items.length,
     navSmallTargets: small,

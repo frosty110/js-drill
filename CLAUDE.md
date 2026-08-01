@@ -130,6 +130,11 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `tools/validate-system-design.js` | Structural validator across all system-design topics (topics↔manifest↔disk parity, part/chapter coverage, MC 4-unique-options + in-range answer + explain, open prompt/points/answer, MC answer-index variety). |
 | `data/paths.json` | Study-path registry. `kind:'lessons'` (Starter Path) drives the curated Today's Plan; `kind:'cram'` (e.g. 4-Day Interview Cram) carries `days[].blocks[].tasks[]` and `startIso` so Today's Plan renders a day-by-day acquisition view in the main app. |
 | `ds/tokens.css` | **Single source of truth** for design tokens across the user-facing pages (colors, radii, type). The redesign's `--ds-*` roles PLUS the legacy `--bg`/`--panel`/`--accent`/… aliases (merged in from the retired root `tokens.css`, design-loop P8/D04). See `.claude/skills/ui-consistency/`. |
+| `ds/components.css` | **Single source of truth** for reusable UI primitives — page frame (`.ds-page`/`__head`/`.ds-section`), button, card, chip, row, stat, field, MC option, switch, segmented, progress, sheet/scrim, adaptive nav, empty state, skeleton. Built only from `ds/tokens.css`; contains no app selectors (D04). |
+| `ds/icons.js` | The stroke line-icon set — `dsIcon(name, px)` + `DS_MODE_ICONS`. Emoji is banned from chrome (D07); add new glyphs here, never inline a one-off `<svg>`. |
+| `ds/gallery.html` | Visual catalog of every primitive in both themes. Open it before building anything new. |
+| `docs/ui-ux-guide.md` | **The UI/UX law** — ten rules, page frame, navigation + launcher contract, state/empty/error patterns, feedback hierarchy, number/chart rules, motion, z-layer ladder, a11y floor, checklists, measured legacy debt. Enforced via `.claude/skills/ui-consistency/`. |
+| `tools/cdp/ds-page-frame.js` | Durable probe: page-frame + nav invariants across Today/Browse/Progress at 390px and 1280px (one `<h1>`, shared column, `.ds-section`, no h-scroll, ≥44px nav, truthful `aria-current`). Append a row to `PAGES` when you add a destination. |
 | `js/storage.js` | **Single source of truth** for localStorage I/O across pages. Exposes `window.DrillStorage`. See `.claude/skills/ui-consistency/`. |
 | `js/supabase-config.js` | Supabase project URL + anon key. Anon key is public-by-design; RLS protects data. |
 | `js/supabase-client.js` | Initializes `@supabase/supabase-js` v2 client. Exposes `window.SupabaseClient`. No-op if config missing. |
@@ -157,13 +162,25 @@ based on what it learned — that's how the app keeps converging on the profile.
 
 ## Shared UI + storage contract (the user-facing pages)
 
-The project ships two user-facing HTML pages — `index.html` and
-`diagnostic.html`. (Pre-2026-05, a third page `prep.html` housed the 4-day
-interview prep dashboard; it was dissolved into the main app as a
-`kind:'cram'` study path consumed by Today's Plan.) They share an audience,
-a visual language, and a localStorage origin. To prevent drift (which bit us
-in iter-35):
+> **The full UI/UX law is [`docs/ui-ux-guide.md`](docs/ui-ux-guide.md)** —
+> the ten rules, the page frame (`.ds-page`), the navigation + launcher
+> contract, state/empty/error patterns, the z-layer ladder, the a11y floor,
+> the review checklists, and the measured legacy debt. Its enforceable short
+> form is the `.claude/skills/ui-consistency/` skill; **load that skill before
+> building any UI.** The section below is the storage/asset half of the same
+> contract.
 
+The project ships three user-facing HTML pages — `index.html`,
+`system-design.html`, and `diagnostic.html`. (Pre-2026-05, a fourth page
+`prep.html` housed the 4-day interview prep dashboard; it was dissolved into
+the main app as a `kind:'cram'` study path consumed by Today's Plan.) They
+share an audience, a visual language, and a localStorage origin. To prevent
+drift (which bit us in iter-35):
+
+- **Page layout** → `.ds-page` / `.ds-page__head` / `.ds-section` from
+  `ds/components.css`. Every full-page destination uses the same frame — one
+  `<h1>`, one column width (`--ds-page-w`), labeled sections. Verified by
+  `node tools/cdp/ds-page-frame.js`.
 - **Colors / radii / type** → `ds/tokens.css` (root `tokens.css` was merged in
   and deleted, P8/D04). Prefer the `--ds-*` roles; the legacy `--bg`/`--panel`/
   `--accent`/… names still resolve (aliases). Don't redeclare tokens in a page's

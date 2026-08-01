@@ -131,13 +131,12 @@ function openTodayHome() {
     </div>`;
 
   shell.innerHTML = `
-    <div class="ds-root today-home-page" style="max-width: 560px; margin: 0 auto; background: transparent;">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--ds-s3);">
-        <span class="ds-dim" style="font-size: var(--ds-fs-sm);">${escapeHtml(dateLine)}</span>
-        ${streakChip}
-      </div>
-      <h1 class="ds-title" style="margin: var(--ds-s4) 0 4px;">${greeting}</h1>
-      <p class="ds-dim" style="margin: 0;">${subLine}</p>
+    <div class="ds-root ds-page today-home-page">
+      <header class="ds-page__head">
+        <div class="ds-page__meta"><span>${escapeHtml(dateLine)}</span>${streakChip}</div>
+        <div class="ds-page__titlerow"><h1 class="ds-title">${greeting}</h1></div>
+        <p class="ds-page__sub">${subLine}</p>
+      </header>
       ${heroHtml}
       <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: var(--ds-s2); margin-top: var(--ds-s5);">
         <div class="ds-stat ds-stat--accent"><b>${dueCount}</b><span>Due</span></div>

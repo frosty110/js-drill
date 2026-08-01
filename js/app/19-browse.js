@@ -358,8 +358,10 @@ function openBrowse() {
   _browseQ = '';
 
   shell.innerHTML = `
-    <div class="ds-root browse-page">
-      <h1 class="ds-title">Browse</h1>
+    <div class="ds-root ds-page browse-page">
+      <header class="ds-page__head">
+        <div class="ds-page__titlerow"><h1 class="ds-title">Browse</h1></div>
+      </header>
       <input class="ds-field" data-browse-search type="search" placeholder="Search lessons…" autocomplete="off" spellcheck="false" />
       <div data-browse-controls></div>
       <div data-browse-list class="browse-list"></div>

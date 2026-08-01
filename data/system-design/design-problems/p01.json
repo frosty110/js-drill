@@ -145,9 +145,42 @@
       "answer": "Custom aliases live in the same code namespace, so I reserve them atomically and reject clashes with generated codes. Expiry is a stored `expiresAt` enforced lazily on read (404 if past) plus a background reaper — never a synchronous delete. The real hot-spot is analytics: incrementing a counter per redirect turns every click into a write on a hot key, so I emit click events asynchronously to a queue/stream and aggregate offline (or use approximate counters). For geography I replicate the immutable, read-only mapping to every region for local redirects and route creates to a primary or give regions disjoint ID ranges to avoid collisions. Because a mapping never changes once written, I lean toward availability over strict consistency — a present-but-slightly-stale link beats a failed redirect — while rate-limiting creates and screening targets for abuse."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C([Client]) --> CDN[\"CDN / Edge\"]\n  CDN --> LB[Load Balancer]\n  LB --> APP[\"App Tier (stateless)\"]\n  APP -->|\"read-first\"| CACHE[(Redis Cache)]\n  APP --> KV[(\"KV Store (source of truth)\")]\n  KGS[[Key-Gen Service]] -->|\"claim code batch\"| APP\n  CACHE -.->|\"miss: backfill\"| KV",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The redirect path is cache-first, while code generation and analytics stay off the hot read path.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  C([Client]) --> CDN[\"CDN / Edge\"]\n  CDN --> LB[Load Balancer]\n  LB --> APP[\"App Tier (stateless)\"]\n  APP -->|\"read-first\"| CACHE[(Redis Cache)]\n  APP --> KV[(\"KV Store (source of truth)\")]\n  KGS[[Key-Gen Service]] -->|\"claim code batch\"| APP\n  CACHE -.->|\"miss: backfill\"| KV"
+    },
+    {
+      "id": "short-code-generation",
+      "title": "Three short-code generation strategies",
+      "kind": "mermaid",
+      "role": "comparison",
+      "takeaway": "Counter ranges avoid coordination, hash generation needs collision retries, and a KGS moves uniqueness work offline.",
+      "afterQuestion": 5,
+      "code": "flowchart TD\n  W[Create URL] --> C[Counter Range]\n  W --> H[Hash and Retry]\n  W --> K[Key Generation Service]\n  C --> B[Base62 Code]\n  H --> U{Unique Check}\n  K --> P[(Prebuilt Codes)]"
+    },
+    {
+      "id": "redirect-hot-path",
+      "title": "Cache-first redirect hot path",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "Popular redirects should finish at the edge or Redis; the mapping store is the miss path, not the normal path.",
+      "afterQuestion": 8,
+      "code": "flowchart LR\n  C([Client]) --> CDN{CDN}\n  CDN -->|\"hit\"| C\n  CDN -->|\"miss\"| API[Redirect API]\n  API --> R{Redis}\n  R -->|\"hit\"| API\n  R -->|\"miss\"| KV[(Mapping Store)]\n  KV --> R"
+    },
+    {
+      "id": "multi-region-analytics",
+      "title": "Global redirects with asynchronous analytics",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Replicate immutable mappings near readers and send click events through a queue so analytics cannot delay redirects.",
+      "afterQuestion": 9,
+      "code": "flowchart LR\n  U([User]) --> E[Nearest Region]\n  E --> M[(Local Mapping Replica)]\n  E -.-> Q[[Click Event Queue]]\n  Q --> A[Analytics Workers]\n  A --> W[(Analytics Warehouse)]\n  P[Primary Region] -.-> M"
+    }
+  ]
 }

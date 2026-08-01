@@ -151,9 +151,42 @@
       "answer": "The per-document coordinator is both a bottleneck and a single point of failure, so I make it a leader with a hot standby and treat the durable op log as the recoverable truth — on failover a new owner replays snapshot-plus-tail and connections re-home via consistent hashing on docId. Hot documents are handled by splitting the thousands of passive viewers (broadcast-only) from the handful of actual editors and fanning out through a pub/sub tree instead of hammering the coordinator. I bound storage by snapshotting and truncating the log, and for CRDTs I only garbage-collect tombstones once a delete is causally stable across replicas. Geographically I pin a document's coordinator near its active editors and migrate if that population moves, accepting that the system is eventually/strongly-eventually consistent — it guarantees convergence, not linearizability, which is exactly what an editor should trade for."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C([\"Client Editor<br/>optimistic apply\"]) --> GW[\"WS Gateway fleet\"]\n  GW --> CO[\"Per-doc Coordinator<br/>serialize + OT/CRDT\"]\n  CO --> LOG[(\"Op Log<br/>append-only\")]\n  CO --> SNAP[(\"Snapshot store\")]\n  CO --> PS[[\"Redis pub/sub\"]]\n  PS --> GW",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "A per-document coordinator orders durable edit operations while WebSocket gateways distribute them to collaborators.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  C([\"Client Editor<br/>optimistic apply\"]) --> GW[\"WS Gateway fleet\"]\n  GW --> CO[\"Per-doc Coordinator<br/>serialize + OT/CRDT\"]\n  CO --> LOG[(\"Op Log<br/>append-only\")]\n  CO --> SNAP[(\"Snapshot store\")]\n  CO --> PS[[\"Redis pub/sub\"]]\n  PS --> GW"
+    },
+    {
+      "id": "document-op-flow",
+      "title": "Optimistic edit and server-ordered operation flow",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "Clients apply edits immediately, then the coordinator transforms or merges them, assigns order, persists, and broadcasts.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  C[Client Edit] --> O[Optimistic Local Apply]\n  C --> G[WebSocket Gateway]\n  G --> D[Document Coordinator]\n  D --> T[Transform or Merge]\n  T --> L[(Operation Log)]\n  T --> B[Broadcast]\n  B --> C"
+    },
+    {
+      "id": "ot-vs-crdt",
+      "title": "OT vs CRDT convergence",
+      "kind": "mermaid",
+      "role": "comparison",
+      "takeaway": "OT transforms operations against server history; CRDTs use mergeable identifiers and metadata so replicas can converge independently.",
+      "afterQuestion": 5,
+      "code": "flowchart TD\n  E[Concurrent Edits] --> O[Operational Transformation]\n  E --> C[CRDT]\n  O --> S[Ordered Server History]\n  O --> T[Transform Operations]\n  C --> I[Stable Identifiers]\n  C --> M[Commutative Merge]\n  T --> V[Converged Document]\n  M --> V"
+    },
+    {
+      "id": "document-recovery",
+      "title": "Snapshots, logs, and coordinator failover",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Durable operation logs rebuild coordinators; periodic snapshots bound replay time and enable version history.",
+      "afterQuestion": 9,
+      "code": "flowchart LR\n  C[Coordinator] --> L[(Operation Log)]\n  L --> S[(Periodic Snapshot)]\n  C -.->|\"failure\"| N[New Coordinator]\n  S --> N\n  L --> N\n  N --> H[Hot Document Shards]"
+    }
+  ]
 }

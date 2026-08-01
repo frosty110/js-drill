@@ -138,9 +138,42 @@
       "answer": "Over-limit requests get a `429` with a `Retry-After` telling the client when to try again, and I'd put `X-RateLimit-Limit/Remaining/Reset` on every response so good clients throttle themselves before getting rejected. The important failure decision is what happens when the limit store is unreachable: fail-open preserves availability but risks backend overload, fail-closed protects the backend but drops legitimate traffic — I'd pick per endpoint, typically fail-open for the general API and fail-closed for abuse-prone paths, and run Redis with replicas/failover accepting that a failover may lose a few seconds of counts (fine since limits are already approximate). For hot keys I'd cache 'already blocked' verdicts locally to short-circuit abusers without a store round-trip, and emit throttle-rate metrics per key to catch both attacks and misconfigured limits."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  Client([Client]) --> GW[\"API gateway<br/>(rate-limit middleware)\"]\n  GW -->|\"INCR + EXPIRE\"| R[(Redis counter cluster)]\n  R -->|\"count vs limit\"| GW\n  GW -->|allowed| BE[\"Backend services\"]\n  GW -.->|over limit| RJ[\"429 Retry-After\"]",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Enforce limits at the edge, but coordinate counters atomically so a fleet shares one logical quota.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  Client([Client]) --> GW[\"API gateway<br/>(rate-limit middleware)\"]\n  GW -->|\"INCR + EXPIRE\"| R[(Redis counter cluster)]\n  R -->|\"count vs limit\"| GW\n  GW -->|allowed| BE[\"Backend services\"]\n  GW -.->|over limit| RJ[\"429 Retry-After\"]"
+    },
+    {
+      "id": "atomic-counter",
+      "title": "Atomic shared counter update",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Every gateway executes the increment, expiry, and limit check as one server-side operation to eliminate read-modify-write races.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  G1[Gateway 1] --> S[Atomic Script]\n  G2[Gateway 2] --> S\n  G3[Gateway 3] --> S\n  S --> R[(Redis Counter + TTL)]\n  R --> A[Allow]\n  R --> X[Reject]"
+    },
+    {
+      "id": "token-leases",
+      "title": "Lease local tokens to reduce store traffic",
+      "kind": "mermaid",
+      "role": "comparison",
+      "takeaway": "The global store allocates small token batches to gateways; requests spend locally, trading exactness for lower latency.",
+      "afterQuestion": 7,
+      "code": "flowchart LR\n  R[(Global Quota Store)] -->|\"token lease\"| G1[(Gateway 1 Bucket)]\n  R -->|\"token lease\"| G2[(Gateway 2 Bucket)]\n  C1[Requests] --> G1\n  C2[Requests] --> G2\n  G1 --> A[Allowed Traffic]\n  G2 --> A"
+    },
+    {
+      "id": "limiter-failure-policy",
+      "title": "Explicit fail-open or fail-closed policy",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "When the counter store is unavailable, low-risk traffic may fail open while sensitive endpoints fail closed; clients receive actionable throttling metadata.",
+      "afterQuestion": 8,
+      "code": "flowchart LR\n  R[Request] --> L{Limiter Healthy}\n  L -->|\"yes\"| Q{Quota Left}\n  Q -->|\"yes\"| A[Allow]\n  Q -->|\"no\"| T[\"429 + Retry-After\"]\n  L -->|\"low risk\"| O[Fail Open]\n  L -->|\"sensitive\"| C[Fail Closed]"
+    }
+  ]
 }

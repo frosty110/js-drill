@@ -1,55 +1,92 @@
-# Diagram Authoring Brief (Mermaid)
+# Design-Problem Diagram Authoring Brief (Mermaid)
 
-You are adding diagrams to canonical system-design problems. Diagrams are authored as
-**Mermaid text** (rendered to SVG in the browser) so they're diffable and theme-matched.
+Canonical design problems use **small diagrams-as-code** rendered to SVG in the
+browser. Every visual should teach one architectural decision and remain legible
+on a 390px phone.
 
-For each problem you produce TWO Mermaid diagrams:
-1. **Architecture** — a `flowchart` (component view: client → LB → services → stores/queues).
-2. **Request flow** — a `sequenceDiagram` of the core write path and/or read path.
+## Required architecture deck
 
-## Output — write to a temp file per problem
+Every `pNN.json` carries exactly four unit-level diagrams in `diagrams[]`:
 
-Write `data/system-design/design-problems/_diagrams/pNN.json` containing ONLY:
+1. **Overview** — the load-bearing components and stores.
+2. **Signature mechanism** — the decision that makes this problem a classic.
+3. **Scale or request path** — the hot read/write path or partitioning shape.
+4. **Failure / consistency** — the dangerous race, outage, or recovery path.
 
-```json
+Each diagram is attached to the most relevant revealed answer with the
+zero-based `afterQuestion` index. The unit detail screen combines all four into
+one **Final Interview Whiteboard** after Key Ideas and before the drill buttons:
+the overview is always visible for quick review, four numbered decision notes
+summarize the board, and "Open full board" expands all four drawings together.
+Hide labels / Reveal labels turns the overview into a visual-recall prompt.
+
+```jsonc
 {
-  "arch": "flowchart LR\n  ...",
-  "flow": "sequenceDiagram\n  ...",
-  "flowIdx": 3
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The redirect path is cache-first; analytics stays asynchronous.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  ..."
+    }
+  ]
 }
 ```
 
-- `arch`  — the architecture flowchart Mermaid source (as a JSON string; use `\n` for newlines).
-- `flow`  — the request-flow sequenceDiagram Mermaid source.
-- `flowIdx` — the 0-based index, in that problem's `questions[]` array, of the **high-level
-  architecture** question (the open question that asks to describe the architecture / data
-  model). Read the file to find it. The flow diagram will be shown when that question is revealed.
+Allowed `role` values:
 
-## Mermaid rules (MUST render without error — keep it simple)
+- `overview`
+- `request-flow`
+- `mechanism`
+- `comparison`
+- `failure`
+- `lifecycle`
 
-- Start with `flowchart LR` (or `TD`) / `sequenceDiagram`.
-- **Keep it small: ≤ 8 nodes** for the flowchart (mobile legibility). Focus on the load-bearing
-  components; don't diagram every detail.
-- **Quote any node label that contains spaces or punctuation**: `A["App / API tier"]`. Use
-  `<br/>` for a line break inside a quoted label. Do NOT put unquoted `()`, `[]`, `:`, `/`, `,`
-  inside labels — either quote the whole label or omit the punctuation.
-- Node shapes: `[box]`, `([rounded])`, `[(database cylinder)]`, `[[queue/subroutine]]`, `{decision}`.
-- Edge with label: `A -->|"cache hit"| B`  (quote labels with punctuation). Dotted: `A -.->|async| B`.
-- Sequence: `participant C as Client` then `C->>API: POST /shorten`, `API-->>C: 200 shortUrl`,
-  `API->>DB: INSERT ...`. Keep to the essential 4–8 messages; show the interesting path
-  (e.g., cache miss → DB, or the write path that assigns an ID).
-- Do NOT use Mermaid features beyond flowchart + sequenceDiagram. No click handlers, no styling
-  directives, no `subgraph` unless essential.
+Question-level `diagram` remains supported for focused request-flow sequence
+diagrams. The renderer is backward compatible with singular unit-level
+`diagram`, but all canonical design problems must use the four-item deck.
 
-## Content
+## Content rules
 
-The diagram must reflect THIS problem's real architecture (read the file's `summary`,
-`keyTakeaways`, and questions). Examples:
-- URL shortener: Client → LB → App → (Redis cache, KV store, Key-Gen Service); flow = read path
-  (cache hit/miss → DB) or write path (allocate code → store).
-- Ride-sharing: Rider/Driver apps → Gateway → (Location service + in-memory geo index, Matching
-  service, Trip service + DB); flow = driver location update + rider request → match.
-- Payments: Client → API (idempotency key) → Ledger service (double-entry DB) → external gateway;
-  flow = auth → capture with idempotency.
+- One diagram, one sentence. Put that sentence in `takeaway`.
+- Prefer 3–7 nodes; use at most 8 unless the overview genuinely needs more.
+- Show only components needed to explain the named decision.
+- Put the diagram on the answer that explains it; `afterQuestion` must reference
+  a valid `questions[]` index.
+- Use architecture nouns for nodes and short mechanism phrases for edge labels.
+- Do not repeat the full overview four times. Each view should add a different
+  mental model.
 
-Verify your `_diagrams/pNN.json` is valid JSON. Report the files you wrote.
+Examples of signature mechanisms:
+
+- URL shortener: code generation and the cache-first redirect path.
+- News feed: hybrid push/pull fan-out.
+- Ride sharing: geo partitioning and an atomic driver claim.
+- Payments: idempotency, double-entry ledger, and reconciliation.
+- Ticket booking: atomic timed holds and waiting-room admission.
+
+## Mermaid rules
+
+- Start with `flowchart LR`, `flowchart TD`, or `sequenceDiagram`.
+- Quote node labels containing spaces or punctuation: `A["App / API tier"]`.
+- Use simple shapes: `[box]`, `([rounded])`, `[(database)]`, `[[queue]]`,
+  `{decision}`.
+- Quote descriptive edge labels: `A -->|"cache hit"| B`.
+- Keep sequence diagrams to essential participants and 4–8 messages.
+- Do not use click handlers, styling directives, `classDef`, initialization
+  directives, or large subgraphs.
+
+## Verification
+
+Run:
+
+```bash
+node tools/validate-system-design.js
+```
+
+The validator checks schema, unique IDs, roles, safe Mermaid syntax, the exact
+four-diagram requirement, and valid question placement. Also parse or render all
+Mermaid source with Mermaid 11 before shipping.

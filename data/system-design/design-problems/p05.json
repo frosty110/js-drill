@@ -123,9 +123,42 @@
       "answer": "Recrawl frequency shouldn't be uniform — it should scale with each page's observed change rate and its importance. I estimate change rate by comparing content fingerprints across crawls and adaptively lengthen the interval for stable pages and shorten it for volatile ones, weighting by an importance signal like inbound links or traffic so budget flows to pages users actually see. Because crawl budget (fetches/sec) is fixed, this is fundamentally an allocation tradeoff: every recrawl of an unchanged low-value page is a new page not discovered, so freshness competes with coverage under the politeness ceiling. Cheap signals — sitemaps, Last-Modified/ETag with conditional GETs returning 304 — let me detect no-change without paying full bandwidth, and I back off erroring hosts with jittered retries to avoid synchronized recrawl storms."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  Seed([Seed URLs]) --> Frontier[[\"URL Frontier<br/>(per-host, prioritized)\"]]\n  Frontier --> Fetcher([Fetcher workers])\n  Fetcher --> DNS[(DNS cache)]\n  Fetcher --> Parser[\"Parser / link extractor\"]\n  Parser --> Dedup{\"URL seen?\"}\n  Dedup -->|new| Frontier\n  Parser --> Store[(Content store)]",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The frontier schedules polite fetches; parsing, deduplication, and storage form a feedback loop that discovers more URLs.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  Seed([Seed URLs]) --> Frontier[[\"URL Frontier<br/>(per-host, prioritized)\"]]\n  Frontier --> Fetcher([Fetcher workers])\n  Fetcher --> DNS[(DNS cache)]\n  Fetcher --> Parser[\"Parser / link extractor\"]\n  Parser --> Dedup{\"URL seen?\"}\n  Dedup -->|new| Frontier\n  Parser --> Store[(Content store)]"
+    },
+    {
+      "id": "polite-frontier",
+      "title": "Host-aware polite URL frontier",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "A global priority queue feeds per-host queues, whose next-fetch times prevent one domain from being hammered.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  U[Discovered URLs] --> G[[Global Priority Queue]]\n  G --> H1[[Host Queue A]]\n  G --> H2[[Host Queue B]]\n  H1 --> S{Politeness Scheduler}\n  H2 --> S\n  S --> F[Fetcher Fleet]"
+    },
+    {
+      "id": "dual-dedup",
+      "title": "URL dedup and content dedup solve different problems",
+      "kind": "mermaid",
+      "role": "comparison",
+      "takeaway": "Canonical URL fingerprints stop repeat fetches; content hashes stop duplicate bodies from consuming storage.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  U[Candidate URL] --> N[Normalize URL]\n  N --> UF{URL Seen Set}\n  UF -->|\"new\"| F[Fetch]\n  F --> H[Content Hash]\n  H --> CF{Content Seen Set}\n  CF -->|\"new\"| S[(Content Store)]"
+    },
+    {
+      "id": "recrawl-budget",
+      "title": "Recrawl scheduler spends a fixed crawl budget",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Change rate, importance, errors, and trap signals determine priority; bounded budgets keep infinite spaces from starving useful pages.",
+      "afterQuestion": 7,
+      "code": "flowchart LR\n  M[(Change History)] --> P[Priority Score]\n  I[Page Importance] --> P\n  T[Trap Signals] --> P\n  P --> B{Crawl Budget}\n  B --> F[Recrawl Frontier]\n  B --> X[Defer or Block]"
+    }
+  ]
 }

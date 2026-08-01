@@ -27,6 +27,15 @@ string and gets the same monospace treatment.
 
 ## How the app encodes it today
 
+- **Canonical design-problem visual decks (2026-07-31)** — every one of the
+  17 worked "Design a…" interviews now pairs its verbal walkthrough with four
+  small Mermaid architecture models: overview, signature mechanism, scale/path,
+  and failure/consistency. Each problem ends with one **Final Interview
+  Whiteboard** for quick review: the overview drawing, four numbered design
+  decisions, and a full-board view that presents all four drawings together.
+  Each model is also co-located with the answer it explains. A Hide labels
+  control turns the overview SVG into retrieval practice: name the boxes and
+  flows, then reveal.
 - **📳 Haptic Tap-Pulse (iter 141)** — first tactile encoding channel in
   the app. Opt-in toggle wires `navigator.vibrate` to L1 correct (30ms) /
   L1 miss (twin 60ms) / L3 pass (120ms) / Rapid-Fire streak-of-5 (3-pulse
@@ -87,8 +96,8 @@ string and gets the same monospace treatment.
   signal. Diagrams earn their place when the formula's *meaning* is spatial;
   for purely textual idioms (e.g. `Array.from`), a diagram is noise.
 - **"Cute but useless" risk.** Boxes-and-arrows for the sake of decoration
-  hurts the rusty user — they're scanning for the formula and the worked
-  example. Every diagram should embed numbers/values, not just structure.
+  hurts the rusty user. Every diagram should isolate a specific mechanism,
+  hot path, tradeoff, or failure and state its one-sentence takeaway.
 - **Cross-browser unicode.** Box-drawing characters render in every modern
   font, but very old terminals or stripped-down email previews may not.
   Inside a CodeMirror or `<pre>` block in a modern browser this is a non-

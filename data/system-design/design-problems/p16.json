@@ -142,9 +142,42 @@
       "answer": "The fundamental wall is hot-row contention on the most-wanted seats, which the waiting room, fast atomic claims, and microsecond-short locks exist to manage. The subtle correctness risk is hold expiry — sweeper lag or clock skew can leak or prematurely free seats — so we combine lazy and active expiry and trust a single authoritative DB clock. We consciously choose consistency over availability: never oversell, even if that means queuing or rejecting users under overload. Real-world failure modes include scalper bots (rate limits, CAPTCHA, per-user caps), the payment-succeeds-as-hold-expires race (idempotency + reconciliation + refund), and the fact that the seat map changes constantly so reads can be slightly stale as long as the DB claim stays authoritative. And to avoid cross-region double-booking, each event's inventory lives in one authoritative region with reads replicated out."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C[\"Client\"]\n  WR[\"Virtual Waiting Room\"]\n  Q[[\"Admission Queue\"]]\n  API[\"Booking Service\"]\n  INV[(\"Seat Inventory DB\")]\n  SW[\"TTL Sweeper\"]\n  PAY[\"Payment Service\"]\n  C -->|\"on-sale burst\"| WR\n  WR --> Q\n  Q -->|\"rate-limited admit\"| API\n  API -->|\"atomic hold claim\"| INV\n  API --> PAY\n  SW -.->|\"release expired holds\"| INV",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The waiting room protects capacity, while an atomic inventory store enforces exactly one active hold or sale per seat.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  C[\"Client\"]\n  WR[\"Virtual Waiting Room\"]\n  Q[[\"Admission Queue\"]]\n  API[\"Booking Service\"]\n  INV[(\"Seat Inventory DB\")]\n  SW[\"TTL Sweeper\"]\n  PAY[\"Payment Service\"]\n  C -->|\"on-sale burst\"| WR\n  WR --> Q\n  Q -->|\"rate-limited admit\"| API\n  API -->|\"atomic hold claim\"| INV\n  API --> PAY\n  SW -.->|\"release expired holds\"| INV"
+    },
+    {
+      "id": "seat-hold-state",
+      "title": "Atomic seat hold state machine",
+      "kind": "mermaid",
+      "role": "lifecycle",
+      "takeaway": "A conditional write moves an available seat to a timed hold; only that hold can purchase, and expiry returns it to inventory.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  A[Available] -->|\"atomic hold\"| H[Held with TTL]\n  H -->|\"payment succeeds\"| S[Sold]\n  H -->|\"TTL expires\"| A\n  H -->|\"payment fails\"| A"
+    },
+    {
+      "id": "virtual-waiting-room",
+      "title": "Virtual waiting room controls admission",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Edge traffic enters a durable queue and receives signed admission tokens at the rate the booking tier can safely process.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  U[Flash-Sale Users] --> E[Edge Gate]\n  E --> Q[[Waiting Room Queue]]\n  Q --> A[Admission Controller]\n  A --> T[Signed Admission Token]\n  T --> B[Booking Service]\n  B --> I[(Inventory Store)]"
+    },
+    {
+      "id": "hold-payment-recovery",
+      "title": "Payment stays inside the hold deadline",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Payment attempts reference the hold, and an expiry worker releases abandoned holds idempotently without racing a completed purchase.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  H[(Active Hold)] --> P[Payment Orchestrator]\n  P --> G[Payment Gateway]\n  G -->|\"success\"| S[Mark Sold]\n  G -->|\"failure\"| R[Release Hold]\n  H --> T[[Expiry Queue]]\n  T --> E[Expiry Worker]\n  E --> R"
+    }
+  ]
 }

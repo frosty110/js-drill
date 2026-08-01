@@ -133,9 +133,42 @@
       "answer": "Durability comes first: blobs are replicated multi-AZ and cross-region, and I order writes blob-first then metadata, treating metadata as the source of truth for existence and garbage-collecting orphaned blobs whose metadata write failed. Failure modes are handled by idempotent workers that reprocess from the durable original, and by serving the original or a placeholder whenever the DB references a variant that isn't ready yet. Globally, a geo-distributed CDN over regional S3 replicas lets users fetch from a nearby edge and upload to the nearest region; a viral photo becomes a hot CDN object that edge caching plus origin shielding absorb without stampeding S3. The main tradeoff is cost — I'd tier storage so hot recent photos sit on fast storage and cold archives move to cheaper/Glacier, and cap the number of generated variants since each one multiplies petabyte-scale storage."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C([Client]) --> APP[App Tier]\n  C -->|\"PUT bytes direct\"| S3[(Blob Storage)]\n  APP --> META[(Metadata DB)]\n  S3 -->|\"upload event\"| Q[[Processing Queue]]\n  Q --> W[Media Workers]\n  W -->|\"write variants\"| S3\n  W --> META\n  CDN[\"CDN\"] --> S3\n  C -->|\"fetch variants\"| CDN",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Photo bytes flow directly to object storage while services and databases handle only metadata and coordination.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  C([Client]) --> APP[App Tier]\n  C -->|\"PUT bytes direct\"| S3[(Blob Storage)]\n  APP --> META[(Metadata DB)]\n  S3 -->|\"upload event\"| Q[[Processing Queue]]\n  Q --> W[Media Workers]\n  W -->|\"write variants\"| S3\n  W --> META\n  CDN[\"CDN\"] --> S3\n  C -->|\"fetch variants\"| CDN"
+    },
+    {
+      "id": "media-processing",
+      "title": "Asynchronous media-processing pipeline",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "The upload becomes durable first; queued workers validate, scan, resize, and publish variants independently.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  C([Client]) --> O[(Original Object)]\n  O --> Q[[Media Jobs]]\n  Q --> V[Validate and Scan]\n  V --> R[Resize Workers]\n  R --> B[(Image Variants)]\n  B --> M[(Metadata Ready)]"
+    },
+    {
+      "id": "photo-feed-read",
+      "title": "Metadata feed plus CDN media delivery",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Feed responses carry metadata and CDN URLs; large image bytes never pass through the feed service.",
+      "afterQuestion": 7,
+      "code": "flowchart LR\n  C([Client]) --> F[Feed Service]\n  F --> M[(Feed Metadata)]\n  F --> C\n  C --> CDN[CDN Edge]\n  CDN --> O[(Object Storage)]"
+    },
+    {
+      "id": "photo-durability",
+      "title": "Durable, globally delivered media",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Cross-zone object replication protects originals, while lifecycle tiers and CDN caching control storage and egress cost.",
+      "afterQuestion": 8,
+      "code": "flowchart LR\n  O[(Originals)] --> R[(Cross-Zone Replica)]\n  O --> V[(Derived Variants)]\n  V --> CDN[Global CDN]\n  O -.-> A[(Archive Tier)]\n  R --> REC[Recovery]\n  CDN --> U([Users])"
+    }
+  ]
 }

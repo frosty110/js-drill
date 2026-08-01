@@ -133,9 +133,42 @@
       "answer": "Under naive push, a 100M-follower post means 100M feed-writes in a burst — a thundering herd that melts the fan-out tier. The hybrid sidesteps it: a celebrity post is written once and pulled at read time, so there's no write fan-out at all. The correlated read spike — everyone opening the app to see it — is absorbed by caching that single hot post and serving it from cache/CDN, replicating the entry if it becomes a hot key. Any fan-out that does happen goes through a queue with backpressure so workers drain at a controlled rate instead of synchronously. The remaining failure modes — cache eviction, worker lag — are handled by rebuilding feeds from the posts DB on miss and accepting eventual consistency, since a post arriving a few seconds late is an acceptable price for availability."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C([Client]) --> LB[Load Balancer]\n  LB --> POST[Post Service]\n  LB --> FEED[Feed Service]\n  POST --> PDB[(Posts DB)]\n  POST --> Q[[Fan-out Queue]]\n  Q --> W[Fan-out Workers]\n  W --> FC[(\"Feed Cache (Redis)\")]\n  FEED --> FC\n  FEED -->|\"pull celebrity posts\"| PDB",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Post storage, asynchronous fan-out, cached feed IDs, and ranking are separate responsibilities.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  C([Client]) --> LB[Load Balancer]\n  LB --> POST[Post Service]\n  LB --> FEED[Feed Service]\n  POST --> PDB[(Posts DB)]\n  POST --> Q[[Fan-out Queue]]\n  Q --> W[Fan-out Workers]\n  W --> FC[(\"Feed Cache (Redis)\")]\n  FEED --> FC\n  FEED -->|\"pull celebrity posts\"| PDB"
+    },
+    {
+      "id": "hybrid-fanout",
+      "title": "Hybrid push and pull fan-out",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Normal authors push post IDs into follower feeds; celebrity posts are stored once and merged into the feed at read time.",
+      "afterQuestion": 5,
+      "code": "flowchart TD\n  P[New Post] --> T{Celebrity Threshold}\n  T -->|\"normal\"| Q[[Fan-out Queue]]\n  Q --> F[(Follower Feed Cache)]\n  T -->|\"celebrity\"| S[(Posts Store)]\n  R[Feed Read] --> F\n  R --> S\n  F --> M[Merge]\n  S --> M"
+    },
+    {
+      "id": "feed-ranking",
+      "title": "Candidate generation then ranking",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "The feed service first gathers plausible posts, then scores and filters a much smaller candidate set.",
+      "afterQuestion": 7,
+      "code": "flowchart LR\n  P[(Push Feed IDs)] --> C[Candidate Merge]\n  S[(Celebrity Posts)] --> C\n  C --> F[Feature Fetch]\n  F --> R[Ranking Model]\n  R --> D[Diversity Filter]\n  D --> O[Ranked Feed]"
+    },
+    {
+      "id": "celebrity-spike",
+      "title": "Absorb a celebrity traffic spike",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Skipping push fan-out prevents a write storm; replicated hot-object caches absorb the correlated read spike.",
+      "afterQuestion": 8,
+      "code": "flowchart LR\n  C[Celebrity Post] --> P[(Posts Store)]\n  P --> H[(Replicated Hot Cache)]\n  U1[Reader Fleet] --> H\n  U2[Reader Fleet] --> H\n  U3[Reader Fleet] --> H\n  P -.->|\"no 100M feed writes\"| X[Push Bypassed]"
+    }
+  ]
 }

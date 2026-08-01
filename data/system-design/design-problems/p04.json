@@ -134,9 +134,42 @@
       "answer": "At global scale the CDN is what absorbs virality — a hot video is served from edge caches so origin only sees cache-fills, and I'd pre-warm known-popular content to PoPs. Geographically I route to the nearest edge with regional origins, replicating popular renditions and pull-through-caching the long tail. The long tail is also a cost problem, so cold videos tier down to archival storage and I'd consider transcoding rare renditions lazily on first request rather than eagerly for everything. Uploads spike, so the queue plus an autoscaled worker pool smooths bursts. Throughout, metadata and view counts are allowed to be eventually consistent, but the creator's master is durably replicated across AZs/regions because that's the one thing we can never regenerate."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C([Client]) -->|\"upload direct\"| S3[(\"Object Storage (master + segments)\")]\n  C --> APP[Metadata Service]\n  APP --> DB[(Metadata DB)]\n  S3 -->|\"upload event\"| Q[[Transcode Queue]]\n  Q --> W[Transcode Workers]\n  W -->|\"write segments\"| S3\n  W --> DB\n  CDN[\"CDN / Edge\"] --> S3\n  C -->|\"stream segments\"| CDN",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The control plane manages metadata and jobs; the data plane moves video objects and segments through storage and CDNs.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  C([Client]) -->|\"upload direct\"| S3[(\"Object Storage (master + segments)\")]\n  C --> APP[Metadata Service]\n  APP --> DB[(Metadata DB)]\n  S3 -->|\"upload event\"| Q[[Transcode Queue]]\n  Q --> W[Transcode Workers]\n  W -->|\"write segments\"| S3\n  W --> DB\n  CDN[\"CDN / Edge\"] --> S3\n  C -->|\"stream segments\"| CDN"
+    },
+    {
+      "id": "transcoding-dag",
+      "title": "Distributed transcoding DAG",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "One uploaded master fans into parallel codec and resolution jobs, then a manifest is published only after required segments exist.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  M[(4K Master)] --> Q[[Transcode Jobs]]\n  Q --> H[1080p Worker]\n  Q --> L[720p Worker]\n  Q --> S[360p Worker]\n  H --> O[(Segments)]\n  L --> O\n  S --> O\n  O --> P[Publish Manifest]"
+    },
+    {
+      "id": "adaptive-bitrate",
+      "title": "Adaptive bitrate playback loop",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "The player measures throughput and buffer health before selecting the next segment quality from the manifest.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  P[Video Player] --> M[Manifest]\n  P --> E[Throughput Estimate]\n  P --> B[Buffer Level]\n  M --> S{Choose Quality}\n  E --> S\n  B --> S\n  S --> CDN[CDN Segment]\n  CDN --> P"
+    },
+    {
+      "id": "video-tiering",
+      "title": "Hot delivery and cold storage tiers",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Popular segments stay replicated at the edge; rarely watched masters and renditions migrate to cheaper storage.",
+      "afterQuestion": 8,
+      "code": "flowchart LR\n  H[Hot Videos] --> CDN[Replicated CDN]\n  W[Warm Videos] --> O[(Object Storage)]\n  C[Cold Videos] --> A[(Archive Tier)]\n  CDN --> U([Global Viewers])\n  O --> CDN\n  A -.->|\"restore on demand\"| O"
+    }
+  ]
 }

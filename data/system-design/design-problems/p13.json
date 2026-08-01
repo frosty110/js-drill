@@ -151,9 +151,42 @@
       "answer": "The metadata plane is the first thing to strain: hot files/shared folders and heavy sync polling — so partition metadata by user/file and push change detection into a scalable notification tier (long-poll/websocket) instead of DB polling. Durability comes from replicating blobs across AZs/regions, with erasure coding to cut cost versus 3× replication. The subtle correctness bug is dedup garbage collection: a chunk's refcount can race with a concurrent upload re-referencing it, so GC must be delayed/safe. The core tradeoffs are strongly-consistent metadata versus eventually-delivered notifications (devices may lag seconds), and chunk size — smaller chunks dedup better but explode metadata and client CPU. The CDN and presigned URLs keep the read path off the app tier entirely."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C[\"Client Sync Engine\"]\n  LB[\"LB / API Tier\"]\n  MS[\"Metadata Service\"]\n  MDB[(\"Metadata DB\")]\n  BS[\"Block Service\"]\n  BLOB[(\"Blob Store / S3\")]\n  CDN[\"CDN\"]\n  N[\"Notification Service\"]\n  C -->|\"metadata + commit\"| LB\n  LB --> MS\n  MS --> MDB\n  LB -->|\"chunk exists / put\"| BS\n  BS --> BLOB\n  BLOB --> CDN\n  CDN -->|\"download\"| C\n  MS -.-> N\n  N -.->|\"change events\"| C",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Strongly consistent metadata names immutable content-addressed chunks stored and delivered through a separate blob plane.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  C[\"Client Sync Engine\"]\n  LB[\"LB / API Tier\"]\n  MS[\"Metadata Service\"]\n  MDB[(\"Metadata DB\")]\n  BS[\"Block Service\"]\n  BLOB[(\"Blob Store / S3\")]\n  CDN[\"CDN\"]\n  N[\"Notification Service\"]\n  C -->|\"metadata + commit\"| LB\n  LB --> MS\n  MS --> MDB\n  LB -->|\"chunk exists / put\"| BS\n  BS --> BLOB\n  BLOB --> CDN\n  CDN -->|\"download\"| C\n  MS -.-> N\n  N -.->|\"change events\"| C"
+    },
+    {
+      "id": "chunk-sync",
+      "title": "Chunk-level delta sync and deduplication",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "The client hashes chunks, asks which hashes are missing, uploads only those bytes, then atomically commits a new file version.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  F[Changed File] --> C[Chunk and Hash]\n  C --> M[Missing-Hash Check]\n  M --> U[Upload Missing Chunks]\n  U --> B[(Chunk Store)]\n  B --> V[Commit File Version]\n  V --> D[(Metadata DB)]"
+    },
+    {
+      "id": "content-addressed-model",
+      "title": "Metadata points to immutable chunks",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "A file version is an ordered manifest of chunk hashes; many users and versions can safely reference the same stored chunk.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  F[(File Record)] --> V[(Version)]\n  V --> M[Chunk Manifest]\n  M --> H1[(Hash A)]\n  M --> H2[(Hash B)]\n  M --> H3[(Hash C)]\n  H1 --> B[(Blob Store)]\n  H2 --> B\n  H3 --> B"
+    },
+    {
+      "id": "sync-conflict-delivery",
+      "title": "Preserve conflicts and deliver versions efficiently",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Optimistic version checks detect concurrent offline edits; the service keeps both versions and distributes immutable chunks through a CDN.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  A[Device A Version] --> C{Base Version Check}\n  B[Device B Version] --> C\n  C -->|\"one wins\"| V[(Current Version)]\n  C -->|\"conflict\"| X[(Conflict Copy)]\n  V --> CDN[CDN]\n  X --> CDN"
+    }
+  ]
 }

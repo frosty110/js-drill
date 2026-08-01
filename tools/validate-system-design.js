@@ -10,21 +10,26 @@
 //                                  bullets, non-empty `answer`; NO options.
 //
 // Checks: topics↔manifests↔disk parity, part/chapter coverage, per-question
-// shape, MC answer-index variety, and diagram schema/safe syntax. Canonical
-// design problems additionally require four architecture diagrams, each tied
-// to a valid reveal position. Exits non-zero on failure.
+// shape, MC answer-index variety, diagram schema/safe syntax, and the complete
+// 36-image lesson infographic set. Canonical design problems additionally
+// require four architecture diagrams, each tied to a valid reveal position.
+// Exits non-zero on failure.
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const SD = path.join(ROOT, 'data', 'system-design');
+const INFOGRAPHICS = path.join(ROOT, 'assets', 'system-design', 'infographics');
+const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
+const INFOGRAPHIC_SPECS = readJson(path.join(SD, 'infographic-specs.json')) || {};
+const expectedInfographics = new Set();
 
 const MIN_QUESTIONS = 8;      // MC + open combined, per chapter
 const MIN_TAKEAWAYS = 3;
 const MIN_OPEN_POINTS = 3;
 
-let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0;
+let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0, totalInfographics = 0;
 const fail = (where, msg) => { errors++; console.error(`  ✗ [${where}] ${msg}`); };
 
 const DIAGRAM_ROLES = new Set(['overview', 'request-flow', 'mechanism', 'comparison', 'failure', 'lifecycle']);
@@ -64,6 +69,33 @@ function validateDiagrams(owner, where) {
       }
     });
   }
+}
+
+function validateInfographic(topic, id, where) {
+  const relative = `${topic}/${id}.png`;
+  expectedInfographics.add(relative);
+  const file = path.join(INFOGRAPHICS, relative);
+  if (!fs.existsSync(file)) { fail(where, `missing downloadable infographic assets/system-design/infographics/${relative}`); return; }
+  const png = fs.readFileSync(file);
+  if (png.length < 24 || png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+    fail(where, 'infographic is not a valid PNG'); return;
+  }
+  const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+  if (width !== 1600 || height !== 2000) fail(where, `infographic must be 1600×2000, got ${width}×${height}`);
+  totalInfographics++;
+}
+
+function validateInfographicSpec(topic, id, where) {
+  if (topic === 'design-problems') return;
+  const spec = INFOGRAPHIC_SPECS[`${topic}/${id}`];
+  if (!spec) { fail(where, 'missing authored entry in infographic-specs.json'); return; }
+  if (!spec.coreIdea || !spec.tradeoff) fail(where, 'infographic spec needs coreIdea and tradeoff');
+  if (!Array.isArray(spec.flow) || spec.flow.length < 3 || spec.flow.length > 5) fail(where, 'infographic flow needs 3–5 nodes');
+  if (!Array.isArray(spec.flowLabels) || spec.flowLabels.length !== spec.flow.length - 1) fail(where, 'infographic flowLabels must connect every adjacent node');
+  if (!Array.isArray(spec.cards) || spec.cards.length !== 4) fail(where, 'infographic spec needs exactly four study cards');
+  else spec.cards.forEach((card, index) => {
+    if (!card.title || !card.body) fail(where, `infographic card ${index + 1} needs title and body`);
+  });
 }
 
 function readJson(file) {
@@ -113,6 +145,10 @@ for (const topic of registry.topics) {
     if (!Array.isArray(ch.keyTakeaways) || ch.keyTakeaways.length < MIN_TAKEAWAYS) fail(at, `keyTakeaways needs >= ${MIN_TAKEAWAYS} entries`);
     else if (!ch.keyTakeaways.every(x => typeof x === 'string' && x.trim())) fail(at, 'empty keyTakeaway');
     validateDiagrams(ch, at);
+    if (INFOGRAPHIC_TOPICS.has(t)) {
+      validateInfographic(t, id, at);
+      validateInfographicSpec(t, id, at);
+    }
 
     if (!Array.isArray(ch.questions) || ch.questions.length < MIN_QUESTIONS) {
       fail(at, `expected >= ${MIN_QUESTIONS} questions, got ${ch.questions ? ch.questions.length : 0}`); continue;
@@ -161,9 +197,29 @@ for (const topic of registry.topics) {
   }
 }
 
+function collectPngs(dir, prefix = '') {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    return entry.isDirectory() ? collectPngs(path.join(dir, entry.name), relative) : (/\.png$/i.test(entry.name) ? [relative] : []);
+  });
+}
+
+const actualInfographics = collectPngs(INFOGRAPHICS);
+for (const relative of actualInfographics) {
+  if (!expectedInfographics.has(relative)) fail('infographics', `unregistered or stale PNG ${relative}`);
+}
+if (actualInfographics.length !== expectedInfographics.size) {
+  fail('infographics', `expected exactly ${expectedInfographics.size} PNGs, found ${actualInfographics.length}`);
+}
+for (const key of Object.keys(INFOGRAPHIC_SPECS)) {
+  const [topic, id] = key.split('/');
+  if (!expectedInfographics.has(`${topic}/${id}.png`)) fail('infographic-specs.json', `orphan spec ${key}`);
+}
+
 console.log('');
 if (errors === 0) {
-  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, 0 errors.`);
+  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, ${totalInfographics} infographics, 0 errors.`);
   process.exit(0);
 } else {
   console.error(`\nSystem Design validation FAILED — ${errors} error(s), ${totalQ} questions scanned.`);

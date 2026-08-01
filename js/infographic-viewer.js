@@ -1,5 +1,5 @@
 /*
- * Reusable static-infographic card + full-screen image workspace.
+ * Reusable static-infographic cards, study sets, and full-screen workspace.
  *
  * Usage:
  *   <drill-infographic src="...png" title="Caching" download-name="caching.png"></drill-infographic>
@@ -13,6 +13,9 @@
 
   const STYLE_ID = 'drill-infographic-styles';
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const escapeHtml = value => String(value == null ? '' : value).replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[character]));
 
   function installStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -20,6 +23,7 @@
     style.id = STYLE_ID;
     style.textContent = `
       drill-infographic{display:block;margin:22px 0 4px}
+      drill-infographic-set{display:block;margin:22px 0 6px}
       .infographic-card{overflow:hidden;background:var(--ds-surface-2,#1b1e24);border:1px solid var(--panel-2,#343840);border-radius:var(--radius-lg,14px)}
       .infographic-card__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 16px 12px;border-bottom:1px solid var(--panel-2,#343840)}
       .infographic-card__eyebrow{display:block;color:var(--accent,#f5b62b);font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
@@ -27,7 +31,7 @@
       .infographic-card__prompt{margin:4px 0 0;color:var(--muted,#a7adb7);font-size:12px;line-height:1.45}
       .infographic-card__badge{flex:none;border:1px solid var(--panel-2,#343840);border-radius:999px;padding:4px 8px;color:var(--muted,#a7adb7);background:var(--panel,#22262d);font-size:10px;font-weight:700}
       .infographic-card__preview{display:block;width:100%;border:0;padding:0;background:var(--ds-code-bg,#111318);cursor:zoom-in;text-align:center}
-      .infographic-card__preview img{display:block;width:100%;height:auto;aspect-ratio:4/5;object-fit:contain}
+      .infographic-card__preview img{display:block;width:100%;height:auto;object-fit:contain}
       .infographic-card__actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;border-top:1px solid var(--panel-2,#343840)}
       .infographic-card__actions .ds-btn{min-height:44px;text-decoration:none}
       .infographic-card__actions .ds-btn:hover{text-decoration:none}
@@ -43,9 +47,48 @@
       .infographic-viewer__stage.is-dragging{cursor:grabbing}
       .infographic-viewer__image{position:absolute;left:0;top:0;width:auto;height:auto;max-width:none;max-height:none;transform-origin:0 0;will-change:transform;pointer-events:none;box-shadow:0 16px 60px rgba(0,0,0,.55)}
       .infographic-viewer__help{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);padding:6px 10px;border-radius:999px;background:rgba(17,19,24,.82);color:#a7adb7;font:600 11px/1.2 system-ui,sans-serif;pointer-events:none;white-space:nowrap}
+      .infographic-set{border:1px solid var(--panel-2,#343840);border-radius:var(--radius-lg,14px);background:var(--ds-surface-2,#1b1e24);overflow:hidden}
+      .infographic-set__head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px;border-bottom:1px solid var(--panel-2,#343840);background:linear-gradient(135deg,rgba(245,182,43,.08),transparent 55%)}
+      .infographic-set__eyebrow{display:block;color:var(--accent,#f5b62b);font-size:10px;font-weight:850;letter-spacing:.09em;text-transform:uppercase;margin-bottom:4px}
+      .infographic-set__head h3{margin:0;color:var(--text-strong,#f4f5f7);font-size:19px;line-height:1.3}
+      .infographic-set__head p{margin:7px 0 0;color:var(--muted,#a7adb7);font-size:13px;line-height:1.5;max-width:650px}
+      .infographic-set__count{flex:none;border:1px solid var(--panel-2,#343840);border-radius:999px;background:var(--panel,#22262d);color:var(--text-strong,#f4f5f7);font-size:11px;font-weight:800;padding:5px 9px;white-space:nowrap}
+      .infographic-study{padding:20px 18px 24px;border-bottom:1px solid var(--panel-2,#343840)}
+      .infographic-study:last-child{border-bottom:0}
+      .infographic-study__head{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:start;margin-bottom:10px}
+      .infographic-study__index{grid-row:1/4;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--ds-accent-soft,#413515);color:var(--ds-accent-hi,#ffd36b);font-size:13px;font-weight:900}
+      .infographic-study__kind{font-size:10px;line-height:1.2;text-transform:uppercase;letter-spacing:.08em;color:var(--accent,#f5b62b);font-weight:800}
+      .infographic-study__head h4{margin:0;color:var(--text-strong,#f4f5f7);font-size:18px;line-height:1.3}
+      .infographic-study__purpose{margin:2px 0 0;color:var(--muted,#a7adb7);font-size:12px;line-height:1.45}
+      .infographic-study__description{margin:12px 0 16px;padding:12px 14px;border-left:3px solid var(--accent,#f5b62b);background:var(--panel,#22262d);border-radius:0 8px 8px 0;color:var(--text,#d9dce1);font-size:13.5px;line-height:1.55}
+      .infographic-study__guide{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(240px,.8fr);gap:14px;margin-bottom:16px}
+      .infographic-study__panel{border:1px solid var(--panel-2,#343840);border-radius:10px;background:var(--ds-code-bg,#111318);padding:14px}
+      .infographic-study__panel h5{margin:0 0 10px;color:var(--muted,#a7adb7);font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+      .infographic-flow{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+      .infographic-flow li{display:grid;grid-template-columns:28px 1fr;gap:9px;align-items:start}
+      .infographic-flow__step{width:27px;height:27px;border:1px solid var(--accent,#f5b62b);border-radius:50%;display:grid;place-items:center;color:var(--accent,#f5b62b);font-size:11px;font-weight:900}
+      .infographic-flow strong{display:block;color:var(--text-strong,#f4f5f7);font-size:12.5px;line-height:1.35}
+      .infographic-flow p{margin:2px 0 0;color:var(--muted,#a7adb7);font-size:12px;line-height:1.45}
+      .infographic-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:14px}
+      .infographic-fact{border-left:2px solid var(--accent,#f5b62b);padding:2px 0 2px 8px;min-width:0}
+      .infographic-fact strong{display:block;color:var(--text-strong,#f4f5f7);font-size:13px;line-height:1.25}
+      .infographic-fact span{display:block;color:var(--accent,#f5b62b);font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+      .infographic-fact small{display:block;color:var(--muted,#a7adb7);font-size:10.5px;line-height:1.35;margin-top:3px}
+      .infographic-bullets{margin:0;padding-left:17px;color:var(--text,#d9dce1)}
+      .infographic-bullets li{margin:5px 0;font-size:11.5px;line-height:1.45}
+      .infographic-bullets--tradeoffs li::marker{color:var(--bad,#ff765d)}
+      .infographic-study drill-infographic{margin:0}
+      .infographic-card--compact{border-radius:10px}
       @media(max-width:620px){
         drill-infographic{margin-left:-4px;margin-right:-4px}
+        drill-infographic-set{margin-left:-4px;margin-right:-4px}
         .infographic-card__head{padding:14px 12px 11px}
+        .infographic-set__head{padding:15px 13px;gap:10px}
+        .infographic-set__head h3{font-size:17px}
+        .infographic-set__count{font-size:10px;padding:4px 7px}
+        .infographic-study{padding:17px 12px 21px}
+        .infographic-study__guide{grid-template-columns:1fr}
+        .infographic-study__description{font-size:13px}
         .infographic-viewer__bar{padding:7px;gap:6px;flex-wrap:wrap}
         .infographic-viewer__title{flex-basis:calc(100% - 52px);order:0}
         .infographic-viewer__controls{order:2;width:100%;display:grid;grid-template-columns:repeat(5,1fr)}
@@ -268,18 +311,24 @@
       const title = this.getAttribute('title') || 'System design';
       const downloadName = this.getAttribute('download-name') || 'system-design-infographic.png';
       const alt = this.getAttribute('alt') || `Quick-review infographic for ${title}`;
+      const eyebrow = this.getAttribute('eyebrow') || 'Lesson infographic';
+      const heading = this.getAttribute('heading') || title;
+      const description = this.getAttribute('description') || 'Tap to explore · zoom, drag, download, or save locally';
+      const width = Number(this.getAttribute('image-width')) || 1600;
+      const height = Number(this.getAttribute('image-height')) || 2000;
+      const compact = this.hasAttribute('compact');
       this.innerHTML = `
-        <article class="infographic-card">
-          <div class="infographic-card__head">
+        <article class="infographic-card${compact ? ' infographic-card--compact' : ''}">
+          ${compact ? '' : `<div class="infographic-card__head">
             <div>
-              <span class="infographic-card__eyebrow">Lesson infographic</span>
-              <h3>Quick-review study sheet</h3>
-              <p class="infographic-card__prompt">Tap to explore · zoom, drag, download, or save locally</p>
+              <span class="infographic-card__eyebrow">${escapeHtml(eyebrow)}</span>
+              <h3>${escapeHtml(heading)}</h3>
+              <p class="infographic-card__prompt">${escapeHtml(description)}</p>
             </div>
             <span class="infographic-card__badge">PNG</span>
-          </div>
+          </div>`}
           <button class="infographic-card__preview" type="button" aria-label="Open ${this.escape(title)} infographic full screen">
-            <img src="${this.escape(src)}" alt="${this.escape(alt)}" loading="lazy" width="1600" height="2000">
+            <img src="${this.escape(src)}" alt="${this.escape(alt)}" loading="lazy" width="${width}" height="${height}">
           </button>
           <div class="infographic-card__actions">
             <button class="ds-btn ds-btn--ghost infographic-card__open" type="button">Explore full screen</button>
@@ -292,13 +341,60 @@
     }
 
     escape(value) {
-      return String(value || '').replace(/[&<>"']/g, character => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      }[character]));
+      return escapeHtml(value);
+    }
+  }
+
+  class DrillInfographicSet extends HTMLElement {
+    set data(value) {
+      this._data = value;
+      this.render();
+    }
+
+    get data() { return this._data; }
+
+    connectedCallback() {
+      installStyles();
+      this.render();
+    }
+
+    renderBullets(items, extraClass = '') {
+      if (!Array.isArray(items) || !items.length) return '';
+      return `<ul class="infographic-bullets ${extraClass}">${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+    }
+
+    render() {
+      if (!this.isConnected || !this._data || !Array.isArray(this._data.items)) return;
+      const set = this._data;
+      const items = set.items;
+      this.innerHTML = `<section class="infographic-set" aria-label="${escapeHtml(set.title)}">
+        <header class="infographic-set__head">
+          <div><span class="infographic-set__eyebrow">Visual study set</span><h3>${escapeHtml(set.title)}</h3><p>${escapeHtml(set.summary)}</p></div>
+          <span class="infographic-set__count">${items.length} graphic${items.length === 1 ? '' : 's'}</span>
+        </header>
+        <div class="infographic-set__items">${items.map((item, index) => {
+          const flow = (item.flow || []).map(step => `<li><span class="infographic-flow__step">${escapeHtml(step.step)}</span><div><strong>${escapeHtml(step.title)}</strong><p>${escapeHtml(step.detail)}</p></div></li>`).join('');
+          const facts = (item.numbers || []).map(fact => `<div class="infographic-fact"><strong>${escapeHtml(fact.value)}</strong><span>${escapeHtml(fact.label)}</span><small>${escapeHtml(fact.detail)}</small></div>`).join('');
+          return `<article class="infographic-study">
+            <header class="infographic-study__head"><span class="infographic-study__index">${index + 1}</span><span class="infographic-study__kind">${escapeHtml(item.kind)}</span><h4>${escapeHtml(item.title)}</h4><p class="infographic-study__purpose">${escapeHtml(item.purpose)}</p></header>
+            <p class="infographic-study__description">${escapeHtml(item.description)}</p>
+            <div class="infographic-study__guide">
+              <section class="infographic-study__panel"><h5>Trace the flow</h5><ol class="infographic-flow">${flow}</ol></section>
+              <aside class="infographic-study__panel">
+                ${facts ? `<h5>Scale and numbers</h5><div class="infographic-facts">${facts}</div>` : ''}
+                <h5>Priorities</h5>${this.renderBullets(item.priorities)}
+                <h5 style="margin-top:14px">Trade-offs</h5>${this.renderBullets(item.tradeoffs, 'infographic-bullets--tradeoffs')}
+              </aside>
+            </div>
+            <drill-infographic compact src="${escapeHtml(item.src)}" title="${escapeHtml(item.title)}" alt="${escapeHtml(item.alt)}" download-name="${escapeHtml(item.downloadName)}" image-width="${Number(item.width) || 1600}" image-height="${Number(item.height) || 2000}"></drill-infographic>
+          </article>`;
+        }).join('')}</div>
+      </section>`;
     }
   }
 
   installStyles();
   customElements.define('drill-infographic', DrillInfographic);
+  customElements.define('drill-infographic-set', DrillInfographicSet);
   window.DrillInfographicViewer = { open: options => sharedWorkspace().open(options) };
 })();

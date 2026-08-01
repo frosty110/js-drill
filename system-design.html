@@ -249,6 +249,7 @@ const MAX_BOX = 5, MASTER_BOX = 4, DAY = 86400000;
 
 let TOPICS = [];              // topics.json registry
 let META = {};               // topicId -> manifest
+let INFOGRAPHIC_SETS = null;  // authored multi-image study sets
 let CH = {};                 // topicId -> { chId -> chapter json }
 let progress = load();       // { __v, boxes:{key:{box,seen,good,again,due,last}}, lastTopic, lastChapter }
 let session = null;
@@ -281,6 +282,10 @@ async function loadTopics() { if (!TOPICS.length) TOPICS = (await fetch(`${BASE}
 async function loadMeta(t) { if (!META[t]) META[t] = await fetch(`${BASE}/${t}/manifest.json`).then(r => r.json()); return META[t]; }
 async function loadChapter(t, id) { CH[t] = CH[t] || {}; if (!CH[t][id]) CH[t][id] = await fetch(`${BASE}/${t}/${id}.json`).then(r => r.json()); return CH[t][id]; }
 async function loadTopicChapters(t) { const m = await loadMeta(t); await Promise.all(m.chapters.map(c => loadChapter(t, c.id))); return m.chapters.map(c => CH[t][c.id]); }
+async function loadInfographicSets() {
+  if (!INFOGRAPHIC_SETS) INFOGRAPHIC_SETS = (await fetch(`${BASE}/infographic-sets.json`).then(r => r.json())).sets || {};
+  return INFOGRAPHIC_SETS;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
@@ -393,20 +398,34 @@ function renderDiagramDeck(el, diagrams, label = 'Visual models') {
   paint();
 }
 
-function infographicPath(topic, ch) {
+function legacyInfographicPath(topic, ch) {
   return `assets/system-design/infographics/${topic}/${ch.id}.png`;
 }
 
-function infographicDownloadName(ch) {
+function infographicDownloadName(ch, item) {
   const slug = ch.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return `${slug}-system-design-infographic.png`;
+  return `${slug}-${item ? item.id : 'overview'}-infographic.png`;
 }
 
 const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
-function renderLessonInfographic(el, topic, ch) {
+function renderLessonInfographics(el, topic, ch, authoredSet) {
   if (!el || !INFOGRAPHIC_TOPICS.has(topic)) return;
+  if (authoredSet && Array.isArray(authoredSet.items) && authoredSet.items.length) {
+    const set = document.createElement('drill-infographic-set');
+    set.data = {
+      ...authoredSet,
+      items: authoredSet.items.map(item => ({
+        ...item,
+        src: `assets/system-design/infographics/${topic}/${ch.id}/${item.id}.png`,
+        alt: `${ch.title}: ${item.title} system design infographic`,
+        downloadName: infographicDownloadName(ch, item)
+      }))
+    };
+    el.replaceWith(set);
+    return;
+  }
   const infographic = document.createElement('drill-infographic');
-  infographic.setAttribute('src', infographicPath(topic, ch));
+  infographic.setAttribute('src', legacyInfographicPath(topic, ch));
   infographic.setAttribute('title', ch.title);
   infographic.setAttribute('alt', `Quick-review system design infographic for ${ch.title}`);
   infographic.setAttribute('download-name', infographicDownloadName(ch));
@@ -539,6 +558,8 @@ async function renderChapterDetail(t, chId) {
   const cruxCount = items.filter(it => it.q.crux).length;
   const takeaways = ch.keyTakeaways || [];
   const diagrams = diagramsOf(ch);
+  const infographicSets = INFOGRAPHIC_TOPICS.has(t) ? await loadInfographicSets() : {};
+  const infographicSet = infographicSets[`${t}/${ch.id}`] || null;
   const label = `${unitAbbrev(t)} ${chNum(ch)}`;
 
   app.innerHTML = `
@@ -564,7 +585,7 @@ async function renderChapterDetail(t, chId) {
   document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
   document.getElementById('drill-all').addEventListener('click', () => startChapter(t, chId));
   const cx = document.getElementById('drill-crux'); if (cx) cx.addEventListener('click', () => startCrux(t, chId));
-  if (INFOGRAPHIC_TOPICS.has(t)) renderLessonInfographic(document.getElementById('unit-infographic'), t, ch);
+  if (INFOGRAPHIC_TOPICS.has(t)) renderLessonInfographics(document.getElementById('unit-infographic'), t, ch, infographicSet);
   if (diagrams.length && t !== 'design-problems') {
     const host = document.getElementById('unit-diagrams');
     renderDiagramDeck(host, diagrams);

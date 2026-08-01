@@ -63,6 +63,37 @@ assert.notStrictEqual(image.style.transform, beforePan, 'dragging pans the zoome
 
 window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 assert(viewer.hidden, 'Escape closes the viewer');
+
+const set = window.document.createElement('drill-infographic-set');
+set.data = {
+  title: 'URL Shortener visual walkthrough',
+  summary: 'Overview first, then focused request flows.',
+  items: [
+    {
+      id: 'overview', kind: 'System map', title: 'Architecture overview', purpose: 'Place the components.',
+      description: 'The mapping store is authoritative.', src: 'assets/system-design/infographics/design-problems/p01/overview.png',
+      alt: 'URL Shortener overview', downloadName: 'url-shortener-overview.png', width: 1600, height: 2400,
+      flow: [{ step: 1, title: 'Create', detail: 'Persist the mapping.' }],
+      numbers: [{ label: 'Read:write', value: '100:1', detail: 'Optimize reads.' }],
+      priorities: ['Redirect latency'], tradeoffs: ['301 versus 302']
+    },
+    {
+      id: 'redirect-flow', kind: 'GET flow', title: 'Cache hit and miss', purpose: 'Trace both read branches.',
+      description: 'A miss backfills Redis.', src: 'assets/system-design/infographics/design-problems/p01/redirect-flow.png',
+      alt: 'URL Shortener redirect flow', downloadName: 'url-shortener-redirect-flow.png', width: 1600, height: 2400,
+      flow: [{ step: 1, title: 'Read cache', detail: 'Return a hit immediately.' }],
+      numbers: [], priorities: ['Availability'], tradeoffs: ['TTL versus freshness']
+    }
+  ]
+};
+window.document.body.appendChild(set);
+assert.strictEqual(set.querySelectorAll('drill-infographic').length, 2, 'a study set renders every authored graphic');
+assert.match(set.textContent, /Trace the flow/, 'a study set explains the numbered flow before the image');
+assert.match(set.textContent, /100:1/, 'a study set renders scale assumptions');
+assert.match(set.textContent, /301 versus 302/, 'a study set renders trade-offs');
+set.querySelectorAll('.infographic-card__preview')[1].click();
+assert.strictEqual(viewer.querySelector('[data-action="download"]').getAttribute('download'), 'url-shortener-redirect-flow.png', 'each set image opens and downloads independently');
+viewer.querySelector('[data-action="close"]').click();
 assert.strictEqual(window.document.querySelectorAll('.infographic-viewer').length, 1, 'one shared workspace serves every card');
 
-console.log('Infographic viewer DOM contract OK — preview, full screen, fit, 100%, pan, download, and close.');
+console.log('Infographic viewer DOM contract OK — multi-image sets, authored guides, full screen, fit, 100%, pan, download, and close.');

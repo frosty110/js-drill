@@ -1,7 +1,7 @@
 // system-design-visual-deck.js — mobile regression probe for the canonical
 // design-problem architecture decks.
 //
-// Verifies: the unit ends with a downloadable lesson PNG infographic, the
+// Verifies: the unit renders a multi-image visual study set, the first
 // raster has the expected dimensions, its reusable pan/zoom workspace works, the
 // relevant supporting diagram stays co-located with its revealed interview
 // answer, and the 390px viewport never overflows horizontally.
@@ -30,13 +30,15 @@ const OUT = process.argv[2] || '/tmp/jsdrill-system-design-visual-deck';
   await s.waitFor(`(() => { const img = document.querySelector('drill-infographic img'); return img && img.complete && img.naturalWidth; })()`, { timeoutMs: 10000 });
 
   const initial = await s.eval(`(() => {
-    const board = document.querySelector('drill-infographic');
+    const set = document.querySelector('drill-infographic-set');
+    const board = set.querySelector('drill-infographic');
     const image = board.querySelector('.infographic-card__preview img');
     const download = board.querySelector('.infographic-card__actions a[download]');
     const controls = [...board.querySelectorAll('.infographic-card__actions button, .infographic-card__actions a')];
     return {
-      placement: board.previousElementSibling && board.previousElementSibling.classList.contains('key-ideas')
-        && board.nextElementSibling && board.nextElementSibling.classList.contains('cta-row'),
+      placement: set.previousElementSibling && set.previousElementSibling.classList.contains('key-ideas')
+        && set.nextElementSibling && set.nextElementSibling.classList.contains('cta-row'),
+      count: set.querySelectorAll('drill-infographic').length,
       src: image.getAttribute('src'),
       naturalWidth: image.naturalWidth,
       naturalHeight: image.naturalHeight,
@@ -45,9 +47,10 @@ const OUT = process.argv[2] || '/tmp/jsdrill-system-design-visual-deck';
       noHScroll: document.documentElement.scrollWidth <= innerWidth
     };
   })()`);
-  s.assert(initial.placement, 'final infographic sits after Key Ideas and before drill actions');
-  s.assert(initial.src.endsWith('/design-problems/p01.png'), `correct problem infographic is loaded (${initial.src})`);
-  s.assert(initial.naturalWidth === 1600 && initial.naturalHeight === 2000, `PNG is the expected 1600×2000 (${initial.naturalWidth}×${initial.naturalHeight})`);
+  s.assert(initial.placement, 'visual study set sits after Key Ideas and before drill actions');
+  s.assert(initial.count === 3, `URL Shortener exposes all three planned graphics (${initial.count})`);
+  s.assert(initial.src.endsWith('/design-problems/p01/overview.png'), `correct overview infographic is loaded (${initial.src})`);
+  s.assert(initial.naturalWidth === 1600 && initial.naturalHeight === 2400, `overview PNG has its registered dimensions (${initial.naturalWidth}×${initial.naturalHeight})`);
   s.assert(initial.download.endsWith('.png'), `download action names a PNG (${initial.download})`);
   s.assert(initial.minControlHeight >= 44, `infographic controls are mobile-sized (${initial.minControlHeight}px)`);
   s.assert(initial.noHScroll, 'infographic has no horizontal overflow at 390px');

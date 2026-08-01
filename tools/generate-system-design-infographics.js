@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Deterministically render 36 illustrated system-design infographics as PNGs.
+// Deterministically render legacy single-image lesson infographics as PNGs.
+// Lessons registered in infographic-sets.json use authored multi-image raster
+// sets instead, so this generator deliberately preserves and skips them.
 // The output is intentionally diagram-first: reusable visual primitives, many
 // lesson-specific compositions, very little prose, and no screenshot-like UI.
 
@@ -12,6 +14,7 @@ const ROOT = path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data/system-design');
 const OUT = path.join(ROOT, 'assets/system-design/infographics');
 const SPECS = JSON.parse(fs.readFileSync(path.join(DATA, 'infographic-specs.json'), 'utf8'));
+const MULTI_SETS = JSON.parse(fs.readFileSync(path.join(DATA, 'infographic-sets.json'), 'utf8')).sets || {};
 const WIDTH = 1600, HEIGHT = 2000;
 
 const C = {
@@ -487,11 +490,12 @@ async function main(){
   const {graphlib}=await import('dagre-d3-es');
   const {layout}=await import('dagre-d3-es/src/dagre/layout.js');
   const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'jsdrill-infographics-v2-'));
-  for(const topic of ['components','ddia','design-problems'])fs.rmSync(path.join(OUT,topic),{recursive:true,force:true});
+  for(const topic of ['components','ddia','design-problems'])fs.mkdirSync(path.join(OUT,topic),{recursive:true});
   let count=0;
   for(const topic of ['components','ddia']){
     const manifest=JSON.parse(fs.readFileSync(path.join(DATA,topic,'manifest.json'),'utf8'));
     for(const entry of manifest.chapters){
+      if(MULTI_SETS[`${topic}/${entry.id}`])continue;
       const chapter=JSON.parse(fs.readFileSync(path.join(DATA,topic,`${entry.id}.json`),'utf8'));
       const spec=SPECS[`${topic}/${entry.id}`];
       if(!spec||!VISUAL_TYPES.has(spec.visualType))throw new Error(`Missing/invalid visualType for ${topic}/${entry.id}`);
@@ -501,6 +505,7 @@ async function main(){
   }
   for(let n=1;n<=17;n++){
     const id=`p${String(n).padStart(2,'0')}`;
+    if(MULTI_SETS[`design-problems/${id}`])continue;
     const problem=JSON.parse(fs.readFileSync(path.join(DATA,'design-problems',`${id}.json`),'utf8'));
     const moments=problem.diagrams.slice(0,4);
     const diagrams=[];
@@ -511,7 +516,7 @@ async function main(){
     const source=path.join(tmp,`${id}.svg`),raster=path.join(tmp,`${id}.png`),output=path.join(OUT,'design-problems',`${id}.png`);
     fs.writeFileSync(source,problemPage(problem,diagrams));exportPng(source,raster,output,`design-problems/${id}`);count++;console.log(`  ✓ ${path.relative(ROOT,output)}`);
   }
-  fs.rmSync(tmp,{recursive:true,force:true});console.log(`Generated ${count} illustrated system-design infographics (${WIDTH}×${HEIGHT}).`);
+  fs.rmSync(tmp,{recursive:true,force:true});console.log(`Generated ${count} legacy lesson infographics (${WIDTH}×${HEIGHT}); preserved authored multi-image sets.`);
 }
 
 main().catch(error=>{console.error(error);process.exit(1);});

@@ -10,8 +10,9 @@
 //                                  bullets, non-empty `answer`; NO options.
 //
 // Checks: topics↔manifests↔disk parity, part/chapter coverage, per-question
-// shape, MC answer-index variety, diagram schema/safe syntax, and the complete
-// 36-image lesson infographic set. Canonical design problems additionally
+// shape, MC answer-index variety, diagram schema/safe syntax, the complete
+// lesson infographic plan, and every registered single- or multi-image asset.
+// Canonical design problems additionally
 // require four architecture diagrams, each tied to a valid reveal position.
 // Exits non-zero on failure.
 
@@ -23,7 +24,10 @@ const SD = path.join(ROOT, 'data', 'system-design');
 const INFOGRAPHICS = path.join(ROOT, 'assets', 'system-design', 'infographics');
 const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
 const INFOGRAPHIC_SPECS = readJson(path.join(SD, 'infographic-specs.json')) || {};
+const INFOGRAPHIC_SETS = (readJson(path.join(SD, 'infographic-sets.json')) || {}).sets || {};
+const INFOGRAPHIC_PLAN = (readJson(path.join(SD, 'infographic-plan.json')) || {}).lessons || {};
 const expectedInfographics = new Set();
+const registeredLessons = new Set();
 
 const INFOGRAPHIC_VISUAL_TYPES = new Set([
   'routing-map', 'cache-layers', 'edge-globe', 'queue-conveyor',
@@ -80,8 +84,7 @@ function validateDiagrams(owner, where) {
   }
 }
 
-function validateInfographic(topic, id, where) {
-  const relative = `${topic}/${id}.png`;
+function validateInfographicFile(relative, widthExpected, heightExpected, where) {
   expectedInfographics.add(relative);
   const file = path.join(INFOGRAPHICS, relative);
   if (!fs.existsSync(file)) { fail(where, `missing downloadable infographic assets/system-design/infographics/${relative}`); return; }
@@ -90,8 +93,57 @@ function validateInfographic(topic, id, where) {
     fail(where, 'infographic is not a valid PNG'); return;
   }
   const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
-  if (width !== 1600 || height !== 2000) fail(where, `infographic must be 1600×2000, got ${width}×${height}`);
+  if (width !== widthExpected || height !== heightExpected) fail(where, `infographic must be ${widthExpected}×${heightExpected}, got ${width}×${height}`);
   totalInfographics++;
+}
+
+function validateInfographic(topic, id, where) {
+  const key = `${topic}/${id}`;
+  const set = INFOGRAPHIC_SETS[key];
+  const plan = INFOGRAPHIC_PLAN[key];
+  if (!plan) fail(where, 'missing lesson entry in infographic-plan.json');
+  else {
+    if (!Number.isInteger(plan.count) || plan.count < 1) fail(where, 'infographic plan count must be a positive integer');
+    if (!Array.isArray(plan.graphics) || plan.graphics.length !== plan.count) fail(where, 'infographic plan graphics must match count');
+    else if (new Set(plan.graphics).size !== plan.graphics.length) fail(where, 'infographic plan graphic ids must be unique');
+  }
+  if (!set) {
+    validateInfographicFile(`${topic}/${id}.png`, 1600, 2000, where);
+    return;
+  }
+  if (!set.title || !set.summary) fail(where, 'infographic set needs title and summary');
+  if (!Array.isArray(set.items) || set.items.length < 2) {
+    fail(where, 'authored infographic set needs at least two focused graphics');
+    return;
+  }
+  if (plan && set.items.length !== plan.count) fail(where, `authored set has ${set.items.length} graphics but plan calls for ${plan.count}`);
+  const ids = new Set();
+  set.items.forEach((item, index) => {
+    const at = `${where} infographic ${index + 1}`;
+    if (!item || typeof item !== 'object') { fail(at, 'item must be an object'); return; }
+    if (!item.id || !/^[a-z0-9-]+$/.test(item.id)) fail(at, 'item needs a kebab-case id');
+    else if (ids.has(item.id)) fail(at, `duplicate id ${item.id}`);
+    else ids.add(item.id);
+    for (const field of ['kind', 'title', 'purpose', 'description']) if (!item[field] || typeof item[field] !== 'string') fail(at, `missing ${field}`);
+    if (!Array.isArray(item.flow) || item.flow.length < 3) fail(at, 'flow needs at least three numbered steps');
+    else item.flow.forEach((step, stepIndex) => {
+      if (step.step !== stepIndex + 1 || !step.title || !step.detail) fail(at, `flow step ${stepIndex + 1} needs sequential number, title, and detail`);
+    });
+    if (!Array.isArray(item.numbers) || !item.numbers.length) fail(at, 'numbers needs at least one scale or operating assumption');
+    else item.numbers.forEach((number, numberIndex) => {
+      if (!number.label || !number.value || !number.detail) fail(at, `number ${numberIndex + 1} needs label, value, and detail`);
+    });
+    if (!Array.isArray(item.priorities) || item.priorities.length < 2) fail(at, 'priorities needs at least two entries');
+    if (!Array.isArray(item.tradeoffs) || item.tradeoffs.length < 2) fail(at, 'tradeoffs needs at least two entries');
+    if (!Number.isInteger(item.width) || !Number.isInteger(item.height) || item.width < 1200 || item.height < 1600 || item.height <= item.width) {
+      fail(at, 'image dimensions must describe a high-resolution portrait asset');
+    } else if (item.id) {
+      validateInfographicFile(`${topic}/${id}/${item.id}.png`, item.width, item.height, at);
+    }
+  });
+  if (plan && Array.isArray(plan.graphics) && set.items.map(item => item.id).join('|') !== plan.graphics.join('|')) {
+    fail(where, 'authored infographic ids/order must match infographic-plan.json');
+  }
 }
 
 function validateInfographicSpec(topic, id, where) {
@@ -146,6 +198,7 @@ for (const topic of registry.topics) {
     const ch = readJson(file);
     if (!ch) continue;
     const at = `${t}/${id}`;
+    registeredLessons.add(at);
 
     if (ch.id !== id) fail(at, `id "${ch.id}" != manifest "${id}"`);
     const num = ch.num != null ? ch.num : ch.chapter;
@@ -225,8 +278,13 @@ if (actualInfographics.length !== expectedInfographics.size) {
   fail('infographics', `expected exactly ${expectedInfographics.size} PNGs, found ${actualInfographics.length}`);
 }
 for (const key of Object.keys(INFOGRAPHIC_SPECS)) {
-  const [topic, id] = key.split('/');
-  if (!expectedInfographics.has(`${topic}/${id}.png`)) fail('infographic-specs.json', `orphan spec ${key}`);
+  if (!registeredLessons.has(key)) fail('infographic-specs.json', `orphan spec ${key}`);
+}
+for (const key of Object.keys(INFOGRAPHIC_PLAN)) if (!registeredLessons.has(key)) fail('infographic-plan.json', `orphan lesson ${key}`);
+for (const key of Object.keys(INFOGRAPHIC_SETS)) if (!registeredLessons.has(key)) fail('infographic-sets.json', `orphan set ${key}`);
+for (const key of registeredLessons) {
+  const [topic] = key.split('/');
+  if (INFOGRAPHIC_TOPICS.has(topic) && !INFOGRAPHIC_PLAN[key]) fail('infographic-plan.json', `missing lesson ${key}`);
 }
 
 console.log('');

@@ -138,9 +138,42 @@
       "answer": "The two strain points are the single-board write ceiling and the un-cacheable my-rank read. I relieve writes by range-sharding the board and coalescing rapid same-user updates before the ZADD, and I relieve top-K reads by caching that slowly-changing page at the app/edge with a short TTL so most reads never hit Redis. The genuinely hard load is per-user exact rank, which is unique per request — that's what justifies score-range sharding, and where I'd offer approximate percentile rank when 'top 3%' is good enough. I lean on near-real-time consistency to enable that batching and caching, add server-side score validation and rate limits for anti-cheat, periodically reconcile Redis against the durable store, and go per-region-with-a-global-rollup so no single node is the global write bottleneck."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C([\"Client\"]) --> API[\"Score Service\"]\n  API --> Z[(\"Redis ZSET<br/>sharded by score range\")]\n  API --> DB[(\"Durable DB<br/>source of truth\")]\n  API --> CACHE[(\"Top-K cache\")]\n  Z --> API",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "A sorted-set serving layer handles real-time ranks, while durable score events make the in-memory view rebuildable.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  C([\"Client\"]) --> API[\"Score Service\"]\n  API --> Z[(\"Redis ZSET<br/>sharded by score range\")]\n  API --> DB[(\"Durable DB<br/>source of truth\")]\n  API --> CACHE[(\"Top-K cache\")]\n  Z --> API"
+    },
+    {
+      "id": "sorted-set-operations",
+      "title": "Leaderboard operations on a sorted set",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "Score updates and rank lookups are logarithmic; top-K is a direct ordered-range read instead of a repeated database sort.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  U[Score Update] --> Z[(Sorted Set)]\n  Z --> T[Top K]\n  Z --> R[Player Rank]\n  Z --> N[Nearby Players]\n  T --> C([Client])\n  R --> C\n  N --> C"
+    },
+    {
+      "id": "sharded-global-rank",
+      "title": "Compute one exact rank across score-range shards",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Global rank is the player’s local rank plus the stored population counts of every higher-score shard.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  Q[Player Rank Query] --> R{Score-Range Router}\n  R --> S[(Owning Score Shard)]\n  S --> L[Local Rank]\n  C[(Higher-Shard Counts)] --> A[Rank Aggregator]\n  L --> A\n  A --> G[Exact Global Rank]"
+    },
+    {
+      "id": "leaderboard-recovery",
+      "title": "Durable events rebuild time-windowed boards",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Persist score events before updating Redis, then replay them into daily, weekly, and all-time materialized boards after failure.",
+      "afterQuestion": 7,
+      "code": "flowchart LR\n  E[Score Event] --> L[[Durable Event Log]]\n  L --> D[(Daily Board)]\n  L --> W[(Weekly Board)]\n  L --> A[(All-Time Board)]\n  L -.->|\"replay\"| R[Recovery Worker]\n  R --> D\n  R --> W\n  R --> A"
+    }
+  ]
 }

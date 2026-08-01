@@ -16,11 +16,44 @@
     "Read the medication list, allergies, and prescription state strongly consistent; a stale replica produces a confident false negative, which is this system's worst failure. Catalog and reviews stay eventual.",
     "Compliance is functional scope: PHI encryption, least-privilege access to the medication list, an immutable append-only audit log as evidence, per-jurisdiction pharmacy licensing, and no auto-refill on controlled substances."
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C[\"Patient App\"]\n  CAT[\"Catalog / Search\"]\n  RX[\"Prescription Service\"]\n  PROF[(\"Patient Profile<br/>meds · allergies\")]\n  ORD[\"Order Service\"]\n  SAFE{{\"Clinical Safety Engine<br/>FAIL-CLOSED gate\"}}\n  PH[\"Pharmacy Routing\"]\n  INV[(\"Inventory\")]\n  PAY[\"Payment + Insurance\"]\n  SUB[\"Subscription Scheduler\"]\n  AUD[(\"Immutable Audit Log\")]\n  C --> CAT\n  C --> ORD\n  RX -->|\"verified Rx\"| ORD\n  ORD -->|\"synchronous check\"| SAFE\n  PROF --> SAFE\n  SAFE -->|\"pass\"| PH\n  SAFE -.->|\"block / pharmacist review\"| RX\n  PH --> INV\n  ORD --> PAY\n  SUB -->|\"re-validate each cycle\"| SAFE\n  SAFE --> AUD\n  ORD --> AUD",
-    "caption": "High-level architecture — the safety engine is an in-path gate, not a post-hoc check"
-  },
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Every order passes through a synchronous clinical gate before pharmacy routing, payment, or dispensing can proceed.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  C[\"Patient App\"]\n  O[\"Order Service\"]\n  S{{\"Clinical Safety Gate\"}}\n  P[(\"Patient Meds and Allergies\")]\n  R[\"Pharmacy Router\"]\n  F[\"Payment and Insurance\"]\n  A[(\"Immutable Audit Log\")]\n  C --> O\n  O -->|\"check before progress\"| S\n  P -->|\"strong read\"| S\n  S -->|\"safe\"| R\n  R --> F\n  S --> A\n  O --> A"
+    },
+    {
+      "id": "clinical-safety-pipeline",
+      "title": "Versioned clinical safety pipeline",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "A versioned rules pipeline returns severity-tiered findings so hard blocks, pharmacist reviews, and advisories remain explainable.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  X[\"Patient Context Snapshot\"] --> V[\"Prescription Validation\"]\n  V --> I[\"Interaction and Allergy Rules\"]\n  D[(\"Versioned Clinical Dataset\")] --> I\n  I --> Q[\"Dose and Policy Rules\"]\n  Q --> F{\"Finding Severity\"}\n  F -->|\"hard block\"| B[\"Blocked\"]\n  F -->|\"review\"| P[\"Pharmacist Queue\"]\n  F -->|\"advisory\"| A[\"Approved with Warning\"]"
+    },
+    {
+      "id": "refill-revalidation-loop",
+      "title": "Every refill earns a new approval",
+      "kind": "mermaid",
+      "role": "lifecycle",
+      "takeaway": "A subscription stores refill intent only; each cycle rechecks prescription state and current medications before creating an order.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  S[(\"Subscription Intent\")] --> T[\"Refill Scheduler\"]\n  T --> R{\"Rx Active and Refills Left?\"}\n  R -->|\"no\"| N[\"Notify Patient and Prescriber\"]\n  R -->|\"yes\"| C{\"Current Safety Check\"}\n  M[(\"Current Medication List\")] --> C\n  C -->|\"pass\"| O[\"Create Refill Order\"]\n  C -->|\"block or review\"| H[\"Hold and Escalate\"]\n  O --> S"
+    },
+    {
+      "id": "fail-closed-order-saga",
+      "title": "Fail-closed order saga",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Dependency failure holds the order for review, while reversible reservations and charges complete before the irreversible dispense step.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  O[\"Idempotent Order\"] --> S{\"Safety Gate Available?\"}\n  S -->|\"no\"| H[\"Hold for Pharmacist Review\"]\n  S -->|\"safe\"| I[\"Reserve Inventory\"]\n  I --> C[\"Insurance and Payment\"]\n  C -->|\"success\"| D[\"Dispense and Ship\"]\n  C -->|\"failure\"| R[\"Release Hold and Refund\"]\n  D --> A[(\"Audit Evidence\")]\n  H --> A"
+    }
+  ],
   "questions": [
     {
       "type": "open",

@@ -144,9 +144,42 @@
       "answer": "The first failure mode is hot shards — single-letter prefixes carry a huge share of traffic, so they must be replicated and edge-cached or they melt. Memory is the next pressure: duplicating top-K up the trie is expensive, so we tune K, apply radix compression, and cap the corpus. There's a core freshness-vs-cost tradeoff in the rebuild interval, and real production concerns around filtering spam/offensive suggestions and handling multilingual scripts. Two things people underestimate: typo tolerance is a genuinely separate, harder problem (edit-distance or n-gram matching, not a plain prefix trie), and personalization defeats simple edge caching because responses become per-user, so it must stay a cheap re-rank on a cacheable global base."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C[\"Client + Debounce\"]\n  CDN[\"Edge / CDN Cache\"]\n  S[\"Suggest Service\"]\n  T[(\"In-Memory Trie Shards\")]\n  LOGS[(\"Query Logs\")]\n  AGG[\"Aggregation Job\"]\n  BUILD[\"Trie Build Job\"]\n  C -->|\"GET /suggest\"| CDN\n  CDN -->|\"cache miss\"| S\n  S --> T\n  LOGS --> AGG\n  AGG --> BUILD\n  BUILD -.->|\"push shards\"| T\n  CDN -.->|\"cache hit\"| C",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "An offline aggregation pipeline builds compact top-K tries that a memory-resident serving tier queries in a few hops.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  C[\"Client + Debounce\"]\n  CDN[\"Edge / CDN Cache\"]\n  S[\"Suggest Service\"]\n  T[(\"In-Memory Trie Shards\")]\n  LOGS[(\"Query Logs\")]\n  AGG[\"Aggregation Job\"]\n  BUILD[\"Trie Build Job\"]\n  C -->|\"GET /suggest\"| CDN\n  CDN -->|\"cache miss\"| S\n  S --> T\n  LOGS --> AGG\n  AGG --> BUILD\n  BUILD -.->|\"push shards\"| T\n  CDN -.->|\"cache hit\"| C"
+    },
+    {
+      "id": "trie-top-k",
+      "title": "Precompute top suggestions at each trie node",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Prefix traversal ends at one node whose cached top-K list makes ranking independent of the number of matching phrases.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  P[Prefix new] --> N1[Node n]\n  N1 --> N2[Node e]\n  N2 --> N3[Node w]\n  N3 --> K[(Top K Suggestions)]\n  K --> R[Response]"
+    },
+    {
+      "id": "autocomplete-build",
+      "title": "Batch build and atomic trie publish",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "Logs are aggregated and filtered offline, then versioned trie snapshots are warmed and swapped into serving without partial updates.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  L[(Search Logs)] --> A[Aggregate Counts]\n  A --> F[Filter and Rank]\n  F --> B[Build Trie Snapshot]\n  B --> W[Warm Serving Fleet]\n  W --> S{Atomic Version Swap}\n  S --> Q[Query Servers]"
+    },
+    {
+      "id": "prefix-sharding",
+      "title": "Route by leading prefix and replicate hot shards",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "A small router selects the prefix shard; popular prefixes get extra replicas so latency stays bounded under skew.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  Q[Prefix Query] --> R{Prefix Router}\n  R --> A[(A-F Shard)]\n  R --> G[(G-M Shard)]\n  R --> N[(N-Z Shard)]\n  N --> H1[Hot Replica 1]\n  N --> H2[Hot Replica 2]"
+    }
+  ]
 }

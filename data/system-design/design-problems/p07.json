@@ -151,9 +151,42 @@
       "answer": "The main failure modes are provider outages (a channel's queue backs up — the queue absorbs it, but you alert on queue age and may fail critical messages over to another channel), and token rot (push tokens rotate, so without pruning on provider feedback your real delivery rate quietly decays). Hot campaigns cause thundering-herd on a provider and can starve other traffic, which priority lanes, per-provider token buckets, and spreading the blast over time address. I'd be explicit that at-least-once delivery means rare boundary duplicates that dedup windows shrink but can't fully remove — chasing exactly-once across third parties isn't worth it. The status store is eventually consistent, which is acceptable here since we favor availability. For multi-region I'd run regional pipelines with replicated preferences and globally-scoped idempotency keys, and circuit-break failing providers while shedding low-priority traffic first to protect OTPs."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  Prod([Caller service]) --> API[\"Ingest API\"]\n  API --> Q[[Priority queue]]\n  Q --> DW([Dispatch workers])\n  DW --> PREF[(\"Prefs + device tokens\")]\n  DW --> CW([Channel workers])\n  CW --> PROV[\"APNS / FCM / SES / Twilio\"]\n  CW -.->|exhausted| DLQ[[Dead-letter queue]]",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "A durable event pipeline separates notification intent from provider-specific delivery and outcome tracking.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  Prod([Caller service]) --> API[\"Ingest API\"]\n  API --> Q[[Priority queue]]\n  Q --> DW([Dispatch workers])\n  DW --> PREF[(\"Prefs + device tokens\")]\n  DW --> CW([Channel workers])\n  CW --> PROV[\"APNS / FCM / SES / Twilio\"]\n  CW -.->|exhausted| DLQ[[Dead-letter queue]]"
+    },
+    {
+      "id": "channel-fanout",
+      "title": "Provider-agnostic channel fan-out",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "One logical notification expands into channel jobs, then adapters translate the common payload for each external provider.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  N[Notification Intent] --> F[Fan-out Worker]\n  F --> P[[Push Queue]]\n  F --> E[[Email Queue]]\n  F --> S[[SMS Queue]]\n  P --> PA[Push Adapter]\n  E --> EA[Email Adapter]\n  S --> SA[SMS Adapter]"
+    },
+    {
+      "id": "notification-retry",
+      "title": "Classify failures before retrying",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Transient provider errors back off into retry queues; permanent errors invalidate destinations; exhausted jobs go to a DLQ.",
+      "afterQuestion": 7,
+      "code": "flowchart LR\n  A[Channel Adapter] --> R{Provider Result}\n  R -->|\"success\"| D[Delivered]\n  R -->|\"transient\"| Q[[Retry Queue]]\n  Q --> A\n  R -->|\"permanent\"| I[Invalidate Address]\n  Q -->|\"max attempts\"| DLQ[[Dead-Letter Queue]]"
+    },
+    {
+      "id": "priority-outage",
+      "title": "Preferences, priority lanes, and provider isolation",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Policy filters run before fan-out, and separate queues stop a bulk campaign or provider outage from blocking critical notifications.",
+      "afterQuestion": 9,
+      "code": "flowchart LR\n  N[Intent] --> P[Preference and Policy]\n  P --> H[[High-Priority Queue]]\n  P --> B[[Bulk Queue]]\n  H --> A[Primary Provider]\n  B --> A\n  A -.->|\"outage\"| F[Fallback Provider]"
+    }
+  ]
 }

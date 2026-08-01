@@ -125,9 +125,42 @@
       "answer": "For 1:1 and small groups, write-fanout — deliver to each member on send — is simplest and fine. It breaks for very large groups because every message is N× amplified; a thousand-member active group turns one send into a thousand deliveries. There I switch to fan-out-on-read or a hybrid: small groups push, huge groups behave like a feed that members pull with caching. Globally, users connect to their nearest gateway and cross-region messages route between regions, with the session/presence service replicated or reachable cross-region so we can still locate a recipient's socket. To keep ordering sane I pin each conversation's sequence authority to one owning partition so regions don't mint conflicting sequence numbers. Failures are handled by reconnect-and-resume: the client re-registers and replays from its last-acked cursor, so a connection-server crash loses no messages, and per-recipient queues plus push fallback keep one slow member from stalling delivery to everyone else."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  A([Client A]) --> S1[\"Chat server A\"]\n  S1 --> DB[(Message store)]\n  S1 --> SESS[(Session store)]\n  S1 -->|route| S2[\"Chat server B\"]\n  S2 --> B([Client B])\n  S1 -.->|offline| PUSH[[\"APNS / FCM\"]]",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Long-lived socket gateways route messages through durable conversation storage and online-session metadata.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  A([Client A]) --> S1[\"Chat server A\"]\n  S1 --> DB[(Message store)]\n  S1 --> SESS[(Session store)]\n  S1 -->|route| S2[\"Chat server B\"]\n  S2 --> B([Client B])\n  S1 -.->|offline| PUSH[[\"APNS / FCM\"]]"
+    },
+    {
+      "id": "socket-routing",
+      "title": "Route a message to the recipient socket",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "The session directory identifies the gateway holding a user’s live connection; a broker bridges sender and recipient gateways.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  A([User A]) --> G1[Gateway 1]\n  G1 --> B[[Message Broker]]\n  D[(Session Directory)] --> B\n  B --> G2[Gateway 2]\n  G2 --> U([User B])"
+    },
+    {
+      "id": "offline-delivery",
+      "title": "Durable offline delivery",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "The message is committed before acknowledgement; offline recipients resume from their last delivered sequence.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  S[Send Message] --> M[(Message Store)]\n  M --> Q[[Recipient Inbox]]\n  Q --> O{Online}\n  O -->|\"yes\"| G[Socket Gateway]\n  O -->|\"no\"| Q\n  R[Reconnect with Cursor] --> Q\n  Q --> R"
+    },
+    {
+      "id": "group-chat-scale",
+      "title": "Shard group fan-out by conversation",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "A conversation coordinator orders operations, while regional fan-out workers deliver to local gateways without one server owning every member.",
+      "afterQuestion": 7,
+      "code": "flowchart LR\n  M[Group Message] --> C[Conversation Coordinator]\n  C --> L[(Ordered Log)]\n  L --> F1[Region A Fan-out]\n  L --> F2[Region B Fan-out]\n  F1 --> G1[Gateway Fleet A]\n  F2 --> G2[Gateway Fleet B]"
+    }
+  ]
 }

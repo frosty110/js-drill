@@ -143,9 +143,42 @@
       "answer": "I replicate each key to N successor nodes so replicas serve reads and cover failover, accepting that async replication can hand back a slightly stale value — the classic availability-over-consistency trade. For coherence I default to cache-aside and, crucially, invalidate-don't-update on a DB write, because deleting the key avoids the races that can leave a stale value pinned; I'd reach for write-through only when read-after-write freshness is required. The nasty failure is the cache stampede — a hot key expires and a thousand concurrent misses stampede the DB — which I fix with single-flight/mutex so one request repopulates while the rest wait, or probabilistic early refresh before expiry. On node loss, consistent hashing limits remap to ~1/N and a replica gets promoted, and I warm or stagger cold restarts to avoid a miss surge. The guiding stance is that the cache is a volatile accelerator and the DB is truth, so I size for hit rate and design a total cache loss to merely spike DB load, never corrupt data."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C([\"App / Smart Client\"]) -->|\"hash(key)\"| N1[\"Cache Node<br/>owner\"]\n  C --> N2[\"Cache Node\"]\n  C --> N3[\"Cache Node\"]\n  N1 -.->|\"replicate\"| N2\n  N1 -->|\"miss\"| DB[(\"Backing DB\")]",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Clients route keys through consistent hashing to replicated in-memory shards, with persistence intentionally outside the cache contract.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  C([\"App / Smart Client\"]) -->|\"hash(key)\"| N1[\"Cache Node<br/>owner\"]\n  C --> N2[\"Cache Node\"]\n  C --> N3[\"Cache Node\"]\n  N1 -.->|\"replicate\"| N2\n  N1 -->|\"miss\"| DB[(\"Backing DB\")]"
+    },
+    {
+      "id": "virtual-node-ring",
+      "title": "Consistent hashing with virtual nodes",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Many virtual positions per physical node smooth uneven ownership; a membership change moves only adjacent ranges.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  K[Key Hash] --> R{Hash Ring}\n  R --> A1[Node A Token 1]\n  R --> B1[Node B Token 1]\n  R --> A2[Node A Token 2]\n  R --> C1[Node C Token 1]\n  B1 -.->|\"node leaves\"| C1"
+    },
+    {
+      "id": "cache-replication",
+      "title": "Primary-replica cache shard",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The hash ring selects a primary; replicas improve read capacity and availability but introduce staleness choices.",
+      "afterQuestion": 8,
+      "code": "flowchart LR\n  C[Cache Client] --> H{Hash Ring}\n  H --> P[(Primary Shard)]\n  P -.-> R1[(Replica 1)]\n  P -.-> R2[(Replica 2)]\n  C -->|\"read fallback\"| R1"
+    },
+    {
+      "id": "hot-key-stampede",
+      "title": "Replicate hot keys and collapse recomputation",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "A local or replicated hot-key cache spreads reads, while single-flight ensures only one cache miss rebuilds the value.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  R[Request Fleet] --> L[(Local Hot Cache)]\n  L --> D[(Distributed Cache)]\n  D -->|\"expired\"| S{Single Flight}\n  S -->|\"one loader\"| DB[(Database)]\n  DB --> D\n  D --> L"
+    }
+  ]
 }

@@ -155,9 +155,42 @@
       "answer": "The classic scaling pain is hot-account contention — a shared merchant or clearing account row becomes a write bottleneck at high TPS, so you use per-shard sub-accounts netted periodically. Architecturally you deliberately pick consistency over availability: if you can't guarantee a correct balance you queue or refuse rather than risk being wrong, because integrity beats timeliness. The dangerous failure mode is the ambiguous gateway timeout where you don't know if the charge landed — you never blind-retry; you resolve it with idempotency keys plus reconciliation, since true exactly-once across two systems is impossible and you can only achieve the exactly-once effect via idempotency, compensation, and reconciliation. On top of that, fraud/chargebacks, PCI scope, audit immutability, data-residency regulation, and multi-currency FX rounding are all first-class concerns rather than edge cases."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  C[\"Client\"]\n  API[\"Payment Service\"]\n  IDMP[(\"Idempotency Store\")]\n  L[(\"Ledger DB\")]\n  Q[[\"Outbox / Queue\"]]\n  GW[\"Gateway Integration\"]\n  EXT[\"External Gateway\"]\n  R[\"Reconciliation\"]\n  C -->|\"POST /payments + key\"| API\n  API --> IDMP\n  API --> L\n  API --> Q\n  Q --> GW\n  GW --> EXT\n  EXT -.->|\"webhook\"| API\n  R -.->|\"daily compare\"| L",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The payment API, immutable double-entry ledger, external processor workflow, and reconciliation loop are separate correctness boundaries.",
+      "afterQuestion": 3,
+      "code": "flowchart LR\n  C[\"Client\"]\n  API[\"Payment Service\"]\n  IDMP[(\"Idempotency Store\")]\n  L[(\"Ledger DB\")]\n  Q[[\"Outbox / Queue\"]]\n  GW[\"Gateway Integration\"]\n  EXT[\"External Gateway\"]\n  R[\"Reconciliation\"]\n  C -->|\"POST /payments + key\"| API\n  API --> IDMP\n  API --> L\n  API --> Q\n  Q --> GW\n  GW --> EXT\n  EXT -.->|\"webhook\"| API\n  R -.->|\"daily compare\"| L"
+    },
+    {
+      "id": "idempotent-payment",
+      "title": "Idempotent payment command",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Reserve the idempotency key and transactionally bind it to one payment result before any retry can repeat the side effect.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  C[Payment Request + Key] --> I{Idempotency Store}\n  I -->|\"new\"| P[Create Payment]\n  P --> L[(Ledger Transaction)]\n  L --> R[(Saved Result)]\n  I -->|\"retry\"| R\n  R --> C"
+    },
+    {
+      "id": "double-entry",
+      "title": "Every transfer creates balanced ledger entries",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "A transaction debits one account and credits another by the same amount, preserving an auditable invariant.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  T[Transfer 50] --> X[(Ledger Transaction)]\n  X --> D[\"Debit Buyer 50\"]\n  X --> C[\"Credit Merchant 50\"]\n  D --> B{Debits = Credits}\n  C --> B\n  B --> P[Post Transaction]"
+    },
+    {
+      "id": "processor-reconciliation",
+      "title": "Outbox workflow plus reconciliation",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Local ledger state and outbound processor commands commit together; reconciliation later compares both systems and repairs discrepancies.",
+      "afterQuestion": 8,
+      "code": "flowchart LR\n  P[Payment Service] --> T[(Ledger + Outbox)]\n  T --> W[Outbox Worker]\n  W --> G[External Gateway]\n  G --> S[(Gateway Settlement)]\n  T --> R[Reconciliation Job]\n  S --> R\n  R --> X[Repair or Alert]"
+    }
+  ]
 }

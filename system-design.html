@@ -124,6 +124,28 @@
   .diagram-box svg{max-width:100%;height:auto}
   .diagram-src{overflow-x:auto;background:var(--ds-code-bg);border:1px solid var(--panel-2);border-radius:10px;padding:12px;
     font:12px/1.5 var(--font-mono);color:var(--muted);white-space:pre;margin:0;text-align:left}
+  .diagram-deck{margin:18px 0 6px;border:1px solid var(--panel-2);border-radius:12px;
+    background:var(--ds-surface-2);padding:14px}
+  .diagram-deck__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+  .diagram-deck__eyebrow{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--accent);font-weight:700;margin-bottom:2px}
+  .diagram-deck__title{display:block;color:var(--text-strong);font-size:15px;line-height:1.35}
+  .diagram-deck__count{flex:none;color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums;
+    background:var(--panel-2);border-radius:999px;padding:3px 8px}
+  .diagram-deck__takeaway{margin:10px 2px 2px;color:var(--text);font-size:13px;line-height:1.5}
+  .diagram-deck__controls{display:grid;grid-template-columns:44px 1fr 44px;gap:8px;margin-top:12px}
+  .diagram-deck__controls .ds-btn{min-height:var(--touch-target-min);padding:8px 10px}
+  .diagram-deck__controls .diagram-recall{white-space:nowrap}
+  .diagram-deck.is-recall .diagram-box svg text,
+  .diagram-deck.is-recall .diagram-box svg foreignObject{opacity:0}
+  .diagram-deck.is-recall .diagram-src{filter:blur(5px);user-select:none}
+  .diagram-deck.is-recall .diagram-box{outline:1px dashed var(--accent);outline-offset:-5px}
+  @media(max-width:480px){
+    .detail{padding:18px 14px}
+    .diagram-deck{margin-left:-4px;margin-right:-4px;padding:12px 10px}
+    .diagram-box{padding:10px;min-height:170px;display:grid;place-items:center}
+    .diagram-deck__controls{grid-template-columns:44px minmax(0,1fr) 44px}
+  }
 
   /* ── Drill session ──────────────────────────────────────────────────── */
   #progress-wrap{height:6px;background:var(--panel);border-radius:3px;overflow:hidden;margin-bottom:6px}
@@ -297,11 +319,83 @@ async function renderDiagramInto(el, diagram) {
   el.innerHTML = cap + `<pre class="diagram-src">${esc(diagram.code)}</pre>`;
 }
 
+// New content uses `diagrams[]`; legacy content can keep its singular `diagram`.
+// A unit/question may therefore opt into the visual deck without a migration.
+function diagramsOf(owner) {
+  if (!owner) return [];
+  if (Array.isArray(owner.diagrams)) return owner.diagrams.filter(d => d && d.code);
+  return owner.diagram && owner.diagram.code ? [owner.diagram] : [];
+}
+
+function diagramsForItem(it) {
+  const questionDiagrams = diagramsOf(it.q);
+  const unit = CH[it.topic] && CH[it.topic][it.chId];
+  const unitDiagrams = diagramsOf(unit).filter(d => d.afterQuestion === it.qIndex);
+  return questionDiagrams.concat(unitDiagrams);
+}
+
+// One-at-a-time is intentional: four small diagrams remain phone-readable instead
+// of becoming a long wall of SVGs. Hiding SVG text turns the same visual into a
+// label-recall prompt without maintaining a second copy of the diagram.
+function renderDiagramDeck(el, diagrams, label = 'Visual models') {
+  if (!el || !diagrams.length) return;
+  let index = 0, recall = false, paintToken = 0;
+  el.className = 'diagram-deck';
+  el.innerHTML = `
+    <div class="diagram-deck__head">
+      <div><span class="diagram-deck__eyebrow"></span><strong class="diagram-deck__title"></strong></div>
+      <span class="diagram-deck__count" aria-live="polite"></span>
+    </div>
+    <div class="diagram-slot"></div>
+    <p class="diagram-deck__takeaway"></p>
+    <div class="diagram-deck__controls">
+      <button class="ds-btn ds-btn--ghost diagram-prev" type="button" aria-label="Previous diagram">‹</button>
+      <button class="ds-btn ds-btn--ghost diagram-recall" type="button" aria-pressed="false">Hide labels</button>
+      <button class="ds-btn ds-btn--ghost diagram-next" type="button" aria-label="Next diagram">›</button>
+    </div>`;
+  const eyebrow = el.querySelector('.diagram-deck__eyebrow');
+  const title = el.querySelector('.diagram-deck__title');
+  const count = el.querySelector('.diagram-deck__count');
+  const slot = el.querySelector('.diagram-slot');
+  const takeaway = el.querySelector('.diagram-deck__takeaway');
+  const prev = el.querySelector('.diagram-prev');
+  const next = el.querySelector('.diagram-next');
+  const recallBtn = el.querySelector('.diagram-recall');
+
+  async function paint() {
+    const token = ++paintToken;
+    const diagram = diagrams[index];
+    recall = false;
+    el.classList.remove('is-recall');
+    recallBtn.textContent = 'Hide labels';
+    recallBtn.setAttribute('aria-pressed', 'false');
+    eyebrow.textContent = diagram.role ? `${label} · ${diagram.role}` : label;
+    title.textContent = diagram.title || diagram.caption || `Diagram ${index + 1}`;
+    count.textContent = `${index + 1} / ${diagrams.length}`;
+    takeaway.textContent = diagram.takeaway || '';
+    takeaway.hidden = !diagram.takeaway;
+    prev.disabled = diagrams.length < 2;
+    next.disabled = diagrams.length < 2;
+    slot.innerHTML = '<div class="loading">Rendering diagram…</div>';
+    await renderDiagramInto(slot, { ...diagram, caption: '' });
+    if (token !== paintToken) return;
+  }
+  prev.addEventListener('click', () => { index = (index - 1 + diagrams.length) % diagrams.length; paint(); });
+  next.addEventListener('click', () => { index = (index + 1) % diagrams.length; paint(); });
+  recallBtn.addEventListener('click', () => {
+    recall = !recall;
+    el.classList.toggle('is-recall', recall);
+    recallBtn.textContent = recall ? 'Reveal labels' : 'Hide labels';
+    recallBtn.setAttribute('aria-pressed', String(recall));
+  });
+  paint();
+}
+
 function unitAbbrev(t) { return (META[t] && META[t].unitAbbrev) || 'Ch'; }
 function chNum(c) { return c.num != null ? c.num : c.chapter; }
 // One chapter's drillable items (MC + open), each with a stable SR key.
 function chapterItems(t, ch) {
-  return (ch.questions || []).map((q, i) => ({ topic: t, chId: ch.id, key: `${t}/${ch.id}/${i}`, type: q.type || 'mc', q }));
+  return (ch.questions || []).map((q, i) => ({ topic: t, chId: ch.id, qIndex: i, key: `${t}/${ch.id}/${i}`, type: q.type || 'mc', q }));
 }
 function chapterStats(t, ch) {
   const items = chapterItems(t, ch);
@@ -422,6 +516,7 @@ async function renderChapterDetail(t, chId) {
   const cs = chapterStats(t, ch);
   const cruxCount = items.filter(it => it.q.crux).length;
   const takeaways = ch.keyTakeaways || [];
+  const diagrams = diagramsOf(ch);
   const label = `${unitAbbrev(t)} ${chNum(ch)}`;
 
   app.innerHTML = `
@@ -432,7 +527,7 @@ async function renderChapterDetail(t, chId) {
       <p class="detail-summary">${fmt(ch.summary || '')}</p>
       <div class="detail-prog"><span class="bar"><i style="width:${cs.total ? Math.round(cs.mastered / cs.total * 100) : 0}%"></i></span>
         <span class="ch-frac">${cs.mastered}/${cs.total} mastered</span>${cs.due ? ` · <span class="ch-due">${cs.due} due</span>` : ''}</div>
-      ${ch.diagram ? `<div class="diagram-slot" id="arch-slot"></div>` : ''}
+      ${diagrams.length ? `<div id="unit-diagrams"></div>` : ''}
       ${takeaways.length ? `
         <div class="key-ideas">
           <h3>💡 Key ideas${cruxCount ? ' — the crux to memorize' : ''}</h3>
@@ -446,7 +541,7 @@ async function renderChapterDetail(t, chId) {
   document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
   document.getElementById('drill-all').addEventListener('click', () => startChapter(t, chId));
   const cx = document.getElementById('drill-crux'); if (cx) cx.addEventListener('click', () => startCrux(t, chId));
-  if (ch.diagram) renderDiagramInto(document.getElementById('arch-slot'), ch.diagram);
+  if (diagrams.length) renderDiagramDeck(document.getElementById('unit-diagrams'), diagrams);
   window.scrollTo(0, 0);
 }
 
@@ -557,6 +652,7 @@ function selectAnswer(choice) {
   session.answered = true;
   const it = session.items[session.pos];
   const q = it.q;
+  const diagrams = diagramsForItem(it);
   const correct = choice === q.answer;
   grade(it.key, correct ? 'good' : 'again');
   applyOutcome(correct);
@@ -569,8 +665,8 @@ function selectAnswer(choice) {
   });
   document.getElementById('explain-slot').innerHTML =
     `<div class="explain ${correct ? 'correct' : 'wrong'}"><span class="verdict ${correct ? 'correct' : 'wrong'}">${correct ? '✓ Correct.' : '✗ Not quite.'}</span>${fmt(q.explain)}</div>`
-    + (q.diagram ? `<div class="diagram-slot" id="mc-diag"></div>` : '');
-  if (q.diagram) renderDiagramInto(document.getElementById('mc-diag'), q.diagram);
+    + (diagrams.length ? `<div id="mc-diag"></div>` : '');
+  if (diagrams.length) renderDiagramDeck(document.getElementById('mc-diag'), diagrams, 'Answer visual');
   showNext();
 }
 
@@ -578,15 +674,17 @@ function selectAnswer(choice) {
 function revealOpen() {
   if (session.answered) return;
   session.answered = true;
-  const q = session.items[session.pos].q;
+  const it = session.items[session.pos];
+  const q = it.q;
+  const diagrams = diagramsForItem(it);
   document.getElementById('explain-slot').innerHTML = `
     <div class="model">
       <h4>Key points to hit</h4>
       <ul>${(q.points || []).map(p => `<li>${fmt(p)}</li>`).join('')}</ul>
       <div class="ans">${fmt(q.answer || '')}</div>
-      ${q.diagram ? `<div class="diagram-slot" id="reveal-diag"></div>` : ''}
+      ${diagrams.length ? `<div id="reveal-diag"></div>` : ''}
     </div>`;
-  if (q.diagram) renderDiagramInto(document.getElementById('reveal-diag'), q.diagram);
+  if (diagrams.length) renderDiagramDeck(document.getElementById('reveal-diag'), diagrams, 'Answer visual');
   document.getElementById('action-bar').innerHTML = `
     <button class="cta ds-btn again" data-g="again">Missed</button>
     <button class="cta ds-btn partial" data-g="partial">Partial</button>

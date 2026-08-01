@@ -145,9 +145,42 @@
       "answer": "The defining decision is separating the write-heavy in-memory location/geo plane from the durable trip/payment plane so a 250k-ping/s firehose can never endanger transactional data — different stores, scaled independently. I'd geo-partition by city/region so a rider and nearby drivers share a shard with little cross-region traffic, and accept that dense downtown cells at rush hour become hotspots, mitigated by adaptive subdivision and per-cell capacity. I'd be explicit on the consistency split: location is eventually consistent and best-effort (stale-by-seconds is fine), but assignment is strongly consistent via an atomic claim. Failure handling leans on timeouts — an offer times out and releases the driver, a driver heartbeat timeout marks them stale so they're not matched, and persisted trip state survives restarts. To keep write cost down I'd throttle and dedup pings and only sample location history asynchronously, keeping the durable store off the hot path, while managing the WebSocket layer for offers/tracking with reconnection and polling fallback."
     }
   ],
-  "diagram": {
-    "kind": "mermaid",
-    "code": "flowchart LR\n  R([\"Rider App\"]) --> GW[\"API Gateway\"]\n  D([\"Driver App\"]) --> GW\n  GW --> LOC[\"Location Service<br/>in-memory geo index\"]\n  GW --> MATCH[\"Matching / Dispatch\"]\n  MATCH --> LOC\n  MATCH --> TRIP[(\"Trip DB\")]\n  MATCH --> PRICE[\"Pricing / ETA\"]",
-    "caption": "High-level architecture"
-  }
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Separate the high-volume location plane from durable trip state, then coordinate matching with an atomic driver claim.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  R([\"Rider App\"]) --> GW[\"API Gateway\"]\n  D([\"Driver App\"]) --> GW\n  GW --> LOC[\"Location Service<br/>in-memory geo index\"]\n  GW --> MATCH[\"Matching / Dispatch\"]\n  MATCH --> LOC\n  MATCH --> TRIP[(\"Trip DB\")]\n  MATCH --> PRICE[\"Pricing / ETA\"]"
+    },
+    {
+      "id": "geo-location-plane",
+      "title": "Partition the live driver index by geography",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Driver updates enter regional geo cells in memory; nearby searches query the rider cell and its neighbors.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  D[Driver Updates] --> R[Regional Location Service]\n  R --> C1[(Geo Cell A)]\n  R --> C2[(Geo Cell B)]\n  R --> C3[(Geo Cell C)]\n  Q[Nearby Query] --> R\n  C1 --> Q\n  C2 --> Q"
+    },
+    {
+      "id": "matching-claim",
+      "title": "Match candidates with an atomic driver claim",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "The matcher ranks nearby candidates, but a conditional state change is what prevents two riders from receiving the same driver.",
+      "afterQuestion": 5,
+      "code": "flowchart LR\n  R[Ride Request] --> M[Matching Service]\n  G[(Geo Index)] --> M\n  M --> C[Candidate Drivers]\n  C --> A{Atomic Claim}\n  A -->|\"won\"| T[(Trip Record)]\n  A -->|\"lost\"| M"
+    },
+    {
+      "id": "regional-ride-scale",
+      "title": "Regional cells contain hotspots and failures",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Location and matching stay regional, while durable trip events replicate globally for recovery, support, and analytics.",
+      "afterQuestion": 8,
+      "code": "flowchart LR\n  A[Region A Location] --> MA[Matcher A]\n  B[Region B Location] --> MB[Matcher B]\n  MA --> L[[Trip Event Log]]\n  MB --> L\n  L --> T[(Trip Store)]\n  L --> AN[(Analytics)]"
+    }
+  ]
 }

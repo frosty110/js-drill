@@ -10,7 +10,9 @@
 //                                  bullets, non-empty `answer`; NO options.
 //
 // Checks: topics↔manifests↔disk parity, part/chapter coverage, per-question
-// shape, and MC answer-index variety per chapter. Exits non-zero on failure.
+// shape, MC answer-index variety, and diagram schema/safe syntax. Canonical
+// design problems additionally require four architecture diagrams, each tied
+// to a valid reveal position. Exits non-zero on failure.
 
 const fs = require('fs');
 const path = require('path');
@@ -22,8 +24,47 @@ const MIN_QUESTIONS = 8;      // MC + open combined, per chapter
 const MIN_TAKEAWAYS = 3;
 const MIN_OPEN_POINTS = 3;
 
-let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0;
+let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0;
 const fail = (where, msg) => { errors++; console.error(`  ✗ [${where}] ${msg}`); };
+
+const DIAGRAM_ROLES = new Set(['overview', 'request-flow', 'mechanism', 'comparison', 'failure', 'lifecycle']);
+
+function validateDiagram(diagram, where, collection = false) {
+  totalDiagrams++;
+  if (!diagram || typeof diagram !== 'object' || Array.isArray(diagram)) {
+    fail(where, 'diagram must be an object'); return;
+  }
+  if (!['mermaid', 'svg'].includes(diagram.kind)) fail(where, `kind must be "mermaid" or "svg", got ${JSON.stringify(diagram.kind)}`);
+  if (!diagram.code || typeof diagram.code !== 'string') fail(where, 'missing non-empty code');
+  if (collection) {
+    if (!diagram.id || typeof diagram.id !== 'string') fail(where, 'diagrams[] item needs a stable id');
+    if (!diagram.title || typeof diagram.title !== 'string') fail(where, 'diagrams[] item needs a title');
+    if (!DIAGRAM_ROLES.has(diagram.role)) fail(where, `role must be one of ${[...DIAGRAM_ROLES].join(', ')}`);
+    if (!diagram.takeaway || typeof diagram.takeaway !== 'string') fail(where, 'diagrams[] item needs a takeaway');
+  }
+  if (diagram.kind === 'mermaid' && typeof diagram.code === 'string') {
+    if (!/^(flowchart (LR|TD)|sequenceDiagram)\n/.test(diagram.code)) fail(where, 'Mermaid must start with flowchart LR/TD or sequenceDiagram');
+    if (/(^|\n)\s*(click|style|classDef)\b|%%\{/.test(diagram.code)) fail(where, 'unsafe/unsupported Mermaid directive');
+  }
+}
+
+function validateDiagrams(owner, where) {
+  if (owner.diagram) validateDiagram(owner.diagram, `${where} diagram`);
+  if (owner.diagrams != null) {
+    if (!Array.isArray(owner.diagrams) || owner.diagrams.length === 0) {
+      fail(where, 'diagrams must be a non-empty array'); return;
+    }
+    if (owner.diagram) fail(where, 'use either diagram or diagrams, not both');
+    const ids = new Set();
+    owner.diagrams.forEach((diagram, i) => {
+      validateDiagram(diagram, `${where} diagrams[${i}]`, true);
+      if (diagram && diagram.id) {
+        if (ids.has(diagram.id)) fail(where, `duplicate diagram id "${diagram.id}"`);
+        ids.add(diagram.id);
+      }
+    });
+  }
+}
 
 function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
@@ -71,9 +112,21 @@ for (const topic of registry.topics) {
     if (ch.part && validParts.size && !validParts.has(ch.part)) fail(at, `part "${ch.part}" not a manifest part`);
     if (!Array.isArray(ch.keyTakeaways) || ch.keyTakeaways.length < MIN_TAKEAWAYS) fail(at, `keyTakeaways needs >= ${MIN_TAKEAWAYS} entries`);
     else if (!ch.keyTakeaways.every(x => typeof x === 'string' && x.trim())) fail(at, 'empty keyTakeaway');
+    validateDiagrams(ch, at);
 
     if (!Array.isArray(ch.questions) || ch.questions.length < MIN_QUESTIONS) {
       fail(at, `expected >= ${MIN_QUESTIONS} questions, got ${ch.questions ? ch.questions.length : 0}`); continue;
+    }
+    if (t === 'design-problems') {
+      if (!Array.isArray(ch.diagrams) || ch.diagrams.length !== 4) {
+        fail(at, `design problem needs exactly 4 architecture diagrams, got ${ch.diagrams ? ch.diagrams.length : 0}`);
+      } else {
+        ch.diagrams.forEach((diagram, i) => {
+          if (!Number.isInteger(diagram.afterQuestion) || diagram.afterQuestion < 0 || diagram.afterQuestion >= ch.questions.length) {
+            fail(`${at} diagrams[${i}]`, `afterQuestion must point to a valid question index, got ${JSON.stringify(diagram.afterQuestion)}`);
+          }
+        });
+      }
     }
 
     const mcAnswers = new Set();
@@ -81,6 +134,7 @@ for (const topic of registry.topics) {
     ch.questions.forEach((q, i) => {
       const qat = `${at} q${i}`;
       totalQ++;
+      validateDiagrams(q, qat);
       if ((q.type || 'mc') === 'open') {
         totalOpen++;
         if (!q.prompt || !String(q.prompt).trim()) fail(qat, 'open: empty prompt');
@@ -109,7 +163,7 @@ for (const topic of registry.topics) {
 
 console.log('');
 if (errors === 0) {
-  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), 0 errors.`);
+  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, 0 errors.`);
   process.exit(0);
 } else {
   console.error(`\nSystem Design validation FAILED — ${errors} error(s), ${totalQ} questions scanned.`);

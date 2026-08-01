@@ -19,7 +19,37 @@ function formatArg(a) {
   if (a === undefined) return 'undefined';
   return JSON.stringify(a);
 }
-async function runCode(code) {
+// ── TypeScript type erasure ───────────────────────────────────────────────
+// A lesson may declare `"lang": "ts"`. `new Function` is a JavaScript parser,
+// so types must be erased first. Node 22.13+ ships the stripper the runtime
+// itself uses for `node file.ts`, which means the validator needs no extra
+// dependency — unlike the browser, which lazy-loads the TypeScript compiler
+// (see js/core/runner.js for why the two engines are allowed to differ:
+// both erase, neither type-checks, and lessons may only use erasable syntax).
+const nodeModule = require('node:module');
+const STRIP = typeof nodeModule.stripTypeScriptTypes === 'function'
+  ? nodeModule.stripTypeScriptTypes
+  : null;
+
+function eraseTypes(code, lang) {
+  if (lang !== 'ts') return code;
+  if (!STRIP) {
+    throw new Error(
+      'This Node build cannot strip TypeScript types (needs Node >= 22.13). ' +
+      'Upgrade Node to validate lang:"ts" lessons.'
+    );
+  }
+  // mode:'strip' blanks types out in place, preserving line/column so a
+  // runtime error's position still points at the authored source.
+  return STRIP(code, { mode: 'strip' });
+}
+
+async function runCode(code, lang) {
+  try {
+    code = eraseTypes(code, lang);
+  } catch (err) {
+    return { output: '', error: err.message };
+  }
   const lines = [];
   const fakeConsole = {
     log: (...args) => lines.push(args.map(formatArg).join(' ')),
@@ -217,6 +247,13 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
     const lesson = JSON.parse(fs.readFileSync(info.file, 'utf8'));
     if (lesson.status !== 'full') continue;
 
+    // Source language for every code string this lesson owns. Absent = 'js',
+    // which is what all the pre-TypeScript lessons rely on.
+    if ('lang' in lesson && lesson.lang !== 'js' && lesson.lang !== 'ts') {
+      failures.push(`${id} unknown lang "${lesson.lang}" — expected "js" or "ts"`);
+    }
+    const lang = lesson.lang === 'ts' ? 'ts' : 'js';
+
     // Density check — non-fatal by default, see below.
     const l1n = lesson.L1?.questions?.length || 0;
     const l2n = lesson.L2?.exercises?.length || 0;
@@ -257,12 +294,33 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
         lesson.reference.alternates.forEach((alt, i) => sources.push({ where: `reference.alternates#${i}.code`, code: alt.code || '' }));
       }
       if (lesson.L2?.exercises) {
-        lesson.L2.exercises.forEach((ex, i) => sources.push({ where: `L2#${i}.template`, code: ex.template || '' }));
+        // Scan the FILLED template, not the raw one — a bare `___` blank isn't
+        // parseable source in any language, and the filled form is what the
+        // user actually runs.
+        lesson.L2.exercises.forEach((ex, i) => {
+          const parts = (ex.template || '').split('___');
+          let filled = parts[0];
+          for (let b = 0; b < (ex.blanks || []).length; b++) {
+            filled += ex.blanks[b].answer + (parts[b + 1] ?? '');
+          }
+          sources.push({ where: `L2#${i}.template`, code: filled });
+        });
       }
       if (lesson.L3?.canonical) sources.push({ where: 'L3.canonical', code: lesson.L3.canonical });
       for (const s of sources) {
-        const hits = scanBanned(s.code);
-        for (const name of hits) {
+        // Scan the ERASED source. The banned list names JavaScript constructs,
+        // and TS type syntax can spell one without meaning it — a `: void`
+        // return type is not the `void` operator, and `Promise<T>` is not a
+        // comparison. Erasing first makes the scan see exactly the JavaScript
+        // that will run. Unparseable TS is reported rather than silently skipped.
+        let scanSrc;
+        try {
+          scanSrc = eraseTypes(s.code, lang);
+        } catch (err) {
+          failures.push(`${id} ${s.where} TypeScript parse error: ${err.message}`);
+          continue;
+        }
+        for (const name of scanBanned(scanSrc)) {
           bannedHits.push({ id, section: info.slug, where: s.where, name });
         }
       }
@@ -301,7 +359,7 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
         for (let b = 0; b < ex.blanks.length; b++) {
           filled += ex.blanks[b].answer + parts[b + 1];
         }
-        const r = await runCode(filled);
+        const r = await runCode(filled, lang);
         if (r.error) {
           failures.push(`${id} L2#${i} runtime error: ${r.error}`);
         } else if (!outputsMatch(r.output, ex.expectedOutput)) {
@@ -314,7 +372,7 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
 
     // L3 — run canonical, compare to expectedOutput
     if (lesson.L3 && lesson.L3.canonical) {
-      const r = await runCode(lesson.L3.canonical);
+      const r = await runCode(lesson.L3.canonical, lang);
       if (r.error) {
         failures.push(`${id} L3 runtime error: ${r.error}`);
       } else if (!outputsMatch(r.output, lesson.L3.expectedOutput)) {
@@ -359,7 +417,7 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
             failures.push(`${id} reference.alternates#${ai} ("${alt.label}"): missing or empty "code"`);
             continue;
           }
-          const ar = await runCode(alt.code);
+          const ar = await runCode(alt.code, lang);
           if (ar.error) {
             failures.push(`${id} reference.alternates#${ai} ("${alt.label}") runtime error: ${ar.error}`);
           } else if (!outputsMatch(ar.output, lesson.L3.expectedOutput)) {
@@ -397,6 +455,24 @@ const SKIP_BANNED = process.argv.includes('--skip-banned-syntax');
               if (steps.length === 0) {
                 failures.push(`${id} walkthrough example#${ei} (${ex.label || ex.input}) yielded zero steps`);
                 continue;
+              }
+              // Every step's `line` indexes into reference.code — that's the
+              // line the stepper highlights (js/app/11-tabs-ref-conv-walk.js
+              // splits content.reference.code and renders a gutter). An
+              // out-of-range number silently highlights nothing, and editing
+              // the canonical without repointing the trace is the way that
+              // happens, so gate it here rather than trusting authoring care.
+              const refLineCount = (lesson.reference?.code || '').split('\n').length;
+              if (refLineCount > 1) {
+                const bad = steps
+                  .map(st => st && st.line)
+                  .filter(n => typeof n === 'number' && (n < 1 || n > refLineCount));
+                if (bad.length) {
+                  failures.push(
+                    `${id} walkthrough example#${ei} steps point outside reference.code ` +
+                    `(1..${refLineCount}): lines ${[...new Set(bad)].join(', ')}`
+                  );
+                }
               }
               const last = steps[steps.length - 1];
               if (ex.expected !== undefined) {

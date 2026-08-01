@@ -47,6 +47,8 @@ const VENDOR_ROUTES = [ // [url-prefix, vendor-relative file, content-type]
   [`${CM}/addon/runmode/runmode.min.js`, 'codemirror/addon/runmode/runmode.js', 'application/javascript'],
   ['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', 'supabase/dist/umd/supabase.js', 'application/javascript'],
   ['https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js', 'mermaid/dist/mermaid.min.js', 'application/javascript'],
+  // Lazy-loaded on demand by js/core/runner.js when a lang:"ts" lesson runs code.
+  ['https://cdn.jsdelivr.net/npm/typescript@5.6.3/lib/typescript.js', 'typescript/lib/typescript.js', 'application/javascript'],
 ];
 function resolveVendor(url) {
   for (const [prefix, rel, type] of VENDOR_ROUTES) {

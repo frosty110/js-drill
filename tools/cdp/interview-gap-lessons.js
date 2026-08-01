@@ -89,6 +89,57 @@ const NEW_LESSONS = [
   const errs = await s.eval(`(window.__probeErrors || []).length`);
   s.assert(!errs || errs === 0, `no uncaught page errors (got ${errs})`);
 
+  // ── The TypeScript path actually executes in the browser ────────────────
+  // These lessons declare lang:"ts", so runCode must lazy-load the compiler,
+  // erase the types, and produce the canonical's expected output. This is the
+  // assertion that would fail if the transpile wiring regressed.
+  const tsLoadedBefore = await s.eval(`typeof window.ts`);
+  s.assert(tsLoadedBefore === 'undefined',
+    `TypeScript compiler is NOT loaded on boot (lazy) — typeof ts === ${tsLoadedBefore}`);
+
+  const tsRun = await s.evalAwait(`(async () => {
+    const body = await fetch('./data/applied-problems/a-csv-transaction-stats.json').then(r => r.json());
+    if (body.lang !== 'ts') return 'lesson is not lang:ts';
+    // Sanity: the canonical really is TypeScript and would NOT parse as JS.
+    let parsesAsJs = true;
+    try { new Function(body.L3.canonical); } catch (e) { parsesAsJs = false; }
+    const res = await window.DrillRunner.runCode(body.L3.canonical, { lang: 'ts' });
+    return JSON.stringify({
+      parsesAsJs,
+      ok: res.ok,
+      matches: res.output === body.L3.expectedOutput,
+      output: res.output.slice(0, 200),
+      tsNowLoaded: typeof window.ts !== 'undefined',
+    });
+  })()`);
+  if (typeof tsRun === 'string' && tsRun.startsWith('lesson is not')) {
+    s.assert(false, tsRun);
+  } else {
+    const r = JSON.parse(tsRun);
+    s.assert(r.parsesAsJs === false, 'the TS canonical genuinely fails to parse as plain JavaScript');
+    s.assert(r.tsNowLoaded === true, 'runCode lazy-loaded the TypeScript compiler on demand');
+    s.assert(r.ok === true, `TS canonical ran without error (got: ${r.output})`);
+    s.assert(r.matches === true, `TS canonical output matches expectedOutput (got: ${r.output})`);
+  }
+
+  // A TS syntax error must surface as a readable message, not a raw SyntaxError.
+  const tsErr = await s.evalAwait(`(async () => {
+    const res = await window.DrillRunner.runCode('const x: = 1;', { lang: 'ts' });
+    return JSON.stringify({ ok: res.ok, output: res.output.slice(0, 120) });
+  })()`);
+  const errRes = JSON.parse(tsErr);
+  s.assert(errRes.ok === false, 'malformed TypeScript is reported as a failure');
+  s.assert(/TypeScript syntax error/.test(errRes.output),
+    `TS syntax errors get a readable prefix (got: ${errRes.output})`);
+
+  // A JS lesson must still run untouched through the same runner.
+  const jsRun = await s.evalAwait(`(async () => {
+    const res = await window.DrillRunner.runCode('console.log(1 + 1);', { lang: 'js' });
+    return JSON.stringify({ ok: res.ok, output: res.output });
+  })()`);
+  const jsRes = JSON.parse(jsRun);
+  s.assert(jsRes.ok === true && jsRes.output === '2', `plain JS still runs unchanged (got: ${jsRes.output})`);
+
   // ── p17 exists in the design-problems topic ────────────────────────────
   const sd = await s.evalAwait(`(async () => {
     const man = await fetch('./data/system-design/design-problems/manifest.json').then(r => r.json());

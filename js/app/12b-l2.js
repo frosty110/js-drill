@@ -174,7 +174,7 @@ function renderL2(body, lesson, content) {
       for (let i = 0; i < inputs.length; i++) {
         filled += inputs[i].value + parts[i + 1];
       }
-      const result = await runCode(filled);
+      const result = await runCode(filled, { lang: lessonLang(content) });
       outputBox.classList.toggle('error', !result.ok);
       outputBox.textContent = result.output || '(no output)';
       outputWrap.classList.remove('hidden');
@@ -402,7 +402,7 @@ function renderL2Mobile(body, lesson, content) {
       });
       let filled = parts[0];
       for (let i = 0; i < vals.length; i++) filled += vals[i] + parts[i + 1];
-      const result = await runCode(filled);
+      const result = await runCode(filled, { lang: lessonLang(content) });
       outputBox.classList.toggle('error', !result.ok);
       outputBox.textContent = result.output || '(no output)';
       outputWrap.classList.remove('hidden');

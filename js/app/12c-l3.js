@@ -309,7 +309,8 @@ function renderL3(body, lesson, content) {
 
   const isTouchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
   const cm = CodeMirror.fromTextArea(document.getElementById('drill-editor'), {
-    mode: 'javascript',
+    // TS lessons get the typescript MIME so annotations colour correctly.
+    mode: lessonCodeMode(content),
     theme: 'dracula',
     lineNumbers: true,
     autoCloseBrackets: true,
@@ -554,7 +555,7 @@ function renderL3(body, lesson, content) {
     attempts++;
     const code = cm.getValue();
     feedback.innerHTML = '<span class="text-slate-500">Running…</span>';
-    const result = await runCode(code);
+    const result = await runCode(code, { lang: lessonLang(content) });
     running = false;
     outputBox.classList.toggle('error', !result.ok);
     outputBox.textContent = result.output || '(no output)';

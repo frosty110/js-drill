@@ -8,6 +8,12 @@
 
 - **171 fully-authored lessons** (`status: 'full'`), 0 stubs
 - **938 verified L2+L3+walkthrough checks** (all pass via `node tools/validate-data.js`)
+- **Lessons may be JavaScript or TypeScript.** A lesson body opts in with `"lang": "ts"`;
+  absent the field it's JS. Types are ERASED before execution (the browser lazy-loads the
+  TypeScript compiler in `js/core/runner.js`; the validator uses Node's built-in
+  `module.stripTypeScriptTypes`). Neither type-checks — the drill grades on output. Only
+  erasable syntax is permitted, so `enum` and parameter properties are banned in favour of
+  string-literal unions. See [`docs/canonical-style.md`](docs/canonical-style.md) § TypeScript lessons.
 - `index.html` is markup only (~430 lines); `app.css` (~3,955 lines) loads via `<link>`
 - **`app.js` (13.3k lines) was split into 15 ordered slices `js/app/01..15-*.js`** that
   share global scope and load in order (see § File layout). They are plain
@@ -133,7 +139,8 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `data/tags.json` | Faceted-filter registry for the merged Problems list (Patterns+Applied). 4 facets: `source`(Type) + `topic` derived from track/section (no authoring); `difficulty` + `company` authored on manifest entries. Add a company by appending a value here. Validator enforces authored values against this registry. |
 | `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
 | `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |
-| `tools/validate-data.js` | Runs every L2 fill + L3 canonical, diffs manifest vs disk. Run before commits. |
+| `js/core/runner.js` | Sandboxed code runner (`window.DrillRunner`). Erases TypeScript types for `lang:"ts"` lessons by lazy-loading the TS compiler on first use, then executes via `new Function`. Mirror semantics in `tools/validate-data.js`. |
+| `tools/validate-data.js` | Runs every L2 fill + L3 canonical, diffs manifest vs disk, gates banned syntax and walkthrough trace line ranges. Erases TS types via Node's built-in stripper. Run before commits. |
 | `tools/cdp/check.js` | Probes a deployed URL via Chrome's :9222 port (basic) |
 | `tools/cdp/deep-check.js` | Multi-tab + multi-lesson navigation probe with screenshots |
 | `tools/cdp/mobile-l3.js` | iPhone-viewport probe for the L3 editor + sticky action bar |
@@ -205,6 +212,10 @@ Each lesson is a standalone JSON file at `data/<section-slug>/<id>.json`:
   "section": "Arrays & Hashing",
   "track": "patterns",           // or "syntax"
   "status": "full",              // or "stub"
+  "lang": "ts",                  // OPTIONAL — omit for JavaScript (the default).
+                                 // "ts" means every code string below is TypeScript;
+                                 // types are erased before running. Erasable syntax only
+                                 // (no enum / parameter properties) — see canonical-style.md.
   "description": "One sentence describing the lesson.",
   "reference": {
     "approach": "Hash map (one-pass complement lookup)",   // OPTIONAL — short name of the canonical approach. When present, renders as a primary header row above the code block, mirroring the alternate-summary layout (label + complexity chip).

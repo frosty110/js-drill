@@ -177,9 +177,21 @@
     };
   };
 
+  // Default highlight mode for static code blocks. The app registers a
+  // resolver returning the open lesson's mode ('javascript' | 'text/typescript')
+  // so the ~20 colorizeInto call sites don't each have to thread it through.
+  // CodeMirror's typescript mode is a superset of its javascript mode, so a JS
+  // snippet shown while a TS lesson is open still highlights correctly.
+  let modeResolver = null;
+  U.setCodeModeResolver = function (fn) { modeResolver = fn; };
+  U.defaultCodeMode = function () {
+    try { return (modeResolver && modeResolver()) || 'javascript'; } catch { return 'javascript'; }
+  };
+
   // CodeMirror static-render helpers. Both depend on the runMode addon being
   // loaded (see index.html head). Fall back to plain text if CM isn't ready.
-  U.colorizeInto = function (target, code, mode = 'javascript') {
+  U.colorizeInto = function (target, code, mode) {
+    mode = mode || U.defaultCodeMode();
     target.textContent = '';
     if (root.CodeMirror && root.CodeMirror.runMode) {
       root.CodeMirror.runMode(code, mode, target);

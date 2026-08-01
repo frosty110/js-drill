@@ -1,0 +1,240 @@
+{
+  "id": "a-rules-engine",
+  "title": "Keyword Rules Engine",
+  "section": "Applied Problems",
+  "track": "applied",
+  "status": "full",
+  "description": "Route free text to a team by matching keywords against a declarative rule table — a `for...of` scan with an early return, because array order IS the priority and the first rule that hits wins, which a `.find`-style fold would hide.",
+  "mechanics": [
+    "text-scan",
+    "set-dedup"
+  ],
+  "conversation": {
+    "intro": "The 'build a simple rules engine' interview. Forty of the fifty minutes are really about one question: do you encode the rules as DATA or as if/else branches? Each section has what you'd say out loud and why the move matters.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "The spec is deliberately underspecified. Find the ambiguity before you code.",
+        "say": "\"So: given a block of text — a support ticket, say — I assign it to a team based on which keywords appear. Each team owns a set of trigger words, and I return the team name.\"\n\nThe questions that actually change the implementation:\n• What if a text matches TWO teams? Is it first-rule-wins by priority, or best-match-wins by hit count, or should it return all matches? This is the biggest one — it decides whether I can return early.\n• What if nothing matches — return null, throw, or fall back to a default queue? I'd argue for an explicit fallback team so the caller never has to null-check.\n• Should matching be on whole words or substrings? 'charge' inside 'recharge' is the case I'd raise.\n• Case sensitivity, and do I need stemming — should 'refunded' or 'refunds' trigger the 'refund' rule?\n• How often do the rules change, and who edits them? If it's a non-engineer updating them weekly, that's an argument for keeping them in a config file rather than in code.",
+        "why": "The tie-break question is the load-bearing one, because first-match-wins and best-match-wins have genuinely different code shapes — one returns early inside the loop, the other must score every rule before deciding. Committing to first-match-wins without asking means you'll be rewriting the loop when the interviewer follows up. Asking who edits the rules is the question a candidate with production experience asks, and it sets up the rules-as-data argument you're about to make."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the if/else version — then explain precisely why you're not writing it.",
+        "say": "\"The version everyone writes first is a chain of conditionals:\n\n```\nif (text.includes('invoice') || text.includes('refund')) return 'Billing';\nif (text.includes('breach') || text.includes('phishing')) return 'Security';\n...\n```\n\nIt works, and for three teams it's honestly readable. I'm not going to write it, for two reasons.\n\nFirst, every rule change is a code change — new team, new keyword, reprioritize — which means a deploy, a review, and a regression risk on logic that has nothing to do with the change. Second, the priority order is invisible: it's implied by the physical order of the if-statements, so nobody can see or test it as a thing.\n\nIf I lift the rules into an array of `{ team, keywords }` objects, the function becomes a fixed loop and the rules become data. Adding a team is appending to a list. Reprioritizing is reordering it. And I can now load that list from JSON or a database without touching the engine.\"",
+        "why": "Saying the brute force out loud and then giving two specific reasons to reject it is much stronger than jumping straight to the table — it proves the design is a decision rather than a memorized pattern. The 'priority is invisible' argument is the one interviewers respond to, because it reframes the refactor as making an implicit thing explicit and testable, not just as tidier code."
+      },
+      {
+        "title": "3. Spot the pattern — rule table + first-match scan",
+        "prompt": "Two design choices carry this: the token Set, and where the early return lives.",
+        "say": "\"The engine is a linear scan over the rule table with an early return, and there are two details I care about.\n\nThe token Set. I tokenize once up front — `text.toLowerCase().match(/[a-z0-9']+/g)` splits on anything that isn't a word character, and I drop the result into a Set. Then a keyword test is `words.has(k)`, which is O(1) and, critically, is a WHOLE-WORD test. If I'd used `text.includes('charge')` instead, the ticket 'Recharge the battery' would route to Billing, which is both wrong and very hard to notice in production. Tokenizing once also means I pay the scan cost once instead of once per keyword.\n\nThe early return. `for (const rule of rules)`, and the first rule with any hit returns immediately — so array position IS priority, exactly as clarified. That's why this is a `for` loop and not a `.filter().map()` chain: the early exit is the semantics, not an optimization.\n\nAnd I collect hits with `filter` rather than `some`. `some` would tell me the rule fired; `filter` tells me WHICH keywords fired. For a routing system that's the difference between 'this went to Billing' and 'this went to Billing because it said invoice and refund' — the second one is what you need when someone disputes the routing.\"",
+        "why": "Returning the matched keywords alongside the team is the detail that reads as production experience. Every rules engine eventually gets the question 'why did this ticket end up here?', and a system that only returns a verdict cannot answer it — you end up re-running the engine with logging bolted on. Building the evidence into the return value from the start costs one word (`filter` instead of `some`) and makes the whole thing auditable."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Pick inputs that prove priority order and whole-word matching separately.",
+        "intro": "\"Let me run a few tickets.\" Three cases: a clean single-rule hit, an ambiguous ticket that hits two rules, and the substring trap.",
+        "examples": [
+          {
+            "input": "'Customer disputes an invoice and wants a refund'",
+            "output": "{\"team\":\"Billing\",\"matched\":[\"invoice\",\"refund\"]}",
+            "note": "Clean case. Security is tested first and misses entirely; Billing hits on two keywords. `matched` preserves the RULE's keyword order, not the order the words appear in the text.",
+            "trace": "tokens = {customer, disputes, an, invoice, and, wants, a, refund}\nrule#0 Security [breach, phishing, password] -> filter -> [] -> fall through\nrule#1 Billing  [invoice, refund, charge]    -> filter -> [invoice, refund] -> return\n  => { team: 'Billing', matched: ['invoice','refund'] } ✓"
+          },
+          {
+            "input": "'Refund the customer after the outage'",
+            "output": "{\"team\":\"Billing\",\"matched\":[\"refund\"]}",
+            "note": "The ambiguous one — this text hits Billing ('refund') AND Platform ('outage'). Billing sits earlier in the table, so it wins and Platform is never even tested. This is the case that makes rule ORDER a visible, testable decision.",
+            "trace": "tokens = {refund, the, customer, after, outage}\nrule#0 Security -> [] -> fall through\nrule#1 Billing  -> [refund] -> RETURN IMMEDIATELY\nrule#2 Platform -> never evaluated, even though 'outage' is present\n  => { team: 'Billing', matched: ['refund'] } ✓"
+          },
+          {
+            "input": "'Recharge the battery before the offsite'",
+            "output": "{\"team\":\"Triage\",\"matched\":[]}",
+            "note": "The substring trap. 'Recharge' CONTAINS 'charge', so a `text.includes('charge')` implementation misroutes this to Billing. Tokenizing to whole words means 'recharge' and 'charge' are simply different tokens, and the ticket correctly falls through to the fallback.",
+            "trace": "tokens = {recharge, the, battery, before, offsite}\nrule#0 Security -> [] -> fall through\nrule#1 Billing  -> words.has('charge') is FALSE ('recharge' is a different token) -> [] -> fall through\nrule#2 Platform -> [] -> fall through\nloop exhausted -> FALLBACK\n  => { team: 'Triage', matched: [] } ✓"
+          }
+        ],
+        "why": "The third example is the one to lead with in an interview, because it's the bug the naive implementation actually ships. Saying 'let me check what happens with the word recharge' before the interviewer thinks of it demonstrates that you test the boundary between substring and token matching rather than assuming. The second example is worth tracing too, because it's the only one where the early return is observable — Platform matching but never being consulted is exactly what 'order is priority' means in practice."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "Where does a keyword matcher quietly do the wrong thing?",
+        "say": "\"Things I'd flag:\n• Substring false positives — 'recharge'/'charge', 'password'/'passwordless', 'deploy'/'redeployment'. Whole-word tokens fix the first class; the rest needs stemming.\n• Morphology. 'refunded', 'refunds', 'refunding' don't match the keyword 'refund' under exact token matching. Options: store stems and match on prefix, add each variant to the rule, or run a real stemmer. I'd punt to variants-in-the-rule for an interview and name the stemmer as the production answer.\n• Punctuation and casing — handled, since the regex tokenizes on non-word characters and I lowercase first. Contractions I kept via `'` in the character class, so \"can't\" stays one token.\n• Empty or non-text input. `String.match` returns `null`, not `[]`, when nothing matches — `?? []` normalizes that. Empty text falls through every rule and lands on the fallback, which is right.\n• Negation. 'This is NOT a refund request' still routes to Billing. Keyword matching genuinely cannot handle negation, and I'd say so plainly rather than pretend — that's where you graduate to a classifier.\n• Overlapping rules as the table grows. At three rules order is obvious; at fifty, two people add keywords that collide and nobody notices. I'd want a test that asserts the routing for a corpus of known tickets, so a rule edit that changes existing routing fails loudly.\"",
+        "why": "Naming negation as a hard limit of the whole approach — rather than a bug to patch — is the strongest thing you can say in this section. It shows you know what class of problem keyword matching belongs to and where the technique runs out, which is exactly the judgment an interviewer is probing when they ask you to build a deliberately simple system. The regression-corpus suggestion is the operational counterpart: it's how you keep a data-driven rule table safe once it outgrows one person's head."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "State the bound, then take the obvious follow-up head-on.",
+        "say": "\"Tokenizing is O(n) in the text length. The scan is O(r·k) where r is rules and k is keywords per rule, with O(1) Set lookups — so overall O(n + r·k), and in practice n dominates because the rule table is small.\n\nIf the table got large — thousands of rules — I'd invert the index: build a `Map` from keyword to the rules containing it, then walk the text's tokens instead of the rules. That's O(n) regardless of rule count, and it's the same inverted-index idea a search engine uses.\n\nThe follow-up I'd expect is 'now make it best-match-wins instead of first-match-wins'. That's a real change, not a tweak: I can no longer return early, because I don't know a rule is the best until I've scored all of them. The loop becomes score-every-rule then take the max, with rule order surviving only as the tie-break — and it costs me the early exit. I'd want to know which behavior they want up front, because it's the difference between 'priority list' and 'classifier', and those are different products.\"",
+        "why": "Pre-empting the best-match-wins follow-up and being precise about what it costs — losing the early return, and demoting rule order from 'the decision' to 'the tie-break' — is what separates a candidate who implemented a spec from one who understands its shape. The inverted-index remark is a cheap, honest scaling answer that connects this toy problem to a real technique the interviewer will recognize."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the rule scan on real ticket text. The state panel shows the tokenized word Set, then each rule as it's tested. Watch the early return fire the moment a rule hits — and watch the third example fall through Billing because 'recharge' is a different token from 'charge'.",
+    "examples": [
+      {
+        "label": "'invoice ... refund' -> Billing (2 hits, Security missed first)",
+        "input": "Customer disputes an invoice and wants a refund",
+        "expected": "{\"team\":\"Billing\",\"matched\":[\"invoice\",\"refund\"]}"
+      },
+      {
+        "label": "Hits Billing AND Platform -> Billing wins on rule order",
+        "input": "Refund the customer after the outage",
+        "expected": "{\"team\":\"Billing\",\"matched\":[\"refund\"]}"
+      },
+      {
+        "label": "'Recharge' does NOT match keyword 'charge' -> fallback",
+        "input": "Recharge the battery before the offsite",
+        "expected": "{\"team\":\"Triage\",\"matched\":[]}"
+      }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const text = input;",
+      "  const RULES = [",
+      "    { team: 'Security', keywords: ['breach', 'phishing', 'password'] },",
+      "    { team: 'Billing', keywords: ['invoice', 'refund', 'charge'] },",
+      "    { team: 'Platform', keywords: ['outage', 'latency', 'deploy'] },",
+      "  ];",
+      "  const FALLBACK = 'Triage';",
+      "  const tokens = text.toLowerCase().match(/[a-z0-9']+/g) ?? [];",
+      "  const words = new Set(tokens);",
+      "  yield { line: 12, label: `tokenize -> ${words.size} unique whole words: ${JSON.stringify([...words])}`, state: { text, words: [...words], step: 'tokenize' } };",
+      "  for (let i = 0; i < RULES.length; i++) {",
+      "    const rule = RULES[i];",
+      "    const matched = rule.keywords.filter(k => words.has(k));",
+      "    if (matched.length > 0) {",
+      "      const result = { team: rule.team, matched };",
+      "      yield { line: 19, label: `rule#${i} ${rule.team}: ${matched.length} hit(s) ${JSON.stringify(matched)} -> FIRST MATCH WINS, return now (rules ${i + 1}..${RULES.length - 1} never tested)`, state: { text, words: [...words], i, rule, matched, result, returns: JSON.stringify(result) } };",
+      "      return;",
+      "    }",
+      "    yield { line: 19, label: `rule#${i} ${rule.team}: no keyword of ${JSON.stringify(rule.keywords)} is a whole word here -> fall through`, state: { text, words: [...words], i, rule, matched: [] } };",
+      "  }",
+      "  const result = { team: FALLBACK, matched: [] };",
+      "  yield { line: 22, label: `every rule fell through -> FALLBACK '${FALLBACK}'`, state: { text, words: [...words], result, returns: JSON.stringify(result) } };",
+      "}"
+    ]
+  },
+  "reference": {
+    "approach": "Declarative rule table + first-match-wins scan over a whole-word token Set",
+    "complexity": "O(n + r*k) / O(n)",
+    "code": "// Rules are DATA, not control flow. Array order IS the priority, and adding\n// a team means appending an entry -- route() never changes.\nconst RULES = [\n  { team: 'Security', keywords: ['breach', 'phishing', 'password'] },\n  { team: 'Billing', keywords: ['invoice', 'refund', 'charge'] },\n  { team: 'Platform', keywords: ['outage', 'latency', 'deploy'] },\n];\nconst FALLBACK = 'Triage';\n\n// Whole-word tokens in a Set: 'recharge' must NOT match the keyword 'charge'.\nfunction tokenize(text) {\n  return new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);\n}\n\nfunction route(text, rules = RULES) {\n  const words = tokenize(text);\n  for (const rule of rules) {\n    // filter, not some -- keeping the hits makes the decision explainable.\n    const matched = rule.keywords.filter(k => words.has(k));\n    if (matched.length > 0) return { team: rule.team, matched };\n  }\n  return { team: FALLBACK, matched: [] };\n}",
+    "notes": [
+      "Rules are an ARRAY OF DATA, so adding a team is appending an entry and reprioritizing is reordering — `route()` itself never changes, and the table can move to JSON or a DB untouched.",
+      "Array order IS the priority: the first rule with any hit returns immediately, so a later rule that would also match is never consulted. That early exit is the semantics, which is why this is a `for...of` and not a chained fold.",
+      "Tokenize into a `Set` and test with `has` — `text.includes('charge')` would misroute 'Recharge the battery' to Billing. Whole-word matching kills that class of false positive, and the Set makes each keyword test O(1).",
+      "`filter` rather than `some`: returning WHICH keywords matched makes the routing decision explainable after the fact, which is what you need the first time someone disputes it.",
+      "`String.match` returns `null` (not `[]`) when nothing matches, so `?? []` normalizes before the Set is built.",
+      "Keyword matching cannot handle negation — 'this is NOT a refund request' still routes to Billing. That's a limit of the technique, not a bug to patch."
+    ]
+  },
+  "L1": {
+    "questions": [
+      {
+        "q": "Why tokenize into a `Set` and test `words.has('charge')` instead of the simpler `text.includes('charge')`?",
+        "options": [
+          "`String.includes` is case-sensitive and cannot be made case-insensitive without a regex",
+          "`includes` matches substrings, so 'Recharge the battery' would falsely fire the 'charge' keyword; Set membership tests whole words",
+          "`includes` performs a full scan per call, and Set lookup is the only way to avoid re-reading the string",
+          "A `Set` automatically strips punctuation from the keywords, which `includes` cannot do"
+        ],
+        "answer": 1,
+        "explain": "The substring false positive is the real bug: 'recharge', 'discharge' and 'surcharge' all contain 'charge'. Tokenizing makes them distinct words. The O(1) lookup is a bonus, not the reason."
+      },
+      {
+        "q": "The rules live in an array of `{ team, keywords }` objects rather than a chain of if/else statements. What is the primary benefit?",
+        "options": [
+          "Array iteration is faster than sequential conditionals because the engine can vectorize the comparisons",
+          "Objects in an array are garbage-collected together, reducing memory churn on repeated routing calls",
+          "It avoids the banned labeled-break needed to exit an if/else chain early",
+          "Rules become data: adding a team is appending an entry and reprioritizing is reordering, so the table can be edited, tested, or loaded from config without touching the routing code"
+        ],
+        "answer": 3,
+        "explain": "The if/else version buries the priority order in the physical layout of the code and turns every rule change into a code change. A table makes both the rules and their order explicit, testable, and externally editable."
+      },
+      {
+        "q": "Each rule collects hits with `rule.keywords.filter(k => words.has(k))` rather than `rule.keywords.some(k => words.has(k))`. Why keep the full list?",
+        "options": [
+          "`some` stops at the first match, so it would miss rules whose later keywords are the higher-priority ones",
+          "`filter` returns the matched keywords as evidence, so the engine can explain WHY a text routed where it did — `some` returns only a boolean and throws that away",
+          "`some` returns undefined rather than false when the keywords array is empty, breaking the length check",
+          "`filter` is required because the result is later spread into the fallback rule's keyword list"
+        ],
+        "answer": 1,
+        "explain": "Both work for the routing decision itself. `filter` additionally answers 'why did this ticket go to Billing?' — which is the first question anyone asks of a routing system in production."
+      },
+      {
+        "q": "A ticket reading 'Refund the customer after the outage' contains keywords from both the Billing rule and the Platform rule. What decides the outcome, and what would change if the requirement became best-match-wins (most keyword hits)?",
+        "options": [
+          "The rule with more total keywords defined wins; best-match-wins would instead require sorting the rules by keyword count up front",
+          "Both rules fire and the result is an array of teams; best-match-wins would just take the first element of that array",
+          "Position in the rules array decides — the earlier rule returns immediately. Best-match-wins would remove the early return, since no rule can be declared the winner until every rule has been scored",
+          "The rule whose keyword appears earliest in the text wins; best-match-wins would compare hit counts at that same point in the scan"
+        ],
+        "answer": 2,
+        "explain": "First-match-wins means array order IS the priority and the loop can exit as soon as anything hits. Best-match-wins forces a full pass to score every rule, with rule order surviving only as a tie-break."
+      }
+    ]
+  },
+  "L2": {
+    "exercises": [
+      {
+        "prompt": "Tokenize text into whole words for membership testing. Fill the blanks so the substring trap prints false.",
+        "template": "function tokenize(text) {\n  return new ___(text.___().match(/[a-z0-9']+/g) ___ []);\n}\nconst words = tokenize('Recharge the battery');\nconsole.log(words.___('charge'), words.has('recharge'));",
+        "blanks": [
+          {
+            "answer": "Set",
+            "hint": "O(1) membership container"
+          },
+          {
+            "answer": "toLowerCase",
+            "hint": "normalize case before matching"
+          },
+          {
+            "answer": "??",
+            "hint": "match returns null, not [], when nothing matches"
+          },
+          {
+            "answer": "has",
+            "hint": "whole-word membership test"
+          }
+        ],
+        "expectedOutput": "false true"
+      },
+      {
+        "prompt": "Scan the rule table and return on the first rule that hits. Fill the blanks so the earlier rule wins.",
+        "template": "const RULES = [\n  { team: 'Billing', keywords: ['invoice', 'refund'] },\n  { team: 'Platform', keywords: ['outage', 'latency'] },\n];\nfunction route(words) {\n  for (const rule ___ RULES) {\n    const matched = rule.keywords.___(k => words.has(k));\n    if (matched.___ > 0) return `${rule.___} <- ${matched.join(', ')}`;\n  }\n  return 'Triage';\n}\nconsole.log(route(new Set(['refund', 'outage'])));",
+        "blanks": [
+          {
+            "answer": "of",
+            "hint": "iterate the rule objects themselves"
+          },
+          {
+            "answer": "filter",
+            "hint": "keep every matching keyword as evidence"
+          },
+          {
+            "answer": "length",
+            "hint": "did this rule hit at all?"
+          },
+          {
+            "answer": "team",
+            "hint": "the field holding the destination name"
+          }
+        ],
+        "expectedOutput": "Billing <- refund"
+      }
+    ]
+  },
+  "L3": {
+    "prompt": "Build a keyword rules engine: given a declarative table of `{ team, keywords }` rules, route each ticket to the FIRST team whose keywords appear as whole words in the text, reporting which keywords matched, and falling back to `Triage` when nothing hits.",
+    "expectedOutput": "Billing <- invoice, refund\nSecurity <- phishing, password\nPlatform <- outage, latency, deploy\nBilling <- refund\nTriage <- no keyword hit",
+    "canonical": "// Rules are DATA, not control flow. Array order IS the priority, and adding\n// a team means appending an entry -- route() never changes.\nconst RULES = [\n  { team: 'Security', keywords: ['breach', 'phishing', 'password'] },\n  { team: 'Billing', keywords: ['invoice', 'refund', 'charge'] },\n  { team: 'Platform', keywords: ['outage', 'latency', 'deploy'] },\n];\nconst FALLBACK = 'Triage';\n\n// Whole-word tokens in a Set: 'recharge' must NOT match the keyword 'charge'.\nfunction tokenize(text) {\n  return new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);\n}\n\nfunction route(text, rules = RULES) {\n  const words = tokenize(text);\n  for (const rule of rules) {\n    // filter, not some -- keeping the hits makes the decision explainable.\n    const matched = rule.keywords.filter(k => words.has(k));\n    if (matched.length > 0) return { team: rule.team, matched };\n  }\n  return { team: FALLBACK, matched: [] };\n}\n\nconst tickets = [\n  'Customer disputes an invoice and wants a refund',\n  'User reports a phishing email asking for their password',\n  'Deploy caused an outage with high latency',\n  'Refund the customer after the outage',\n  'Recharge the battery before the offsite',\n];\n\nfor (const t of tickets) {\n  const { team, matched } = route(t);\n  console.log(`${team} <- ${matched.join(', ') || 'no keyword hit'}`);\n}",
+    "hints": [
+      "Tokenize once into a Set: `new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? [])` — whole words, so 'recharge' never matches the keyword 'charge'.",
+      "Scan the rules with `for...of` and return on the first hit — array order is the priority, and a later rule that would also match must never be consulted.",
+      "Collect hits with `filter` (not `some`) so the result carries which keywords fired, and return a fallback team when the loop finishes."
+    ]
+  }
+}

@@ -729,6 +729,30 @@ async function startCrux(t, chId) {
   renderQuestion();
 }
 
+// Due-only review — the session the main app's Home ⟲ links to. It exists
+// because startMixed()'s pool is built from isDue(), and isDue() treats an
+// untouched box-0 question as due; on a mostly-new topic that turns a
+// "Review 2" affordance into 20 shuffled NEW cards with the 2 actually-overdue
+// ones nowhere in sight. This pool is strictly cards the user has SEEN whose
+// interval has come around, oldest first, matching the count Home displays.
+// Empty pool → fall back to mixed so the route is never a dead end.
+async function startDue(t) {
+  await loadTopicChapters(t);
+  progress.lastTopic = t; persist();
+  const now = Date.now();
+  const pool = [];
+  META[t].chapters.forEach(c => chapterItems(t, CH[t][c.id]).forEach(it => {
+    const b = boxOf(it.key);
+    if (b.seen > 0 && b.due <= now) pool.push({ it, due: b.due });
+  }));
+  if (!pool.length) return startMixed(t);
+  setRoute(`#/${t}/due`);
+  pool.sort((a, b) => a.due - b.due);
+  session = { topic: t, title: 'Due review', items: pool.map(x => x.it).slice(0, 20),
+    pos: 0, right: 0, gained: 0, streak: 0, answered: false, mixed: true };
+  renderQuestion();
+}
+
 async function startMixed(t) {
   await loadTopicChapters(t);
   progress.lastTopic = t; persist();
@@ -974,6 +998,7 @@ document.addEventListener('keydown', e => {
 //   #/<topic>                topic home (chapter list)
 //   #/<topic>/<unit>         unit detail (key ideas + drill modes)
 //   #/<topic>/mixed          due-first mixed review, started immediately
+//   #/<topic>/due            ONLY the seen cards whose interval came around
 // Screen renders push their route with replaceState (no history spam inside a
 // browsing session); only an EXTERNAL hash change (back/forward, a pasted or
 // deep link) re-renders, so this never fights the click handlers.
@@ -998,6 +1023,7 @@ function parseRoute() {
   if (!parts[1]) return { view: 'topic', topic };
   const unit = parts[1].replace(/[^a-z0-9-]/gi, '');
   if (unit === 'mixed') return { view: 'mixed', topic };
+  if (unit === 'due') return { view: 'due', topic };
   return { view: 'unit', topic, unit };
 }
 
@@ -1008,6 +1034,7 @@ async function applyRoute() {
   try {
     if (r.view === 'topic' && known(r.topic)) return await renderTopicHome(r.topic);
     if (r.view === 'mixed' && known(r.topic)) { curTopic = r.topic; return await startMixed(r.topic); }
+    if (r.view === 'due' && known(r.topic)) { curTopic = r.topic; return await startDue(r.topic); }
     if (r.view === 'unit' && known(r.topic)) {
       const m = await loadMeta(r.topic);
       if (m.chapters.some(c => c.id === r.unit)) return await renderChapterDetail(r.topic, r.unit);

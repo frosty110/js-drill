@@ -136,9 +136,18 @@ function homeContinueTarget(scope) {
 // icons use (overdue → due → weak → reveal-flagged). buildRepairIndex()
 // already dedupes and ranks globally; scoping is an intersection, so the two
 // surfaces can never disagree about what needs work.
-function homeRepairIds(scope) {
+//
+// `unscoped: true` is deliberate: Home's scopes are the ones the USER just
+// tapped, so the Starter Plan's track filter (which dueReviewIds() applies)
+// must not silently subtract from them. Without it a section could read
+// "1 due" — homeScopeStats() calls isDueForReview() directly, which is
+// unfiltered — while showing no ⟲ and no entry in Review-all.
+//
+// Entries keep their rank so the review session can pick a level that can
+// actually CLEAR the signal that queued the lesson (see 23-review.js).
+function homeRepairEntries(scope) {
   const inScope = new Set(homeScopeLessons(scope).map(l => l.id));
-  const idx = typeof buildRepairIndex === 'function' ? buildRepairIndex() : new Map();
+  const idx = typeof buildRepairIndex === 'function' ? buildRepairIndex({ unscoped: true }) : new Map();
   const rows = [];
   idx.forEach((rep, id) => { if (inScope.has(id)) rows.push({ id, rank: rep.rank }); });
   rows.sort((a, b) => {
@@ -147,7 +156,11 @@ function homeRepairIds(scope) {
     const db = (state.reviews[b.id] || {}).dueAt || Infinity;
     return da - db;
   });
-  return rows.map(r => r.id);
+  return rows;
+}
+
+function homeRepairIds(scope) {
+  return homeRepairEntries(scope).map(r => r.id);
 }
 
 // ── System Design rollup (cross-store, read-only) ───────────────────────────
@@ -319,8 +332,8 @@ function _homeAreaCardHtml(area) {
             </span>
           </a>
           ${ts.due ? `<a class="ds-btn ds-btn--ghost ds-btn--pill home-subrow__review"
-             href="system-design.html#/${escapeHtml(t.id)}/mixed"
-             title="Mixed review — ${escapeHtml(t.title)}">${dsIcon('refresh', 14)} ${ts.due}</a>` : ''}
+             href="system-design.html#/${escapeHtml(t.id)}/due"
+             title="Review ${ts.due} card${ts.due === 1 ? '' : 's'} due — ${escapeHtml(t.title)}">${dsIcon('refresh', 14)} ${ts.due}</a>` : ''}
         </div>`;
     }).join('');
     return `
@@ -435,7 +448,9 @@ function openHome() {
   if (!hadIndex) _sdLoadIndex().then(() => { if (document.querySelector('.home-page')) openHome(); });
 
   const { streak, todayActive, passesToday } = _todayStreak();
-  const dueTotal = typeof dueReviewIds === 'function' ? dueReviewIds().length : 0;
+  // Unfiltered on purpose — same reason as homeRepairEntries(): Home reports
+  // the whole store, not the active Starter Plan's slice of it.
+  const dueTotal = typeof allDueReviewIds === 'function' ? allDueReviewIds().length : 0;
   const sd = _sdAreaStats();
   const sdDue = sd ? sd.due : 0;
   const hour = new Date().getHours();

@@ -1120,15 +1120,22 @@ function initSurfaceToggle() {
 // Phase E: union the "needs work" signals into one ranked index, consumed by the
 // sidebar inline icons + the 🛠 Repair filter. Resurrect (overdue) > due > weak >
 // reveal. Bridge is an opportunity signal with its own surface — excluded here.
-function buildRepairIndex() {
+// `unscoped: true` sources the due signal from allDueReviewIds() instead of
+// the Starter-Plan-filtered dueReviewIds(). Home and the scoped review
+// sessions pass it: their scope is the track/section the user just tapped, so
+// silently subtracting the active plan's track filter on top would show a
+// section "1 due" (homeScopeStats reads isDueForReview directly) while its ⟲
+// never appears. The sidebar and Browse keep the plan-scoped default.
+function buildRepairIndex({ unscoped = false } = {}) {
   const idx = new Map();
   const consider = (id, rank, icon, title) => {
     if (!id || !findLesson(id)) return;
     const cur = idx.get(id);
     if (!cur || rank < cur.rank) idx.set(id, { rank, icon, title });
   };
+  const dueIds = () => (unscoped ? allDueReviewIds() : dueReviewIds());
   try { (resurrectIds() || []).forEach(id => consider(id, 0, '💀', 'Overdue — mastered but past 2× its review interval')); } catch (_) {}
-  try { (dueReviewIds() || []).forEach(id => consider(id, 1, '🕒', 'Due for review (' + formatDueRelative(id) + ')')); } catch (_) {}
+  try { (dueIds() || []).forEach(id => consider(id, 1, '🕒', 'Due for review (' + formatDueRelative(id) + ')')); } catch (_) {}
   try { Object.keys(state.weakness || {}).forEach(id => { if (state.weakness[id]) consider(id, 2, '⚠️', 'Weak spot — recurring L1 miss'); }); } catch (_) {}
   try { Object.keys(state.revealed || {}).forEach(id => { if (wasRevealed(id, 'L2') || wasRevealed(id, 'L3')) consider(id, 3, '🃏', 'Mastered with a reveal — retry clean to clear'); }); } catch (_) {}
   return idx;

@@ -16,11 +16,19 @@
 // levels already do — SR scheduling, weakness clearing, reveal-flag clearing,
 // history — happens for free and stays the single source of truth.
 //
-// Level choice mirrors the long-standing Review-Due rule: a mastered lesson
-// coming back for review lands on L2 on touch devices (cued recall — typing
-// free-recall code on a phone is the wrong friction, PROFILE.md's 80% case)
-// and L3 on fine-pointer devices (the tier that advances the SR interval).
-// A not-yet-mastered lesson lands on its first unpassed level instead.
+// Level choice follows THE SIGNAL THAT QUEUED THE LESSON, not just overall
+// mastery — otherwise a rep can "pass" without repairing anything and the
+// lesson stays in the queue the session claims to be draining:
+//   · due / overdue → the long-standing Review-Due rule: L2 on touch (cued
+//     recall — typing free-recall code on a phone is the wrong friction,
+//     PROFILE.md's 80% case; L2 on a due lesson holds the SR bucket and
+//     resets dueAt) and L3 on fine pointer (advances the interval).
+//   · weak spot → L1. clearWeakness() is called from ONE place (12a-l1.js, a
+//     clean L1 pass); an L2/L3 rep can never clear it.
+//   · reveal-flagged → the flagged level itself. markLevelPassed only clears
+//     revealed[id][level] for the level actually passed, so an L3-only flag
+//     sent to L2 would survive the "pass". Pointer type only breaks the tie
+//     when both levels are flagged.
 //
 // Session state is in-memory only — a review queue is a moment, not a
 // preference, and persisting it would resurrect a stale queue days later.
@@ -30,10 +38,18 @@ const REVIEW_MAX_REPS = 12;
 
 let _reviewSession = null;   // { slug, label, ids, pos, passed, startedAt }
 
-function _reviewTargetLevel(lessonId) {
-  if (lessonOverallStatus(lessonId) === 'mastered') {
-    return window.matchMedia('(pointer: coarse)').matches ? 'L2' : 'L3';
+// rank comes from buildRepairIndex(): 0 overdue · 1 due · 2 weak · 3 reveal.
+function _reviewTargetLevel(lessonId, rank) {
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  if (rank === 2) return 'L1';                      // only a clean L1 pass clears weakness
+  if (rank === 3) {
+    const flagged = ['L2', 'L3'].filter(lv => typeof wasRevealed === 'function' && wasRevealed(lessonId, lv));
+    if (flagged.length) {
+      const preferred = coarse ? 'L2' : 'L3';
+      return flagged.includes(preferred) ? preferred : flagged[0];
+    }
   }
+  if (lessonOverallStatus(lessonId) === 'mastered') return coarse ? 'L2' : 'L3';
   return _todayNextLevel(lessonId);
 }
 
@@ -44,9 +60,12 @@ function _reviewLevelIdx(level) {
 // The queue for a slug. 'all' is the global repair list; anything else
 // resolves through the Home scope model, so the queue and the counts on the
 // Home buttons are computed from exactly one source.
+// Returns [{id, rank}] — the rank rides along so the session can target the
+// level that repairs THAT signal. `unscoped: true` matches Home's counts (see
+// homeRepairEntries in 22-home.js).
 function reviewQueueFor(slug) {
   if (slug === 'all') {
-    const idx = typeof buildRepairIndex === 'function' ? buildRepairIndex() : new Map();
+    const idx = typeof buildRepairIndex === 'function' ? buildRepairIndex({ unscoped: true }) : new Map();
     const rows = [];
     idx.forEach((rep, id) => rows.push({ id, rank: rep.rank }));
     rows.sort((a, b) => {
@@ -55,10 +74,10 @@ function reviewQueueFor(slug) {
       const db = (state.reviews[b.id] || {}).dueAt || Infinity;
       return da - db;
     });
-    return rows.map(r => r.id);
+    return rows;
   }
   const scope = homeScopeFromSlug(slug);
-  return scope ? homeRepairIds(scope) : [];
+  return scope ? homeRepairEntries(scope) : [];
 }
 
 function reviewScopeLabel(slug) {
@@ -68,15 +87,18 @@ function reviewScopeLabel(slug) {
 }
 
 function startScopedReview(slug) {
-  const ids = reviewQueueFor(slug).slice(0, REVIEW_MAX_REPS);
-  if (!ids.length) {
+  const queue = reviewQueueFor(slug).slice(0, REVIEW_MAX_REPS);
+  if (!queue.length) {
     _reviewToast(`Nothing to review in ${reviewScopeLabel(slug)} — all on schedule.`);
     return;
   }
+  const ranks = {};
+  for (const q of queue) ranks[q.id] = q.rank;
   _reviewSession = {
     slug,
     label: reviewScopeLabel(slug),
-    ids,
+    ids: queue.map(q => q.id),
+    ranks,
     pos: 0,
     passed: 0,
     startedAt: Date.now(),
@@ -90,7 +112,7 @@ function _reviewGoto(pos) {
   if (pos >= _reviewSession.ids.length) { _reviewFinish(); return; }
   _reviewSession.pos = pos;
   const id = _reviewSession.ids[pos];
-  const level = _reviewTargetLevel(id);
+  const level = _reviewTargetLevel(id, _reviewSession.ranks[id]);
   _reviewSession.level = level;
   selectLesson(id);
   selectTab(level);
@@ -131,7 +153,15 @@ function _reviewOnLevelPass(lessonId, level) {
   const s = _reviewSession;
   if (!s) return;
   if (s.ids[s.pos] !== lessonId) return;
-  if (_reviewLevelIdx(level) < _reviewLevelIdx(s.level || 'L1')) {
+  const rank = s.ranks[lessonId];
+  const targetIdx = _reviewLevelIdx(s.level || 'L1');
+  const passedIdx = _reviewLevelIdx(level);
+  // Weak (2) and reveal (3) repairs are cleared by ONE specific level, so
+  // only that level ends the rep — drifting up to L3 on a weak-spot rep
+  // leaves the weakness flag set. Due/overdue repairs are satisfied by the
+  // target level or anything above it (L3 advances the bucket L2 holds).
+  const done = (rank === 2 || rank === 3) ? passedIdx === targetIdx : passedIdx >= targetIdx;
+  if (!done) {
     _reviewRenderHud();   // level chip may have moved on; keep the strip truthful
     return;
   }
@@ -200,15 +230,27 @@ function _reviewToast(msg) {
   }, 2600);
 }
 
-// Leaving the queue's lesson by any other route (sidebar click, palette,
-// Browse) ends the session — the HUD would otherwise claim to be tracking a
-// lesson the user has walked away from.
+// Leaving the queue's lesson by any other route ends the session — the HUD
+// would otherwise claim to be tracking a rep the user has walked away from.
+// Two ways to leave, and BOTH have to be caught:
+//   · another lesson is selected → currentLessonId no longer matches;
+//   · a full-page surface (Home, Today, Browse, Progress) or a full-bleed
+//     drill session takes over #lesson-shell — those renderers leave
+//     currentLessonId untouched, so identity alone would miss it.
+// Deliberately NOT "the shell has no lesson tabs": renderLesson paints a
+// loading placeholder first when the lesson body is still in flight, and
+// exiting on that would kill the session between reps.
+const _REVIEW_SURFACE_SELECTOR =
+  '.home-page, .today-home-page, .browse-page, .progress-page, .dashboard-page, [data-action^="exit-"]';
+
 (() => {
   const shell = document.getElementById('lesson-shell');
   if (!shell) return;
   new MutationObserver(() => {
     const s = _reviewSession;
     if (!s) return;
-    if (state.currentLessonId !== s.ids[s.pos]) exitScopedReview(true);
+    if (state.currentLessonId !== s.ids[s.pos] || shell.querySelector(_REVIEW_SURFACE_SELECTOR)) {
+      exitScopedReview(true);
+    }
   }).observe(shell, { childList: true });
 })();

@@ -28,12 +28,14 @@ const SEED = {
     'two-sum': { L1: 'passed', L2: 'passed', L3: 'passed' },
     'p-contains-dup': { L1: 'passed', L2: 'passed', L3: 'passed' },
     'p-anagrams': { L1: 'passed' },
+    'p-valid-anagram': { L1: 'passed', L2: 'passed', L3: 'passed' },
   },
   reviews: {
     'two-sum': { lastPassedAt: Date.now() - 40 * 86400000, interval: 86400000, dueAt: Date.now() - 39 * 86400000 },
     'p-contains-dup': { lastPassedAt: Date.now(), interval: 30 * 86400000, dueAt: Date.now() + 30 * 86400000 },
   },
   weakness: { 'p-anagrams': 2 },
+  revealed: { 'p-valid-anagram': { L3: true } },
   lastLessonId: 'p-anagrams',
   lastTab: 'L1',
 };
@@ -73,8 +75,8 @@ const SEED = {
     const codingFrac = await s.eval(`document.querySelector('[data-home-area="coding"] .home-area__frac')?.textContent || ''`);
     s.assert(/^\d+\/\d+$/.test(codingFrac), `coding card shows a mastered/total fraction (got "${codingFrac}")`);
     s.assert(
-      await s.eval(`(() => { const [m, t] = (document.querySelector('[data-home-area="coding"] .home-area__frac').textContent).split('/').map(Number); return m === 2 && t > 100; })()`),
-      'coding fraction counts the two seeded mastered lessons out of the full problem set'
+      await s.eval(`(() => { const [m, t] = (document.querySelector('[data-home-area="coding"] .home-area__frac').textContent).split('/').map(Number); return m === 3 && t > 100; })()`),
+      'coding fraction counts the three seeded mastered lessons out of the full problem set'
     );
 
     // ── Subcategory expansion ───────────────────────────────────────────
@@ -136,9 +138,37 @@ const SEED = {
     await s.click('[data-review-skip]');
     await s.waitFor(`_reviewSession && _reviewSession.pos === 1`);
     s.assert(true, 'Skip advances the queue');
+
+    // The level has to be one that can CLEAR the signal that queued the
+    // lesson, at both viewports — a weak spot is only cleared by a clean L1
+    // pass, and a reveal flag only by the flagged level itself.
+    const weakLvl = await s.eval(`(() => {
+      const i = _reviewSession.ids.indexOf('p-anagrams');
+      return i < 0 ? null : _reviewTargetLevel('p-anagrams', _reviewSession.ranks['p-anagrams']);
+    })()`);
+    s.assert(weakLvl === 'L1', `weak-spot rep targets L1 (clearWeakness' only caller) — got ${weakLvl}`);
+    const revealLvl = await s.eval(`(() => {
+      const i = _reviewSession.ids.indexOf('p-valid-anagram');
+      return i < 0 ? null : _reviewTargetLevel('p-valid-anagram', _reviewSession.ranks['p-valid-anagram']);
+    })()`);
+    s.assert(revealLvl === 'L3', `L3-only reveal flag targets L3 even on touch — got ${revealLvl}`);
+
     await s.click('[data-review-exit]');
     await s.waitFor(`!!document.querySelector('.home-page')`);
     s.assert(await s.eval(`!document.getElementById('review-hud')`), 'Exit unmounts the HUD and returns Home');
+
+    // Navigating to another shell surface mid-review ends the session — those
+    // renderers replace #lesson-shell without touching currentLessonId, so
+    // identity alone wouldn't catch it and the HUD would hang over Browse.
+    await s.eval(`startScopedReview('coding')`);
+    await s.waitFor(`!!document.getElementById('review-hud')`, { timeoutMs: 6000 });
+    await s.eval(`document.getElementById('browse-btn').click()`);
+    await s.waitFor(`!!document.querySelector('.browse-page')`);
+    await s.sleep(250);
+    s.assert(
+      await s.eval(`!document.getElementById('review-hud') && !_reviewSession && !document.body.classList.contains('review-active')`),
+      'opening another surface mid-review ends the session and drops the HUD'
+    );
 
     // ── Deep links ──────────────────────────────────────────────────────
     await s.eval(`location.hash = '#/m/review/coding'`);
@@ -166,6 +196,28 @@ const SEED = {
       'an explicit lesson deep link still beats the Home boot'
     );
 
+    // Home reports the whole store: a Starter Plan scoped to one track must
+    // not subtract from Home's counts, or a section reads "1 due" with no ⟲.
+    await s.eval(`document.getElementById('home-btn').click()`);
+    await s.waitFor(`!!document.querySelector('.home-page')`);
+    const scopedCounts = await s.eval(`(() => {
+      const before = { due: homeScopeStats({kind:'section',key:'Arrays & Hashing'}).due,
+                       repair: homeRepairIds({kind:'section',key:'Arrays & Hashing'}).length };
+      state.starterPath = true; state.starterPathTrack = 'syntax';
+      if (typeof _invalidateStarterPathCache === 'function') _invalidateStarterPathCache();
+      const after = { due: homeScopeStats({kind:'section',key:'Arrays & Hashing'}).due,
+                      repair: homeRepairIds({kind:'section',key:'Arrays & Hashing'}).length };
+      state.starterPath = false; state.starterPathTrack = null;
+      if (typeof _invalidateStarterPathCache === 'function') _invalidateStarterPathCache();
+      return { before, after };
+    })()`);
+    s.assert(
+      scopedCounts.before.due === scopedCounts.after.due &&
+      scopedCounts.before.repair === scopedCounts.after.repair &&
+      scopedCounts.after.repair > 0,
+      `a track-scoped Starter Plan doesn't shrink Home's scoped counts (${JSON.stringify(scopedCounts)})`
+    );
+
     // ── System Design rollup + routes ───────────────────────────────────
     await s.eval(`document.getElementById('home-btn').click()`);
     await s.waitFor(`!!document.querySelector('[data-home-area="sysdesign"] .home-subrow')`, { timeoutMs: 8000 });
@@ -174,6 +226,11 @@ const SEED = {
     s.assert(
       await s.eval(`(document.querySelector('[data-home-sd-continue]')?.getAttribute('href') || '').startsWith('system-design.html')`),
       'System Design Continue points at the drill page'
+    );
+    s.assert(
+      await s.eval(`[...document.querySelectorAll('[data-home-area="sysdesign"] .home-subrow__review')]
+        .every(a => /#\\/[a-z-]+\\/due$/.test(a.getAttribute('href')))`),
+      'System Design ⟲ routes to the due-only session, not the untouched-inclusive mixed pool'
     );
     await s.snap('05-home-sysdesign');
 
@@ -203,6 +260,27 @@ const SEED = {
   await sd.eval(`document.getElementById('home-btn').click()`);
   await sd.waitFor(`!!document.querySelector('.topic-card')`);
   sd.assert(await sd.eval(`location.hash === '#/'`), 'landing normalizes back to #/');
+
+  // #/<topic>/due drills ONLY the seen cards whose interval came around —
+  // unlike mixed, whose isDue() counts every untouched box-0 question. Seed a
+  // single overdue card in a topic with 202 untouched ones and assert the
+  // session is exactly that card.
+  await sd.seedLocalStorage('jsdrill.systemdesign.v1', {
+    __v: 1,
+    boxes: { 'ddia/ch01/0': { box: 2, seen: 3, good: 2, again: 1, due: Date.now() - 86400000, last: Date.now() - 5 * 86400000 } },
+    lastTopic: 'ddia', lastChapter: 'ch01',
+  });
+  await sd.eval(`location.hash = '#/ddia/due'`);
+  await sd.waitFor(`typeof session !== 'undefined' && session && session.title === 'Due review'`, { timeoutMs: 8000 });
+  const dueSession = await sd.eval(`({ n: session.items.length, key: session.items[0] && session.items[0].key })`);
+  sd.assert(dueSession.n === 1 && dueSession.key === 'ddia/ch01/0',
+    `due session holds only the seen-overdue card (got ${JSON.stringify(dueSession)})`);
+
+  // Empty due pool must not dead-end — it falls back to the mixed session.
+  await sd.eval(`location.hash = '#/components/due'`);
+  await sd.waitFor(`typeof session !== 'undefined' && session && session.items.length > 0`, { timeoutMs: 8000 });
+  sd.assert(await sd.eval(`session.title === 'Mixed Review'`),
+    'a topic with nothing seen-overdue falls back to mixed instead of an empty session');
 
   await sd.close();
   const r2 = sd.report();

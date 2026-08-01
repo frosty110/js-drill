@@ -18,6 +18,92 @@
 
   const R = {};
 
+  // ── TypeScript support ───────────────────────────────────────────────────
+  // A lesson may declare `"lang": "ts"`, in which case every code string that
+  // belongs to it (reference, L2 templates, L3 canonical, and whatever the
+  // user types in the editor) is TypeScript and must have its types erased
+  // before `new Function` sees it — `new Function` is a JavaScript parser, so
+  // a bare `x: number` annotation is a SyntaxError.
+  //
+  // The compiler is loaded LAZILY, on first use only. It's ~1.6 MB gzipped,
+  // which would be an unacceptable boot cost on the phone this app is built
+  // for (PROFILE.md), so JS lessons never pay it. Once fetched the browser
+  // caches it for every later TS lesson.
+  //
+  // We use `transpileModule`, not a full program: it erases types and does NOT
+  // type-check. That's deliberate. The drill grades on OUTPUT, and a lesson
+  // whose canonical is mid-typing shouldn't refuse to run because an inferred
+  // type is momentarily wrong.
+  //
+  // Node's validator (tools/validate-data.js) erases types with the built-in
+  // `module.stripTypeScriptTypes` instead of shipping this 9 MB dependency.
+  // Different engines, same contract: both erase, neither type-checks. Only
+  // erasable syntax is allowed in lessons (see docs/canonical-style.md § TS),
+  // which is what keeps the two paths equivalent.
+  R.TS_URL = 'https://cdn.jsdelivr.net/npm/typescript@5.6.3/lib/typescript.js';
+
+  let tsLoad = null;
+  R.ensureTypeScript = function () {
+    if (root.ts && root.ts.transpileModule) return Promise.resolve(root.ts);
+    if (tsLoad) return tsLoad;
+    tsLoad = new Promise((resolve, reject) => {
+      if (typeof document === 'undefined') {
+        reject(new Error('TypeScript compiler unavailable (no document)'));
+        return;
+      }
+      const el = document.createElement('script');
+      el.src = R.TS_URL;
+      el.async = true;
+      el.onload = () => {
+        if (root.ts && root.ts.transpileModule) resolve(root.ts);
+        else reject(new Error('TypeScript loaded but transpileModule is missing'));
+      };
+      el.onerror = () => {
+        tsLoad = null; // let a later attempt retry after a transient failure
+        reject(new Error('Could not load the TypeScript compiler (offline?)'));
+      };
+      document.head.appendChild(el);
+    });
+    return tsLoad;
+  };
+
+  // Language resolver. Call sites that know the lesson pass `{ lang }`
+  // explicitly; the rest fall back to whatever the app registers here (the
+  // currently-open lesson's `lang`). Registered once, in the app's init.
+  let langResolver = null;
+  R.setLanguageResolver = function (fn) { langResolver = fn; };
+
+  R.resolveLang = function (lang) {
+    if (lang) return lang;
+    try { return (langResolver && langResolver()) || 'js'; } catch { return 'js'; }
+  };
+
+  // Erase types. A no-op for JS, so it's safe to call unconditionally.
+  R.transpile = async function (code, lang) {
+    if (R.resolveLang(lang) !== 'ts') return code;
+    const ts = await R.ensureTypeScript();
+    const out = ts.transpileModule(code, {
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.None,
+        removeComments: false
+      },
+      reportDiagnostics: true
+    });
+    // transpileModule only ever reports SYNTACTIC problems (it does no type
+    // analysis), so anything here is genuinely malformed source and would
+    // otherwise become confusing garbage JS.
+    const syntax = (out.diagnostics || []).filter(
+      d => d.category === ts.DiagnosticCategory.Error
+    );
+    if (syntax.length) {
+      const first = syntax[0];
+      const msg = ts.flattenDiagnosticMessageText(first.messageText, ' ');
+      throw new Error(`TypeScript syntax error: ${msg}`);
+    }
+    return out.outputText;
+  };
+
   // formatArg controls how console-log args are stringified into the graded
   // output. Special-cases Map/Set so `console.log(myMap)` shows real content
   // (native JSON.stringify produces "{}" for them).
@@ -45,9 +131,19 @@
   // console.debug / console.info are captured separately and NEVER fed to the
   // grader — that's the escape hatch for users who want to log mid-attempt
   // without breaking the subsequence match.
-  R.runCode = async function (code) {
+  // `opts.lang` — 'ts' erases types first; omitted falls back to the resolver.
+  R.runCode = async function (code, opts) {
     const logs = [];
     const debugLogs = [];
+    // Type erasure happens before anything else so a TS syntax error is
+    // reported the same way a runtime error is, rather than as a bare
+    // SyntaxError from `new Function`.
+    let source;
+    try {
+      source = await R.transpile(code, opts && opts.lang);
+    } catch (e) {
+      return { ok: false, output: (e && e.message) || String(e), debug: '' };
+    }
     const fakeConsole = {
       log:   (...args) => logs.push(args.map(R.formatArg).join(' ')),
       error: (...args) => logs.push('[error] ' + args.map(R.formatArg).join(' ')),
@@ -66,7 +162,7 @@
     const hasWindow = typeof window !== 'undefined';
     if (hasWindow) window.addEventListener('unhandledrejection', rejectionHandler);
     try {
-      const wrapped = '"use strict";\n' + code;
+      const wrapped = '"use strict";\n' + source;
       // eslint-disable-next-line no-new-func
       const result = new Function('console', wrapped)(fakeConsole);
       if (result && typeof result.then === 'function') {
@@ -144,7 +240,17 @@
   // loop-guard-transformed first. A budget overrun surfaces as a normal
   // { ok: false } result whose output contains "Iteration budget exceeded".
   R.runCodeBudgeted = async function (code, opts) {
-    return R.runCode(R.injectLoopGuard(code, opts && opts.maxIterations));
+    // Erase types BEFORE the loop guard: injectLoopGuard is a source scanner
+    // looking for `for (` / `while (`, and a type annotation can carry its own
+    // parens (`Array<(n: number) => void>`) that would confuse its brace walk.
+    let source;
+    try {
+      source = await R.transpile(code, opts && opts.lang);
+    } catch (e) {
+      return { ok: false, output: (e && e.message) || String(e), debug: '' };
+    }
+    // Already plain JS at this point, so pin lang to skip a second transpile.
+    return R.runCode(R.injectLoopGuard(source, opts && opts.maxIterations), { lang: 'js' });
   };
 
   root.DrillRunner = R;

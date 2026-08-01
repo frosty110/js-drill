@@ -60,6 +60,65 @@ When a problem could be written either way, ask:
 
 ---
 
+## TypeScript lessons (`lang: "ts"`)
+
+A lesson may set `"lang": "ts"` at the top level of its JSON. Everything that
+lesson owns is then TypeScript: `reference.code`, every `L2.exercises[*].template`,
+`L3.canonical`, `reference.alternates[*].code`, and whatever the user types into
+the L3 editor. Absent the field, a lesson is JavaScript — which is what all the
+pre-TypeScript lessons rely on, so this is purely additive.
+
+**How it runs.** Types are erased before execution, because `new Function` is a
+JavaScript parser and a bare `x: number` is a SyntaxError. Two engines do it:
+
+| Where | Eraser | Why |
+|---|---|---|
+| Browser | `ts.transpileModule`, lazy-loaded from a CDN on first use (`js/core/runner.js`) | Handles arbitrary user-typed TS. ~1.6 MB gz, so it's fetched only when a TS lesson actually runs code — JS lessons never pay it. |
+| Validator | `module.stripTypeScriptTypes` (built into Node ≥ 22.13) | Zero dependency; avoids a 9 MB devDependency for a Node-only path. |
+
+Neither type-checks — both only erase. The drill grades on **output**, and a
+half-written attempt shouldn't refuse to run because an inferred type is
+momentarily wrong.
+
+**Only erasable syntax is allowed.** That's what keeps the two engines
+equivalent. These are fine:
+
+`type` aliases and unions · `interface` · type annotations on params, returns,
+variables and class fields · generics (`Map<string, T>`) · `as` casts ·
+`satisfies` · optional markers (`city?: string`) · `readonly` · non-null
+assertion (`!`) · type guards (`v is T`) · annotated arrow returns (`(u): Row => …`)
+
+These are **banned** — they emit runtime code, so Node's stripper rejects them
+outright:
+
+| Banned | Use instead |
+|---|---|
+| `enum` | A union of string literals: `type TxnType = 'DEPOSIT' \| 'WITHDRAWAL'`. Same checking, zero emit, and it matches the strings actually on the wire. |
+| Parameter properties (`constructor(private x: number)`) | Declare the field and assign it in the constructor body. |
+| `namespace` | A module or a plain object. |
+| Decorators | Not applicable to drill-sized code. |
+
+**Comment for a reader who doesn't know TypeScript.** The target user
+(PROFILE.md) knows JavaScript and may not know TS. Explain each construct at
+the point it first appears — what `?` means on a field, what `as` does and does
+not check, why `Promise<T>` wraps an async return. The comments are lesson
+content, not decoration.
+
+**Teach the compile-time/runtime boundary.** It's the highest-value thing a TS
+lesson can drill, and the place confident users slip: a cast is an assertion,
+not a check; a union can't validate a file it never sees; a 500 response is a
+perfectly well-typed response. Where a lesson takes untrusted input, show the
+runtime guard alongside the type.
+
+**Watch the walkthrough traces.** A `walkthrough.trace` stays plain JavaScript —
+it's engine machinery the user never sees. But its `yield { line: N }` values
+index into `reference.code`, so adding a block of explanatory comments shifts
+every line number. The validator gates that the numbers stay in range; it can't
+tell you they point at the *right* line, so re-check them after editing a
+canonical.
+
+---
+
 ## Banned syntax (validator-enforced)
 
 These never appear in `reference.code`, `L2.exercises[*].template`, or `L3.canonical`. They are rare-or-never in modern JS and shouldn't take up canonical real estate:

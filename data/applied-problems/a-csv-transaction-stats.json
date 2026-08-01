@@ -4,13 +4,13 @@
   "section": "Applied Problems",
   "track": "applied",
   "status": "full",
-  "description": "Parse -> group -> aggregate pipeline: `.map` the CSV lines into header-keyed records (collection-transform), then a `for...of` upsert loop that dispatches on a DEPOSIT/WITHDRAWAL enum into a per-company stats class — the loop carries create-if-absent state and mutates an instance, so it is algorithm shape, not a fold.",
+  "description": "Parse → group → aggregate pipeline in TypeScript: `.map` the CSV lines into header-keyed records (collection-transform), then a `for...of` upsert loop that dispatches on a `'DEPOSIT' | 'WITHDRAWAL'` union into a per-company stats class — the loop carries create-if-absent state and mutates an instance, so it is algorithm shape, not a fold.",
   "mechanics": [
     "map-keyed-state",
     "text-scan"
   ],
   "conversation": {
-    "intro": "The 45-minute 'here's a CSV, aggregate it' interview. It looks like a parsing problem and is really a data-modeling problem: the interviewer is watching whether you hard-code column indices, whether you coerce the strings, and whether your enum dispatch lives in one place. Each section has what you'd say out loud and why the move matters.",
+    "intro": "The 45-minute 'here's a CSV, aggregate it' interview, in TypeScript. It looks like a parsing problem and is really a data-modeling problem: the interviewer is watching whether you hard-code column indices, whether you coerce the strings, whether your enum dispatch lives in one place — and, in a typed codebase, whether you know which of your guarantees survive to runtime. Each section has what you'd say out loud and why the move matters.",
     "sections": [
       {
         "title": "1. Restate & clarify",
@@ -67,6 +67,12 @@
         "prompt": "Defend the bound and name what you'd change for a real file.",
         "say": "\"Time is O(n + k log k): one pass over n rows with O(1) Map operations and O(c) work per row for the c columns, then a sort over the k distinct companies. Since k <= n and usually k << n, the parse dominates. Space is O(n) for the parsed records plus O(k) for the Map — and honestly the O(n) records array is the part I'd change first at scale.\n\nFor a genuinely large file I wouldn't materialize the records at all: stream line by line and fold straight into the Map, which drops peak memory to O(k). The rest of the structure survives that change unmodified, which is a decent sign the decomposition is right.\n\nThe transferable shape here is 'flat rows in, keyed aggregates out' — the same skeleton handles orders by customer, log lines by status code, or timesheets by project. What varies is the key function and what the accumulator does per row; the parse-zip-upsert-dispatch spine stays put.\"",
         "why": "Volunteering that the intermediate array is the scaling bottleneck — and that the fix is streaming — answers the follow-up before it's asked, and it's a genuine tradeoff rather than a rehearsed line: materializing is more debuggable and testable, streaming is what you need at a million rows. Noting that the rest of the code survives the change is the real point, because it's evidence that the three moves were separable for a reason."
+      },
+      {
+        "title": "7. Typing it — what TypeScript actually buys here",
+        "prompt": "Three modeling decisions, and the one place the type system can't help you.",
+        "say": "\"Three calls I'd make and defend.\n\nFirst, the transaction type is a union of string literals — `type TxnType = 'DEPOSIT' | 'WITHDRAWAL'` — not an `enum`. Both check callers just as tightly, but a union is erased completely while an `enum` generates a real runtime object. In a codebase that's already shipping JSON strings over the wire, the union is also the thing that matches the data: I'm comparing against the literal `'DEPOSIT'` either way, so introducing an enum member that merely wraps that string adds a translation layer for nothing.\n\nSecond, `CsvRow.amount` is typed `string`, not `number`. That's deliberate and it's the honest model — a CSV cell IS text. Typing it `number` would be a lie the compiler happily believes, and then `Number()` looks redundant right up until the totals come out concatenated.\n\nThird — and this is the one I'd make sure to say out loud — the types do not validate the file. `Object.fromEntries(...) as CsvRow` is a cast, and a cast is an assertion, not a check: I'm telling the compiler to believe a shape it has no way to verify. So the union constrains my code and the guard constrains the data. `function isTxnType(v: string): v is TxnType` does both jobs at once — it's a real runtime comparison, and the `v is TxnType` return type narrows the value for everything downstream.\"",
+        "why": "The compile-time versus runtime boundary is the thing interviewers are actually probing when they hand a typed candidate untrusted input, and it's where confident TypeScript users most often slip: the cast reads like a guarantee, so the guard gets skipped, and the failure is silent because the erased union can't object. Naming the cast as an assertion rather than a check — and then showing the type guard as the piece that bridges back — demonstrates you know exactly how much of your safety survives `tsc`. The enum-versus-union argument is the secondary signal: preferring the zero-emit option, and being able to say why, reads as someone who has thought about what their types compile to rather than just satisfying the checker."
       }
     ]
   },
@@ -94,15 +100,15 @@
       "  const text = input;",
       "  const [header, ...rowLines] = text.trim().split('\\n');",
       "  const cols = header.split(',');",
-      "  yield { line: 20, label: `header parsed -> cols=${JSON.stringify(cols)}; ${rowLines.length} data rows to fold`, state: { cols, rowCount: rowLines.length, step: 'header' } };",
+      "  yield { line: 67, label: `header parsed -> cols=${JSON.stringify(cols)}; ${rowLines.length} data rows to fold`, state: { cols, rowCount: rowLines.length, step: 'header' } };",
       "  const rows = rowLines.map(line => {",
       "    const cells = line.split(',');",
       "    return Object.fromEntries(cols.map((col, i) => [col, cells[i]]));",
       "  });",
-      "  yield { line: 23, label: `zip each row against the header -> ${rows.length} records, first=${JSON.stringify(rows[0])}`, state: { cols, rows, step: 'parsed' } };",
+      "  yield { line: 73, label: `zip each row against the header -> ${rows.length} records, first=${JSON.stringify(rows[0])}`, state: { cols, rows, step: 'parsed' } };",
       "  const byCompany = new Map();",
       "  const view = () => [...byCompany.values()].map(s => ({ company: s.company, deposited: s.deposited, withdrawn: s.withdrawn, txns: s.txns, net: s.deposited - s.withdrawn }));",
-      "  yield { line: 30, label: 'init byCompany (empty Map: company -> CompanyStats instance)', state: { rows, byCompany: [], step: 'init' } };",
+      "  yield { line: 80, label: 'init byCompany (empty Map: company -> CompanyStats instance)', state: { rows, byCompany: [], step: 'init' } };",
       "  for (let i = 0; i < rows.length; i++) {",
       "    const row = rows[i];",
       "    const amount = Number(row.amount);",
@@ -113,25 +119,27 @@
       "    if (row.type === 'DEPOSIT') s.deposited += amount;",
       "    else if (row.type === 'WITHDRAWAL') s.withdrawn += amount;",
       "    else throw new Error(`unknown type: ${row.type}`);",
-      "    yield { line: 33, label: `row#${i} ${row.company}/${row.type}/${row.amount} -> ${isNew ? 'NEW instance created, then' : 'existing instance,'} apply() ${row.type === 'DEPOSIT' ? 'deposited' : 'withdrawn'}=${row.type === 'DEPOSIT' ? s.deposited : s.withdrawn}`, state: { rows, i, row, amount, createdInstance: isNew, byCompany: view() } };",
+      "    yield { line: 90, label: `row#${i} ${row.company}/${row.type}/${row.amount} -> ${isNew ? 'NEW instance created, then' : 'existing instance,'} apply() ${row.type === 'DEPOSIT' ? 'deposited' : 'withdrawn'}=${row.type === 'DEPOSIT' ? s.deposited : s.withdrawn}`, state: { rows, i, row, amount, createdInstance: isNew, byCompany: view() } };",
       "  }",
       "  const sorted = view().sort((a, b) => b.net - a.net);",
-      "  yield { line: 38, label: `sort ${sorted.length} companies by net desc -> ${sorted.map(s => `${s.company}(${s.net})`).join(', ')}`, state: { byCompany: view(), sorted } };",
+      "  yield { line: 92, label: `sort ${sorted.length} companies by net desc -> ${sorted.map(s => `${s.company}(${s.net})`).join(', ')}`, state: { byCompany: view(), sorted } };",
       "  const lines = sorted.map(s => `${s.company}: +${s.deposited} / -${s.withdrawn} (${s.txns} txns) net ${s.net}`);",
-      "  yield { line: 39, label: `format each stats object into a line -> ${lines.length} lines`, state: { sorted, lines } };",
-      "  yield { line: 39, label: `return lines -- ${JSON.stringify(lines)}`, state: { sorted, lines, returns: JSON.stringify(lines) } };",
+      "  yield { line: 92, label: `format each stats object into a line -> ${lines.length} lines`, state: { sorted, lines } };",
+      "  yield { line: 93, label: `return lines -- ${JSON.stringify(lines)}`, state: { sorted, lines, returns: JSON.stringify(lines) } };",
       "}"
     ]
   },
   "reference": {
-    "approach": "Header-keyed parse -> Map upsert -> enum dispatch into a stats class",
+    "approach": "Header-keyed parse → Map upsert → union-typed dispatch into a stats class",
     "complexity": "O(n + k log k) / O(n)",
-    "code": "class CompanyStats {\n  constructor(company) {\n    this.company = company;\n    this.deposited = 0;\n    this.withdrawn = 0;\n    this.txns = 0;\n  }\n  // One entry point for both enum arms keeps the dispatch in ONE place.\n  apply(type, amount) {\n    this.txns++;\n    if (type === 'DEPOSIT') this.deposited += amount;\n    else if (type === 'WITHDRAWAL') this.withdrawn += amount;\n    else throw new Error(`unknown type: ${type}`);\n  }\n  get net() {\n    return this.deposited - this.withdrawn;\n  }\n}\n\nfunction parseCsv(text) {\n  // Split off the header so column POSITION never gets hard-coded downstream.\n  const [header, ...rows] = text.trim().split('\\n');\n  const cols = header.split(',');\n  return rows.map(line => {\n    const cells = line.split(',');\n    return Object.fromEntries(cols.map((col, i) => [col, cells[i]]));\n  });\n}\n\nfunction summarize(text) {\n  const byCompany = new Map();\n  for (const row of parseCsv(text)) {\n    // Upsert: create-if-absent, then ALWAYS mutate the stored instance.\n    if (!byCompany.has(row.company)) {\n      byCompany.set(row.company, new CompanyStats(row.company));\n    }\n    byCompany.get(row.company).apply(row.type, Number(row.amount));\n  }\n  return [...byCompany.values()].sort((a, b) => b.net - a.net);\n}",
+    "code": "// ── A TypeScript primer, inline ──────────────────────────────────────────\n// TypeScript is JavaScript plus type annotations. The annotations are checked\n// while you write, then ERASED before anything runs — the JavaScript that\n// actually executes is the same code with the types deleted. Nothing below\n// costs you a single runtime operation.\n\n// `type X = ...` gives a name to a shape. This one is a UNION: a TxnType is\n// the string 'DEPOSIT' or the string 'WITHDRAWAL' and nothing else. Assigning\n// 'TRANSFER' is a compile error. This is why we don't reach for `enum` —\n// a union of string literals does the same job with zero runtime output.\ntype TxnType = 'DEPOSIT' | 'WITHDRAWAL';\n\n// An object type: every CsvRow has these four fields, all `string`. They are\n// strings because a CSV cell is always text until we convert it — writing\n// `amount: number` here would be a lie the compiler couldn't catch.\ntype CsvRow = {\n  date: string;\n  company: string;\n  type: string;\n  amount: string;\n};\n\nclass CompanyStats {\n  // Class fields are declared with their types up front. `readonly` means\n  // \"assignable in the constructor, never reassigned after\" — again a\n  // compile-time rule only; nothing freezes the object at runtime.\n  readonly company: string;\n  // No annotation needed here: TypeScript INFERS `number` from the `0`.\n  deposited = 0;\n  withdrawn = 0;\n  txns = 0;\n\n  // Parameters take their types the same way. (Note we assign `this.company`\n  // by hand rather than writing `constructor(readonly company: string)` —\n  // that shorthand generates real runtime code, so it isn't erasable.)\n  constructor(company: string) {\n    this.company = company;\n  }\n\n  // `type: TxnType` is the payoff: every caller is checked against the two\n  // legal values. `: void` says this method returns nothing.\n  apply(type: TxnType, amount: number): void {\n    this.txns++;\n    if (type === 'DEPOSIT') this.deposited += amount;\n    else this.withdrawn += amount;\n  }\n\n  // A getter annotates its return type after the parens, like a method.\n  get net(): number {\n    return this.deposited - this.withdrawn;\n  }\n}\n\n// A TYPE GUARD. The return type `value is TxnType` is a promise to the\n// compiler: \"if this returns true, you may treat `value` as a TxnType from\n// here on.\" It matters because types are erased at runtime — the compiler\n// can police our own code, but it cannot police a CSV file, so text arriving\n// from outside still needs a real check.\nfunction isTxnType(value: string): value is TxnType {\n  return value === 'DEPOSIT' || value === 'WITHDRAWAL';\n}\n\n// `: CsvRow[]` is the return type — an array of CsvRow.\nfunction parseCsv(text: string): CsvRow[] {\n  // Split off the header so column POSITION never gets hard-coded downstream.\n  const [header, ...rows] = text.trim().split('\\n');\n  const cols = header.split(',');\n  return rows.map(line => {\n    const cells = line.split(',');\n    // `as CsvRow` is a CAST: fromEntries hands back a loose object, and we\n    // assert it has our shape. A cast changes what the compiler BELIEVES,\n    // never what exists — which is exactly why isTxnType still has to run.\n    return Object.fromEntries(cols.map((col, i) => [col, cells[i]])) as CsvRow;\n  });\n}\n\nfunction summarize(text: string): CompanyStats[] {\n  // The angle brackets on `Map<string, CompanyStats>` say what the keys and\n  // values are, so `.get()` is known to return `CompanyStats | undefined`.\n  const byCompany = new Map<string, CompanyStats>();\n  for (const row of parseCsv(text)) {\n    // Validate the untrusted string BEFORE it's used as a TxnType.\n    if (!isTxnType(row.type)) throw new Error(`unknown type: ${row.type}`);\n    // Upsert: create-if-absent, then ALWAYS mutate the stored instance.\n    if (!byCompany.has(row.company)) {\n      byCompany.set(row.company, new CompanyStats(row.company));\n    }\n    // The `!` is a non-null assertion: `.get()` could be undefined in general,\n    // but we just guaranteed the key exists, so we drop it from the type.\n    byCompany.get(row.company)!.apply(row.type, Number(row.amount));\n  }\n  return [...byCompany.values()].sort((a, b) => b.net - a.net);\n}",
     "notes": [
-      "Zip against the HEADER (`Object.fromEntries(cols.map(...))`) so downstream code reads `row.company`, not `cells[1]` — the CSV can gain or reorder columns without breaking the aggregation.",
+      "TypeScript types are ERASED before the code runs — they cost nothing at runtime and change no behavior. Everything below is still the same JavaScript algorithm.",
+      "`type TxnType = 'DEPOSIT' | 'WITHDRAWAL'` is a union of string literals. Prefer it to `enum`: it checks callers just as tightly but emits no runtime code, whereas an `enum` generates a real object.",
+      "Because types are erased, the union does NOT validate the CSV. `isTxnType` — a type guard, signalled by the `value is TxnType` return type — is what actually checks the untrusted text, and it also narrows the type for the compiler.",
+      "`as CsvRow` is an unchecked cast: it changes what the compiler believes, not what exists. That's the precise reason the runtime guard is still required after it.",
       "Objects need a real upsert: `if (!map.has(k)) map.set(k, new X(k))` then mutate. The numeric `map.get(k) || 0` habit fails here — `map.get(k) || new X(k)` mutates an instance that was never stored, silently dropping every company's first transaction.",
-      "`Number(row.amount)` at the parse boundary is load-bearing: CSV cells are strings and `'1200' + '800'` is `'1200800'` with no error.",
-      "All enum branching lives in `apply()`. Adding a TRANSFER type is a one-place edit, and the `else throw` turns upstream schema drift into a loud failure instead of a wrong total.",
+      "`Number(row.amount)` is still load-bearing: `CsvRow.amount` is typed `string` because CSV cells ARE strings, so TypeScript would reject `+= row.amount` at compile time — but nothing coerces it for you at runtime.",
       "`net` is a getter, not a stored field — derived values can't drift out of sync when a new enum arm forgets to update them."
     ]
   },
@@ -149,15 +157,15 @@
         "explain": "With numbers, `map.get(k) || 0` works because you write the result back with `set`. With an object you mutate in place — so if the new instance was never stored, the mutation lands on an orphan and the Map still has no entry for that company."
       },
       {
-        "q": "The parse wraps every cell with `Number(row.amount)`. What breaks without it?",
+        "q": "`CsvRow.amount` is typed `string`, and the code still calls `Number(row.amount)`. Why is the conversion required even though the field is typed?",
         "options": [
-          "`Map` keys must be primitives, and an unconverted numeric string is rejected as a key",
-          "Nothing at runtime — it is purely a TypeScript-style annotation for readability",
-          "CSV cells are strings, so `+=` concatenates: two 1200 and 800 deposits become the string '1200800' instead of 2000, with no error thrown",
-          "String amounts sort lexicographically in the final comparator but the totals themselves stay correct"
+          "It isn't required — TypeScript coerces a `string` field to `number` automatically when it is used in arithmetic",
+          "Types are erased before the code runs, so nothing converts the value at runtime; the annotation only stops you writing `+= row.amount` in the editor",
+          "`Number()` is required because `Map` keys must be primitives and the amount is part of the composite key",
+          "The cast to `CsvRow` re-tags the field as `number`, so `Number()` merely documents a conversion that already happened"
         ],
-        "answer": 2,
-        "explain": "`'0' + '1200'` is `'01200'`. The totals silently become concatenated strings; nothing throws, and the bug only surfaces when someone reads the output."
+        "answer": 1,
+        "explain": "TypeScript's job ends at compile time. The annotation catches the mistake in your editor — `this.deposited += row.amount` is a type error — but at runtime the value is still the string '1200', and `'0' + '1200'` is `'01200'`. The compiler tells you to convert; it never converts for you."
       },
       {
         "q": "Records are built with `Object.fromEntries(cols.map((col, i) => [col, cells[i]]))` instead of reading `cells[1]`, `cells[2]` directly. What does that buy?",
@@ -191,30 +199,37 @@
         ],
         "answer": 2,
         "explain": "`'a\\nb\\n'.split('\\n')` yields `['a','b','']`. That empty final line becomes a record whose every field is `undefined`, and the upsert then happily creates a company named `undefined`."
+      },
+      {
+        "q": "`apply` takes `type: TxnType`, a union of the only two legal strings. Why does the code STILL call `isTxnType(row.type)` before passing it?",
+        "options": [
+          "Because a union type only constrains variables, not function parameters, so `apply` would accept any string regardless",
+          "Because `isTxnType` also converts the string to the union's underlying numeric representation",
+          "Because the union is erased at runtime, so it constrains code the compiler can see — not a CSV file; the guard is the only thing that actually rejects a bad value",
+          "Because TypeScript requires an explicit guard before any value may be passed to a parameter with a union type"
+        ],
+        "answer": 2,
+        "explain": "The compiler can police your own call sites, but the CSV arrives at runtime, long after every type has been deleted. `Object.fromEntries(...) as CsvRow` asserts a shape without verifying it, so `row.type` could be any string at all. The `value is TxnType` guard does two jobs: it performs the real runtime check, and it narrows the type so the compiler accepts the call afterwards."
       }
     ]
   },
   "L2": {
     "exercises": [
       {
-        "prompt": "Zip a data row against the header so fields are reachable by NAME. Fill the blanks so the company prints.",
-        "template": "const header = 'date,company,type,amount';\nconst line = '2026-01-03,Acme,DEPOSIT,1200';\nconst cols = header.___(',');\nconst cells = line.split(',');\nconst row = Object.___(cols.___((col, i) => [col, cells[___]]));\nconsole.log(row.___);",
+        "prompt": "Zip a data row against the header and assert its shape. Fill the blanks so the company prints.",
+        "template": "type CsvRow = { date: string; company: ___; type: string; amount: string };\nconst header = 'date,company,type,amount';\nconst line = '2026-01-03,Acme,DEPOSIT,1200';\nconst cols = header.split(',');\nconst cells = line.split(',');\nconst row = Object.___(cols.map((col, i) => [col, cells[i]])) ___ CsvRow;\nconsole.log(row.___);",
         "blanks": [
           {
-            "answer": "split",
-            "hint": "string -> array of column names"
+            "answer": "string",
+            "hint": "a CSV cell is always text"
           },
           {
             "answer": "fromEntries",
-            "hint": "[key, value] pairs -> object"
+            "hint": "[key, value] pairs → object"
           },
           {
-            "answer": "map",
-            "hint": "one entry pair per column"
-          },
-          {
-            "answer": "i",
-            "hint": "the cell at the same position as the column"
+            "answer": "as",
+            "hint": "the cast keyword — assert a shape without checking it"
           },
           {
             "answer": "company",
@@ -224,28 +239,24 @@
         "expectedOutput": "Acme"
       },
       {
-        "prompt": "Upsert a stats instance into a Map, then dispatch on the type enum. Fill the blanks so Acme's net prints.",
-        "template": "class Stats {\n  constructor() { this.deposited = 0; this.withdrawn = 0; }\n  apply(type, amount) {\n    if (type === 'DEPOSIT') this.deposited ___ amount;\n    else this.withdrawn += amount;\n  }\n  get net() { return this.deposited ___ this.withdrawn; }\n}\nconst byCompany = new Map();\nconst rows = [{ company: 'Acme', type: 'DEPOSIT', amount: '1200' }, { company: 'Acme', type: 'WITHDRAWAL', amount: '450' }];\nfor (const r of rows) {\n  if (!byCompany.___(r.company)) byCompany.set(r.company, new ___());\n  byCompany.___(r.company).apply(r.type, ___(r.amount));\n}\nconsole.log(byCompany.get('Acme').net);",
+        "prompt": "Type the transaction union, then upsert a stats instance into a typed Map. Fill the blanks so Acme's net prints.",
+        "template": "type TxnType = 'DEPOSIT' ___ 'WITHDRAWAL';\nclass Stats {\n  deposited = 0;\n  withdrawn = 0;\n  apply(type: TxnType, amount: number): ___ {\n    if (type === 'DEPOSIT') this.deposited += amount;\n    else this.withdrawn += amount;\n  }\n  get net(): number { return this.deposited - this.withdrawn; }\n}\nconst byCompany = new Map<___, Stats>();\nconst rows = [\n  { company: 'Acme', type: 'DEPOSIT' as TxnType, amount: '1200' },\n  { company: 'Acme', type: 'WITHDRAWAL' as TxnType, amount: '450' },\n];\nfor (const r of rows) {\n  if (!byCompany.has(r.company)) byCompany.set(r.company, new Stats());\n  byCompany.get(r.company)___.apply(r.type, ___(r.amount));\n}\nconsole.log(byCompany.get('Acme')!.net);",
         "blanks": [
           {
-            "answer": "+=",
-            "hint": "add into the running deposit total"
+            "answer": "|",
+            "hint": "union: either this literal or that one"
           },
           {
-            "answer": "-",
-            "hint": "net is deposits minus withdrawals"
+            "answer": "void",
+            "hint": "the return type of a method that returns nothing"
           },
           {
-            "answer": "has",
-            "hint": "create-if-absent check"
+            "answer": "string",
+            "hint": "the Map's KEY type (company name)"
           },
           {
-            "answer": "Stats",
-            "hint": "the instance stored as the Map value"
-          },
-          {
-            "answer": "get",
-            "hint": "read back the STORED instance before mutating it"
+            "answer": "!",
+            "hint": "non-null assertion — we just guaranteed the key exists"
           },
           {
             "answer": "Number",
@@ -257,13 +268,15 @@
     ]
   },
   "L3": {
-    "prompt": "Parse a CSV of transactions (`date,company,type,amount` where type is DEPOSIT or WITHDRAWAL), roll them up per company into a stats class tracking deposited, withdrawn and transaction count, and print one line per company ordered by net descending.",
+    "prompt": "In TypeScript: parse a CSV of transactions (`date,company,type,amount` where type is DEPOSIT or WITHDRAWAL), roll them up per company into a stats class tracking deposited, withdrawn and transaction count, and print one line per company ordered by net descending. Model the transaction type as a string-literal union and validate it at the parse boundary.",
     "expectedOutput": "Acme: +2000 / -450 (3 txns) net 1550\nGlobex: +900 / -300 (2 txns) net 600",
-    "canonical": "class CompanyStats {\n  constructor(company) {\n    this.company = company;\n    this.deposited = 0;\n    this.withdrawn = 0;\n    this.txns = 0;\n  }\n  // One entry point for both enum arms keeps the dispatch in ONE place.\n  apply(type, amount) {\n    this.txns++;\n    if (type === 'DEPOSIT') this.deposited += amount;\n    else if (type === 'WITHDRAWAL') this.withdrawn += amount;\n    else throw new Error(`unknown type: ${type}`);\n  }\n  get net() {\n    return this.deposited - this.withdrawn;\n  }\n}\n\nfunction parseCsv(text) {\n  // Split off the header so column POSITION never gets hard-coded downstream.\n  const [header, ...rows] = text.trim().split('\\n');\n  const cols = header.split(',');\n  return rows.map(line => {\n    const cells = line.split(',');\n    return Object.fromEntries(cols.map((col, i) => [col, cells[i]]));\n  });\n}\n\nfunction summarize(text) {\n  const byCompany = new Map();\n  for (const row of parseCsv(text)) {\n    // Upsert: create-if-absent, then ALWAYS mutate the stored instance.\n    if (!byCompany.has(row.company)) {\n      byCompany.set(row.company, new CompanyStats(row.company));\n    }\n    byCompany.get(row.company).apply(row.type, Number(row.amount));\n  }\n  return [...byCompany.values()].sort((a, b) => b.net - a.net);\n}\n\nconst CSV = `date,company,type,amount\n2026-01-03,Acme,DEPOSIT,1200\n2026-01-05,Globex,WITHDRAWAL,300\n2026-01-07,Acme,WITHDRAWAL,450\n2026-01-09,Globex,DEPOSIT,900\n2026-01-11,Acme,DEPOSIT,800`;\n\nfor (const s of summarize(CSV)) {\n  console.log(`${s.company}: +${s.deposited} / -${s.withdrawn} (${s.txns} txns) net ${s.net}`);\n}",
+    "canonical": "// ── A TypeScript primer, inline ──────────────────────────────────────────\n// TypeScript is JavaScript plus type annotations. The annotations are checked\n// while you write, then ERASED before anything runs — the JavaScript that\n// actually executes is the same code with the types deleted. Nothing below\n// costs you a single runtime operation.\n\n// `type X = ...` gives a name to a shape. This one is a UNION: a TxnType is\n// the string 'DEPOSIT' or the string 'WITHDRAWAL' and nothing else. Assigning\n// 'TRANSFER' is a compile error. This is why we don't reach for `enum` —\n// a union of string literals does the same job with zero runtime output.\ntype TxnType = 'DEPOSIT' | 'WITHDRAWAL';\n\n// An object type: every CsvRow has these four fields, all `string`. They are\n// strings because a CSV cell is always text until we convert it — writing\n// `amount: number` here would be a lie the compiler couldn't catch.\ntype CsvRow = {\n  date: string;\n  company: string;\n  type: string;\n  amount: string;\n};\n\nclass CompanyStats {\n  // Class fields are declared with their types up front. `readonly` means\n  // \"assignable in the constructor, never reassigned after\" — again a\n  // compile-time rule only; nothing freezes the object at runtime.\n  readonly company: string;\n  // No annotation needed here: TypeScript INFERS `number` from the `0`.\n  deposited = 0;\n  withdrawn = 0;\n  txns = 0;\n\n  // Parameters take their types the same way. (Note we assign `this.company`\n  // by hand rather than writing `constructor(readonly company: string)` —\n  // that shorthand generates real runtime code, so it isn't erasable.)\n  constructor(company: string) {\n    this.company = company;\n  }\n\n  // `type: TxnType` is the payoff: every caller is checked against the two\n  // legal values. `: void` says this method returns nothing.\n  apply(type: TxnType, amount: number): void {\n    this.txns++;\n    if (type === 'DEPOSIT') this.deposited += amount;\n    else this.withdrawn += amount;\n  }\n\n  // A getter annotates its return type after the parens, like a method.\n  get net(): number {\n    return this.deposited - this.withdrawn;\n  }\n}\n\n// A TYPE GUARD. The return type `value is TxnType` is a promise to the\n// compiler: \"if this returns true, you may treat `value` as a TxnType from\n// here on.\" It matters because types are erased at runtime — the compiler\n// can police our own code, but it cannot police a CSV file, so text arriving\n// from outside still needs a real check.\nfunction isTxnType(value: string): value is TxnType {\n  return value === 'DEPOSIT' || value === 'WITHDRAWAL';\n}\n\n// `: CsvRow[]` is the return type — an array of CsvRow.\nfunction parseCsv(text: string): CsvRow[] {\n  // Split off the header so column POSITION never gets hard-coded downstream.\n  const [header, ...rows] = text.trim().split('\\n');\n  const cols = header.split(',');\n  return rows.map(line => {\n    const cells = line.split(',');\n    // `as CsvRow` is a CAST: fromEntries hands back a loose object, and we\n    // assert it has our shape. A cast changes what the compiler BELIEVES,\n    // never what exists — which is exactly why isTxnType still has to run.\n    return Object.fromEntries(cols.map((col, i) => [col, cells[i]])) as CsvRow;\n  });\n}\n\nfunction summarize(text: string): CompanyStats[] {\n  // The angle brackets on `Map<string, CompanyStats>` say what the keys and\n  // values are, so `.get()` is known to return `CompanyStats | undefined`.\n  const byCompany = new Map<string, CompanyStats>();\n  for (const row of parseCsv(text)) {\n    // Validate the untrusted string BEFORE it's used as a TxnType.\n    if (!isTxnType(row.type)) throw new Error(`unknown type: ${row.type}`);\n    // Upsert: create-if-absent, then ALWAYS mutate the stored instance.\n    if (!byCompany.has(row.company)) {\n      byCompany.set(row.company, new CompanyStats(row.company));\n    }\n    // The `!` is a non-null assertion: `.get()` could be undefined in general,\n    // but we just guaranteed the key exists, so we drop it from the type.\n    byCompany.get(row.company)!.apply(row.type, Number(row.amount));\n  }\n  return [...byCompany.values()].sort((a, b) => b.net - a.net);\n}\n\nconst CSV = `date,company,type,amount\n2026-01-03,Acme,DEPOSIT,1200\n2026-01-05,Globex,WITHDRAWAL,300\n2026-01-07,Acme,WITHDRAWAL,450\n2026-01-09,Globex,DEPOSIT,900\n2026-01-11,Acme,DEPOSIT,800`;\n\nfor (const s of summarize(CSV)) {\n  console.log(`${s.company}: +${s.deposited} / -${s.withdrawn} (${s.txns} txns) net ${s.net}`);\n}",
     "hints": [
-      "Peel the header with `const [header, ...rows] = text.trim().split('\\n')`, then zip each row against `header.split(',')` so you can read `row.company`.",
-      "Upsert the class instance: `if (!map.has(k)) map.set(k, new CompanyStats(k))`, then `map.get(k).apply(type, Number(amount))` — mutate the STORED instance.",
-      "Keep both enum arms inside `apply()`, and make `net` a getter so it can never disagree with the two totals."
+      "Model the type as `type TxnType = 'DEPOSIT' | 'WITHDRAWAL'` rather than an `enum` — same checking, no runtime output.",
+      "Peel the header with `const [header, ...rows] = text.trim().split('\\n')`, zip each row against `header.split(',')`, and `as CsvRow` the result.",
+      "Types are erased at runtime, so validate the untrusted string with a type guard: `function isTxnType(v: string): v is TxnType`.",
+      "Upsert the class instance: `if (!map.has(k)) map.set(k, new CompanyStats(k))`, then `map.get(k)!.apply(...)` — mutate the STORED instance."
     ]
-  }
+  },
+  "lang": "ts"
 }

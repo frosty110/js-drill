@@ -28,6 +28,7 @@ fetch_tgz codemirror   codemirror@5.65.16
 fetch_tgz tailwind     tailwindcss-cdn@3.4.10   # npm mirror of the v3 Play CDN script
 fetch_tgz supabase     @supabase/supabase-js@2
 fetch_tgz mermaid      mermaid@11
+fetch_tgz typescript   typescript@5.6.3         # lazy-loaded by js/core/runner.js for lang:"ts" lessons
 
 echo "Done. vendor/ contents:"
-ls -d codemirror tailwind supabase mermaid
+ls -d codemirror tailwind supabase mermaid typescript

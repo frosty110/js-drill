@@ -4,13 +4,13 @@
   "section": "Applied Problems",
   "track": "applied",
   "status": "full",
-  "description": "Route free text to a team by matching keywords against a declarative rule table — a `for...of` scan with an early return, because array order IS the priority and the first rule that hits wins, which a `.find`-style fold would hide.",
+  "description": "Route free text to a team by matching keywords against a declarative, typed rule table — a `for...of` scan with an early return, because array order IS the priority and the first rule that hits wins, which a `.find`-style fold would hide.",
   "mechanics": [
     "text-scan",
     "set-dedup"
   ],
   "conversation": {
-    "intro": "The 'build a simple rules engine' interview. Forty of the fifty minutes are really about one question: do you encode the rules as DATA or as if/else branches? Each section has what you'd say out loud and why the move matters.",
+    "intro": "The 'build a simple rules engine' interview, in TypeScript. Forty of the fifty minutes are really about one question: do you encode the rules as DATA or as if/else branches? The typing is a second, quieter signal — whether your annotations describe the contract or just decorate it. Each section has what you'd say out loud and why the move matters.",
     "sections": [
       {
         "title": "1. Restate & clarify",
@@ -67,6 +67,12 @@
         "prompt": "State the bound, then take the obvious follow-up head-on.",
         "say": "\"Tokenizing is O(n) in the text length. The scan is O(r·k) where r is rules and k is keywords per rule, with O(1) Set lookups — so overall O(n + r·k), and in practice n dominates because the rule table is small.\n\nIf the table got large — thousands of rules — I'd invert the index: build a `Map` from keyword to the rules containing it, then walk the text's tokens instead of the rules. That's O(n) regardless of rule count, and it's the same inverted-index idea a search engine uses.\n\nThe follow-up I'd expect is 'now make it best-match-wins instead of first-match-wins'. That's a real change, not a tweak: I can no longer return early, because I don't know a rule is the best until I've scored all of them. The loop becomes score-every-rule then take the max, with rule order surviving only as the tie-break — and it costs me the early exit. I'd want to know which behavior they want up front, because it's the difference between 'priority list' and 'classifier', and those are different products.\"",
         "why": "Pre-empting the best-match-wins follow-up and being precise about what it costs — losing the early return, and demoting rule order from 'the decision' to 'the tie-break' — is what separates a candidate who implemented a spec from one who understands its shape. The inverted-index remark is a cheap, honest scaling answer that connects this toy problem to a real technique the interviewer will recognize."
+      },
+      {
+        "title": "7. Typing it — what TypeScript actually buys here",
+        "prompt": "Where the annotations earn their keep, and where they're decoration.",
+        "say": "\"Two annotations here do real work, and I'd point at them specifically.\n\n`const RULES: readonly Rule[]` is the first. Without it, TypeScript infers the table's type from the literal, which means a typo — `keyword` instead of `keywords` — infers a DIFFERENT shape and is perfectly legal. The bug that produces is the nastiest kind: a rule that loads fine, matches nothing, ever, and looks correct in review. Annotating the table is what turns that into a red squiggle. This is the general principle — annotate at the boundary where data enters, let inference handle the interior.\n\nThe second is the return type `{ team: string; matched: string[] }`. That's the engine's contract with its callers, and writing it down is what stops the shape drifting when someone adds a debug field.\n\nWhat TypeScript does NOT buy me here: it can't tell me the rule ORDER is right, because priority is a property of the array's contents, not its type. And it can't catch a keyword that's misspelled — `'phishng'` is a perfectly good `string`. If I wanted the type system to police the team names I'd narrow `team` from `string` to a union of the actual teams, which would then catch a typo in a caller comparing against `'Bling'`. Whether that's worth it depends on whether teams are a fixed set or config-driven — if the table is loaded from JSON at runtime, a union is a lie.\"",
+        "why": "Being explicit about what the types DON'T catch is the stronger half of this answer. Plenty of candidates annotate everything and imply the compiler has therefore verified the system; naming rule order and keyword spelling as things that remain entirely on you shows you know the boundary between a type error and a logic error. The closing point is the senior one: whether to narrow `team` to a union depends on whether the rules are compiled in or loaded at runtime, and recognising that a union over externally-sourced data is an unverifiable claim is exactly the compile-time-versus-runtime instinct this problem family keeps testing."
       }
     ]
   },
@@ -100,33 +106,35 @@
       "  const FALLBACK = 'Triage';",
       "  const tokens = text.toLowerCase().match(/[a-z0-9']+/g) ?? [];",
       "  const words = new Set(tokens);",
-      "  yield { line: 12, label: `tokenize -> ${words.size} unique whole words: ${JSON.stringify([...words])}`, state: { text, words: [...words], step: 'tokenize' } };",
+      "  yield { line: 32, label: `tokenize -> ${words.size} unique whole words: ${JSON.stringify([...words])}`, state: { text, words: [...words], step: 'tokenize' } };",
       "  for (let i = 0; i < RULES.length; i++) {",
       "    const rule = RULES[i];",
       "    const matched = rule.keywords.filter(k => words.has(k));",
       "    if (matched.length > 0) {",
       "      const result = { team: rule.team, matched };",
-      "      yield { line: 19, label: `rule#${i} ${rule.team}: ${matched.length} hit(s) ${JSON.stringify(matched)} -> FIRST MATCH WINS, return now (rules ${i + 1}..${RULES.length - 1} never tested)`, state: { text, words: [...words], i, rule, matched, result, returns: JSON.stringify(result) } };",
+      "      yield { line: 46, label: `rule#${i} ${rule.team}: ${matched.length} hit(s) ${JSON.stringify(matched)} -> FIRST MATCH WINS, return now (rules ${i + 1}..${RULES.length - 1} never tested)`, state: { text, words: [...words], i, rule, matched, result, returns: JSON.stringify(result) } };",
       "      return;",
       "    }",
-      "    yield { line: 19, label: `rule#${i} ${rule.team}: no keyword of ${JSON.stringify(rule.keywords)} is a whole word here -> fall through`, state: { text, words: [...words], i, rule, matched: [] } };",
+      "    yield { line: 45, label: `rule#${i} ${rule.team}: no keyword of ${JSON.stringify(rule.keywords)} is a whole word here -> fall through`, state: { text, words: [...words], i, rule, matched: [] } };",
       "  }",
       "  const result = { team: FALLBACK, matched: [] };",
-      "  yield { line: 22, label: `every rule fell through -> FALLBACK '${FALLBACK}'`, state: { text, words: [...words], result, returns: JSON.stringify(result) } };",
+      "  yield { line: 48, label: `every rule fell through -> FALLBACK '${FALLBACK}'`, state: { text, words: [...words], result, returns: JSON.stringify(result) } };",
       "}"
     ]
   },
   "reference": {
-    "approach": "Declarative rule table + first-match-wins scan over a whole-word token Set",
+    "approach": "Typed rule table + first-match-wins scan over a whole-word token Set",
     "complexity": "O(n + r*k) / O(n)",
-    "code": "// Rules are DATA, not control flow. Array order IS the priority, and adding\n// a team means appending an entry -- route() never changes.\nconst RULES = [\n  { team: 'Security', keywords: ['breach', 'phishing', 'password'] },\n  { team: 'Billing', keywords: ['invoice', 'refund', 'charge'] },\n  { team: 'Platform', keywords: ['outage', 'latency', 'deploy'] },\n];\nconst FALLBACK = 'Triage';\n\n// Whole-word tokens in a Set: 'recharge' must NOT match the keyword 'charge'.\nfunction tokenize(text) {\n  return new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);\n}\n\nfunction route(text, rules = RULES) {\n  const words = tokenize(text);\n  for (const rule of rules) {\n    // filter, not some -- keeping the hits makes the decision explainable.\n    const matched = rule.keywords.filter(k => words.has(k));\n    if (matched.length > 0) return { team: rule.team, matched };\n  }\n  return { team: FALLBACK, matched: [] };\n}",
+    "code": "// ── A TypeScript primer, inline ──────────────────────────────────────────\n// TypeScript is JavaScript plus type annotations. They're checked while you\n// write and ERASED before anything runs, so none of them costs a runtime\n// operation — the shipped JavaScript is this code with the types deleted.\n\n// `interface` names an object shape. (`type Rule = { ... }` would work the\n// same here; interfaces are the conventional choice for a contract like this.)\ninterface Rule {\n  team: string;\n  // `readonly string[]` = an array of strings this code promises not to\n  // mutate. Compile-time only — the array isn't frozen at runtime.\n  keywords: readonly string[];\n}\n\n// The annotation `: readonly Rule[]` makes the table's shape explicit, so a\n// typo like `{ team: 'X', keyword: [...] }` is caught here rather than\n// silently producing a rule that can never match.\n//\n// Rules are DATA, not control flow. Array order IS the priority, and adding\n// a team means appending an entry — route() never changes.\nconst RULES: readonly Rule[] = [\n  { team: 'Security', keywords: ['breach', 'phishing', 'password'] },\n  { team: 'Billing', keywords: ['invoice', 'refund', 'charge'] },\n  { team: 'Platform', keywords: ['outage', 'latency', 'deploy'] },\n];\nconst FALLBACK = 'Triage';\n\n// `Set<string>` — the angle brackets say what the Set holds, so `.has()` is\n// known to take a string. Whole-word tokens: 'recharge' must NOT match the\n// keyword 'charge'.\nfunction tokenize(text: string): Set<string> {\n  return new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);\n}\n\n// The return type is written inline: this hands back a team plus the keywords\n// that matched it. Naming the shape in the signature is what stops a caller\n// from quietly depending on a field we never meant to expose.\n//\n// `rules: readonly Rule[] = RULES` is a typed parameter WITH a default —\n// callers can inject their own table, which is how you'd test this.\nfunction route(text: string, rules: readonly Rule[] = RULES): { team: string; matched: string[] } {\n  const words = tokenize(text);\n  for (const rule of rules) {\n    // filter, not some — keeping the hits makes the decision explainable.\n    const matched = rule.keywords.filter(k => words.has(k));\n    if (matched.length > 0) return { team: rule.team, matched };\n  }\n  return { team: FALLBACK, matched: [] };\n}",
     "notes": [
-      "Rules are an ARRAY OF DATA, so adding a team is appending an entry and reprioritizing is reordering — `route()` itself never changes, and the table can move to JSON or a DB untouched.",
+      "TypeScript types are ERASED before the code runs — they cost nothing at runtime and change no behavior. The algorithm below is the same JavaScript either way.",
+      "Rules are an ARRAY OF DATA typed `readonly Rule[]`, so adding a team is appending an entry and reprioritizing is reordering — `route()` itself never changes, and the table can move to JSON or a DB untouched. The annotation catches a mistyped field (`keyword` vs `keywords`) that would otherwise produce a rule which silently never matches.",
       "Array order IS the priority: the first rule with any hit returns immediately, so a later rule that would also match is never consulted. That early exit is the semantics, which is why this is a `for...of` and not a chained fold.",
-      "Tokenize into a `Set` and test with `has` — `text.includes('charge')` would misroute 'Recharge the battery' to Billing. Whole-word matching kills that class of false positive, and the Set makes each keyword test O(1).",
-      "`filter` rather than `some`: returning WHICH keywords matched makes the routing decision explainable after the fact, which is what you need the first time someone disputes it.",
-      "`String.match` returns `null` (not `[]`) when nothing matches, so `?? []` normalizes before the Set is built.",
-      "Keyword matching cannot handle negation — 'this is NOT a refund request' still routes to Billing. That's a limit of the technique, not a bug to patch."
+      "Tokenize into a `Set<string>` and test with `has` — `text.includes('charge')` would misroute 'Recharge the battery' to Billing. Whole-word matching kills that class of false positive, and the Set makes each keyword test O(1).",
+      "`filter` rather than `some`: returning WHICH keywords matched makes the routing decision explainable after the fact, which is what you need the first time someone disputes it. The inline return type `{ team: string; matched: string[] }` is what pins that contract.",
+      "`readonly string[]` documents that the engine never mutates a rule's keyword list. It's a compile-time promise only — nothing is frozen at runtime.",
+      "`String.match` returns `null` (not `[]`) when nothing matches, so `?? []` normalizes before the Set is built. TypeScript surfaces this: the match result is typed `RegExpMatchArray | null`, so it won't let you skip the check.",
+      "Keyword matching cannot handle negation — 'this is NOT a refund request' still routes to Billing. That's a limit of the technique, not a bug to patch, and no amount of typing fixes it."
     ]
   },
   "L1": {
@@ -174,6 +182,17 @@
         ],
         "answer": 2,
         "explain": "First-match-wins means array order IS the priority and the loop can exit as soon as anything hits. Best-match-wins forces a full pass to score every rule, with rule order surviving only as a tie-break."
+      },
+      {
+        "q": "`tokenize` is written `text.toLowerCase().match(/[a-z0-9']+/g) ?? []`. What does TypeScript add here that plain JavaScript doesn't?",
+        "options": [
+          "It converts the regex match into a typed tuple, so the `?? []` fallback becomes unnecessary",
+          "It types the match result as `RegExpMatchArray | null`, so omitting the null check is a compile error rather than a crash the first time nothing matches",
+          "It makes `.match()` return an empty array instead of null, which is why the `??` is only defensive style",
+          "It narrows the regex literal to the exact set of strings it can match, letting the Set be typed more precisely"
+        ],
+        "answer": 1,
+        "explain": "`String.prototype.match` is typed to return `RegExpMatchArray | null`. Feeding that straight into `new Set(...)` — or into any array method — is rejected until you handle the null, so the bug 'text with no word characters at all' gets caught in the editor instead of in production. The runtime behavior is identical to the JavaScript version; the difference is when you find out."
       }
     ]
   },
@@ -181,8 +200,12 @@
     "exercises": [
       {
         "prompt": "Tokenize text into whole words for membership testing. Fill the blanks so the substring trap prints false.",
-        "template": "function tokenize(text) {\n  return new ___(text.___().match(/[a-z0-9']+/g) ___ []);\n}\nconst words = tokenize('Recharge the battery');\nconsole.log(words.___('charge'), words.has('recharge'));",
+        "template": "function tokenize(text: ___): Set<string> {\n  return new ___(text.___().match(/[a-z0-9']+/g) ___ []);\n}\nconst words = tokenize('Recharge the battery');\nconsole.log(words.___('charge'), words.has('recharge'));",
         "blanks": [
+          {
+            "answer": "string",
+            "hint": "the parameter's type"
+          },
           {
             "answer": "Set",
             "hint": "O(1) membership container"
@@ -193,7 +216,7 @@
           },
           {
             "answer": "??",
-            "hint": "match returns null, not [], when nothing matches"
+            "hint": "match is typed `... | null`, so this is required"
           },
           {
             "answer": "has",
@@ -203,9 +226,17 @@
         "expectedOutput": "false true"
       },
       {
-        "prompt": "Scan the rule table and return on the first rule that hits. Fill the blanks so the earlier rule wins.",
-        "template": "const RULES = [\n  { team: 'Billing', keywords: ['invoice', 'refund'] },\n  { team: 'Platform', keywords: ['outage', 'latency'] },\n];\nfunction route(words) {\n  for (const rule ___ RULES) {\n    const matched = rule.keywords.___(k => words.has(k));\n    if (matched.___ > 0) return `${rule.___} <- ${matched.join(', ')}`;\n  }\n  return 'Triage';\n}\nconsole.log(route(new Set(['refund', 'outage'])));",
+        "prompt": "Type the rule table, then scan it and return on the first rule that hits. Fill the blanks so the earlier rule wins.",
+        "template": "interface Rule {\n  team: ___;\n  keywords: readonly string[];\n}\nconst RULES: ___ Rule[] = [\n  { team: 'Billing', keywords: ['invoice', 'refund'] },\n  { team: 'Platform', keywords: ['outage', 'latency'] },\n];\nfunction route(words: Set<string>): string {\n  for (const rule ___ RULES) {\n    const matched = rule.keywords.___(k => words.has(k));\n    if (matched.___ > 0) return `${rule.team} <- ${matched.join(', ')}`;\n  }\n  return 'Triage';\n}\nconsole.log(route(new Set(['refund', 'outage'])));",
         "blanks": [
+          {
+            "answer": "string",
+            "hint": "the team name's type"
+          },
+          {
+            "answer": "readonly",
+            "hint": "an array this code promises not to mutate"
+          },
           {
             "answer": "of",
             "hint": "iterate the rule objects themselves"
@@ -217,10 +248,6 @@
           {
             "answer": "length",
             "hint": "did this rule hit at all?"
-          },
-          {
-            "answer": "team",
-            "hint": "the field holding the destination name"
           }
         ],
         "expectedOutput": "Billing <- refund"
@@ -228,13 +255,15 @@
     ]
   },
   "L3": {
-    "prompt": "Build a keyword rules engine: given a declarative table of `{ team, keywords }` rules, route each ticket to the FIRST team whose keywords appear as whole words in the text, reporting which keywords matched, and falling back to `Triage` when nothing hits.",
+    "prompt": "In TypeScript: build a keyword rules engine. Given a declarative table of `{ team, keywords }` rules, route each ticket to the FIRST team whose keywords appear as whole words in the text, reporting which keywords matched, and falling back to `Triage` when nothing hits. Type the rule table so a mistyped field is a compile error.",
     "expectedOutput": "Billing <- invoice, refund\nSecurity <- phishing, password\nPlatform <- outage, latency, deploy\nBilling <- refund\nTriage <- no keyword hit",
-    "canonical": "// Rules are DATA, not control flow. Array order IS the priority, and adding\n// a team means appending an entry -- route() never changes.\nconst RULES = [\n  { team: 'Security', keywords: ['breach', 'phishing', 'password'] },\n  { team: 'Billing', keywords: ['invoice', 'refund', 'charge'] },\n  { team: 'Platform', keywords: ['outage', 'latency', 'deploy'] },\n];\nconst FALLBACK = 'Triage';\n\n// Whole-word tokens in a Set: 'recharge' must NOT match the keyword 'charge'.\nfunction tokenize(text) {\n  return new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);\n}\n\nfunction route(text, rules = RULES) {\n  const words = tokenize(text);\n  for (const rule of rules) {\n    // filter, not some -- keeping the hits makes the decision explainable.\n    const matched = rule.keywords.filter(k => words.has(k));\n    if (matched.length > 0) return { team: rule.team, matched };\n  }\n  return { team: FALLBACK, matched: [] };\n}\n\nconst tickets = [\n  'Customer disputes an invoice and wants a refund',\n  'User reports a phishing email asking for their password',\n  'Deploy caused an outage with high latency',\n  'Refund the customer after the outage',\n  'Recharge the battery before the offsite',\n];\n\nfor (const t of tickets) {\n  const { team, matched } = route(t);\n  console.log(`${team} <- ${matched.join(', ') || 'no keyword hit'}`);\n}",
+    "canonical": "// ── A TypeScript primer, inline ──────────────────────────────────────────\n// TypeScript is JavaScript plus type annotations. They're checked while you\n// write and ERASED before anything runs, so none of them costs a runtime\n// operation — the shipped JavaScript is this code with the types deleted.\n\n// `interface` names an object shape. (`type Rule = { ... }` would work the\n// same here; interfaces are the conventional choice for a contract like this.)\ninterface Rule {\n  team: string;\n  // `readonly string[]` = an array of strings this code promises not to\n  // mutate. Compile-time only — the array isn't frozen at runtime.\n  keywords: readonly string[];\n}\n\n// The annotation `: readonly Rule[]` makes the table's shape explicit, so a\n// typo like `{ team: 'X', keyword: [...] }` is caught here rather than\n// silently producing a rule that can never match.\n//\n// Rules are DATA, not control flow. Array order IS the priority, and adding\n// a team means appending an entry — route() never changes.\nconst RULES: readonly Rule[] = [\n  { team: 'Security', keywords: ['breach', 'phishing', 'password'] },\n  { team: 'Billing', keywords: ['invoice', 'refund', 'charge'] },\n  { team: 'Platform', keywords: ['outage', 'latency', 'deploy'] },\n];\nconst FALLBACK = 'Triage';\n\n// `Set<string>` — the angle brackets say what the Set holds, so `.has()` is\n// known to take a string. Whole-word tokens: 'recharge' must NOT match the\n// keyword 'charge'.\nfunction tokenize(text: string): Set<string> {\n  return new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);\n}\n\n// The return type is written inline: this hands back a team plus the keywords\n// that matched it. Naming the shape in the signature is what stops a caller\n// from quietly depending on a field we never meant to expose.\n//\n// `rules: readonly Rule[] = RULES` is a typed parameter WITH a default —\n// callers can inject their own table, which is how you'd test this.\nfunction route(text: string, rules: readonly Rule[] = RULES): { team: string; matched: string[] } {\n  const words = tokenize(text);\n  for (const rule of rules) {\n    // filter, not some — keeping the hits makes the decision explainable.\n    const matched = rule.keywords.filter(k => words.has(k));\n    if (matched.length > 0) return { team: rule.team, matched };\n  }\n  return { team: FALLBACK, matched: [] };\n}\n\nconst tickets: string[] = [\n  'Customer disputes an invoice and wants a refund',\n  'User reports a phishing email asking for their password',\n  'Deploy caused an outage with high latency',\n  'Refund the customer after the outage',\n  'Recharge the battery before the offsite',\n];\n\nfor (const t of tickets) {\n  const { team, matched } = route(t);\n  console.log(`${team} <- ${matched.join(', ') || 'no keyword hit'}`);\n}",
     "hints": [
-      "Tokenize once into a Set: `new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? [])` — whole words, so 'recharge' never matches the keyword 'charge'.",
-      "Scan the rules with `for...of` and return on the first hit — array order is the priority, and a later rule that would also match must never be consulted.",
-      "Collect hits with `filter` (not `some`) so the result carries which keywords fired, and return a fallback team when the loop finishes."
+      "Declare the shape first: `interface Rule { team: string; keywords: readonly string[] }`, then annotate the table `const RULES: readonly Rule[] = [...]`.",
+      "Tokenize once into a `Set<string>`: `new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? [])` — the `??` is required because `.match` is typed `RegExpMatchArray | null`.",
+      "Scan with `for...of` and return on the first hit — array order is the priority, and a later rule that would also match must never be consulted.",
+      "Collect hits with `filter` (not `some`) and declare the return type inline: `{ team: string; matched: string[] }`."
     ]
-  }
+  },
+  "lang": "ts"
 }

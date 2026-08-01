@@ -352,7 +352,7 @@ function renderWalkthrough(body, lesson, content) {
     const codeSpan = document.createElement('span');
     codeSpan.className = 'walk-line-code';
     if (window.CodeMirror && CodeMirror.runMode) {
-      CodeMirror.runMode(line || ' ', 'javascript', codeSpan);
+      CodeMirror.runMode(line || ' ', window.DrillUtil.defaultCodeMode(), codeSpan);
     } else {
       codeSpan.textContent = line || ' ';
     }

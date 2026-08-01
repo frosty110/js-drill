@@ -12,6 +12,34 @@ const {
 const { formatArg, runCode, runCodeBudgeted } = window.DrillRunner;
 
 // ──────────────────────────────────────────────────────────────────────────
+//  LESSON LANGUAGE ('js' | 'ts')
+//  A lesson body may declare `"lang": "ts"`, meaning every code string it
+//  owns — reference, L2 templates, L3 canonical, and whatever the user types
+//  into the editor for it — is TypeScript. The runner erases types before
+//  executing; CodeMirror needs the matching mode to colour it.
+//
+//  Defaults to 'js', so the 168 lessons that predate TS support are wholly
+//  unaffected by its absence.
+// ──────────────────────────────────────────────────────────────────────────
+function lessonLang(lessonOrId) {
+  const body = typeof lessonOrId === 'string' ? CONTENT[lessonOrId] : lessonOrId;
+  return (body && body.lang) === 'ts' ? 'ts' : 'js';
+}
+
+// CodeMirror ships TypeScript support inside its javascript mode, addressed
+// by MIME — no extra <script> needed beyond the one index.html already loads.
+function lessonCodeMode(lessonOrId) {
+  return lessonLang(lessonOrId) === 'ts' ? 'text/typescript' : 'javascript';
+}
+
+// Fallback for runCode call sites that don't have the lesson in hand (the
+// bug-hunt and notes→code drills build their editors from a drill object, not
+// a lesson body). They always operate on the lesson the user currently has
+// open, so resolving through state is correct for them.
+window.DrillRunner.setLanguageResolver(() => lessonLang(state.currentLessonId));
+window.DrillUtil.setCodeModeResolver(() => lessonCodeMode(state.currentLessonId));
+
+// ──────────────────────────────────────────────────────────────────────────
 //  CONTENT LOADER (replaces the inline CURRICULUM + CONTENT data blocks)
 //  CURRICULUM is loaded once from data/manifest.json on boot.
 //  Per-lesson bodies live in data/<section-slug>/<lesson-id>.json and are

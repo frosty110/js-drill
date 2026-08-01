@@ -14,8 +14,11 @@ Every `pNN.json` carries exactly four unit-level diagrams in `diagrams[]`:
 4. **Failure / consistency** — the dangerous race, outage, or recovery path.
 
 Each diagram is attached to the most relevant revealed answer with the
-zero-based `afterQuestion` index. The unit detail screen also exposes all four as
-a swipe-sized visual deck with previous/next and Hide labels / Reveal labels.
+zero-based `afterQuestion` index. The unit detail screen combines all four into
+one **Final Interview Whiteboard** after Key Ideas and before the drill buttons:
+the overview is always visible for quick review, four numbered decision notes
+summarize the board, and "Open full board" expands all four drawings together.
+Hide labels / Reveal labels turns the overview into a visual-recall prompt.
 
 ```jsonc
 {

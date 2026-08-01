@@ -30,11 +30,12 @@ string and gets the same monospace treatment.
 - **Canonical design-problem visual decks (2026-07-31)** — every one of the
   17 worked "Design a…" interviews now pairs its verbal walkthrough with four
   small Mermaid architecture models: overview, signature mechanism, scale/path,
-  and failure/consistency. Each model is co-located with the answer it explains
-  and is also browsable from the unit detail screen. A Hide labels control turns
-  the same SVG into retrieval practice: name the boxes and flows, then reveal.
-  The one-at-a-time carousel preserves the spatial-contiguity benefit on the
-  390px mobile target instead of stacking a wall of tiny diagrams.
+  and failure/consistency. Each problem ends with one **Final Interview
+  Whiteboard** for quick review: the overview drawing, four numbered design
+  decisions, and a full-board view that presents all four drawings together.
+  Each model is also co-located with the answer it explains. A Hide labels
+  control turns the overview SVG into retrieval practice: name the boxes and
+  flows, then reveal.
 - **📳 Haptic Tap-Pulse (iter 141)** — first tactile encoding channel in
   the app. Opt-in toggle wires `navigator.vibrate` to L1 correct (30ms) /
   L1 miss (twin 60ms) / L3 pass (120ms) / Rapid-Fire streak-of-5 (3-pulse

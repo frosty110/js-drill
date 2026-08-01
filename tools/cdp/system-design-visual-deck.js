@@ -1,10 +1,10 @@
 // system-design-visual-deck.js — mobile regression probe for the canonical
 // design-problem architecture decks.
 //
-// Verifies: four diagrams load, Mermaid renders, carousel navigation works,
-// label recall hides/reveals SVG text, the relevant architecture diagram is
-// co-located with its revealed interview answer, and the 390px viewport never
-// overflows horizontally.
+// Verifies: the unit ends with a consolidated final-interview whiteboard,
+// its overview renders, label recall works, the expanded board contains all
+// four authored views, the relevant diagram stays co-located with its revealed
+// interview answer, and the 390px viewport never overflows horizontally.
 //
 //   node tools/cdp/system-design-visual-deck.js [outDir]
 
@@ -27,45 +27,54 @@ const OUT = process.argv[2] || '/tmp/jsdrill-system-design-visual-deck';
   await s.eval(`document.querySelector('.topic-card[data-topic="design-problems"]').click()`);
   await s.waitFor(`document.querySelector('.ch-card[data-ch="p01"]')`, { timeoutMs: 6000 });
   await s.eval(`document.querySelector('.ch-card[data-ch="p01"]').click()`);
-  await s.waitFor(`document.querySelector('.diagram-deck .diagram-box svg')`, { timeoutMs: 10000 });
+  await s.waitFor(`document.querySelector('.final-board .diagram-box svg')`, { timeoutMs: 10000 });
 
   const initial = await s.eval(`(() => {
-    const deck = document.querySelector('.diagram-deck');
-    const controls = [...deck.querySelectorAll('.diagram-deck__controls button')];
+    const board = document.querySelector('.final-board');
+    const controls = [...board.querySelectorAll('.final-board__actions button')];
     return {
       authored: CH['design-problems'].p01.diagrams.length,
-      count: deck.querySelector('.diagram-deck__count').textContent.trim(),
-      title: deck.querySelector('.diagram-deck__title').textContent.trim(),
-      rendered: !!deck.querySelector('.diagram-box svg'),
+      placement: board.previousElementSibling && board.previousElementSibling.classList.contains('key-ideas')
+        && board.nextElementSibling && board.nextElementSibling.classList.contains('cta-row'),
+      notes: board.querySelectorAll('.final-board__note').length,
+      rendered: !!board.querySelector('.diagram-box svg'),
       minControlHeight: Math.min(...controls.map(b => b.getBoundingClientRect().height)),
       noHScroll: document.documentElement.scrollWidth <= innerWidth
     };
   })()`);
-  s.assert(initial.authored === 4 && initial.count === '1 / 4', `four-diagram deck is present (${JSON.stringify(initial)})`);
-  s.assert(initial.rendered, 'first architecture diagram rendered as SVG');
-  s.assert(initial.minControlHeight >= 44, `deck controls are mobile-sized (${initial.minControlHeight}px)`);
-  s.assert(initial.noHScroll, 'detail deck has no horizontal overflow at 390px');
-  await s.snap('01-overview');
+  s.assert(initial.authored === 4 && initial.notes === 4, `four decisions form one final whiteboard (${JSON.stringify(initial)})`);
+  s.assert(initial.placement, 'final whiteboard sits after Key Ideas and before drill actions');
+  s.assert(initial.rendered, 'whiteboard overview rendered as SVG');
+  s.assert(initial.minControlHeight >= 44, `whiteboard controls are mobile-sized (${initial.minControlHeight}px)`);
+  s.assert(initial.noHScroll, 'final whiteboard has no horizontal overflow at 390px');
+  await s.snap('01-final-whiteboard');
 
-  await s.eval(`document.querySelector('.diagram-next').click()`);
-  await s.waitFor(`document.querySelector('.diagram-deck__count').textContent.trim() === '2 / 4'`);
-  const secondTitle = await s.eval(`document.querySelector('.diagram-deck__title').textContent.trim()`);
-  s.assert(secondTitle !== initial.title, `next control changes diagrams (${initial.title} → ${secondTitle})`);
-  await s.snap('02-signature-mechanism');
-
-  await s.eval(`document.querySelector('.diagram-recall').click()`);
+  await s.eval(`document.querySelector('.final-board__recall').click()`);
   const recall = await s.eval(`(() => {
-    const deck = document.querySelector('.diagram-deck');
-    const label = deck.querySelector('.diagram-box svg text, .diagram-box svg foreignObject');
+    const board = document.querySelector('.final-board');
+    const label = board.querySelector('.diagram-box svg text, .diagram-box svg foreignObject');
     return {
-      active: deck.classList.contains('is-recall'),
-      button: deck.querySelector('.diagram-recall').textContent.trim(),
+      active: board.classList.contains('is-recall'),
+      button: board.querySelector('.final-board__recall').textContent.trim(),
       opacity: label ? getComputedStyle(label).opacity : null
     };
   })()`);
   s.assert(recall.active && recall.button === 'Reveal labels', `recall mode activates (${JSON.stringify(recall)})`);
   s.assert(recall.opacity === '0', `SVG labels are hidden in recall mode (${recall.opacity})`);
-  await s.snap('03-label-recall');
+  await s.snap('02-label-recall');
+
+  await s.eval(`document.querySelector('.final-board__open').click()`);
+  await s.waitFor(`document.querySelectorAll('#whiteboard-modal .whiteboard-panel .diagram-box svg').length === 4`, { timeoutMs: 10000 });
+  const expanded = await s.eval(`(() => ({
+    open: document.getElementById('whiteboard-modal').classList.contains('is-open'),
+    panels: document.querySelectorAll('#whiteboard-modal .whiteboard-panel').length,
+    rendered: document.querySelectorAll('#whiteboard-modal .whiteboard-panel .diagram-box svg').length,
+    noHScroll: document.documentElement.scrollWidth <= innerWidth
+  }))()`);
+  s.assert(expanded.open && expanded.panels === 4 && expanded.rendered === 4, `full board shows all four visual views (${JSON.stringify(expanded)})`);
+  s.assert(expanded.noHScroll, 'expanded whiteboard has no horizontal page overflow at 390px');
+  await s.snap('03-full-whiteboard');
+  await s.eval(`closeFinalWhiteboard()`);
 
   // Ordered problem session: jump to p01 question index 3 (architecture), reveal,
   // and verify its afterQuestion diagram appears beside the model answer.

@@ -1,0 +1,256 @@
+{
+  "version": 1,
+  "sets": {
+    "design-problems/p01": {
+      "title": "URL Shortener visual walkthrough",
+      "summary": "Study the system map first, then trace creation and redirection independently. The GET sheet keeps cache hit, cache miss, and not-found behavior together because those branches share one serving path.",
+      "items": [
+        {
+          "id": "overview",
+          "kind": "System map",
+          "title": "Architecture, priorities, and boundaries",
+          "purpose": "Place every service, store, cache, and asynchronous boundary before walking either API.",
+          "description": "The mapping store is authoritative, Redis accelerates the read-heavy redirect path, and click analytics leaves the request path through a durable queue. Creation may coordinate for uniqueness; redirection is optimized for latency and availability.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {"step": 1, "title": "Create", "detail": "The authenticated client submits a long URL through the edge to the stateless URL service."},
+            {"step": 2, "title": "Generate and persist", "detail": "Allocate a unique ID, encode it in Base62, and durably store code → URL before responding."},
+            {"step": 3, "title": "Redirect", "detail": "Resolve GET /{code} from Redis when possible and fall back to a point read from the mapping store."},
+            {"step": 4, "title": "Measure asynchronously", "detail": "Publish click events to a queue so analytics workers and the warehouse cannot delay redirects."}
+          ],
+          "numbers": [
+            {"label": "Read:write", "value": "≈100:1", "detail": "Engineer the redirect path first."},
+            {"label": "Creates", "value": "100M/day", "detail": "≈1.16K/s average; ≈3K/s peak."},
+            {"label": "Redirects", "value": "10B/day", "detail": "≈116K/s average; 230–350K/s peak."},
+            {"label": "Code space", "value": "62⁷ ≈ 3.5T", "detail": "Seven characters cover the five-year estimate."}
+          ],
+          "priorities": ["P0 redirect latency", "P0 redirect availability", "P1 durable unique mappings", "P2 analytics freshness"],
+          "tradeoffs": ["301 improves cacheability; 302 preserves measurement and control.", "Sequential IDs avoid collisions but expose traffic volume; random IDs hide volume but require collision retries."]
+        },
+        {
+          "id": "create-flow",
+          "kind": "POST flow",
+          "title": "Create a short URL",
+          "purpose": "Trace the write path, including validation, idempotency, unique-code allocation, persistence, and cache warming.",
+          "description": "Creation is the correctness path. A retry must return the same mapping rather than create another code, and the service must never acknowledge a code before its mapping is durable. ID ranges remove per-request coordination from a globally unique counter.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {"step": 1, "title": "Authenticate and limit", "detail": "Protect the public create endpoint from spam and expensive abuse."},
+            {"step": 2, "title": "Validate and normalize", "detail": "Check scheme, length, denylist, optional alias, and expiry without rewriting URL semantics."},
+            {"step": 3, "title": "Deduplicate retries", "detail": "Bind the client idempotency key to the eventual response."},
+            {"step": 4, "title": "Allocate and encode", "detail": "Claim an ID from a preallocated range and encode it in Base62; custom aliases use a uniqueness check."},
+            {"step": 5, "title": "Persist", "detail": "Conditionally insert code → long URL into the source-of-truth mapping store."},
+            {"step": 6, "title": "Warm and respond", "detail": "Populate Redis after the durable write and return the short URL."}
+          ],
+          "numbers": [
+            {"label": "Average writes", "value": "≈1,160/s", "detail": "100M creates ÷ 86,400 seconds."},
+            {"label": "Peak target", "value": "≈3,000/s", "detail": "Budget roughly 2–3× average."},
+            {"label": "Five-year rows", "value": "≈182B", "detail": "About 90 TB at 500 bytes per mapping."}
+          ],
+          "priorities": ["Uniqueness", "Durability before acknowledgement", "Idempotent retries", "Abuse prevention"],
+          "tradeoffs": ["Preallocated counter ranges are collision-free and fast, but codes remain enumerable.", "Synchronous cache warming improves the first read but should not make a successful durable write fail."]
+        },
+        {
+          "id": "redirect-flow",
+          "kind": "GET flow",
+          "title": "Redirect: cache hit, miss, and not found",
+          "purpose": "Keep the serving path and its three outcomes on one sheet so the latency and availability decisions are easy to compare.",
+          "description": "The redirect endpoint is public, read-heavy, and availability-critical. A hit returns immediately; a miss performs one primary-key read and backfills Redis; an absent or expired mapping is negative-cached briefly. Click events are emitted after resolution and never block the response.",
+          "width": 1440,
+          "height": 3035,
+          "flow": [
+            {"step": 1, "title": "Route", "detail": "The edge validates the code shape, applies abuse controls, and routes to a nearby stateless redirect service."},
+            {"step": 2, "title": "Cache hit", "detail": "Redis returns the long URL; issue 301 or 302 immediately and emit a click event asynchronously."},
+            {"step": 3, "title": "Cache miss", "detail": "Point-read the mapping store, check expiry, backfill Redis with TTL jitter, and redirect."},
+            {"step": 4, "title": "Not found", "detail": "Negative-cache the miss briefly to absorb repeated scans, then return 404."},
+            {"step": 5, "title": "Degrade deliberately", "detail": "If the store is unavailable, continue serving cached mappings; buffer or drop analytics before delaying redirects."}
+          ],
+          "numbers": [
+            {"label": "Average reads", "value": "≈116K/s", "detail": "10B redirects per day."},
+            {"label": "Peak reads", "value": "230–350K/s", "detail": "Edge and cache capacity dominate."},
+            {"label": "Latency focus", "value": "single-digit ms", "detail": "Target the warm regional path, not global origin latency."}
+          ],
+          "priorities": ["Cache-hit latency", "Availability during store failure", "Bounded staleness for immutable mappings", "Analytics isolation"],
+          "tradeoffs": ["Long cache TTLs lower cost and latency but delay deletion or destination changes.", "Negative caching protects the store from scans but can briefly hide a newly created code."]
+        }
+      ]
+    },
+
+    "components/c05": {
+      "title": "Rate Limiting visual walkthrough",
+      "summary": "Start with placement and ownership, then trace one atomic token-bucket decision, and finish with the coordination and failure choices introduced by a distributed gateway fleet.",
+      "items": [
+        {
+          "id": "overview",
+          "kind": "System map",
+          "title": "Where rate limiting lives",
+          "purpose": "Identify the enforcement point, policy source, counter state, response contract, and protected downstream service.",
+          "description": "The edge authenticates enough of the request to select a key such as user, API key, tenant, or IP. A limiter applies versioned policy and performs an atomic state update before the request reaches scarce downstream capacity.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {"step": 1, "title": "Identify", "detail": "Derive the limit key and endpoint or resource class after trusted authentication."},
+            {"step": 2, "title": "Load policy", "detail": "Resolve capacity, refill rate, request cost, exemptions, and policy version."},
+            {"step": 3, "title": "Spend atomically", "detail": "Update token or counter state without a read-modify-write race."},
+            {"step": 4, "title": "Allow or reject", "detail": "Forward allowed work; otherwise return 429 with Retry-After and rate-limit headers."},
+            {"step": 5, "title": "Observe", "detail": "Record decisions, saturation, hot keys, store latency, and fail-open or fail-closed events."}
+          ],
+          "numbers": [
+            {"label": "Example capacity", "value": "B = 100", "detail": "Maximum immediate burst."},
+            {"label": "Example refill", "value": "r = 20/s", "detail": "Sustained admitted rate."},
+            {"label": "Reject response", "value": "HTTP 429", "detail": "Include Retry-After when calculable."}
+          ],
+          "priorities": ["Protect downstream capacity", "Reject before expensive work", "Fairness by trusted identity", "Predictable client recovery"],
+          "tradeoffs": ["Edge enforcement is cheap and early but may lack application context.", "Service-level limits are precise but allow rejected work deeper into the stack."]
+        },
+        {
+          "id": "request-decision",
+          "kind": "Decision flow",
+          "title": "One atomic token-bucket decision",
+          "purpose": "Trace refill, spend, allow, and Retry-After calculation as one race-free state transition.",
+          "description": "The stored state is tokens plus the last refill timestamp. One atomic script computes elapsed refill, caps the bucket at capacity, spends the request cost when possible, and returns the remaining budget and reset estimate.",
+          "width": 1440,
+          "height": 3035,
+          "flow": [
+            {"step": 1, "title": "Read inputs", "detail": "Use key, capacity B, refill rate r, cost c, and a monotonic server-side time source."},
+            {"step": 2, "title": "Refill", "detail": "tokens = min(B, tokens + r × elapsed)."},
+            {"step": 3, "title": "Decide", "detail": "If tokens ≥ c, subtract c and allow; otherwise preserve state and reject."},
+            {"step": 4, "title": "Explain", "detail": "Return remaining tokens and Retry-After = ceil((c − tokens) ÷ r)."},
+            {"step": 5, "title": "Expire idle keys", "detail": "Set a TTL long enough for a full refill so inactive identities do not consume memory forever."}
+          ],
+          "numbers": [
+            {"label": "Burst", "value": "≤ B requests", "detail": "An idle client can spend accumulated tokens immediately."},
+            {"label": "Long-run rate", "value": "≤ r/s", "detail": "Refill limits sustained traffic."},
+            {"label": "State", "value": "2 values/key", "detail": "Tokens and last-refill time."}
+          ],
+          "priorities": ["Atomicity", "Stable time source", "Low decision latency", "Actionable rejection metadata"],
+          "tradeoffs": ["Token bucket permits controlled bursts; leaky bucket instead smooths output.", "Exact sliding logs remove approximation but store one timestamp per request."]
+        },
+        {
+          "id": "distributed-enforcement",
+          "kind": "Scale and failure",
+          "title": "Distributed counters, reservations, and failure policy",
+          "purpose": "Show why local counters overshoot a global quota and where accuracy can be traded for latency and availability.",
+          "description": "Twenty independent gateways each enforcing the full quota can admit roughly twenty times the intended traffic. Shared atomic state fixes accuracy but adds a network hop. Local token reservations amortize that hop while accepting bounded overshoot.",
+          "width": 1440,
+          "height": 3035,
+          "flow": [
+            {"step": 1, "title": "Shard by limit key", "detail": "Consistent hashing spreads users while keeping each user's state on one counter shard."},
+            {"step": 2, "title": "Execute atomically", "detail": "A Redis script or transactional primitive owns refill and spend for that key."},
+            {"step": 3, "title": "Reserve locally when needed", "detail": "Gateways lease small token batches to remove a shared-store round trip from every request."},
+            {"step": 4, "title": "Bound the error", "detail": "Reservation size × active gateways defines the worst-case overshoot."},
+            {"step": 5, "title": "Choose failure semantics", "detail": "Fail closed for billing or security; fail open or use an emergency local limit for low-risk availability paths."}
+          ],
+          "numbers": [
+            {"label": "Gateway fleet", "value": "20 nodes", "detail": "Local full quotas could admit ≈20×."},
+            {"label": "Shared check", "value": "+1 RTT", "detail": "Accuracy costs coordination latency."},
+            {"label": "Reservation error", "value": "batch × nodes", "detail": "Make the accuracy budget explicit."}
+          ],
+          "priorities": ["Bounded global overshoot", "Counter-store availability", "Hot-key isolation", "Policy-version consistency"],
+          "tradeoffs": ["Shared counters are accurate but add latency and a dependency to every request.", "Sticky routing is fast but imbalances hot clients and complicates failover."]
+        }
+      ]
+    },
+
+    "ddia/ch05": {
+      "title": "Replication visual walkthrough",
+      "summary": "Replication needs four sheets because the topologies solve different problems. Compare them first, then study single-leader lag and failover, multi-leader conflict handling, and leaderless quorum repair independently.",
+      "items": [
+        {
+          "id": "topologies",
+          "kind": "Comparison",
+          "title": "Single-leader, multi-leader, and leaderless",
+          "purpose": "Choose a topology by locating write authority, replication direction, conflict surface, and failure behavior.",
+          "description": "Single-leader centralizes write order; multi-leader accepts local writes in several locations and must merge conflicts; leaderless sends each operation to multiple replicas and reconciles versions. No topology provides latency, availability, and simple consistency simultaneously.",
+          "width": 1440,
+          "height": 3035,
+          "flow": [
+            {"step": 1, "title": "Locate write authority", "detail": "One leader, several leaders, or any replica determines the coordination model."},
+            {"step": 2, "title": "Trace propagation", "detail": "Identify synchronous acknowledgements, asynchronous logs, and cross-region links."},
+            {"step": 3, "title": "Find concurrency", "detail": "More than one write authority means concurrent versions must be detected and resolved."},
+            {"step": 4, "title": "Test a partition", "detail": "Ask which side accepts writes, what the client observes, and what must reconcile later."}
+          ],
+          "numbers": [
+            {"label": "Single leader", "value": "1 write authority", "detail": "Simple order; leader is a coordination point."},
+            {"label": "Multi-leader", "value": "≥2 leaders", "detail": "Local writes; conflict handling required."},
+            {"label": "Leaderless", "value": "n replicas", "detail": "Tune read and write quorums."}
+          ],
+          "priorities": ["Write latency", "Partition availability", "Conflict tolerance", "Read freshness"],
+          "tradeoffs": ["Centralized ordering simplifies correctness but adds write latency and failover complexity.", "Multiple write authorities improve locality and availability but move complexity into conflict resolution."]
+        },
+        {
+          "id": "single-leader",
+          "kind": "Ordered log flow",
+          "title": "Single-leader replication, lag, and failover",
+          "purpose": "Trace one write through the leader and log, then connect acknowledgement timing to lag, stale reads, and data loss.",
+          "description": "The leader assigns a single order and streams a replication log to followers. Synchronous followers improve durability but can block writes; asynchronous followers reduce latency but can lose acknowledged writes and serve stale reads after a leader failure.",
+          "width": 1440,
+          "height": 3035,
+          "flow": [
+            {"step": 1, "title": "Write the leader", "detail": "The client sends all mutations to the elected leader."},
+            {"step": 2, "title": "Append and apply", "detail": "The leader records the write and applies it in log order."},
+            {"step": 3, "title": "Replicate", "detail": "Followers consume the log synchronously or asynchronously and expose a replay position."},
+            {"step": 4, "title": "Acknowledge", "detail": "The durability contract depends on which follower acknowledgements are required before success."},
+            {"step": 5, "title": "Serve reads safely", "detail": "Use leader pinning or log-position checks for read-your-writes and monotonic reads."},
+            {"step": 6, "title": "Fail over", "detail": "Detect failure, elect the most caught-up follower, fence the old leader, and reconfigure clients."}
+          ],
+          "numbers": [
+            {"label": "Sync follower", "value": "≥1 common", "detail": "Balances durability and availability."},
+            {"label": "Lag", "value": "log distance/time", "detail": "Track bytes, entries, and seconds behind."},
+            {"label": "RPO", "value": "async > 0", "detail": "Recent acknowledged writes may be lost."}
+          ],
+          "priorities": ["Durable acknowledgement", "Bounded replication lag", "Read-your-writes", "Fenced failover"],
+          "tradeoffs": ["Synchronous replication improves freshness and durability but blocks on slow or failed replicas.", "Aggressive failover reduces outage time but increases false elections and split-brain risk."]
+        },
+        {
+          "id": "multi-leader",
+          "kind": "Conflict flow",
+          "title": "Multi-leader replication and conflict resolution",
+          "purpose": "Show how local writes become concurrent and why detection, deterministic merge, and convergence are part of the write model.",
+          "description": "Each region accepts writes locally and exchanges them asynchronously. When two leaders update the same object without observing each other, the system must preserve causal metadata, detect concurrency, and apply a deterministic policy such as an application merge or CRDT.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {"step": 1, "title": "Write locally", "detail": "Region A and Region B acknowledge nearby clients without a cross-ocean round trip."},
+            {"step": 2, "title": "Replicate asynchronously", "detail": "Each leader sends operations and causal metadata to the other leaders."},
+            {"step": 3, "title": "Detect concurrency", "detail": "Version vectors distinguish overwrites from genuinely concurrent updates."},
+            {"step": 4, "title": "Resolve deliberately", "detail": "Prefer application merge or CRDT semantics; last-write-wins silently discards data."},
+            {"step": 5, "title": "Converge", "detail": "Replicate the resolved version until every leader and follower agrees."}
+          ],
+          "numbers": [
+            {"label": "Regions", "value": "2+ writers", "detail": "Every added authority expands the conflict surface."},
+            {"label": "Local write", "value": "≈regional RTT", "detail": "Avoids cross-region acknowledgement latency."},
+            {"label": "Conflict window", "value": "replication lag", "detail": "Longer lag permits more concurrency."}
+          ],
+          "priorities": ["Local write latency", "Causal metadata", "Data-preserving merge", "Eventual convergence"],
+          "tradeoffs": ["Home-region routing avoids most conflicts but sacrifices local writes during that region's outage.", "Last-write-wins is operationally simple but converts concurrency into silent data loss."]
+        },
+        {
+          "id": "leaderless",
+          "kind": "Quorum flow",
+          "title": "Leaderless quorums, repair, and hinted handoff",
+          "purpose": "Trace writes and reads across replicas, then separate overlap math from the background mechanisms that actually converge stale copies.",
+          "description": "A coordinator sends writes to n replicas and succeeds after w acknowledgements; reads query r replicas and reconcile returned versions. When w + r > n the sets overlap, but sloppy quorums, partial writes, and concurrency mean this is not automatically linearizable.",
+          "width": 1440,
+          "height": 3035,
+          "flow": [
+            {"step": 1, "title": "Write n replicas", "detail": "The coordinator sends a versioned value to the replica set."},
+            {"step": 2, "title": "Wait for w", "detail": "Return success when the configured write quorum acknowledges."},
+            {"step": 3, "title": "Read r", "detail": "Fetch multiple versions, compare clocks, and return or merge the newest causal value."},
+            {"step": 4, "title": "Repair", "detail": "Read repair updates stale replicas encountered by traffic; anti-entropy handles cold data in the background."},
+            {"step": 5, "title": "Survive unavailable homes", "detail": "Sloppy quorum stores a hint on reachable nodes and hands it back to the intended replica later."}
+          ],
+          "numbers": [
+            {"label": "Example", "value": "n=3, w=2, r=2", "detail": "Read and write sets must overlap."},
+            {"label": "Overlap", "value": "w + r > n", "detail": "Necessary for quorum freshness, not sufficient for linearizability."},
+            {"label": "Fast-read option", "value": "w=3, r=1", "detail": "Cheap reads; writes lose availability if one replica is down."}
+          ],
+          "priorities": ["Replica availability", "Version reconciliation", "Repair coverage", "Explicit stale-read tolerance"],
+          "tradeoffs": ["Larger w improves read freshness but reduces write availability.", "Sloppy quorums keep writes available during partitions but weaken immediate read-your-write behavior on home replicas."]
+        }
+      ]
+    }
+  }
+}

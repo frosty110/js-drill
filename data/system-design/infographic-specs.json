@@ -1,0 +1,249 @@
+{
+  "components/c01": {
+    "visualType": "routing-map",
+    "coreIdea": "Route each request to a healthy backend using the cheapest layer that has the signal you need.",
+    "flow": ["User / client", "DNS or anycast", "L4 / L7 balancer", "Healthy backend pool"],
+    "flowLabels": ["nearest region", "route by IP, path, or load", "active + passive checks"],
+    "cards": [
+      {"title": "L4 vs L7", "body": "L4 is fast and connection-aware. L7 reads HTTP, terminates TLS, and routes by path, header, or cookie."},
+      {"title": "Choose a backend", "body": "Round robin is simple; least-connections adapts to long work; consistent hashing limits remapping."},
+      {"title": "Stay healthy", "body": "Probe proactively, observe live errors, drain bad nodes, and keep spare capacity for failover."},
+      {"title": "Avoid hidden state", "body": "Sticky sessions create skew and brittle failover. Prefer stateless servers plus shared session storage."}
+    ],
+    "tradeoff": "More application awareness enables smarter routing, but costs CPU, latency, and operational complexity."
+  },
+  "components/c02": {
+    "visualType": "cache-layers",
+    "coreIdea": "Cache expensive reads close to demand, then make staleness and invalidation explicit design decisions.",
+    "flow": ["Reader", "Local / edge cache", "Distributed cache", "Source of truth"],
+    "flowLabels": ["fast hit", "miss / fill", "authoritative read"],
+    "cards": [
+      {"title": "Read patterns", "body": "Cache-aside is flexible; read-through centralizes misses. Always define TTL, ownership, and fallback."},
+      {"title": "Write patterns", "body": "Write-through favors consistency; write-back favors throughput but risks loss and reordering."},
+      {"title": "Control pressure", "body": "Use request coalescing, jittered TTLs, prewarming, and stale-while-revalidate against stampedes."},
+      {"title": "Measure the cache", "body": "Track hit ratio, eviction rate, hot keys, item age, origin load, and tail latency—not just capacity."}
+    ],
+    "tradeoff": "Every cache trades freshness and complexity for latency and source-of-truth load reduction."
+  },
+  "components/c03": {
+    "visualType": "edge-globe",
+    "coreIdea": "Serve cacheable bytes from nearby edge points while protecting the origin and preserving safe invalidation.",
+    "flow": ["User", "Nearest edge PoP", "Origin shield", "Application origin"],
+    "flowLabels": ["TLS + cache lookup", "regional miss", "final miss"],
+    "cards": [
+      {"title": "Populate", "body": "Pull CDNs fetch on first miss; push workflows pre-position known assets. Most systems combine both."},
+      {"title": "Control freshness", "body": "Cache-Control, TTL, versioned URLs, purge APIs, and stale serving define the consistency contract."},
+      {"title": "Protect origin", "body": "An origin shield collapses duplicate misses and keeps global edge churn away from core services."},
+      {"title": "Use the edge", "body": "Terminate TLS, compress, resize media, filter abuse, and run small latency-sensitive functions near users."}
+    ],
+    "tradeoff": "Longer edge caching improves latency and cost, but increases the blast radius and duration of stale content."
+  },
+  "components/c04": {
+    "visualType": "queue-conveyor",
+    "coreIdea": "Persist work between producers and consumers so each side can scale, fail, and recover independently.",
+    "flow": ["Producer", "Durable broker", "Consumer group", "Side effect / store"],
+    "flowLabels": ["publish", "claim + acknowledge", "idempotent apply"],
+    "cards": [
+      {"title": "Pick semantics", "body": "Queues distribute work; pub/sub fans events out. Logs retain ordered history for independent replay."},
+      {"title": "Assume duplicates", "body": "At-least-once delivery is practical. Make handlers idempotent with stable event and operation IDs."},
+      {"title": "Bound failure", "body": "Retry with backoff, cap attempts, quarantine poison messages in a DLQ, and expose lag and age."},
+      {"title": "Apply backpressure", "body": "Limit in-flight work, pause partitions, shed low-priority load, and scale from queue depth plus age."}
+    ],
+    "tradeoff": "Asynchrony improves resilience and throughput, but gives up immediate completion and introduces lag, duplicates, and ordering work."
+  },
+  "components/c05": {
+    "visualType": "token-bucket",
+    "coreIdea": "Admit traffic at a controlled rate before scarce downstream resources become the bottleneck.",
+    "flow": ["Caller", "Identity + policy", "Rate limiter", "Protected service"],
+    "flowLabels": ["key + quota", "allow / reject", "bounded load"],
+    "cards": [
+      {"title": "Token bucket", "body": "Tokens refill steadily and allow bounded bursts. Capacity sets burst size; refill rate sets sustained traffic."},
+      {"title": "Window choices", "body": "Fixed windows are cheap but bursty at boundaries. Sliding log is exact; sliding counter is a useful compromise."},
+      {"title": "Distribute safely", "body": "Use atomic Redis updates or local leases. Decide whether small over-admission during failure is acceptable."},
+      {"title": "Be a good API", "body": "Return 429 plus Retry-After and quota headers; distinguish user, token, IP, route, and tenant limits."}
+    ],
+    "tradeoff": "Stricter global accuracy costs coordination and latency; local limits are faster but can overshoot the global quota."
+  },
+  "components/c06": {
+    "visualType": "primitive-toolkit",
+    "coreIdea": "Combine a small set of proven primitives to place data, reduce work, coordinate ownership, and retry safely.",
+    "flow": ["Key / request", "Placement primitive", "Coordination primitive", "Replicated storage"],
+    "flowLabels": ["hash or shard", "quorum / leader", "read + write"],
+    "cards": [
+      {"title": "Place data", "body": "Consistent hashing limits movement; virtual nodes smooth imbalance; explicit sharding keeps boundaries visible."},
+      {"title": "Skip needless work", "body": "Bloom filters can prove absence cheaply. False positives are possible; false negatives are not."},
+      {"title": "Coordinate", "body": "Leaders serialize ownership. Quorums overlap replicas when R + W > N, subject to repair and clock realities."},
+      {"title": "Retry safely", "body": "Idempotency keys turn repeated operations into the same logical result and must outlive client retry windows."}
+    ],
+    "tradeoff": "Primitives simplify one failure mode at a time; composing them creates new invariants that must be stated and tested."
+  },
+  "components/c07": {
+    "visualType": "protocol-branches",
+    "coreIdea": "Choose an interface whose coupling, latency, evolution, and delivery semantics match the interaction.",
+    "flow": ["Client", "API contract", "Gateway / transport", "Service"],
+    "flowLabels": ["REST, gRPC, GraphQL", "auth + policy", "sync or async"],
+    "cards": [
+      {"title": "Match the style", "body": "REST fits resources, gRPC fits typed internal calls, and GraphQL fits client-shaped reads with governance."},
+      {"title": "Design retries", "body": "Make safe operations idempotent; use idempotency keys for create or charge actions that clients may retry."},
+      {"title": "Page stable data", "body": "Offset is simple but drifts under writes. Cursor pagination anchors continuation to a stable sort key."},
+      {"title": "Push intentionally", "body": "Webhooks fit server callbacks, SSE fits one-way streams, and WebSockets fit bidirectional low-latency sessions."}
+    ],
+    "tradeoff": "A richer API reduces client round trips but increases server complexity, coupling, observability, and abuse surface."
+  },
+  "ddia/ch01": {
+    "visualType": "three-pillars",
+    "coreIdea": "Evaluate every data system through reliability, scalability, and maintainability—not a single peak-throughput number.",
+    "flow": ["Load parameters", "System behavior", "User percentiles", "Operate + evolve"],
+    "flowLabels": ["requests, data, fan-out", "p50 / p95 / p99", "close the loop"],
+    "cards": [
+      {"title": "Reliability", "body": "Prevent component faults from becoming service failures; expect hardware, software, and human faults."},
+      {"title": "Scalability", "body": "Name the load parameter, observe how performance changes, then specify resources needed to hold an SLO."},
+      {"title": "Tail latency", "body": "Averages hide the users who wait. Percentiles expose queues, fan-out amplification, and the real experience."},
+      {"title": "Maintainability", "body": "Optimize for operability, simplicity, and evolvability so the system remains changeable after launch."}
+    ],
+    "tradeoff": "Optimizing one pillar can harm another; make the workload and service objective explicit before choosing architecture."
+  },
+  "ddia/ch02": {
+    "visualType": "data-models",
+    "coreIdea": "A data model shapes both how an application thinks and which queries and evolutions remain easy.",
+    "flow": ["Domain relationships", "Data model", "Query language", "Application behavior"],
+    "flowLabels": ["translate", "declare intent", "retrieve + update"],
+    "cards": [
+      {"title": "Relational", "body": "Strong joins and normalized many-to-many data; schema-on-write makes structure explicit before storage."},
+      {"title": "Document", "body": "Natural aggregates and locality; schema-on-read eases variation but references and joins can become awkward."},
+      {"title": "Graph", "body": "Vertices and edges make many-to-many traversal first-class when relationship shape is the central query."},
+      {"title": "Declarative queries", "body": "State what results you want and let the optimizer choose execution, parallelism, and access paths."}
+    ],
+    "tradeoff": "Choose for the dominant relationships and access patterns; no model removes impedance mismatch for every workload."
+  },
+  "ddia/ch03": {
+    "visualType": "storage-cutaway",
+    "coreIdea": "Storage engines turn writes into durable structures and indexes into read speed—at a measurable amplification cost.",
+    "flow": ["Write", "WAL / memtable", "SSTables or pages", "Index-assisted read"],
+    "flowLabels": ["durability", "flush + compact", "seek / scan"],
+    "cards": [
+      {"title": "LSM trees", "body": "Sequential writes and background compaction favor write throughput; reads consult multiple sorted levels."},
+      {"title": "B-trees", "body": "Fixed pages and in-place updates give predictable indexed reads, protected by a write-ahead log."},
+      {"title": "Indexes", "body": "Primary, secondary, clustered, covering, and multi-column indexes trade storage and write cost for query speed."},
+      {"title": "OLTP vs OLAP", "body": "Row stores serve selective transactions; columnar warehouses compress and scan analytical dimensions efficiently."}
+    ],
+    "tradeoff": "Every index accelerates a read path by adding write amplification, storage overhead, and maintenance work."
+  },
+  "ddia/ch04": {
+    "visualType": "compatibility-bridge",
+    "coreIdea": "Evolve data safely by defining what old and new readers and writers must understand during mixed-version operation.",
+    "flow": ["Old + new writers", "Versioned encoding", "Stored / transmitted bytes", "Old + new readers"],
+    "flowLabels": ["encode", "preserve unknown fields", "decode compatibly"],
+    "cards": [
+      {"title": "Compatibility", "body": "Backward: new code reads old data. Forward: old code reads new data. Rolling deploys usually need both."},
+      {"title": "Formats", "body": "Protobuf and Thrift use tagged fields; Avro resolves writer and reader schemas without field tags."},
+      {"title": "Dataflow", "body": "Databases, service calls, and asynchronous messages retain different version mixes and upgrade windows."},
+      {"title": "RPC reality", "body": "A network call is not a local call: it can time out, duplicate, partially fail, reorder, and cross versions."}
+    ],
+    "tradeoff": "Strict schemas improve safety and tooling; looser evolution improves flexibility but shifts errors into runtime and consumers."
+  },
+  "ddia/ch05": {
+    "visualType": "replication-topologies",
+    "coreIdea": "Replication copies data for availability and locality, then forces explicit choices about leaders, lag, and conflicts.",
+    "flow": ["Client write", "Leader or coordinator", "Replica log", "Follower reads"],
+    "flowLabels": ["order", "sync / async replicate", "possibly stale"],
+    "cards": [
+      {"title": "Single leader", "body": "Simple ordering and conflict avoidance; failover and asynchronous lag can lose acknowledged writes."},
+      {"title": "Multi-leader", "body": "Useful across regions or offline clients, but concurrent writes require conflict detection and resolution."},
+      {"title": "Leaderless", "body": "Clients or coordinators read and write quorums; sloppy quorums, repair, and hinted handoff sustain availability."},
+      {"title": "Read guarantees", "body": "Read-your-writes, monotonic reads, and consistent-prefix reads make lag tolerable for specific experiences."}
+    ],
+    "tradeoff": "Synchronous replication improves durability and freshness; asynchronous replication improves latency and availability."
+  },
+  "ddia/ch06": {
+    "visualType": "partition-map",
+    "coreIdea": "Partition data to scale, while keeping placement discoverable and rebalancing bounded as nodes and load change.",
+    "flow": ["Record key", "Partition function", "Shard owner", "Replica set"],
+    "flowLabels": ["range or hash", "route", "replicate"],
+    "cards": [
+      {"title": "Range partition", "body": "Efficient contiguous scans, but sequential or time-based keys can concentrate writes on one shard."},
+      {"title": "Hash partition", "body": "Spreads keys more evenly, but destroys range locality and cannot cure a single extremely hot key."},
+      {"title": "Secondary indexes", "body": "Document-local indexes write locally and scatter reads; term-local indexes scatter writes and focus reads."},
+      {"title": "Rebalance + route", "body": "Move bounded partitions, avoid modulo-N churn, and let clients discover owners through routing metadata."}
+    ],
+    "tradeoff": "Even distribution reduces hotspots; locality reduces scatter-gather and cross-partition coordination."
+  },
+  "ddia/ch07": {
+    "visualType": "transaction-timeline",
+    "coreIdea": "Transactions group reads and writes into a correctness boundary, but isolation determines which races are actually prevented.",
+    "flow": ["Concurrent clients", "Transaction boundary", "Isolation control", "Committed state"],
+    "flowLabels": ["read + write", "detect or serialize", "atomic visibility"],
+    "cards": [
+      {"title": "ACID", "body": "Atomicity, consistency, isolation, and durability are guarantees with product-specific strength—not one universal mode."},
+      {"title": "Weak isolation", "body": "Read committed and snapshot isolation prevent some anomalies but may allow lost updates or write skew."},
+      {"title": "Serializable", "body": "Use actual serial execution, two-phase locking, or serializable snapshot isolation to match a serial order."},
+      {"title": "2PL is not 2PC", "body": "Two-phase locking provides isolation; two-phase commit coordinates atomic commit across participants."}
+    ],
+    "tradeoff": "Stronger isolation simplifies application correctness but may cost contention, aborts, latency, and availability."
+  },
+  "ddia/ch08": {
+    "visualType": "partial-failure",
+    "coreIdea": "Distributed systems live with partial failure: messages, clocks, and processes can fail independently and ambiguously.",
+    "flow": ["Sender", "Unreliable network", "Paused / failed process", "Ambiguous outcome"],
+    "flowLabels": ["delay, drop, duplicate", "timeout", "retry or fence"],
+    "cards": [
+      {"title": "Timeouts are guesses", "body": "Silence cannot distinguish a dead node, slow node, lost request, or lost response; tune against false suspicion."},
+      {"title": "Clocks mislead", "body": "Wall clocks jump; monotonic clocks measure duration. Clock confidence matters when ordering or expiring ownership."},
+      {"title": "Pauses break leases", "body": "A process can stop past its lease and resume unaware. Fencing tokens let storage reject stale owners."},
+      {"title": "Choose a model", "body": "Safety claims depend on synchrony assumptions, crash behavior, Byzantine behavior, and quorum membership."}
+    ],
+    "tradeoff": "Aggressive failure detection recovers faster but falsely ejects healthy slow nodes; patience preserves work but delays failover."
+  },
+  "ddia/ch09": {
+    "visualType": "consensus-overlap",
+    "coreIdea": "Consistency and consensus define which global facts processes can safely agree on despite faults and reordering.",
+    "flow": ["Concurrent operations", "Ordering rule", "Consensus / log", "Consistent decisions"],
+    "flowLabels": ["happens-before", "agree on order", "apply"],
+    "cards": [
+      {"title": "Two meanings", "body": "Linearizability is a recency guarantee across objects; serializability is a transaction isolation guarantee."},
+      {"title": "CAP boundary", "body": "During a network partition, a linearizable service must choose between rejecting requests and risking divergence."},
+      {"title": "Order precisely", "body": "Causal order captures dependencies; total-order broadcast gives every node the same durable message sequence."},
+      {"title": "Consensus", "body": "Agreement, integrity, and termination underpin leader election, unique constraints, atomic broadcast, and membership."}
+    ],
+    "tradeoff": "Global ordering makes invariants easier to enforce, but coordination adds latency and can reduce availability during partitions."
+  },
+  "ddia/ch10": {
+    "visualType": "batch-pipeline",
+    "coreIdea": "Batch systems transform bounded immutable inputs through restartable stages into reproducible derived outputs.",
+    "flow": ["Immutable inputs", "Map / partition", "Shuffle + reduce", "Derived output"],
+    "flowLabels": ["read all", "group by key", "write anew"],
+    "cards": [
+      {"title": "Unix model", "body": "Small tools communicate through uniform byte streams; composition and immutability make pipelines understandable."},
+      {"title": "MapReduce", "body": "Mappers emit key-value pairs; shuffle groups keys; reducers process each key's complete value set."},
+      {"title": "Joins", "body": "Sort-merge and reduce-side joins move data by key; broadcast joins copy a small side to every worker."},
+      {"title": "Dataflow engines", "body": "DAG schedulers keep intermediates in memory, pipeline operators, and recompute lost partitions from lineage."}
+    ],
+    "tradeoff": "Materialized stages are slow but durable and inspectable; pipelined execution is fast but needs lineage-based recovery."
+  },
+  "ddia/ch11": {
+    "visualType": "stream-windows",
+    "coreIdea": "Stream processing treats unbounded events as data, maintaining derived views while handling time, replay, and delivery.",
+    "flow": ["Event producers", "Ordered broker log", "Stream processor", "Materialized view / sink"],
+    "flowLabels": ["append", "consume + checkpoint", "idempotent update"],
+    "cards": [
+      {"title": "Broker models", "body": "AMQP assigns transient messages to consumers; log brokers retain partitioned history for replay."},
+      {"title": "CDC + event sourcing", "body": "CDC derives a change stream from database state; event sourcing makes domain events the source of truth."},
+      {"title": "Time + windows", "body": "Event time reflects reality; processing time reflects arrival. Watermarks bound how long to await late data."},
+      {"title": "Exactly once", "body": "Usually means effectively-once effects via checkpoints, transactions, idempotency, or deterministic replay."}
+    ],
+    "tradeoff": "Waiting longer improves event-time completeness; emitting earlier lowers latency but increases corrections and retractions."
+  },
+  "ddia/ch12": {
+    "visualType": "derived-ecosystem",
+    "coreIdea": "Build data systems as composable sources and derived views, with end-to-end correctness spanning every boundary.",
+    "flow": ["Source of truth", "Ordered change log", "Derived systems", "User-visible result"],
+    "flowLabels": ["capture intent", "project + index", "verify end to end"],
+    "cards": [
+      {"title": "Derived data", "body": "Caches, indexes, warehouses, and models should be rebuildable from an authoritative durable source."},
+      {"title": "Unbundled database", "body": "Compose specialized storage and processing tools around a common log instead of forcing one system to do all jobs."},
+      {"title": "End-to-end", "body": "Exactly-once internals cannot guarantee user correctness without request IDs, constraints, audits, and outcome visibility."},
+      {"title": "People matter", "body": "Auditability, privacy, fairness, consent, and feedback loops are system properties—not post-launch add-ons."}
+    ],
+    "tradeoff": "Specialized components improve local fit but increase integration contracts, metadata, lineage, and operational responsibility."
+  }
+}

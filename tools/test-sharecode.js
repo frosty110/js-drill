@@ -141,17 +141,17 @@ eq(S.summarize([]).score, 0, 'empty summary does not divide by zero');
 // ── Routes ──────────────────────────────────────────────────────────────────
 
 const BASE = 'https://frosty110.github.io/js-drill/';
-eq(R.sharePath('lesson', { id: 'two-sum' }), 'p/two-sum', 'lesson share path');
-eq(R.sharePath('sdUnit', { topic: 'ddia', unit: 'ch01' }), 'sd/ddia/ch01', 'sd unit share path');
-eq(R.sharePath('lessonIndex', {}), 'p', 'lesson index path');
+eq(R.sharePath('lesson', { id: 'two-sum' }), 'p/two-sum/', 'lesson share path');
+eq(R.sharePath('sdUnit', { topic: 'ddia', unit: 'ch01' }), 'sd/ddia/ch01/', 'sd unit share path');
+eq(R.sharePath('lessonIndex', {}), 'p/', 'lesson index path');
 eq(
   R.shareUrl('lesson', { id: 'two-sum' }, 'Ab.Y.n', { base: BASE }),
-  `${BASE}p/two-sum?s=Ab.Y.n`,
+  `${BASE}p/two-sum/?s=Ab.Y.n`,
   'lesson share URL'
 );
 eq(
   R.shareUrl('lesson', { id: 'two-sum' }, 'Ab.Y.n', { base: BASE, anchor: 'q3' }),
-  `${BASE}p/two-sum?s=Ab.Y.n#q3`,
+  `${BASE}p/two-sum/?s=Ab.Y.n#q3`,
   'share URL with a question anchor'
 );
 eq(
@@ -162,6 +162,32 @@ eq(
 eq(R.codeKind('lesson'), 'lesson', 'lesson uses the lesson grammar');
 eq(R.codeKind('sdUnit'), 'unit', 'sd unit uses the unit grammar');
 eq(R.codeKind('lessonIndex'), null, 'an index carries no code grammar');
+
+// Every surface is emitted as <dir>/index.html, so its URL must carry the
+// trailing slash — the slashless form costs a 301 on GitHub Pages, and some
+// fetchers drop the ?s= across that hop (that is the bug this guards).
+for (const [kind, params] of [
+  ['lesson', { id: 'two-sum' }],
+  ['sdUnit', { topic: 'design-problems', unit: 'p01' }],
+  ['sdTopic', { topic: 'ddia' }],
+  ['lessonIndex', {}],
+  ['sdIndex', {}]
+]) {
+  eq(R.sharePath(kind, params).endsWith('/'), true, `share path ends in a slash: ${kind}`);
+  eq(/\/\//.test(R.sharePath(kind, params)), false, `no doubled slash: ${kind}`);
+}
+eq(
+  R.shareUrl('sdUnit', { topic: 'design-problems', unit: 'p01' }, 'Y---------', { base: BASE }),
+  `${BASE}sd/design-problems/p01/?s=Y---------`,
+  'sd unit share URL resolves in one hop'
+);
+
+// Links shared BEFORE the trailing-slash change must still parse.
+eq(
+  R.parseSharePath('sd/design-problems/p01'),
+  { kind: 'sdUnit', params: { topic: 'design-problems', unit: 'p01' } },
+  'legacy slashless sd unit still parses'
+);
 
 // Parsing tolerates the deployment prefix, trailing slash and /index.html.
 eq(R.parseSharePath('p/two-sum'), { kind: 'lesson', params: { id: 'two-sum' } }, 'parse bare path');

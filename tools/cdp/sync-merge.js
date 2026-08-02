@@ -390,6 +390,36 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
      return { t: m.lastTopic, c: m.lastChapter };`,
     { t: 'ddia', c: 'ch03' });
 
+  await check('sysdesign: activePlan prefers local (study-plan cursor is device state)',
+    `const m = window.DrillSync._testInternals.mergeSystemDesign(
+       { __v: 1, boxes: {}, activePlan: { id: 'one-week', index: 4, startedAt: 200 } },
+       { __v: 1, boxes: {}, activePlan: { id: 'night-before', index: 1, startedAt: 100 } });
+     return { id: m.activePlan.id, i: m.activePlan.index };`,
+    { id: 'one-week', i: 4 });
+
+  await check('sysdesign: activePlan — local null TOMBSTONE beats a cloud plan (drop stays dropped)',
+    `const m = window.DrillSync._testInternals.mergeSystemDesign(
+       { __v: 1, boxes: {}, activePlan: null },
+       { __v: 1, boxes: {}, activePlan: { id: 'full-canon', index: 9, startedAt: 100 } });
+     return m.activePlan;`,
+    null);
+
+  await check('sysdesign: activePlan — cloud fills in when local never saw the field',
+    `const m = window.DrillSync._testInternals.mergeSystemDesign(
+       { __v: 1, boxes: {} },
+       { __v: 1, boxes: {}, activePlan: { id: 'ai-sprint', index: 2, startedAt: 100 } });
+     return m.activePlan.id;`,
+    'ai-sprint');
+
+  await check('sysdesign: activePlan merge is idempotent + order-stable on the tombstone',
+    `const T = window.DrillSync._testInternals;
+     const l = { __v: 1, boxes: {}, activePlan: null };
+     const c = { __v: 1, boxes: {}, activePlan: { id: 'primitives', index: 3, startedAt: 100 } };
+     const once = T.mergeSystemDesign(l, c);
+     const twice = T.mergeSystemDesign(once, c);
+     return { once: once.activePlan, twice: twice.activePlan };`,
+    { once: null, twice: null });
+
   await check('sysdesign: local null passes cloud through',
     `const m = window.DrillSync._testInternals.mergeSystemDesign(null,
        { __v: 1, boxes: { k: { box: 2 } } });

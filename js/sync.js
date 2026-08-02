@@ -145,6 +145,13 @@
 //                              two sides (lifetime counters; MAX not SUM for
 //                              idempotence — see the additive rule above).
 //     lastTopic / lastChapter: prefer LOCAL        (device/session state)
+//     activePlan:              prefer LOCAL *including an explicit null* — the
+//                              study-plan cursor {id,index,startedAt} is device
+//                              state, and dropping a plan writes null rather
+//                              than deleting, so the clear survives the merge
+//                              instead of resurrecting from the other device.
+//                              Plan COMPLETION is never synced: it is derived
+//                              from boxes, so the cursor carries no mastery.
 //
 //   __v on every blob: max
 //
@@ -1036,6 +1043,14 @@
                   : (cloud[key] != null) ? cloud[key]
                   : (local[key] !== undefined ? local[key] : cloud[key]);
     }
+
+    // activePlan: the study-plan cursor. Also device state, but UNLIKE the two
+    // above a local null is a deliberate tombstone (dropping a plan writes null
+    // — see clearActivePlan), so it must NOT fall back to the cloud's cursor.
+    // Local wins whenever it holds the key at all; cloud fills in only for a
+    // device that has never seen the field.
+    if ('activePlan' in local) merged.activePlan = local.activePlan;
+    else if ('activePlan' in cloud) merged.activePlan = cloud.activePlan;
 
     return merged;
   }

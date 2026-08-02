@@ -82,11 +82,39 @@ async function ensureChrome({ timeoutMs = 15000 } = {}) {
   try { await get('/json/version'); return { started: false }; } catch (_) {}
   // Headless so the probe doesn't steal user focus. --user-data-dir keeps the
   // debug profile isolated from the user's normal browser.
-  spawn('open', ['-na', 'Google Chrome', '--args',
+  //
+  // macOS launches the installed Chrome via `open`; Linux (dev containers, the
+  // remote-execution environment) has no `open` and no "Google Chrome" bundle,
+  // so fall back to the first chromium binary we can find — CHROME_BIN, then
+  // the Playwright browser that ships in those images, then PATH.
+  const flags = [
     '--remote-debugging-port=9222',
     '--user-data-dir=/tmp/chrome-debug-jsdrill',
-    '--headless=new'
-  ], { detached: true, stdio: 'ignore' }).unref();
+    '--headless=new',
+    '--no-sandbox',
+    '--disable-dev-shm-usage'
+  ];
+  if (process.platform === 'darwin') {
+    spawn('open', ['-na', 'Google Chrome', '--args', ...flags], { detached: true, stdio: 'ignore' }).unref();
+  } else {
+    const candidates = [
+      process.env.CHROME_BIN,
+      '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+      ...(() => {
+        // PLAYWRIGHT_BROWSERS_PATH images pin a build number; glob rather than hardcode.
+        try {
+          const root = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
+          return fs.readdirSync(root)
+            .filter(d => d.startsWith('chromium-'))
+            .map(d => path.join(root, d, 'chrome-linux', 'chrome'));
+        } catch (_) { return []; }
+      })(),
+      'chromium', 'chromium-browser', 'google-chrome'
+    ].filter(Boolean);
+    const bin = candidates.find(c => (c.includes('/') ? fs.existsSync(c) : true));
+    if (!bin) throw new Error('No chromium binary found — set CHROME_BIN to one.');
+    spawn(bin, flags, { detached: true, stdio: 'ignore' }).unref();
+  }
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     try { await get('/json/version'); return { started: true }; } catch (_) {}
@@ -312,6 +340,13 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
     },
 
     async sleep(ms) { await new Promise(r => setTimeout(r, ms)); },
+
+    // Switch breakpoints inside one session. Opening a second connect() just to
+    // check desktop costs a whole tab + Fetch-interception setup; this keeps a
+    // responsive probe to a single session.
+    async setViewport({ width, height, mobile = false, deviceScaleFactor = 2 }) {
+      await rawSend('Emulation.setDeviceMetricsOverride', { width, height, mobile, deviceScaleFactor });
+    },
 
     assert(cond, message) {
       assertions.push({ ok: !!cond, message });

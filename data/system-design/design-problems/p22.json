@@ -1,0 +1,185 @@
+{
+  "id": "p22",
+  "num": 22,
+  "part": "AI & ML Infrastructure",
+  "title": "Design an LLM Inference Platform",
+  "summary": "Serve a large language model to many concurrent users on a scarce, expensive GPU fleet. The signature challenge is that generation is autoregressive and variable-length, so classic request-per-worker serving wastes most of the hardware you are paying for.",
+  "keyTakeaways": [
+    "Inference has two phases with opposite profiles: prefill is compute-bound and parallel over the prompt; decode is memory-bandwidth-bound and strictly one token at a time.",
+    "Continuous (in-flight) batching is the single biggest throughput win — admit and retire sequences every decode step instead of waiting for a whole static batch to finish.",
+    "The KV cache, not model weights, is the scaling limit: it grows with batch size × sequence length and determines how many concurrent sequences fit in GPU memory.",
+    "PagedAttention stores the KV cache in fixed-size blocks so memory is allocated on demand, eliminating the fragmentation that reserving max-length contiguous buffers causes.",
+    "TTFT and TPOT are different SLOs with different bottlenecks; a single 'latency' target hides the tradeoff and leads to the wrong scheduler.",
+    "Prefill and decode interfere — a long prompt entering the batch stalls every streaming user — so separate them, by chunking prefill or by disaggregating onto different GPU pools.",
+    "Prefix caching turns a shared system prompt from per-request compute into a cache hit, which is often the cheapest large win in a production deployment."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope an LLM inference platform. What are the functional requirements, and which non-functional targets matter that wouldn't appear in a normal web service?",
+      "points": [
+        "Functional: accept a prompt plus sampling parameters, stream generated tokens back, support multiple models and versions, and cancel in-flight requests.",
+        "Streaming is a requirement, not a nicety — users perceive tokens arriving, so the API is server-sent events or a websocket, not a single response.",
+        "Two distinct latency SLOs: time-to-first-token (TTFT), which governs perceived responsiveness, and time-per-output-token (TPOT), which governs reading speed. Conflating them is a design error.",
+        "Throughput matters unusually much because GPUs are scarce and expensive — the real objective is tokens/sec/dollar subject to the latency SLOs.",
+        "Workload is heterogeneous and unpredictable: prompt lengths vary by orders of magnitude and output length is not known until generation stops.",
+        "Multi-tenancy: fair sharing and per-tenant rate limits, since one user requesting 8K tokens can monopolize a worker.",
+        "Ask about the mix — chat (interactive, latency-critical) versus batch/offline (throughput-only) — because they justify different clusters."
+      ],
+      "answer": "The API accepts a prompt and sampling parameters and streams tokens back, so this is SSE or websockets rather than request/response. What's different from a normal service is that there are two latency SLOs, not one: time-to-first-token drives perceived responsiveness, and time-per-output-token drives whether the text reads smoothly. They have different bottlenecks, so collapsing them into 'p99 latency' will produce the wrong scheduler. The other difference is that hardware cost dominates — the real objective is tokens per second per dollar subject to those SLOs. And the workload is genuinely unpredictable: prompt lengths vary by orders of magnitude and you don't know the output length until generation stops, which breaks the usual capacity math.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate capacity: how much GPU memory does a 70B-parameter model need, and how many concurrent sequences fit?",
+      "points": [
+        "Weights: 70B params × 2 bytes (fp16/bf16) = 140 GB — already more than a single 80 GB H100, so tensor parallelism across at least 2-4 GPUs is mandatory.",
+        "That leaves roughly 160 GB of the 320 GB on a 4×80 GB node for everything else, most of it KV cache.",
+        "KV cache per token ≈ 2 (K and V) × layers × hidden_dim × 2 bytes. For a 70B-class model (~80 layers, 8192 hidden) with multi-head attention that is ~2.6 MB/token — grouped-query attention cuts this roughly 8x, to ~0.3 MB/token.",
+        "With GQA at ~0.3 MB/token, a 4K-token sequence costs ~1.2 GB, so ~130 concurrent sequences fit in 160 GB. Without GQA it would be closer to 15 — which is why GQA matters so much.",
+        "Throughput intuition: decode is memory-bandwidth-bound, so tokens/sec ≈ memory_bandwidth / bytes_read_per_token; larger batches amortize the weight read across more sequences, which is exactly why batching wins.",
+        "Serving 10K concurrent users at ~130 sequences per node means ~75+ nodes — state the arithmetic so the cost of the SLO is visible."
+      ],
+      "answer": "A 70B model in bf16 is 140 GB of weights alone, so it doesn't fit on one 80 GB GPU — tensor parallelism across at least two, realistically four, is forced. On a 4×80 GB node that leaves roughly 160 GB, and almost all of it goes to KV cache. Per-token KV cost is about 2.6 MB for a 70B-class model with plain multi-head attention, but grouped-query attention cuts it roughly eightfold to about 0.3 MB. That's the difference between fitting ~15 concurrent 4K-token sequences and ~130 — which is why GQA is a serving decision, not just a modeling one. Decode is memory-bandwidth-bound, so throughput scales with how many sequences share each weight read; that's the whole argument for batching.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Design the API and describe the request lifecycle from arrival to the last token.",
+      "points": [
+        "`POST /v1/completions` with `{model, prompt, max_tokens, temperature, stream: true}` returning an SSE stream of token deltas and a terminal event with stop reason and usage.",
+        "Cancellation must be first-class: a client disconnect should free the sequence's KV blocks immediately, or abandoned requests hold scarce memory to completion.",
+        "Lifecycle: gateway (auth, rate limit, model routing) → scheduler queue → admission when KV blocks are available → prefill → decode loop → stream out → free blocks.",
+        "Admission control is where SLOs are enforced: the scheduler admits based on free KV capacity, not just on worker count.",
+        "Queue with priority classes so an interactive chat request isn't stuck behind a large batch job.",
+        "Return usage (prompt and completion tokens) for billing, and the stop reason (length, stop sequence, EOS) so callers can distinguish truncation from completion."
+      ],
+      "answer": "`POST /v1/completions` with `stream: true`, returning SSE token deltas and a final event carrying stop reason and token usage. Cancellation has to be first-class — when a client disconnects, that sequence's KV blocks must be freed immediately, otherwise abandoned requests hold scarce memory until they hit max_tokens. The lifecycle is gateway for auth, rate limiting and model routing; then a scheduler queue; then admission, which is gated on free KV blocks rather than on worker count, because memory is the real capacity; then prefill, then the decode loop streaming out, then freeing blocks. I'd put priority classes on the queue so interactive chat doesn't sit behind offline batch work."
+    },
+    {
+      "type": "mc",
+      "q": "Why does static batching — collecting N requests, running them together, returning all N — waste most of the GPU on a chat workload?",
+      "options": [
+        "Static batches cannot use tensor parallelism across multiple GPUs",
+        "Sequences finish at different lengths, so short ones idle in the batch until the longest finishes, and no new request can join until the whole batch completes",
+        "The KV cache must be recomputed from scratch for every token in a static batch",
+        "Static batching forces fp32 precision, halving effective memory bandwidth"
+      ],
+      "answer": 1,
+      "explain": "Output lengths vary wildly — one request stops after 20 tokens, another runs to 2,000. In a static batch the finished sequences occupy their slots doing nothing until the longest one completes, and arriving requests wait for the entire batch to drain. Utilization collapses toward the ratio of average to maximum length. Continuous batching fixes exactly this: the scheduler evaluates the batch every decode step, retiring finished sequences and admitting queued ones immediately, so slots are never idle and queueing delay drops. Batching strategy is orthogonal to parallelism, cache reuse, and precision.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: prefill and decode have opposite performance profiles. Explain the difference and why mixing them in one batch hurts.",
+      "points": [
+        "Prefill processes the entire prompt at once — all tokens attend in parallel, so it is compute-bound and saturates the GPU's matrix units. Cost scales with prompt length.",
+        "Decode generates one token at a time, each depending on the previous, so there is no parallelism within a sequence. Each step re-reads the model weights to produce one token per sequence, making it memory-bandwidth-bound.",
+        "Consequence: decode is only efficient when batched across many sequences, because that amortizes the weight read.",
+        "The interference: a 8K-token prefill entering the batch occupies the GPU for a long compute-bound step, during which every streaming user's decode stalls — a visible stutter in TPOT for unrelated requests.",
+        "Fix A — chunked prefill: split a long prompt into chunks and interleave them with decode steps so no single step blocks the batch for long.",
+        "Fix B — prefill/decode disaggregation: run prefill on one GPU pool and decode on another, transferring the KV cache between them. Each pool is then tuned for its own bottleneck and the SLOs decouple.",
+        "Cost of disaggregation: the KV cache must cross the interconnect, so it needs fast links (NVLink/RDMA) to be worthwhile.",
+        "This is also why TTFT and TPOT need separate SLOs — TTFT is dominated by prefill and queueing, TPOT by decode batch dynamics."
+      ],
+      "answer": "Prefill runs the whole prompt in parallel, so it's compute-bound and saturates the matrix units, and its cost scales with prompt length. Decode emits one token at a time with a strict serial dependency, so within a single sequence there's no parallelism at all — each step re-reads the entire model to produce one token, which makes it memory-bandwidth-bound and only efficient when many sequences share that read. The interference is concrete: an 8K-token prefill joining the batch takes one long compute-heavy step, and every streaming user's next token is delayed behind it — they see a stutter caused by someone else's prompt. Two fixes: chunked prefill, which splits the prompt so no step blocks for long, or full prefill/decode disaggregation onto separate GPU pools with the KV cache shipped between them. Disaggregation decouples the two SLOs cleanly but needs a fast interconnect to move the cache.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "A naive server reserves a contiguous KV-cache buffer sized to `max_tokens` for each admitted sequence. What goes wrong?",
+      "options": [
+        "Attention produces incorrect results because the buffer isn't zero-initialized",
+        "Most sequences generate far fewer tokens than max_tokens, so reserved-but-unused memory plus fragmentation strands a large fraction of GPU memory and caps concurrency well below what's physically possible",
+        "Contiguous allocation prevents the use of grouped-query attention",
+        "The GPU cannot address contiguous buffers larger than 2 GB"
+      ],
+      "answer": 1,
+      "explain": "You must reserve for the worst case because you can't know the output length in advance, but the typical sequence uses a small fraction of it — so a large share of memory is reserved and never touched, and variable-sized contiguous blocks fragment the remainder. Reported waste in naive servers runs 60-80%. PagedAttention borrows OS virtual memory: the KV cache lives in fixed-size blocks allocated on demand and tracked by a block table, so a sequence consumes only what it has actually generated, fragmentation is bounded to at most one partial block per sequence, and identical prefixes can share blocks by reference.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how does paged KV-cache management work, and what second benefit does it unlock?",
+      "points": [
+        "Partition GPU memory into fixed-size blocks each holding the KV entries for a fixed number of tokens (e.g. 16).",
+        "Each sequence has a block table mapping logical token positions to physical blocks — the direct analogue of OS page tables.",
+        "Blocks are allocated as the sequence grows, so memory used tracks tokens actually generated. Internal fragmentation is bounded to one partial block per sequence.",
+        "Second benefit — prefix sharing: sequences with a common prefix (a shared system prompt, a few-shot preamble, a branching sample) point at the same physical blocks with a reference count, copying on write only when they diverge.",
+        "Prefix caching turns a long shared system prompt from per-request prefill compute into a cache hit, cutting both TTFT and cost dramatically for chat products.",
+        "Enables preemption: under memory pressure the scheduler can evict a low-priority sequence's blocks (swap to host memory or recompute later) instead of failing the request.",
+        "Cost: an indirection per attention access and a custom attention kernel that understands the block table — real engineering, which is why this lives in the serving framework rather than the model."
+      ],
+      "answer": "Memory is partitioned into fixed-size blocks holding the KV entries for some number of tokens, and each sequence gets a block table mapping logical positions to physical blocks — it's OS paging applied to attention. Blocks are allocated as the sequence actually grows, so waste is bounded to one partial block per sequence instead of a whole reserved max-length buffer. The second benefit is the one I'd emphasize: because blocks are referenced rather than copied, sequences sharing a prefix can point at the same physical blocks with a refcount and copy-on-write when they diverge. For a chat product with a long shared system prompt, that converts per-request prefill compute into a cache hit and cuts both TTFT and cost substantially. It also makes preemption possible — under pressure the scheduler evicts blocks rather than failing requests.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "How do you scale beyond one node, and how do you route requests across a heterogeneous fleet?",
+      "points": [
+        "Within a node: tensor parallelism splits each layer's matrices across GPUs — high communication per layer, so it needs NVLink-class interconnect and stays inside a node.",
+        "Across nodes: pipeline parallelism assigns layer ranges to different nodes; communication is only at stage boundaries, tolerating slower links, but introduces pipeline bubbles.",
+        "Replicate the whole model to add throughput once one instance is saturated — this is the ordinary horizontal scaling axis.",
+        "Routing: prefer prefix-aware routing that sends a request to a replica already holding its prefix in cache, turning a cache hit into a routing decision.",
+        "Also route on queue depth and free KV blocks rather than round-robin, since capacity is memory, not connection count.",
+        "Multi-model fleets: hot models get dedicated replicas; cold models share GPUs with fast model loading or LoRA adapters over a shared base model, which avoids paying full weights per variant.",
+        "Autoscaling is slow — GPU nodes take minutes to come up and load weights — so scale on queue-depth trend with generous headroom rather than reacting to instantaneous load.",
+        "Quantization (int8/fp8) reduces weight memory and bandwidth, raising achievable batch size; validate quality impact before adopting."
+      ],
+      "answer": "Inside a node, tensor parallelism splits each layer across GPUs — that's chatty per layer, so it wants NVLink and stays intra-node. Across nodes, pipeline parallelism assigns layer ranges to stages, which tolerates slower links but adds bubbles. Once a single instance is saturated you just replicate the model, which is the normal horizontal axis. The interesting part is routing: rather than round-robin, I'd route on free KV blocks and queue depth — since capacity is memory, not connections — and make it prefix-aware, sending a request to a replica that already holds its system prompt in cache so a routing decision becomes a cache hit. For many model variants, LoRA adapters over a shared base beat paying full weights per variant. And I'd autoscale on queue-depth trend with real headroom, because a GPU node takes minutes to boot and load weights — reacting instantaneously is too late."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks under load, and what do you monitor that a normal service wouldn't?",
+      "points": [
+        "Under overload the failure mode is unusual: throughput stays high while per-user TPOT degrades, because a bigger batch is better for the fleet and worse for each user. Users experience slowdown, dashboards look healthy.",
+        "So monitor TTFT and TPOT percentiles separately, plus batch size and KV-cache utilization — the last is the true capacity gauge.",
+        "Queue time versus generation time must be separable, or you can't tell an admission problem from a compute problem.",
+        "Preemption/eviction rate signals sustained memory pressure before it becomes user-visible failure.",
+        "Admission control must shed load explicitly at the gateway; without it, latency degrades unboundedly for everyone rather than failing a subset cleanly.",
+        "Cost per million tokens is a first-class operational metric here in a way it isn't for CPU services.",
+        "Long-context requests are the tail risk — a few 128K-token prompts can consume the memory of hundreds of ordinary ones, so price or quota them separately.",
+        "Model updates need canarying on quality, not just latency: a regression may be a worse answer at identical latency, which no infrastructure metric detects."
+      ],
+      "answer": "The distinctive failure mode is that overload doesn't look like overload. As load rises the batch grows, aggregate throughput stays high, and every individual user's tokens just come out slower — so the fleet dashboard looks fine while the product feels broken. That means TTFT and TPOT percentiles have to be monitored separately, alongside batch size and KV-cache utilization, which is the real capacity gauge. I'd also separate queue time from generation time so an admission problem is distinguishable from a compute problem, and watch preemption rate as the early warning on memory pressure. Two tail risks: long-context requests, where a handful of 128K prompts can displace hundreds of normal ones — those need their own quota — and model updates, which need quality canarying, because a regression can be a worse answer at identical latency and no infrastructure metric will ever catch it."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Admission is gated on free KV blocks rather than worker count, because GPU memory — not connections — is the real capacity.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  C([\"Clients<br/>SSE stream\"]) --> GW[\"Gateway<br/>auth · rate limit · routing\"]\n  GW --> Q[[\"Priority queue<br/>interactive / batch\"]]\n  Q --> SCH{\"Scheduler<br/>free KV blocks?\"}\n  SCH -->|\"admit\"| ENG[\"Inference engine<br/>continuous batching\"]\n  SCH -->|\"wait\"| Q\n  ENG --> GPU[(\"GPU pool<br/>weights + KV cache\")]\n  ENG -->|\"token deltas\"| C\n  ENG -->|\"free blocks\"| SCH"
+    },
+    {
+      "id": "continuous-batching",
+      "title": "Static vs. continuous batching",
+      "kind": "mermaid",
+      "role": "comparison",
+      "takeaway": "Re-evaluating the batch every decode step retires finished sequences and admits waiting ones immediately, so slots never idle.",
+      "afterQuestion": 3,
+      "code": "flowchart TD\n  subgraph STATIC[\"Static batch\"]\n    S1[\"seq A · done at t=20\"] --> SI[\"idle slot<br/>until t=200\"]\n    S2[\"seq B · runs to t=200\"]\n    SI --> SEND([\"batch returns at t=200\"])\n    S2 --> SEND\n  end\n  subgraph CONT[\"Continuous batch\"]\n    C1[\"seq A done at t=20\"] --> EV{\"every decode step\"}\n    EV -->|\"retire A\"| FREE[\"free A's blocks\"]\n    FREE -->|\"admit queued C\"| EV\n    C2[\"seq B still running\"] --> EV\n  end"
+    },
+    {
+      "id": "paged-kv-cache",
+      "title": "PagedAttention: block tables and prefix sharing",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Fixed-size blocks allocated on demand bound fragmentation to one partial block per sequence — and let sequences share a system prompt by reference.",
+      "afterQuestion": 6,
+      "code": "flowchart TD\n  SP[\"shared system prompt\"] --> B0[(\"block 0\")]\n  SP --> B1[(\"block 1\")]\n  A[\"Sequence A<br/>block table\"] --> B0\n  A --> B1\n  A --> B7[(\"block 7<br/>A's tokens\")]\n  B[\"Sequence B<br/>block table\"] --> B0\n  B --> B1\n  B --> B9[(\"block 9<br/>B's tokens\")]\n  B0 -.->|\"refcount 2<br/>copy-on-write\"| SHARE([\"prefill computed once\"])"
+    },
+    {
+      "id": "prefill-decode-interference",
+      "title": "Why a long prompt stalls everyone else",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Prefill is compute-bound and decode is bandwidth-bound; mixing them in one step makes one user's 8K prompt visible as every other user's stutter.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  IN([\"8K-token prompt arrives\"]) --> MIX{\"same batch as<br/>decoding users?\"}\n  MIX -->|\"yes — naive\"| STALL[\"long compute-bound step\"]\n  STALL --> BAD([\"every streaming user's<br/>TPOT spikes\"])\n  MIX -->|\"chunked prefill\"| CH[\"split prompt;<br/>interleave with decode\"]\n  MIX -->|\"disaggregated\"| DIS[\"prefill pool<br/>-> ship KV -><br/>decode pool\"]\n  CH --> GOOD([\"TTFT and TPOT decouple\"])\n  DIS --> GOOD"
+    }
+  ]
+}

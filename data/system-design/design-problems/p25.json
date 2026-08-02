@@ -1,0 +1,190 @@
+{
+  "id": "p25",
+  "num": 25,
+  "part": "Read-Heavy Systems & Search",
+  "title": "Design a Search Engine",
+  "summary": "Serve full-text queries over billions of documents in under a second. The signature challenge is that the inverted index inverts the obvious data layout — you store term to documents rather than document to terms — and everything else follows from making that index shardable, rankable and refreshable.",
+  "keyTakeaways": [
+    "The inverted index maps each term to a posting list of document ids; a query becomes an intersection of posting lists rather than a scan of documents.",
+    "Shard by document, not by term: term-sharding makes every multi-term query a cross-node join and creates hot shards on common words.",
+    "Document sharding means every query fans out to every shard, so the scatter-gather latency is the p99 of the slowest shard, not the average.",
+    "Retrieval and ranking are separate stages — cheap BM25 to get candidates, expensive learned ranking on the top few hundred.",
+    "Indexes are immutable segments merged in the background; a document update is a delete-marker plus a reinsert, exactly like an LSM tree.",
+    "Near-real-time search comes from a small in-memory segment searched alongside the on-disk ones, not from mutating the main index.",
+    "Skip lists and early termination are what make intersection sublinear — without them a common term's posting list dominates every query it appears in."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a search engine over a large document corpus. What are the functional requirements, and what shapes the design?",
+      "points": [
+        "Functional: index documents; serve keyword queries with boolean and phrase support; rank by relevance; paginate; support filters and facets.",
+        "Clarify the corpus: web-scale crawl versus an enterprise/product catalogue. This design assumes a large but bounded corpus (say 1B documents) rather than the open web, which adds crawling and spam adversaries.",
+        "Freshness requirement: how soon must a new document be searchable? Seconds changes the design substantially versus hours.",
+        "Non-functional: p99 query latency under ~200ms, because search is interactive and users abandon.",
+        "Read-heavy and read-critical: query availability matters more than indexing availability — indexing can lag, search cannot go down.",
+        "Relevance is the actual product and needs a metric (NDCG, click-through) rather than being treated as a given.",
+        "Out of scope unless asked: crawling, personalization, and query understanding beyond basic analysis."
+      ],
+      "answer": "Index documents, serve keyword queries with boolean and phrase support, rank by relevance, paginate, and support filters. I'd pin down two things early. First the corpus — I'll assume a large bounded corpus of around a billion documents rather than the open web, which would add crawling and adversarial spam. Second, freshness: seconds-to-searchable is a materially different design from hours. Non-functionally, p99 under about 200ms because search is interactive, and an availability asymmetry worth naming — indexing can lag without users noticing, but query serving going down is the outage. And relevance is the real product, so it needs a metric like NDCG rather than being assumed.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the index size and the query load for 1B documents.",
+      "points": [
+        "1B documents averaging ~1 KB of indexable text ≈ 1 TB of raw text.",
+        "The inverted index is typically 20-30% of raw text size after compression — so roughly 200-300 GB. Smaller than the corpus, because stopwords and formatting are dropped and posting lists compress well.",
+        "Posting lists compress with delta encoding on sorted document ids plus variable-byte or bitpacking — sorted increasing ids delta down to small numbers.",
+        "Sharding: at ~50 GB per shard, that's 5-10 primary shards, each replicated 2-3x for query throughput and fault tolerance.",
+        "Query load: 10K QPS with fan-out to every shard means each shard handles 10K QPS of its own — replication is what scales query throughput, since every shard sees every query.",
+        "That fan-out property is the key insight: adding documents needs more shards, adding queries needs more replicas. Two different scaling axes.",
+        "Latency budget: fan-out means p99 is governed by the slowest shard, so tail latency compounds — with 10 shards, a 1-in-100 slow response per shard makes ~10% of queries slow."
+      ],
+      "answer": "A billion documents at ~1 KB of text is about 1 TB raw, and the inverted index lands around 200-300 GB after compression — smaller than the corpus, because stopwords and formatting drop out and sorted document ids delta-encode extremely well. At ~50 GB a shard that's five to ten primary shards, replicated a few times. The important structural point is that the two scaling axes are different: more documents needs more shards, more queries needs more replicas, because every query fans out to every shard. And that fan-out is also the latency trap — p99 is the slowest shard, not the average, so with ten shards a one-in-a-hundred slow response per shard makes roughly one in ten queries slow.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Describe the indexing pipeline and the structure of the inverted index itself.",
+      "points": [
+        "Pipeline: fetch/receive document → parse → analyze (tokenize, lowercase, remove stopwords, stem or lemmatize) → build postings → write segment.",
+        "The analyzer must be identical at index time and query time, or a query token will never match its indexed form. This is the search equivalent of training/serving skew.",
+        "Inverted index: term → posting list of (doc_id, term_frequency, positions). Positions are what make phrase queries possible and roughly double index size.",
+        "Term dictionary maps term → posting list offset; stored as an FST or prefix trie so it's compact and supports prefix lookup.",
+        "Posting lists are sorted by doc_id and delta-encoded, so intersection is a merge of sorted lists.",
+        "Skip lists over posting lists let intersection jump ahead rather than scanning every entry — essential when one term is rare and another common.",
+        "Also store a forward index (doc_id → field values) for retrieving snippets and for filters/facets that aren't term lookups.",
+        "Segments are immutable: a new batch writes a new segment, and a background merge combines small segments into larger ones."
+      ],
+      "answer": "Parse, then analyze — tokenize, lowercase, drop stopwords, stem — then build postings and write a segment. The rule that bites people is that the analyzer must be byte-identical at index and query time, or a query token can never match its indexed form; it's the search equivalent of training/serving skew. The index itself maps each term to a posting list of doc id, term frequency and positions, with positions being what enables phrase queries at roughly double the size. The term dictionary is an FST or trie for compactness and prefix lookup, posting lists are sorted by doc id and delta-encoded so intersection is a sorted merge, and skip lists let that merge jump ahead instead of scanning — which matters enormously when one term is rare and the other is common. Segments are immutable and merged in the background."
+    },
+    {
+      "type": "mc",
+      "q": "Should the index be sharded by term (each node owns a subset of terms) or by document (each node owns a subset of documents)?",
+      "options": [
+        "By term — it means a single-term query touches only one node, minimizing fan-out",
+        "By document — every node holds a complete self-contained index over its documents, so any query is answerable locally and results merge; term sharding turns multi-term queries into cross-node joins and puts common terms on permanently hot nodes",
+        "By term for reads and by document for writes, switching at query time",
+        "Neither — the index must remain on a single node to preserve global term statistics"
+      ],
+      "answer": 1,
+      "explain": "Term sharding looks attractive for single-term queries but collapses on realistic ones: a two-term query needs posting lists from two nodes intersected across the network, and posting lists for common terms are huge — so you'd ship megabytes per query. Worse, the node owning a common term is hot on every query containing it. Document sharding gives each node a complete miniature index, so every shard answers locally and the coordinator merges ranked results. The cost is fan-out to all shards and the fact that global term statistics (IDF) are per-shard approximations, which is usually corrected by periodically distributing global stats.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: walk a query from arrival to ranked results.",
+      "points": [
+        "Coordinator receives the query, analyzes it with the same analyzer used at index time, and expands it (synonyms, spelling correction) if configured.",
+        "Fan out to all shards in parallel — each shard is a complete index over its documents.",
+        "Per shard: look up each term in the dictionary, fetch posting lists, intersect (AND) or union (OR) using skip lists to jump ahead.",
+        "Score candidates with a cheap function — BM25, which weights term frequency, inverse document frequency and document length normalization.",
+        "Each shard returns its local top-K, not everything — this is what bounds network transfer.",
+        "Coordinator merges the per-shard top-K lists into a global top-K, then optionally reranks the top few hundred with an expensive learned model.",
+        "Fetch documents for the final page only (from the forward index) and generate snippets with query-term highlighting.",
+        "Two-stage retrieval-then-rank exists for the same reason as in RAG: the accurate scorer is too expensive to run on millions of candidates.",
+        "Early termination — WAND or block-max WAND — skips documents that cannot possibly enter the top-K, which is where most of the query-time savings come from."
+      ],
+      "answer": "The coordinator analyzes the query with the same analyzer used at index time, expands it if configured, and fans out to every shard in parallel. Each shard looks up terms in its dictionary, fetches posting lists, and intersects them using skip lists to jump ahead rather than scanning. It scores candidates with BM25 — term frequency, inverse document frequency, length normalization — and returns only its local top-K, which is what bounds the network transfer. The coordinator merges those into a global top-K and can rerank the top few hundred with an expensive learned model. The shape is the same two-stage pattern as RAG, for the same reason: the accurate scorer is unaffordable over millions of candidates. And the biggest query-time win is early termination — block-max WAND skipping documents that provably cannot reach the top-K.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "A document is edited. How does an inverted index handle the update?",
+      "options": [
+        "The posting lists containing that document are located and modified in place",
+        "The document is marked deleted in a live-documents bitmap and the new version is indexed into a new segment; the old version's postings disappear only when segments are merged",
+        "The affected shard is rebuilt from scratch to maintain consistency",
+        "Updates are applied to a write-ahead log and merged into posting lists on read"
+      ],
+      "answer": 1,
+      "explain": "Segments are immutable, and a document's terms are scattered across thousands of posting lists — updating in place would mean thousands of random writes into compressed, delta-encoded structures. Instead the old doc id is flagged in a deletion bitmap so it's filtered from results, and the new version is written to a fresh segment. Space is reclaimed only during background merges, which is precisely the LSM-tree pattern. The consequence worth knowing: an update-heavy corpus accumulates deleted documents and grows segment count, so merge policy becomes an operational concern rather than a background detail.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how do you make a newly indexed document searchable within seconds without rewriting the index?",
+      "points": [
+        "New documents go into an in-memory buffer. A periodic refresh turns that buffer into a new small, immutable segment that becomes searchable.",
+        "Search queries every segment — the many small recent ones plus the large old ones — and merges results, so a document is visible one refresh after indexing.",
+        "Refresh interval is the freshness dial: one second gives near-real-time search at the cost of many tiny segments.",
+        "Durability is separate from visibility: a translog/WAL records the operation before refresh, so a crash between index and refresh doesn't lose the document.",
+        "Segment proliferation is the cost — every query touches every segment, so hundreds of tiny segments degrade query latency badly.",
+        "Background merge combines small segments into larger ones, reclaiming deleted-document space and bounding segment count. Merging is I/O heavy and competes with query serving.",
+        "So there's a three-way tension: refresh frequently for freshness, merge aggressively for query speed, and both consume I/O that queries also need.",
+        "For bulk indexing, temporarily disabling refresh and increasing the merge threshold is a standard and large speedup."
+      ],
+      "answer": "New documents accumulate in an in-memory buffer, and a periodic refresh seals that buffer into a new small immutable segment that becomes searchable. Queries hit every segment — the many small recent ones and the large old ones — and merge results, so a document is visible one refresh after indexing. The refresh interval is the freshness dial, and setting it to a second gives near-real-time search at the cost of producing many tiny segments. Durability is decoupled from visibility via a translog, so a crash between index and refresh doesn't lose data. The real tension is three-way: frequent refresh helps freshness, aggressive merging helps query latency, and both compete for the same I/O the queries need. For bulk loads the standard move is to suspend refresh entirely and raise the merge threshold.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Ranking: how do you go beyond BM25, and how do you know relevance improved?",
+      "points": [
+        "BM25 is a strong lexical baseline but knows nothing about user behaviour, document quality, or semantics.",
+        "Learning-to-rank: train a model on features — BM25 score, field matches, freshness, popularity, click-through rate, document authority — to produce the final ordering.",
+        "Apply it only in the rerank stage over the top few hundred candidates, because it's far too expensive per document at retrieval scale.",
+        "Semantic/vector retrieval as an additional candidate source catches matches with no lexical overlap; fuse with BM25 rather than replacing it, since exact terms still matter.",
+        "Measurement: offline with labelled relevance judgements (NDCG, MRR) on a fixed query set; online with interleaving or A/B tests on click and abandonment metrics.",
+        "Click data is biased by position — users click the top result because it's first — so use it carefully or correct for position bias.",
+        "Query understanding matters as much as ranking: spelling correction, synonym expansion and intent classification often move relevance more than a better ranker.",
+        "Guardrail: always keep a held-out query set and check that a ranking change doesn't regress head queries while improving the tail."
+      ],
+      "answer": "BM25 is a strong lexical baseline that knows nothing about quality, popularity or semantics, so the next step is learning-to-rank over features like BM25 score, field matches, freshness, popularity and click-through — applied only in the rerank stage over the top few hundred, because it's unaffordable at retrieval scale. I'd add vector retrieval as an extra candidate source and fuse rather than replace, since exact terms still matter. On measurement: offline NDCG against labelled judgements on a fixed query set, plus online interleaving or A/B on click and abandonment. The caveat is that click data is position-biased — people click the top result because it's on top — so it needs correcting. And often query understanding, spelling correction and synonyms move relevance more than a better ranker does."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks at scale, and what would you monitor?",
+      "points": [
+        "Tail latency from fan-out: p99 is the slowest shard. Mitigate with hedged requests — send to a second replica after a short delay and take whichever returns first.",
+        "Deep pagination is pathological: page 1000 requires each shard to return 10,000 results to guarantee correctness. Use search-after/cursor pagination instead of offsets.",
+        "Hot shards from uneven document distribution or from a filter that concentrates on one shard; route-aware sharding helps if queries commonly filter by a known key.",
+        "Merge storms: aggressive indexing triggers large merges that starve queries of I/O. Throttle merges and monitor merge backlog.",
+        "Cache layers matter: filter/bitset caches and a query result cache absorb repeated queries, which are a large share of real traffic.",
+        "Global IDF: with document sharding, each shard computes IDF locally, so identical documents can score differently across shards. Distribute global term stats periodically if this matters.",
+        "Monitor query latency percentiles per shard, indexing lag, segment count, merge backlog, and cache hit rates — plus the relevance metrics, since a search engine can be fast and useless.",
+        "Reindexing the whole corpus (schema or analyzer change) must be possible without downtime: build a new index alongside and switch an alias atomically."
+      ],
+      "answer": "Tail latency from fan-out is the structural one — p99 is the slowest shard, so I'd use hedged requests, sending to a second replica after a short delay and taking whichever answers first. Deep pagination is the pathological query: page 1000 forces every shard to return ten thousand results, so cursor-based search-after replaces offsets. Operationally, merge storms are what surprise people — heavy indexing triggers large merges that starve queries of I/O, so merges need throttling and a monitored backlog. One correctness subtlety: with document sharding each shard computes IDF locally, so identical documents can score differently across shards unless global term statistics are distributed. And I'd insist that a full reindex is possible without downtime — build alongside and flip an alias — because analyzer changes are inevitable and they invalidate the whole index."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Each shard is a complete miniature index, so every query fans out and merges — documents scale by shards, queries scale by replicas.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  D([\"Documents\"]) --> AN[\"Analyzer<br/>tokenize + stem\"]\n  AN --> SEG[\"Segment writer\"]\n  SEG --> S1[(\"Shard 1<br/>complete index\")]\n  SEG --> S2[(\"Shard 2\")]\n  SEG --> S3[(\"Shard 3\")]\n  Q([\"Query\"]) --> CO[\"Coordinator<br/>same analyzer\"]\n  CO --> S1\n  CO --> S2\n  CO --> S3\n  S1 -->|\"local top-K\"| MG[\"Merge + rerank\"]\n  S2 --> MG\n  S3 --> MG\n  MG --> R([\"ranked page + snippets\"])"
+    },
+    {
+      "id": "inverted-index",
+      "title": "The inverted index and posting-list intersection",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Storing term to documents turns a query into a merge of sorted lists, and skip lists are what let that merge jump instead of scan.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  Q([\"query: distributed systems\"]) --> T1[\"term: distributed<br/>postings: 3, 9, 14, 27, 88\"]\n  Q --> T2[\"term: systems<br/>postings: 9, 27, 41\"]\n  T1 --> I{\"intersect sorted lists\"}\n  T2 --> I\n  I -->|\"skip list jumps ahead\"| C([\"candidates: 9, 27\"])\n  C --> BM[\"BM25: tf, idf,<br/>length normalization\"]\n  BM --> TK([\"local top-K\"])"
+    },
+    {
+      "id": "segment-lifecycle",
+      "title": "Immutable segments, refresh and merge",
+      "kind": "mermaid",
+      "role": "lifecycle",
+      "takeaway": "Freshness comes from sealing a small in-memory segment, not from mutating the index — and the cost is a segment count that merging must keep bounded.",
+      "afterQuestion": 6,
+      "code": "flowchart TD\n  IN([\"index a document\"]) --> WAL[\"translog<br/>durable immediately\"]\n  IN --> BUF[\"in-memory buffer\"]\n  BUF -->|\"refresh (~1s)\"| NEW[(\"new small segment<br/>now searchable\")]\n  NEW --> MANY[\"many small segments\"]\n  MANY -->|\"every query touches all\"| SLOW([\"query latency degrades\"])\n  MANY -->|\"background merge\"| BIG[(\"fewer large segments\")]\n  BIG --> RECLAIM([\"deleted docs reclaimed\"])\n  UPD([\"update a document\"]) --> DEL[\"mark old id deleted\"]\n  DEL --> BUF"
+    },
+    {
+      "id": "fanout-tail-latency",
+      "title": "Why p99 is the slowest shard",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Fan-out multiplies tail risk — with ten shards, a 1-in-100 slow shard response makes roughly one query in ten slow.",
+      "afterQuestion": 8,
+      "code": "flowchart TD\n  Q([\"one query\"]) --> F[\"fan out to all 10 shards\"]\n  F --> A[\"shard 1: 20ms\"]\n  F --> B[\"shard 2: 25ms\"]\n  F --> C[\"shard 7: 400ms — GC pause\"]\n  A --> W{\"coordinator waits<br/>for the slowest\"}\n  B --> W\n  C --> W\n  W --> P([\"query takes 400ms\"])\n  HED[\"hedged request:<br/>re-send to a replica after 50ms,<br/>take whichever returns first\"] --> W"
+    }
+  ]
+}

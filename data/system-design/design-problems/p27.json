@@ -1,0 +1,194 @@
+{
+  "id": "p27",
+  "num": 27,
+  "part": "Realtime & Push",
+  "title": "Design a Live Streaming Service",
+  "summary": "Broadcast one creator's video to millions of concurrent viewers with only seconds of delay, plus a live chat that fans out to the same audience. The signature challenge is that latency and scale pull in opposite directions — the CDN that makes a million viewers affordable is the same thing that adds the delay interactivity can't tolerate.",
+  "keyTakeaways": [
+    "Live inverts video-on-demand: content is produced and consumed simultaneously, so nothing can be precomputed and the whole pipeline is on the critical path.",
+    "Segmented HTTP protocols (HLS/DASH) scale to millions because every segment is a cacheable file — but segment duration is a latency floor, since the player must buffer several of them.",
+    "Sub-second latency requires WebRTC or LL-HLS with chunked transfer, which trades away plain HTTP caching and therefore costs far more per viewer.",
+    "So the latency target is an architectural fork, not a tuning knob: pick it before designing anything else.",
+    "Transcoding to a bitrate ladder must be real-time — falling behind is unrecoverable because the stream keeps arriving.",
+    "Viewer fan-out is entirely a CDN problem; origin sees one request per segment per edge, not per viewer.",
+    "Chat at a million concurrent viewers cannot deliver every message to everyone — sample, rate-limit, or shard the room, and say so explicitly.",
+    "Adaptive bitrate moves the failure mode from stalling to quality degradation, which viewers tolerate far better."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a live streaming service. What are the functional requirements, and which single decision drives the architecture?",
+      "points": [
+        "Functional: a creator broadcasts; viewers watch with adaptive quality; live chat alongside; optionally a recording available afterwards.",
+        "The driving decision is the latency target, and it should be extracted early because it forks the design.",
+        "~10-30s (segmented HLS/DASH): pure HTTP, CDN-cacheable, scales to millions cheaply. Fine for concerts, sports with a delay, conference talks.",
+        "~2-5s (LL-HLS/LL-DASH): chunked transfer, still HTTP but with partial segments; more complex, more origin load.",
+        "<500ms (WebRTC): genuine interactivity — auctions, betting, two-way — but per-viewer connections, so cost scales linearly with audience.",
+        "Non-functional: viewer scale (say 1M concurrent peak), availability of the ingest path (a dropped broadcast cannot be retried), and startup time.",
+        "Note the asymmetry with VOD: nothing can be precomputed, so every stage is on the critical path and failures are unrecoverable rather than retryable."
+      ],
+      "answer": "A creator broadcasts, viewers watch with adaptive quality, and there's live chat alongside. The decision that drives everything is the latency target, so I'd extract it first. Segmented HLS at ten to thirty seconds is pure cacheable HTTP and scales to millions cheaply. Low-latency HLS gets you to a few seconds with chunked transfer at more complexity and origin load. Under half a second means WebRTC, which is genuinely interactive but holds a connection per viewer, so cost scales linearly with audience rather than being absorbed by cache. Those are three different systems, not three settings. The other thing I'd name is the asymmetry with video-on-demand: nothing can be precomputed, so every stage sits on the critical path and a failure is unrecoverable rather than retryable.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the bandwidth and transcoding cost for 1M concurrent viewers.",
+      "points": [
+        "Average sustained bitrate across a quality ladder: call it 3 Mbps (some at 1080p/5Mbps, many at 720p/3Mbps, some mobile at 1Mbps).",
+        "1M viewers × 3 Mbps = 3 Tbps of egress. This is the number that matters and it is enormous — comfortably a CDN-scale problem, not an origin one.",
+        "Origin egress is tiny by comparison: each edge pulls each segment once, so origin serves roughly (number of edges × ladder renditions) per segment, not per viewer.",
+        "That ratio — 3 Tbps at the edge versus a few Gbps at origin — is the entire economic argument for the segmented design.",
+        "Transcoding: one incoming stream becomes ~5 renditions, and it must run faster than real time. A GPU or dedicated encoder handles a handful of streams; 10K concurrent broadcasters means thousands of transcoder instances.",
+        "So cost splits: viewer scale is a bandwidth problem, broadcaster scale is a compute problem. They scale independently.",
+        "Storage only matters if recording: 3 Mbps × 5 renditions × stream duration, written to object storage for later VOD.",
+        "Segment size: 4-second segments at 3 Mbps is ~1.5 MB per segment per rendition — a comfortable cacheable object."
+      ],
+      "answer": "At roughly 3 Mbps average across the ladder, a million concurrent viewers is about 3 Tbps of egress — which is unambiguously a CDN problem, not an origin one. The contrast is the point: origin serves each segment once per edge per rendition, so it's a few Gbps against 3 Tbps at the edge. That ratio is the entire economic argument for segmented HTTP. Transcoding is a separate axis — one input becomes about five renditions and must run faster than real time, so ten thousand concurrent broadcasters means thousands of transcoder instances. Viewer scale is bandwidth, broadcaster scale is compute, and they scale independently, which is worth saying because they're often conflated."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the ingest-to-playback pipeline. What happens between the creator's encoder and the viewer's player?",
+      "points": [
+        "Creator's encoder pushes over RTMP or SRT to the nearest ingest point — a persistent connection carrying a single high-quality stream.",
+        "Ingest validates the stream key, and routes to a transcoding pipeline.",
+        "Transcoder produces a bitrate ladder (1080p, 720p, 480p, 360p) plus audio-only, in real time.",
+        "Packager segments each rendition into fixed-duration chunks and writes a manifest (.m3u8 or .mpd) listing available segments and renditions.",
+        "Segments and manifests go to origin storage; the CDN pulls on demand and caches.",
+        "Player fetches the manifest, picks a rendition, and requests segments sequentially, re-fetching the manifest as it updates with new segments.",
+        "The manifest is the coordination point — it's how the player discovers new segments exist, and its refresh interval contributes to latency.",
+        "Cache headers matter: segments are immutable and cache forever; the manifest must have a very short TTL since it changes every segment.",
+        "That manifest/segment TTL split is the classic mistake — caching the manifest too long freezes the stream for every viewer behind that edge."
+      ],
+      "answer": "The creator's encoder pushes RTMP or SRT to the nearest ingest, which validates the stream key and hands off to transcoding. The transcoder produces a bitrate ladder in real time, and a packager cuts each rendition into fixed-duration segments and maintains a manifest listing what's available. Segments and manifest land on origin, the CDN pulls and caches, and the player reads the manifest, picks a rendition, and pulls segments in sequence. The manifest is the coordination point — it's how a player learns new segments exist. The detail I'd call out is cache headers: segments are immutable and can cache effectively forever, but the manifest changes every few seconds and needs a very short TTL. Caching the manifest too long is the classic bug, and it freezes the stream for every viewer behind that edge.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "Why does HLS with 6-second segments have roughly 20-30 seconds of end-to-end latency?",
+      "options": [
+        "Transcoding a segment takes about 20 seconds",
+        "The segment must be fully written before it can be served, and players buffer around three segments before playing — so the floor is roughly segment duration times three, plus encoding, packaging and CDN propagation",
+        "CDN propagation to edge nodes takes 20-30 seconds",
+        "The manifest is only regenerated every 30 seconds"
+      ],
+      "answer": 1,
+      "explain": "The dominant term is structural, not slow infrastructure. A segment is an HTTP object, so it can't be served until it's complete — that's one segment duration of delay immediately. Players then buffer several segments (typically three) to survive network jitter without stalling, adding another two segment durations. With 6-second segments that's ~18 seconds before encoding, packaging and propagation are even counted. This is why reducing latency means reducing segment duration, and why low-latency HLS instead delivers *partial* segments via chunked transfer — it attacks the 'must be complete' constraint directly rather than just making segments smaller.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: the product now needs sub-second latency for a live auction. What changes?",
+      "points": [
+        "Segmented HTTP cannot get there — the completeness constraint plus buffering sets a floor of several seconds even with tiny segments.",
+        "Tiny segments aren't the answer either: 1-second segments mean 6x the request rate, 6x the manifest churn, and worse compression efficiency per segment.",
+        "LL-HLS/LL-DASH: deliver partial segments as chunked transfer so the player starts consuming before the segment is complete. Gets to ~2s, still HTTP, still mostly cacheable — a genuine middle ground.",
+        "WebRTC: sub-second, but it's a peer connection per viewer with its own congestion control, not a cacheable file. Scaling requires a mesh of selective forwarding units (SFUs) fanning out.",
+        "Cost consequence: CDN caching means marginal cost per viewer approaches zero; WebRTC means every viewer consumes a server-side connection and CPU. Cost scales linearly.",
+        "Hybrid is common and worth proposing: WebRTC for the interactive few (bidders, callers) and HLS for the passive many, accepting that they see different points in time.",
+        "That time skew is a real product problem — a chat message about something that happened can arrive before the segment showing it, for viewers on different paths.",
+        "So sub-second is a business decision with a cost attached, not a technical preference."
+      ],
+      "answer": "Segmented HTTP can't get there — the completeness constraint plus player buffering sets a floor of several seconds regardless of how small you cut segments, and shrinking them costs request rate and compression efficiency. Low-latency HLS attacks the actual constraint by delivering partial segments over chunked transfer, reaching about two seconds while staying HTTP and mostly cacheable. Genuine sub-second means WebRTC, which is a connection per viewer through a mesh of forwarding units rather than a cacheable file — so the marginal cost per viewer stops being near-zero and becomes linear. For an auction I'd propose a hybrid: WebRTC for the handful of actual bidders and HLS for the passive audience, while naming the consequence that they're watching different moments, so a chat message can describe something a viewer hasn't seen yet.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "A viewer's bandwidth drops from 10 Mbps to 2 Mbps mid-stream. What should happen?",
+      "options": [
+        "The player buffers longer at the same quality until conditions improve",
+        "The player measures throughput and buffer level and switches to a lower-bitrate rendition at the next segment boundary — degrading quality rather than stalling",
+        "The server detects the drop and pushes a lower bitrate to that viewer",
+        "The CDN transcodes a lower-bitrate version on the fly for that connection"
+      ],
+      "answer": 1,
+      "explain": "Adaptive bitrate is client-driven by design: the player owns the measurement (recent throughput plus buffer occupancy) and picks the next segment's rendition from the manifest. Segment boundaries are the switch points, which is another reason segment duration matters — it bounds how fast the player can react. The key product insight is that this converts a stall into a quality drop, and viewers tolerate softer video far better than a spinner. Server-side push doesn't apply to a pull-based protocol, and on-the-fly per-viewer transcoding at the edge would destroy the caching that makes the whole design affordable.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: design live chat for a stream with 1M concurrent viewers.",
+      "points": [
+        "The naive model breaks immediately: if 1% of a million viewers send one message a minute, that's ~170 messages/sec inbound, but delivering each to a million viewers is 170M outbound messages/sec.",
+        "So the honest statement is that everyone cannot receive everything — this must be a product decision, not a silent drop.",
+        "Sampling: deliver a representative subset. At that scale a viewer cannot read a fast chat anyway, so showing a sample preserves the experience while cutting fan-out by orders of magnitude.",
+        "Room sharding: split viewers into rooms of a few thousand; each viewer sees their room's chat. Preserves interactivity locally at the cost of a single shared conversation.",
+        "Rate-limit per user, and aggregate high-frequency reactions into counts rather than individual messages.",
+        "Delivery: persistent connections (WebSocket) via a fan-out tier of gateway nodes; a message publishes to a pub/sub topic and each gateway pushes to its connected subscribers.",
+        "Connection count is the real constraint — a million WebSockets needs hundreds of gateway nodes and careful memory-per-connection budgeting.",
+        "Moderation must be inline and fast; at this volume it's automated classification with a human escalation path, which is its own pipeline.",
+        "Chat and video travel different paths with different latency, so they desynchronize — worth acknowledging and, where it matters, deliberately delaying chat to match video."
+      ],
+      "answer": "The arithmetic kills the naive design: even at a modest inbound rate, delivering every message to a million viewers is hundreds of millions of outbound messages per second. So the honest answer is that everyone cannot receive everything, and that has to be an explicit product decision rather than a silent drop. Two workable shapes: sample the messages, which is defensible because nobody can read a million-viewer chat anyway, or shard viewers into rooms of a few thousand so conversation stays interactive locally. Both cut fan-out by orders of magnitude. Delivery is WebSockets through a fan-out tier subscribing to a pub/sub topic, and the binding constraint is connection count — a million sockets is hundreds of gateway nodes with a careful memory-per-connection budget. And chat and video travel different paths, so they desynchronize; where it matters I'd deliberately delay chat to match the video.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "The ingest connection drops mid-broadcast, or a transcoder crashes. What happens?",
+      "points": [
+        "Ingest drop is unrecoverable in the sense that the content during the gap simply doesn't exist — unlike VOD there's no source to retry from.",
+        "So the goal is graceful degradation: keep the last manifest valid, show a 'reconnecting' state, and allow the encoder to reconnect to the same stream key and resume appending.",
+        "Redundant ingest: professional broadcasters push to two ingest endpoints simultaneously and the system fails over between them. This is the only real protection.",
+        "Transcoder crash: the input stream is still arriving, so a standby must take over quickly. Renditions that lapse cause players to drop to whatever ladder rungs remain, which ABR handles naturally.",
+        "That's a nice property worth naming — losing one rendition degrades quality for some viewers rather than breaking the stream.",
+        "Origin/CDN failure: segments are immutable and cacheable, so an edge outage is absorbed by other edges; a manifest-serving outage is far worse because players lose the discovery mechanism.",
+        "Player-side resilience: on segment fetch failure, retry, then drop rendition, then rebuffer — degrade in that order rather than erroring out.",
+        "Monitor ingest continuity, transcoder lag (falling behind real time is unrecoverable — it can never catch up), and per-edge segment error rate.",
+        "Recording to object storage in parallel means a dropped live stream still yields a usable VOD, which limits the damage."
+      ],
+      "answer": "An ingest drop is genuinely unrecoverable for that interval — unlike VOD there's no source to re-pull from — so the goal is graceful degradation: keep the last manifest valid, show reconnecting, and let the encoder resume on the same stream key. The only real protection is redundant ingest, with the broadcaster pushing to two endpoints and the system failing over. A transcoder crash is gentler than it sounds: the input is still arriving, a standby takes over, and any rendition that lapses just disappears from the ladder, which adaptive bitrate handles by moving viewers to a remaining rung. Losing a rendition degrades quality rather than breaking the stream. The metric I'd watch hardest is transcoder lag, because falling behind real time is unrecoverable — it can never catch up, only drop content."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks at scale, and what's different from video-on-demand?",
+      "points": [
+        "Thundering herd at stream start: a scheduled event means a million viewers request the manifest within seconds. Stagger, and ensure the first segments are pre-warmed at edges.",
+        "Cache miss storms: with a short manifest TTL, every edge revalidates constantly. Use request coalescing at the edge so one origin fetch serves all waiting requests.",
+        "Long-tail broadcasters: most streams have a handful of viewers, so per-stream fixed cost (a transcoder) dominates. Transcode lazily — only produce the full ladder when viewership justifies it.",
+        "That's a genuinely different economic problem from VOD, where content is transcoded once and served forever.",
+        "Geographic distribution: ingest should be near the creator and edges near viewers, which for a global audience means the origin path crosses regions.",
+        "Monitoring differs from VOD: rebuffer ratio, startup time, and average bitrate delivered are the viewer-experience metrics, plus ingest continuity and transcoder lag on the production side.",
+        "DVR/rewind: keeping a rolling window of segments lets viewers pause and rewind, which is cheap because the segments already exist.",
+        "The core difference from VOD: VOD is precomputed and infinitely retryable; live is produced once, in real time, with every stage on the critical path and no second chance."
+      ],
+      "answer": "The scale problems are bursty rather than steady. A scheduled event means a million manifest requests in a few seconds, so the first segments need pre-warming at edges and requests need coalescing there, since a short manifest TTL otherwise has every edge revalidating constantly. The economic surprise is the long tail: most streams have a handful of viewers, so a fixed per-stream transcoder cost dominates — which argues for transcoding lazily and only producing the full ladder once viewership justifies it. That's structurally different from VOD, where you transcode once and serve forever. On monitoring, the viewer metrics are rebuffer ratio, startup time and delivered bitrate, and on the production side ingest continuity and transcoder lag. The core difference from VOD is that it's produced once in real time with every stage on the critical path and no second chance."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Origin serves each segment once per edge; the CDN absorbs the million-viewer fan-out, which is the whole economic argument for segmented HTTP.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  E([\"Creator encoder\"]) -->|\"RTMP / SRT\"| ING[\"Ingest<br/>validate stream key\"]\n  ING --> TC[\"Transcoder<br/>real-time bitrate ladder\"]\n  TC --> PK[\"Packager<br/>segments + manifest\"]\n  PK --> OR[(\"Origin\")]\n  OR --> CDN[\"CDN edges<br/>segments cache forever,<br/>manifest TTL ~1s\"]\n  CDN --> V1([\"1M viewers\"])\n  PK -.->|\"parallel\"| REC[(\"Recording<br/>for VOD\")]"
+    },
+    {
+      "id": "latency-fork",
+      "title": "The latency target is an architectural fork",
+      "kind": "mermaid",
+      "role": "comparison",
+      "takeaway": "Cacheable files scale to millions for almost nothing; sub-second means a connection per viewer and linear cost — decide before designing.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  T([\"latency target?\"]) --> A[\"10-30s: HLS/DASH\"]\n  T --> B[\"2-5s: LL-HLS<br/>chunked transfer\"]\n  T --> C[\"<500ms: WebRTC\"]\n  A --> A1([\"plain HTTP, fully cacheable,<br/>marginal cost ~0 per viewer\"])\n  B --> B1([\"partial segments,<br/>more origin load\"])\n  C --> C1([\"connection per viewer via SFU,<br/>cost scales linearly\"])\n  C1 --> HY[\"hybrid: WebRTC for bidders,<br/>HLS for the audience\"]\n  HY --> SKEW([\"but they watch<br/>different moments\"])"
+    },
+    {
+      "id": "segment-latency-budget",
+      "title": "Where 20-30 seconds of HLS latency comes from",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "A segment cannot be served until complete, and the player buffers several — so the floor is structural, not slow infrastructure.",
+      "afterQuestion": 3,
+      "code": "flowchart TD\n  CAP([\"moment captured\"]) --> ENC[\"encode + transcode\"]\n  ENC --> SEG[\"segment must be COMPLETE<br/>before it is servable: +6s\"]\n  SEG --> PUB[\"packaged + published\"]\n  PUB --> PROP[\"CDN propagation\"]\n  PROP --> BUF[\"player buffers ~3 segments<br/>to survive jitter: +12s\"]\n  BUF --> PLAY([\"viewer sees it:<br/>~20-30s later\"])\n  FIX[\"LL-HLS attacks the<br/>completeness constraint,<br/>not the segment size\"] --> SEG"
+    },
+    {
+      "id": "chat-fanout",
+      "title": "Chat fan-out at a million viewers",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Inbound is trivial and outbound is not — everyone receiving everything is arithmetically impossible, so the reduction must be a stated product decision.",
+      "afterQuestion": 6,
+      "code": "flowchart TD\n  IN([\"~170 messages/sec inbound\"]) --> NAIVE{\"deliver all to all?\"}\n  NAIVE -->|\"yes\"| MATH([\"170M outbound/sec —<br/>arithmetically impossible\"])\n  NAIVE -->|\"sample\"| S1[\"deliver a representative subset\"]\n  NAIVE -->|\"shard\"| S2[\"rooms of a few thousand\"]\n  S1 --> PS[[\"pub/sub topic\"]]\n  S2 --> PS\n  PS --> GW[\"WebSocket gateway tier<br/>hundreds of nodes\"]\n  GW --> V([\"viewers\"])\n  GW --> DELAY[\"delay chat to match<br/>video path latency\"]"
+    }
+  ]
+}

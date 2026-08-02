@@ -1,0 +1,184 @@
+{
+  "id": "p23",
+  "num": 23,
+  "part": "AI & ML Infrastructure",
+  "title": "Design a RAG / Semantic Search System",
+  "summary": "Ground an LLM's answers in a private corpus: chunk and embed documents, retrieve the relevant passages at query time, and cite them. The signature challenge is that retrieval quality — not the model — decides the answer, and the embedding model is a schema you cannot migrate cheaply.",
+  "keyTakeaways": [
+    "Retrieval quality caps answer quality. A perfect model cannot recover from passages that don't contain the answer, so evaluate retrieval separately from generation.",
+    "Chunking is the highest-leverage knob: too small loses context, too large dilutes the embedding and blows the context budget. Overlap plus parent-document retrieval buys both.",
+    "Pure vector search fails on exact terms — error codes, SKUs, names. Hybrid BM25 + vector with reciprocal-rank fusion is the default, not an optimization.",
+    "Two-stage retrieval is the standard shape: cheap ANN recall of ~100 candidates, then an expensive cross-encoder rerank down to ~5.",
+    "ANN is an approximation with a recall/latency dial (HNSW `efSearch`); exact kNN over tens of millions of vectors is not affordable at interactive latency.",
+    "The embedding model is effectively a schema. Changing it invalidates every stored vector, so plan a dual-write reindex path before you need one.",
+    "Access control must be applied inside retrieval, not after generation — filtering the answer once the model has already read a forbidden passage is not a security boundary."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a RAG system over a private corpus. What are the functional requirements, and which non-functional targets actually shape the design?",
+      "points": [
+        "Functional: ingest documents (PDF, HTML, wiki, tickets), keep them searchable as they change, answer a natural-language question grounded in retrieved passages, and cite sources.",
+        "Citations are a requirement, not decoration — they are how a user verifies a claim, and they force the design to keep passage provenance end to end.",
+        "Permissions: a user must only ever retrieve passages they are allowed to read. This has to be a retrieval-time filter.",
+        "Non-functional: p95 end-to-end a few seconds (dominated by generation), retrieval itself under ~200ms so it isn't the bottleneck.",
+        "Freshness: state the target — a newly edited document searchable within minutes, not days.",
+        "Quality is the real non-functional target and needs a metric: recall@k for retrieval, plus groundedness/faithfulness for the final answer.",
+        "State the corpus scale (e.g. 10M documents) because it decides whether an ANN index is required or a brute-force scan would do."
+      ],
+      "answer": "We ingest a heterogeneous corpus, keep it fresh as documents change, and answer questions grounded in retrieved passages with citations. Two requirements shape everything: citations, which force provenance to survive the whole pipeline, and permissions, which have to be enforced *inside* retrieval — filtering after the model has already read a passage isn't a boundary. Retrieval should land under ~200ms so generation dominates the few-second budget. The target I'd insist on defining is quality: recall@k for retrieval and groundedness for the answer, because without those you cannot tell a chunking regression from a model regression.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the index: how many vectors, how much memory, and what does that imply?",
+      "points": [
+        "10M documents averaging ~4 chunks each ≈ 40M vectors.",
+        "A 768-dimension float32 vector is 768 × 4 = ~3 KB, so 40M × 3 KB ≈ 120 GB — more than one machine's RAM comfortably holds, so shard or quantize.",
+        "int8 scalar quantization cuts that ~4x to ~30 GB, which fits one large node; product quantization goes further at more recall cost.",
+        "HNSW graph overhead adds roughly 30-50% on top of raw vectors — budget for it or the index won't fit where you sized it.",
+        "Payload (original text, metadata) is stored separately, often in the document store rather than the vector index, since only ids need to come back from ANN.",
+        "Query cost: embedding the query is one small forward pass (~10ms); ANN search over 40M vectors with HNSW is single-digit ms; the cross-encoder rerank of 100 candidates is usually the dominant retrieval cost.",
+        "Ingest cost is the one people forget: embedding 40M chunks once, at maybe 1000 chunks/sec/GPU, is ~11 GPU-hours — and you pay it again on every model change."
+      ],
+      "answer": "10M documents at ~4 chunks each is roughly 40M vectors. At 768 dimensions in float32 that's ~3 KB each, so ~120 GB raw — too much for one node once you add HNSW's 30-50% graph overhead, so I'd quantize to int8 and land near 30 GB, or shard. Query-side, embedding is ~10ms and ANN is single-digit ms; the cross-encoder rerank over ~100 candidates dominates. The number I'd flag out loud is ingest: embedding 40M chunks is about 11 GPU-hours, and that's a bill you pay again every time the embedding model changes — which is exactly why the migration path matters."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the ingest pipeline and the query API.",
+      "points": [
+        "Ingest: parse → clean → chunk → embed → upsert to the vector index, with document id, chunk index, ACL tags and a content hash as metadata.",
+        "Content hash lets re-ingest skip unchanged chunks — the difference between re-embedding a whole document and re-embedding one edited paragraph.",
+        "Deletes and updates must propagate: a stale chunk that is still retrievable is a correctness bug, and for permissions it's a leak.",
+        "Query: `POST /answer {query, filters, top_k}` → embed query → hybrid retrieve → rerank → assemble prompt → stream answer with citations.",
+        "Return the retrieved passages alongside the answer so the caller can render citations and so evaluation can inspect what was retrieved.",
+        "Expose retrieval on its own (`POST /search`) — it makes the system debuggable and testable without paying for generation."
+      ],
+      "answer": "Ingest is parse → clean → chunk → embed → upsert, carrying document id, chunk index, ACL tags and a content hash. The hash matters more than it looks: it lets a re-ingest skip unchanged chunks, so editing one paragraph doesn't re-embed the document. Deletes and updates have to propagate promptly — a stale retrievable chunk is a correctness bug and, if permissions changed, a leak. On the query side, `POST /answer` embeds, retrieves, reranks, assembles and streams with citations, and I'd also expose `POST /search` on its own so retrieval can be tested and debugged without paying for generation."
+    },
+    {
+      "type": "mc",
+      "q": "Why is approximate nearest neighbour search (HNSW/IVF) used instead of exact kNN?",
+      "options": [
+        "Exact kNN cannot handle vectors above 256 dimensions",
+        "Exact kNN must compare the query against every vector — O(N) per query, which at 40M vectors is far too slow for interactive latency; ANN trades a small, tunable amount of recall for sub-linear search",
+        "ANN produces more semantically accurate results than exact search",
+        "Exact kNN requires the entire index to be held in GPU memory"
+      ],
+      "answer": 1,
+      "explain": "Exact search is a full scan: every query compares against all N vectors, which is fine at 100K and hopeless at 40M under a 200ms budget. HNSW builds a navigable small-world graph so search is roughly logarithmic, and `efSearch` becomes an explicit recall-versus-latency dial. Note the direction of the tradeoff: ANN is strictly *less* accurate than exact search, never more — you're buying speed with recall, and you should measure how much recall you bought.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how do you chunk the corpus, and why is this the highest-leverage decision in the system?",
+      "points": [
+        "The tension: an embedding is one fixed-size vector, so a large chunk averages many ideas into a vague point, while a small chunk is precise but may not contain enough context to answer.",
+        "Fixed-size chunking with overlap (e.g. 500 tokens, 50-token overlap) is the baseline — overlap stops an answer being split across a boundary.",
+        "Structure-aware chunking beats fixed size when the corpus has structure: split on headings, sections, or function definitions so a chunk is a coherent unit.",
+        "Parent-document (small-to-big) retrieval resolves the tension directly: embed and match on small precise chunks, but return the larger parent section to the model.",
+        "Attach context to each chunk — document title, section path — so an isolated paragraph doesn't lose what it was about.",
+        "Tables, code and lists break naive splitters; a chunk that ends mid-table retrieves and reads as noise.",
+        "This is testable: chunking changes should be evaluated against a fixed question set with recall@k, not chosen by intuition."
+      ],
+      "answer": "It's the highest-leverage decision because an embedding is a single fixed-size vector: a big chunk averages several ideas into a vague point that matches everything weakly, and a small chunk is precise but may not carry enough context to answer. Baseline is fixed-size with overlap so an answer isn't cut in half at a boundary. Better, where the corpus has structure, is splitting on headings or sections so each chunk is a coherent unit. The technique that resolves the tension outright is parent-document retrieval — embed and match on small precise chunks, then hand the model the larger parent section. I'd also prepend the document title and section path to each chunk, since an isolated paragraph loses what it was about. And I'd treat all of this as measurable: chunking changes get evaluated against a fixed question set on recall@k, never chosen by feel.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "A user searches for error code `ERR_4021`. Pure vector search returns semantically similar but unrelated troubleshooting pages. What is the standard fix?",
+      "options": [
+        "Increase `top_k` until the exact match appears in the candidate set",
+        "Run keyword (BM25) and vector search in parallel and fuse the ranked lists — reciprocal rank fusion — so exact lexical matches and semantic matches both surface",
+        "Fine-tune the embedding model on the error-code vocabulary",
+        "Lower the ANN `efSearch` parameter to tighten the search neighbourhood"
+      ],
+      "answer": 1,
+      "explain": "Embeddings capture meaning, and a rare literal token like `ERR_4021` carries almost no semantic signal — it lands near other code-shaped strings rather than near its own documentation. BM25 handles exactly this case, because a rare term gets a high IDF weight. Hybrid search runs both and fuses the rankings, which is why it's the default rather than a refinement. Raising `top_k` buries the answer in noise, fine-tuning is enormously expensive for one token class and doesn't generalize to the next new code, and `efSearch` tunes recall within vector space — it can't create lexical matching that the representation never had.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: walk through the retrieval pipeline from query to final passages. Why two stages?",
+      "points": [
+        "Stage 1 — recall: embed the query, run ANN plus BM25 with metadata/ACL filters, fuse to ~100 candidates. Optimized for not missing the answer.",
+        "Stage 2 — precision: a cross-encoder reranker scores each (query, passage) pair jointly and keeps the top ~5.",
+        "The reason two stages exist: a bi-encoder embeds query and document separately, so it can be precomputed and indexed but never sees them together. A cross-encoder reads both at once and is far more accurate — but cannot be precomputed, so it only affords ~100 pairs, not 40M.",
+        "ACL filtering must happen in stage 1, as a pre-filter on the index, not by dropping results afterwards — post-filtering can empty the result set and still leak through counts or latency.",
+        "Query transformation helps before stage 1: rewrite a conversational follow-up into a standalone query, or expand into multiple sub-queries for multi-hop questions.",
+        "Final assembly matters: order passages deliberately (models attend more to the start and end of context), deduplicate near-identical chunks, and keep provenance so citations are real.",
+        "Set a relevance floor — if nothing clears it, answering 'I don't know' is better than grounding on the least-bad passage."
+      ],
+      "answer": "Stage one is recall: embed the query, run ANN and BM25 in parallel with ACL and metadata pre-filters, fuse to about 100 candidates. Stage two is precision: a cross-encoder scores each query-passage pair jointly and keeps the top five. The reason it's split is a real architectural constraint — a bi-encoder embeds query and document independently, which is what makes precomputation and indexing possible but means it never sees them together; a cross-encoder reads both and is much more accurate but can't be precomputed, so it's affordable over 100 pairs and impossible over 40M. Permissions have to be a pre-filter in stage one, not a post-filter. And I'd set a relevance floor, because answering 'I don't know' beats grounding confidently on the least-bad passage.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "You need to switch to a better embedding model. What breaks, and how do you migrate without downtime?",
+      "points": [
+        "Vectors from different models are not comparable — different spaces, often different dimensions. A query embedded with model B cannot search an index built with model A; results would be nonsense, not merely worse.",
+        "So the embedding model is effectively a schema: changing it invalidates the entire index and requires re-embedding the whole corpus.",
+        "Migration is a dual-index build: stand up index B alongside A, backfill by re-embedding the corpus, keep both written on ingest, then cut queries over once B is complete and evaluated.",
+        "Cut over on a quality gate, not a completion percentage — compare A and B on a fixed evaluation set before switching traffic.",
+        "Keep A warm for a fast rollback; the failure mode is a quality regression nobody notices for a day, so rollback needs to be cheap.",
+        "Store the embedding model id and version on every vector so mixed-generation data is detectable rather than silently wrong.",
+        "This is why the ingest cost estimate matters up front: an 11-GPU-hour backfill is a plan, not an accident."
+      ],
+      "answer": "Vectors from different models live in different spaces — often different dimensions — so a query embedded with the new model searching an old index doesn't degrade gracefully, it returns nonsense. That makes the embedding model a schema, and changing it invalidates every stored vector. The migration is a dual index: stand up B beside A, backfill by re-embedding the corpus, dual-write on ingest so B stays current, then cut over. I'd gate the cutover on a quality comparison against a fixed eval set rather than on backfill percentage, and keep A warm afterwards, because the realistic failure is a quality regression nobody notices for a day. I'd also stamp the model id and version on every vector so a mixed-generation index is detectable instead of quietly wrong.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: how do you know it's working, and what breaks at scale?",
+      "points": [
+        "Evaluate the two stages separately: retrieval by recall@k and MRR on a labelled question set; generation by groundedness (is every claim supported by a retrieved passage) and answer correctness.",
+        "Without split evaluation, a regression is unattributable — you cannot tell a chunking change from a prompt change from a model change.",
+        "Log the retrieved passage ids per query. Retrieval failures are invisible in the answer text, which reads fluent either way — that fluency is the whole danger.",
+        "Scale: index build time and memory dominate. HNSW build is expensive and largely rebuilt rather than updated in place, so high churn corpora need a segment-and-merge design like an LSM tree.",
+        "Deletes in ANN indexes are typically tombstones; churn degrades recall until compaction, so schedule it.",
+        "Hot-shard risk if sharding by tenant with uneven tenant sizes; shard by vector hash or split large tenants.",
+        "Cost control: cache embeddings for repeated queries, and cache whole answers for common questions — a large fraction of production traffic is repeats.",
+        "Multi-tenant isolation: an ACL bug in the pre-filter is a data breach, not a quality issue, so it needs its own tests."
+      ],
+      "answer": "I'd evaluate retrieval and generation separately — recall@k and MRR on a labelled question set for retrieval, groundedness and correctness for generation — because a combined score makes every regression unattributable. I'd also log retrieved passage ids per query, since a retrieval failure produces an answer that reads exactly as fluently as a good one, and that fluency is the actual danger. At scale the pain is index build: HNSW is expensive to build and mostly rebuilt rather than updated, so a high-churn corpus wants a segment-and-merge design, and tombstoned deletes degrade recall until compaction runs. Sharding by tenant risks hot shards if tenant sizes are uneven. And I'd treat the ACL pre-filter as security-critical with its own tests — a bug there is a breach, not a quality dip."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Ingest and query are separate pipelines joined only by the index — which is why the embedding model is a shared schema between them.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  D([\"Documents\"]) --> P[\"Parse + chunk\"]\n  P --> E[\"Embed\"]\n  E --> VI[(\"Vector index<br/>+ BM25\")]\n  Q([\"User query\"]) --> QE[\"Embed query\"]\n  QE --> R[\"Hybrid retrieve<br/>ACL pre-filter\"]\n  VI --> R\n  R --> RR[\"Cross-encoder<br/>rerank\"]\n  RR --> LLM[\"LLM<br/>grounded answer\"]\n  LLM --> A([\"Answer + citations\"])"
+    },
+    {
+      "id": "chunking-strategy",
+      "title": "Chunking and parent-document retrieval",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Match on small precise chunks, return the larger parent — that resolves the precision-versus-context tension instead of trading it.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  DOC([\"Section: 2,000 tokens\"]) --> SPLIT[\"Split on structure<br/>+ 50-token overlap\"]\n  SPLIT --> C1[\"chunk A<br/>embedded\"]\n  SPLIT --> C2[\"chunk B<br/>embedded\"]\n  SPLIT --> C3[\"chunk C<br/>embedded\"]\n  C2 -->|\"best match\"| HIT{\"retrieved\"}\n  HIT -->|\"expand to parent\"| DOC\n  DOC -->|\"full section to model\"| OUT([\"precise match,<br/>full context\"])"
+    },
+    {
+      "id": "hybrid-retrieval",
+      "title": "Two-stage hybrid retrieval",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "Bi-encoders are indexable but blind to the pair; cross-encoders read the pair but can't be precomputed — so recall cheaply, then rerank expensively.",
+      "afterQuestion": 6,
+      "code": "flowchart LR\n  Q([\"query\"]) --> BM[\"BM25<br/>lexical\"]\n  Q --> AN[\"ANN<br/>semantic\"]\n  BM --> F[\"Reciprocal<br/>rank fusion\"]\n  AN --> F\n  F -->|\"~100 candidates\"| CE[\"Cross-encoder<br/>rerank\"]\n  CE -->|\"top ~5\"| FL{\"above<br/>relevance floor?\"}\n  FL -->|\"yes\"| CTX([\"assemble context\"])\n  FL -->|\"no\"| IDK([\"answer: I don't know\"])"
+    },
+    {
+      "id": "embedding-migration",
+      "title": "Migrating the embedding model",
+      "kind": "mermaid",
+      "role": "lifecycle",
+      "takeaway": "Vectors from two models are incomparable, so migration is a dual-index backfill gated on a quality comparison — not a percentage.",
+      "afterQuestion": 7,
+      "code": "flowchart TD\n  A[(\"Index A<br/>model v1\")] --> SERVE[\"serves queries\"]\n  NEW([\"model v2 chosen\"]) --> B[(\"Index B<br/>model v2\")]\n  ING([\"ingest\"]) -->|\"dual write\"| A\n  ING -->|\"dual write\"| B\n  CORP([\"backfill corpus\"]) --> B\n  B --> EVAL{\"recall@k on eval set<br/>beats A?\"}\n  EVAL -->|\"no\"| B\n  EVAL -->|\"yes\"| CUT[\"cut queries to B\"]\n  CUT --> KEEP([\"keep A warm<br/>for rollback\"])"
+    }
+  ]
+}

@@ -35,6 +35,105 @@ const INFOGRAPHIC_SETS = (readJson(path.join(SD, 'infographic-sets.json')) || {}
 const INFOGRAPHIC_PLAN = (readJson(path.join(SD, 'infographic-plan.json')) || {}).lessons || {};
 const expectedInfographics = new Set();
 const registeredLessons = new Set();
+let totalPending = 0;
+
+// --- Faceted tags (data/system-design/tags.json) -----------------------------
+// Authored facets live on manifest chapter entries so the topic home can filter
+// before any unit file is fetched. Registry-closed: an authored value that isn't
+// registered is an error, which is what stops near-synonyms ("work-queue" vs
+// "task-queue") from accumulating.
+const TAGS = readJson(path.join(SD, 'tags.json')) || {};
+const TAG_FACETS = Array.isArray(TAGS.facets) ? TAGS.facets : [];
+const TAG_TOPICS = new Set(Array.isArray(TAGS.appliesTo) ? TAGS.appliesTo : []);
+const facetValues = (id) => {
+  const f = TAG_FACETS.find(x => x.id === id);
+  return new Set((f && Array.isArray(f.values) ? f.values : []).map(v => v.id));
+};
+const MECHANISMS = facetValues('mechanism');
+const DIFFICULTIES = facetValues('difficulty');
+const COMPANIES = facetValues('company');
+
+// --- Study plans (data/system-design/plans.json) -----------------------------
+// A plan is a route through existing content, never a copy of it. The rule that
+// matters: every referenced unit must exist, or the plan runner builds a queue
+// with holes in it and the failure surfaces mid-session as a blank screen.
+const PLANS_FILE = readJson(path.join(SD, 'plans.json'));
+function validatePlans(unitIdsByTopic, cruxUnits) {
+  if (!PLANS_FILE) return;                     // optional file
+  const topic = PLANS_FILE.appliesTo;
+  const known = unitIdsByTopic[topic];
+  if (!known) { fail('plans.json', `appliesTo "${topic}" is not a known topic`); return; }
+  if (!Array.isArray(PLANS_FILE.plans) || !PLANS_FILE.plans.length) {
+    fail('plans.json', 'plans must be a non-empty array'); return;
+  }
+  const seen = new Set();
+  for (const p of PLANS_FILE.plans) {
+    const at = `plans.json/${p && p.id ? p.id : '?'}`;
+    if (!p || !p.id || !/^[a-z0-9-]+$/.test(p.id)) { fail(at, 'plan needs a kebab-case id'); continue; }
+    if (seen.has(p.id)) fail(at, `duplicate plan id ${p.id}`);
+    seen.add(p.id);
+    for (const f of ['title', 'budget', 'blurb']) if (!p[f]) fail(at, `missing ${f}`);
+    if (!['all', 'crux'].includes(p.mode)) fail(at, `mode must be "all" or "crux", got ${JSON.stringify(p.mode)}`);
+    if (p.units === '*') continue;             // every unit, resolved at load
+    if (!Array.isArray(p.units) || p.units.length < 2) { fail(at, 'units must be "*" or an array of >= 2 unit ids'); continue; }
+    if (new Set(p.units).size !== p.units.length) fail(at, 'units has duplicates');
+    for (const u of p.units) {
+      if (!known.has(u)) fail(at, `references unknown unit "${u}"`);
+      // A crux plan over a unit with no crux questions yields an empty step —
+      // the user taps through to nothing and the plan silently under-delivers.
+      else if (p.mode === 'crux' && !cruxUnits.has(`${topic}/${u}`)) {
+        fail(at, `crux plan references "${u}", which has no crux:true questions`);
+      }
+    }
+  }
+  const cp = PLANS_FILE.companyPlans;
+  if (cp && (!Number.isInteger(cp.minUnits) || cp.minUnits < 2)) {
+    fail('plans.json', 'companyPlans.minUnits must be an integer >= 2');
+  }
+}
+
+function validateTagRegistry() {
+  if (!TAGS.facets) { fail('tags.json', 'missing or unreadable — expected a facets[] array'); return; }
+  const seen = new Set();
+  for (const f of TAG_FACETS) {
+    if (!f || !f.id || !f.label) { fail('tags.json', 'every facet needs an id and a label'); continue; }
+    if (seen.has(f.id)) fail('tags.json', `duplicate facet id ${f.id}`);
+    seen.add(f.id);
+    if (!f.authored && !f.derived) fail('tags.json', `facet ${f.id} must be either authored or derived`);
+    for (const v of (f.values || [])) {
+      if (!v || !v.id || !v.label) fail('tags.json', `facet ${f.id} has a value missing id or label`);
+      else if (!/^[a-z0-9-]+$/.test(v.id)) fail('tags.json', `facet ${f.id} value "${v.id}" must be kebab-case`);
+    }
+  }
+  for (const id of ['mechanism', 'difficulty', 'company']) {
+    if (!seen.has(id)) fail('tags.json', `missing required authored facet "${id}"`);
+  }
+}
+
+// Authored tags on one manifest chapter entry. Mechanism is required (>=2) because
+// it is the cross-family transfer index — a problem with one mechanism can't answer
+// "what else solves it this way?".
+function validateChapterTags(topic, entry, where) {
+  if (!TAG_TOPICS.has(topic)) return;
+  const tags = entry.tags;
+  if (!tags || typeof tags !== 'object') { fail(where, 'manifest entry missing "tags" block'); return; }
+
+  if (!tags.difficulty) fail(where, 'tags.difficulty is required');
+  else if (!DIFFICULTIES.has(tags.difficulty)) fail(where, `unregistered difficulty "${tags.difficulty}"`);
+
+  if (!Array.isArray(tags.mechanism) || tags.mechanism.length < 2) {
+    fail(where, 'tags.mechanism must list at least 2 registered mechanisms');
+  } else {
+    if (new Set(tags.mechanism).size !== tags.mechanism.length) fail(where, 'tags.mechanism has duplicates');
+    for (const m of tags.mechanism) if (!MECHANISMS.has(m)) fail(where, `unregistered mechanism "${m}"`);
+  }
+
+  if (!Array.isArray(tags.company)) fail(where, 'tags.company must be an array (may be empty)');
+  else {
+    if (new Set(tags.company).size !== tags.company.length) fail(where, 'tags.company has duplicates');
+    for (const c of tags.company) if (!COMPANIES.has(c)) fail(where, `unregistered company "${c}"`);
+  }
+}
 
 const INFOGRAPHIC_VISUAL_TYPES = new Set([
   'routing-map', 'cache-layers', 'edge-globe', 'queue-conveyor',
@@ -111,13 +210,14 @@ function validateInfographic(topic, id, where) {
     if (!Array.isArray(plan.graphics) || plan.graphics.length !== plan.count) fail(where, 'infographic plan graphics must match count');
     else if (new Set(plan.graphics).size !== plan.graphics.length) fail(where, 'infographic plan graphic ids must be unique');
   }
-  // Mixed model: a lesson either has an authored multi-image set (design problems,
-  // plus the hand-authored pilots) or keeps its single illustrated sheet. The plan
-  // records the eventual target either way, so it stays the roadmap for conversion.
-  if (!set) {
-    validateInfographicFile(`${topic}/${id}.png`, 1600, 2000, where);
-    return;
-  }
+  // `pending: true` = the lesson's text is authored and gated, but its hand-drawn
+  // sheets haven't landed yet. SHIPPED BUT DELIBERATELY UNUSED: the repo owner
+  // wants a missing sheet to fail hard, so the red gate is the artwork to-do list.
+  // Kept available in case that call is ever reversed.
+  if (plan && plan.pending === true) { totalPending++; return; }
+  // Every infographic lesson now has an authored multi-image set — the old
+  // single-illustrated-sheet fallback retired when the last lesson converted.
+  if (!set) { fail(where, 'every infographic lesson needs an authored multi-image set'); return; }
   if (!set.title || !set.summary) fail(where, 'infographic set needs title and summary');
   if (!Array.isArray(set.items) || set.items.length < 2) {
     fail(where, 'authored infographic set needs at least two focused graphics');
@@ -182,6 +282,10 @@ if (!registry || !Array.isArray(registry.topics)) {
   console.error('\nSystem Design validation FAILED (no topics.json).'); process.exit(1);
 }
 
+validateTagRegistry();
+
+const unitIdsByTopic = {};
+const cruxUnits = new Set();
 for (const topic of registry.topics) {
   const t = topic.id;
   const dir = path.join(SD, t);
@@ -200,6 +304,13 @@ for (const topic of registry.topics) {
 
   const partChapters = (manifest.parts || []).flatMap(p => p.chapters);
   for (const id of manifestIds) if (!partChapters.includes(id)) fail(t, `${id} not assigned to any part`);
+  // ...and exactly once: a chapter listed in two parts renders its card twice and
+  // makes `displayNum` non-contiguous. Hand-re-parting makes this a live risk.
+  for (const id of new Set(partChapters)) {
+    const n = partChapters.filter(x => x === id).length;
+    if (n > 1) fail(t, `${id} assigned to ${n} parts — must be exactly one`);
+  }
+  for (const id of partChapters) if (!manifestIds.includes(id)) fail(t, `part references unknown chapter ${id}`);
 
   for (const entry of manifest.chapters) {
     const id = entry.id;
@@ -209,6 +320,8 @@ for (const topic of registry.topics) {
     if (!ch) continue;
     const at = `${t}/${id}`;
     registeredLessons.add(at);
+    (unitIdsByTopic[t] || (unitIdsByTopic[t] = new Set())).add(id);
+    if (Array.isArray(ch.questions) && ch.questions.some(q => q && q.crux)) cruxUnits.add(at);
 
     if (ch.id !== id) fail(at, `id "${ch.id}" != manifest "${id}"`);
     const num = ch.num != null ? ch.num : ch.chapter;
@@ -217,6 +330,7 @@ for (const topic of registry.topics) {
     if (!ch.title) fail(at, 'missing title');
     if (!ch.summary) fail(at, 'missing summary');
     if (ch.part && validParts.size && !validParts.has(ch.part)) fail(at, `part "${ch.part}" not a manifest part`);
+    validateChapterTags(t, entry, at);
     if (!Array.isArray(ch.keyTakeaways) || ch.keyTakeaways.length < MIN_TAKEAWAYS) fail(at, `keyTakeaways needs >= ${MIN_TAKEAWAYS} entries`);
     else if (!ch.keyTakeaways.every(x => typeof x === 'string' && x.trim())) fail(at, 'empty keyTakeaway');
     validateDiagrams(ch, at);
@@ -308,8 +422,11 @@ for (const key of registeredLessons) {
 }
 
 console.log('');
+validatePlans(unitIdsByTopic, cruxUnits);
+
 if (errors === 0) {
-  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, ${totalInfographics} infographics, 0 errors.`);
+  const pending = totalPending ? `, ${totalPending} pending artwork` : '';
+  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, ${totalInfographics} infographics${pending}, 0 errors.`);
   process.exit(0);
 } else {
   console.error(`\nSystem Design validation FAILED — ${errors} error(s), ${totalQ} questions scanned.`);

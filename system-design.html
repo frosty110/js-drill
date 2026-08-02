@@ -108,6 +108,45 @@
   .ch-due{font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap}
   .ch-chevron{color:var(--dim);font-size:18px}
 
+  /* ── Faceted tags + filter panel ─────────────────────────────────────
+     Tokens only (ds/tokens.css); chips reuse the ds pill geometry. Mobile is
+     the design center, so chips wrap and every tappable one clears 44px. */
+  .sd-chip{display:inline-flex;align-items:center;font-size:11px;font-weight:600;line-height:1;
+    padding:5px 9px;border-radius:999px;background:var(--panel-2);color:var(--muted);
+    border:1px solid transparent;white-space:nowrap;text-decoration:none}
+  .sd-chip--easy{background:var(--good-soft);color:var(--good-soft-fg)}
+  .sd-chip--medium{background:var(--ds-accent-soft);color:var(--ds-accent-hi)}
+  .sd-chip--hard{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+  .sd-chip--more{color:var(--dim)}
+  .sd-chip--link:hover,.sd-chip--co:hover{border-color:var(--accent);color:var(--accent)}
+  .sd-chip--co{color:var(--dim)}
+  .ch-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .detail-tags{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 4px}
+  .detail-tags .sd-chip{padding:7px 11px;font-size:12px;min-height:30px}
+
+  .sd-filter{background:var(--panel);border:1px solid var(--panel-2);border-radius:var(--radius);
+    margin:18px 0 4px;overflow:hidden}
+  .sd-filter.is-open{border-color:var(--ds-border-strong,var(--panel-2))}
+  .sd-filter-head{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 14px;
+    background:none;border:0;cursor:pointer;color:var(--text-strong);font:inherit;text-align:left}
+  .sd-filter-title{font-size:13px;font-weight:600;flex:1}
+  .sd-filter-count{font-size:11px;font-weight:700;color:var(--ds-accent-hi);
+    background:var(--ds-accent-soft);padding:3px 8px;border-radius:999px}
+  .sd-filter-caret{color:var(--dim);font-size:12px}
+  .sd-filter-body{padding:2px 14px 14px;border-top:1px solid var(--panel-2)}
+  .sd-facet{margin-top:12px}
+  .sd-facet-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+    font-weight:600;margin-bottom:7px}
+  .sd-facet-vals{display:flex;flex-wrap:wrap;gap:6px}
+  .sd-chip--btn{min-height:32px;padding:8px 12px;cursor:pointer;font-family:inherit}
+  .sd-chip--btn.is-on{background:var(--accent);color:var(--ds-accent-on,#17181c);border-color:var(--accent)}
+  .sd-filter-clear{margin-top:14px;min-height:36px;padding:0 12px;background:none;border:1px solid var(--panel-2);
+    border-radius:8px;color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+  .sd-filter-clear:hover{border-color:var(--warn);color:var(--warn)}
+  .sd-empty{background:var(--panel);border:1px dashed var(--panel-2);border-radius:var(--radius);
+    padding:26px 18px;text-align:center;color:var(--muted);font-size:14px}
+  .sd-empty small{color:var(--dim)}
+
   /* ── Unit detail (key ideas + drill-mode picker) ────────────────────── */
   .detail{background:var(--panel);border:1px solid var(--panel-2);border-radius:var(--radius-lg);padding:22px}
   .detail-tag{display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);
@@ -282,7 +321,20 @@ function grade(key, outcome) {   // 'good' | 'partial' | 'again'
 
 // ── Data loading ─────────────────────────────────────────────────────────
 async function loadTopics() { if (!TOPICS.length) TOPICS = (await fetch(`${BASE}/topics.json`).then(r => r.json())).topics; return TOPICS; }
-async function loadMeta(t) { if (!META[t]) META[t] = await fetch(`${BASE}/${t}/manifest.json`).then(r => r.json()); return META[t]; }
+async function loadMeta(t) {
+  if (!META[t]) {
+    const m = await fetch(`${BASE}/${t}/manifest.json`).then(r => r.json());
+    // Chapter ids are PERMANENT — SR keys, deep links and infographic paths all
+    // depend on them. Display position instead comes from parts[] order, so
+    // re-grouping a topic never renumbers a file. `_order` is that mapping.
+    m._order = {};
+    (m.parts || []).flatMap(p => p.chapters).forEach((cid, i) => { m._order[cid] = i + 1; });
+    m._partOf = {};
+    (m.parts || []).forEach(p => p.chapters.forEach(cid => { m._partOf[cid] = p.name; }));
+    META[t] = m;
+  }
+  return META[t];
+}
 async function loadChapter(t, id) { CH[t] = CH[t] || {}; if (!CH[t][id]) CH[t][id] = await fetch(`${BASE}/${t}/${id}.json`).then(r => r.json()); return CH[t][id]; }
 async function loadTopicChapters(t) { const m = await loadMeta(t); await Promise.all(m.chapters.map(c => loadChapter(t, c.id))); return m.chapters.map(c => CH[t][c.id]); }
 async function loadInfographicSets() {
@@ -436,7 +488,86 @@ function renderLessonInfographics(el, topic, ch, authoredSet) {
 }
 
 function unitAbbrev(t) { return (META[t] && META[t].unitAbbrev) || 'Ch'; }
-function chNum(c) { return c.num != null ? c.num : c.chapter; }
+// Display number = position in the flattened parts order (see loadMeta). Falls
+// back to the authored num for any topic loaded without a manifest.
+function chNum(c, t) {
+  const order = t && META[t] && META[t]._order;
+  if (order && c && order[c.id] != null) return order[c.id];
+  return c.num != null ? c.num : c.chapter;
+}
+
+// ============================================================================
+// FACETED TAGS — data/system-design/tags.json
+// Mirrors the main app's Problems filter: AND across facets, OR within a facet.
+// Authored facets (mechanism/difficulty/company) live on manifest chapter
+// entries, so filtering works before any unit file is fetched. Derived facets
+// (family/length) are computed here and need no authoring.
+// ============================================================================
+let TAGS = null;
+async function loadTags() {
+  if (TAGS === null) {
+    try { TAGS = await fetch(`${BASE}/tags.json`).then(r => r.json()); }
+    catch (_) { TAGS = { facets: [], appliesTo: [] }; }
+  }
+  return TAGS;
+}
+const tagsApplyTo = (t) => !!(TAGS && (TAGS.appliesTo || []).indexOf(t) >= 0);
+const facetOf = (id) => ((TAGS && TAGS.facets) || []).find(f => f.id === id) || null;
+function facetLabel(fid, vid) {
+  const f = facetOf(fid);
+  const v = f && (f.values || []).find(x => x.id === vid);
+  return v ? v.label : vid;
+}
+const LENGTH_OF = (q) => (q <= 8 ? 'short' : q <= 10 ? 'medium' : 'long');
+
+// Every facet value one manifest entry carries — derived and authored together.
+function entryTags(t, entry) {
+  const tg = entry.tags || {};
+  const part = (META[t] && META[t]._partOf && META[t]._partOf[entry.id]) || null;
+  return {
+    family: part ? [part] : [],
+    mechanism: tg.mechanism || [],
+    difficulty: tg.difficulty ? [tg.difficulty] : [],
+    company: tg.company || [],
+    length: [LENGTH_OF(entry.questions || 0)]
+  };
+}
+
+function tagFilter() { return progress.tagFilter || (progress.tagFilter = {}); }
+function tagFilterCount() {
+  return Object.keys(tagFilter()).reduce((n, k) => n + (tagFilter()[k] || []).length, 0);
+}
+function tagFilterHas(fid, vid) { return (tagFilter()[fid] || []).indexOf(vid) >= 0; }
+function toggleTag(fid, vid) {
+  const tf = tagFilter();
+  const arr = tf[fid] || (tf[fid] = []);
+  const i = arr.indexOf(vid);
+  if (i >= 0) arr.splice(i, 1); else arr.push(vid);
+  if (!arr.length) delete tf[fid];
+  persist();
+}
+function clearTagFilter() { progress.tagFilter = {}; persist(); }
+// AND across facets, OR within a facet.
+function tagMatch(tags) {
+  const tf = tagFilter();
+  return Object.keys(tf).every(fid => {
+    const vals = tf[fid] || [];
+    return !vals.length || vals.some(v => (tags[fid] || []).indexOf(v) >= 0);
+  });
+}
+// Which facet values actually occur in this topic — never offer a filter that
+// can only ever return zero results.
+function presentValues(t, entries) {
+  const seen = {};
+  entries.forEach(e => {
+    const tags = entryTags(t, e);
+    Object.keys(tags).forEach(fid => {
+      (seen[fid] || (seen[fid] = new Set()));
+      tags[fid].forEach(v => seen[fid].add(v));
+    });
+  });
+  return seen;
+}
 // One chapter's drillable items (MC + open), each with a stable SR key.
 function chapterItems(t, ch) {
   return (ch.questions || []).map((q, i) => ({ topic: t, chId: ch.id, qIndex: i, key: `${t}/${ch.id}/${i}`, type: q.type || 'mc', q }));
@@ -498,6 +629,7 @@ async function renderTopicHome(t) {
   const app = document.getElementById('app');
   const m = await loadMeta(t);
   await loadTopicChapters(t);
+  await loadTags();
   const meta = TOPICS.find(x => x.id === t) || {};
   const s = topicStats(t);
   const byId = Object.fromEntries(m.chapters.map(c => [c.id, CH[t][c.id]]));
@@ -517,33 +649,110 @@ async function renderTopicHome(t) {
       </div>
       <div class="cta-row">
         <button class="cta ds-btn ds-btn--primary" id="mixed-btn" ${s.total ? '' : 'disabled'}>⚡ Mixed review${s.due ? ` <span class="due-pill">${s.due}</span>` : ''}</button>
-        ${resume ? `<button class="cta ds-btn ds-btn--ghost" id="resume-btn">↻ Resume ${unitAbbrev(t)} ${chNum(byId[resume])}</button>` : ''}
+        ${resume ? `<button class="cta ds-btn ds-btn--ghost" id="resume-btn">↻ Resume ${unitAbbrev(t)} ${chNum(byId[resume], t)}</button>` : ''}
       </div>
     </section>`;
 
-  for (const part of m.parts) {
-    html += `<div class="part-head">${esc(part.name)}</div>`;
-    for (const cid of part.chapters) {
-      const ch = byId[cid]; if (!ch) continue;
-      const cs = chapterStats(t, ch);
-      const p = cs.total ? Math.round(cs.mastered / cs.total * 100) : 0;
-      const done = cs.total && cs.mastered === cs.total;
-      html += `
-        <button class="ch-card" data-ch="${ch.id}">
-          <div class="ch-num ${done ? 'done' : ''}">${done ? '✓' : chNum(ch)}</div>
-          <div class="ch-main">
-            <div class="ch-title">${esc(ch.title)}</div>
-            <div class="ch-meta"><span class="bar"><i style="width:${p}%"></i></span>
-              <span class="ch-frac">${cs.mastered}/${cs.total}</span>
-              ${cs.due ? `<span class="ch-due">${cs.due} due</span>` : ''}</div>
-          </div>
-          <span class="ch-chevron">›</span>
-        </button>`;
+  const faceted = tagsApplyTo(t);
+  const entryOf = Object.fromEntries(m.chapters.map(c => [c.id, c]));
+
+  // Card renderer, shared by the grouped and filtered layouts.
+  const card = (cid) => {
+    const ch = byId[cid]; if (!ch) return '';
+    const cs = chapterStats(t, ch);
+    const p = cs.total ? Math.round(cs.mastered / cs.total * 100) : 0;
+    const done = cs.total && cs.mastered === cs.total;
+    let chips = '';
+    if (faceted && entryOf[cid]) {
+      const tags = entryTags(t, entryOf[cid]);
+      const diff = tags.difficulty[0];
+      // Mobile is the design center: difficulty + two mechanisms, then a count.
+      const mech = tags.mechanism.slice(0, 2);
+      const extra = tags.mechanism.length - mech.length;
+      chips = `<div class="ch-tags">
+        ${diff ? `<span class="sd-chip sd-chip--${diff}">${esc(facetLabel('difficulty', diff))}</span>` : ''}
+        ${mech.map(v => `<span class="sd-chip">${esc(facetLabel('mechanism', v))}</span>`).join('')}
+        ${extra > 0 ? `<span class="sd-chip sd-chip--more">+${extra}</span>` : ''}
+      </div>`;
+    }
+    return `
+      <button class="ch-card" data-ch="${ch.id}">
+        <div class="ch-num ${done ? 'done' : ''}">${done ? '✓' : chNum(ch, t)}</div>
+        <div class="ch-main">
+          <div class="ch-title">${esc(ch.title)}</div>
+          <div class="ch-meta"><span class="bar"><i style="width:${p}%"></i></span>
+            <span class="ch-frac">${cs.mastered}/${cs.total}</span>
+            ${cs.due ? `<span class="ch-due">${cs.due} due</span>` : ''}</div>
+          ${chips}
+        </div>
+        <span class="ch-chevron">›</span>
+      </button>`;
+  };
+
+  if (faceted) {
+    const present = presentValues(t, m.chapters);
+    const active = tagFilterCount();
+    const open = !!progress.tagFilterOpen || active > 0;
+    const facets = (TAGS.facets || []).filter(f => (present[f.id] || new Set()).size > 1);
+    html += `
+      <section class="sd-filter ${open ? 'is-open' : ''}">
+        <button class="sd-filter-head" id="filter-toggle" aria-expanded="${open}">
+          <span class="sd-filter-title">Filter</span>
+          ${active ? `<span class="sd-filter-count">${active} active</span>` : ''}
+          <span class="sd-filter-caret">${open ? '▾' : '▸'}</span>
+        </button>
+        ${open ? `<div class="sd-filter-body">
+          ${facets.map(f => {
+            const vals = (f.values || []).filter(v => (present[f.id] || new Set()).has(v.id));
+            // Derived facets (family) enumerate from the data, not the registry.
+            const list = vals.length ? vals
+              : Array.from(present[f.id] || []).sort().map(v => ({ id: v, label: v }));
+            if (list.length < 2) return '';
+            return `<div class="sd-facet">
+              <div class="sd-facet-label">${esc(f.label)}</div>
+              <div class="sd-facet-vals">
+                ${list.map(v => `<button class="sd-chip sd-chip--btn ${tagFilterHas(f.id, v.id) ? 'is-on' : ''}"
+                   data-facet="${esc(f.id)}" data-val="${esc(v.id)}">${esc(v.label)}</button>`).join('')}
+              </div></div>`;
+          }).join('')}
+          ${active ? `<button class="sd-filter-clear" id="filter-clear">Clear all filters</button>` : ''}
+        </div>` : ''}
+      </section>`;
+
+    if (active) {
+      // Under an active filter the parts collapse into one flat list — same
+      // behavior as the main app's merged Problems list.
+      const hits = m.chapters.filter(e => tagMatch(entryTags(t, e)))
+        .sort((a, b) => (m._order[a.id] || 0) - (m._order[b.id] || 0));
+      html += `<div class="part-head">${hits.length} problem${hits.length === 1 ? '' : 's'} match</div>`;
+      html += hits.length
+        ? hits.map(e => card(e.id)).join('')
+        : `<div class="sd-empty">No problems match all four filters.<br>
+             <small>Try clearing the narrowest one.</small></div>`;
     }
   }
+
+  if (!faceted || !tagFilterCount()) {
+    for (const part of m.parts) {
+      html += `<div class="part-head">${esc(part.name)}</div>`;
+      for (const cid of part.chapters) html += card(cid);
+    }
+  }
+
   app.innerHTML = html;
   document.getElementById('to-topics').addEventListener('click', renderTopics);
   app.querySelectorAll('.ch-card').forEach(el => el.addEventListener('click', () => renderChapterDetail(t, el.dataset.ch)));
+  const ft = document.getElementById('filter-toggle');
+  if (ft) ft.addEventListener('click', () => {
+    progress.tagFilterOpen = !(progress.tagFilterOpen || tagFilterCount() > 0);
+    if (!progress.tagFilterOpen) clearTagFilter();
+    persist(); renderTopicHome(t);
+  });
+  app.querySelectorAll('.sd-chip--btn').forEach(el => el.addEventListener('click', () => {
+    toggleTag(el.dataset.facet, el.dataset.val); renderTopicHome(t);
+  }));
+  const fc = document.getElementById('filter-clear');
+  if (fc) fc.addEventListener('click', () => { clearTagFilter(); renderTopicHome(t); });
   const mb = document.getElementById('mixed-btn'); if (mb) mb.addEventListener('click', () => startMixed(t));
   const rb = document.getElementById('resume-btn'); if (rb) rb.addEventListener('click', () => renderChapterDetail(t, resume));
   window.scrollTo(0, 0);
@@ -559,6 +768,8 @@ async function renderChapterDetail(t, chId) {
   document.getElementById('stats-btn').hidden = false;
   const app = document.getElementById('app');
   const ch = await loadChapter(t, chId);
+  const m = await loadMeta(t);
+  await loadTags();
   const items = chapterItems(t, ch);
   const cs = chapterStats(t, ch);
   const cruxCount = items.filter(it => it.q.crux).length;
@@ -566,7 +777,17 @@ async function renderChapterDetail(t, chId) {
   const diagrams = diagramsOf(ch);
   const infographicSets = INFOGRAPHIC_TOPICS.has(t) ? await loadInfographicSets() : {};
   const infographicSet = infographicSets[`${t}/${ch.id}`] || null;
-  const label = `${unitAbbrev(t)} ${chNum(ch)}`;
+  const label = `${unitAbbrev(t)} ${chNum(ch, t)}`;
+  // Mechanism chips are the cross-family transfer surface: tapping one asks
+  // "what else solves it this way?" and routes to that filtered list.
+  const entry = tagsApplyTo(t) ? m.chapters.find(c => c.id === chId) : null;
+  const dTags = entry ? entryTags(t, entry) : null;
+  const tagRow = dTags ? `
+    <div class="detail-tags">
+      ${dTags.difficulty.map(v => `<span class="sd-chip sd-chip--${v}">${esc(facetLabel('difficulty', v))}</span>`).join('')}
+      ${dTags.mechanism.map(v => `<a class="sd-chip sd-chip--link" href="#/${t}/tag/mechanism/${encodeURIComponent(v)}">${esc(facetLabel('mechanism', v))}</a>`).join('')}
+      ${dTags.company.map(v => `<a class="sd-chip sd-chip--co" href="#/${t}/tag/company/${encodeURIComponent(v)}">${esc(facetLabel('company', v))}</a>`).join('')}
+    </div>` : '';
 
   app.innerHTML = `
     <button class="crumb" id="to-chapters">‹ ${esc(META[t].title)}</button>
@@ -581,6 +802,7 @@ async function renderChapterDetail(t, chId) {
           <h3>💡 Key ideas${cruxCount ? ' — the crux to memorize' : ''}</h3>
           <ul>${takeaways.map(k => `<li>${fmt(k)}</li>`).join('')}</ul>
         </div>` : ''}
+      ${tagRow}
       ${INFOGRAPHIC_TOPICS.has(t) ? `<div id="unit-infographic"></div>` : ''}
       ${diagrams.length && t !== 'design-problems' ? `<div id="unit-diagrams"></div>` : ''}
       <div class="cta-row">
@@ -923,6 +1145,14 @@ function parseRoute() {
   const unit = parts[1].replace(/[^a-z0-9-]/gi, '');
   if (unit === 'mixed') return { view: 'mixed', topic };
   if (unit === 'due') return { view: 'due', topic };
+  // #/<topic>/tag/<facet>/<value> — a shareable filtered list.
+  if (unit === 'tag' && parts[2] && parts[3]) {
+    return {
+      view: 'tag', topic,
+      facet: decodeURIComponent(parts[2]).replace(/[^a-z0-9-]/gi, ''),
+      value: decodeURIComponent(parts[3]).replace(/[^a-z0-9-]/gi, '')
+    };
+  }
   return { view: 'unit', topic, unit };
 }
 
@@ -934,6 +1164,17 @@ async function applyRoute() {
     if (r.view === 'topic' && known(r.topic)) return await renderTopicHome(r.topic);
     if (r.view === 'mixed' && known(r.topic)) { curTopic = r.topic; return await startMixed(r.topic); }
     if (r.view === 'due' && known(r.topic)) { curTopic = r.topic; return await startDue(r.topic); }
+    if (r.view === 'tag' && known(r.topic)) {
+      // A tag link REPLACES the filter rather than adding to it, so a shared URL
+      // always lands on the same list regardless of the recipient's saved state.
+      await loadTags();
+      if (tagsApplyTo(r.topic) && facetOf(r.facet)) {
+        progress.tagFilter = { [r.facet]: [r.value] };
+        progress.tagFilterOpen = true;
+        persist();
+      }
+      return await renderTopicHome(r.topic);
+    }
     if (r.view === 'unit' && known(r.topic)) {
       const m = await loadMeta(r.topic);
       if (m.chapters.some(c => c.id === r.unit)) return await renderChapterDetail(r.topic, r.unit);

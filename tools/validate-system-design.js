@@ -35,6 +35,66 @@ const INFOGRAPHIC_SETS = (readJson(path.join(SD, 'infographic-sets.json')) || {}
 const INFOGRAPHIC_PLAN = (readJson(path.join(SD, 'infographic-plan.json')) || {}).lessons || {};
 const expectedInfographics = new Set();
 const registeredLessons = new Set();
+let totalPending = 0;
+
+// --- Faceted tags (data/system-design/tags.json) -----------------------------
+// Authored facets live on manifest chapter entries so the topic home can filter
+// before any unit file is fetched. Registry-closed: an authored value that isn't
+// registered is an error, which is what stops near-synonyms ("work-queue" vs
+// "task-queue") from accumulating.
+const TAGS = readJson(path.join(SD, 'tags.json')) || {};
+const TAG_FACETS = Array.isArray(TAGS.facets) ? TAGS.facets : [];
+const TAG_TOPICS = new Set(Array.isArray(TAGS.appliesTo) ? TAGS.appliesTo : []);
+const facetValues = (id) => {
+  const f = TAG_FACETS.find(x => x.id === id);
+  return new Set((f && Array.isArray(f.values) ? f.values : []).map(v => v.id));
+};
+const MECHANISMS = facetValues('mechanism');
+const DIFFICULTIES = facetValues('difficulty');
+const COMPANIES = facetValues('company');
+
+function validateTagRegistry() {
+  if (!TAGS.facets) { fail('tags.json', 'missing or unreadable — expected a facets[] array'); return; }
+  const seen = new Set();
+  for (const f of TAG_FACETS) {
+    if (!f || !f.id || !f.label) { fail('tags.json', 'every facet needs an id and a label'); continue; }
+    if (seen.has(f.id)) fail('tags.json', `duplicate facet id ${f.id}`);
+    seen.add(f.id);
+    if (!f.authored && !f.derived) fail('tags.json', `facet ${f.id} must be either authored or derived`);
+    for (const v of (f.values || [])) {
+      if (!v || !v.id || !v.label) fail('tags.json', `facet ${f.id} has a value missing id or label`);
+      else if (!/^[a-z0-9-]+$/.test(v.id)) fail('tags.json', `facet ${f.id} value "${v.id}" must be kebab-case`);
+    }
+  }
+  for (const id of ['mechanism', 'difficulty', 'company']) {
+    if (!seen.has(id)) fail('tags.json', `missing required authored facet "${id}"`);
+  }
+}
+
+// Authored tags on one manifest chapter entry. Mechanism is required (>=2) because
+// it is the cross-family transfer index — a problem with one mechanism can't answer
+// "what else solves it this way?".
+function validateChapterTags(topic, entry, where) {
+  if (!TAG_TOPICS.has(topic)) return;
+  const tags = entry.tags;
+  if (!tags || typeof tags !== 'object') { fail(where, 'manifest entry missing "tags" block'); return; }
+
+  if (!tags.difficulty) fail(where, 'tags.difficulty is required');
+  else if (!DIFFICULTIES.has(tags.difficulty)) fail(where, `unregistered difficulty "${tags.difficulty}"`);
+
+  if (!Array.isArray(tags.mechanism) || tags.mechanism.length < 2) {
+    fail(where, 'tags.mechanism must list at least 2 registered mechanisms');
+  } else {
+    if (new Set(tags.mechanism).size !== tags.mechanism.length) fail(where, 'tags.mechanism has duplicates');
+    for (const m of tags.mechanism) if (!MECHANISMS.has(m)) fail(where, `unregistered mechanism "${m}"`);
+  }
+
+  if (!Array.isArray(tags.company)) fail(where, 'tags.company must be an array (may be empty)');
+  else {
+    if (new Set(tags.company).size !== tags.company.length) fail(where, 'tags.company has duplicates');
+    for (const c of tags.company) if (!COMPANIES.has(c)) fail(where, `unregistered company "${c}"`);
+  }
+}
 
 const INFOGRAPHIC_VISUAL_TYPES = new Set([
   'routing-map', 'cache-layers', 'edge-globe', 'queue-conveyor',
@@ -111,6 +171,12 @@ function validateInfographic(topic, id, where) {
     if (!Array.isArray(plan.graphics) || plan.graphics.length !== plan.count) fail(where, 'infographic plan graphics must match count');
     else if (new Set(plan.graphics).size !== plan.graphics.length) fail(where, 'infographic plan graphic ids must be unique');
   }
+  // `pending: true` = the lesson's text is authored and gated, but its hand-drawn
+  // sheets haven't landed yet. Without this the gate is all-or-nothing (one missing
+  // PNG would blank the signal on every question, diagram and manifest check in the
+  // run), so new content could not land green while artwork is produced out-of-band.
+  // Counted and reported in the summary line — pending art is visible, never silent.
+  if (plan && plan.pending === true) { totalPending++; return; }
   // Mixed model: a lesson either has an authored multi-image set (design problems,
   // plus the hand-authored pilots) or keeps its single illustrated sheet. The plan
   // records the eventual target either way, so it stays the roadmap for conversion.
@@ -182,6 +248,8 @@ if (!registry || !Array.isArray(registry.topics)) {
   console.error('\nSystem Design validation FAILED (no topics.json).'); process.exit(1);
 }
 
+validateTagRegistry();
+
 for (const topic of registry.topics) {
   const t = topic.id;
   const dir = path.join(SD, t);
@@ -200,6 +268,13 @@ for (const topic of registry.topics) {
 
   const partChapters = (manifest.parts || []).flatMap(p => p.chapters);
   for (const id of manifestIds) if (!partChapters.includes(id)) fail(t, `${id} not assigned to any part`);
+  // ...and exactly once: a chapter listed in two parts renders its card twice and
+  // makes `displayNum` non-contiguous. Hand-re-parting makes this a live risk.
+  for (const id of new Set(partChapters)) {
+    const n = partChapters.filter(x => x === id).length;
+    if (n > 1) fail(t, `${id} assigned to ${n} parts — must be exactly one`);
+  }
+  for (const id of partChapters) if (!manifestIds.includes(id)) fail(t, `part references unknown chapter ${id}`);
 
   for (const entry of manifest.chapters) {
     const id = entry.id;
@@ -217,6 +292,7 @@ for (const topic of registry.topics) {
     if (!ch.title) fail(at, 'missing title');
     if (!ch.summary) fail(at, 'missing summary');
     if (ch.part && validParts.size && !validParts.has(ch.part)) fail(at, `part "${ch.part}" not a manifest part`);
+    validateChapterTags(t, entry, at);
     if (!Array.isArray(ch.keyTakeaways) || ch.keyTakeaways.length < MIN_TAKEAWAYS) fail(at, `keyTakeaways needs >= ${MIN_TAKEAWAYS} entries`);
     else if (!ch.keyTakeaways.every(x => typeof x === 'string' && x.trim())) fail(at, 'empty keyTakeaway');
     validateDiagrams(ch, at);
@@ -309,7 +385,8 @@ for (const key of registeredLessons) {
 
 console.log('');
 if (errors === 0) {
-  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, ${totalInfographics} infographics, 0 errors.`);
+  const pending = totalPending ? `, ${totalPending} pending artwork` : '';
+  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, ${totalInfographics} infographics${pending}, 0 errors.`);
   process.exit(0);
 } else {
   console.error(`\nSystem Design validation FAILED — ${errors} error(s), ${totalQ} questions scanned.`);

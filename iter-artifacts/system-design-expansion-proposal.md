@@ -341,7 +341,20 @@ Design track card shows **plan progress** instead of global mastery — "One Wee
 5. `displayNum` is contiguous `1..N` with no duplicates.
 6. `plans.json`: every referenced unit exists; `mode ∈ {all, crux}`; `mode:"crux"`
    plans only reference units that actually have `crux:true` questions; `budget` present.
-7. Existing infographic gates extend to the new units unchanged.
+7. Existing infographic gates extend to the new units unchanged — **except** that a
+   plan entry may carry `"pending": true`, which skips that unit's PNG file check and
+   counts it instead of failing:
+
+   ```jsonc
+   "design-problems/p18": { "count": 4, "pending": true, "graphics": [...] }
+   ```
+
+   Reported in the summary line — `System Design validation OK — 32 units, 4 pending
+   artwork, 0 errors` — so pending art is visible, never silent. ~10 lines. This is
+   what lets lesson content land green while artwork is produced out-of-band, instead
+   of red-lining the whole gate (`process.exit(1)` is all-or-nothing, so one missing
+   PNG would blank the signal on ~300 new questions, diagram schemas, manifest parity
+   and question-count sync — precisely when the content is newest and least verified).
 
 ---
 
@@ -369,7 +382,59 @@ more.
 
 ---
 
-## 9. Cost & risks
+## 9. Cost, verified findings & risks
+
+### 9.1 Verified after first draft — two corrections
+
+**The rendering pipeline is not a blocker.** Inkscape 1.2.2 and ImageMagick 6.9.12
+install cleanly in the container, and a full regen of every registered set produced
+**0 of 88 PNGs changed** — the pipeline is byte-reproducible here. `renderSvg()` is
+one generic 194-line template driven entirely by the authored JSON, so a new problem
+needs **zero generator code**. (The install is not persistent — the container is
+ephemeral — so it should be scripted before it matters.)
+
+**But `diagram-v1` does not reach the quality bar.** The hand-authored `p01/overview`
+sheet renders a real topology: components, a four-style path legend (create / redirect
+/ event / cache-miss) traced through the diagram, numbered callouts pinned to the
+wires, and a priorities → optimizations / trade-offs / failure-focus footer.
+`diagram-v1` renders a **vertical card list** — four decorative, interchangeable icons
+on a dashed snake, then flow / numbers / priorities / trade-off cards. No components,
+no request paths, no arrows between services. It teaches a list; the pilot teaches a
+system.
+
+**And the compiler-authored source behind the 61 generated sheets carries real
+defects.** From `design-problems/p02/overview` — currently live:
+
+```jsonc
+"priorities": ["Fan-out-on-read (pull) assembles the feed",   // truncated fragment
+               "A Twitter/Facebook-style home feed that",      // truncated fragment
+               "Non-functional"]                               // a label, not a priority
+"tradeoffs[1]": "A Twitter/Facebook-style home feed that shows each user a merged,
+                 ranked stream…"                               // the lesson summary
+"numbers":     Demand = "peak QPS", Data = "items/day × bytes" // placeholders
+```
+
+This is the exact failure `INFOGRAPHIC-AUTHORING.md` documents — "step titles were the
+detail text truncated mid-sentence", "flow titles duplicated the paragraph beside
+them" — and for which DDIA and Building Blocks were **reverted** to single sheets.
+Design Problems has the same defect and shipped. **61 sheets are live with it.**
+
+**Decision (2026-08-02): artwork for the 15 new problems is hand-drawn PNG, produced
+out-of-band, matching the `p01` grammar.** They register with `renderer` omitted, so
+`generate:infographic-sets` preserves them — already a first-class path, 10 sheets work
+that way today. `diagram-v1` is not used for new problems.
+
+The only hard contract the art must meet is the validator's: each sheet lands at
+`assets/system-design/infographics/design-problems/<pNN>/<graphic-id>.png` at **exactly**
+the width×height registered in `infographic-sets.json`, with ids and order matching
+`infographic-plan.json`. Everything else — sheet count, composition, what each sheet
+teaches — is authored as text first (§ "Author text before pixels") and handed over as
+the brief.
+
+*(Remediating the 61 defective sheets is out of scope here and needs its own decision:
+regenerate from hand-fixed source, convert to hand-authored, or defer.)*
+
+### 9.2 Cost
 
 **Per new problem:** ~20–30 KB JSON (8–11 questions on the authored arc,
 `keyTakeaways`, 4 architecture diagrams) + `infographic-plan.json` entry +
@@ -378,13 +443,9 @@ more.
 
 **Risks:**
 
-- **Infographic tooling.** `tools/generate-system-design-infographic-sets.js` needs
-  Inkscape + ImageMagick; neither is installed in the current container (apt is
-  available, so likely installable — unverified). The validator hard-fails a
-  design-problems unit without its PNGs, so **this must be resolved before P3**, not
-  during it. Mitigation if it can't be: allow new units to register as single-sheet
-  (`<topic>/<lesson>.png`, the existing unconverted form) and convert later — the plan
-  file already models exactly this roadmap.
+- **Artwork throughput, not tooling.** Rendering is solved (§9.1); *authoring ~55
+  sheets to the `p01` bar* is the real constraint. The `pending` flag (§7 rule 7)
+  decouples it from content so neither blocks the other.
 - **Re-parting churn.** P1 rewrites `parts[]` and touches all 17 manifest entries. Ids
   and files are untouched, so SR progress, deep links and infographic keys are safe —
   but it should land as one atomic commit with the `displayNum` change.

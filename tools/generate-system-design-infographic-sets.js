@@ -281,9 +281,14 @@ function mapPressureLenses(item) {
 
 function architecture(item) {
   const kind = String(item.kind || '').toLowerCase();
+  const subject = `${item.id || ''} ${item.title || ''}`.toLowerCase();
   if (kind.includes('comparison')) return comparisonLayout(item);
   if (kind.includes('failure')) return failureLayout(item);
   if (kind.includes('scale')) return scaleLayout(item);
+  if (/consistent.hash.ring|quorum.overlap|geohash|replication.isr/.test(subject)) return scaleLayout(item);
+  if (/threshold.bands|chunking.strategy|density.skew|latency.fork/.test(subject)) return comparisonLayout(item);
+  if (kind.includes('lifecycle') || kind.includes('request')) return sequenceLayout(item);
+  if (/window|segmented.log|hot.key|paged.kv|point.in.time|tsdb|trace.sampling|exclusive.claim|signing|inverted.index|latency.budget|two.stage|refresh.rotation|key.rotation/.test(subject)) return sequenceLayout(item);
   if (kind.includes('read') || kind.includes('write') || kind.includes('correctness')) return sequenceLayout(item);
   if (kind.includes('map')) return mapLayout(item);
   return mechanismLayout(item);
@@ -338,6 +343,7 @@ function arg(name) {
 
 function main() {
   const preview=process.argv.includes('--preview');
+  const missing=process.argv.includes('--missing');
   const rerenderV2=process.argv.includes('--rerender-v2');
   const keyFilter=arg('key');
   const idFilter=arg('id');
@@ -346,7 +352,10 @@ function main() {
   const candidates=[];
   for (const [key,set] of Object.entries(SETS)) {
     set.items.forEach((item,index)=>{
-      if (item.renderer !== 'diagram-v1' && !(rerenderV2 && item.artwork === 'chalkboard-architecture-v2')) return;
+      const [topic,lesson]=key.split('/');
+      const output=path.join(OUT,topic,lesson,`${item.id}.png`);
+      const shouldRenderMissing=missing && !fs.existsSync(output);
+      if (!shouldRenderMissing && item.renderer !== 'diagram-v1' && !(rerenderV2 && item.artwork === 'chalkboard-architecture-v2')) return;
       if (keyFilter && key !== keyFilter) return;
       if (idFilter && item.id !== idFilter) return;
       candidates.push({key,set,item,index});
@@ -354,7 +363,7 @@ function main() {
   }
   const selected=candidates.slice(offset,offset+limit);
   if (!selected.length) {
-    if (preview || keyFilter || idFilter) throw new Error('No pending infographic matched the requested filters.');
+    if (preview || missing || keyFilter || idFilter) throw new Error('No pending infographic matched the requested filters.');
     console.log('No pending diagram-v1 infographics; reviewed static artwork is already registered.');
     return;
   }

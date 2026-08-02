@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Design a News Feed — Canonical Design Problems</title>
+<meta name="description" content="A Twitter/Facebook-style home feed that shows each user a merged, ranked stream of posts from the accounts they follow. The signature challenge is the fan-out tradeoff: precompute feeds on write (push) vs. assemble them on read (pull), and the hybrid needed to survive high-follower &#39;celebrity&#39; accounts.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/design-problems/p02">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Design a News Feed — Canonical Design Problems">
+<meta property="og:description" content="A Twitter/Facebook-style home feed that shows each user a merged, ranked stream of posts from the accounts they follow. The signature challenge is the fan-out tradeoff: precompute feeds on write (push) vs. assemble them on read (pull), and the hybrid needed to survive high-follower &#39;celebrity&#39; accounts.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/design-problems/p02">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/design-problems/">Canonical Design Problems</a></p>
+    <h1>Design a News Feed</h1>
+    <p class="sharepage__lede">A Twitter/Facebook-style home feed that shows each user a merged, ranked stream of posts from the accounts they follow. The signature challenge is the fan-out tradeoff: precompute feeds on write (push) vs. assemble them on read (pull), and the hybrid needed to survive high-follower &#39;celebrity&#39; accounts.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Canonical Design Problems</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Fan-out-on-write (push) precomputes each follower&#39;s feed at post time — fast reads, but write amplification explodes for high-follower accounts.</li><li>Fan-out-on-read (pull) assembles the feed at query time by merging followees&#39; recent posts — cheap writes, but slow, repeated reads.</li><li>The production answer is HYBRID: push for normal users, pull for celebrities, merged at read time.</li><li>Store each user&#39;s feed as a capped, per-user timeline of post IDs in a fast store (e.g. Redis) — hydrate post bodies on read.</li><li>Ranking can be reverse-chronological or a scored model (recency, affinity, engagement); chrono is simpler, scored drives engagement.</li><li>Paginate with a cursor (last-seen post ID / timestamp), not OFFSET, so the feed is stable as new posts arrive.</li><li>A celebrity post is a thundering-herd write event — decouple fan-out via a queue and never push to millions synchronously.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Frame the problem: what are the functional and non-functional requirements for a home news feed, and the read:write characteristics?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Functional: post content; follow/unfollow users; view a home feed merging followees&#39; posts; feed is ranked (chrono or scored); infinite-scroll pagination.</li><li>Non-functional: low feed-load latency (&lt;200ms), high availability, eventual consistency is acceptable (a post can appear seconds late).</li><li>Heavily read-skewed — users scroll far more than they post; peak read QPS dominates.</li><li>Scale assumptions to confirm: DAU, avg followees per user, avg posts/user/day, follower distribution (power-law with celebrities).</li><li>Out of scope for v1: DMs, ads, notifications — confirm.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Functionally: users post, follow/unfollow, and load a home feed that merges recent posts from everyone they follow, ranked and infinitely scrollable. Non-functionally it&#39;s read-dominated — people scroll far more than they post — so I optimize feed-read latency (sub-200ms) and high availability, and I&#39;ll accept eventual consistency since a post appearing a few seconds late is fine. The numbers I&#39;d confirm are DAU, average followees, posts per user per day, and crucially the follower distribution, because the power-law tail (celebrities) drives the hardest design decision.</div>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Estimate capacity. Assume 300M DAU, each user follows ~200 accounts, posts 2×/day, and opens the feed 10×/day. Derive post write QPS, feed read QPS, and the fan-out write volume under a pure push model.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Posts: 300M × 2 = 600M/day ÷ 86,400 ≈ 7K writes/s; peak ~2× ≈ 14K/s.</li><li>Feed reads: 300M × 10 = 3B/day ÷ 86,400 ≈ 35K reads/s; peak ≈ 70K/s.</li><li>Push fan-out: each post copied to ~200 follower feeds → 600M × 200 = 120B feed-writes/day ≈ 1.4M feed-writes/s.</li><li>That fan-out number is the argument against naive push — 200× write amplification.</li><li>Feed storage: cap each timeline at ~500–800 post IDs (~8 bytes each) → a few KB/user, cheap in Redis.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> 600M posts/day is ~7K writes/s, ~14K at peak. Feed opens at 10×/day give 3B reads/day, ~35K/s and ~70K/s peak. The killer number is fan-out: under pure push, each post is copied into ~200 follower timelines, so 600M posts becomes 120B feed-writes/day — about 1.4M writes/s, a 200× amplification. That&#39;s exactly why naive push doesn&#39;t survive celebrities. Feeds themselves are cheap to store — cap each per-user timeline at a few hundred post IDs at 8 bytes each, a few KB per user, easily held in Redis.</div>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Design the core API for posting, following, and reading the feed — include the pagination parameters.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>POST /posts {content, mediaRefs?} → creates a post, returns postId.</li><li>POST /follow {targetUserId} / DELETE /follow/{targetUserId}.</li><li>GET /feed?cursor=&lt;opaque&gt;&amp;limit=20 → returns ranked posts + next cursor.</li><li>Cursor is opaque (encodes last post ID/score/timestamp), not a numeric page offset.</li><li>Feed response hydrates post bodies + author info; supports infinite scroll.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> <code>POST /posts</code> with <code>{content, mediaRefs?}</code> creates a post; <code>POST /follow</code> and <code>DELETE /follow/{id}</code> manage the graph; and <code>GET /feed?cursor=&lt;opaque&gt;&amp;limit=20</code> returns a page of ranked, hydrated posts plus a <code>nextCursor</code>. The cursor is opaque — it encodes the last-seen post&#39;s ID/score/timestamp — rather than a numeric OFFSET, so pagination stays stable while new posts stream in at the top.</div>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Give the high-level architecture and data model. What are the main services, stores, and tables?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Services: post service, fan-out service (queue-driven), feed service, user/graph service.</li><li>Stores: posts DB (postId → content/author/ts), social graph store (follows), per-user feed cache (Redis lists of post IDs), object store for media.</li><li>Fan-out is async: a new post publishes to a queue; workers push post IDs into follower feed lists.</li><li>Feed read: fetch the user&#39;s cached list of post IDs → hydrate bodies from posts DB/cache → rank → return.</li><li>Data model: Posts{postId, authorId, content, createdAt}; Follows{followerId, followeeId}; Feed{userId → [postId...] capped}.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Four services: a post service (writes to the Posts DB), a graph service (Follows), a queue-driven fan-out service, and a feed service. When a post is created, it&#39;s persisted and an event goes onto a queue; fan-out workers append the post ID into each follower&#39;s capped Redis timeline. On read, the feed service pulls the user&#39;s list of post IDs, hydrates bodies from the posts store/cache, ranks them, and returns a page. The model is three shapes: <code>Posts{postId, authorId, content, createdAt}</code>, <code>Follows{followerId, followeeId}</code>, and per-user <code>Feed{userId → [postId…]}</code> capped to a few hundred entries.</div>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span> <span class="ds-chip">crux</span></h3>
+      <p>What is the core tradeoff between fan-out-on-write (push) and fan-out-on-read (pull) for feed generation?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Push gives cheap writes and expensive reads; pull gives expensive writes and cheap reads</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Push precomputes each follower&#39;s feed at post time — fast reads but huge write amplification for high-follower users; pull merges followees&#39; posts at read time — cheap writes but slow, repeated read-time work <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> They are equivalent in cost; the only difference is which database engine you use</li>
+        <li><span class="sharepage__key">D</span> Pull requires strong consistency while push only works with strong consistency</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Push (fan-out-on-write) does the work at post time, copying the post into every follower&#39;s feed — so reads are a cheap lookup of a precomputed list, but a post by a high-follower account causes millions of writes. Pull (fan-out-on-read) does nothing at write time and instead gathers and merges each followee&#39;s recent posts when the feed is requested — cheap writes, but every read repeats an expensive scatter-gather. The whole design tension is where you pay: at write time (push) or read time (pull).</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>This is the crux. Design the HYBRID fan-out that handles celebrity accounts. How does it work at write and at read time, and where&#39;s the threshold?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Classify authors by follower count: normal users use push; celebrities (above a follower threshold, e.g. ~10K–1M) are NOT fanned out on write.</li><li>Write path: a normal user&#39;s post is pushed into follower feeds via the queue; a celebrity&#39;s post is just stored once, no fan-out.</li><li>Read path: load the user&#39;s precomputed (push) feed, THEN pull recent posts from the celebrities they follow, and merge/rank the two at query time.</li><li>Celebrity posts are cached hot (one copy read by millions) so the pull is a cheap cache hit, not N DB reads.</li><li>Threshold is tunable and can be per-account; avoids both million-write fan-out AND merging thousands of followees on every read.</li><li>Edge cases: a user who follows only celebrities gets a pure-pull feed; recompute/backfill on follow changes.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I split authors by follower count. Normal users are pushed: their post is fanned out through the queue into each follower&#39;s precomputed timeline. Celebrities — anyone above a tunable threshold, say tens of thousands of followers — are NOT fanned out; their post is stored once. At read time I load the viewer&#39;s precomputed push feed and then pull the recent posts of the handful of celebrities they follow, merging and ranking the two sets. Because a celebrity&#39;s post is a single hot cache entry read by millions, the pull side is a cheap cache hit rather than N database reads. This gets the best of both: no million-write thundering herd on a celebrity post, and no thousand-followee scatter-gather on a normal read — with the threshold tunable per account.</div>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span> <span class="ds-chip">crux</span></h3>
+      <p>For paginating an infinitely-scrolling feed where new posts constantly arrive at the top, which approach is correct?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Cursor-based pagination keyed on the last-seen post&#39;s ID/score/timestamp <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> SQL LIMIT/OFFSET, incrementing the offset per page</li>
+        <li><span class="sharepage__key">C</span> Re-fetch the entire feed each scroll and diff on the client</li>
+        <li><span class="sharepage__key">D</span> Random sampling of posts to avoid duplicates</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Cursor (keyset) pagination anchors the next page to the last item the client saw — its ID, score, or timestamp — so newly-inserted top-of-feed posts don&#39;t shift the pages and you never see duplicates or skips. OFFSET pagination breaks precisely here: inserting posts at the top shifts every row, so page 2 repeats or drops items. Re-fetching everything and random sampling are wasteful and don&#39;t guarantee stable ordering.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Discuss ranking: reverse-chronological vs. a scored feed. What signals feed a scored model, and what&#39;s the cost of moving off chrono?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Chronological: simple, predictable, trivially mergeable across sources; but shows low-value recent posts and buries good older ones.</li><li>Scored: rank by a model combining recency, author affinity, predicted engagement (like/reply probability), content type, and diversity.</li><li>Scored feed needs feature data + a serving model at read time (or precomputed scores), adding latency and infra.</li><li>Ranking must still merge push + pull sources before scoring in the hybrid.</li><li>Tradeoff: engagement and relevance go up, but predictability, chronological trust, and simplicity go down; often a candidate-generation → ranking two-stage pipeline.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Reverse-chronological is simple, predictable, and trivially merges push and pull sources, but it surfaces low-value recent posts and buries good older ones. A scored feed ranks by a model over recency, author affinity, predicted engagement, content type, and diversity — typically a two-stage candidate-generation then ranking pipeline. The cost is real: you need feature data and a model served at read time (or precomputed scores), which adds latency and infrastructure, and you trade away chronological predictability for engagement. In the hybrid I&#39;d generate candidates from both the push feed and the pulled celebrity posts, then score the merged set.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Staff-level: a celebrity with 100M followers posts. Walk through the thundering-herd problem and how your design absorbs it, plus other failure modes at scale.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Under naive push, one celebrity post = 100M synchronous feed-writes — a write storm that saturates the fan-out tier.</li><li>Hybrid avoids it entirely: the post is stored once and pulled at read time, so there&#39;s no fan-out spike.</li><li>The read spike (everyone loading it) is absorbed by caching the hot post once and serving millions of reads from cache/CDN.</li><li>Decouple any remaining fan-out through a queue with backpressure — never push synchronously; workers drain at a controlled rate.</li><li>Other failure modes: hot-key on the celebrity post (replicate the cache entry), feed-cache eviction (rebuild from posts DB on miss), fan-out worker lag (eventual consistency, acceptable).</li><li>Consistency tradeoff: feeds are eventually consistent — a post may take seconds to appear; that&#39;s fine and lets us favor availability.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Under naive push, a 100M-follower post means 100M feed-writes in a burst — a thundering herd that melts the fan-out tier. The hybrid sidesteps it: a celebrity post is written once and pulled at read time, so there&#39;s no write fan-out at all. The correlated read spike — everyone opening the app to see it — is absorbed by caching that single hot post and serving it from cache/CDN, replicating the entry if it becomes a hot key. Any fan-out that does happen goes through a queue with backpressure so workers drain at a controlled rate instead of synchronously. The remaining failure modes — cache eviction, worker lag — are handled by rebuilding feeds from the posts DB on miss and accepting eventual consistency, since a post arriving a few seconds late is an acceptable price for availability.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"design-problems","unit":"p02","title":"Design a News Feed","codeShape":["Q"],"questions":[{"n":1,"type":"open","prompt":"Frame the problem: what are the functional and non-functional requirements for a home news feed, and the read:write characteristics?","points":["Functional: post content; follow/unfollow users; view a home feed merging followees' posts; feed is ranked (chrono or scored); infinite-scroll pagination.","Non-functional: low feed-load latency (\u003c200ms), high availability, eventual consistency is acceptable (a post can appear seconds late).","Heavily read-skewed — users scroll far more than they post; peak read QPS dominates.","Scale assumptions to confirm: DAU, avg followees per user, avg posts/user/day, follower distribution (power-law with celebrities).","Out of scope for v1: DMs, ads, notifications — confirm."]},{"n":2,"type":"open","prompt":"Estimate capacity. Assume 300M DAU, each user follows ~200 accounts, posts 2×/day, and opens the feed 10×/day. Derive post write QPS, feed read QPS, and the fan-out write volume under a pure push model.","points":["Posts: 300M × 2 = 600M/day ÷ 86,400 ≈ 7K writes/s; peak ~2× ≈ 14K/s.","Feed reads: 300M × 10 = 3B/day ÷ 86,400 ≈ 35K reads/s; peak ≈ 70K/s.","Push fan-out: each post copied to ~200 follower feeds → 600M × 200 = 120B feed-writes/day ≈ 1.4M feed-writes/s.","That fan-out number is the argument against naive push — 200× write amplification.","Feed storage: cap each timeline at ~500–800 post IDs (~8 bytes each) → a few KB/user, cheap in Redis."]},{"n":3,"type":"open","prompt":"Design the core API for posting, following, and reading the feed — include the pagination parameters.","points":["POST /posts {content, mediaRefs?} → creates a post, returns postId.","POST /follow {targetUserId} / DELETE /follow/{targetUserId}.","GET /feed?cursor=\u003copaque>&limit=20 → returns ranked posts + next cursor.","Cursor is opaque (encodes last post ID/score/timestamp), not a numeric page offset.","Feed response hydrates post bodies + author info; supports infinite scroll."]},{"n":4,"type":"open","prompt":"Give the high-level architecture and data model. What are the main services, stores, and tables?","points":["Services: post service, fan-out service (queue-driven), feed service, user/graph service.","Stores: posts DB (postId → content/author/ts), social graph store (follows), per-user feed cache (Redis lists of post IDs), object store for media.","Fan-out is async: a new post publishes to a queue; workers push post IDs into follower feed lists.","Feed read: fetch the user's cached list of post IDs → hydrate bodies from posts DB/cache → rank → return.","Data model: Posts{postId, authorId, content, createdAt}; Follows{followerId, followeeId}; Feed{userId → [postId...] capped}."]},{"n":5,"type":"mc","prompt":"What is the core tradeoff between fan-out-on-write (push) and fan-out-on-read (pull) for feed generation?","options":["Push gives cheap writes and expensive reads; pull gives expensive writes and cheap reads","Push precomputes each follower's feed at post time — fast reads but huge write amplification for high-follower users; pull merges followees' posts at read time — cheap writes but slow, repeated read-time work","They are equivalent in cost; the only difference is which database engine you use","Pull requires strong consistency while push only works with strong consistency"],"answer":1,"answerLetter":"B"},{"n":6,"type":"open","prompt":"This is the crux. Design the HYBRID fan-out that handles celebrity accounts. How does it work at write and at read time, and where's the threshold?","points":["Classify authors by follower count: normal users use push; celebrities (above a follower threshold, e.g. ~10K–1M) are NOT fanned out on write.","Write path: a normal user's post is pushed into follower feeds via the queue; a celebrity's post is just stored once, no fan-out.","Read path: load the user's precomputed (push) feed, THEN pull recent posts from the celebrities they follow, and merge/rank the two at query time.","Celebrity posts are cached hot (one copy read by millions) so the pull is a cheap cache hit, not N DB reads.","Threshold is tunable and can be per-account; avoids both million-write fan-out AND merging thousands of followees on every read.","Edge cases: a user who follows only celebrities gets a pure-pull feed; recompute/backfill on follow changes."]},{"n":7,"type":"mc","prompt":"For paginating an infinitely-scrolling feed where new posts constantly arrive at the top, which approach is correct?","options":["Cursor-based pagination keyed on the last-seen post's ID/score/timestamp","SQL LIMIT/OFFSET, incrementing the offset per page","Re-fetch the entire feed each scroll and diff on the client","Random sampling of posts to avoid duplicates"],"answer":0,"answerLetter":"A"},{"n":8,"type":"open","prompt":"Discuss ranking: reverse-chronological vs. a scored feed. What signals feed a scored model, and what's the cost of moving off chrono?","points":["Chronological: simple, predictable, trivially mergeable across sources; but shows low-value recent posts and buries good older ones.","Scored: rank by a model combining recency, author affinity, predicted engagement (like/reply probability), content type, and diversity.","Scored feed needs feature data + a serving model at read time (or precomputed scores), adding latency and infra.","Ranking must still merge push + pull sources before scoring in the hybrid.","Tradeoff: engagement and relevance go up, but predictability, chronological trust, and simplicity go down; often a candidate-generation → ranking two-stage pipeline."]},{"n":9,"type":"open","prompt":"Staff-level: a celebrity with 100M followers posts. Walk through the thundering-herd problem and how your design absorbs it, plus other failure modes at scale.","points":["Under naive push, one celebrity post = 100M synchronous feed-writes — a write storm that saturates the fan-out tier.","Hybrid avoids it entirely: the post is stored once and pulled at read time, so there's no fan-out spike.","The read spike (everyone loading it) is absorbed by caching the hot post once and serving millions of reads from cache/CDN.","Decouple any remaining fan-out through a queue with backpressure — never push synchronously; workers drain at a controlled rate.","Other failure modes: hot-key on the celebrity post (replicate the cache entry), feed-cache eviction (rebuild from posts DB on miss), fan-out worker lag (eventual consistency, acceptable).","Consistency tradeoff: feeds are eventually consistent — a post may take seconds to appear; that's fine and lets us favor availability."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/design-problems/p02">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

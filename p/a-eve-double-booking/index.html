@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Double-Booking Detector — JS Drill</title>
+<meta name="description" content="Interval shape on object input — sort depositions by start time, then a single scan comparing each event&#39;s start against the furthest end seen so far to surface scheduling conflicts.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-eve-double-booking">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Double-Booking Detector — JS Drill">
+<meta property="og:description" content="Interval shape on object input — sort depositions by start time, then a single scan comparing each event&#39;s start against the furthest end seen so far to surface scheduling conflicts.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-eve-double-booking">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Double-Booking Detector</h1>
+    <p class="sharepage__lede">Interval shape on object input — sort depositions by start time, then a single scan comparing each event&#39;s start against the furthest end seen so far to surface scheduling conflicts.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Given an array of {caseId, start, end} depositions for one attorney, return an array of [caseId, caseId] pairs that overlap in time (the attorney can&#39;t be in two places at once).</p>
+    <p class="sharepage__note">Expected output: <code>[[&quot;A-101&quot;,&quot;B-205&quot;],[&quot;C-309&quot;,&quot;D-412&quot;]]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Sort by start, scan against furthest end</strong> · <code>O(n log n) / O(n)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">const depositions = [
+  { caseId: &#39;A-101&#39;, start: &#39;09:00&#39;, end: &#39;10:30&#39; },
+  { caseId: &#39;B-205&#39;, start: &#39;10:00&#39;, end: &#39;11:00&#39; },
+  { caseId: &#39;C-309&#39;, start: &#39;11:00&#39;, end: &#39;12:00&#39; },
+  { caseId: &#39;D-412&#39;, start: &#39;11:30&#39;, end: &#39;13:00&#39; }
+];
+
+function findConflicts(events) {
+  const sorted = [...events].sort((a, b) =&gt;
+    a.start &lt; b.start ? -1 : a.start &gt; b.start ? 1 : 0
+  );
+  const conflicts = [];
+  let last = sorted[0];
+  for (let i = 1; i &lt; sorted.length; i++) {
+    const curr = sorted[i];
+    if (curr.start &lt; last.end) {
+      conflicts.push([last.caseId, curr.caseId]);
+    }
+    if (curr.end &gt; last.end) last = curr;
+  }
+  return conflicts;
+}
+
+console.log(JSON.stringify(findConflicts(depositions)));</code></pre>
+    <ul class="sharepage__notes"><li>Sort by start time first — overlap logic only holds once events are in chronological order.</li><li>Track the event with the furthest end seen so far, not just the immediately previous one: a long early deposition can overlap several later ones, which a bare <code>i-1</code> comparison would miss.</li><li>The overlap test is strict — <code>curr.start &lt; last.end</code>. Touching boundaries (one ends exactly when the next starts) are NOT a conflict.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why sort the events by start time before scanning for conflicts?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Sorting removes duplicate depositions</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Overlap detection compares each event to earlier ones — &#39;earlier&#39; only means something on a chronologically ordered list <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> JavaScript requires arrays to be sorted before a for loop</li>
+        <li><span class="sharepage__key">D</span> Sorting converts the time strings into Date objects</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Conflict detection is about whether an event starts before an earlier one ends. &#39;Earlier&#39; is only well-defined once the events are sorted by start time.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why compare each event against the event with the FURTHEST end seen so far, rather than just the immediately previous event?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It makes the scan run faster</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A long early deposition can overlap several later ones; comparing only to the immediately previous event would miss those conflicts <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> JavaScript cannot compare two array elements directly</li>
+        <li><span class="sharepage__key">D</span> Sorting by start guarantees the previous element is always the closest in time</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Once sorted by start, the previous element isn&#39;t necessarily the one that ends latest. A 9:00–13:00 event overlaps everything starting before 13:00 — you must compare against the furthest-reaching end, not just index i-1.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Given <code>curr</code> starts after <code>prev</code>, what condition means they overlap?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> curr.start &lt;= prev.start</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> curr.start &lt; prev.end <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> curr.end &lt; prev.end</li>
+        <li><span class="sharepage__key">D</span> curr.start &gt; prev.end</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If the later event starts before the earlier one has ended (<code>curr.start &lt; prev.end</code>), the two intervals overlap in time.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> One deposition ends at 11:00 and the next starts at exactly 11:00. Using <code>curr.start &lt; last.end</code>, is that a conflict?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Yes — they touch, so they collide</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> No — the test is strict <code>&lt;</code>, so a shared boundary is not an overlap <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Yes — adjacent events in the sorted array always conflict</li>
+        <li><span class="sharepage__key">D</span> Only if the two share the same caseId</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>&#39;11:00&#39; &lt; &#39;11:00&#39;</code> is false, so back-to-back events that merely touch are not flagged. This matches reality: you can finish one deposition and start the next at the same minute.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Sort the events by start ascending, grab the first as <code>last</code>, and write the overlap test for the next event.</p>
+      <pre class="sharepage__code"><code class="language-js">const evs = [
+  { id: &#39;X&#39;, start: &#39;10:00&#39;, end: &#39;11:00&#39; },
+  { id: &#39;Y&#39;, start: &#39;09:00&#39;, end: &#39;10:30&#39; }
+];
+const sorted = [...evs].___((a, b) =&gt; a.start &lt; b.start ? -1 : 1);
+const last = sorted[___];
+const curr = sorted[1];
+const conflict = curr.start ___ last.end;
+console.log(sorted[0].id, conflict);</code></pre>
+      <p><strong>Answers:</strong> <code>sort</code>, <code>0</code>, <code>&lt;</code></p>
+      <p class="sharepage__note">Expected output: <code>Y true</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Record a conflicting pair, then advance <code>last</code> only when the current event reaches further.</p>
+      <pre class="sharepage__code"><code class="language-js">const conflicts = [];
+let last = { caseId: &#39;A&#39;, end: &#39;10:30&#39; };
+const curr = { caseId: &#39;B&#39;, start: &#39;10:00&#39;, end: &#39;11:00&#39; };
+if (curr.start ___ last.end) conflicts.___([last.caseId, curr.caseId]);
+if (curr.end &gt; last.end) last = ___;
+console.log(JSON.stringify(conflicts[0]), last.caseId);</code></pre>
+      <p><strong>Answers:</strong> <code>&lt;</code>, <code>push</code>, <code>curr</code></p>
+      <p class="sharepage__note">Expected output: <code>[&quot;A&quot;,&quot;B&quot;] B</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Given an array of {caseId, start, end} depositions for one attorney, return an array of [caseId, caseId] pairs that overlap in time (the attorney can&#39;t be in two places at once).</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Sort by start time first, then walk the list once.</li><li>Keep a reference to the event with the furthest end so far; compare each new event&#39;s start against it.</li><li>Overlap is strict: <code>curr.start &lt; last.end</code>. Advance <code>last</code> when <code>curr.end &gt; last.end</code>.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">const depositions = [
+  { caseId: &#39;A-101&#39;, start: &#39;09:00&#39;, end: &#39;10:30&#39; },
+  { caseId: &#39;B-205&#39;, start: &#39;10:00&#39;, end: &#39;11:00&#39; },
+  { caseId: &#39;C-309&#39;, start: &#39;11:00&#39;, end: &#39;12:00&#39; },
+  { caseId: &#39;D-412&#39;, start: &#39;11:30&#39;, end: &#39;13:00&#39; }
+];
+
+function findConflicts(events) {
+  const sorted = [...events].sort((a, b) =&gt;
+    a.start &lt; b.start ? -1 : a.start &gt; b.start ? 1 : 0
+  );
+  const conflicts = [];
+  let last = sorted[0];
+  for (let i = 1; i &lt; sorted.length; i++) {
+    const curr = sorted[i];
+    if (curr.start &lt; last.end) {
+      conflicts.push([last.caseId, curr.caseId]);
+    }
+    if (curr.end &gt; last.end) last = curr;
+  }
+  return conflicts;
+}
+
+console.log(JSON.stringify(findConflicts(depositions)));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-eve-double-booking","title":"Double-Booking Detector","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why sort the events by start time before scanning for conflicts?","options":["Sorting removes duplicate depositions","Overlap detection compares each event to earlier ones — 'earlier' only means something on a chronologically ordered list","JavaScript requires arrays to be sorted before a for loop","Sorting converts the time strings into Date objects"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why compare each event against the event with the FURTHEST end seen so far, rather than just the immediately previous event?","options":["It makes the scan run faster","A long early deposition can overlap several later ones; comparing only to the immediately previous event would miss those conflicts","JavaScript cannot compare two array elements directly","Sorting by start guarantees the previous element is always the closest in time"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Given `curr` starts after `prev`, what condition means they overlap?","options":["curr.start \u003c= prev.start","curr.start \u003c prev.end","curr.end \u003c prev.end","curr.start > prev.end"],"answer":1,"answerLetter":"B"},{"n":4,"q":"One deposition ends at 11:00 and the next starts at exactly 11:00. Using `curr.start \u003c last.end`, is that a conflict?","options":["Yes — they touch, so they collide","No — the test is strict `\u003c`, so a shared boundary is not an overlap","Yes — adjacent events in the sorted array always conflict","Only if the two share the same caseId"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Sort the events by start ascending, grab the first as `last`, and write the overlap test for the next event.","answers":["sort","0","\u003c"]},{"n":2,"prompt":"Record a conflicting pair, then advance `last` only when the current event reaches further.","answers":["\u003c","push","curr"]}],"L3":[{"n":1,"prompt":"Given an array of {caseId, start, end} depositions for one attorney, return an array of [caseId, caseId] pairs that overlap in time (the attorney can't be in two places at once).","expectedOutput":"[[\"A-101\",\"B-205\"],[\"C-309\",\"D-412\"]]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-eve-double-booking">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

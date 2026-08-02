@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Search Rotated Array — JS Drill</title>
+<meta name="description" content="Binary search on a rotated sorted array. At each step one half is sorted — check if target lies inside. O(log n).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-rotated">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Search Rotated Array — JS Drill">
+<meta property="og:description" content="Binary search on a rotated sorted array. At each step one half is sorted — check if target lies inside. O(log n).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-rotated">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Binary Search</p>
+    <h1>Search Rotated Array</h1>
+    <p class="sharepage__lede">Binary search on a rotated sorted array. At each step one half is sorted — check if target lies inside. O(log n).</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Binary Search</span> <span class="ds-chip">9 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>search(nums, target)</code> for a rotated sorted array. Return the index of target, or -1. Log <code>search([4,5,6,7,0,1,2], 0)</code>.</p>
+    <p class="sharepage__note">Expected output: <code>4</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function search(nums, target) {
+  let l = 0, r = nums.length - 1;
+  while (l &lt;= r) {
+    const m = Math.floor((l + r) / 2);
+    if (nums[m] === target) return m;
+    // Invariant: after any rotation at least ONE half is still sorted. Identify it.
+    if (nums[l] &lt;= nums[m]) {
+      // left half [l..m] is sorted
+      // If target lies in the sorted-left range, discard the right; else discard the left.
+      if (nums[l] &lt;= target &amp;&amp; target &lt; nums[m]) r = m - 1;
+      else l = m + 1;
+    } else {
+      // right half [m..r] is sorted
+      if (nums[m] &lt; target &amp;&amp; target &lt;= nums[r]) l = m + 1;
+      else r = m - 1;
+    }
+  }
+  return -1;
+}
+// Time O(log n), Space O(1)</code></pre>
+    <ul class="sharepage__notes"><li>Key: after any rotation, at least ONE of [l..m] or [m..r] is still sorted.</li><li><code>nums[l] &lt;= nums[m]</code> (inclusive) — equality handles single-element left half.</li><li>Boundary strictness matters: <code>nums[l] &lt;= target &amp;&amp; target &lt; nums[m]</code> avoids re-testing nums[m].</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Find-pivot-first, then plain BS (two-pass) <code>O(log n) / O(1)</code></h3>
+      <p>If you find the one-pass invariant hard to reason about under pressure, decompose into two explicit binary searches: first find the rotation pivot (index of the minimum), then pick the correct sorted half and run a standard binary search. Both passes are O(log n) so the total is still O(log n) / O(1) — same complexity, clearer structure.</p>
+      <pre class="sharepage__code"><code class="language-js">function search(nums, target) {
+  const n = nums.length;
+  // Pass 1: find the pivot (index of minimum) using right-anchor find-min.
+  let pl = 0, pr = n - 1;
+  while (pl &lt; pr) {
+    const pm = Math.floor((pl + pr) / 2);
+    if (nums[pm] &gt; nums[pr]) pl = pm + 1;
+    else pr = pm;
+  }
+  const pivot = pl;
+  // Pass 2: binary-search the appropriate sorted half.
+  let l, r;
+  if (target &gt;= nums[pivot] &amp;&amp; target &lt;= nums[n - 1]) {
+    l = pivot; r = n - 1;
+  } else {
+    l = 0; r = pivot - 1;
+  }
+  while (l &lt;= r) {
+    const m = Math.floor((l + r) / 2);
+    if (nums[m] === target) return m;
+    if (nums[m] &lt; target) l = m + 1;
+    else r = m - 1;
+  }
+  return -1;
+}
+console.log(search([4,5,6,7,0,1,2], 0));</code></pre>
+      <ul class="sharepage__notes"><li>Pass 1 is exactly the Find-Minimum-in-Rotated-Array algorithm (right-anchor BS, r=m on &lt;=).</li><li>After finding pivot, the problem reduces to two standard sorted sub-arrays — pick the one that can contain target by comparing to the array&#39;s endpoints.</li><li>Same O(log n) / O(1) complexity as the one-pass version; the constant factor is slightly higher (two loops), but correctness is easier to argue.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What invariant makes binary search still work after rotation?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The array remains globally sorted after rotation because rotation preserves relative order</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> At every step, at least one of [l..m] or [m..r] is sorted <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The midpoint <code>m</code> always lands on or adjacent to the rotation pivot, so it can be detected and handled directly</li>
+        <li><span class="sharepage__key">D</span> <code>nums[l]</code> and <code>nums[r]</code> always bound <code>target</code> from both sides after the first iteration</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(1)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(log n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n)</li>
+        <li><span class="sharepage__key">D</span> O(sqrt(n))</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> How do you decide which half is sorted?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Compare nums[m] with target — equal means the sorted half is the one containing m</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Compare nums[l] with nums[m]; if nums[l] &lt;= nums[m] the left half is sorted <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Compare nums[l] with nums[r] — if nums[l] &lt;= nums[r] the whole array is sorted, otherwise the right half is</li>
+        <li><span class="sharepage__key">D</span> Compute the rotation index first via <code>nums.indexOf(Math.min(nums[l], nums[r]))</code> and split on it</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> After identifying the sorted half, what do you check?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Whether nums[m] is closer to target than nums[l] is, and step toward the closer end</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Whether target lies WITHIN the sorted half&#39;s value range — if yes, recurse there <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Whether the unsorted half is longer than the sorted half; recurse into the longer one to make better progress</li>
+        <li><span class="sharepage__key">D</span> Whether <code>nums[l] + nums[r] === 2 * target</code>, the centerpoint test</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> Why is it guaranteed that at least one of the two halves is always sorted?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because the array is sorted globally</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because a single rotation creates exactly one &#39;break&#39; point, which can fall in only one half — the other half is unbroken <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because m is always the pivot</li>
+        <li><span class="sharepage__key">D</span> It is not guaranteed; sometimes neither half is sorted</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> One rotation produces a single descent point; it lands in one half, leaving the other half entirely ascending.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> The check uses <code>nums[l] &lt;= nums[m]</code> (with the <code>=</code>) rather than <code>nums[l] &lt; nums[m]</code>. Why include equality?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Equality is needed so the half-check matches the loop&#39;s <code>l &lt;= r</code> condition — both must use the same operator for the invariant to hold</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> When l == m (a single-element left side, e.g. 2-element subarray), <code>&lt;</code> would wrongly flag the right half as sorted and mis-branch <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Without <code>=</code>, the algorithm would silently drop the element at index <code>l</code> from consideration each iteration</li>
+        <li><span class="sharepage__key">D</span> <code>&lt;</code> would skip the case where the rotation point lands exactly on <code>m</code>, since <code>nums[l] === nums[m]</code> signals m IS the pivot</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> When the left half is a single element, nums[l] equals nums[m]; <code>&lt;=</code> correctly treats it as sorted, while <code>&lt;</code> would mis-route a 2-element subarray.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> If the array contains DUPLICATES, what happens to the algorithm?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It still runs in O(log n) unchanged</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The <code>nums[l] &lt;= nums[m]</code> test can be ambiguous (e.g. [1,1,1,2,1]), forcing an l++ fallback that degrades to O(n) worst case <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It returns the wrong index</li>
+        <li><span class="sharepage__key">D</span> It infinite-loops</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> When nums[l] == nums[m] == nums[r] you can&#39;t tell which half is sorted, so you advance l by one and lose the log-n guarantee (Search Rotated II).</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> For an array rotated by 0 (still in original ascending order), how does the template behave?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It crashes</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> <code>nums[l] &lt;= nums[m]</code> is always true, so it always takes the left-sorted branch — it degrades gracefully to plain binary search <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It always returns -1</li>
+        <li><span class="sharepage__key">D</span> It enters the right-sorted branch</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With no rotation the whole array is the sorted-left half every step, reducing to standard binary search.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> The Find-Minimum-in-Rotated-Array variant uses the same skeleton but differs how?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It searches for the maximum instead</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It anchors comparisons to nums[r] and converges to the pivot itself rather than testing against a target value <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It requires the array to be sorted first</li>
+        <li><span class="sharepage__key">D</span> It uses a hash map</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Find-Minimum compares nums[m] to nums[r] to decide which side the pivot is on, converging on the rotation point with no target.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the rotated binary search.</p>
+      <pre class="sharepage__code"><code class="language-js">function search(nums, target) {
+  let l = 0, r = nums.length - 1;
+  while (l ___ r) {
+    const m = Math.floor((l + r) / 2);
+    if (nums[m] === target) return m;
+    if (nums[l] ___ nums[m]) {
+      if (nums[l] &lt;= target &amp;&amp; target &lt; nums[m]) r = m - 1;
+      else l = m + 1;
+    } else {
+      if (nums[m] &lt; target &amp;&amp; target &lt;= nums[r]) l = m + ___;
+      else r = m - 1;
+    }
+  }
+  return ___;
+}
+console.log(search([4,5,6,7,0,1,2], 0));</code></pre>
+      <p><strong>Answers:</strong> <code>&lt;=</code>, <code>&lt;=</code>, <code>1</code>, <code>-1</code></p>
+      <p class="sharepage__note">Expected output: <code>4</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>search(nums, target)</code> for a rotated sorted array. Return the index of target, or -1. Log <code>search([4,5,6,7,0,1,2], 0)</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Find which half is sorted by comparing nums[l] to nums[m].</li><li>Test whether target lies inside that sorted half.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function search(nums, target) {
+  let l = 0, r = nums.length - 1;
+  while (l &lt;= r) {
+    const m = Math.floor((l + r) / 2);
+    if (nums[m] === target) return m;
+    // Invariant: after any rotation at least ONE half is still sorted. Identify it.
+    if (nums[l] &lt;= nums[m]) {
+      // Left half [l..m] sorted. If target is in that range, search it; else the other.
+      if (nums[l] &lt;= target &amp;&amp; target &lt; nums[m]) r = m - 1;
+      else l = m + 1;
+    } else {
+      // Right half [m..r] sorted. Same test, mirrored.
+      if (nums[m] &lt; target &amp;&amp; target &lt;= nums[r]) l = m + 1;
+      else r = m - 1;
+    }
+  }
+  return -1;
+}
+console.log(search([4,5,6,7,0,1,2], 0));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-rotated","title":"Search Rotated Array","section":"Binary Search","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What invariant makes binary search still work after rotation?","options":["The array remains globally sorted after rotation because rotation preserves relative order","At every step, at least one of [l..m] or [m..r] is sorted","The midpoint `m` always lands on or adjacent to the rotation pivot, so it can be detected and handled directly","`nums[l]` and `nums[r]` always bound `target` from both sides after the first iteration"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Time complexity?","options":["O(1)","O(log n)","O(n)","O(sqrt(n))"],"answer":1,"answerLetter":"B"},{"n":3,"q":"How do you decide which half is sorted?","options":["Compare nums[m] with target — equal means the sorted half is the one containing m","Compare nums[l] with nums[m]; if nums[l] \u003c= nums[m] the left half is sorted","Compare nums[l] with nums[r] — if nums[l] \u003c= nums[r] the whole array is sorted, otherwise the right half is","Compute the rotation index first via `nums.indexOf(Math.min(nums[l], nums[r]))` and split on it"],"answer":1,"answerLetter":"B"},{"n":4,"q":"After identifying the sorted half, what do you check?","options":["Whether nums[m] is closer to target than nums[l] is, and step toward the closer end","Whether target lies WITHIN the sorted half's value range — if yes, recurse there","Whether the unsorted half is longer than the sorted half; recurse into the longer one to make better progress","Whether `nums[l] + nums[r] === 2 * target`, the centerpoint test"],"answer":1,"answerLetter":"B"},{"n":5,"q":"Why is it guaranteed that at least one of the two halves is always sorted?","options":["Because the array is sorted globally","Because a single rotation creates exactly one 'break' point, which can fall in only one half — the other half is unbroken","Because m is always the pivot","It is not guaranteed; sometimes neither half is sorted"],"answer":1,"answerLetter":"B"},{"n":6,"q":"The check uses `nums[l] \u003c= nums[m]` (with the `=`) rather than `nums[l] \u003c nums[m]`. Why include equality?","options":["Equality is needed so the half-check matches the loop's `l \u003c= r` condition — both must use the same operator for the invariant to hold","When l == m (a single-element left side, e.g. 2-element subarray), `\u003c` would wrongly flag the right half as sorted and mis-branch","Without `=`, the algorithm would silently drop the element at index `l` from consideration each iteration","`\u003c` would skip the case where the rotation point lands exactly on `m`, since `nums[l] === nums[m]` signals m IS the pivot"],"answer":1,"answerLetter":"B"},{"n":7,"q":"If the array contains DUPLICATES, what happens to the algorithm?","options":["It still runs in O(log n) unchanged","The `nums[l] \u003c= nums[m]` test can be ambiguous (e.g. [1,1,1,2,1]), forcing an l++ fallback that degrades to O(n) worst case","It returns the wrong index","It infinite-loops"],"answer":1,"answerLetter":"B"},{"n":8,"q":"For an array rotated by 0 (still in original ascending order), how does the template behave?","options":["It crashes","`nums[l] \u003c= nums[m]` is always true, so it always takes the left-sorted branch — it degrades gracefully to plain binary search","It always returns -1","It enters the right-sorted branch"],"answer":1,"answerLetter":"B"},{"n":9,"q":"The Find-Minimum-in-Rotated-Array variant uses the same skeleton but differs how?","options":["It searches for the maximum instead","It anchors comparisons to nums[r] and converges to the pivot itself rather than testing against a target value","It requires the array to be sorted first","It uses a hash map"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the rotated binary search.","answers":["\u003c=","\u003c=","1","-1"]}],"L3":[{"n":1,"prompt":"Write `search(nums, target)` for a rotated sorted array. Return the index of target, or -1. Log `search([4,5,6,7,0,1,2], 0)`.","expectedOutput":"4"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-rotated">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

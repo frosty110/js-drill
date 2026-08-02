@@ -102,12 +102,12 @@ This runs every L2 fill + L3 canonical against the app's runner semantics, diffs
 - If a banned-syntax hit fires AND the lesson is genuinely about that construct: add the lesson id to `BANNED_SYNTAX_EXEMPTIONS` in `tools/validate-data.js` with a one-line `// reason` comment. Otherwise: rewrite the canonical to use the allowed idiom.
 - If a density warning fires (`L1 < 3` or `L2 < 2`): add the missing questions/exercises. This is non-fatal but the bar.
 
-## Step 6 — Flip to `"full"` and report
+## Step 6 — Flip to `"full"`, regenerate, report
 
 Once the validator is green:
 
 1. Change `"status": "stub"` → `"status": "full"` in both the lesson JSON and the manifest entry.
-2. Re-run `node tools/validate-data.js` to confirm.
+2. Run `node tools/check-all.js --fix`. This re-runs the validator, regenerates the crawlable share page for the new lesson (`p/<id>/index.html` — committed output that GitHub Pages serves), and records the lesson in the content-order lock. **Commit `p/`, `sitemap.xml` and `data/content-order.lock.json` alongside the lesson JSON.**
 3. Report:
    - Lesson IDs added
    - Validator output line (`N passed, 0 failed.`)

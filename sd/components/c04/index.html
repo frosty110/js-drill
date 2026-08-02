@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Messaging &amp; Queues — Building Blocks</title>
+<meta name="description" content="Asynchronous messaging decouples producers from consumers so systems can buffer bursts, absorb load spikes, and let components fail and recover independently. This section contrasts the two core delivery shapes (point-to-point queues vs pub/sub fan-out) and the dominant brokers (Kafka&#39;s partitioned log vs RabbitMQ&#39;s exchange/queue model vs managed SQS), plus the delivery-semantics tradeoffs that force idempotent consumers.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c04">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Messaging &amp; Queues — Building Blocks">
+<meta property="og:description" content="Asynchronous messaging decouples producers from consumers so systems can buffer bursts, absorb load spikes, and let components fail and recover independently. This section contrasts the two core delivery shapes (point-to-point queues vs pub/sub fan-out) and the dominant brokers (Kafka&#39;s partitioned log vs RabbitMQ&#39;s exchange/queue model vs managed SQS), plus the delivery-semantics tradeoffs that force idempotent consumers.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c04">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/components/">Building Blocks</a></p>
+    <h1>Messaging &amp; Queues</h1>
+    <p class="sharepage__lede">Asynchronous messaging decouples producers from consumers so systems can buffer bursts, absorb load spikes, and let components fail and recover independently. This section contrasts the two core delivery shapes (point-to-point queues vs pub/sub fan-out) and the dominant brokers (Kafka&#39;s partitioned log vs RabbitMQ&#39;s exchange/queue model vs managed SQS), plus the delivery-semantics tradeoffs that force idempotent consumers.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Building Blocks</span> <span class="ds-chip">16 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>A point-to-point queue delivers each message to exactly one consumer; pub/sub fans a copy out to every subscriber.</li><li>Async messaging buys decoupling, buffering, and load smoothing — producers keep going even when consumers are slow or down.</li><li>Kafka is a distributed append-only log: partitions are the unit of parallelism, ordering is guaranteed only WITHIN a partition, consumers pull and track offsets, and retention lets them replay.</li><li>RabbitMQ is a smart broker: producers publish to exchanges (direct/topic/fanout) that route via bindings into queues; it pushes to consumers, waits for acks, then deletes the message.</li><li>At-least-once is the common default and requires idempotent consumers; exactly-once is hard/costly and is usually approximated as effectively-once via idempotency + dedup.</li><li>Dead-letter queues capture poison messages that exceed max retries so one bad message can&#39;t block the queue.</li><li>Backpressure and consumer groups let the system match consumption rate to production rate and scale out horizontally.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">16</span></h2>
+    <p class="sharepage__note">Positions 1–16 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the defining difference between a point-to-point message queue and a pub/sub topic?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> A queue delivers each message to exactly one consumer; a pub/sub topic delivers a copy of each message to every subscriber <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> A queue guarantees ordering while pub/sub never preserves order</li>
+        <li><span class="sharepage__key">C</span> A queue is always in-memory while pub/sub is always durable on disk</li>
+        <li><span class="sharepage__key">D</span> A queue supports multiple producers while pub/sub allows only one publisher</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> In point-to-point, competing consumers share a queue and each message is handled by exactly one of them (load balancing work). In pub/sub, every subscriber to the topic receives its own copy (fan-out). Ordering and durability are separate, broker-specific concerns, not what distinguishes the two shapes.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which benefit is the PRIMARY reason to put an async message queue between a producer and consumer?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It guarantees the message is processed with lower latency than a direct call</li>
+        <li><span class="sharepage__key">B</span> It removes the need for the consumer to be idempotent</li>
+        <li><span class="sharepage__key">C</span> It provides exactly-once delivery for free</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> It decouples the two: the producer can keep accepting work and the queue buffers/smooths load even when the consumer is slow or temporarily down <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Async messaging&#39;s core value is decoupling plus buffering — a traffic spike or a slow/failed consumer no longer blocks the producer, because the queue absorbs the backlog. Async typically adds latency (not reduces it), and it makes idempotency MORE important, not less.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In Kafka, ordering of messages is guaranteed under which condition?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Across the entire topic, regardless of how many partitions it has</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Only within a single partition; there is no total ordering across partitions of a topic <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Only when there is exactly one consumer group</li>
+        <li><span class="sharepage__key">D</span> Only for messages published within the same one-second window</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Kafka guarantees order only within a partition — messages with the same key hash to the same partition and stay ordered there. Across partitions there is no global order, which is precisely why partitioning is the unit of parallelism: you trade total ordering for throughput.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What role does a partition play in Kafka?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It is a backup copy of the topic kept for disaster recovery</li>
+        <li><span class="sharepage__key">B</span> It is a temporary in-memory buffer flushed to the log every few seconds</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It is the unit of parallelism and ordering: a topic is split into partitions, each an ordered append-only log consumed independently <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It is the access-control boundary that restricts which producers may write</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A Kafka topic is divided into partitions, each an ordered, append-only log. Parallelism scales with partition count because consumers in a group split partitions among themselves, and ordering is maintained per partition. Replicas (not partitions) provide the backup/DR copies.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How do consumer groups divide work across the partitions of a Kafka topic?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Each partition is assigned to at most one consumer within a group, so adding consumers beyond the partition count leaves some idle <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Every consumer in the group reads every partition, and duplicates are filtered later</li>
+        <li><span class="sharepage__key">C</span> The broker pushes each message to whichever consumer is least busy at that instant</li>
+        <li><span class="sharepage__key">D</span> Consumers round-robin individual messages regardless of partition</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Within a consumer group, each partition is consumed by exactly one member, which preserves per-partition order and spreads load. The direct consequence: you can&#39;t have more actively-consuming members than partitions — extras sit idle. Different groups, however, each get the full stream independently.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is a Kafka consumer offset, and what does it enable?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A byte-alignment padding value that keeps records page-aligned on disk</li>
+        <li><span class="sharepage__key">B</span> A countdown that deletes a message once every consumer has acknowledged it</li>
+        <li><span class="sharepage__key">C</span> A priority weight the broker uses to reorder messages before delivery</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> The consumer&#39;s position (a monotonically increasing index) in a partition&#39;s log, which — combined with retention — lets it re-read or replay past messages <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An offset is a consumer&#39;s committed position within a partition. Because Kafka retains messages for a configured period regardless of consumption, a consumer can rewind its offset to reprocess history or catch up after downtime — the replay capability that distinguishes a log from a delete-on-ack queue.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which statement best contrasts Kafka&#39;s delivery model with RabbitMQ&#39;s?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Kafka pushes messages and deletes them after ack; RabbitMQ is a pull-based log with retention</li>
+        <li><span class="sharepage__key">B</span> Both are pull-based logs with identical retention semantics</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Kafka is a pull-based retained log (consumers poll and track offsets); RabbitMQ is a push-based broker that delivers to consumers and removes messages after ack <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Both push messages and delete them immediately on delivery</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Kafka consumers pull from a retained log and manage their own offsets, so messages persist for replay. RabbitMQ pushes messages to consumers and, once acknowledged, removes them from the queue — the classic smart-broker/dumb-consumer model versus Kafka&#39;s dumb-broker/smart-consumer log.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In RabbitMQ, how does a published message reach the right queue?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> The producer publishes to an exchange, which uses bindings and a routing type (direct, topic, or fanout) to route the message into one or more queues <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> The producer names the destination queue directly and the broker appends to it</li>
+        <li><span class="sharepage__key">C</span> Consumers subscribe to a partition and the broker hashes the key to pick one</li>
+        <li><span class="sharepage__key">D</span> A central offset table maps each message id to its queue</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> RabbitMQ producers publish to an exchange, never directly to a queue. The exchange type plus bindings decide routing: direct matches an exact routing key, topic matches wildcard patterns, and fanout broadcasts to every bound queue. This indirection is what lets one publish fan out or route selectively.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A RabbitMQ fanout exchange behaves most like which messaging pattern?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A priority queue that serves high-priority messages first</li>
+        <li><span class="sharepage__key">B</span> Point-to-point work distribution among competing consumers</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Pub/sub, because it copies each message to every queue bound to it regardless of routing key <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> A dead-letter queue for messages that failed processing</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A fanout exchange ignores the routing key and delivers a copy to every bound queue — the fan-out semantics of pub/sub. Direct and topic exchanges, by contrast, route selectively by key, and a single queue with competing consumers gives point-to-point work distribution.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does an at-least-once delivery guarantee imply for consumer design?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Consumers may safely assume each message arrives exactly one time</li>
+        <li><span class="sharepage__key">B</span> Messages may be silently dropped, so consumers must poll a backup store</li>
+        <li><span class="sharepage__key">C</span> The broker deduplicates automatically, so consumers need no special handling</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Consumers can receive a message more than once (e.g. after a redelivery on missing ack), so processing must be idempotent to avoid double effects <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> At-least-once is the common default: if an ack is lost or a consumer crashes mid-processing, the broker redelivers, so the same message can be seen twice. The consumer must therefore be idempotent (or dedup by message id). At-most-once trades duplicates for possible loss; neither the broker nor at-least-once dedups for you.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why is true exactly-once delivery considered hard, and how is it usually achieved in practice?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It requires atomic coordination between broker and consumer side-effects across failures; in practice systems approximate it as effectively-once via at-least-once delivery plus idempotency/deduplication <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It is trivial; every modern broker provides it by default with no cost</li>
+        <li><span class="sharepage__key">C</span> It is achieved by disabling acknowledgements so no redelivery can occur</li>
+        <li><span class="sharepage__key">D</span> It only works if there is a single producer and a single consumer with no retries</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Exactly-once end-to-end demands that message delivery and the consumer&#39;s side effects commit atomically despite crashes and retries, which is expensive and often impossible across external systems. The pragmatic answer is effectively-once: deliver at-least-once and make the consumer idempotent or dedup on a message key so reprocessing is harmless.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In Amazon SQS, what does the visibility timeout do?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It deletes a message automatically after that many seconds whether or not it was processed</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It hides an in-flight message from other consumers for a period after one consumer receives it; if that consumer doesn&#39;t delete it in time, the message becomes visible again for redelivery <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It sets how long the queue waits before creating a message</li>
+        <li><span class="sharepage__key">D</span> It caps the total number of messages the queue can hold</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> When a consumer receives an SQS message it isn&#39;t deleted — it&#39;s hidden for the visibility timeout. The consumer must explicitly delete it after successful processing; if it fails or is too slow, the timeout expires and the message reappears for another consumer. This redelivery is exactly why standard SQS is at-least-once.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does an SQS FIFO queue differ from a standard SQS queue?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> FIFO queues drop messages under load while standard queues never do</li>
+        <li><span class="sharepage__key">B</span> Standard queues guarantee ordering; FIFO queues explicitly randomize order</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> FIFO queues preserve strict ordering and provide exactly-once processing within a dedup window, whereas standard queues offer best-effort ordering and at-least-once delivery at higher throughput <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> FIFO queues are push-based while standard queues are pull-based</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Standard SQS maximizes throughput with best-effort ordering and at-least-once delivery (duplicates possible). FIFO queues trade some throughput for strict first-in-first-out order and exactly-once processing within a 5-minute deduplication window, using message group ids to order related messages.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What problem does a dead-letter queue (DLQ) solve?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It speeds up delivery by pre-fetching messages before consumers ask</li>
+        <li><span class="sharepage__key">B</span> It stores acknowledged messages so producers can confirm receipt</li>
+        <li><span class="sharepage__key">C</span> It compresses old messages to reclaim disk space</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> It captures &#39;poison&#39; messages that repeatedly fail processing (exceeding a max-retry count) so they stop blocking the main queue and can be inspected later <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A single message that always throws can be redelivered forever, stalling the queue and wasting retries. A DLQ moves a message aside once it exceeds the max-retry threshold, isolating the poison message for later debugging while normal processing continues.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which scenario most justifies a SYNCHRONOUS request/response call instead of async messaging?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A background email that can be sent minutes later without the user waiting</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The caller needs the result immediately to continue — e.g. a checkout must know the payment authorization outcome before showing a confirmation <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A firehose of analytics events that should be buffered and processed in batches</li>
+        <li><span class="sharepage__key">D</span> Fanning one order event out to inventory, shipping, and billing services independently</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Synchronous calls fit request/response flows where the caller must have the answer now to proceed and can tolerate blocking on the dependency. Fire-and-forget work, high-volume event streams, and multi-consumer fan-out are the textbook cases for async messaging, which decouples timing at the cost of an immediate reply.</p>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>An interviewer says your order-processing consumer reads from an at-least-once queue. Explain what can go wrong and how you&#39;d design the consumer to be safe.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>At-least-once means the same message can be delivered more than once (redelivery after a lost ack or a crash mid-processing), so naive processing double-charges or double-ships.</li><li>Make the consumer idempotent: key the effect on a stable message/order id so reprocessing the same id is a no-op.</li><li>Deduplicate by recording processed message ids (e.g. an idempotency key row / unique constraint) and skipping ones already seen.</li><li>Only ack/commit the offset AFTER the side effect has durably committed, so a crash before commit safely redelivers.</li><li>Route repeat-failing (poison) messages to a dead-letter queue after N retries so one bad message can&#39;t block the queue.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> At-least-once delivery guarantees no loss but allows duplicates — a lost ack or a crash between doing the work and acknowledging causes redelivery. So I make the consumer idempotent: I derive a stable key from the order id and either use a unique constraint / idempotency table to detect and skip already-processed messages, or design the operation so applying it twice is harmless. I commit the offset only after the side effect is durably persisted, and I send messages that fail repeatedly to a dead-letter queue after a max-retry count so a poison message doesn&#39;t stall the pipeline. That gives me effectively-once behavior without paying for true exactly-once coordination.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"components","unit":"c04","title":"Messaging & Queues","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"What is the defining difference between a point-to-point message queue and a pub/sub topic?","options":["A queue delivers each message to exactly one consumer; a pub/sub topic delivers a copy of each message to every subscriber","A queue guarantees ordering while pub/sub never preserves order","A queue is always in-memory while pub/sub is always durable on disk","A queue supports multiple producers while pub/sub allows only one publisher"],"answer":0,"answerLetter":"A"},{"n":2,"type":"mc","prompt":"Which benefit is the PRIMARY reason to put an async message queue between a producer and consumer?","options":["It guarantees the message is processed with lower latency than a direct call","It removes the need for the consumer to be idempotent","It provides exactly-once delivery for free","It decouples the two: the producer can keep accepting work and the queue buffers/smooths load even when the consumer is slow or temporarily down"],"answer":3,"answerLetter":"D"},{"n":3,"type":"mc","prompt":"In Kafka, ordering of messages is guaranteed under which condition?","options":["Across the entire topic, regardless of how many partitions it has","Only within a single partition; there is no total ordering across partitions of a topic","Only when there is exactly one consumer group","Only for messages published within the same one-second window"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"What role does a partition play in Kafka?","options":["It is a backup copy of the topic kept for disaster recovery","It is a temporary in-memory buffer flushed to the log every few seconds","It is the unit of parallelism and ordering: a topic is split into partitions, each an ordered append-only log consumed independently","It is the access-control boundary that restricts which producers may write"],"answer":2,"answerLetter":"C"},{"n":5,"type":"mc","prompt":"How do consumer groups divide work across the partitions of a Kafka topic?","options":["Each partition is assigned to at most one consumer within a group, so adding consumers beyond the partition count leaves some idle","Every consumer in the group reads every partition, and duplicates are filtered later","The broker pushes each message to whichever consumer is least busy at that instant","Consumers round-robin individual messages regardless of partition"],"answer":0,"answerLetter":"A"},{"n":6,"type":"mc","prompt":"What is a Kafka consumer offset, and what does it enable?","options":["A byte-alignment padding value that keeps records page-aligned on disk","A countdown that deletes a message once every consumer has acknowledged it","A priority weight the broker uses to reorder messages before delivery","The consumer's position (a monotonically increasing index) in a partition's log, which — combined with retention — lets it re-read or replay past messages"],"answer":3,"answerLetter":"D"},{"n":7,"type":"mc","prompt":"Which statement best contrasts Kafka's delivery model with RabbitMQ's?","options":["Kafka pushes messages and deletes them after ack; RabbitMQ is a pull-based log with retention","Both are pull-based logs with identical retention semantics","Kafka is a pull-based retained log (consumers poll and track offsets); RabbitMQ is a push-based broker that delivers to consumers and removes messages after ack","Both push messages and delete them immediately on delivery"],"answer":2,"answerLetter":"C"},{"n":8,"type":"mc","prompt":"In RabbitMQ, how does a published message reach the right queue?","options":["The producer publishes to an exchange, which uses bindings and a routing type (direct, topic, or fanout) to route the message into one or more queues","The producer names the destination queue directly and the broker appends to it","Consumers subscribe to a partition and the broker hashes the key to pick one","A central offset table maps each message id to its queue"],"answer":0,"answerLetter":"A"},{"n":9,"type":"mc","prompt":"A RabbitMQ fanout exchange behaves most like which messaging pattern?","options":["A priority queue that serves high-priority messages first","Point-to-point work distribution among competing consumers","Pub/sub, because it copies each message to every queue bound to it regardless of routing key","A dead-letter queue for messages that failed processing"],"answer":2,"answerLetter":"C"},{"n":10,"type":"mc","prompt":"What does an at-least-once delivery guarantee imply for consumer design?","options":["Consumers may safely assume each message arrives exactly one time","Messages may be silently dropped, so consumers must poll a backup store","The broker deduplicates automatically, so consumers need no special handling","Consumers can receive a message more than once (e.g. after a redelivery on missing ack), so processing must be idempotent to avoid double effects"],"answer":3,"answerLetter":"D"},{"n":11,"type":"mc","prompt":"Why is true exactly-once delivery considered hard, and how is it usually achieved in practice?","options":["It requires atomic coordination between broker and consumer side-effects across failures; in practice systems approximate it as effectively-once via at-least-once delivery plus idempotency/deduplication","It is trivial; every modern broker provides it by default with no cost","It is achieved by disabling acknowledgements so no redelivery can occur","It only works if there is a single producer and a single consumer with no retries"],"answer":0,"answerLetter":"A"},{"n":12,"type":"mc","prompt":"In Amazon SQS, what does the visibility timeout do?","options":["It deletes a message automatically after that many seconds whether or not it was processed","It hides an in-flight message from other consumers for a period after one consumer receives it; if that consumer doesn't delete it in time, the message becomes visible again for redelivery","It sets how long the queue waits before creating a message","It caps the total number of messages the queue can hold"],"answer":1,"answerLetter":"B"},{"n":13,"type":"mc","prompt":"How does an SQS FIFO queue differ from a standard SQS queue?","options":["FIFO queues drop messages under load while standard queues never do","Standard queues guarantee ordering; FIFO queues explicitly randomize order","FIFO queues preserve strict ordering and provide exactly-once processing within a dedup window, whereas standard queues offer best-effort ordering and at-least-once delivery at higher throughput","FIFO queues are push-based while standard queues are pull-based"],"answer":2,"answerLetter":"C"},{"n":14,"type":"mc","prompt":"What problem does a dead-letter queue (DLQ) solve?","options":["It speeds up delivery by pre-fetching messages before consumers ask","It stores acknowledged messages so producers can confirm receipt","It compresses old messages to reclaim disk space","It captures 'poison' messages that repeatedly fail processing (exceeding a max-retry count) so they stop blocking the main queue and can be inspected later"],"answer":3,"answerLetter":"D"},{"n":15,"type":"mc","prompt":"Which scenario most justifies a SYNCHRONOUS request/response call instead of async messaging?","options":["A background email that can be sent minutes later without the user waiting","The caller needs the result immediately to continue — e.g. a checkout must know the payment authorization outcome before showing a confirmation","A firehose of analytics events that should be buffered and processed in batches","Fanning one order event out to inventory, shipping, and billing services independently"],"answer":1,"answerLetter":"B"},{"n":16,"type":"open","prompt":"An interviewer says your order-processing consumer reads from an at-least-once queue. Explain what can go wrong and how you'd design the consumer to be safe.","points":["At-least-once means the same message can be delivered more than once (redelivery after a lost ack or a crash mid-processing), so naive processing double-charges or double-ships.","Make the consumer idempotent: key the effect on a stable message/order id so reprocessing the same id is a no-op.","Deduplicate by recording processed message ids (e.g. an idempotency key row / unique constraint) and skipping ones already seen.","Only ack/commit the offset AFTER the side effect has durably committed, so a crash before commit safely redelivers.","Route repeat-failing (poison) messages to a dead-letter queue after N retries so one bad message can't block the queue."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c04">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

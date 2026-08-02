@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scale Primitives — Building Blocks</title>
+<meta name="description" content="The low-level distributed-systems building blocks you compose under the hood of a scalable design: consistent hashing, bloom filters, sharding strategies, quorums, idempotency keys, leader election, and failure detection.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c06">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Scale Primitives — Building Blocks">
+<meta property="og:description" content="The low-level distributed-systems building blocks you compose under the hood of a scalable design: consistent hashing, bloom filters, sharding strategies, quorums, idempotency keys, leader election, and failure detection.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c06">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/components/">Building Blocks</a></p>
+    <h1>Scale Primitives</h1>
+    <p class="sharepage__lede">The low-level distributed-systems building blocks you compose under the hood of a scalable design: consistent hashing, bloom filters, sharding strategies, quorums, idempotency keys, leader election, and failure detection.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Building Blocks</span> <span class="ds-chip">15 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Consistent hashing places keys and nodes on a ring so adding/removing a node remaps only ~K/N keys instead of nearly all of them.</li><li>Virtual nodes give each physical node many points on the ring, smoothing load imbalance and reducing variance.</li><li>A bloom filter is a probabilistic set-membership test with no false negatives but tunable false positives; you cannot delete from a standard one.</li><li>Sharding strategies trade off: range (ordered, good scans, hotspot risk) vs hash (even spread, no range scans) vs geo vs directory/lookup table.</li><li>Hotspots are mitigated by salting or composite keys that spread a hot value across shards.</li><li>A quorum with R + W &gt; N guarantees every read set overlaps the latest write set, so a read can see the most recent write.</li><li>Idempotency keys let a retried request be applied exactly once; leader election plus heartbeats keep a single coordinator alive without split-brain.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">15</span></h2>
+    <p class="sharepage__note">Positions 1–15 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What problem does consistent hashing primarily solve compared to a naive <code>hash(key) % N</code> placement?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It makes each lookup O(1) instead of O(log n)</li>
+        <li><span class="sharepage__key">B</span> It guarantees perfectly even key distribution with no configuration</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It avoids remapping nearly every key when the number of nodes N changes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It removes the need for replication because keys never move</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With <code>hash(key) % N</code>, changing N (adding/removing a node) alters the modulus for almost every key, so nearly all keys must move. Consistent hashing changes the placement of only the keys in one arc of the ring, roughly K/N of them.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In consistent hashing, which node owns a given key?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The node whose hash is numerically closest to the key&#39;s hash in either direction</li>
+        <li><span class="sharepage__key">B</span> The node with the most free capacity at write time</li>
+        <li><span class="sharepage__key">C</span> A node chosen by a central directory service per key</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> The first node encountered moving clockwise from the key&#39;s position on the ring <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Both keys and nodes are hashed onto the same ring; a key is assigned to the next node found walking clockwise from the key&#39;s position. Closest-in-either-direction and capacity-based schemes are different placement models.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Roughly how many keys move when one node is added to or removed from a consistent-hashing ring of N nodes?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> About K/N of the K total keys <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> About half of all keys</li>
+        <li><span class="sharepage__key">C</span> Nearly all K keys</li>
+        <li><span class="sharepage__key">D</span> Exactly one key per node</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Adding or removing a node only reassigns the keys in the affected arc, which is on average K/N of the K total keys. Remapping nearly all keys is the failure mode of <code>hash % N</code> that consistent hashing was designed to avoid.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why do consistent-hashing systems introduce virtual nodes (each physical node getting many ring positions)?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To eliminate the need for hashing keys at all</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> To smooth out load imbalance and reduce variance from an uneven ring layout <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> To guarantee strong consistency across replicas</li>
+        <li><span class="sharepage__key">D</span> To let range scans work efficiently on the ring</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With few points per node, random placement leaves some nodes owning much larger arcs than others. Giving each physical node many virtual positions averages out the arc sizes, evening the load and reducing variance.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which statement about a standard bloom filter is correct?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It can produce false negatives but never false positives</li>
+        <li><span class="sharepage__key">B</span> It produces neither false positives nor false negatives</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It can produce false positives but never false negatives <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It stores the actual elements so membership is always exact</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A bloom filter may report that an absent element is present (false positive), but a &#39;not present&#39; answer is always trustworthy — there are no false negatives. It stores only bits, not the elements themselves.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How is a bloom filter structured internally?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> An m-bit array with k independent hash functions setting/checking k bits per element <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> A balanced binary search tree of hashed keys</li>
+        <li><span class="sharepage__key">C</span> A sorted array of key fingerprints searched by binary search</li>
+        <li><span class="sharepage__key">D</span> A hash map from key to a presence boolean</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A bloom filter is an m-bit array; each element is run through k hash functions that set k bits, and membership is tested by checking whether all k bits are set. Tuning m and k trades space against the false-positive rate.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is a canonical use of a bloom filter in a storage engine?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To physically delete keys during compaction</li>
+        <li><span class="sharepage__key">B</span> To compress column values on disk</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> To skip an expensive disk lookup when the filter says a key is definitely absent <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> To keep replicas in sync via anti-entropy</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Because a bloom filter never yields false negatives, a &#39;definitely not present&#39; result lets the engine skip reading a segment or disk block entirely, avoiding costly I/O for keys that are absent. Positives still require the real lookup to confirm.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why can&#39;t you delete an element from a standard bloom filter by clearing its bits?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The bits are stored on immutable disk segments</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A given bit may be shared by other elements, so clearing it could create false negatives for them <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Bloom filters have no hash functions to locate the bits</li>
+        <li><span class="sharepage__key">D</span> Deletion would require rehashing the entire m-bit array</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Multiple elements can set the same bit, so clearing bits for one element could turn another element&#39;s lookup into a false negative — which breaks the filter&#39;s core guarantee. Deletion needs a variant like a counting bloom filter.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which is the key tradeoff between range-based and hash-based sharding?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Range sharding spreads load evenly but forbids scans; hash sharding preserves order but causes hotspots</li>
+        <li><span class="sharepage__key">B</span> Both preserve key order; they differ only in replication factor</li>
+        <li><span class="sharepage__key">C</span> Hash sharding is only for reads and range sharding only for writes</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Range sharding keeps keys ordered (good for scans) but risks hotspots; hash sharding spreads keys evenly but kills range scans <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Range partitioning keeps adjacent keys together so range scans are efficient, but a hot key range concentrates load on one shard. Hashing the key scatters adjacent keys across shards for even load, at the cost of making range scans require touching every shard.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A social app shards user timelines by <code>hash(user_id)</code>, but one celebrity account overwhelms its shard. Which mitigation directly addresses this hotspot?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Switch to range sharding by user_id</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Add a salt or composite key so the hot user&#39;s data spreads across multiple shards <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Increase the replication factor N on every shard</li>
+        <li><span class="sharepage__key">D</span> Replace the hash function with <code>id % N</code></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Salting (e.g. appending a random or bucketed suffix) or using a composite key splits the single hot key&#39;s writes across several shards so no one shard is overwhelmed. Range sharding would make the hotspot worse, and more replicas doesn&#39;t reduce write load on the primary.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the purpose of a client-supplied idempotency key on a request?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> To ensure a retried (duplicated) request is applied only once <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> To authenticate the client to the server</li>
+        <li><span class="sharepage__key">C</span> To encrypt the request payload end-to-end</li>
+        <li><span class="sharepage__key">D</span> To route the request to the correct shard</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The client sends a unique idempotency key with the operation; the server records it and, on a retry with the same key, returns the original result instead of performing the action again — critical for non-idempotent operations like &#39;charge card&#39;. It is not an auth or routing mechanism.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In a quorum system with N replicas, W write acknowledgments, and R read responses, what does the condition R + W &gt; N guarantee?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> That writes are always faster than reads</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> That every read set overlaps the latest write set, so a read can observe the most recent write <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> That data is replicated to exactly N/2 + 1 nodes</li>
+        <li><span class="sharepage__key">D</span> That the system is linearizable under all network partitions</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> R + W &gt; N forces any read quorum to share at least one node with the last write quorum, so the read is guaranteed to encounter a replica holding the latest write. It does not by itself provide full linearizability — quorum reads can still see stale data during concurrent writes or partial failures.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why do distributed systems perform leader election (via ZooKeeper, etcd, or Raft)?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To shard data evenly across nodes</li>
+        <li><span class="sharepage__key">B</span> To compress the write-ahead log</li>
+        <li><span class="sharepage__key">C</span> To generate idempotency keys for clients</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> To pick a single coordinator and avoid split-brain, where two nodes both believe they are in charge <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Leader election designates one node as the coordinator for a task, and consensus systems like Raft ensure only one leader is active at a time to prevent split-brain (two competing leaders making conflicting decisions). It is unrelated to sharding or compaction.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the primary role of heartbeats in a distributed system?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To synchronize wall-clock time across nodes</li>
+        <li><span class="sharepage__key">B</span> To replicate every write to every replica synchronously</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> To detect node failures so a dead node can be marked down and its work reassigned <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> To balance read load across healthy nodes</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Nodes periodically send heartbeats (or answer health checks); a missed heartbeat past a timeout is the signal that a node has likely failed, triggering failover or reassignment. Clock synchronization is a separate concern handled by protocols like NTP.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Explain why consistent hashing is preferable to <code>hash(key) % N</code> for a distributed cache, and what virtual nodes add on top of it.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li><code>hash % N</code> changes the modulus for almost every key when N changes, remapping ~all keys and causing a cache stampede.</li><li>Consistent hashing places keys and nodes on a ring; a key maps to the next node clockwise.</li><li>Adding/removing a node only remaps the keys in one arc — about K/N keys — so most cache entries stay put.</li><li>With few points per node, arc sizes are uneven, causing load imbalance.</li><li>Virtual nodes give each physical node many ring positions, averaging arc sizes to smooth load and reduce variance.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> With <code>hash % N</code>, adding or removing a node changes the modulus for nearly every key, so almost the whole cache is invalidated at once. Consistent hashing hashes keys and nodes onto a ring and sends each key to the next node clockwise, so a membership change only moves the ~K/N keys in the affected arc. Virtual nodes then give each physical node many positions on the ring, evening out otherwise-lopsided arc sizes and reducing load variance.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"components","unit":"c06","title":"Scale Primitives","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"What problem does consistent hashing primarily solve compared to a naive `hash(key) % N` placement?","options":["It makes each lookup O(1) instead of O(log n)","It guarantees perfectly even key distribution with no configuration","It avoids remapping nearly every key when the number of nodes N changes","It removes the need for replication because keys never move"],"answer":2,"answerLetter":"C"},{"n":2,"type":"mc","prompt":"In consistent hashing, which node owns a given key?","options":["The node whose hash is numerically closest to the key's hash in either direction","The node with the most free capacity at write time","A node chosen by a central directory service per key","The first node encountered moving clockwise from the key's position on the ring"],"answer":3,"answerLetter":"D"},{"n":3,"type":"mc","prompt":"Roughly how many keys move when one node is added to or removed from a consistent-hashing ring of N nodes?","options":["About K/N of the K total keys","About half of all keys","Nearly all K keys","Exactly one key per node"],"answer":0,"answerLetter":"A"},{"n":4,"type":"mc","prompt":"Why do consistent-hashing systems introduce virtual nodes (each physical node getting many ring positions)?","options":["To eliminate the need for hashing keys at all","To smooth out load imbalance and reduce variance from an uneven ring layout","To guarantee strong consistency across replicas","To let range scans work efficiently on the ring"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"Which statement about a standard bloom filter is correct?","options":["It can produce false negatives but never false positives","It produces neither false positives nor false negatives","It can produce false positives but never false negatives","It stores the actual elements so membership is always exact"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"How is a bloom filter structured internally?","options":["An m-bit array with k independent hash functions setting/checking k bits per element","A balanced binary search tree of hashed keys","A sorted array of key fingerprints searched by binary search","A hash map from key to a presence boolean"],"answer":0,"answerLetter":"A"},{"n":7,"type":"mc","prompt":"What is a canonical use of a bloom filter in a storage engine?","options":["To physically delete keys during compaction","To compress column values on disk","To skip an expensive disk lookup when the filter says a key is definitely absent","To keep replicas in sync via anti-entropy"],"answer":2,"answerLetter":"C"},{"n":8,"type":"mc","prompt":"Why can't you delete an element from a standard bloom filter by clearing its bits?","options":["The bits are stored on immutable disk segments","A given bit may be shared by other elements, so clearing it could create false negatives for them","Bloom filters have no hash functions to locate the bits","Deletion would require rehashing the entire m-bit array"],"answer":1,"answerLetter":"B"},{"n":9,"type":"mc","prompt":"Which is the key tradeoff between range-based and hash-based sharding?","options":["Range sharding spreads load evenly but forbids scans; hash sharding preserves order but causes hotspots","Both preserve key order; they differ only in replication factor","Hash sharding is only for reads and range sharding only for writes","Range sharding keeps keys ordered (good for scans) but risks hotspots; hash sharding spreads keys evenly but kills range scans"],"answer":3,"answerLetter":"D"},{"n":10,"type":"mc","prompt":"A social app shards user timelines by `hash(user_id)`, but one celebrity account overwhelms its shard. Which mitigation directly addresses this hotspot?","options":["Switch to range sharding by user_id","Add a salt or composite key so the hot user's data spreads across multiple shards","Increase the replication factor N on every shard","Replace the hash function with `id % N`"],"answer":1,"answerLetter":"B"},{"n":11,"type":"mc","prompt":"What is the purpose of a client-supplied idempotency key on a request?","options":["To ensure a retried (duplicated) request is applied only once","To authenticate the client to the server","To encrypt the request payload end-to-end","To route the request to the correct shard"],"answer":0,"answerLetter":"A"},{"n":12,"type":"mc","prompt":"In a quorum system with N replicas, W write acknowledgments, and R read responses, what does the condition R + W > N guarantee?","options":["That writes are always faster than reads","That every read set overlaps the latest write set, so a read can observe the most recent write","That data is replicated to exactly N/2 + 1 nodes","That the system is linearizable under all network partitions"],"answer":1,"answerLetter":"B"},{"n":13,"type":"mc","prompt":"Why do distributed systems perform leader election (via ZooKeeper, etcd, or Raft)?","options":["To shard data evenly across nodes","To compress the write-ahead log","To generate idempotency keys for clients","To pick a single coordinator and avoid split-brain, where two nodes both believe they are in charge"],"answer":3,"answerLetter":"D"},{"n":14,"type":"mc","prompt":"What is the primary role of heartbeats in a distributed system?","options":["To synchronize wall-clock time across nodes","To replicate every write to every replica synchronously","To detect node failures so a dead node can be marked down and its work reassigned","To balance read load across healthy nodes"],"answer":2,"answerLetter":"C"},{"n":15,"type":"open","prompt":"Explain why consistent hashing is preferable to `hash(key) % N` for a distributed cache, and what virtual nodes add on top of it.","points":["`hash % N` changes the modulus for almost every key when N changes, remapping ~all keys and causing a cache stampede.","Consistent hashing places keys and nodes on a ring; a key maps to the next node clockwise.","Adding/removing a node only remaps the keys in one arc — about K/N keys — so most cache entries stay put.","With few points per node, arc sizes are uneven, causing load imbalance.","Virtual nodes give each physical node many ring positions, averaging arc sizes to smooth load and reduce variance."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c06">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

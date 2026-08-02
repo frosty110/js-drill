@@ -318,6 +318,13 @@ const state = {
   fontScale: 'lg', // 🔠 App-wide font size — 'md' (1.0×) | 'lg' (1.125×, default — bumps everything ~12.5% over the original baseline) | 'xl' (1.25×). Drives the --font-scale CSS variable on :root, which scales html font-size so every rem-based value (Tailwind text-* utilities, conv-* spacing, modal bodies, etc.) scales uniformly. Hard-coded pixel sizes (CodeMirror, .code-block) keep their explicit values so mobile density stays sane. Toggle via 🔠 Font in ⚙️ Settings; persisted across sessions.
   commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
+  // Per-QUESTION record of the most recent attempt, in AUTHORED index order —
+  // the grain state.progress can't express ('L1':'passed' can't say which
+  // distractor pulled you). Feeds the share codes in js/app/24-share.js:
+  //   { lessonId: { L1: { picks: [authoredOptIdx|null], at },
+  //                 L2: { results: [bool|null], at },
+  //                 L3: { ok: bool, code: string, at } } }
+  answers: {},
   subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   cramTaskChecks: {},  // { taskId: true } — non-lesson task ticks for cram-kind paths (e.g. "write BFS on paper"). Lesson-linked tasks auto-check via isLessonFullyDone.
   cramView: { mode: 'today', dayIndex: -1 },  // active Cram Home view. mode: 'today' (live day) | 'day' (specific past/future day, dayIndex set) | 'all' (all days expanded) | 'open-from' (only !done items from dayIndex).

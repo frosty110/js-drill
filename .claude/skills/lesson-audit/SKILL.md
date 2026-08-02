@@ -113,6 +113,15 @@ Concatenate the per-subagent outputs into `iter-artifacts/lesson-audit-YYYY-MM-D
 3. **Per-section sections** — the subagent outputs verbatim, grouped by section.
 4. **Cross-cutting themes** — orchestrator-written, 4-7 bullets distilling the per-section themes. What's the dominant failure mode? What's the strongest cluster? What's regressed?
 5. **Highest-leverage rewrites (combined)** — orchestrator-written, top 5-10 across all sections, ranked. Each gets: lesson, primary issue, rewrite direction.
+
+   > **Every rewrite direction must be expressible as an IN-PLACE edit.** Share
+   > codes are positional, so a rewrite may replace an option's text at its
+   > existing index, reword a stem, or append — but must never reorder options,
+   > drop one, or move the `answer` index. "Shuffle the answer off position A"
+   > and "cut the throwaway 4th option" are both invalid recommendations; the
+   > equivalent valid one is "replace the text at index 3". See
+   > [`docs/invariants.md`](../../../docs/invariants.md) § 1 —
+   > `tools/check-content-order.js` will block the commit otherwise.
 6. **Delta summary** — count of lessons {improved | regressed | unchanged | newly-scored} since last audit.
 7. **Next-iter plan** — explicit nomination of what consumes the audit output and by when. **Mandatory** — adversarial-subagent finding from iter 25 stands: do not ship a measurement-only artifact without a committed plan.
 

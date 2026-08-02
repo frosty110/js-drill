@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Throttle — JS Drill</title>
+<meta name="description" content="Throttle caps invocations to one per `ms` window — extra calls during the cool-down are dropped (leading-edge variant). Built with an injectable clock so tests advance time deterministically.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-throttle">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Throttle — JS Drill">
+<meta property="og:description" content="Throttle caps invocations to one per `ms` window — extra calls during the cool-down are dropped (leading-edge variant). Built with an injectable clock so tests advance time deterministically.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-throttle">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Throttle</h1>
+    <p class="sharepage__lede">Throttle caps invocations to one per `ms` window — extra calls during the cool-down are dropped (leading-edge variant). Built with an injectable clock so tests advance time deterministically.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement throttle(fn, ms) leading-edge with injectable clock. Show: first call fires, two more within window drop, advance past window, next call fires.</p>
+    <p class="sharepage__note">Expected output: <code>calls=1 last=a
+calls=1 last=a
+calls=2 last=d</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Leading-edge throttle (gate on call)</strong> · <code>O(1) / O(1)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">function throttle(fn, ms) {
+  // -Infinity so the very first call always satisfies _now - lastFired &gt;= ms.
+  let lastFired = -Infinity;
+  const api = function (...args) {
+    // Leading edge: fire on the first call of each window, drop the rest silently.
+    if (api._now - lastFired &gt;= ms) {
+      lastFired = api._now;
+      fn(...args);
+    }
+    // No queueing — throttle does NOT keep latest args like debounce does.
+  };
+  api._now = 0;
+  // Injected clock — tests advance time deterministically without setTimeout.
+  api.tick = (delta) =&gt; { api._now += delta; };
+  return api;
+}</code></pre>
+    <ul class="sharepage__notes"><li>Leading-edge throttle fires on the first call of each window; trailing-edge would defer to the window end. Both are valid — pick one and document it.</li><li>Initialize <code>lastFired = -Infinity</code> (or any sentinel &lt; -ms) so the very first call always fires.</li><li>Dropped calls are lost — no queueing. Debounce keeps the latest args; throttle does not.</li><li>Time O(1) per call and per tick; Space O(1) — one closure variable <code>lastFired</code>.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Trailing-edge throttle (defer + latest args win) <code>O(1) / O(1)</code></h3>
+      <p>Reach for this when the spec asks &#39;fire with the LATEST args, but no more than once per window&#39; — the canonical follow-up to leading-edge throttle. This variant looks more like debounce: it keeps <code>lastArgs</code> AND a <code>scheduled</code> due-time, fires at the END of the window with whatever args arrived most recently. Common for &#39;autosave every N seconds&#39; or &#39;send the last cursor position per frame&#39; patterns where leading-edge would fire on a stale state.</p>
+      <pre class="sharepage__code"><code class="language-js">function throttle(fn, ms) {
+  let scheduled = null;       // due-at on fake clock, or null when idle
+  let lastArgs = null;
+  const api = function (...args) {
+    // Always capture latest args — trailing-edge fires with the freshest snapshot.
+    lastArgs = args;
+    // Only ARM the timer if none is pending; subsequent calls just refresh lastArgs.
+    if (scheduled === null) {
+      scheduled = api._now + ms;
+    }
+  };
+  api._now = 0;
+  api.tick = (delta) =&gt; {
+    api._now += delta;
+    if (scheduled !== null &amp;&amp; api._now &gt;= scheduled) {
+      scheduled = null;
+      fn(...lastArgs);
+    }
+  };
+  return api;
+}
+let calls = 0, last = null;
+const t = throttle((x) =&gt; { calls++; last = x; }, 100);
+t(&#39;a&#39;);                             // schedules fire at _now+100
+t.tick(110);                        // window elapsed — fires with &#39;a&#39;
+console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);
+console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);
+t(&#39;d&#39;);                             // schedules fire at _now+100
+t.tick(110);                        // fires with &#39;d&#39;
+console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);</code></pre>
+      <ul class="sharepage__notes"><li>The <code>if (scheduled === null)</code> guard is what makes this throttle (one fire per window) rather than debounce (timer resets on every call). Calls inside the pending window refresh <code>lastArgs</code> but do NOT extend the deadline.</li><li>Trailing-edge fires with the FRESHEST args, not the first ones — opposite of leading-edge&#39;s &#39;first call wins&#39; policy. The two variants pick different winners from the same burst.</li><li>If you wanted BOTH edges (lodash&#39;s default), combine the leading gate with this trailing scheduler — fire immediately on first call, then schedule a trailing fire if more calls arrived during the window.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Three calls within one ms window to a leading-edge throttled fn invoke the underlying fn how many times?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 3 — throttle records the calls but defers their firing to a single batched flush</li>
+        <li><span class="sharepage__key">B</span> 0 — the gate is closed on the first call until one full window has elapsed</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> 1 — the first one <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> 1 — the last one (trailing-edge default)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What is the key difference between debounce and throttle?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Throttle resolves a Promise per window; debounce returns the underlying fn&#39;s value synchronously</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Debounce delays until quiet; throttle caps the rate (at most one per window) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Throttle queues calls in a buffer and replays them after the window; debounce discards everything but the first</li>
+        <li><span class="sharepage__key">D</span> Throttle requires a real timer; debounce works purely off comparisons of call timestamps</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why initialize lastFired to -Infinity?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> To make <code>_now - lastFired &gt;= ms</code> true on the very first call <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> <code>-Infinity</code> is the only numeric value JavaScript treats as &#39;unset&#39; in arithmetic comparisons against integers</li>
+        <li><span class="sharepage__key">C</span> Initializing to 0 would cause the first call at _now=0 to silently coerce ms to a negative value via the subtraction</li>
+        <li><span class="sharepage__key">D</span> It prevents the closure variable from being collapsed by V8&#39;s constant-folding optimization</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> If the underlying fn is called inside the cool-down window, what happens to its args?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Queued and applied in order once the window elapses, the same behavior as <code>Promise.allSettled</code> with a delay</li>
+        <li><span class="sharepage__key">B</span> Stored as <code>lastArgs</code> and fired automatically when the next call passes the gate</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Dropped — leading-edge throttle does not buffer <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Merged into the previous fire&#39;s args via <code>Object.assign</code> so the most recent args win</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Complete the throttle: fire on the first call, drop calls within ms, fire again once the window passes.</p>
+      <pre class="sharepage__code"><code class="language-js">function throttle(fn, ms) {
+  let lastFired = ___;
+  const api = function (___args) {
+    if (api._now - lastFired ___ ms) {
+      lastFired = api._now;
+      fn(___args);
+    }
+  };
+  api._now = 0;
+  api.tick = (d) =&gt; { api._now ___ d; };
+  return api;
+}
+let calls = 0;
+const t = throttle((x) =&gt; { calls++; console.log(&#39;fire:&#39; + x); }, 100);
+t(1);
+t(2);
+t.tick(50);
+t(3);
+t.tick(60);
+t(4);
+console.log(calls);</code></pre>
+      <p><strong>Answers:</strong> <code>-Infinity</code>, <code>...</code>, <code>&gt;=</code>, <code>...</code>, <code>+=</code></p>
+      <p class="sharepage__note">Expected output: <code>fire:1
+fire:4
+2</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement throttle(fn, ms) leading-edge with injectable clock. Show: first call fires, two more within window drop, advance past window, next call fires.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Track only <code>lastFired</code> — no pending args, no scheduled callback.</li><li>On each call, compare _now - lastFired against ms; fire and update lastFired only if the gap is large enough.</li><li>tick(delta) is the only way time moves — there&#39;s no real setTimeout.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function throttle(fn, ms) {
+  // -Infinity so the very first call always satisfies _now - lastFired &gt;= ms.
+  let lastFired = -Infinity;
+  const api = function (...args) {
+    // Leading edge: fire on the first call of each window, drop the rest silently.
+    if (api._now - lastFired &gt;= ms) {
+      lastFired = api._now;
+      fn(...args);
+    }
+    // No queueing — throttle does NOT keep latest args like debounce does.
+  };
+  api._now = 0;
+  // Injected clock — tests advance time deterministically without setTimeout.
+  api.tick = (delta) =&gt; { api._now += delta; };
+  return api;
+}
+let calls = 0, last = null;
+const t = throttle((x) =&gt; { calls++; last = x; }, 100);
+t(&#39;a&#39;);
+console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);
+t(&#39;b&#39;); t(&#39;c&#39;);
+t.tick(50);
+console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);
+t.tick(60);
+t(&#39;d&#39;);
+console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-throttle","title":"Throttle","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Three calls within one ms window to a leading-edge throttled fn invoke the underlying fn how many times?","options":["3 — throttle records the calls but defers their firing to a single batched flush","0 — the gate is closed on the first call until one full window has elapsed","1 — the first one","1 — the last one (trailing-edge default)"],"answer":2,"answerLetter":"C"},{"n":2,"q":"What is the key difference between debounce and throttle?","options":["Throttle resolves a Promise per window; debounce returns the underlying fn's value synchronously","Debounce delays until quiet; throttle caps the rate (at most one per window)","Throttle queues calls in a buffer and replays them after the window; debounce discards everything but the first","Throttle requires a real timer; debounce works purely off comparisons of call timestamps"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why initialize lastFired to -Infinity?","options":["To make `_now - lastFired >= ms` true on the very first call","`-Infinity` is the only numeric value JavaScript treats as 'unset' in arithmetic comparisons against integers","Initializing to 0 would cause the first call at _now=0 to silently coerce ms to a negative value via the subtraction","It prevents the closure variable from being collapsed by V8's constant-folding optimization"],"answer":0,"answerLetter":"A"},{"n":4,"q":"If the underlying fn is called inside the cool-down window, what happens to its args?","options":["Queued and applied in order once the window elapses, the same behavior as `Promise.allSettled` with a delay","Stored as `lastArgs` and fired automatically when the next call passes the gate","Dropped — leading-edge throttle does not buffer","Merged into the previous fire's args via `Object.assign` so the most recent args win"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete the throttle: fire on the first call, drop calls within ms, fire again once the window passes.","answers":["-Infinity","...",">=","...","+="]}],"L3":[{"n":1,"prompt":"Implement throttle(fn, ms) leading-edge with injectable clock. Show: first call fires, two more within window drop, advance past window, next call fires.","expectedOutput":"calls=1 last=a\ncalls=1 last=a\ncalls=2 last=d"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-throttle">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Merge Intervals — JS Drill</title>
+<meta name="description" content="Sort by start, then sweep once: extend the last merged interval if the next overlaps; otherwise start a new one. O(n log n) sort + O(n) sweep.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-merge-intervals">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Merge Intervals — JS Drill">
+<meta property="og:description" content="Sort by start, then sweep once: extend the last merged interval if the next overlaps; otherwise start a new one. O(n log n) sort + O(n) sweep.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-merge-intervals">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Intervals</p>
+    <h1>Merge Intervals</h1>
+    <p class="sharepage__lede">Sort by start, then sweep once: extend the last merged interval if the next overlaps; otherwise start a new one. O(n log n) sort + O(n) sweep.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Intervals</span> <span class="ds-chip">8 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement <code>merge(intervals)</code> that returns merged intervals (touching = overlap). Log <code>JSON.stringify(merge([[1,4],[4,5]]))</code>.</p>
+    <p class="sharepage__note">Expected output: <code>[[1,5]]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Sort by start, then linear sweep</strong> · <code>O(n log n) / O(n)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">function merge(intervals) {
+  if (intervals.length === 0) return [];
+  // Sort by start — after this, each interval only needs to compare to the LAST merged one.
+  intervals.sort((a, b) =&gt; a[0] - b[0]);
+  const res = [intervals[0]];
+  for (let i = 1; i &lt; intervals.length; i++) {
+    const last = res[res.length - 1];
+    const cur = intervals[i];
+    // Touching counts as overlap (&lt;= not &lt;); use Math.max in case cur is fully inside last.
+    if (cur[0] &lt;= last[1]) {
+      last[1] = Math.max(last[1], cur[1]);
+    } else {
+      res.push(cur);
+    }
+  }
+  return res;
+}
+// merge([[1,3],[2,6],[8,10],[15,18]]) -&gt; [[1,6],[8,10],[15,18]]
+// Time O(n log n), Space O(n)</code></pre>
+    <ul class="sharepage__notes"><li>Sort by START. After sorting, compare a candidate only against the LAST merged interval.</li><li>Touching intervals overlap with <code>&lt;=</code>; use <code>&lt;</code> if the problem says strictly disjoint.</li><li>Take Math.max of ends — the next interval may be fully contained; you must not shrink the run.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Union-Find (DSU) on overlapping intervals <code>O(n² α(n)) / O(n)</code></h3>
+      <p>Reach for this when the problem morphs into &#39;add an interval and re-merge&#39; (Insert Interval, dynamic calendar) or when intervals arrive as a stream and you need to keep merging incrementally without re-sorting. Sort+sweep is one-shot — DSU gives you a structure that absorbs new overlaps in near-constant amortized time per union.</p>
+      <pre class="sharepage__code"><code class="language-js">function merge(intervals) {
+  const n = intervals.length;
+  if (n === 0) return [];
+  // DSU: parent[i] is the root of interval i&#39;s merged component.
+  const parent = Array.from({length: n}, (_, i) =&gt; i);
+  function find(x) {
+    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+    return x;
+  }
+  function union(x, y) { parent[find(x)] = find(y); }
+  // Pairwise overlap check — union every overlapping pair into one component.
+  for (let i = 0; i &lt; n; i++) {
+    for (let j = i + 1; j &lt; n; j++) {
+      const a = intervals[i], b = intervals[j];
+      if (a[0] &lt;= b[1] &amp;&amp; b[0] &lt;= a[1]) union(i, j);
+    }
+  }
+  // Collapse each component to one [min-start, max-end] interval.
+  const groups = new Map();
+  for (let i = 0; i &lt; n; i++) {
+    const r = find(i);
+    const iv = intervals[i];
+    if (!groups.has(r)) groups.set(r, [iv[0], iv[1]]);
+    else {
+      const g = groups.get(r);
+      g[0] = Math.min(g[0], iv[0]);
+      g[1] = Math.max(g[1], iv[1]);
+    }
+  }
+  return [...groups.values()].sort((a, b) =&gt; a[0] - b[0]);
+}
+console.log(JSON.stringify(merge([[1,4],[4,5]])));</code></pre>
+      <ul class="sharepage__notes"><li>Two intervals [a0,a1] and [b0,b1] overlap iff a0 &lt;= b1 AND b0 &lt;= a1 — the classic &#39;one starts before the other ends, both ways&#39; test.</li><li>Path compression in <code>find</code> keeps the amortized cost per union near-constant; the O(n²) bound is from the pairwise overlap scan, not the DSU itself.</li><li>DSU shines on the Insert Interval / dynamic-calendar followup: incoming intervals just <code>union</code> with whatever they overlap, no re-sort needed.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">8</span></h2>
+    <p class="sharepage__note">Positions 1–8 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why sort by start before merging?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> So the output is automatically returned in sorted order, satisfying the spec without a final sort pass</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Lets us compare each interval to only the last merged one — one pass suffices <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Sorting compacts the array in memory, eliminating cache misses on the sweep</li>
+        <li><span class="sharepage__key">D</span> So binary search can locate the merge target in O(log n) instead of O(n)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Overall time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n log n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n^2)</li>
+        <li><span class="sharepage__key">D</span> O(n + k log k) where k = number of merged runs</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> When merging, why use Math.max(last[1], cur[1])?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because <code>last[1]</code> is read from a shared reference and could mutate during the iteration; Math.max snapshots it</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> cur may end before last — taking the max prevents shrinking the run <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Math.max is required to extend the array correctly because JS array indexing rounds towards zero</li>
+        <li><span class="sharepage__key">D</span> Because sorting only orders starts, not ends, so <code>cur[1]</code> might be larger and Math.max picks it</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Should touching intervals like [1,4] and [4,5] merge?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Always — they share an endpoint</li>
+        <li><span class="sharepage__key">B</span> Never — disjoint endpoints means disjoint intervals</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Only when the problem says so; check <code>&lt;=</code> vs <code>&lt;</code> <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Only when sorting by end (not start) — because end-sort places them adjacent</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> Which key do you sort by, and why that one?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> By end — so the longest intervals come first</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> By start — once starts are ascending, any overlap must touch the most recently merged interval, so one pass suffices <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> By interval width</li>
+        <li><span class="sharepage__key">D</span> Either start or end works the same</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sorting by start guarantees later intervals can only overlap the last merged run (their start is &gt;= everything before), which is what collapses the problem to a single sweep.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> After sorting by start, the overlap test for the current interval vs the last merged one is:</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> cur.start &lt;= last.end <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> cur.end &lt;= last.start</li>
+        <li><span class="sharepage__key">C</span> cur.start &gt;= last.end</li>
+        <li><span class="sharepage__key">D</span> cur.end &gt;= last.end</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Since starts are sorted, cur.start is already &gt;= last.start; they overlap exactly when cur begins at or before last ends, i.e. cur.start &lt;= last.end.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> Why is one forward pass enough — never looking back at earlier merged intervals?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because the array is short</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Sorted starts mean every future interval starts at or after the current one, so it can never reach back across a gap into an older run <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because intervals never overlap</li>
+        <li><span class="sharepage__key">D</span> Because Math.max handles it</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Ascending starts give a no-look-back invariant: once a gap closes a run, no later interval can start before that gap, so earlier runs are final — that is why the sweep is O(n).</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> What guards against crashing on an empty input <code>[]</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The sort call</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> An up-front <code>if (intervals.length === 0) return []</code> — otherwise <code>res = [intervals[0]]</code> seeds with undefined <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Math.max</li>
+        <li><span class="sharepage__key">D</span> Nothing is needed</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Without the guard, seeding <code>res = [intervals[0]]</code> on an empty array yields <code>[undefined]</code> and silently returns garbage; the length check is the cheap fix.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in sort-then-sweep merge.</p>
+      <pre class="sharepage__code"><code class="language-js">function merge(intervals) {
+  if (intervals.length === 0) return [];
+  intervals.___((a, b) =&gt; a[0] ___ b[0]);
+  const res = [intervals[0]];
+  for (let i = 1; i &lt; intervals.length; i++) {
+    const last = res[res.length - 1];
+    const cur = intervals[i];
+    if (cur[0] ___ last[1]) {
+      last[1] = Math.___(last[1], cur[1]);
+    } else {
+      res.___(cur);
+    }
+  }
+  return res;
+}
+console.log(JSON.stringify(merge([[1,3],[2,6],[8,10],[15,18]])));</code></pre>
+      <p><strong>Answers:</strong> <code>sort</code>, <code>-</code>, <code>&lt;=</code>, <code>max</code>, <code>push</code></p>
+      <p class="sharepage__note">Expected output: <code>[[1,6],[8,10],[15,18]]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement <code>merge(intervals)</code> that returns merged intervals (touching = overlap). Log <code>JSON.stringify(merge([[1,4],[4,5]]))</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Sort by start, then sweep once.</li><li><code>cur[0] &lt;= last[1]</code> means touching intervals merge.</li><li>Use Math.max(last[1], cur[1]) — cur could be fully inside last.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function merge(intervals) {
+  if (intervals.length === 0) return [];
+  // Sort by start — after this, each interval only needs to compare to the LAST merged one.
+  intervals.sort((a, b) =&gt; a[0] - b[0]);
+  const res = [intervals[0]];
+  for (let i = 1; i &lt; intervals.length; i++) {
+    const last = res[res.length - 1];
+    const cur = intervals[i];
+    // Touching counts as overlap (&lt;= not &lt;); use Math.max in case cur is fully inside last.
+    if (cur[0] &lt;= last[1]) {
+      last[1] = Math.max(last[1], cur[1]);
+    } else {
+      res.push(cur);
+    }
+  }
+  return res;
+}
+console.log(JSON.stringify(merge([[1,4],[4,5]])));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-merge-intervals","title":"Merge Intervals","section":"Intervals","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why sort by start before merging?","options":["So the output is automatically returned in sorted order, satisfying the spec without a final sort pass","Lets us compare each interval to only the last merged one — one pass suffices","Sorting compacts the array in memory, eliminating cache misses on the sweep","So binary search can locate the merge target in O(log n) instead of O(n)"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Overall time complexity?","options":["O(n)","O(n log n)","O(n^2)","O(n + k log k) where k = number of merged runs"],"answer":1,"answerLetter":"B"},{"n":3,"q":"When merging, why use Math.max(last[1], cur[1])?","options":["Because `last[1]` is read from a shared reference and could mutate during the iteration; Math.max snapshots it","cur may end before last — taking the max prevents shrinking the run","Math.max is required to extend the array correctly because JS array indexing rounds towards zero","Because sorting only orders starts, not ends, so `cur[1]` might be larger and Math.max picks it"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Should touching intervals like [1,4] and [4,5] merge?","options":["Always — they share an endpoint","Never — disjoint endpoints means disjoint intervals","Only when the problem says so; check `\u003c=` vs `\u003c`","Only when sorting by end (not start) — because end-sort places them adjacent"],"answer":2,"answerLetter":"C"},{"n":5,"q":"Which key do you sort by, and why that one?","options":["By end — so the longest intervals come first","By start — once starts are ascending, any overlap must touch the most recently merged interval, so one pass suffices","By interval width","Either start or end works the same"],"answer":1,"answerLetter":"B"},{"n":6,"q":"After sorting by start, the overlap test for the current interval vs the last merged one is:","options":["cur.start \u003c= last.end","cur.end \u003c= last.start","cur.start >= last.end","cur.end >= last.end"],"answer":0,"answerLetter":"A"},{"n":7,"q":"Why is one forward pass enough — never looking back at earlier merged intervals?","options":["Because the array is short","Sorted starts mean every future interval starts at or after the current one, so it can never reach back across a gap into an older run","Because intervals never overlap","Because Math.max handles it"],"answer":1,"answerLetter":"B"},{"n":8,"q":"What guards against crashing on an empty input `[]`?","options":["The sort call","An up-front `if (intervals.length === 0) return []` — otherwise `res = [intervals[0]]` seeds with undefined","Math.max","Nothing is needed"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in sort-then-sweep merge.","answers":["sort","-","\u003c=","max","push"]}],"L3":[{"n":1,"prompt":"Implement `merge(intervals)` that returns merged intervals (touching = overlap). Log `JSON.stringify(merge([[1,4],[4,5]]))`.","expectedOutput":"[[1,5]]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-merge-intervals">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

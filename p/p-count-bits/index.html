@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Counting Bits — JS Drill</title>
+<meta name="description" content="DP on bits: counts[i] = counts[i &gt;&gt; 1] + (i &amp; 1) — reuse the answer for half of i. O(n).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-count-bits">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Counting Bits — JS Drill">
+<meta property="og:description" content="DP on bits: counts[i] = counts[i &gt;&gt; 1] + (i &amp; 1) — reuse the answer for half of i. O(n).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-count-bits">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Bit Manipulation</p>
+    <h1>Counting Bits</h1>
+    <p class="sharepage__lede">DP on bits: counts[i] = counts[i &gt;&gt; 1] + (i &amp; 1) — reuse the answer for half of i. O(n).</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Bit Manipulation</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>countBits(n)</code> returning an array where <code>counts[i]</code> is the number of 1-bits in <code>i</code> for i = 0..n. Use the O(n) DP <code>counts[i] = counts[i &gt;&gt; 1] + (i &amp; 1)</code>. Log <code>JSON.stringify(countBits(5))</code>.</p>
+    <p class="sharepage__note">Expected output: <code>[0,1,1,2,1,2]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function countBits(n) {
+  // counts[0] = 0 is the base; loop starts at 1.
+  const counts = new Array(n + 1).fill(0);
+  for (let i = 1; i &lt;= n; i++) {
+    // i &gt;&gt; 1 drops the lowest bit (i/2); i &amp; 1 recovers it. So popcount(i) = popcount(i/2) + last bit.
+    counts[i] = counts[i &gt;&gt; 1] + (i &amp; 1);
+  }
+  return counts;
+}
+// Time O(n), Space O(n) for output</code></pre>
+    <ul class="sharepage__notes"><li><code>i &gt;&gt; 1</code> is integer divide by 2 — drops the lowest bit, which (i &amp; 1) recovers.</li><li>counts[0] = 0 is the base case; the loop starts at 1.</li><li>Naive popcount per i is O(log i) → O(n log n) total; this DP is O(n).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Brian Kernighan DP (lowest-set-bit identity) <code>O(n) / O(n)</code></h3>
+      <p>Use this alternate if you already know the <code>i &amp; (i-1)</code> Kernighan trick from hammingWeight — the recurrence <code>counts[i] = counts[i &amp; (i-1)] + 1</code> flows naturally from it. Same O(n) / O(n), different bit identity.</p>
+      <pre class="sharepage__code"><code class="language-js">function countBits(n) {
+  const counts = new Array(n + 1).fill(0);
+  for (let i = 1; i &lt;= n; i++) {
+    // i &amp; (i-1) clears the lowest set bit — strictly smaller than i, so safe to look up.
+    counts[i] = counts[i &amp; (i - 1)] + 1;
+  }
+  return counts;
+}
+console.log(JSON.stringify(countBits(5)));</code></pre>
+      <ul class="sharepage__notes"><li><code>i &amp; (i-1)</code> clears the lowest set bit of i, giving a strictly smaller index always in the table.</li><li>Each cell adds exactly 1 to a previously-computed value — one fewer set bit than i.</li><li>Equivalent O(n) as the right-shift DP; pick whichever identity you recall more easily.</li></ul>
+    </article>
+    <article class="sharepage__alt" id="alt2">
+      <h3>Naive popcount per number (Brian Kernighan loop) <code>O(n log n) / O(n)</code></h3>
+      <p>Use this as the brute-force baseline you name before pitching the DP — running hammingWeight independently on each i is O(n log n) total because each call is O(set bits of i). It&#39;s instructive to show WHY the DP is better.</p>
+      <pre class="sharepage__code"><code class="language-js">function countBits(n) {
+  const counts = new Array(n + 1).fill(0);
+  for (let i = 1; i &lt;= n; i++) {
+    let x = i;
+    while (x !== 0) { x = x &amp; (x - 1); counts[i]++; }
+  }
+  return counts;
+}
+console.log(JSON.stringify(countBits(5)));</code></pre>
+      <ul class="sharepage__notes"><li>Runs Brian Kernighan&#39;s popcount loop independently for every i — O(log i) per number, O(n log n) total.</li><li>No shared work between adjacent values — the DP avoids this waste by reusing <code>counts[i&gt;&gt;1]</code> or <code>counts[i&amp;(i-1)]</code>.</li><li>Name this brute force first in an interview; the DP is the optimization over it.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What does <code>i &gt;&gt; 1</code> compute for non-negative i?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> i * 2</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Math.floor(i / 2) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> i % 2</li>
+        <li><span class="sharepage__key">D</span> The bit-reverse of i within its current bit-width</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What does <code>i &amp; 1</code> give you?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The highest set bit of i (the position of the most significant 1)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The lowest bit of i (0 or 1) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The popcount of i mod 2 (the parity of bits)</li>
+        <li><span class="sharepage__key">D</span> 1 if i is non-zero, 0 otherwise</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why does <code>counts[i] = counts[i &gt;&gt; 1] + (i &amp; 1)</code> work?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Bits in i = bits in i/2 plus its last bit <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Because <code>i &gt;&gt; 1</code> always equals <code>popcount(i) - 1</code>, so adding the parity recovers the full count</li>
+        <li><span class="sharepage__key">C</span> Because every integer i has exactly <code>floor(log2(i)) + 1</code> set bits, and the recurrence reconstructs that</li>
+        <li><span class="sharepage__key">D</span> Because <code>i &amp; 1</code> doubles the bit count when set, matching the doubling effect of the left-shift inverse</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Total time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n log n)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(log n)</li>
+        <li><span class="sharepage__key">D</span> O(n * popcount(n))</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the bit-DP popcount table.</p>
+      <pre class="sharepage__code"><code class="language-js">function countBits(n) {
+  const counts = new ___(n + 1).fill(___);
+  for (let i = 1; i ___ n; i++) {
+    counts[i] = counts[i ___ 1] + (i ___ 1);
+  }
+  return counts;
+}
+console.log(JSON.stringify(countBits(5)));</code></pre>
+      <p><strong>Answers:</strong> <code>Array</code>, <code>0</code>, <code>&lt;=</code>, <code>&gt;&gt;</code>, <code>&amp;</code></p>
+      <p class="sharepage__note">Expected output: <code>[0,1,1,2,1,2]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>countBits(n)</code> returning an array where <code>counts[i]</code> is the number of 1-bits in <code>i</code> for i = 0..n. Use the O(n) DP <code>counts[i] = counts[i &gt;&gt; 1] + (i &amp; 1)</code>. Log <code>JSON.stringify(countBits(5))</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Allocate counts of size n+1; base case counts[0] = 0.</li><li><code>i &gt;&gt; 1</code> is i/2 floored; <code>i &amp; 1</code> is i mod 2.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function countBits(n) {
+  // counts[0] = 0 is the base; loop starts at 1.
+  const counts = new Array(n + 1).fill(0);
+  for (let i = 1; i &lt;= n; i++) {
+    // i &gt;&gt; 1 drops the lowest bit (i/2); i &amp; 1 recovers it. So popcount(i) = popcount(i/2) + last bit.
+    counts[i] = counts[i &gt;&gt; 1] + (i &amp; 1);
+  }
+  return counts;
+}
+console.log(JSON.stringify(countBits(5)));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-count-bits","title":"Counting Bits","section":"Bit Manipulation","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does `i >> 1` compute for non-negative i?","options":["i * 2","Math.floor(i / 2)","i % 2","The bit-reverse of i within its current bit-width"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What does `i & 1` give you?","options":["The highest set bit of i (the position of the most significant 1)","The lowest bit of i (0 or 1)","The popcount of i mod 2 (the parity of bits)","1 if i is non-zero, 0 otherwise"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why does `counts[i] = counts[i >> 1] + (i & 1)` work?","options":["Bits in i = bits in i/2 plus its last bit","Because `i >> 1` always equals `popcount(i) - 1`, so adding the parity recovers the full count","Because every integer i has exactly `floor(log2(i)) + 1` set bits, and the recurrence reconstructs that","Because `i & 1` doubles the bit count when set, matching the doubling effect of the left-shift inverse"],"answer":0,"answerLetter":"A"},{"n":4,"q":"Total time complexity?","options":["O(n log n)","O(n)","O(log n)","O(n * popcount(n))"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the bit-DP popcount table.","answers":["Array","0","\u003c=",">>","&"]}],"L3":[{"n":1,"prompt":"Write `countBits(n)` returning an array where `counts[i]` is the number of 1-bits in `i` for i = 0..n. Use the O(n) DP `counts[i] = counts[i >> 1] + (i & 1)`. Log `JSON.stringify(countBits(5))`.","expectedOutput":"[0,1,1,2,1,2]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-count-bits">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

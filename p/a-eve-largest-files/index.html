@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>K Largest Files — JS Drill</title>
+<meta name="description" content="Top-K shape on object input — return the k largest documents in a production by byte size. Sort-and-slice is the brute-force-OK answer; a size-k min-heap is the O(n log k) optimization to name.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-eve-largest-files">
+<meta property="og:type" content="article">
+<meta property="og:title" content="K Largest Files — JS Drill">
+<meta property="og:description" content="Top-K shape on object input — return the k largest documents in a production by byte size. Sort-and-slice is the brute-force-OK answer; a size-k min-heap is the O(n log k) optimization to name.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-eve-largest-files">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>K Largest Files</h1>
+    <p class="sharepage__lede">Top-K shape on object input — return the k largest documents in a production by byte size. Sort-and-slice is the brute-force-OK answer; a size-k min-heap is the O(n log k) optimization to name.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Given an array of {name, bytes} files and a number k, return the names of the k largest files, ordered largest first.</p>
+    <p class="sharepage__note">Expected output: <code>[&quot;mri-scan.dcm&quot;,&quot;deposition.pdf&quot;,&quot;photo.jpg&quot;]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Sort by size descending, take the first k</strong> · <code>O(n log n) / O(n)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">const files = [
+  { name: &#39;deposition.pdf&#39;, bytes: 2400000 },
+  { name: &#39;intake.docx&#39;, bytes: 38000 },
+  { name: &#39;mri-scan.dcm&#39;, bytes: 9100000 },
+  { name: &#39;photo.jpg&#39;, bytes: 512000 },
+  { name: &#39;notes.txt&#39;, bytes: 4096 }
+];
+
+function largestFiles(files, k) {
+  return [...files]
+    .sort((a, b) =&gt; b.bytes - a.bytes)
+    .slice(0, k)
+    .map(f =&gt; f.name);
+}
+
+console.log(JSON.stringify(largestFiles(files, 3)));</code></pre>
+    <ul class="sharepage__notes"><li>The comparator <code>b.bytes - a.bytes</code> sorts descending, so the k largest land at the front.</li><li>Spread <code>[...files]</code> before sorting — <code>.sort()</code> mutates in place and you don&#39;t want to reorder the caller&#39;s array.</li><li>Sort-and-slice is O(n log n). When n is huge and k is small, a size-k min-heap is faster — see the alternate.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Min-heap of size k <code>O(n log k) / O(k)</code></h3>
+      <p>When n is huge but k is small — e.g. the 10 largest files out of a million-document production. A size-k min-heap avoids sorting everything: O(n log k) vs O(n log n).</p>
+      <pre class="sharepage__code"><code class="language-js">class MinHeap {
+  constructor() { this.h = []; }
+  size() { return this.h.length; }
+  push(v) {
+    const h = this.h; h.push(v);
+    let i = h.length - 1;
+    while (i &gt; 0) {
+      const p = (i - 1) &gt;&gt; 1;
+      if (h[p].bytes &lt;= h[i].bytes) break;
+      [h[p], h[i]] = [h[i], h[p]];
+      i = p;
+    }
+  }
+  pop() {
+    const h = this.h; const top = h[0]; const last = h.pop();
+    if (h.length) { h[0] = last; let i = 0;
+      while (true) {
+        let s = i; const l = 2*i+1, r = 2*i+2;
+        if (l &lt; h.length &amp;&amp; h[l].bytes &lt; h[s].bytes) s = l;
+        if (r &lt; h.length &amp;&amp; h[r].bytes &lt; h[s].bytes) s = r;
+        if (s === i) break;
+        [h[s], h[i]] = [h[i], h[s]]; i = s;
+      }
+    }
+    return top;
+  }
+}
+
+const files = [
+  { name: &#39;deposition.pdf&#39;, bytes: 2400000 },
+  { name: &#39;intake.docx&#39;, bytes: 38000 },
+  { name: &#39;mri-scan.dcm&#39;, bytes: 9100000 },
+  { name: &#39;photo.jpg&#39;, bytes: 512000 },
+  { name: &#39;notes.txt&#39;, bytes: 4096 }
+];
+const k = 3;
+const heap = new MinHeap();
+for (const f of files) {
+  heap.push(f);
+  if (heap.size() &gt; k) heap.pop();
+}
+const top = [];
+while (heap.size()) top.push(heap.pop());
+top.reverse();
+console.log(JSON.stringify(top.map(f =&gt; f.name)));</code></pre>
+      <ul class="sharepage__notes"><li>Keep a MIN-heap of size k: the smallest of the current top-k sits at the root, so a bigger incoming file evicts it in one pop.</li><li>Compare on <code>.bytes</code>, not the object — the heap orders files by size.</li><li>Drain and reverse at the end: a min-heap pops smallest-first, so reverse to get descending size.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> To return the k LARGEST files with a heap, what kind of heap do you keep, and of what size?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A max-heap of size n</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A min-heap of size k — the smallest of the current top-k sits at the root for cheap eviction <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A min-heap of size n</li>
+        <li><span class="sharepage__key">D</span> A max-heap of size k</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Counterintuitively, you keep a MIN-heap of size k. The root is the smallest of your current top-k, so when a bigger file arrives you pop the root and push the newcomer — O(log k) per element.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What order does the comparator <code>(a, b) =&gt; b.bytes - a.bytes</code> produce?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Ascending by bytes</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Descending by bytes — largest first <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Alphabetical by file name</li>
+        <li><span class="sharepage__key">D</span> The original insertion order</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Subtracting in the order <code>b - a</code> flips the sort to descending, so the largest files come first and <code>.slice(0, k)</code> grabs the top k.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why spread <code>[...files]</code> before calling <code>.sort()</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It converts the array into a heap</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> <code>.sort()</code> mutates in place, so spreading first avoids reordering the caller&#39;s original array <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Spreading makes the sort run faster</li>
+        <li><span class="sharepage__key">D</span> JavaScript requires it before calling <code>.slice()</code></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>Array.prototype.sort</code> sorts in place and returns the same array. Spreading into a fresh array first keeps the caller&#39;s data untouched — important when other code still relies on the original order.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> When does the size-k min-heap (O(n log k)) clearly beat sort-and-slice (O(n log n))?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> When k is close to n</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> When n is very large and k is small — e.g. the 10 largest out of a million files <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> When the array is already sorted</li>
+        <li><span class="sharepage__key">D</span> Never — a full sort is always faster</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If k is tiny relative to n, <code>log k</code> is far smaller than <code>log n</code>, so the heap does much less work. When k approaches n the two converge and a plain sort is simpler.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Sort the files largest-first, take the top 2, and map to names.</p>
+      <pre class="sharepage__code"><code class="language-js">const files = [{ name: &#39;a&#39;, bytes: 10 }, { name: &#39;b&#39;, bytes: 50 }, { name: &#39;c&#39;, bytes: 30 }];
+const top2 = [...files]
+  .sort((a, b) =&gt; b.bytes ___ a.bytes)
+  .___(0, 2)
+  .map(f =&gt; f.___);
+console.log(JSON.stringify(top2));</code></pre>
+      <p><strong>Answers:</strong> <code>-</code>, <code>slice</code>, <code>name</code></p>
+      <p class="sharepage__note">Expected output: <code>[&quot;b&quot;,&quot;c&quot;]</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Mimic the size-k min-heap eviction: if the incoming file beats the smallest kept, drop the smallest and add the newcomer.</p>
+      <pre class="sharepage__code"><code class="language-js">const k = 2;
+let kept = [30, 80];
+const incoming = 50;
+const smallest = Math.___(...kept);
+if (incoming &gt; smallest &amp;&amp; kept.length &gt;= k) {
+  kept = kept.filter(x =&gt; x ___ smallest);
+  kept.push(incoming);
+}
+console.log(JSON.stringify(kept.sort((a, b) =&gt; b - a)));</code></pre>
+      <p><strong>Answers:</strong> <code>min</code>, <code>!==</code></p>
+      <p class="sharepage__note">Expected output: <code>[80,50]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Given an array of {name, bytes} files and a number k, return the names of the k largest files, ordered largest first.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Sort by bytes descending with <code>(a, b) =&gt; b.bytes - a.bytes</code>.</li><li>Take the first k with <code>.slice(0, k)</code>, then <code>.map(f =&gt; f.name)</code>.</li><li>For the O(n log k) optimization, mention keeping a size-k min-heap instead of sorting everything.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">const files = [
+  { name: &#39;deposition.pdf&#39;, bytes: 2400000 },
+  { name: &#39;intake.docx&#39;, bytes: 38000 },
+  { name: &#39;mri-scan.dcm&#39;, bytes: 9100000 },
+  { name: &#39;photo.jpg&#39;, bytes: 512000 },
+  { name: &#39;notes.txt&#39;, bytes: 4096 }
+];
+
+function largestFiles(files, k) {
+  return [...files]
+    .sort((a, b) =&gt; b.bytes - a.bytes)
+    .slice(0, k)
+    .map(f =&gt; f.name);
+}
+
+console.log(JSON.stringify(largestFiles(files, 3)));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-eve-largest-files","title":"K Largest Files","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"To return the k LARGEST files with a heap, what kind of heap do you keep, and of what size?","options":["A max-heap of size n","A min-heap of size k — the smallest of the current top-k sits at the root for cheap eviction","A min-heap of size n","A max-heap of size k"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What order does the comparator `(a, b) => b.bytes - a.bytes` produce?","options":["Ascending by bytes","Descending by bytes — largest first","Alphabetical by file name","The original insertion order"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why spread `[...files]` before calling `.sort()`?","options":["It converts the array into a heap","`.sort()` mutates in place, so spreading first avoids reordering the caller's original array","Spreading makes the sort run faster","JavaScript requires it before calling `.slice()`"],"answer":1,"answerLetter":"B"},{"n":4,"q":"When does the size-k min-heap (O(n log k)) clearly beat sort-and-slice (O(n log n))?","options":["When k is close to n","When n is very large and k is small — e.g. the 10 largest out of a million files","When the array is already sorted","Never — a full sort is always faster"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Sort the files largest-first, take the top 2, and map to names.","answers":["-","slice","name"]},{"n":2,"prompt":"Mimic the size-k min-heap eviction: if the incoming file beats the smallest kept, drop the smallest and add the newcomer.","answers":["min","!=="]}],"L3":[{"n":1,"prompt":"Given an array of {name, bytes} files and a number k, return the names of the k largest files, ordered largest first.","expectedOutput":"[\"mri-scan.dcm\",\"deposition.pdf\",\"photo.jpg\"]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-eve-largest-files">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# Standing-constraint gates — the enforceable half of docs/invariants.md.
+#
+# The pre-commit hook is opt-in per clone (`git config core.hooksPath .githooks`),
+# so this is what actually makes the rules binding: nothing reaches the default
+# branch without passing the same checks a developer runs locally.
+name: checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No dependencies: every gate is plain Node against files in the repo.
+      # (The browser probes need Chrome and are run manually — see below.)
+      - name: Run all gates
+        run: node tools/check-all.js
+
+      # The crawlable pages, the sitemap and the order lock are COMMITTED —
+      # GitHub Pages serves them from the repo. `check-all` verifies they are
+      # current; this catches the case where a gate regenerated something and
+      # the author forgot to commit it.
+      - name: Generated output is committed
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::Generated output is out of date. Run: node tools/check-all.js --fix"
+            git diff --stat
+            exit 1
+          fi

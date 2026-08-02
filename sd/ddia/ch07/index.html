@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Transactions — Designing Data-Intensive Applications</title>
+<meta name="description" content="How transactions group reads and writes into an all-or-nothing unit to simplify error handling and concurrency, the weak isolation levels that trade correctness for performance, the race conditions each prevents, and the three routes to true serializability.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ddia/ch07">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Transactions — Designing Data-Intensive Applications">
+<meta property="og:description" content="How transactions group reads and writes into an all-or-nothing unit to simplify error handling and concurrency, the weak isolation levels that trade correctness for performance, the race conditions each prevents, and the three routes to true serializability.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ddia/ch07">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ddia/">Designing Data-Intensive Applications</a></p>
+    <h1>Transactions</h1>
+    <p class="sharepage__lede">How transactions group reads and writes into an all-or-nothing unit to simplify error handling and concurrency, the weak isolation levels that trade correctness for performance, the race conditions each prevents, and the three routes to true serializability.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Data-Intensive Applications</span> <span class="ds-chip">17 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>ACID: Atomicity = abortability (all-or-nothing on failure), Consistency = an app-level invariant (the odd one out, the app&#39;s responsibility), Isolation = concurrent transactions don&#39;t interfere, Durability = committed data survives.</li><li>Read committed prevents dirty reads and dirty writes; snapshot isolation (MVCC) additionally prevents read skew by giving each transaction a consistent point-in-time view.</li><li>Lost updates need atomic ops, explicit locking (SELECT FOR UPDATE), automatic detect-and-abort, or compare-and-set; replication with LWW silently loses updates.</li><li>Write skew is a generalized race where two transactions read the same objects then update different ones (e.g., on-call doctors); phantoms are writes that change another transaction&#39;s search result.</li><li>Serializability has three implementations: actual serial execution (single-threaded + stored procedures), two-phase locking (2PL), and serializable snapshot isolation (SSI, optimistic).</li><li>Do not confuse 2PL (a locking concurrency-control method for isolation) with 2PC (two-phase commit, an atomic-commit protocol).</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">17</span></h2>
+    <p class="sharepage__note">Positions 1–17 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In ACID, which property is best described as &#39;abortability&#39; — the ability to discard all of a transaction&#39;s writes if anything goes wrong partway through?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Consistency</li>
+        <li><span class="sharepage__key">B</span> Isolation</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Atomicity <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Durability</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> DDIA frames atomicity as abortability: on failure the transaction is aborted and all its partial writes are thrown away, so it&#39;s all-or-nothing. Durability is about committed data surviving crashes; isolation is about concurrency.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does DDIA call the &#39;C&#39; (Consistency) in ACID the odd one out?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It refers to application-level invariants the application must maintain, not a guarantee the database provides — unlike A, I, and D <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It is the only property that is impossible to implement</li>
+        <li><span class="sharepage__key">C</span> It is a synonym for isolation and thus redundant</li>
+        <li><span class="sharepage__key">D</span> It only applies to replicated databases</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Consistency here means the data satisfies application-defined invariants; the database can only help, but it&#39;s the application&#39;s job to define and preserve them. Atomicity, isolation, and durability are genuinely database-provided.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does read-committed isolation guarantee?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A fully consistent snapshot of the entire database for the transaction&#39;s lifetime</li>
+        <li><span class="sharepage__key">B</span> That transactions execute as if one at a time</li>
+        <li><span class="sharepage__key">C</span> That lost updates cannot occur</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> No dirty reads and no dirty writes — you only read/overwrite committed data <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Read committed prevents dirty reads (seeing uncommitted data) and dirty writes (overwriting uncommitted data). A consistent point-in-time snapshot is snapshot isolation, a stronger level; read committed does not prevent lost updates or read skew.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How is read committed typically implemented for reads and writes?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A single global lock serializes all transactions</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Row-level locks prevent dirty writes, while for reads the database remembers and returns the old committed value until the new one commits (rather than holding read locks) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Multi-version snapshots keyed to a transaction start timestamp</li>
+        <li><span class="sharepage__key">D</span> Optimistic detection that aborts on conflict</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Write locks per object prevent dirty writes; for reads, holding locks would hurt throughput, so the DB serves the last committed value until the writer commits. Full multi-version snapshots per transaction are how snapshot isolation (a stronger level) works.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What race condition does snapshot isolation specifically prevent that read committed does not?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Dirty writes</li>
+        <li><span class="sharepage__key">B</span> Write skew</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Read skew (nonrepeatable read) — a transaction seeing different parts of the database at different points in time <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Phantom reads in all cases</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Snapshot isolation gives the whole transaction one consistent point-in-time view, preventing read skew where, mid-transaction, you&#39;d see some data pre-update and some post-update. It still does not prevent write skew or all phantoms.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the core mechanism behind snapshot isolation, and what property does it give readers vs. writers?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Two-phase locking; readers and writers both block each other</li>
+        <li><span class="sharepage__key">B</span> A single serial execution thread; no concurrency at all</li>
+        <li><span class="sharepage__key">C</span> Compare-and-set on every read</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Multi-version concurrency control (MVCC); readers never block writers and writers never block readers <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Snapshot isolation uses MVCC, keeping multiple committed versions so each transaction reads from a consistent snapshot without blocking writers (and vice versa). This makes it ideal for long-running reads like backups and analytics.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which of these is NOT a valid technique for preventing lost updates?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Enabling last-write-wins conflict resolution on a replicated database <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Atomic write operations (e.g., a single UPDATE ... SET x = x + 1)</li>
+        <li><span class="sharepage__key">C</span> Explicit locking with SELECT ... FOR UPDATE</li>
+        <li><span class="sharepage__key">D</span> Compare-and-set (only write if the value hasn&#39;t changed since you read it)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Atomic ops, explicit locks, and compare-and-set all prevent lost updates; automatic detect-and-abort does too. LWW on replicated systems is explicitly called out as a way lost updates still happen, because it discards concurrent writes.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which scenario is the textbook example of write skew?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Two users both incrementing the same counter and one increment being lost</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Two on-call doctors each checking that at least one other doctor is on call, then both simultaneously booking off — leaving no one on call <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A transaction reading uncommitted data from another transaction</li>
+        <li><span class="sharepage__key">D</span> A backup reading rows at different times mid-transaction</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Write skew: two transactions read the same set (doctors on call), each sees the invariant satisfied, then each updates a different row, together violating the invariant. The counter case is a classic lost update, not write skew.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA&#39;s terminology, what is a &#39;phantom&#39;?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A committed write that vanishes after a crash</li>
+        <li><span class="sharepage__key">B</span> A replica that reports itself as leader after failover</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A write in one transaction that changes the result of a search query in another transaction <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> A read that returns uncommitted data</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A phantom occurs when one transaction&#39;s write alters the set of rows another transaction&#39;s WHERE-clause search would match, causing write skew. Snapshot isolation can&#39;t lock rows that don&#39;t yet exist; &#39;materializing conflicts&#39; is one workaround.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the key requirement that makes &#39;actual serial execution&#39; (single-threaded transactions, as in VoltDB/Redis) viable?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Extremely fast disks so every transaction can be fsynced individually</li>
+        <li><span class="sharepage__key">B</span> A cluster of at least five nodes for quorum</li>
+        <li><span class="sharepage__key">C</span> Predicate locks on every index range</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> The active dataset must fit in memory and transactions must be short (often stored procedures), with writes partitionable for throughput <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Running transactions one at a time on a single thread only works if data is in RAM (no disk-wait stalls) and transactions are small stored procedures; throughput scales by partitioning. Predicate/index-range locks belong to 2PL, a different approach.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Two-phase locking (2PL) enforces serializability using which locking scheme?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Shared (read) and exclusive (write) locks, where readers block writers and writers block everyone — plus predicate or index-range locks to prevent phantoms <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> A single global mutex held for the whole transaction</li>
+        <li><span class="sharepage__key">C</span> Optimistic locks acquired only at commit time</li>
+        <li><span class="sharepage__key">D</span> Compare-and-set on each written row</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 2PL uses shared/exclusive locks so reads and writes mutually block, and adds predicate/index-range locks to stop phantoms. Its downsides are poor performance (lots of blocking) and deadlocks; optimistic-at-commit describes SSI, not 2PL.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does serializable snapshot isolation (SSI) differ from two-phase locking?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> SSI is pessimistic and locks earlier than 2PL</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> SSI is optimistic: transactions run without blocking on a snapshot, and at commit the database checks whether reads were invalidated by concurrent writes, aborting if so <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> SSI abandons snapshot isolation entirely</li>
+        <li><span class="sharepage__key">D</span> SSI can only run on a single thread</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> SSI lets transactions proceed optimistically on a consistent snapshot and detects serialization conflicts (stale premises) at commit, aborting the loser. This avoids 2PL&#39;s heavy locking and generally scales better, at the cost of wasted work on aborts.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does DDIA warn readers not to confuse 2PL with 2PC?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They are the same protocol under two names</li>
+        <li><span class="sharepage__key">B</span> 2PC provides isolation and 2PL provides atomicity</li>
+        <li><span class="sharepage__key">C</span> Both are consensus algorithms like Paxos</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> 2PL (two-phase locking) is a concurrency-control method for isolation, whereas 2PC (two-phase commit) is an atomic-commit protocol across nodes — different problems entirely <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The names are similar but unrelated: 2PL is about serializable isolation via locks (this chapter), while 2PC is about committing a distributed transaction atomically across participants (Chapter 9). Conflating them is a common exam trap.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the practical relationship between single-object and multi-object operations regarding transactions?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Single-object atomicity/isolation is common even in non-transactional stores, but coordinating an invariant across multiple objects is what genuinely requires multi-object transactions <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Multi-object transactions are unnecessary because single-object atomicity covers everything</li>
+        <li><span class="sharepage__key">C</span> Single-object operations always require distributed consensus</li>
+        <li><span class="sharepage__key">D</span> Multi-object transactions only matter for read-only workloads</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Many datastores provide atomic single-object writes cheaply, but keeping an invariant consistent across several rows/documents (e.g., moving money between accounts, updating denormalized copies) is exactly where multi-object transactions earn their keep.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>A booking app lets two users concurrently book the last remaining seat: each transaction reads <code>seats_left = 1</code>, both see it&#39;s available, and both insert a booking. Which isolation level does this need, why won&#39;t snapshot isolation save you, and what&#39;s the cheapest fix if you must stay on snapshot isolation?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Name the race: this is write skew — two transactions read the same premise (a seat is free) and each writes a different row (its own booking), together violating the invariant.</li><li>Snapshot isolation does NOT prevent write skew: each transaction reads from its own consistent snapshot and neither sees the other&#39;s not-yet-committed insert.</li><li>True fix is serializability (SSI, or 2PL with predicate/index-range locks to catch the phantom).</li><li>Cheap fix on SI: materialize the conflict — take an explicit lock on the seat row (SELECT ... FOR UPDATE) or a lock row for the resource so the reads collide.</li><li>A plain UPDATE ... SET x = x - 1 atomic decrement also serializes the contended write.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> This is write skew: both transactions read <code>seats_left = 1</code>, decide it&#39;s safe, then insert conflicting bookings. Snapshot isolation can&#39;t stop it because each runs against its own snapshot and can&#39;t see the other&#39;s phantom insert. The correct fix is serializable isolation (SSI or 2PL with predicate locks); if I must stay on SI, I&#39;d materialize the conflict by taking an explicit <code>SELECT ... FOR UPDATE</code> lock on the seat/resource row so the two transactions actually contend on the same object.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You&#39;re on call for a hospital scheduler whose invariant is &#39;at least one doctor must remain on call at all times.&#39; Explain to a teammate why weaker isolation is genuinely unsafe here and what specifically serializability buys you.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Describe the failure: two doctors each check that another is on call, both see the invariant satisfied, and both simultaneously book off — leaving zero, a classic write skew.</li><li>Read committed and snapshot isolation both permit this because the two transactions read overlapping rows but write disjoint rows, so no lock or snapshot conflict fires.</li><li>The invariant spans multiple rows and depends on a read staying true through commit — exactly what serializability guarantees.</li><li>Serializability makes the outcome equivalent to some serial order, in which the second doctor to run would see only one left and be rejected.</li><li>This is worth the performance cost precisely because a violated safety invariant here is a real-world harm, not cosmetic staleness.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The invariant couples multiple rows: each transaction reads the set of on-call doctors, confirms one other is present, then writes its own row — classic write skew that read committed and snapshot isolation both allow, since the writes don&#39;t overlap. Under those levels both can commit and leave nobody on call. Serializability forces the result to match some serial order, where whoever runs second would observe only one doctor left and be blocked. The isolation cost is justified because violating this invariant is an actual safety harm, not just stale data.</div>
+    </article>
+    <article class="sharepage__q" id="q17">
+      <h3><a href="#q17" class="sharepage__anchor">Q17</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Two teams debate serializable isolation for a service with mostly short, read-heavy transactions and rare conflicts. When would you pick two-phase locking (2PL) versus serializable snapshot isolation (SSI), and what&#39;s the core mechanical tradeoff?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>2PL is pessimistic: it takes shared/exclusive locks (plus predicate/index-range locks for phantoms) so conflicting transactions block each other up front.</li><li>SSI is optimistic: transactions run unblocked on a snapshot and the DB checks at commit whether a read premise was invalidated, aborting the loser.</li><li>For low-contention, read-heavy workloads SSI wins — few aborts, no lock waiting, better throughput and no reader/writer blocking.</li><li>For high-contention workloads SSI&#39;s abort-and-retry rate climbs and wastes work, so 2PL&#39;s blocking can be more predictable.</li><li>2PL costs come from lock overhead, reduced concurrency, and deadlocks; SSI costs come from wasted work on aborts.</li><li>Both give the same correctness (equivalent to a serial order); the choice is a performance-profile decision, not a correctness one.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> For this mostly-read, low-conflict workload I&#39;d pick SSI: transactions run optimistically on a snapshot without blocking, and since conflicts are rare, few will be aborted at commit — you get near snapshot-isolation throughput with serializable correctness. 2PL would make readers and writers block each other and risk deadlocks even though conflicts almost never happen. I&#39;d flip to 2PL only if contention were high, where SSI&#39;s abort-and-retry rate would waste too much work; both deliver identical correctness, so it&#39;s purely a performance-profile call.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ddia","unit":"ch07","title":"Transactions","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"In ACID, which property is best described as 'abortability' — the ability to discard all of a transaction's writes if anything goes wrong partway through?","options":["Consistency","Isolation","Atomicity","Durability"],"answer":2,"answerLetter":"C"},{"n":2,"type":"mc","prompt":"Why does DDIA call the 'C' (Consistency) in ACID the odd one out?","options":["It refers to application-level invariants the application must maintain, not a guarantee the database provides — unlike A, I, and D","It is the only property that is impossible to implement","It is a synonym for isolation and thus redundant","It only applies to replicated databases"],"answer":0,"answerLetter":"A"},{"n":3,"type":"mc","prompt":"What does read-committed isolation guarantee?","options":["A fully consistent snapshot of the entire database for the transaction's lifetime","That transactions execute as if one at a time","That lost updates cannot occur","No dirty reads and no dirty writes — you only read/overwrite committed data"],"answer":3,"answerLetter":"D"},{"n":4,"type":"mc","prompt":"How is read committed typically implemented for reads and writes?","options":["A single global lock serializes all transactions","Row-level locks prevent dirty writes, while for reads the database remembers and returns the old committed value until the new one commits (rather than holding read locks)","Multi-version snapshots keyed to a transaction start timestamp","Optimistic detection that aborts on conflict"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"What race condition does snapshot isolation specifically prevent that read committed does not?","options":["Dirty writes","Write skew","Read skew (nonrepeatable read) — a transaction seeing different parts of the database at different points in time","Phantom reads in all cases"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"What is the core mechanism behind snapshot isolation, and what property does it give readers vs. writers?","options":["Two-phase locking; readers and writers both block each other","A single serial execution thread; no concurrency at all","Compare-and-set on every read","Multi-version concurrency control (MVCC); readers never block writers and writers never block readers"],"answer":3,"answerLetter":"D"},{"n":7,"type":"mc","prompt":"Which of these is NOT a valid technique for preventing lost updates?","options":["Enabling last-write-wins conflict resolution on a replicated database","Atomic write operations (e.g., a single UPDATE ... SET x = x + 1)","Explicit locking with SELECT ... FOR UPDATE","Compare-and-set (only write if the value hasn't changed since you read it)"],"answer":0,"answerLetter":"A"},{"n":8,"type":"mc","prompt":"Which scenario is the textbook example of write skew?","options":["Two users both incrementing the same counter and one increment being lost","Two on-call doctors each checking that at least one other doctor is on call, then both simultaneously booking off — leaving no one on call","A transaction reading uncommitted data from another transaction","A backup reading rows at different times mid-transaction"],"answer":1,"answerLetter":"B"},{"n":9,"type":"mc","prompt":"In DDIA's terminology, what is a 'phantom'?","options":["A committed write that vanishes after a crash","A replica that reports itself as leader after failover","A write in one transaction that changes the result of a search query in another transaction","A read that returns uncommitted data"],"answer":2,"answerLetter":"C"},{"n":10,"type":"mc","prompt":"What is the key requirement that makes 'actual serial execution' (single-threaded transactions, as in VoltDB/Redis) viable?","options":["Extremely fast disks so every transaction can be fsynced individually","A cluster of at least five nodes for quorum","Predicate locks on every index range","The active dataset must fit in memory and transactions must be short (often stored procedures), with writes partitionable for throughput"],"answer":3,"answerLetter":"D"},{"n":11,"type":"mc","prompt":"Two-phase locking (2PL) enforces serializability using which locking scheme?","options":["Shared (read) and exclusive (write) locks, where readers block writers and writers block everyone — plus predicate or index-range locks to prevent phantoms","A single global mutex held for the whole transaction","Optimistic locks acquired only at commit time","Compare-and-set on each written row"],"answer":0,"answerLetter":"A"},{"n":12,"type":"mc","prompt":"How does serializable snapshot isolation (SSI) differ from two-phase locking?","options":["SSI is pessimistic and locks earlier than 2PL","SSI is optimistic: transactions run without blocking on a snapshot, and at commit the database checks whether reads were invalidated by concurrent writes, aborting if so","SSI abandons snapshot isolation entirely","SSI can only run on a single thread"],"answer":1,"answerLetter":"B"},{"n":13,"type":"mc","prompt":"Why does DDIA warn readers not to confuse 2PL with 2PC?","options":["They are the same protocol under two names","2PC provides isolation and 2PL provides atomicity","Both are consensus algorithms like Paxos","2PL (two-phase locking) is a concurrency-control method for isolation, whereas 2PC (two-phase commit) is an atomic-commit protocol across nodes — different problems entirely"],"answer":3,"answerLetter":"D"},{"n":14,"type":"mc","prompt":"What is the practical relationship between single-object and multi-object operations regarding transactions?","options":["Single-object atomicity/isolation is common even in non-transactional stores, but coordinating an invariant across multiple objects is what genuinely requires multi-object transactions","Multi-object transactions are unnecessary because single-object atomicity covers everything","Single-object operations always require distributed consensus","Multi-object transactions only matter for read-only workloads"],"answer":0,"answerLetter":"A"},{"n":15,"type":"open","prompt":"A booking app lets two users concurrently book the last remaining seat: each transaction reads `seats_left = 1`, both see it's available, and both insert a booking. Which isolation level does this need, why won't snapshot isolation save you, and what's the cheapest fix if you must stay on snapshot isolation?","points":["Name the race: this is write skew — two transactions read the same premise (a seat is free) and each writes a different row (its own booking), together violating the invariant.","Snapshot isolation does NOT prevent write skew: each transaction reads from its own consistent snapshot and neither sees the other's not-yet-committed insert.","True fix is serializability (SSI, or 2PL with predicate/index-range locks to catch the phantom).","Cheap fix on SI: materialize the conflict — take an explicit lock on the seat row (SELECT ... FOR UPDATE) or a lock row for the resource so the reads collide.","A plain UPDATE ... SET x = x - 1 atomic decrement also serializes the contended write."]},{"n":16,"type":"open","prompt":"You're on call for a hospital scheduler whose invariant is 'at least one doctor must remain on call at all times.' Explain to a teammate why weaker isolation is genuinely unsafe here and what specifically serializability buys you.","points":["Describe the failure: two doctors each check that another is on call, both see the invariant satisfied, and both simultaneously book off — leaving zero, a classic write skew.","Read committed and snapshot isolation both permit this because the two transactions read overlapping rows but write disjoint rows, so no lock or snapshot conflict fires.","The invariant spans multiple rows and depends on a read staying true through commit — exactly what serializability guarantees.","Serializability makes the outcome equivalent to some serial order, in which the second doctor to run would see only one left and be rejected.","This is worth the performance cost precisely because a violated safety invariant here is a real-world harm, not cosmetic staleness."]},{"n":17,"type":"open","prompt":"Two teams debate serializable isolation for a service with mostly short, read-heavy transactions and rare conflicts. When would you pick two-phase locking (2PL) versus serializable snapshot isolation (SSI), and what's the core mechanical tradeoff?","points":["2PL is pessimistic: it takes shared/exclusive locks (plus predicate/index-range locks for phantoms) so conflicting transactions block each other up front.","SSI is optimistic: transactions run unblocked on a snapshot and the DB checks at commit whether a read premise was invalidated, aborting the loser.","For low-contention, read-heavy workloads SSI wins — few aborts, no lock waiting, better throughput and no reader/writer blocking.","For high-contention workloads SSI's abort-and-retry rate climbs and wastes work, so 2PL's blocking can be more predictable.","2PL costs come from lock overhead, reduced concurrency, and deadlocks; SSI costs come from wasted work on aborts.","Both give the same correctness (equivalent to a serial order); the choice is a performance-profile decision, not a correctness one."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ddia/ch07">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

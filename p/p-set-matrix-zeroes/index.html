@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Set Matrix Zeroes — JS Drill</title>
+<meta name="description" content="If a cell is 0, zero its entire row and column — in place, with O(1) extra space, by using the first row and column as flag arrays.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-set-matrix-zeroes">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Set Matrix Zeroes — JS Drill">
+<meta property="og:description" content="If a cell is 0, zero its entire row and column — in place, with O(1) extra space, by using the first row and column as flag arrays.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-set-matrix-zeroes">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Matrix</p>
+    <h1>Set Matrix Zeroes</h1>
+    <p class="sharepage__lede">If a cell is 0, zero its entire row and column — in place, with O(1) extra space, by using the first row and column as flag arrays.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Matrix</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>setZeroes(matrix)</code> that zeros every row and column containing a 0, using O(1) extra space. Log <code>JSON.stringify(matrix)</code> after running on [[0,1,2,0],[3,4,5,2],[1,3,1,5]].</p>
+    <p class="sharepage__note">Expected output: <code>[[0,0,0,0],[0,4,5,0],[0,3,1,0]]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function setZeroes(matrix) {
+  const m = matrix.length, n = matrix[0].length;
+  // Capture row-0 / col-0 zeroness BEFORE we overwrite them with flags.
+  let firstRowZero = false, firstColZero = false;
+  for (let j = 0; j &lt; n; j++) if (matrix[0][j] === 0) firstRowZero = true;
+  for (let i = 0; i &lt; m; i++) if (matrix[i][0] === 0) firstColZero = true;
+  // Pass 1: use row 0 / col 0 as flag arrays for the interior.
+  for (let i = 1; i &lt; m; i++) {
+    for (let j = 1; j &lt; n; j++) {
+      if (matrix[i][j] === 0) {
+        matrix[i][0] = 0;
+        matrix[0][j] = 0;
+      }
+    }
+  }
+  // Pass 2: read the flags and zero interior cells.
+  for (let i = 1; i &lt; m; i++) {
+    for (let j = 1; j &lt; n; j++) {
+      if (matrix[i][0] === 0 || matrix[0][j] === 0) matrix[i][j] = 0;
+    }
+  }
+  // Apply captured booleans LAST — earlier would destroy the flags Pass 2 still needs.
+  if (firstRowZero) for (let j = 0; j &lt; n; j++) matrix[0][j] = 0;
+  if (firstColZero) for (let i = 0; i &lt; m; i++) matrix[i][0] = 0;
+}
+// Time O(m*n), Space O(1)</code></pre>
+    <ul class="sharepage__notes"><li>The trick: reuse row 0 and column 0 as flag arrays, but capture their original zero state in two booleans BEFORE you start writing flags.</li><li>Process the interior (i, j &gt;= 1) twice: first pass writes flags, second pass reads flags and zeros cells.</li><li>Apply the firstRowZero / firstColZero booleans LAST — otherwise you&#39;d overwrite the flags you still need.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Marker Sets (O(m+n) space) <code>O(m*n) / O(m+n)</code></h3>
+      <p>Reach for this when interview pressure is high and the O(1) trick doesn&#39;t come to mind — two boolean arrays (one per row, one per column) make the two-pass structure obvious and are easy to reason about. The only cost is O(m+n) auxiliary space.</p>
+      <pre class="sharepage__code"><code class="language-js">function setZeroes(matrix) {
+  const m = matrix.length, n = matrix[0].length;
+  const zeroRows = new Array(m).fill(false);
+  const zeroCols = new Array(n).fill(false);
+  // Pass 1: record which rows and columns contain a zero.
+  for (let i = 0; i &lt; m; i++) {
+    for (let j = 0; j &lt; n; j++) {
+      if (matrix[i][j] === 0) {
+        zeroRows[i] = true;
+        zeroCols[j] = true;
+      }
+    }
+  }
+  // Pass 2: zero out the flagged rows and columns.
+  for (let i = 0; i &lt; m; i++) {
+    for (let j = 0; j &lt; n; j++) {
+      if (zeroRows[i] || zeroCols[j]) matrix[i][j] = 0;
+    }
+  }
+}
+const g = [[0,1,2,0],[3,4,5,2],[1,3,1,5]];
+setZeroes(g);
+console.log(JSON.stringify(g));</code></pre>
+      <ul class="sharepage__notes"><li>Two explicit boolean arrays replace the implicit flags reused from row 0 / col 0 — easier to read but O(m+n) extra space.</li><li>Same two-pass structure as the optimal: detect zeros first, apply them second (avoids cascade writes).</li><li>No scalar booleans needed — the arrays are never overwritten, so row-0/col-0 ambiguity disappears.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why capture <code>firstRowZero</code> and <code>firstColZero</code> before scanning the interior?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because the interior scan visits row 0 / col 0 cells first and could short-circuit before reaching real zeros</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because the first row and column get reused as flag storage and would otherwise lose their original zero info <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because the JS engine may reorder loop iterations and reading the scalars first guarantees a consistent snapshot</li>
+        <li><span class="sharepage__key">D</span> Because zeros in row 0 / col 0 trigger different row+column wipes than interior zeros do (only row, not column)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Space complexity of the optimal in-place approach?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(m + n) for two separate flag arrays</li>
+        <li><span class="sharepage__key">B</span> O(m * n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(1) extra space <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(min(m, n)) — one flag array indexed by the smaller dimension</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why must the first row / first column be zeroed LAST?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because zeroing them first would propagate zeros via the cascade trap the two-pass design is meant to prevent</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> If you zero them earlier, you destroy the flags the interior pass still needs to read <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because the interior pass writes flags into row 0 / col 0 and they must be in a known state when written</li>
+        <li><span class="sharepage__key">D</span> So that the scalars <code>firstRowZero</code> and <code>firstColZero</code> can be re-derived from the matrix at the end for verification</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(m + n)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(m * n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O((m * n)^2)</li>
+        <li><span class="sharepage__key">D</span> O((m + n)^2) for the cross-shaped wipe per zero</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the flag-capture and final write-back.</p>
+      <pre class="sharepage__code"><code class="language-js">function setZeroes(matrix) {
+  const m = matrix.length, n = matrix[0].length;
+  let firstRowZero = false, firstColZero = false;
+  for (let j = 0; j &lt; n; j++) if (matrix[0][j] === 0) firstRowZero = true;
+  for (let i = 0; i &lt; m; i++) if (matrix[i][___] === 0) firstColZero = true;
+  for (let i = 1; i &lt; m; i++) {
+    for (let j = 1; j &lt; n; j++) {
+      if (matrix[i][j] ___ 0) {
+        matrix[i][0] = 0;
+        matrix[___][j] = 0;
+      }
+    }
+  }
+  for (let i = 1; i &lt; m; i++) {
+    for (let j = 1; j &lt; n; j++) {
+      if (matrix[i][0] === 0 ___ matrix[0][j] === 0) matrix[i][j] = 0;
+    }
+  }
+  if (firstRowZero) for (let j = 0; j &lt; n; j++) matrix[0][j] = 0;
+  if (___) for (let i = 0; i &lt; m; i++) matrix[i][0] = 0;
+}
+const g = [[1,1,1],[1,0,1],[1,1,1]];
+setZeroes(g);
+console.log(JSON.stringify(g));</code></pre>
+      <p><strong>Answers:</strong> <code>0</code>, <code>===</code>, <code>0</code>, <code>||</code>, <code>firstColZero</code></p>
+      <p class="sharepage__note">Expected output: <code>[[1,0,1],[0,0,0],[1,0,1]]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>setZeroes(matrix)</code> that zeros every row and column containing a 0, using O(1) extra space. Log <code>JSON.stringify(matrix)</code> after running on [[0,1,2,0],[3,4,5,2],[1,3,1,5]].</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Capture whether row 0 / col 0 originally contained a zero into two booleans.</li><li>Use row 0 and col 0 as flags for the interior; apply the captured booleans LAST.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function setZeroes(matrix) {
+  const m = matrix.length, n = matrix[0].length;
+  // Capture row-0 / col-0 zeroness BEFORE we overwrite them with flags.
+  let firstRowZero = false, firstColZero = false;
+  for (let j = 0; j &lt; n; j++) if (matrix[0][j] === 0) firstRowZero = true;
+  for (let i = 0; i &lt; m; i++) if (matrix[i][0] === 0) firstColZero = true;
+  // Pass 1: use row 0 / col 0 as flag arrays for the interior.
+  for (let i = 1; i &lt; m; i++) {
+    for (let j = 1; j &lt; n; j++) {
+      if (matrix[i][j] === 0) {
+        matrix[i][0] = 0;
+        matrix[0][j] = 0;
+      }
+    }
+  }
+  // Pass 2: read the flags and zero interior cells.
+  for (let i = 1; i &lt; m; i++) {
+    for (let j = 1; j &lt; n; j++) {
+      if (matrix[i][0] === 0 || matrix[0][j] === 0) matrix[i][j] = 0;
+    }
+  }
+  // Apply captured booleans LAST — earlier would destroy the flags Pass 2 still needs.
+  if (firstRowZero) for (let j = 0; j &lt; n; j++) matrix[0][j] = 0;
+  if (firstColZero) for (let i = 0; i &lt; m; i++) matrix[i][0] = 0;
+}
+const g = [[0,1,2,0],[3,4,5,2],[1,3,1,5]];
+setZeroes(g);
+console.log(JSON.stringify(g));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-set-matrix-zeroes","title":"Set Matrix Zeroes","section":"Matrix","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why capture `firstRowZero` and `firstColZero` before scanning the interior?","options":["Because the interior scan visits row 0 / col 0 cells first and could short-circuit before reaching real zeros","Because the first row and column get reused as flag storage and would otherwise lose their original zero info","Because the JS engine may reorder loop iterations and reading the scalars first guarantees a consistent snapshot","Because zeros in row 0 / col 0 trigger different row+column wipes than interior zeros do (only row, not column)"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Space complexity of the optimal in-place approach?","options":["O(m + n) for two separate flag arrays","O(m * n)","O(1) extra space","O(min(m, n)) — one flag array indexed by the smaller dimension"],"answer":2,"answerLetter":"C"},{"n":3,"q":"Why must the first row / first column be zeroed LAST?","options":["Because zeroing them first would propagate zeros via the cascade trap the two-pass design is meant to prevent","If you zero them earlier, you destroy the flags the interior pass still needs to read","Because the interior pass writes flags into row 0 / col 0 and they must be in a known state when written","So that the scalars `firstRowZero` and `firstColZero` can be re-derived from the matrix at the end for verification"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Time complexity?","options":["O(m + n)","O(m * n)","O((m * n)^2)","O((m + n)^2) for the cross-shaped wipe per zero"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the flag-capture and final write-back.","answers":["0","===","0","||","firstColZero"]}],"L3":[{"n":1,"prompt":"Write `setZeroes(matrix)` that zeros every row and column containing a 0, using O(1) extra space. Log `JSON.stringify(matrix)` after running on [[0,1,2,0],[3,4,5,2],[1,3,1,5]].","expectedOutput":"[[0,0,0,0],[0,4,5,0],[0,3,1,0]]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-set-matrix-zeroes">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

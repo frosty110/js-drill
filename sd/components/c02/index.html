@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Caching — Building Blocks</title>
+<meta name="description" content="Where to put a cache, how reads and writes flow through it (cache-aside, read-through, write-through, write-back, write-around), how entries are evicted and invalidated, and how to survive the stampede when a hot key expires.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c02">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Caching — Building Blocks">
+<meta property="og:description" content="Where to put a cache, how reads and writes flow through it (cache-aside, read-through, write-through, write-back, write-around), how entries are evicted and invalidated, and how to survive the stampede when a hot key expires.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c02">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/components/">Building Blocks</a></p>
+    <h1>Caching</h1>
+    <p class="sharepage__lede">Where to put a cache, how reads and writes flow through it (cache-aside, read-through, write-through, write-back, write-around), how entries are evicted and invalidated, and how to survive the stampede when a hot key expires.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Building Blocks</span> <span class="ds-chip">15 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Cache-aside (lazy loading): the app checks the cache, and on a miss loads from the DB and populates the cache itself; the cache never talks to the DB.</li><li>Read-through and write-through push that logic into the cache layer; write-through writes cache and DB synchronously (fresh but slower writes).</li><li>Write-back (write-behind) writes to cache and flushes to the DB asynchronously — fastest writes but risks data loss if the node dies before flush; write-around writes straight to the DB and skips the cache.</li><li>Eviction policies (LRU, LFU, FIFO, TTL/random) decide who leaves when the cache is full; cache invalidation is famously one of the two hard problems.</li><li>A cache stampede/thundering herd happens when a hot key expires and many requests hit the origin at once; mitigate with per-key locking, request coalescing, jittered TTLs, early recomputation, or stale-while-revalidate.</li><li>Redis is single-threaded with rich data structures and optional persistence; Memcached is multi-threaded, string-only, and purely in-memory.</li><li>Caches live at many layers — browser, CDN, in-process/application, distributed cache, and the DB buffer pool — and hit ratio measures their effectiveness.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">15</span></h2>
+    <p class="sharepage__note">Positions 1–15 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In the cache-aside (lazy loading) pattern, who is responsible for loading data from the database on a cache miss?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A background job pre-warms every possible key</li>
+        <li><span class="sharepage__key">B</span> The cache automatically fetches from the DB and returns it</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> The application code reads from the DB and then writes the value into the cache <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The database pushes the row into the cache when it changes</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With cache-aside the application owns the logic: on a miss it queries the DB, returns the value, and populates the cache itself — the cache is a dumb store that never contacts the DB. When the cache does the load for you, that is read-through, a different pattern.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does write-through caching behave on a write?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Writes are dropped unless the key is already cached</li>
+        <li><span class="sharepage__key">B</span> Writes go to the cache only and are flushed to the DB later asynchronously</li>
+        <li><span class="sharepage__key">C</span> Writes go straight to the DB and bypass the cache entirely</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Writes update the cache and the database synchronously as one operation <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Write-through updates both the cache and the DB synchronously, so the cache is always consistent with the database at the cost of slower writes. Writing to cache and flushing later is write-back; going straight to the DB and skipping the cache is write-around.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the defining risk of a write-back (write-behind) cache?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Data can be lost if the cache node fails after acking the write but before flushing it to the database <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Every write must also invalidate the CDN</li>
+        <li><span class="sharepage__key">C</span> Writes are slower than write-through because of the extra hop</li>
+        <li><span class="sharepage__key">D</span> Reads are always stale because the DB is never updated</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Write-back acknowledges the write once it hits the cache and flushes to the DB asynchronously, so a crash before the flush loses those buffered writes — the durability tradeoff for very fast writes. It is actually faster than write-through, which is its whole appeal.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>When is write-around caching (write to the DB, skip the cache) the right choice?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> For data that is written once and read many times immediately after</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> For write-heavy data that is rarely re-read soon, so you avoid polluting the cache with entries that will just be evicted <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> When you need the cache and DB to stay perfectly consistent on every write</li>
+        <li><span class="sharepage__key">D</span> When you want the fastest possible write latency</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Write-around sends writes straight to the DB and only caches on a later read, which avoids filling the cache with write-once data that would otherwise evict hotter entries. The tradeoff is that a read right after a write is a guaranteed miss.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which pattern combined with write-around causes a recently written item to be a cache miss on the next read?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Write-through, because it invalidates on write</li>
+        <li><span class="sharepage__key">B</span> Read-through, because it never repopulates</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Cache-aside read, because the write skipped the cache so the value must be loaded from the DB on first read <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Write-back, because the flush blocks the read</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Write-around does not populate the cache on write, so the first read afterward misses and a cache-aside/read-through load pulls it from the DB. Write-through would have kept the cache fresh, avoiding that miss.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does an LRU eviction policy do when the cache is full?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Evicts a randomly chosen entry</li>
+        <li><span class="sharepage__key">B</span> Evicts the entry that has been accessed the fewest times overall</li>
+        <li><span class="sharepage__key">C</span> Evicts the entry that was inserted earliest, regardless of use</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Evicts the entry that has gone the longest without being accessed <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> LRU (least-recently-used) evicts whichever entry has been idle the longest, betting that recently touched items will be touched again. Evicting by lowest access count is LFU, and evicting the oldest-inserted is FIFO.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does LFU differ from LRU?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> LFU evicts by lowest access frequency/count; LRU evicts by longest time since last access <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> LFU and LRU are identical for read-heavy workloads</li>
+        <li><span class="sharepage__key">C</span> LFU evicts the newest entries first; LRU evicts the oldest</li>
+        <li><span class="sharepage__key">D</span> LFU uses TTL while LRU never expires entries</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> LFU tracks how often each key is used and drops the least-frequently-used, which can retain a long-popular item that was briefly idle; LRU only looks at recency of last access. A pitfall of LFU is that once-popular-now-cold keys can stick around unless the counts decay.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A cache stampede (thundering herd) occurs when...</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The cache runs out of memory and evicts everything at once</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A popular key expires and many concurrent requests all miss and hit the origin database simultaneously <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Two nodes write the same key with different values</li>
+        <li><span class="sharepage__key">D</span> The TTL is set too long, so entries never refresh</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> When a hot key expires, every in-flight request misses at once and stampedes the origin to recompute the same value, which can overwhelm the DB. The classic fixes coordinate that recomputation so only one request does the work.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which technique lets only one request recompute an expired hot key while the others wait for or reuse its result?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Disabling TTLs so keys never expire</li>
+        <li><span class="sharepage__key">B</span> Increasing the LRU cache size</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Per-key locking / request coalescing (single-flight) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Switching from Redis to Memcached</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A per-key lock (single-flight / request coalescing) ensures the first request rebuilds the value while the rest block briefly and then read the freshly cached result, collapsing N origin hits into one. Bigger caches or a different engine do not address the concurrent-miss problem.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why add jitter (randomization) to cache TTLs?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To guarantee strong consistency with the database</li>
+        <li><span class="sharepage__key">B</span> To reduce the memory footprint of each entry</li>
+        <li><span class="sharepage__key">C</span> To make each key use a different eviction policy</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> To spread expirations over time so many keys don&#39;t expire at the same instant and cause a synchronized stampede <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If many entries are written together with an identical TTL, they all expire simultaneously and stampede the origin; adding random jitter to each TTL staggers the expirations. It is a cheap complement to locking and early-recompute strategies.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does the stale-while-revalidate strategy do?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Serves the existing (slightly stale) cached value immediately while asynchronously refreshing it in the background <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Deletes the key the moment it becomes stale</li>
+        <li><span class="sharepage__key">C</span> Writes through to the DB on every read</li>
+        <li><span class="sharepage__key">D</span> Blocks all readers until a fresh value is computed</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Stale-while-revalidate returns the stale entry right away to keep latency low and kicks off an async refresh so the next reader gets fresh data, avoiding both the miss latency and the stampede. The cost is briefly serving slightly outdated data.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which statement correctly contrasts Redis and Memcached?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Redis is multi-threaded and string-only; Memcached is single-threaded with rich data structures</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Redis is single-threaded (per shard) with rich data structures and optional persistence; Memcached is multi-threaded, stores plain strings, and is purely in-memory <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Both persist to disk by default and support the same data types</li>
+        <li><span class="sharepage__key">D</span> Memcached supports replication and pub/sub while Redis does not</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Redis offers data structures (lists, sets, sorted sets, hashes), optional persistence (RDB/AOF), and replication, running its command loop single-threaded; Memcached is a simpler multi-threaded string cache with no persistence. Pick Memcached for a pure, multi-core string cache and Redis when you need structures, durability, or pub/sub.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which is an example of an in-process (application-layer) cache rather than a distributed cache?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The database&#39;s buffer pool</li>
+        <li><span class="sharepage__key">B</span> A Redis cluster shared by all app servers</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A local in-memory map inside a single application server&#39;s heap <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> A CDN edge PoP caching static assets</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An in-process cache lives inside one application instance&#39;s memory (fastest access, but not shared and lost on restart); a Redis cluster is a distributed cache shared across servers. CDN and DB buffer pool are separate cache layers entirely.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A single &#39;hot key&#39; is receiving so much traffic that its one cache node is saturated. Which mitigation directly addresses this?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Switch the eviction policy from LRU to FIFO</li>
+        <li><span class="sharepage__key">B</span> Reduce the cache size to force earlier eviction</li>
+        <li><span class="sharepage__key">C</span> Raise the global TTL so the key never expires</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Replicate the hot key across multiple nodes (or add a small local in-process cache) so reads fan out instead of hammering one node <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A hot key overloads whichever shard owns it, so the fix is to spread its reads — replicate the key to several nodes or front it with a per-app-server local cache. Eviction policy and TTL tuning don&#39;t relieve a single overloaded node.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Explain the difference between write-through and write-back caching, and when you&#39;d accept the durability risk of write-back.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Write-through writes cache and DB synchronously — always consistent, slower writes, no data-loss window.</li><li>Write-back writes to cache and flushes to DB asynchronously — much faster writes, but a crash before flush loses buffered writes.</li><li>Choose write-back when write throughput/latency matters more than never losing a recent write (e.g. metrics, counters, view counts, ephemeral state).</li><li>Mitigate the risk with replication of the cache, batching flushes, or accepting bounded loss for that data class.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Write-through updates the cache and the database in the same synchronous operation, so the DB is always current but every write pays for two writes. Write-back only writes the cache and flushes to the DB asynchronously, which is far faster but opens a window where a node crash loses unflushed writes. I&#39;d accept write-back for high-volume, loss-tolerant data like counters or metrics — ideally with cache replication or bounded batching to cap how much I could lose — and stick with write-through for anything I can&#39;t afford to drop.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"components","unit":"c02","title":"Caching","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"In the cache-aside (lazy loading) pattern, who is responsible for loading data from the database on a cache miss?","options":["A background job pre-warms every possible key","The cache automatically fetches from the DB and returns it","The application code reads from the DB and then writes the value into the cache","The database pushes the row into the cache when it changes"],"answer":2,"answerLetter":"C"},{"n":2,"type":"mc","prompt":"How does write-through caching behave on a write?","options":["Writes are dropped unless the key is already cached","Writes go to the cache only and are flushed to the DB later asynchronously","Writes go straight to the DB and bypass the cache entirely","Writes update the cache and the database synchronously as one operation"],"answer":3,"answerLetter":"D"},{"n":3,"type":"mc","prompt":"What is the defining risk of a write-back (write-behind) cache?","options":["Data can be lost if the cache node fails after acking the write but before flushing it to the database","Every write must also invalidate the CDN","Writes are slower than write-through because of the extra hop","Reads are always stale because the DB is never updated"],"answer":0,"answerLetter":"A"},{"n":4,"type":"mc","prompt":"When is write-around caching (write to the DB, skip the cache) the right choice?","options":["For data that is written once and read many times immediately after","For write-heavy data that is rarely re-read soon, so you avoid polluting the cache with entries that will just be evicted","When you need the cache and DB to stay perfectly consistent on every write","When you want the fastest possible write latency"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"Which pattern combined with write-around causes a recently written item to be a cache miss on the next read?","options":["Write-through, because it invalidates on write","Read-through, because it never repopulates","Cache-aside read, because the write skipped the cache so the value must be loaded from the DB on first read","Write-back, because the flush blocks the read"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"What does an LRU eviction policy do when the cache is full?","options":["Evicts a randomly chosen entry","Evicts the entry that has been accessed the fewest times overall","Evicts the entry that was inserted earliest, regardless of use","Evicts the entry that has gone the longest without being accessed"],"answer":3,"answerLetter":"D"},{"n":7,"type":"mc","prompt":"How does LFU differ from LRU?","options":["LFU evicts by lowest access frequency/count; LRU evicts by longest time since last access","LFU and LRU are identical for read-heavy workloads","LFU evicts the newest entries first; LRU evicts the oldest","LFU uses TTL while LRU never expires entries"],"answer":0,"answerLetter":"A"},{"n":8,"type":"mc","prompt":"A cache stampede (thundering herd) occurs when...","options":["The cache runs out of memory and evicts everything at once","A popular key expires and many concurrent requests all miss and hit the origin database simultaneously","Two nodes write the same key with different values","The TTL is set too long, so entries never refresh"],"answer":1,"answerLetter":"B"},{"n":9,"type":"mc","prompt":"Which technique lets only one request recompute an expired hot key while the others wait for or reuse its result?","options":["Disabling TTLs so keys never expire","Increasing the LRU cache size","Per-key locking / request coalescing (single-flight)","Switching from Redis to Memcached"],"answer":2,"answerLetter":"C"},{"n":10,"type":"mc","prompt":"Why add jitter (randomization) to cache TTLs?","options":["To guarantee strong consistency with the database","To reduce the memory footprint of each entry","To make each key use a different eviction policy","To spread expirations over time so many keys don't expire at the same instant and cause a synchronized stampede"],"answer":3,"answerLetter":"D"},{"n":11,"type":"mc","prompt":"What does the stale-while-revalidate strategy do?","options":["Serves the existing (slightly stale) cached value immediately while asynchronously refreshing it in the background","Deletes the key the moment it becomes stale","Writes through to the DB on every read","Blocks all readers until a fresh value is computed"],"answer":0,"answerLetter":"A"},{"n":12,"type":"mc","prompt":"Which statement correctly contrasts Redis and Memcached?","options":["Redis is multi-threaded and string-only; Memcached is single-threaded with rich data structures","Redis is single-threaded (per shard) with rich data structures and optional persistence; Memcached is multi-threaded, stores plain strings, and is purely in-memory","Both persist to disk by default and support the same data types","Memcached supports replication and pub/sub while Redis does not"],"answer":1,"answerLetter":"B"},{"n":13,"type":"mc","prompt":"Which is an example of an in-process (application-layer) cache rather than a distributed cache?","options":["The database's buffer pool","A Redis cluster shared by all app servers","A local in-memory map inside a single application server's heap","A CDN edge PoP caching static assets"],"answer":2,"answerLetter":"C"},{"n":14,"type":"mc","prompt":"A single 'hot key' is receiving so much traffic that its one cache node is saturated. Which mitigation directly addresses this?","options":["Switch the eviction policy from LRU to FIFO","Reduce the cache size to force earlier eviction","Raise the global TTL so the key never expires","Replicate the hot key across multiple nodes (or add a small local in-process cache) so reads fan out instead of hammering one node"],"answer":3,"answerLetter":"D"},{"n":15,"type":"open","prompt":"Explain the difference between write-through and write-back caching, and when you'd accept the durability risk of write-back.","points":["Write-through writes cache and DB synchronously — always consistent, slower writes, no data-loss window.","Write-back writes to cache and flushes to DB asynchronously — much faster writes, but a crash before flush loses buffered writes.","Choose write-back when write throughput/latency matters more than never losing a recent write (e.g. metrics, counters, view counts, ephemeral state).","Mitigate the risk with replication of the cache, batching flushes, or accepting bounded loss for that data class."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c02">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

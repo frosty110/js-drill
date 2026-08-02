@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clone Graph — JS Drill</title>
+<meta name="description" content="DFS with a visited Map from original-node to clone-node. The Map handles cycles AND avoids exponential reclones of shared neighbors.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-clone-graph">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Clone Graph — JS Drill">
+<meta property="og:description" content="DFS with a visited Map from original-node to clone-node. The Map handles cycles AND avoids exponential reclones of shared neighbors.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-clone-graph">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Graphs</p>
+    <h1>Clone Graph</h1>
+    <p class="sharepage__lede">DFS with a visited Map from original-node to clone-node. The Map handles cycles AND avoids exponential reclones of shared neighbors.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Graphs</span> <span class="ds-chip">8 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>cloneGraph(node)</code> using DFS + a visited Map. Build the 4-cycle graph with edges 1-2, 2-3, 3-4, 4-1, clone it, then log (1) <code>cloned !== original</code> (deep-copy proof), (2) a DFS-order serialization as <code>val:[n1,n2,...]</code> entries space-separated.</p>
+    <p class="sharepage__note">Expected output: <code>true
+1:[2,4] 2:[1,3] 3:[2,4] 4:[1,3]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function cloneGraph(node) {
+  if (!node) return null;
+  // Map original-node OBJECT → clone — identity keys, vals can repeat.
+  const map = new Map();
+  function dfs(orig) {
+    // Already cloned (or mid-clone) — return the recorded copy to break cycles.
+    if (map.has(orig)) return map.get(orig);
+    const copy = { val: orig.val, neighbors: [] };
+    // CRITICAL: record BEFORE recursing — otherwise a cycle infinite-loops.
+    map.set(orig, copy);
+    for (const nb of orig.neighbors) copy.neighbors.push(dfs(nb));
+    return copy;
+  }
+  return dfs(node);
+}
+// Time O(V + E), Space O(V) for the map + recursion stack</code></pre>
+    <ul class="sharepage__notes"><li>CRITICAL: set map.set(orig, copy) BEFORE recursing into neighbors. Otherwise a cycle re-enters dfs and infinite-loops.</li><li>The Map keys are the original node OBJECTS (identity), not their .val — vals can repeat.</li><li>For each original node you create exactly one clone, then wire its neighbors by recursing or fetching from the map.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>BFS (iterative queue) <code>O(V+E) / O(V)</code></h3>
+      <p>Use BFS when you want to avoid recursion-stack overflow on large graphs (V can be up to ~100 on LeetCode but arbitrary in production). The same visited Map discipline applies — set-before-enqueue instead of set-before-recurse.</p>
+      <pre class="sharepage__code"><code class="language-js">function cloneGraph(node) {
+  if (!node) return null;
+  const map = new Map();
+  // Create the root clone and seed the queue with the original root.
+  map.set(node, { val: node.val, neighbors: [] });
+  const queue = [node];
+  while (queue.length) {
+    const orig = queue.shift();
+    for (const nb of orig.neighbors) {
+      if (!map.has(nb)) {
+        // Create the clone and enqueue BEFORE wiring — same discipline as DFS set-before-recurse.
+        map.set(nb, { val: nb.val, neighbors: [] });
+        queue.push(nb);
+      }
+      // Wire this edge on every visit (both directions of an undirected edge).
+      map.get(orig).neighbors.push(map.get(nb));
+    }
+  }
+  return map.get(node);
+}
+function serialize(start) {
+  const seen = new Set();
+  const order = [];
+  function walk(n) {
+    if (seen.has(n)) return;
+    seen.add(n);
+    order.push(n);
+    for (const nb of n.neighbors) walk(nb);
+  }
+  walk(start);
+  return order.map(n =&gt; n.val + &quot;:[&quot; + n.neighbors.map(x =&gt; x.val).join(&quot;,&quot;) + &quot;]&quot;).join(&quot; &quot;);
+}
+const a = { val: 1, neighbors: [] };
+const b = { val: 2, neighbors: [] };
+const c = { val: 3, neighbors: [] };
+const d = { val: 4, neighbors: [] };
+a.neighbors = [b, d];
+b.neighbors = [a, c];
+c.neighbors = [b, d];
+d.neighbors = [a, c];
+const cloned = cloneGraph(a);
+console.log(cloned !== a);
+console.log(serialize(cloned));</code></pre>
+      <ul class="sharepage__notes"><li>Create the root&#39;s clone and add it to the map BEFORE entering the loop — the root has no &#39;parent&#39; to trigger the if (!map.has) branch for it.</li><li>Wire each neighbor edge inside the loop for every dequeued node — this correctly handles undirected edges appearing from both endpoints.</li><li>BFS traverses level-by-level vs DFS depth-first, but the result is identical: every node cloned exactly once, all edges wired.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">8</span></h2>
+    <p class="sharepage__note">Positions 1–8 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why must you put the clone in the map BEFORE recursing into neighbors?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> So the neighbor recursion can mutate the parent&#39;s copy via the shared Map reference</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Otherwise a cycle re-enters dfs on a node that is not yet recorded and recurses forever <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Map.set assigns a stable identity hash that neighbor recursions rely on for ordering</li>
+        <li><span class="sharepage__key">D</span> The Map&#39;s insertion order determines the clone&#39;s neighbor order in the result</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What are the keys of the visited Map?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Node values (.val)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Original node object references <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Clone references</li>
+        <li><span class="sharepage__key">D</span> A tuple of (original, clone) pairs, with the original side compared by identity</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(V)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(V + E) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(V * E)</li>
+        <li><span class="sharepage__key">D</span> O(V^2)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> For a null input, the function returns:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> An empty node <code>{ val: null, neighbors: [] }</code> to preserve the deep-copy contract</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> null <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> undefined</li>
+        <li><span class="sharepage__key">D</span> throws</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The guard <code>if (!node) return null</code> handles the empty-graph case before any cloning begins.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> Why is a plain visited SET insufficient here, requiring a MAP instead?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Set.has takes O(n) on objects while Map.has is O(1), so cycles would be too slow with a Set</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> You need the original-&gt;clone mapping to wire each clone&#39;s neighbors to the right clone objects <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Set iteration order isn&#39;t insertion-preserving, which would scramble the neighbor order in the clones</li>
+        <li><span class="sharepage__key">D</span> A Set can only break cycles for directed graphs; undirected graphs need a Map&#39;s bidirectional lookup</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A Set only answers &#39;seen this?&#39;; cloning needs to fetch the EXISTING clone for an already-seen original so neighbors point at shared clones, which requires the value side of a Map.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> Besides breaking cycles, what second problem does the visited Map solve?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It guarantees the clone&#39;s neighbor lists are in the same insertion order as the original</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It ensures a neighbor shared by multiple nodes (e.g. a diamond) is cloned exactly once <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It records the depth of each node so the recursion knows when to terminate</li>
+        <li><span class="sharepage__key">D</span> It distinguishes nodes with equal .val by appending a unique tag to each clone</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Without the Map, a node reachable via two paths (diamond A-&gt;B-&gt;D, A-&gt;C-&gt;D) would be cloned twice, producing two distinct D-copies and a wrong structure.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> Could you solve Clone Graph with BFS instead of DFS?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> No — BFS would clone nodes level-by-level, but cycles span levels and would be cloned twice</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Yes — use a queue plus the same original-&gt;clone Map; both traverse every node once <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Yes, but the clones must be wired up in a second pass after BFS finishes enumerating all originals</li>
+        <li><span class="sharepage__key">D</span> No — BFS visits each node before its neighbors are cloned, so neighbor pointers would be null</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> BFS with an explicit queue and the identical visited Map clones correctly and avoids deep recursion; the Map (set-before-enqueue) is what handles cycles in either traversal.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> Why MUST the Map key be the original node OBJECT, not node.val?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Map.get(val) does linear scan on numeric keys; object keys hash in O(1)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> If two distinct nodes share a val, keying on val would alias them into one clone — wrong graph <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Map keys must be reference types — primitives are silently converted to Object wrappers that lose equality</li>
+        <li><span class="sharepage__key">D</span> node.val could be mutated during traversal, invalidating prior Map entries</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Map uses identity for object keys, so distinct originals stay distinct even with equal vals; keying on val collapses different nodes when values repeat.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the DFS clone. The order of the two lines after creating copy is load-bearing.</p>
+      <pre class="sharepage__code"><code class="language-js">function cloneGraph(node) {
+  if (!node) return null;
+  const map = new ___();
+  function dfs(orig) {
+    if (map.has(orig)) return map.___(orig);
+    const copy = { val: orig.val, neighbors: [] };
+    map.set(orig, ___);
+    for (const nb of orig.neighbors) copy.neighbors.push(___(nb));
+    return copy;
+  }
+  return dfs(node);
+}
+const a = { val: 1, neighbors: [] };
+const b = { val: 2, neighbors: [] };
+const c = { val: 3, neighbors: [] };
+a.neighbors = [b, c];
+b.neighbors = [a, c];
+c.neighbors = [a, b];
+const cloned = cloneGraph(a);
+console.log(cloned !== a);
+console.log(cloned.val + &quot;:&quot; + cloned.neighbors.map(n =&gt; n.val).join(&quot;,&quot;));</code></pre>
+      <p><strong>Answers:</strong> <code>Map</code>, <code>get</code>, <code>copy</code>, <code>dfs</code></p>
+      <p class="sharepage__note">Expected output: <code>true
+1:2,3</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>cloneGraph(node)</code> using DFS + a visited Map. Build the 4-cycle graph with edges 1-2, 2-3, 3-4, 4-1, clone it, then log (1) <code>cloned !== original</code> (deep-copy proof), (2) a DFS-order serialization as <code>val:[n1,n2,...]</code> entries space-separated.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Map original-node → clone-node, keyed by object identity.</li><li>Record the clone in the map BEFORE recursing into its neighbors, or a cycle infinite-loops.</li><li>For each neighbor, push dfs(neighbor) — dfs returns either the cached clone or a fresh one.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function cloneGraph(node) {
+  if (!node) return null;
+  // Map original-node OBJECT → clone — identity keys, vals can repeat.
+  const map = new Map();
+  function dfs(orig) {
+    // Already cloned (or mid-clone) — return the recorded copy to break cycles.
+    if (map.has(orig)) return map.get(orig);
+    const copy = { val: orig.val, neighbors: [] };
+    // CRITICAL: record BEFORE recursing — otherwise a cycle infinite-loops.
+    map.set(orig, copy);
+    for (const nb of orig.neighbors) copy.neighbors.push(dfs(nb));
+    return copy;
+  }
+  return dfs(node);
+}
+function serialize(start) {
+  const seen = new Set();
+  const order = [];
+  function walk(n) {
+    if (seen.has(n)) return;
+    seen.add(n);
+    order.push(n);
+    for (const nb of n.neighbors) walk(nb);
+  }
+  walk(start);
+  return order.map(n =&gt; n.val + &quot;:[&quot; + n.neighbors.map(x =&gt; x.val).join(&quot;,&quot;) + &quot;]&quot;).join(&quot; &quot;);
+}
+const a = { val: 1, neighbors: [] };
+const b = { val: 2, neighbors: [] };
+const c = { val: 3, neighbors: [] };
+const d = { val: 4, neighbors: [] };
+a.neighbors = [b, d];
+b.neighbors = [a, c];
+c.neighbors = [b, d];
+d.neighbors = [a, c];
+const cloned = cloneGraph(a);
+console.log(cloned !== a);
+console.log(serialize(cloned));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-clone-graph","title":"Clone Graph","section":"Graphs","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why must you put the clone in the map BEFORE recursing into neighbors?","options":["So the neighbor recursion can mutate the parent's copy via the shared Map reference","Otherwise a cycle re-enters dfs on a node that is not yet recorded and recurses forever","Map.set assigns a stable identity hash that neighbor recursions rely on for ordering","The Map's insertion order determines the clone's neighbor order in the result"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What are the keys of the visited Map?","options":["Node values (.val)","Original node object references","Clone references","A tuple of (original, clone) pairs, with the original side compared by identity"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Time complexity?","options":["O(V)","O(V + E)","O(V * E)","O(V^2)"],"answer":1,"answerLetter":"B"},{"n":4,"q":"For a null input, the function returns:","options":["An empty node `{ val: null, neighbors: [] }` to preserve the deep-copy contract","null","undefined","throws"],"answer":1,"answerLetter":"B"},{"n":5,"q":"Why is a plain visited SET insufficient here, requiring a MAP instead?","options":["Set.has takes O(n) on objects while Map.has is O(1), so cycles would be too slow with a Set","You need the original->clone mapping to wire each clone's neighbors to the right clone objects","Set iteration order isn't insertion-preserving, which would scramble the neighbor order in the clones","A Set can only break cycles for directed graphs; undirected graphs need a Map's bidirectional lookup"],"answer":1,"answerLetter":"B"},{"n":6,"q":"Besides breaking cycles, what second problem does the visited Map solve?","options":["It guarantees the clone's neighbor lists are in the same insertion order as the original","It ensures a neighbor shared by multiple nodes (e.g. a diamond) is cloned exactly once","It records the depth of each node so the recursion knows when to terminate","It distinguishes nodes with equal .val by appending a unique tag to each clone"],"answer":1,"answerLetter":"B"},{"n":7,"q":"Could you solve Clone Graph with BFS instead of DFS?","options":["No — BFS would clone nodes level-by-level, but cycles span levels and would be cloned twice","Yes — use a queue plus the same original->clone Map; both traverse every node once","Yes, but the clones must be wired up in a second pass after BFS finishes enumerating all originals","No — BFS visits each node before its neighbors are cloned, so neighbor pointers would be null"],"answer":1,"answerLetter":"B"},{"n":8,"q":"Why MUST the Map key be the original node OBJECT, not node.val?","options":["Map.get(val) does linear scan on numeric keys; object keys hash in O(1)","If two distinct nodes share a val, keying on val would alias them into one clone — wrong graph","Map keys must be reference types — primitives are silently converted to Object wrappers that lose equality","node.val could be mutated during traversal, invalidating prior Map entries"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the DFS clone. The order of the two lines after creating copy is load-bearing.","answers":["Map","get","copy","dfs"]}],"L3":[{"n":1,"prompt":"Write `cloneGraph(node)` using DFS + a visited Map. Build the 4-cycle graph with edges 1-2, 2-3, 3-4, 4-1, clone it, then log (1) `cloned !== original` (deep-copy proof), (2) a DFS-order serialization as `val:[n1,n2,...]` entries space-separated.","expectedOutput":"true\n1:[2,4] 2:[1,3] 3:[2,4] 4:[1,3]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-clone-graph">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

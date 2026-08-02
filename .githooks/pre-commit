@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Pre-commit gate — runs every standing-constraint check (docs/invariants.md).
+#
+# Enable once per clone:
+#     git config core.hooksPath .githooks
+#
+# Skip deliberately for a work-in-progress commit:
+#     git commit --no-verify
+#
+# Only runs when something it protects actually changed, so a docs-only or
+# CSS-only commit stays instant.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: node not found — skipping checks." >&2
+  exit 0
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+# Anything that can invalidate a gate: content, app code, shared scripts, the
+# service worker, the tools themselves. Generated output is excluded — it is an
+# OUTPUT of the checks, not an input to them.
+if ! echo "$staged" | grep -qE '^(data/|js/|css/|ds/|tools/|index\.html|system-design\.html|diagnostic\.html|service-worker\.js)'; then
+  exit 0
+fi
+
+echo "pre-commit: running standing-constraint checks…"
+if ! node tools/check-all.js; then
+  cat >&2 <<'MSG'
+
+pre-commit: blocked. See docs/invariants.md for what each gate protects.
+
+  node tools/check-all.js --fix    regenerate what is generated, then re-verify
+  git commit --no-verify           commit anyway (work in progress)
+MSG
+  exit 1
+fi
+
+# Generated output is committed (GitHub Pages serves it from the repo), so a
+# passing check that left files dirty means the regeneration itself is unstaged.
+if ! git diff --quiet -- p sd sitemap.xml robots.txt data/content-order.lock.json; then
+  cat >&2 <<'MSG'
+
+pre-commit: generated output changed but is not staged. Add it:
+
+  git add p sd sitemap.xml robots.txt data/content-order.lock.json
+MSG
+  exit 1
+fi
+
+exit 0

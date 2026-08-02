@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>this / bind / call / apply — JS Drill</title>
+<meta name="description" content="this is decided by how a function is CALLED. Four call patterns (method, standalone, new, explicit) + the arrow gotcha (lexical capture).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/s-this">
+<meta property="og:type" content="article">
+<meta property="og:title" content="this / bind / call / apply — JS Drill">
+<meta property="og:description" content="this is decided by how a function is CALLED. Four call patterns (method, standalone, new, explicit) + the arrow gotcha (lexical capture).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/s-this">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Advanced JS</p>
+    <h1>this / bind / call / apply</h1>
+    <p class="sharepage__lede">this is decided by how a function is CALLED. Four call patterns (method, standalone, new, explicit) + the arrow gotcha (lexical capture).</p>
+    <p class="sharepage__meta"><span class="ds-chip">syntax</span> <span class="ds-chip">Advanced JS</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Inside <code>obj.greet()</code>, declare an arrow function that reads <code>this.name</code>, then return its call. Log <code>obj.greet()</code> for <code>{ name: &quot;Ada&quot; }</code>.</p>
+    <p class="sharepage__note">Expected output: <code>Ada</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">const user = {
+  name: &quot;Ada&quot;,
+  greet() { return &quot;Hi &quot; + this.name; }      // method call → this = user
+};
+
+user.greet();                                // &quot;Hi Ada&quot;
+
+const detached = user.greet;
+detached();                                  // standalone → this is undefined (strict)
+
+// Fix 1: bind returns a NEW function with this locked
+const bound = user.greet.bind(user);
+bound();                                     // &quot;Hi Ada&quot;
+
+// Fix 2: call / apply invoke once with an explicit this
+function intro(greet, punct) {
+  return greet + &quot; &quot; + this.name + punct;
+}
+intro.call(user, &quot;Hello&quot;, &quot;!&quot;);              // &quot;Hello Ada!&quot;
+intro.apply(user, [&quot;Hey&quot;, &quot;.&quot;]);             // &quot;Hey Ada.&quot; — array form
+
+// Arrow functions IGNORE call/bind — they capture this lexically
+const obj = {
+  name: &quot;Lee&quot;,
+  greet() { return (() =&gt; this.name)(); }    // arrow → this = obj
+};</code></pre>
+    <ul class="sharepage__notes"><li>this is bound at CALL time for normal functions; arrow functions capture this at DEFINITION time.</li><li>bind returns a new function; call/apply invoke immediately. apply takes args as an array.</li><li>Passing a method as a callback (setTimeout, map) detaches it — wrap in arrow or bind to preserve this.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> When is <code>this</code> resolved for a regular (non-arrow) function?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Lexically — captured from the enclosing scope at definition</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> When the function is called — based on how it is called <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Always the global object in strict mode</li>
+        <li><span class="sharepage__key">D</span> Whichever object owns the variable that holds the function</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Difference between call and apply?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> call binds permanently, apply does not</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> apply takes args as an array; call takes them comma-separated <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> apply spreads array args; call also accepts an array but spreads it the same way</li>
+        <li><span class="sharepage__key">D</span> apply ignores the first argument (thisArg); call uses it</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> What does bind return?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The result of calling the function with the given this</li>
+        <li><span class="sharepage__key">B</span> A Proxy that intercepts calls and substitutes this</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A new function with this (and optional args) locked in <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The original function mutated in place</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Inside <code>obj.greet() { return (() =&gt; this.name)(); }</code>, the arrow’s <code>this</code> is:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> undefined — the IIFE is a standalone call, so this is unbound</li>
+        <li><span class="sharepage__key">B</span> The global object — the arrow is invoked without a receiver</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> obj — arrows inherit this from the enclosing scope <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The arrow function object itself, since arrows self-bind</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fix the lost-this problem by binding the detached method.</p>
+      <pre class="sharepage__code"><code class="language-js">const user = {
+  name: &quot;Ada&quot;,
+  greet() { ___ &quot;Hi &quot; + ___.name; }
+};
+const detached = user.greet;
+const bound = detached.___(user);
+console.log(___());</code></pre>
+      <p><strong>Answers:</strong> <code>return</code>, <code>this</code>, <code>bind</code>, <code>bound</code></p>
+      <p class="sharepage__note">Expected output: <code>Hi Ada</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Invoke intro once with call, then with apply (note the array).</p>
+      <pre class="sharepage__code"><code class="language-js">function intro(greet, punct) {
+  return greet + &quot; &quot; + ___.name + punct;
+}
+const u = { name: &quot;Lee&quot; };
+const a = intro.___(u, &quot;Hello&quot;, &quot;!&quot;);
+const b = intro.___(u, ___&quot;Hey&quot;, &quot;.&quot;___);
+console.log(a);
+console.log(b);</code></pre>
+      <p><strong>Answers:</strong> <code>this</code>, <code>call</code>, <code>apply</code>, <code>[</code>, <code>]</code></p>
+      <p class="sharepage__note">Expected output: <code>Hello Lee!
+Hey Lee.</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Inside <code>obj.greet()</code>, declare an arrow function that reads <code>this.name</code>, then return its call. Log <code>obj.greet()</code> for <code>{ name: &quot;Ada&quot; }</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Arrow functions do not have their own this — they inherit it from the enclosing method.</li><li>Inside greet(), this is obj because of the method call.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">const obj = {
+  name: &quot;Ada&quot;,
+  greet() {
+    const arrow = () =&gt; this.name;
+    return arrow();
+  }
+};
+console.log(obj.greet());</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"s-this","title":"this / bind / call / apply","section":"Advanced JS","track":"syntax","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"When is `this` resolved for a regular (non-arrow) function?","options":["Lexically — captured from the enclosing scope at definition","When the function is called — based on how it is called","Always the global object in strict mode","Whichever object owns the variable that holds the function"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Difference between call and apply?","options":["call binds permanently, apply does not","apply takes args as an array; call takes them comma-separated","apply spreads array args; call also accepts an array but spreads it the same way","apply ignores the first argument (thisArg); call uses it"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What does bind return?","options":["The result of calling the function with the given this","A Proxy that intercepts calls and substitutes this","A new function with this (and optional args) locked in","The original function mutated in place"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Inside `obj.greet() { return (() => this.name)(); }`, the arrow’s `this` is:","options":["undefined — the IIFE is a standalone call, so this is unbound","The global object — the arrow is invoked without a receiver","obj — arrows inherit this from the enclosing scope","The arrow function object itself, since arrows self-bind"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fix the lost-this problem by binding the detached method.","answers":["return","this","bind","bound"]},{"n":2,"prompt":"Invoke intro once with call, then with apply (note the array).","answers":["this","call","apply","[","]"]}],"L3":[{"n":1,"prompt":"Inside `obj.greet()`, declare an arrow function that reads `this.name`, then return its call. Log `obj.greet()` for `{ name: \"Ada\" }`.","expectedOutput":"Ada"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/s-this">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

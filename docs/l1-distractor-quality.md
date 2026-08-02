@@ -6,6 +6,30 @@ This is the load-bearing reference for L1 distractor quality. Authoring a new
 lesson? Read this before writing the `options` arrays. Auditing existing
 lessons? Use the rubric in § Audit rubric.
 
+> ### ⚠ Before rewriting an EXISTING question
+>
+> **Rewrite options in place. Never reorder them, never delete one, and never
+> change how many there are.**
+>
+> Share codes are positional: a URL someone pasted into a chat window says
+> "picked option index 2", and index 2 is whatever now sits at index 2. Swapping
+> two options — including the natural instinct to move the strongest distractor
+> off position A — silently repoints every code ever generated for that lesson.
+> Nothing looks broken; an AI is simply told the user picked an answer they
+> never saw.
+>
+> | Editing an existing question | |
+> |---|---|
+> | Replace a weak distractor's **text**, same index | ✅ |
+> | Reword the stem | ✅ |
+> | Add a 5th option at the end | ✅ (max 8) |
+> | Swap two options / move the answer | ❌ |
+> | Drop an option | ❌ |
+>
+> When you replace a distractor, keep `answer` pointing at the same index unless
+> you deliberately intend to break existing codes. `tools/check-content-order.js`
+> enforces this; see [`invariants.md`](invariants.md) § 1.
+
 L1 is the high-throughput surface — taps on a phone, 80% of study sessions
 per `PROFILE.md`. A weak distractor turns the question into pattern-match
 elimination ("the one weird option" wins by default), which trains the user

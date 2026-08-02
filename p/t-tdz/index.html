@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Temporal Dead Zone (TDZ) — JS Drill</title>
+<meta name="description" content="let and const bindings exist from block-entry but throw ReferenceError until their declaration line is reached — unlike var, which hoists with the value undefined.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/t-tdz">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Temporal Dead Zone (TDZ) — JS Drill">
+<meta property="og:description" content="let and const bindings exist from block-entry but throw ReferenceError until their declaration line is reached — unlike var, which hoists with the value undefined.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/t-tdz">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › JS Traps</p>
+    <h1>Temporal Dead Zone (TDZ)</h1>
+    <p class="sharepage__lede">let and const bindings exist from block-entry but throw ReferenceError until their declaration line is reached — unlike var, which hoists with the value undefined.</p>
+    <p class="sharepage__meta"><span class="ds-chip">syntax</span> <span class="ds-chip">JS Traps</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>inTdz(fn)</code> that calls fn and returns the error name if it throws, otherwise the string &quot;ok&quot;. Use it to prove all three TDZ cases throw ReferenceError: reading a <code>let</code>, <code>typeof</code> on a <code>let</code>, and reading a <code>const</code> — each before its declaration. Log the three results, one per line.</p>
+    <p class="sharepage__note">Expected output: <code>ReferenceError
+ReferenceError
+ReferenceError</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// var hoists with the value `undefined` — no error
+console.log(a); // undefined
+var a = 1;
+console.log(a); // 1
+
+// let / const exist in a Temporal Dead Zone from block-entry until
+// their declaration line. Reading them in the TDZ throws.
+try {
+  console.log(b); // throws ReferenceError
+  let b = 1;
+} catch (e) {
+  console.log(e.name); // &quot;ReferenceError&quot;
+}
+
+// Even `typeof` throws in the TDZ — unlike typeof on a TRULY
+// undeclared identifier, which safely returns &quot;undefined&quot;.
+console.log(typeof neverDeclared); // &quot;undefined&quot;
+try {
+  console.log(typeof c); // throws — c IS declared, just in TDZ
+  let c;
+} catch (e) {
+  console.log(e.name); // &quot;ReferenceError&quot;
+}
+
+// const has the exact same TDZ behavior as let.
+try {
+  console.log(d);
+  const d = 1;
+} catch (e) {
+  console.log(e.name); // &quot;ReferenceError&quot;
+}</code></pre>
+    <ul class="sharepage__notes"><li>TDZ is per-binding-per-scope: the dead zone runs from block-entry to the declaration line, then the binding becomes live.</li><li><code>typeof</code> throws inside the TDZ — the one place where typeof on a name is unsafe. On a truly undeclared name, typeof still returns &quot;undefined&quot;.</li><li><code>const</code> has the same TDZ behavior as <code>let</code> (plus immutability). Only <code>var</code> skips the TDZ — it hoists with the value <code>undefined</code>.</li><li>TDZ errors are always <code>ReferenceError</code>, never <code>SyntaxError</code> (the binding is valid; the access is just too early).</li><li>Restructure to fix: declare the let/const FIRST in the block, or move the read AFTER the declaration line.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What does <code>console.log(a); var a = 1;</code> print?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 1</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> undefined <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> ReferenceError</li>
+        <li><span class="sharepage__key">D</span> null</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> var hoists with the value <code>undefined</code> — no TDZ, just a hoisted-but-not-yet-assigned binding.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What happens when <code>console.log(b); let b = 1;</code> runs?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Prints <code>undefined</code></li>
+        <li><span class="sharepage__key">B</span> Prints <code>1</code></li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Throws ReferenceError (TDZ) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Throws SyntaxError</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> let bindings exist from block-entry but are in the Temporal Dead Zone until the declaration line — reading them throws ReferenceError.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Which of these throws? <code>(A) console.log(typeof notDeclaredAnywhere)</code>  <code>(B) { console.log(typeof x); let x; }</code></h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Only A</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Only B <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Both A and B</li>
+        <li><span class="sharepage__key">D</span> Neither — typeof never throws</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> typeof on a truly undeclared name returns &quot;undefined&quot; safely. But typeof on a let/const inside its TDZ DOES throw — the binding exists, it&#39;s just not initialized yet.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Does <code>const</code> have the same TDZ behavior as <code>let</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> No — const is initialized eagerly at block-entry</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Yes — const has the same TDZ as let <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Only in strict mode</li>
+        <li><span class="sharepage__key">D</span> Only when declared at module scope</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> let and const share TDZ semantics — only var skips the dead zone.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Reading a let binding before its declaration throws. Pick the keyword and the Error property that exposes the error type.</p>
+      <pre class="sharepage__code"><code class="language-js">___ {
+  console.log(b);
+  ___ b = 1;
+} ___ (e) {
+  console.log(e.___);
+}</code></pre>
+      <p><strong>Answers:</strong> <code>try</code>, <code>let</code>, <code>catch</code>, <code>name</code></p>
+      <p class="sharepage__note">Expected output: <code>ReferenceError</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Contrast typeof on a never-declared name (safe) with typeof on a let inside its TDZ (throws). Fill the operators and keywords.</p>
+      <pre class="sharepage__code"><code class="language-js">console.log(___ neverDeclared);
+try {
+  console.log(___ x);
+  ___ x = 5;
+} catch (e) {
+  console.log(e.___);
+}</code></pre>
+      <p><strong>Answers:</strong> <code>typeof</code>, <code>typeof</code>, <code>let</code>, <code>name</code></p>
+      <p class="sharepage__note">Expected output: <code>undefined
+ReferenceError</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>inTdz(fn)</code> that calls fn and returns the error name if it throws, otherwise the string &quot;ok&quot;. Use it to prove all three TDZ cases throw ReferenceError: reading a <code>let</code>, <code>typeof</code> on a <code>let</code>, and reading a <code>const</code> — each before its declaration. Log the three results, one per line.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>The arrow body is its own block scope — <code>let a = 1</code> inside it creates a TDZ for <code>a</code> from the block-entry to that line.</li><li>All three reads happen BEFORE the declaration line, so the inner console.log never fires — the read itself throws.</li><li><code>typeof</code> is normally the safe way to probe an identifier, but inside a TDZ it throws like any other read.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function inTdz(fn) {
+  try {
+    fn();
+    return &quot;ok&quot;;
+  } catch (e) {
+    return e.name;
+  }
+}
+
+console.log(inTdz(() =&gt; { console.log(a); let a = 1; }));
+console.log(inTdz(() =&gt; { console.log(typeof b); let b; }));
+console.log(inTdz(() =&gt; { console.log(c); const c = 1; }));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"t-tdz","title":"Temporal Dead Zone (TDZ)","section":"JS Traps","track":"syntax","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does `console.log(a); var a = 1;` print?","options":["1","undefined","ReferenceError","null"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What happens when `console.log(b); let b = 1;` runs?","options":["Prints `undefined`","Prints `1`","Throws ReferenceError (TDZ)","Throws SyntaxError"],"answer":2,"answerLetter":"C"},{"n":3,"q":"Which of these throws? `(A) console.log(typeof notDeclaredAnywhere)`  `(B) { console.log(typeof x); let x; }`","options":["Only A","Only B","Both A and B","Neither — typeof never throws"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Does `const` have the same TDZ behavior as `let`?","options":["No — const is initialized eagerly at block-entry","Yes — const has the same TDZ as let","Only in strict mode","Only when declared at module scope"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Reading a let binding before its declaration throws. Pick the keyword and the Error property that exposes the error type.","answers":["try","let","catch","name"]},{"n":2,"prompt":"Contrast typeof on a never-declared name (safe) with typeof on a let inside its TDZ (throws). Fill the operators and keywords.","answers":["typeof","typeof","let","name"]}],"L3":[{"n":1,"prompt":"Write `inTdz(fn)` that calls fn and returns the error name if it throws, otherwise the string \"ok\". Use it to prove all three TDZ cases throw ReferenceError: reading a `let`, `typeof` on a `let`, and reading a `const` — each before its declaration. Log the three results, one per line.","expectedOutput":"ReferenceError\nReferenceError\nReferenceError"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/t-tdz">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

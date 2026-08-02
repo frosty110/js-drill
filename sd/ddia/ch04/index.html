@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Encoding and Evolution — Designing Data-Intensive Applications</title>
+<meta name="description" content="How data is encoded (serialized) for storage or transmission and how those encodings let applications evolve. Because old and new code and data coexist during rolling upgrades, formats must preserve backward and forward compatibility across databases, services, and message brokers.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ddia/ch04">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Encoding and Evolution — Designing Data-Intensive Applications">
+<meta property="og:description" content="How data is encoded (serialized) for storage or transmission and how those encodings let applications evolve. Because old and new code and data coexist during rolling upgrades, formats must preserve backward and forward compatibility across databases, services, and message brokers.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ddia/ch04">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ddia/">Designing Data-Intensive Applications</a></p>
+    <h1>Encoding and Evolution</h1>
+    <p class="sharepage__lede">How data is encoded (serialized) for storage or transmission and how those encodings let applications evolve. Because old and new code and data coexist during rolling upgrades, formats must preserve backward and forward compatibility across databases, services, and message brokers.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Data-Intensive Applications</span> <span class="ds-chip">16 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Backward compatibility = new code can read data written by old code; forward compatibility = old code can read data written by new code.</li><li>Rolling upgrades mean old and new versions run simultaneously, so both compatibility directions matter.</li><li>Language-specific serialization (Java Serializable, Python pickle) is convenient but ties data to one language and has security, versioning, and efficiency problems.</li><li>JSON/XML/CSV are textual and interoperable but ambiguous about numbers and have weak/optional schema support.</li><li>Thrift and Protocol Buffers use required schemas with numeric field tags; Avro uses writer&#39;s and reader&#39;s schemas resolved by field name with no tag numbers.</li><li>Three modes of dataflow: through databases, through services (REST/RPC), and through asynchronous message brokers.</li><li>RPC tries to make a network call look like a local one, but the network adds latency, partial failure, timeouts, and non-idempotency that local calls do not have.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">16</span></h2>
+    <p class="sharepage__note">Positions 1–16 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA&#39;s terms, what does backward compatibility mean?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> New code can read data that was written by older code <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Old code can read data that was written by newer code</li>
+        <li><span class="sharepage__key">C</span> Two different services can exchange data over the network</li>
+        <li><span class="sharepage__key">D</span> Data can be re-encoded from one format into another without loss</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Backward compatibility means newer code can still read older data. Forward compatibility is the opposite and harder case: older code must tolerate data written by newer code (for example by ignoring fields it does not recognize).</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why do rolling upgrades make BOTH forward and backward compatibility necessary?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because the database is offline during the upgrade, so all data must be re-encoded</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because new and old versions of the code (and the data they write) run at the same time during the rollout <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because encoding is always slower than decoding, so both must be optimized</li>
+        <li><span class="sharepage__key">D</span> Because every client must upgrade before any server does</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> In a staged/rolling deployment, some nodes run new code while others still run old code, so newer nodes must read older data (backward) and older nodes must tolerate data from newer nodes (forward). Both directions coexist for the duration of the rollout.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which is a real drawback of language-specific serialization formats like Java&#39;s Serializable or Python&#39;s pickle?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They require a separately maintained schema definition file</li>
+        <li><span class="sharepage__key">B</span> They cannot represent nested objects</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> They tie data to a single programming language and carry security, versioning, and efficiency problems <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> They are always more compact than binary schema-based formats</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Built-in language serializers couple your persisted data to one language, can execute arbitrary code on decode (a security risk), and tend to neglect versioning and efficiency. They also do not require an explicit external schema, which is one reason their compatibility story is weak.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is a well-known ambiguity of JSON as a data format?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It cannot represent nested arrays or objects</li>
+        <li><span class="sharepage__key">B</span> It requires a schema to be sent alongside every message</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It has no way to distinguish integers from floats, and large integers can lose precision <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It stores binary data more efficiently than any binary format</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> JSON does not distinguish integers from floating-point numbers and lacks precision control, so large numbers (e.g. integers above 2^53) can be silently mangled by parsers using IEEE 754 doubles. JSON also has no native binary type, so binary data must be Base64-encoded, inflating its size.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How do Thrift and Protocol Buffers identify fields in their binary encoding?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> By the field&#39;s name, matched between a writer&#39;s and a reader&#39;s schema</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> By numeric field tags declared in the schema, not by field name <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> By the field&#39;s byte offset within a fixed-layout record</li>
+        <li><span class="sharepage__key">D</span> By a hash of the field&#39;s type and value</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Thrift and Protocol Buffers reference each field by a numeric tag defined in the schema, so the encoded bytes contain tag numbers rather than field names. This is why you can freely rename a field but must never change or reuse its tag number.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>With Protocol Buffers/Thrift, how do you add a new field while preserving forward and backward compatibility?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Reuse an existing tag number so old readers still find the field</li>
+        <li><span class="sharepage__key">B</span> Mark it required so every reader is forced to handle it</li>
+        <li><span class="sharepage__key">C</span> Change the field&#39;s name to signal the new version to old readers</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Add it with a new, unused tag number, and make it optional or give it a default value <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A new field must get a fresh tag number and cannot be <code>required</code>; old readers simply skip an unknown tag (forward compatible), and new readers see the field missing in old data and fall back to a default (backward compatible). Making it required would break old writers, and reusing a tag would corrupt interpretation.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does Avro decide what each encoded value means, given that its binary encoding contains no field tags or names?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> By reading a self-describing header embedded before every record</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> By resolving the writer&#39;s schema against the reader&#39;s schema, matching fields by name <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> By numeric field tags, exactly like Protocol Buffers</li>
+        <li><span class="sharepage__key">D</span> By requiring the writer and reader to use byte-identical schemas</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Avro&#39;s encoding is just concatenated values with no tags, so decoding requires the exact writer&#39;s schema; the Avro library then resolves it against the reader&#39;s schema, matching fields by name and filling in defaults or dropping fields as needed. The two schemas need only be compatible, not identical.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does DDIA note that Avro is especially friendly to dynamically generated schemas?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because it assigns tag numbers automatically at encode time</li>
+        <li><span class="sharepage__key">B</span> Because it embeds the full schema in every single record</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because fields are matched by name, so a schema regenerated from a changing database needs no manually maintained, stable tag numbers <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because it forbids schema changes, guaranteeing stability</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Since Avro matches fields by name rather than by hand-assigned tag numbers, you can regenerate a schema from, say, a relational table whenever its columns change without worrying about keeping tag numbers stable. Thrift/Protobuf would require carefully preserving each field&#39;s numeric tag.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which is a genuine merit of schema-based binary encodings (Thrift, Protobuf, Avro) that DDIA lists?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They are human-readable without any tooling</li>
+        <li><span class="sharepage__key">B</span> They can be decoded without knowing the schema</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> They are more compact, double as up-to-date documentation, and enable compatibility checks before deployment <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> They eliminate the need for forward or backward compatibility</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Because the schema is explicit, these formats can drop field names from the payload (more compact), the schema itself serves as accurate documentation, and tooling can check schema changes for compatibility before rollout, plus generate typed code. They are not human-readable and still require thinking about compatibility.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>For dataflow through a database, why does DDIA warn about an old service rewriting a record it read?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because the database will reject writes from old code entirely</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because old code may not know about newer fields and can drop them when it reads, modifies, and writes the record back <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because writes to a database are never forward compatible</li>
+        <li><span class="sharepage__key">D</span> Because the database re-encodes every record on write, losing precision</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Data in a database can outlive the code, so a value written by new code may be read by old code; the danger is that old code, unaware of a new field, silently drops it during a read-modify-write cycle. Preserving unknown fields through such round-trips is the fix DDIA recommends.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the core critique DDIA makes of RPC frameworks?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They cannot pass complex data structures as arguments</li>
+        <li><span class="sharepage__key">B</span> They require both endpoints to be written in the same language</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> They try to make a network request look like a local function call, hiding that the network adds latency, partial failure, timeouts, and non-idempotency <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> They are always slower than REST over HTTP</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The &#39;location transparency&#39; goal of RPC is fundamentally leaky: a network call can be slow, time out, or fail partway with no way to know if it executed, and retries may not be safe unless the operation is idempotent, whereas a local call has none of these hazards. This is why modern RPC frameworks make the remote nature explicit.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In the message-broker (asynchronous messaging) style of dataflow, how does the sender relate to the recipient?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The sender calls the recipient directly and blocks for the response, like RPC</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The sender writes a message to a broker/queue and does not wait for or usually expect a direct reply; the broker delivers it to consumers <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The sender and recipient must share the same in-memory address space</li>
+        <li><span class="sharepage__key">D</span> The sender embeds the recipient&#39;s schema in every message so no broker is needed</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With a message broker, the producer sends a message to a named queue/topic and the broker delivers it to one or more consumers; this decouples sender and receiver in time and identity, and the sender normally does not block on a reply. Blocking request/response is the RPC model, not the async messaging model.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does the actor model relate to the network&#39;s messiness, per DDIA?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It hides the network so completely that message loss cannot happen</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It already assumes messages may be lost and communication is asynchronous, so it maps naturally onto distributed message passing <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It requires all actors to run in a single process for correctness</li>
+        <li><span class="sharepage__key">D</span> It replaces message passing with shared mutable memory between actors</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The actor model communicates only by asynchronous messages and already tolerates message loss even on one node, so extending it across machines (a distributed actor framework) fits the network&#39;s realities more naturally than the RPC pretense of a local call. Actors avoid shared mutable state by design.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You need to add a field to a Protobuf/Thrift message and remove another, then deploy via a rolling upgrade where old and new code run at once. Walk through exactly how you keep both backward and forward compatibility.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Rolling upgrade means old and new code coexist, so new code must read old data (backward) AND old code must tolerate new data (forward).</li><li>Add the new field with a fresh, never-before-used tag number — never reuse an old tag.</li><li>Make the new field optional or give it a default so new readers can handle old records that lack it (backward compat).</li><li>Old readers skip unknown tag numbers, so a new field is safely ignored by old code (forward compat) — but never mark a new field required.</li><li>To remove a field, only remove an optional one, and retire (never reuse) its tag number so future messages can&#39;t be misinterpreted.</li><li>Renaming is free since encoding uses tag numbers, not names.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The rolling upgrade means both directions matter: new nodes read old data and old nodes must survive new data. For the added field I give it a brand-new tag number and make it optional/defaulted — old readers just skip the unknown tag (forward compatible) and new readers fall back to the default on old records (backward compatible); I never make a new field required. For the removal I only drop an optional field and permanently retire its tag number so it&#39;s never reused and misread later. Renames are safe because Protobuf/Thrift key everything on numeric tags, not field names.</div>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You&#39;re picking a binary encoding for a pipeline where the schema is auto-generated from a frequently-changing database table and dumped to files. Would you choose Avro or Protobuf, and why? When would the answer flip?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Avro matches fields by name and uses no manually-assigned tag numbers, so a schema regenerated from a changing table needs no stable tag bookkeeping — ideal for dynamically generated schemas.</li><li>Avro decoding needs the exact writer&#39;s schema, which fits file/archive use where you can store the schema once per large file.</li><li>Avro resolves writer&#39;s vs reader&#39;s schema by name, filling defaults/dropping fields, so evolution stays clean.</li><li>Protobuf/Thrift require hand-stable tag numbers, which is friction when the schema is auto-regenerated constantly.</li><li>Flip to Protobuf when you have a hand-maintained schema, want mature cross-language tooling/RPC (gRPC), or per-message overhead of shipping/looking up the writer schema is undesirable.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I&#39;d choose Avro. Because it matches fields by name and has no hand-assigned tag numbers, a schema regenerated every time the table changes needs no fragile tag bookkeeping, and its writer&#39;s-schema/reader&#39;s-schema resolution handles added/dropped columns cleanly by name. It also fits the file-dump case, where I can store the writer&#39;s schema once per large file rather than per record. The answer flips to Protobuf when the schema is hand-maintained and stable, or when I want its mature cross-language tooling and gRPC — then stable tag numbers are an asset, not a burden.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>An old version of a service reads a record, edits one field, and writes it back — but the record was written by newer code with fields the old code doesn&#39;t know about. What goes wrong, and how do you prevent it?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Data in a database can outlive the code, so old code will encounter records written by newer code (the forward-compatibility case).</li><li>The danger is a read-modify-write cycle: old code deserializes into its model, which has no place for the unknown new fields, and silently drops them on write-back.</li><li>This is data loss even though nothing errors — the new fields just vanish.</li><li>Fix: preserve unknown/unrecognized fields through the round-trip (carry them untouched) rather than dropping them.</li><li>Schema-tag formats (Protobuf/Avro) and careful code can keep unknown fields; naive object-mapping that only knows current fields is the trap.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The problem is the classic read-modify-write hazard: because data outlives code, the old service reads a record written by newer code, but its object model has no slot for the newer fields, so when it writes the record back it silently drops them — real data loss with no error. The fix is to preserve unknown fields through the round-trip: carry any unrecognized fields untouched and re-emit them on write, rather than materializing only the fields this version knows about. That&#39;s a place where thoughtless object-mapping bites you, and why the encoding and the write path both need to respect fields the current code doesn&#39;t understand.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ddia","unit":"ch04","title":"Encoding and Evolution","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"In DDIA's terms, what does backward compatibility mean?","options":["New code can read data that was written by older code","Old code can read data that was written by newer code","Two different services can exchange data over the network","Data can be re-encoded from one format into another without loss"],"answer":0,"answerLetter":"A"},{"n":2,"type":"mc","prompt":"Why do rolling upgrades make BOTH forward and backward compatibility necessary?","options":["Because the database is offline during the upgrade, so all data must be re-encoded","Because new and old versions of the code (and the data they write) run at the same time during the rollout","Because encoding is always slower than decoding, so both must be optimized","Because every client must upgrade before any server does"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"Which is a real drawback of language-specific serialization formats like Java's Serializable or Python's pickle?","options":["They require a separately maintained schema definition file","They cannot represent nested objects","They tie data to a single programming language and carry security, versioning, and efficiency problems","They are always more compact than binary schema-based formats"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"What is a well-known ambiguity of JSON as a data format?","options":["It cannot represent nested arrays or objects","It requires a schema to be sent alongside every message","It has no way to distinguish integers from floats, and large integers can lose precision","It stores binary data more efficiently than any binary format"],"answer":2,"answerLetter":"C"},{"n":5,"type":"mc","prompt":"How do Thrift and Protocol Buffers identify fields in their binary encoding?","options":["By the field's name, matched between a writer's and a reader's schema","By numeric field tags declared in the schema, not by field name","By the field's byte offset within a fixed-layout record","By a hash of the field's type and value"],"answer":1,"answerLetter":"B"},{"n":6,"type":"mc","prompt":"With Protocol Buffers/Thrift, how do you add a new field while preserving forward and backward compatibility?","options":["Reuse an existing tag number so old readers still find the field","Mark it required so every reader is forced to handle it","Change the field's name to signal the new version to old readers","Add it with a new, unused tag number, and make it optional or give it a default value"],"answer":3,"answerLetter":"D"},{"n":7,"type":"mc","prompt":"How does Avro decide what each encoded value means, given that its binary encoding contains no field tags or names?","options":["By reading a self-describing header embedded before every record","By resolving the writer's schema against the reader's schema, matching fields by name","By numeric field tags, exactly like Protocol Buffers","By requiring the writer and reader to use byte-identical schemas"],"answer":1,"answerLetter":"B"},{"n":8,"type":"mc","prompt":"Why does DDIA note that Avro is especially friendly to dynamically generated schemas?","options":["Because it assigns tag numbers automatically at encode time","Because it embeds the full schema in every single record","Because fields are matched by name, so a schema regenerated from a changing database needs no manually maintained, stable tag numbers","Because it forbids schema changes, guaranteeing stability"],"answer":2,"answerLetter":"C"},{"n":9,"type":"mc","prompt":"Which is a genuine merit of schema-based binary encodings (Thrift, Protobuf, Avro) that DDIA lists?","options":["They are human-readable without any tooling","They can be decoded without knowing the schema","They are more compact, double as up-to-date documentation, and enable compatibility checks before deployment","They eliminate the need for forward or backward compatibility"],"answer":2,"answerLetter":"C"},{"n":10,"type":"mc","prompt":"For dataflow through a database, why does DDIA warn about an old service rewriting a record it read?","options":["Because the database will reject writes from old code entirely","Because old code may not know about newer fields and can drop them when it reads, modifies, and writes the record back","Because writes to a database are never forward compatible","Because the database re-encodes every record on write, losing precision"],"answer":1,"answerLetter":"B"},{"n":11,"type":"mc","prompt":"What is the core critique DDIA makes of RPC frameworks?","options":["They cannot pass complex data structures as arguments","They require both endpoints to be written in the same language","They try to make a network request look like a local function call, hiding that the network adds latency, partial failure, timeouts, and non-idempotency","They are always slower than REST over HTTP"],"answer":2,"answerLetter":"C"},{"n":12,"type":"mc","prompt":"In the message-broker (asynchronous messaging) style of dataflow, how does the sender relate to the recipient?","options":["The sender calls the recipient directly and blocks for the response, like RPC","The sender writes a message to a broker/queue and does not wait for or usually expect a direct reply; the broker delivers it to consumers","The sender and recipient must share the same in-memory address space","The sender embeds the recipient's schema in every message so no broker is needed"],"answer":1,"answerLetter":"B"},{"n":13,"type":"mc","prompt":"How does the actor model relate to the network's messiness, per DDIA?","options":["It hides the network so completely that message loss cannot happen","It already assumes messages may be lost and communication is asynchronous, so it maps naturally onto distributed message passing","It requires all actors to run in a single process for correctness","It replaces message passing with shared mutable memory between actors"],"answer":1,"answerLetter":"B"},{"n":14,"type":"open","prompt":"You need to add a field to a Protobuf/Thrift message and remove another, then deploy via a rolling upgrade where old and new code run at once. Walk through exactly how you keep both backward and forward compatibility.","points":["Rolling upgrade means old and new code coexist, so new code must read old data (backward) AND old code must tolerate new data (forward).","Add the new field with a fresh, never-before-used tag number — never reuse an old tag.","Make the new field optional or give it a default so new readers can handle old records that lack it (backward compat).","Old readers skip unknown tag numbers, so a new field is safely ignored by old code (forward compat) — but never mark a new field required.","To remove a field, only remove an optional one, and retire (never reuse) its tag number so future messages can't be misinterpreted.","Renaming is free since encoding uses tag numbers, not names."]},{"n":15,"type":"open","prompt":"You're picking a binary encoding for a pipeline where the schema is auto-generated from a frequently-changing database table and dumped to files. Would you choose Avro or Protobuf, and why? When would the answer flip?","points":["Avro matches fields by name and uses no manually-assigned tag numbers, so a schema regenerated from a changing table needs no stable tag bookkeeping — ideal for dynamically generated schemas.","Avro decoding needs the exact writer's schema, which fits file/archive use where you can store the schema once per large file.","Avro resolves writer's vs reader's schema by name, filling defaults/dropping fields, so evolution stays clean.","Protobuf/Thrift require hand-stable tag numbers, which is friction when the schema is auto-regenerated constantly.","Flip to Protobuf when you have a hand-maintained schema, want mature cross-language tooling/RPC (gRPC), or per-message overhead of shipping/looking up the writer schema is undesirable."]},{"n":16,"type":"open","prompt":"An old version of a service reads a record, edits one field, and writes it back — but the record was written by newer code with fields the old code doesn't know about. What goes wrong, and how do you prevent it?","points":["Data in a database can outlive the code, so old code will encounter records written by newer code (the forward-compatibility case).","The danger is a read-modify-write cycle: old code deserializes into its model, which has no place for the unknown new fields, and silently drops them on write-back.","This is data loss even though nothing errors — the new fields just vanish.","Fix: preserve unknown/unrecognized fields through the round-trip (carry them untouched) rather than dropping them.","Schema-tag formats (Protobuf/Avro) and careful code can keep unknown fields; naive object-mapping that only knows current fields is the trap."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ddia/ch04">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

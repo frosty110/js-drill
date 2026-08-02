@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trapping Rain Water — JS Drill</title>
+<meta name="description" content="Total water trapped above a height array. Two pointers march inward; the shorter side fixes the water level on that column.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-trapping-rain">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Trapping Rain Water — JS Drill">
+<meta property="og:description" content="Total water trapped above a height array. Two pointers march inward; the shorter side fixes the water level on that column.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-trapping-rain">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Two Pointers</p>
+    <h1>Trapping Rain Water</h1>
+    <p class="sharepage__lede">Total water trapped above a height array. Two pointers march inward; the shorter side fixes the water level on that column.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Two Pointers</span> <span class="ds-chip">9 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>trap(height)</code> returning total trapped water. Use two pointers and running max on each side. Log <code>trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1])</code>.</p>
+    <p class="sharepage__note">Expected output: <code>6</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function trap(height) {
+  let l = 0, r = height.length - 1;
+  // Running max on each side — the cap on water level at the inner pointer.
+  let lMax = 0, rMax = 0, water = 0;
+  while (l &lt; r) {
+    if (height[l] &lt; height[r]) {                  // left side is the bottleneck
+      // Update max BEFORE adding water — otherwise lMax - height[l] could go negative.
+      lMax = Math.max(lMax, height[l]);
+      water += lMax - height[l];
+      l++;
+    } else {
+      rMax = Math.max(rMax, height[r]);
+      water += rMax - height[r];
+      r--;
+    }
+  }
+  return water;
+}
+// Time O(n), Space O(1)</code></pre>
+    <ul class="sharepage__notes"><li>The shorter side bounds the water on its column — that&#39;s why we advance it.</li><li>Update the running max BEFORE adding water; otherwise you subtract too much.</li><li>No need to precompute left/right max arrays — the two-pointer walk is sufficient.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Prefix-max arrays (leftMax[] / rightMax[]) <code>O(n) / O(n)</code></h3>
+      <p>The most direct translation of the formula water[i] = min(leftMax[i], rightMax[i]) - height[i]. Reach for it when you want the clearest correctness story and O(n) extra space is acceptable — it&#39;s the natural stepping stone before the two-pointer optimization.</p>
+      <pre class="sharepage__code"><code class="language-js">function trap(height) {
+  const n = height.length;
+  if (n === 0) return 0;
+  // Pass 1: tallest bar at or left of i.
+  const leftMax = new Array(n);
+  leftMax[0] = height[0];
+  for (let i = 1; i &lt; n; i++) leftMax[i] = Math.max(leftMax[i - 1], height[i]);
+  // Pass 2: tallest bar at or right of i.
+  const rightMax = new Array(n);
+  rightMax[n - 1] = height[n - 1];
+  for (let i = n - 2; i &gt;= 0; i--) rightMax[i] = Math.max(rightMax[i + 1], height[i]);
+  // Pass 3: water above each column.
+  let water = 0;
+  for (let i = 0; i &lt; n; i++) water += Math.min(leftMax[i], rightMax[i]) - height[i];
+  return water;
+}
+console.log(trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]));</code></pre>
+      <ul class="sharepage__notes"><li>Three linear passes: build leftMax[], build rightMax[], then sum the per-column water.</li><li>Materializes both maxes explicitly — easiest to verify, but pays O(n) space for the two arrays.</li><li>The two-pointer canonical is this exact idea with the two arrays collapsed into running scalars.</li></ul>
+    </article>
+    <article class="sharepage__alt" id="alt2">
+      <h3>Monotonic stack (decreasing heights) <code>O(n) / O(n)</code></h3>
+      <p>Computes water in horizontal slabs rather than vertical columns. Worth knowing because the same decreasing-stack machinery solves Largest Rectangle in Histogram and Daily Temperatures — interviewers probing the stack family may steer you here.</p>
+      <pre class="sharepage__code"><code class="language-js">function trap(height) {
+  const stack = []; // indices of bars in decreasing height
+  let water = 0;
+  for (let i = 0; i &lt; height.length; i++) {
+    // Current bar is a right wall — drain every shorter bar it tops.
+    while (stack.length &amp;&amp; height[i] &gt; height[stack[stack.length - 1]]) {
+      const bottom = stack.pop();         // basin floor
+      if (!stack.length) break;           // no left wall → nothing bounded
+      const left = stack[stack.length - 1];
+      const width = i - left - 1;          // span between the two walls
+      const bounded = Math.min(height[i], height[left]) - height[bottom];
+      water += width * bounded;            // one horizontal slab
+    }
+    stack.push(i);
+  }
+  return water;
+}
+console.log(trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]));</code></pre>
+      <ul class="sharepage__notes"><li>Keep a stack of indices with decreasing heights; a taller bar triggers draining.</li><li>Each pop fills one horizontal slab: width (i - left - 1) times bounded height min(height[i], height[left]) - height[bottom].</li><li>Each index is pushed and popped at most once → O(n) time; the stack is the O(n) space.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why advance the pointer on the shorter side?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The shorter side is more likely to be followed by a taller bar, refilling more water on the next iteration</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The shorter side bounds the water level for that column <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Advancing the taller side would re-process the same column and double-count water</li>
+        <li><span class="sharepage__key">D</span> It keeps lMax and rMax synchronized so their difference is always zero</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What does lMax - height[l] represent?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Distance to the right wall</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Water trapped above column l <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Maximum future height</li>
+        <li><span class="sharepage__key">D</span> Slope to the next bar</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Space complexity of the two-pointer version?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li><span class="sharepage__key">B</span> O(log n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(1) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(n^2)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why update lMax/rMax BEFORE adding to water?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Updating after would skip the current bar&#39;s contribution to lMax, leaving lMax one step stale for the rest of the run</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Otherwise lMax - height[l] could be negative <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Math.max coerces to NaN if called before its arguments are materialized in the loop</li>
+        <li><span class="sharepage__key">D</span> Updating after triggers a re-read of height[l] from the original array, which may have been mutated by another iteration</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If you add before updating, the current bar may exceed the old max and you subtract a stale value.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> The exact water above column i is min(leftMax, rightMax) - height[i]. When height[l] &lt; height[r], why can the algorithm safely use lMax alone instead of computing min(lMax, rMax)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because lMax is always larger than rMax</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because rMax is at least height[r], and height[r] &gt; height[l], so rMax &gt; lMax — making lMax the true minimum (the binding constraint) for column l <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because rMax has not been computed yet</li>
+        <li><span class="sharepage__key">D</span> Because the two maxes are always equal at that point</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> rMax &gt;= height[r] &gt; height[l], and lMax already includes height[l], so lMax is provably the smaller of the two maxes; it IS the min, so column l can be settled with lMax - height[l].</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> Compared to the precompute-arrays approach (build leftMax[] and rightMax[] in two passes), what does the two-pointer version improve, and at what cost?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It is faster: O(log n) vs O(n) time</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Same O(n) time, but O(1) space instead of O(n) — at the cost of a subtler correctness argument <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It uses less time but more space</li>
+        <li><span class="sharepage__key">D</span> There is no difference</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Both run in O(n) time; the two-pointer walk maintains running maxes incrementally so it needs only O(1) extra space versus O(n) for the two precomputed arrays.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> On a monotone increasing array like [1,2,3,4,5], the answer is 0. Why does the algorithm correctly add nothing?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It detects the array is sorted and returns 0 early</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Each step settles the left side, and after lMax = max(lMax, height[l]) the current bar IS the new max, so lMax - height[l] is 0 every time <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It skips every bar because heights increase</li>
+        <li><span class="sharepage__key">D</span> rMax stays 0 the whole time</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With strictly increasing heights, each new left bar becomes the running max, so lMax equals height[l] after the update and the contribution lMax - height[l] is 0; trapping needs a higher bar on BOTH sides.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> Which alternative O(n) solution processes water &#39;horizontally&#39; (level by level) rather than column by column?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A binary-search approach</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A monotonic stack: push indices, and whenever the current bar exceeds the stack top, pop and compute the trapped rectangle at that level <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A recursive divide-and-conquer</li>
+        <li><span class="sharepage__key">D</span> A prefix-sum array</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The stack-based variant keeps a decreasing stack of bar indices and, on each taller bar, pops to fill the bounded horizontal slab of water — same O(n) total, different mental model.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> If you swapped the comparison to <code>if (height[l] &lt;= height[r])</code> (settle left on ties too) instead of <code>&lt;</code>, would the total trapped water change?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Yes, it would overcount water</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> No — on a tie either side&#39;s running max equals the other&#39;s binding value, so settling either side adds the same correct amount; the total is unchanged <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Yes, it would crash on equal heights</li>
+        <li><span class="sharepage__key">D</span> Yes, it would undercount by 1 each tie</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> On equal heights the binding max is the same from either side, so choosing left or right on the tie settles the same column contribution and the running maxes stay consistent — the total is identical.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the two-pointer rainwater scan.</p>
+      <pre class="sharepage__code"><code class="language-js">function trap(height) {
+  let l = 0, r = height.length - 1;
+  let lMax = 0, rMax = 0, water = 0;
+  while (l &lt; r) {
+    if (height[l] &lt; height[___]) {
+      lMax = Math.max(lMax, height[l]);
+      water += lMax - height[___];
+      l++;
+    } else {
+      rMax = Math.max(rMax, height[r]);
+      water += ___ - height[r];
+      r--;
+    }
+  }
+  return ___;
+}
+console.log(trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]));</code></pre>
+      <p><strong>Answers:</strong> <code>r</code>, <code>l</code>, <code>rMax</code>, <code>water</code></p>
+      <p class="sharepage__note">Expected output: <code>6</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>trap(height)</code> returning total trapped water. Use two pointers and running max on each side. Log <code>trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1])</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Two pointers l, r. Track lMax and rMax separately.</li><li>Move whichever side is shorter — that&#39;s the side whose water level is fixed.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function trap(height) {
+  let l = 0, r = height.length - 1;
+  // Running max on each side — the cap on water level at the inner pointer.
+  let lMax = 0, rMax = 0, water = 0;
+  while (l &lt; r) {
+    // Shorter side fixes its column&#39;s water level — safe to settle and advance it.
+    if (height[l] &lt; height[r]) {
+      // Update max BEFORE adding water — otherwise lMax - height[l] could go negative.
+      lMax = Math.max(lMax, height[l]);
+      water += lMax - height[l];
+      l++;
+    } else {
+      rMax = Math.max(rMax, height[r]);
+      water += rMax - height[r];
+      r--;
+    }
+  }
+  return water;
+}
+console.log(trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-trapping-rain","title":"Trapping Rain Water","section":"Two Pointers","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why advance the pointer on the shorter side?","options":["The shorter side is more likely to be followed by a taller bar, refilling more water on the next iteration","The shorter side bounds the water level for that column","Advancing the taller side would re-process the same column and double-count water","It keeps lMax and rMax synchronized so their difference is always zero"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What does lMax - height[l] represent?","options":["Distance to the right wall","Water trapped above column l","Maximum future height","Slope to the next bar"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Space complexity of the two-pointer version?","options":["O(n)","O(log n)","O(1)","O(n^2)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Why update lMax/rMax BEFORE adding to water?","options":["Updating after would skip the current bar's contribution to lMax, leaving lMax one step stale for the rest of the run","Otherwise lMax - height[l] could be negative","Math.max coerces to NaN if called before its arguments are materialized in the loop","Updating after triggers a re-read of height[l] from the original array, which may have been mutated by another iteration"],"answer":1,"answerLetter":"B"},{"n":5,"q":"The exact water above column i is min(leftMax, rightMax) - height[i]. When height[l] \u003c height[r], why can the algorithm safely use lMax alone instead of computing min(lMax, rMax)?","options":["Because lMax is always larger than rMax","Because rMax is at least height[r], and height[r] > height[l], so rMax > lMax — making lMax the true minimum (the binding constraint) for column l","Because rMax has not been computed yet","Because the two maxes are always equal at that point"],"answer":1,"answerLetter":"B"},{"n":6,"q":"Compared to the precompute-arrays approach (build leftMax[] and rightMax[] in two passes), what does the two-pointer version improve, and at what cost?","options":["It is faster: O(log n) vs O(n) time","Same O(n) time, but O(1) space instead of O(n) — at the cost of a subtler correctness argument","It uses less time but more space","There is no difference"],"answer":1,"answerLetter":"B"},{"n":7,"q":"On a monotone increasing array like [1,2,3,4,5], the answer is 0. Why does the algorithm correctly add nothing?","options":["It detects the array is sorted and returns 0 early","Each step settles the left side, and after lMax = max(lMax, height[l]) the current bar IS the new max, so lMax - height[l] is 0 every time","It skips every bar because heights increase","rMax stays 0 the whole time"],"answer":1,"answerLetter":"B"},{"n":8,"q":"Which alternative O(n) solution processes water 'horizontally' (level by level) rather than column by column?","options":["A binary-search approach","A monotonic stack: push indices, and whenever the current bar exceeds the stack top, pop and compute the trapped rectangle at that level","A recursive divide-and-conquer","A prefix-sum array"],"answer":1,"answerLetter":"B"},{"n":9,"q":"If you swapped the comparison to `if (height[l] \u003c= height[r])` (settle left on ties too) instead of `\u003c`, would the total trapped water change?","options":["Yes, it would overcount water","No — on a tie either side's running max equals the other's binding value, so settling either side adds the same correct amount; the total is unchanged","Yes, it would crash on equal heights","Yes, it would undercount by 1 each tie"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the two-pointer rainwater scan.","answers":["r","l","rMax","water"]}],"L3":[{"n":1,"prompt":"Write `trap(height)` returning total trapped water. Use two pointers and running max on each side. Log `trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1])`.","expectedOutput":"6"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-trapping-rain">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

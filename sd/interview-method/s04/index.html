@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tradeoffs, Wrap-up &amp; Staff+ Signals — The System Design Interview</title>
+<meta name="description" content="The final stretch is where senior candidates separate themselves: presenting real tradeoffs, reasoning about failure and operations, respecting cost, and closing with an honest summary of bottlenecks and next steps. This is also where the interviewer decides whether you read as mid-level, senior, or staff+.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/interview-method/s04">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tradeoffs, Wrap-up &amp; Staff+ Signals — The System Design Interview">
+<meta property="og:description" content="The final stretch is where senior candidates separate themselves: presenting real tradeoffs, reasoning about failure and operations, respecting cost, and closing with an honest summary of bottlenecks and next steps. This is also where the interviewer decides whether you read as mid-level, senior, or staff+.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/interview-method/s04">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/interview-method/">The System Design Interview</a></p>
+    <h1>Tradeoffs, Wrap-up &amp; Staff+ Signals</h1>
+    <p class="sharepage__lede">The final stretch is where senior candidates separate themselves: presenting real tradeoffs, reasoning about failure and operations, respecting cost, and closing with an honest summary of bottlenecks and next steps. This is also where the interviewer decides whether you read as mid-level, senior, or staff+.</p>
+    <p class="sharepage__meta"><span class="ds-chip">The System Design Interview</span> <span class="ds-chip">16 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>A strong tradeoff answer presents multiple viable options, then commits to one and justifies it against the agreed requirements — not just a list of choices.</li><li>Operational maturity — failure modes, blast radius, monitoring, safe rollout, migrations, and DR — is a top Staff+ signal that most candidates skip.</li><li>RTO is how fast you recover; RPO is how much data you can afford to lose — they are different objectives and must not be conflated.</li><li>Cost awareness (cross-region traffic, extra replicas, over-provisioning) is a maturity signal; the goal is a design fit for the requirements, not the most gold-plated one.</li><li>Evolvability beats premature complexity: add abstraction boundaries where change is likely, not everywhere.</li><li>Wrap-up should name your own bottlenecks, single points of failure, and concrete next steps — self-awareness reads as senior.</li><li>Junior/mid candidates recite components; staff+ candidates navigate ambiguity, drive the conversation, combine breadth with depth, and reason about operations and long-term evolution.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">16</span></h2>
+    <p class="sharepage__note">Positions 1–16 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>The interviewer asks how you&#39;d deliver a social feed at scale. What is the strongest way to handle the tradeoff?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> State that fan-out-on-write is the industry standard and design only that</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Describe both fan-out-on-write (push) and fan-out-on-read (pull), then pick one and justify it from the read/write ratio and celebrity problem <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> List every possible feed architecture without choosing, so you stay neutral</li>
+        <li><span class="sharepage__key">D</span> Say the choice does not matter because both eventually return the same posts</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A strong candidate presents the real alternatives, then commits and justifies the pick against the requirements — e.g. push for read-heavy feeds, pull or a hybrid to handle celebrity fan-out. Refusing to choose, or presenting one option as the only choice, both read as weaker signal.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>You choose eventual consistency for a &#39;like&#39; counter over strong consistency. What best justifies this in an interview?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> A brief staleness on a like count is acceptable to users, and relaxing consistency buys availability and lower latency at scale <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Eventual consistency is always faster, so it is the correct default everywhere</li>
+        <li><span class="sharepage__key">C</span> Strong consistency is impossible in a distributed system</li>
+        <li><span class="sharepage__key">D</span> The interviewer prefers eventual consistency for social apps</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The justification is requirement-driven: the business can tolerate a slightly stale counter, so you trade recency for availability and latency. Strong consistency is achievable (at a cost), and &#39;always faster&#39; overgeneralizes — the point is that this data does not need strong guarantees.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A candidate designs a payment flow as fully synchronous end-to-end. What is the key tradeoff they should surface?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Synchronous processing has no downsides for payments</li>
+        <li><span class="sharepage__key">B</span> Asynchronous processing removes the need for a database</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Asynchronous processing via a queue improves resilience and smooths load spikes, but adds eventual consistency and requires idempotency and status tracking <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Synchronous and asynchronous designs have identical failure behavior</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Async decouples the request from the work, absorbing spikes and surviving downstream outages, at the cost of eventual consistency and the need for idempotency and status/reconciliation. Claiming sync has no downsides, or that async removes the database, misses the actual engineering tradeoff.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which of these is the clearest Staff+ operational-maturity signal during a design?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Naming the exact CPU model of the servers</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Proactively discussing what happens when a component dies — blast radius, failover, and how you&#39;d detect it via monitoring and alerts <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Adding as many microservices as possible to look sophisticated</li>
+        <li><span class="sharepage__key">D</span> Memorizing the default port numbers of each datastore</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Reasoning about failure modes, blast radius, detection, and failover is exactly the operational judgment that distinguishes staff-level candidates. Hardware trivia and service-count inflation are noise, not signal.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does &#39;blast radius&#39; refer to when discussing a component failure?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The physical distance between data centers</li>
+        <li><span class="sharepage__key">B</span> The time it takes to redeploy the service</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> The scope of what breaks or degrades when that component fails — how far the impact spreads <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The number of engineers paged during an incident</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Blast radius is how much of the system is affected when something fails; you shrink it with isolation, bulkheads, and cell-based architectures. It is about impact scope, not distance, deploy time, or on-call size.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A team must recover a service within 5 minutes of an outage and can tolerate losing at most 30 seconds of data. Which is correct?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> RTO is 30 seconds and RPO is 5 minutes</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> RTO is 5 minutes and RPO is 30 seconds <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Both RTO and RPO are 5 minutes</li>
+        <li><span class="sharepage__key">D</span> RTO and RPO both describe how often you take backups</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> RTO (recovery time objective) is how fast you must be back up — 5 minutes here; RPO (recovery point objective) is how much data loss is acceptable — 30 seconds here. Conflating the two is a common and costly interview error.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>You propose active-active multi-region replication to hit 99.999% availability. What cost tradeoff should you name?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Multi-region is free once the app is stateless</li>
+        <li><span class="sharepage__key">B</span> Multi-region always lowers total cost by spreading load</li>
+        <li><span class="sharepage__key">C</span> Availability targets have no relationship to infrastructure cost</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> It adds cross-region traffic cost, duplicated infrastructure, and hard conflict/consistency handling — so you weigh it against how many nines the requirements truly need <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Chasing 99.999% (~5 min/yr downtime) with active-active means paying for duplicate infra, cross-region bandwidth, and conflict resolution — justified only if the business actually needs those nines. Treating multi-region as free or automatically cheaper ignores the real cost curve.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Two designs meet the requirements: one uses 3 read replicas plus a cache, the other uses 12 replicas across 4 regions. When is the simpler one the better interview answer?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Never — more replicas always score higher</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> When the traffic and availability requirements don&#39;t justify the extra cost and complexity of the larger design <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Only if the interviewer explicitly asks you to save money</li>
+        <li><span class="sharepage__key">D</span> When you have run out of time to describe the bigger design</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Right-sizing to the requirements — not gold-plating — is a maturity signal; over-provisioning burns cost and adds operational surface for no benefit. You should default to the design that fits the agreed scale, and mention how it scales up if needed.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which practice best reflects designing for evolvability rather than premature complexity?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Building a generic plugin framework for every component up front, in case requirements change</li>
+        <li><span class="sharepage__key">B</span> Sharding every table from day one regardless of data volume</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Keeping the design simple now but placing clean abstraction boundaries where change is most likely (e.g. behind the storage or notification layer) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Adding a message queue between every pair of services by default</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Evolvability comes from clean seams at the points of likely change, not from maximal abstraction everywhere. Speculative frameworks, blanket sharding, and queue-everything all add complexity and cost before the requirements demand it.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>During wrap-up you have three minutes left. What is the highest-signal use of it?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Add two new features to show ambition</li>
+        <li><span class="sharepage__key">B</span> Recompute your capacity estimate more precisely</li>
+        <li><span class="sharepage__key">C</span> Redraw the diagram more neatly</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Summarize the design, call out its main bottleneck and any single points of failure, and name concrete next steps you&#39;d take <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A crisp summary plus honest self-critique — bottlenecks, SPOFs, and next steps — signals the self-awareness interviewers associate with senior engineers. Piling on features or polishing arithmetic late adds little signal.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A candidate finishes a design but never mentions metrics, logging, dashboards, or alerts. How does this typically read?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Neutral — observability is out of scope for design interviews</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> As a gap in operational maturity, since you can&#39;t run what you can&#39;t observe <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> As a strength, because it keeps the design simple</li>
+        <li><span class="sharepage__key">D</span> As irrelevant, since monitoring is the SRE team&#39;s job</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Omitting the observability story is a classic senior-level miss: you can&#39;t detect failures, verify SLOs, or debug without metrics, logs, and alerts. A brief &#39;here&#39;s what I&#39;d monitor and alert on&#39; meaningfully raises the operational signal.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What most distinguishes a staff+ candidate from a competent mid-level one in the same interview?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> The staff+ candidate navigates ambiguity, drives the conversation, combines breadth with depth, and reasons about operations and long-term evolution — not just component recall <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> The staff+ candidate names more technologies and buzzwords</li>
+        <li><span class="sharepage__key">C</span> The staff+ candidate draws a larger diagram</li>
+        <li><span class="sharepage__key">D</span> The staff+ candidate avoids making any tradeoff to stay safe</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Mid-level candidates recite the right components; staff+ candidates prioritize under constraints, own the direction, go deep where it matters, and think about running and evolving the system. Buzzword density and diagram size are not the signal.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How should you present a schema/data migration on a live, high-traffic table during a deep dive?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Take the table offline, alter it, and bring it back</li>
+        <li><span class="sharepage__key">B</span> Migrations don&#39;t matter in a design interview</li>
+        <li><span class="sharepage__key">C</span> Just add the column; large tables alter instantly</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Use a phased approach — expand (add new columns/tables), dual-write and backfill, migrate reads, then contract — so there&#39;s no downtime and a rollback path <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The expand/backfill/contract (dual-write) pattern lets you migrate without downtime and roll back at each step — exactly the operational thinking interviewers reward. Taking the table offline or assuming instant DDL on a big table shows a gap in production experience.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>The interviewer asks how you&#39;d generate a user&#39;s home feed. Walk me through the tradeoff and tell me what you&#39;d pick and why.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Names both options: fan-out-on-write (push, precompute per-follower feeds) and fan-out-on-read (pull, assemble at read time).</li><li>States the tradeoff: push gives fast reads but expensive writes and heavy fan-out for high-follower accounts; pull is cheap on write but slow/expensive on read.</li><li>Ties the choice to requirements — read/write ratio, latency target, and the celebrity/hot-key problem.</li><li>Commits to a pick, commonly a hybrid: push for normal users, pull (or on-demand merge) for celebrities.</li><li>Mentions an operational consequence — e.g. bounded queues/backpressure for fan-out, or caching the merged feed.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> There are two main options. Fan-out-on-write precomputes each follower&#39;s feed when someone posts, giving very fast reads but expensive writes — and a celebrity with millions of followers causes a fan-out storm. Fan-out-on-read assembles the feed at request time, which is cheap to write but slow and costly to read. Since feeds are extremely read-heavy and need low latency, I&#39;d default to push for the common case, but go hybrid: for high-follower accounts I&#39;d pull their posts on read and merge them in, so a single celebrity post doesn&#39;t fan out to millions of writes. I&#39;d also bound the fan-out workers with a queue and backpressure so a spike degrades gracefully.</div>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You&#39;ve just finished the high-level design and deep dive. It&#39;s wrap-up time — what do you say?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Gives a one-line summary of the design and how it meets the agreed requirements.</li><li>Names the primary bottleneck(s) explicitly (e.g. the database write path, the fan-out service, a hot cache key).</li><li>Calls out single points of failure and how you&#39;d mitigate (replication, failover, isolation).</li><li>Offers concrete next steps / future improvements rather than new features.</li><li>Frames it as honest self-critique, signaling awareness of the design&#39;s limits.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> To wrap up: this design meets the read-heavy, low-latency feed requirement with a push-based fan-out, a cache in front of reads, and a sharded datastore. The main bottleneck is the fan-out service under celebrity load, which I addressed with a hybrid pull path, and the write-path database, which I&#39;d watch closely. The clearest single point of failure is the primary datastore, so I&#39;d run replicas with automatic failover and isolate tenants to limit blast radius. If I had more time, my next steps would be a proper observability layer — metrics and alerts on fan-out lag and cache hit rate — and load-testing the celebrity path. I&#39;d rather flag these limits honestly than pretend the design is finished.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>How would you make sure your design reads as staff-level rather than just competent? Give concrete things you&#39;d do differently.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Drives the conversation and structures the time instead of waiting to be prompted.</li><li>Navigates ambiguity by making and stating explicit assumptions, then confirming.</li><li>Combines breadth (touches the whole system) with depth (goes deep on the highest-risk component).</li><li>Reasons about operations — failure modes, monitoring, rollout, DR — not just the happy path.</li><li>Shows cost and prioritization judgment: right-sizes to requirements and thinks about evolution/org-level impact.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I&#39;d own the direction — lay out the arc, time-box myself, and steer rather than wait for prompts. Where the prompt is ambiguous I&#39;d state explicit assumptions and confirm them instead of freezing. I&#39;d cover the whole system at a high level but deliberately go deep on the riskiest component, and I&#39;d bring in the operational story — failure modes, what I monitor, how I roll out and recover — which most candidates skip. Finally I&#39;d show judgment about cost and evolution: right-size the design to the actual requirements, avoid gold-plating, and note how it would change as the system or the org grows. Reciting components is mid-level; reasoning about tradeoffs, operations, and the long term is what reads as staff.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"interview-method","unit":"s04","title":"Tradeoffs, Wrap-up & Staff+ Signals","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"The interviewer asks how you'd deliver a social feed at scale. What is the strongest way to handle the tradeoff?","options":["State that fan-out-on-write is the industry standard and design only that","Describe both fan-out-on-write (push) and fan-out-on-read (pull), then pick one and justify it from the read/write ratio and celebrity problem","List every possible feed architecture without choosing, so you stay neutral","Say the choice does not matter because both eventually return the same posts"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"You choose eventual consistency for a 'like' counter over strong consistency. What best justifies this in an interview?","options":["A brief staleness on a like count is acceptable to users, and relaxing consistency buys availability and lower latency at scale","Eventual consistency is always faster, so it is the correct default everywhere","Strong consistency is impossible in a distributed system","The interviewer prefers eventual consistency for social apps"],"answer":0,"answerLetter":"A"},{"n":3,"type":"mc","prompt":"A candidate designs a payment flow as fully synchronous end-to-end. What is the key tradeoff they should surface?","options":["Synchronous processing has no downsides for payments","Asynchronous processing removes the need for a database","Asynchronous processing via a queue improves resilience and smooths load spikes, but adds eventual consistency and requires idempotency and status tracking","Synchronous and asynchronous designs have identical failure behavior"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"Which of these is the clearest Staff+ operational-maturity signal during a design?","options":["Naming the exact CPU model of the servers","Proactively discussing what happens when a component dies — blast radius, failover, and how you'd detect it via monitoring and alerts","Adding as many microservices as possible to look sophisticated","Memorizing the default port numbers of each datastore"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"What does 'blast radius' refer to when discussing a component failure?","options":["The physical distance between data centers","The time it takes to redeploy the service","The scope of what breaks or degrades when that component fails — how far the impact spreads","The number of engineers paged during an incident"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"A team must recover a service within 5 minutes of an outage and can tolerate losing at most 30 seconds of data. Which is correct?","options":["RTO is 30 seconds and RPO is 5 minutes","RTO is 5 minutes and RPO is 30 seconds","Both RTO and RPO are 5 minutes","RTO and RPO both describe how often you take backups"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"You propose active-active multi-region replication to hit 99.999% availability. What cost tradeoff should you name?","options":["Multi-region is free once the app is stateless","Multi-region always lowers total cost by spreading load","Availability targets have no relationship to infrastructure cost","It adds cross-region traffic cost, duplicated infrastructure, and hard conflict/consistency handling — so you weigh it against how many nines the requirements truly need"],"answer":3,"answerLetter":"D"},{"n":8,"type":"mc","prompt":"Two designs meet the requirements: one uses 3 read replicas plus a cache, the other uses 12 replicas across 4 regions. When is the simpler one the better interview answer?","options":["Never — more replicas always score higher","When the traffic and availability requirements don't justify the extra cost and complexity of the larger design","Only if the interviewer explicitly asks you to save money","When you have run out of time to describe the bigger design"],"answer":1,"answerLetter":"B"},{"n":9,"type":"mc","prompt":"Which practice best reflects designing for evolvability rather than premature complexity?","options":["Building a generic plugin framework for every component up front, in case requirements change","Sharding every table from day one regardless of data volume","Keeping the design simple now but placing clean abstraction boundaries where change is most likely (e.g. behind the storage or notification layer)","Adding a message queue between every pair of services by default"],"answer":2,"answerLetter":"C"},{"n":10,"type":"mc","prompt":"During wrap-up you have three minutes left. What is the highest-signal use of it?","options":["Add two new features to show ambition","Recompute your capacity estimate more precisely","Redraw the diagram more neatly","Summarize the design, call out its main bottleneck and any single points of failure, and name concrete next steps you'd take"],"answer":3,"answerLetter":"D"},{"n":11,"type":"mc","prompt":"A candidate finishes a design but never mentions metrics, logging, dashboards, or alerts. How does this typically read?","options":["Neutral — observability is out of scope for design interviews","As a gap in operational maturity, since you can't run what you can't observe","As a strength, because it keeps the design simple","As irrelevant, since monitoring is the SRE team's job"],"answer":1,"answerLetter":"B"},{"n":12,"type":"mc","prompt":"What most distinguishes a staff+ candidate from a competent mid-level one in the same interview?","options":["The staff+ candidate navigates ambiguity, drives the conversation, combines breadth with depth, and reasons about operations and long-term evolution — not just component recall","The staff+ candidate names more technologies and buzzwords","The staff+ candidate draws a larger diagram","The staff+ candidate avoids making any tradeoff to stay safe"],"answer":0,"answerLetter":"A"},{"n":13,"type":"mc","prompt":"How should you present a schema/data migration on a live, high-traffic table during a deep dive?","options":["Take the table offline, alter it, and bring it back","Migrations don't matter in a design interview","Just add the column; large tables alter instantly","Use a phased approach — expand (add new columns/tables), dual-write and backfill, migrate reads, then contract — so there's no downtime and a rollback path"],"answer":3,"answerLetter":"D"},{"n":14,"type":"open","prompt":"The interviewer asks how you'd generate a user's home feed. Walk me through the tradeoff and tell me what you'd pick and why.","points":["Names both options: fan-out-on-write (push, precompute per-follower feeds) and fan-out-on-read (pull, assemble at read time).","States the tradeoff: push gives fast reads but expensive writes and heavy fan-out for high-follower accounts; pull is cheap on write but slow/expensive on read.","Ties the choice to requirements — read/write ratio, latency target, and the celebrity/hot-key problem.","Commits to a pick, commonly a hybrid: push for normal users, pull (or on-demand merge) for celebrities.","Mentions an operational consequence — e.g. bounded queues/backpressure for fan-out, or caching the merged feed."]},{"n":15,"type":"open","prompt":"You've just finished the high-level design and deep dive. It's wrap-up time — what do you say?","points":["Gives a one-line summary of the design and how it meets the agreed requirements.","Names the primary bottleneck(s) explicitly (e.g. the database write path, the fan-out service, a hot cache key).","Calls out single points of failure and how you'd mitigate (replication, failover, isolation).","Offers concrete next steps / future improvements rather than new features.","Frames it as honest self-critique, signaling awareness of the design's limits."]},{"n":16,"type":"open","prompt":"How would you make sure your design reads as staff-level rather than just competent? Give concrete things you'd do differently.","points":["Drives the conversation and structures the time instead of waiting to be prompted.","Navigates ambiguity by making and stating explicit assumptions, then confirming.","Combines breadth (touches the whole system) with depth (goes deep on the highest-risk component).","Reasons about operations — failure modes, monitoring, rollout, DR — not just the happy path.","Shows cost and prioritization judgment: right-sizes to requirements and thinks about evolution/org-level impact."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/interview-method/s04">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Document Update Propagation — JS Drill</title>
+<meta name="description" content="Graph problem — when a source doc changes, regenerate every downstream doc in dependency (topological) order with a DFS-based topo sort, bailing out via 3-color cycle detection if the dependency graph has a cycle.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-eve-update-propagation">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Document Update Propagation — JS Drill">
+<meta property="og:description" content="Graph problem — when a source doc changes, regenerate every downstream doc in dependency (topological) order with a DFS-based topo sort, bailing out via 3-color cycle detection if the dependency graph has a cycle.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-eve-update-propagation">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Document Update Propagation</h1>
+    <p class="sharepage__lede">Graph problem — when a source doc changes, regenerate every downstream doc in dependency (topological) order with a DFS-based topo sort, bailing out via 3-color cycle detection if the dependency graph has a cycle.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Documents depend on each other ([dependent, dependsOn], e.g. [&#39;chronology&#39;,&#39;records&#39;]). When one node changes, return all transitively-dependent docs to regenerate, in topological order (a doc regenerates only after its inputs). If the graph contains a cycle, return [&#39;CYCLE DETECTED&#39;]. Print the regeneration order for a change to &#39;records&#39; (join with &#39; -&gt; &#39;), then the result for a 3-node cyclic graph.</p>
+    <p class="sharepage__note">Expected output: <code>chronology -&gt; demand-letter -&gt; complaint
+CYCLE DETECTED</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// Docs depend on each other: edge [dependent, dependsOn].
+// A doc may only regenerate AFTER every input it depends on.
+function regenerationOrder(edges, changed) {
+  // dependents: who reads me (reverse edges); deps: who I read (forward edges).
+  const dependents = new Map();
+  const deps = new Map();
+  const nodes = new Set();
+  for (const [dep, on] of edges) {
+    nodes.add(dep);
+    nodes.add(on);
+    if (!dependents.has(on)) dependents.set(on, []);
+    dependents.get(on).push(dep);
+    if (!deps.has(dep)) deps.set(dep, new Set());
+    deps.get(dep).add(on);
+  }
+  // 3-color DFS: 0=white (unseen), 1=gray (on stack), 2=black (done).
+  // A back-edge to a GRAY node is a cycle — the timeline can never settle.
+  const color = new Map([...nodes].map(n =&gt; [n, 0]));
+  const hasCycle = n =&gt; {
+    color.set(n, 1);
+    for (const d of dependents.get(n) || []) {
+      if (color.get(d) === 1) return true;
+      if (color.get(d) === 0 &amp;&amp; hasCycle(d)) return true;
+    }
+    color.set(n, 2);
+    return false;
+  };
+  for (const n of nodes) {
+    if (color.get(n) === 0 &amp;&amp; hasCycle(n)) return [&#39;CYCLE DETECTED&#39;];
+  }
+  // Collect everything transitively downstream of the changed node.
+  const affected = new Set();
+  const stack = [...(dependents.get(changed) || [])];
+  while (stack.length) {
+    const n = stack.pop();
+    if (affected.has(n)) continue;
+    affected.add(n);
+    for (const d of dependents.get(n) || []) stack.push(d);
+  }
+  // Kahn&#39;s algorithm over the affected subgraph: count only in-affected inputs.
+  const indeg = new Map();
+  for (const n of affected) {
+    let cnt = 0;
+    for (const dep of deps.get(n) || []) if (affected.has(dep)) cnt++;
+    indeg.set(n, cnt);
+  }
+  const ready = [...affected].filter(n =&gt; indeg.get(n) === 0).sort();
+  const order = [];
+  while (ready.length) {
+    const n = ready.shift();
+    order.push(n);
+    for (const d of dependents.get(n) || []) {
+      if (!affected.has(d)) continue;
+      indeg.set(d, indeg.get(d) - 1);
+      if (indeg.get(d) === 0) { ready.push(d); ready.sort(); }
+    }
+  }
+  return order;
+}</code></pre>
+    <ul class="sharepage__notes"><li>A doc may only regenerate after every doc it depends on — that&#39;s why the output is a topological order, not just a reachability list. Regenerating the demand letter before the chronology it cites would embed stale text.</li><li>A cycle means A depends on B depends on A: there is no valid order, so the graph can never settle into a finished state. Return a sentinel instead of looping forever or returning a partial order.</li><li>The 3-color DFS distinguishes a back-edge (to a GRAY node still on the recursion stack = a real cycle) from a cross-edge (to a BLACK node already finished = fine). A plain visited-set would false-positive on the cross-edge.</li><li>Time O(V + E) for each of the three phases (cycle-DFS, reachability, Kahn&#39;s), each sequential — total O(V + E). Space O(V + E) for the two adjacency maps.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why must the output be in topological order rather than any order of downstream docs?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Topological order deduplicates nodes reachable by two paths, which any-order traversal would regenerate twice</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A doc can only regenerate after the docs it depends on, or it would embed stale upstream content <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Any other order would violate the BFS visitation guarantee that the affected-set was built with</li>
+        <li><span class="sharepage__key">D</span> Topological order is what allows Kahn&#39;s algorithm to skip the cycle-detection pass entirely</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If the demand letter regenerates before the chronology it cites, it pulls in the old chronology text. Inputs must be rebuilt first.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What does a cycle in the dependency graph mean for this problem?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Two docs share a common input, so the regeneration would repeat that input twice and waste work</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A depends on B which depends on A — there is no valid regeneration order, so it can never settle <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The graph has more edges than nodes, exceeding the in-degree budget Kahn&#39;s algorithm allows</li>
+        <li><span class="sharepage__key">D</span> A node is reachable from itself by a path of length &gt; 1 through unrelated docs</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A circular dependency has no node that can go first, so any rebuild would loop forever. The function returns a sentinel instead.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> In the 3-color DFS, what specifically signals a cycle?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Reaching any node that was visited before — a plain visited-set check is sufficient and equivalent</li>
+        <li><span class="sharepage__key">B</span> Reaching a BLACK (fully-finished) node — a back-edge always targets a finished node</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Reaching a GRAY node — one still on the current recursion stack (a back-edge) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Finishing the outer DFS loop with at least one node still WHITE</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> GRAY means &#39;currently being explored, still on the stack.&#39; An edge back to a GRAY node is a back-edge = a cycle. A BLACK node is finished and safe to re-encounter as a cross-edge.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why count only inputs that are themselves in the <code>affected</code> set when computing in-degree (Kahn&#39;s algorithm)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Including unaffected inputs would double-count edges shared by two affected nodes and inflate the in-degree past the edge count</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Inputs outside the affected set are unchanged and already current, so they impose no ordering constraint <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Unaffected inputs may not yet exist when Kahn&#39;s runs, so referencing them would throw a ReferenceError on <code>indeg.get</code></li>
+        <li><span class="sharepage__key">D</span> Kahn&#39;s algorithm requires that in-degree reflect the full graph; the <code>affected</code> filter is applied later, on the output</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An untouched upstream doc is already up to date; it does not need to be rebuilt first, so it should not block its dependent&#39;s readiness.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Build the reverse-edge (dependents) adjacency: for edge [dep, on], record that <code>on</code> is read by <code>dep</code>. Fill the Map methods so &#39;records&#39; lists its dependent &#39;chronology&#39;.</p>
+      <pre class="sharepage__code"><code class="language-js">const edges = [[&#39;chronology&#39;, &#39;records&#39;], [&#39;demand&#39;, &#39;chronology&#39;]];
+const dependents = new ___();
+for (const [dep, on] ___ edges) {
+  if (!dependents.___(on)) dependents.___(on, []);
+  dependents.___(on).___(dep);
+}
+console.log(dependents.get(&#39;records&#39;).join(&#39;,&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>Map</code>, <code>of</code>, <code>has</code>, <code>set</code>, <code>get</code>, <code>push</code></p>
+      <p class="sharepage__note">Expected output: <code>chronology</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>3-color cycle detection: mark a node GRAY (1) on entry, BLACK (2) on exit; a neighbor that is still GRAY means a cycle. Fill the comparisons so this graph reports a cycle.</p>
+      <pre class="sharepage__code"><code class="language-js">const adj = new Map([[&#39;a&#39;, [&#39;b&#39;]], [&#39;b&#39;, [&#39;a&#39;]]]);
+const color = new Map([[&#39;a&#39;, 0], [&#39;b&#39;, 0]]);
+const hasCycle = n =&gt; {
+  color.___(n, 1);
+  for (const d ___ adj.get(n) ___ []) {
+    if (color.get(d) === ___) return true;
+    if (color.get(d) === 0 &amp;&amp; hasCycle(d)) return true;
+  }
+  color.set(n, ___);
+  return false;
+};
+console.log(hasCycle(&#39;a&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>set</code>, <code>of</code>, <code>||</code>, <code>1</code>, <code>2</code></p>
+      <p class="sharepage__note">Expected output: <code>true</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Documents depend on each other ([dependent, dependsOn], e.g. [&#39;chronology&#39;,&#39;records&#39;]). When one node changes, return all transitively-dependent docs to regenerate, in topological order (a doc regenerates only after its inputs). If the graph contains a cycle, return [&#39;CYCLE DETECTED&#39;]. Print the regeneration order for a change to &#39;records&#39; (join with &#39; -&gt; &#39;), then the result for a 3-node cyclic graph.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Build two maps: dependents (reverse edges, who reads me) and deps (forward edges, who I read). The topo order walks the reverse edges.</li><li>Run a 3-color DFS over the whole graph first and bail with the sentinel if any back-edge to a GRAY node exists.</li><li>Then collect the transitive dependents of the changed node and run Kahn&#39;s algorithm over only that subgraph, counting in-degree from inputs that are themselves affected.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function regenerationOrder(edges, changed) {
+  const dependents = new Map();
+  const deps = new Map();
+  const nodes = new Set();
+  for (const [dep, on] of edges) {
+    nodes.add(dep);
+    nodes.add(on);
+    if (!dependents.has(on)) dependents.set(on, []);
+    dependents.get(on).push(dep);
+    if (!deps.has(dep)) deps.set(dep, new Set());
+    deps.get(dep).add(on);
+  }
+  const color = new Map([...nodes].map(n =&gt; [n, 0]));
+  const hasCycle = n =&gt; {
+    color.set(n, 1);
+    for (const d of dependents.get(n) || []) {
+      if (color.get(d) === 1) return true;
+      if (color.get(d) === 0 &amp;&amp; hasCycle(d)) return true;
+    }
+    color.set(n, 2);
+    return false;
+  };
+  for (const n of nodes) {
+    if (color.get(n) === 0 &amp;&amp; hasCycle(n)) return [&#39;CYCLE DETECTED&#39;];
+  }
+  const affected = new Set();
+  const stack = [...(dependents.get(changed) || [])];
+  while (stack.length) {
+    const n = stack.pop();
+    if (affected.has(n)) continue;
+    affected.add(n);
+    for (const d of dependents.get(n) || []) stack.push(d);
+  }
+  const indeg = new Map();
+  for (const n of affected) {
+    let cnt = 0;
+    for (const dep of deps.get(n) || []) if (affected.has(dep)) cnt++;
+    indeg.set(n, cnt);
+  }
+  const ready = [...affected].filter(n =&gt; indeg.get(n) === 0).sort();
+  const order = [];
+  while (ready.length) {
+    const n = ready.shift();
+    order.push(n);
+    for (const d of dependents.get(n) || []) {
+      if (!affected.has(d)) continue;
+      indeg.set(d, indeg.get(d) - 1);
+      if (indeg.get(d) === 0) { ready.push(d); ready.sort(); }
+    }
+  }
+  return order;
+}
+const edges = [
+  [&#39;chronology&#39;, &#39;records&#39;],
+  [&#39;demand-letter&#39;, &#39;chronology&#39;],
+  [&#39;demand-letter&#39;, &#39;intake&#39;],
+  [&#39;complaint&#39;, &#39;demand-letter&#39;],
+];
+console.log(regenerationOrder(edges, &#39;records&#39;).join(&#39; -&gt; &#39;));
+const cyclic = [[&#39;a&#39;, &#39;b&#39;], [&#39;b&#39;, &#39;c&#39;], [&#39;c&#39;, &#39;a&#39;]];
+console.log(regenerationOrder(cyclic, &#39;a&#39;).join(&#39; -&gt; &#39;));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-eve-update-propagation","title":"Document Update Propagation","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why must the output be in topological order rather than any order of downstream docs?","options":["Topological order deduplicates nodes reachable by two paths, which any-order traversal would regenerate twice","A doc can only regenerate after the docs it depends on, or it would embed stale upstream content","Any other order would violate the BFS visitation guarantee that the affected-set was built with","Topological order is what allows Kahn's algorithm to skip the cycle-detection pass entirely"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What does a cycle in the dependency graph mean for this problem?","options":["Two docs share a common input, so the regeneration would repeat that input twice and waste work","A depends on B which depends on A — there is no valid regeneration order, so it can never settle","The graph has more edges than nodes, exceeding the in-degree budget Kahn's algorithm allows","A node is reachable from itself by a path of length > 1 through unrelated docs"],"answer":1,"answerLetter":"B"},{"n":3,"q":"In the 3-color DFS, what specifically signals a cycle?","options":["Reaching any node that was visited before — a plain visited-set check is sufficient and equivalent","Reaching a BLACK (fully-finished) node — a back-edge always targets a finished node","Reaching a GRAY node — one still on the current recursion stack (a back-edge)","Finishing the outer DFS loop with at least one node still WHITE"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Why count only inputs that are themselves in the `affected` set when computing in-degree (Kahn's algorithm)?","options":["Including unaffected inputs would double-count edges shared by two affected nodes and inflate the in-degree past the edge count","Inputs outside the affected set are unchanged and already current, so they impose no ordering constraint","Unaffected inputs may not yet exist when Kahn's runs, so referencing them would throw a ReferenceError on `indeg.get`","Kahn's algorithm requires that in-degree reflect the full graph; the `affected` filter is applied later, on the output"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Build the reverse-edge (dependents) adjacency: for edge [dep, on], record that `on` is read by `dep`. Fill the Map methods so 'records' lists its dependent 'chronology'.","answers":["Map","of","has","set","get","push"]},{"n":2,"prompt":"3-color cycle detection: mark a node GRAY (1) on entry, BLACK (2) on exit; a neighbor that is still GRAY means a cycle. Fill the comparisons so this graph reports a cycle.","answers":["set","of","||","1","2"]}],"L3":[{"n":1,"prompt":"Documents depend on each other ([dependent, dependsOn], e.g. ['chronology','records']). When one node changes, return all transitively-dependent docs to regenerate, in topological order (a doc regenerates only after its inputs). If the graph contains a cycle, return ['CYCLE DETECTED']. Print the regeneration order for a change to 'records' (join with ' -> '), then the result for a 3-node cyclic graph.","expectedOutput":"chronology -> demand-letter -> complaint\nCYCLE DETECTED"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-eve-update-propagation">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

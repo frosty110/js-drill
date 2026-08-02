@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Validate BST — JS Drill</title>
+<meta name="description" content="Validate a BST by passing tightening (lo, hi) bounds down: every node must satisfy lo &lt; node.val &lt; hi. Recurse left with hi=node.val, right with lo=node.val. O(n).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-valid-bst">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Validate BST — JS Drill">
+<meta property="og:description" content="Validate a BST by passing tightening (lo, hi) bounds down: every node must satisfy lo &lt; node.val &lt; hi. Recurse left with hi=node.val, right with lo=node.val. O(n).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-valid-bst">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Trees</p>
+    <h1>Validate BST</h1>
+    <p class="sharepage__lede">Validate a BST by passing tightening (lo, hi) bounds down: every node must satisfy lo &lt; node.val &lt; hi. Recurse left with hi=node.val, right with lo=node.val. O(n).</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Trees</span> <span class="ds-chip">8 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>isValidBST(root)</code> using the (lo, hi) bounds approach. Build a valid BST [2,1,3] and an invalid BST [5,1,4,null,null,3,6]. Log both.</p>
+    <p class="sharepage__note">Expected output: <code>true
+false</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function isValidBST(root) {
+  // Carry the open interval (lo, hi) each node must fall inside — strict inequalities.
+  function check(node, lo, hi) {
+    if (!node) return true;
+    if (node.val &lt;= lo || node.val &gt;= hi) return false;
+    // Left subtree caps hi at node.val; right subtree raises lo to node.val.
+    return check(node.left, lo, node.val) &amp;&amp; check(node.right, node.val, hi);
+  }
+  // Root has no bounds — start with ±Infinity sentinels.
+  return check(root, -Infinity, Infinity);
+}
+// Time O(n), Space O(h) recursion stack</code></pre>
+    <ul class="sharepage__notes"><li>Bounds approach beats in-order-and-compare: handles duplicates cleanly and never allocates the traversal array.</li><li>Start with lo=-Infinity, hi=Infinity — the root has no constraint; tighten ONE side per recursion.</li><li>Use strict &lt;= and &gt;= — a BST disallows equal values (unless the problem says otherwise).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Iterative in-order traversal <code>O(n) / O(h)</code></h3>
+      <p>Reach for this when the interviewer asks for an iterative solution, or when you want to avoid the -Infinity/+Infinity sentinel ceremony. In-order of a valid BST is strictly increasing — a single non-increase means invalid. Also useful when you need to return the offending node rather than just true/false.</p>
+      <pre class="sharepage__code"><code class="language-js">function isValidBST(root) {
+  const stack = [];
+  let prev = -Infinity;
+  let node = root;
+  while (node || stack.length) {
+    // Descend to the leftmost node.
+    while (node) {
+      stack.push(node);
+      node = node.left;
+    }
+    node = stack.pop();
+    // In-order visit: must be strictly greater than previous.
+    if (node.val &lt;= prev) return false;
+    prev = node.val;
+    node = node.right;
+  }
+  return true;
+}
+const good = { val: 2, left: { val: 1, left: null, right: null }, right: { val: 3, left: null, right: null } };
+const bad  = { val: 5, left: { val: 1, left: null, right: null }, right: { val: 4, left: { val: 3, left: null, right: null }, right: { val: 6, left: null, right: null } } };
+console.log(isValidBST(good));
+console.log(isValidBST(bad));</code></pre>
+      <ul class="sharepage__notes"><li>Push lefts until null, pop, compare with <code>prev</code>, then move to the right child — the standard iterative in-order template.</li><li><code>prev</code> starts at -Infinity so the leftmost node always passes; any non-increasing step means invalid.</li><li>Space is O(h) for the explicit stack — same as the recursive bounds approach but no call-stack risk on very deep trees.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">8</span></h2>
+    <p class="sharepage__note">Positions 1–8 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What bounds does the left child of a node with value v inherit from a parent (lo, hi)?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> (lo, v) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> (v, hi)</li>
+        <li><span class="sharepage__key">C</span> (lo, hi)</li>
+        <li><span class="sharepage__key">D</span> (-Infinity, Infinity)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Going left tightens the UPPER bound to v; lo is unchanged.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why is the bounds approach preferred over in-order-traversal-and-compare?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Bounds short-circuit on the first violation, while in-order must complete the full traversal before comparing</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Handles duplicates cleanly and avoids allocating the traversal list <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> In-order traversal can&#39;t distinguish between a valid BST and its mirror image</li>
+        <li><span class="sharepage__key">D</span> Bounds-passing tightens monotonically, so it correctly handles trees where values exceed safe-integer range</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Initial call uses which bounds?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> (Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> (-Infinity, Infinity) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> (root.val - 1, root.val + 1)</li>
+        <li><span class="sharepage__key">D</span> (null, null) — checked with <code>lo == null</code> short-circuits</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Time and space complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n log n) time, O(1) space</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n) time, O(h) recursion stack <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n^2) time, O(n) space</li>
+        <li><span class="sharepage__key">D</span> O(log n) time, O(log n) space</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> A candidate validates a BST by only checking node.left.val &lt; node.val &lt; node.right.val at every node. Why is this WRONG?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It allows duplicates because non-strict <code>&lt;=</code> is implicit when comparing object properties</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It only enforces the local parent constraint; a node deep in a subtree can satisfy its parent yet still violate a distant ancestor&#39;s bound <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It compares child values rather than subtree min/max, so it misses internal violations within a subtree</li>
+        <li><span class="sharepage__key">D</span> It returns false on valid trees whose left subtree happens to be deeper than the right</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The BST property is global: every node in a left subtree must be less than the ANCESTOR, not just the direct parent — the local-only check passes invalid trees like [10,5,15,null,null,6,20].</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> In the tree [10,5,15,null,null,6,20], the node 6 is the left child of 15. Why is this tree invalid?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 6 is greater than its parent 15</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 6 sits in the right subtree of 10, so it must be greater than 10, but 6 &lt; 10 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 15 has no left structure</li>
+        <li><span class="sharepage__key">D</span> 20 is greater than 15</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 6 is locally fine (6 &lt; 15) but globally invalid: it descends from the right of 10 so it inherits lo=10, and 6 &lt;= 10 fails the bound.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> What is the alternative validation technique using in-order traversal?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> The traversal must be strictly increasing <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> The traversal must be non-decreasing</li>
+        <li><span class="sharepage__key">C</span> The traversal must be sorted descending</li>
+        <li><span class="sharepage__key">D</span> Any traversal order works as long as no duplicates exist</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An in-order traversal of a valid BST yields values in strictly increasing order; a single non-increase (including an equal pair) means it is not a valid BST.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> Why does the check use strict &lt;= lo and &gt;= hi rather than &lt; and &gt;?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Non-strict bounds would let a node equal its ancestor&#39;s value but still treat its subtree&#39;s bounds as strict, causing inconsistent rejection</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> To reject duplicate values — a standard BST disallows equal keys <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The recursion tightens bounds by +/- 1 on each call, so strict comparison is needed to prevent off-by-one drift</li>
+        <li><span class="sharepage__key">D</span> Strict comparison is required because lo/hi start at +/-Infinity, where non-strict comparisons are undefined in JS</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Strict bounds reject equality, so duplicates like [2,2] correctly return false; if the problem allowed duplicates on one side you would relax one comparison.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the bounds-check validator. Going LEFT tightens hi; going RIGHT tightens lo.</p>
+      <pre class="sharepage__code"><code class="language-js">function isValidBST(root) {
+  function check(node, lo, hi) {
+    if (!node) return true;
+    if (node.val &lt;= lo || node.val ___ hi) return false;
+    return check(node.left, lo, ___) &amp;&amp; check(node.right, ___, hi);
+  }
+  return check(root, -Infinity, ___);
+}
+const root = { val: 2, left: { val: 1, left: null, right: null }, right: { val: 3, left: null, right: null } };
+console.log(isValidBST(root));</code></pre>
+      <p><strong>Answers:</strong> <code>&gt;=</code>, <code>node.val</code>, <code>node.val</code>, <code>Infinity</code></p>
+      <p class="sharepage__note">Expected output: <code>true</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>isValidBST(root)</code> using the (lo, hi) bounds approach. Build a valid BST [2,1,3] and an invalid BST [5,1,4,null,null,3,6]. Log both.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Pass (lo, hi) down — never compare to the parent directly.</li><li>Left child inherits (lo, node.val); right child inherits (node.val, hi).</li><li>In [5,1,4,null,null,3,6]: node 3 is in 4 left subtree but smaller than ancestor 5 — bounds catch this; naive parent-only check does not.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function isValidBST(root) {
+  // Carry the open interval (lo, hi) each node must fall inside — strict inequalities.
+  function check(node, lo, hi) {
+    if (!node) return true;
+    if (node.val &lt;= lo || node.val &gt;= hi) return false;
+    // Left subtree caps hi at node.val; right subtree raises lo to node.val.
+    return check(node.left, lo, node.val) &amp;&amp; check(node.right, node.val, hi);
+  }
+  // Root has no bounds — start with ±Infinity sentinels.
+  return check(root, -Infinity, Infinity);
+}
+const good = { val: 2, left: { val: 1, left: null, right: null }, right: { val: 3, left: null, right: null } };
+const bad  = { val: 5, left: { val: 1, left: null, right: null }, right: { val: 4, left: { val: 3, left: null, right: null }, right: { val: 6, left: null, right: null } } };
+console.log(isValidBST(good));
+console.log(isValidBST(bad));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-valid-bst","title":"Validate BST","section":"Trees","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What bounds does the left child of a node with value v inherit from a parent (lo, hi)?","options":["(lo, v)","(v, hi)","(lo, hi)","(-Infinity, Infinity)"],"answer":0,"answerLetter":"A"},{"n":2,"q":"Why is the bounds approach preferred over in-order-traversal-and-compare?","options":["Bounds short-circuit on the first violation, while in-order must complete the full traversal before comparing","Handles duplicates cleanly and avoids allocating the traversal list","In-order traversal can't distinguish between a valid BST and its mirror image","Bounds-passing tightens monotonically, so it correctly handles trees where values exceed safe-integer range"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Initial call uses which bounds?","options":["(Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)","(-Infinity, Infinity)","(root.val - 1, root.val + 1)","(null, null) — checked with `lo == null` short-circuits"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Time and space complexity?","options":["O(n log n) time, O(1) space","O(n) time, O(h) recursion stack","O(n^2) time, O(n) space","O(log n) time, O(log n) space"],"answer":1,"answerLetter":"B"},{"n":5,"q":"A candidate validates a BST by only checking node.left.val \u003c node.val \u003c node.right.val at every node. Why is this WRONG?","options":["It allows duplicates because non-strict `\u003c=` is implicit when comparing object properties","It only enforces the local parent constraint; a node deep in a subtree can satisfy its parent yet still violate a distant ancestor's bound","It compares child values rather than subtree min/max, so it misses internal violations within a subtree","It returns false on valid trees whose left subtree happens to be deeper than the right"],"answer":1,"answerLetter":"B"},{"n":6,"q":"In the tree [10,5,15,null,null,6,20], the node 6 is the left child of 15. Why is this tree invalid?","options":["6 is greater than its parent 15","6 sits in the right subtree of 10, so it must be greater than 10, but 6 \u003c 10","15 has no left structure","20 is greater than 15"],"answer":1,"answerLetter":"B"},{"n":7,"q":"What is the alternative validation technique using in-order traversal?","options":["The traversal must be strictly increasing","The traversal must be non-decreasing","The traversal must be sorted descending","Any traversal order works as long as no duplicates exist"],"answer":0,"answerLetter":"A"},{"n":8,"q":"Why does the check use strict \u003c= lo and >= hi rather than \u003c and >?","options":["Non-strict bounds would let a node equal its ancestor's value but still treat its subtree's bounds as strict, causing inconsistent rejection","To reject duplicate values — a standard BST disallows equal keys","The recursion tightens bounds by +/- 1 on each call, so strict comparison is needed to prevent off-by-one drift","Strict comparison is required because lo/hi start at +/-Infinity, where non-strict comparisons are undefined in JS"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the bounds-check validator. Going LEFT tightens hi; going RIGHT tightens lo.","answers":[">=","node.val","node.val","Infinity"]}],"L3":[{"n":1,"prompt":"Write `isValidBST(root)` using the (lo, hi) bounds approach. Build a valid BST [2,1,3] and an invalid BST [5,1,4,null,null,3,6]. Log both.","expectedOutput":"true\nfalse"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-valid-bst">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -148,6 +148,47 @@
   .sd-filter-clear{margin-top:14px;min-height:36px;padding:0 12px;background:none;border:1px solid var(--panel-2);
     border-radius:8px;color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
   .sd-filter-clear:hover{border-color:var(--warn);color:var(--warn)}
+  /* ── Study plans: strip, cards, active row, in-session HUD ───────────── */
+  .plan-strip{margin:18px 0 4px}
+  .plan-strip__label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+    font-weight:600;margin:0 4px 8px}
+  .plan-cards{display:flex;gap:10px;overflow-x:auto;padding:2px 4px 6px;
+    scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
+  .plan-cards::-webkit-scrollbar{height:0}
+  .plan-card{flex:0 0 auto;width:150px;min-height:88px;scroll-snap-align:start;
+    display:flex;flex-direction:column;gap:5px;text-align:left;cursor:pointer;
+    background:var(--panel);border:1px solid var(--panel-2);border-radius:var(--radius);
+    padding:11px 12px;font:inherit;transition:border-color .15s,background .15s}
+  .plan-card:hover{border-color:var(--accent);background:var(--ds-surface-2)}
+  .plan-card__title{font-size:13px;font-weight:650;color:var(--text-strong);line-height:1.25}
+  .plan-card__budget{font-size:11px;color:var(--ds-accent-hi)}
+  .plan-card__bar{display:block;height:4px;border-radius:2px;background:var(--panel-2);overflow:hidden;margin-top:auto}
+  .plan-card__bar > i{display:block;height:100%;background:var(--good);width:0}
+  .plan-card__frac{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+  .plan-active{display:flex;align-items:center;gap:10px;background:var(--panel);
+    border:1px solid var(--accent);border-radius:var(--radius);padding:10px 12px}
+  .plan-active__main{flex:1;min-width:0}
+  .plan-active__main b{display:block;font-size:13px;color:var(--text-strong)}
+  .plan-active__meta{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .plan-active__go{flex:none;min-height:var(--ds-tap,44px);padding:0 12px;font-size:13px}
+  .plan-active__exit{flex:none;width:var(--ds-tap,44px);height:var(--ds-tap,44px);border-radius:8px;background:none;
+    border:1px solid var(--panel-2);color:var(--dim);cursor:pointer;font-size:13px}
+  .plan-active__exit:hover{border-color:var(--warn);color:var(--warn)}
+
+  /* Mirrors the main app's scoped-review HUD so the family reads as one product. */
+  /* Vertical padding is small because the buttons carry the 44px tap floor
+     themselves — the strip is persistent, so its height is thumb-real-estate. */
+  .plan-hud{display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:3px 12px;
+    background:var(--ds-accent-soft);border-radius:var(--radius);flex-wrap:wrap}
+  .plan-hud__label{font-size:12px;font-weight:650;color:var(--ds-accent-hi);flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .plan-hud__count{font-size:12px;color:var(--ds-accent-hi);font-variant-numeric:tabular-nums;opacity:.85}
+  .plan-hud__btn{min-height:var(--ds-tap,44px);padding:0 10px;border-radius:8px;background:none;
+    border:1px solid color-mix(in srgb,var(--ds-accent-hi) 35%,transparent);
+    color:var(--ds-accent-hi);font:inherit;font-size:12px;cursor:pointer}
+  .plan-hud__btn:hover{background:var(--panel)}
+
   .sd-empty{background:var(--panel);border:1px dashed var(--panel-2);border-radius:var(--radius);
     padding:26px 18px;text-align:center;color:var(--muted);font-size:14px}
   .sd-empty small{color:var(--dim)}
@@ -544,6 +585,88 @@ function entryTags(t, entry) {
   };
 }
 
+// ============================================================================
+// STUDY PLANS — data/system-design/plans.json
+// A plan is a ROUTE through existing units with a declared time budget, never a
+// copy of them. Completion is always derived from unit SR state, so switching or
+// abandoning a plan can never reset mastery. Only the cursor is persisted
+// (schema-additive `activePlan`), because the main app's Home lives on a
+// different page and needs to render "One Week Core · 6/14" from a cold load.
+// ============================================================================
+let PLANS = null;
+async function loadPlans() {
+  if (PLANS === null) {
+    try { PLANS = await fetch(`${BASE}/plans.json`).then(r => r.json()); }
+    catch (_) { PLANS = { plans: [] }; }
+  }
+  return PLANS;
+}
+const plansApplyTo = (t) => !!(PLANS && PLANS.appliesTo === t);
+
+// Authored plans plus the generated company sets, in one list.
+function allPlans(t) {
+  if (!plansApplyTo(t)) return [];
+  const authored = (PLANS.plans || []).map(p => ({ ...p, generated: false }));
+  return authored.concat(companyPlans(t));
+}
+
+// Company plans are DERIVED from the `company` tag, not authored — tagging one
+// problem grows every relevant loop set for free. That is the whole payoff for
+// surfacing company tags at all.
+function companyPlans(t) {
+  const cfg = (PLANS && PLANS.companyPlans) || {};
+  const min = cfg.minUnits || 4, perUnit = cfg.budgetPerUnit || 12;
+  const m = META[t]; if (!m) return [];
+  const byCompany = {};
+  m.chapters.forEach(c => ((c.tags && c.tags.company) || []).forEach(co => {
+    (byCompany[co] || (byCompany[co] = [])).push(c.id);
+  }));
+  return Object.keys(byCompany)
+    .filter(co => byCompany[co].length >= min)
+    .sort((a, b) => byCompany[b].length - byCompany[a].length || a.localeCompare(b))
+    .map(co => ({
+      id: `company/${co}`, generated: true, mode: 'all',
+      title: `${facetLabel('company', co)} loop`,
+      budget: `~${Math.round(byCompany[co].length * perUnit / 60 * 10) / 10} hrs`,
+      blurb: `${byCompany[co].length} problems tagged as asked at ${facetLabel('company', co)}.`,
+      units: byCompany[co].sort((a, b) => (m._order[a] || 0) - (m._order[b] || 0))
+    }));
+}
+const planById = (t, id) => allPlans(t).find(p => p.id === id) || null;
+
+// `units: "*"` resolves to every unit in parts[] order — the curriculum order,
+// not manifest-array order, so the Full Canon walks family by family.
+function planUnits(t, plan) {
+  const m = META[t]; if (!m || !plan) return [];
+  if (plan.units === '*') return (m.parts || []).flatMap(p => p.chapters);
+  return plan.units.filter(id => m._order[id] != null);
+}
+
+// Derived from unit SR state — never stored, so it can't drift from mastery.
+function planProgress(t, plan) {
+  const units = planUnits(t, plan);
+  let done = 0;
+  units.forEach(id => {
+    const ch = CH[t] && CH[t][id]; if (!ch) return;
+    const items = plan.mode === 'crux'
+      ? chapterItems(t, ch).filter(it => it.q.crux)
+      : chapterItems(t, ch);
+    if (items.length && items.every(it => isMastered(it.key))) done++;
+  });
+  return { total: units.length, done };
+}
+
+function activePlan() { return progress.activePlan || null; }
+function setActivePlan(id, index) {
+  progress.activePlan = { id, index, startedAt: (activePlan() || {}).startedAt || Date.now() };
+  persist();
+}
+// Writes an explicit null TOMBSTONE rather than deleting the key: sync merges
+// system-design state as { ...cloud, ...local }, so a missing local key silently
+// inherits the cloud's value and a plan dropped on the phone would resurrect
+// from the laptop's copy. A null is a fact ("no plan here"); an absence isn't.
+function clearActivePlan() { progress.activePlan = null; persist(); }
+
 function tagFilter() { return progress.tagFilter || (progress.tagFilter = {}); }
 function tagFilterCount() {
   return Object.keys(tagFilter()).reduce((n, k) => n + (tagFilter()[k] || []).length, 0);
@@ -663,6 +786,7 @@ async function renderTopicHome(t) {
   const m = await loadMeta(t);
   await loadTopicChapters(t);
   await loadTags();
+  await loadPlans();
   const meta = TOPICS.find(x => x.id === t) || {};
   const s = topicStats(t);
   const u = topicUnitStats(t);
@@ -687,6 +811,50 @@ async function renderTopicHome(t) {
         ${resume ? `<button class="cta ds-btn ds-btn--ghost" id="resume-btn">↻ Resume ${unitAbbrev(t)} ${chNum(byId[resume], t)}</button>` : ''}
       </div>
     </section>`;
+
+  // Plan strip. Once a plan is running it collapses to a single resume row, so
+  // it costs one line rather than a permanent carousel.
+  if (plansApplyTo(t)) {
+    const ap = activePlan();
+    const active = ap ? planById(t, ap.id) : null;
+    if (active) {
+      const pr = planProgress(t, active);
+      html += `
+        <section class="plan-strip plan-strip--active">
+          <div class="plan-active">
+            <div class="plan-active__main">
+              <b>${esc(active.title)}</b>
+              <span class="plan-active__meta">${ap.index + 1} of ${pr.total} · ${pr.done} mastered</span>
+            </div>
+            <button class="ds-btn ds-btn--primary plan-active__go" id="plan-resume">Resume →</button>
+            <button class="plan-active__exit" id="plan-drop" title="Leave this plan">✕</button>
+          </div>
+        </section>`;
+    } else {
+      // Two labeled rows, not one list: a "Google loop" spanning 19 of 32
+      // problems answers "what do they ask", not "I have 45 minutes". Filing
+      // them under one heading would make the time budgets unreadable.
+      const planCard = (p) => {
+        const pr = planProgress(t, p);
+        const pct = pr.total ? Math.round(pr.done / pr.total * 100) : 0;
+        return `<button class="plan-card" data-plan="${esc(p.id)}">
+          <span class="plan-card__title">${esc(p.title)}</span>
+          <span class="plan-card__budget">${esc(p.budget)}${p.mode === 'crux' ? ' · crux' : ''}</span>
+          <span class="plan-card__bar"><i style="width:${pct}%"></i></span>
+          <span class="plan-card__frac">${pr.done}/${pr.total}</span>
+        </button>`;
+      };
+      const row = (label, list) => list.length ? `
+        <div class="plan-strip__label">${esc(label)}</div>
+        <div class="plan-cards">${list.map(planCard).join('')}</div>` : '';
+      const gen = companyPlans(t);
+      html += `
+        <section class="plan-strip">
+          ${row('Pick a time budget', (PLANS.plans || []).map(p => ({ ...p, generated: false })))}
+          ${row(`By company · ${gen.length}`, gen)}
+        </section>`;
+    }
+  }
 
   const faceted = tagsApplyTo(t);
   const entryOf = Object.fromEntries(m.chapters.map(c => [c.id, c]));
@@ -788,6 +956,14 @@ async function renderTopicHome(t) {
   }));
   const fc = document.getElementById('filter-clear');
   if (fc) fc.addEventListener('click', () => { clearTagFilter(); renderTopicHome(t); });
+  app.querySelectorAll('.plan-card').forEach(el => el.addEventListener('click', () =>
+    startPlanStep(t, el.dataset.plan, 0)));
+  const presume = document.getElementById('plan-resume');
+  if (presume) presume.addEventListener('click', () => {
+    const ap = activePlan(); startPlanStep(t, ap.id, ap.index);
+  });
+  const pdrop = document.getElementById('plan-drop');
+  if (pdrop) pdrop.addEventListener('click', () => { clearActivePlan(); renderTopicHome(t); });
   const mb = document.getElementById('mixed-btn'); if (mb) mb.addEventListener('click', () => startMixed(t));
   const rb = document.getElementById('resume-btn'); if (rb) rb.addEventListener('click', () => renderChapterDetail(t, resume));
   window.scrollTo(0, 0);
@@ -888,6 +1064,86 @@ async function startCrux(t, chId) {
   renderQuestion();
 }
 
+// Plan step — one unit inside a running plan. Deliberately reuses the ordinary
+// session shape and renderQuestion(); the plan owns only the queue, the cursor
+// and the HUD, so SR scheduling and grading stay in exactly one place.
+async function startPlanStep(t, planId, index) {
+  await loadPlans(); await loadMeta(t); await loadTags();
+  const plan = planById(t, planId);
+  if (!plan) return renderTopicHome(t);
+  const units = planUnits(t, plan);
+  if (index >= units.length) return renderPlanDone(t, plan);
+
+  const chId = units[index];
+  const ch = await loadChapter(t, chId);
+  const items = plan.mode === 'crux'
+    ? chapterItems(t, ch).filter(it => it.q.crux)
+    : chapterItems(t, ch);
+  // A step with no items would strand the user on a blank screen; skip forward
+  // rather than render nothing. The validator makes this near-impossible, but a
+  // hand-edited plan shouldn't be able to wedge the runner.
+  if (!items.length) return startPlanStep(t, planId, index + 1);
+
+  setActivePlan(planId, index);
+  progress.lastTopic = t; progress.lastChapter = chId; persist();
+  setRoute(`#/${t}/plan/${planId}`);
+  session = {
+    topic: t, chId, mode: plan.mode, title: ch.title, items,
+    pos: 0, right: 0, gained: 0, streak: 0, answered: false,
+    plan: { id: planId, index, total: units.length, label: plan.title }
+  };
+  renderQuestion();
+}
+
+function renderPlanDone(t, plan) {
+  clearActivePlan();
+  session = null;
+  setRoute(`#/${t}`);
+  const app = document.getElementById('app');
+  const pr = planProgress(t, plan);
+  app.innerHTML = `
+    <button class="crumb" id="to-chapters">‹ ${esc(META[t].title)}</button>
+    <div class="detail">
+      <div class="detail-tag">Plan complete</div>
+      <h2 class="detail-title">${esc(plan.title)}</h2>
+      <p class="detail-summary">You worked all ${pr.total} ${esc(unitNoun(t, pr.total))} in this plan.
+        ${pr.done} of ${pr.total} are fully mastered — the rest stay in spaced review.</p>
+      <div class="cta-row">
+        <button class="cta ds-btn ds-btn--primary" id="plan-again">↻ Run it again</button>
+        <button class="cta ds-btn ds-btn--ghost" id="plan-back">← All ${esc(unitNoun(t, 2))}</button>
+      </div>
+    </div>`;
+  document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
+  document.getElementById('plan-back').addEventListener('click', () => renderTopicHome(t));
+  document.getElementById('plan-again').addEventListener('click', () => startPlanStep(t, plan.id, 0));
+  window.scrollTo(0, 0);
+}
+
+// The HUD strip — same shape as the main app's scoped-review HUD so the family
+// reads as one product: label · n/N · Skip · Exit.
+function planHud() {
+  if (!session || !session.plan) return '';
+  const p = session.plan;
+  return `<div class="plan-hud">
+    <span class="plan-hud__label">${esc(p.label)}</span>
+    <span class="plan-hud__count">${p.index + 1}/${p.total}</span>
+    <button class="plan-hud__btn" id="plan-skip">Skip</button>
+    <button class="plan-hud__btn" id="plan-exit">Exit</button>
+  </div>`;
+}
+function wirePlanHud() {
+  const skip = document.getElementById('plan-skip');
+  if (skip) skip.addEventListener('click', () => {
+    const p = session.plan;
+    startPlanStep(session.topic, p.id, p.index + 1);
+  });
+  const exit = document.getElementById('plan-exit');
+  if (exit) exit.addEventListener('click', () => {
+    const t = session.topic;
+    clearActivePlan(); session = null; renderTopicHome(t);
+  });
+}
+
 // Due-only review — the session the main app's Home ⟲ links to. It exists
 // because startMixed()'s pool is built from isDue(), and isDue() treats an
 // untouched box-0 question as due; on a mostly-new topic that turns a
@@ -968,6 +1224,7 @@ function renderQuestion() {
   }
 
   app.innerHTML = `
+    ${planHud()}
     <div id="progress-wrap"><div id="progress-bar" style="width:${pct}%"></div></div>
     <div class="sess-meta">
       <span>${esc(session.title)} — ${session.pos + 1}/${total}${session.mixed ? '' : ` · <span class="q-tag" style="margin:0;padding:1px 6px">${tag}</span>`}</span>
@@ -982,6 +1239,7 @@ function renderQuestion() {
   } else {
     app.querySelectorAll('.ds-opt').forEach(el => el.addEventListener('click', () => selectAnswer(parseInt(el.dataset.i, 10))));
   }
+  wirePlanHud();
   window.scrollTo(0, 0);
 }
 
@@ -1046,6 +1304,7 @@ function showNext() {
   const last = session.pos === session.items.length - 1;
   document.getElementById('action-bar').innerHTML = `<button class="cta ds-btn ds-btn--primary" id="next-btn">${last ? 'Finish →' : 'Next →'}</button>`;
   document.getElementById('next-btn').addEventListener('click', nextQuestion);
+  wirePlanHud();
 }
 function nextQuestion() { session.pos++; renderQuestion(); }
 
@@ -1212,13 +1471,16 @@ function renderSummary() {
   const pct = total ? Math.round(session.right / total * 100) : 0;
   const t = session.topic;
   app.innerHTML = `
+    ${planHud()}
     <div class="summary">
-      <h2>Session complete</h2>
+      <h2>${session.plan ? esc(session.title) : 'Session complete'}</h2>
       <div class="score">${session.right}/${total}</div>
       <p class="sub">${pct}% on this ${session.mixed ? 'mixed review' : 'set'}.</p>
       ${session.gained ? `<div class="gained">🎯 ${session.gained} new item${session.gained === 1 ? '' : 's'} mastered</div>` : ''}
       <div class="cta-row" style="justify-content:center;margin-top:22px">
-        <button class="cta ds-btn ds-btn--primary" id="again-btn">${session.mixed ? '⚡ Another mixed set' : (session.mode === 'crux' ? '⚡ Crux again' : '↻ Drill again')}</button>
+        ${session.plan
+          ? `<button class="cta ds-btn ds-btn--primary" id="plan-next">${session.plan.index + 1 < session.plan.total ? 'Next in plan →' : 'Finish plan →'}</button>`
+          : `<button class="cta ds-btn ds-btn--primary" id="again-btn">${session.mixed ? '⚡ Another mixed set' : (session.mode === 'crux' ? '⚡ Crux again' : '↻ Drill again')}</button>`}
         <button class="cta ds-btn ds-btn--ghost" id="back-btn">${session.mixed ? '← All chapters' : '← Back'}</button>
         ${session.mixed ? '' : `<button class="cta ds-btn ds-btn--ghost" id="share-session" title="Share a link carrying your results, for an AI to drill you from">Share</button>`}
       </div>
@@ -1230,8 +1492,15 @@ function renderSummary() {
   // they have no single unit URL to point at.
   const shareBtn = document.getElementById('share-session');
   if (shareBtn) shareBtn.addEventListener('click', () => openShareSheet(t, CH[t][chId]));
+  const planNext = document.getElementById('plan-next');
+  if (planNext) {
+    const pl = session.plan;
+    planNext.addEventListener('click', () => startPlanStep(t, pl.id, pl.index + 1));
+  }
+  wirePlanHud();
   document.getElementById('back-btn').addEventListener('click', () => session.mixed ? renderTopicHome(t) : renderChapterDetail(t, chId));
-  document.getElementById('again-btn').addEventListener('click', () =>
+  const againBtn = document.getElementById('again-btn');
+  if (againBtn) againBtn.addEventListener('click', () =>
     session.mixed ? startMixed(t) : (mode === 'crux' ? startCrux(t, chId) : startChapter(t, chId)));
   window.scrollTo(0, 0);
 }
@@ -1342,6 +1611,11 @@ function parseRoute() {
   const unit = parts[1].replace(/[^a-z0-9-]/gi, '');
   if (unit === 'mixed') return { view: 'mixed', topic };
   if (unit === 'due') return { view: 'due', topic };
+  // #/<topic>/plan/<planId>  (company plans are #/<topic>/plan/company/<name>)
+  if (unit === 'plan' && parts[2]) {
+    const rest = parts.slice(2).map(x => decodeURIComponent(x).replace(/[^a-z0-9-]/gi, '')).join('/');
+    return { view: 'plan', topic, plan: rest };
+  }
   // #/<topic>/tag/<facet>/<value> — a shareable filtered list.
   if (unit === 'tag' && parts[2] && parts[3]) {
     return {
@@ -1361,6 +1635,15 @@ async function applyRoute() {
     if (r.view === 'topic' && known(r.topic)) return await renderTopicHome(r.topic);
     if (r.view === 'mixed' && known(r.topic)) { curTopic = r.topic; return await startMixed(r.topic); }
     if (r.view === 'due' && known(r.topic)) { curTopic = r.topic; return await startDue(r.topic); }
+    if (r.view === 'plan' && known(r.topic)) {
+      await loadMeta(r.topic); await loadTopicChapters(r.topic); await loadTags(); await loadPlans();
+      if (!planById(r.topic, r.plan)) return await renderTopicHome(r.topic);
+      // A shared plan link starts at the beginning unless THIS plan is the one
+      // already in progress, in which case it resumes where the user left off.
+      const ap = activePlan();
+      const at = (ap && ap.id === r.plan) ? ap.index : 0;
+      return await startPlanStep(r.topic, r.plan, at);
+    }
     if (r.view === 'tag' && known(r.topic)) {
       // A tag link REPLACES the filter rather than adding to it, so a shared URL
       // always lands on the same list regardless of the recipient's saved state.

@@ -242,6 +242,25 @@ renders an implicit plan ("Meta loop · 9 problems · ~2 hrs") built from the `c
 facet. Tagging one problem grows every relevant company set for free — that's the
 payoff for surfacing company tags at all.
 
+**As shipped** (deltas from the sketch above, all found while building):
+
+- A sixth plan, **Data & Streaming** (`p19`+`p18`+`p26`), because the log, the
+  aggregation on top of it, and the platform that watches both only teach the
+  shape as a set — the sketch scattered them across three plans.
+- Budgets were re-derived from actual question counts rather than guessed:
+  Night Before is ~50 min (8 units × crux only, not 6 × full), Full Canon ~6 hrs
+  (the ~12 hrs guess double-counted the open-question self-grade).
+- `companyPlans` config moved into `plans.json` (`minUnits`, `budgetPerUnit`) so
+  the threshold is data, not a constant buried in the page.
+- **The strip renders two labeled rows, not one list.** With the canon tagged, 12
+  companies clear `minUnits` and the largest spans 19 of 32 problems — a "Google
+  loop" is not a time budget, and filing it under *Pick a time budget* made the
+  actual budgets unreadable. Authored budgets first, `By company · N` second.
+- `activePlan` needed a **sync rule**: `mergeSystemDesign` starts from
+  `{ ...cloud, ...local }`, so `delete`-ing the key on drop would have let the
+  other device's cursor resurrect. Dropping a plan writes an explicit `null`
+  tombstone and the merge prefers local *including* that null.
+
 ---
 
 ## 6. Navigation & UX
@@ -431,9 +450,9 @@ artwork (§ 7 rule 7), so "leaves the validator green" holds for every gate exce
 |---|---|---|---|
 | **P1 — Taxonomy & tags** ✅ | Re-part the existing 17 into 5 families; `displayNum`; author tags on all 17; `tags.json`; filter panel; chip rows; tag routes; validator rules 1–5; unit-level rollup (§ 6.7) | none | ✅ all gates green · `sd-tags-nav.js` 39/39 |
 | **P3 — Tier 1A content** ✅ | `p18` Ad Click Aggregator · `p19` Message Queue · `p21` Key-Value Store · `p22` LLM Inference — adds the *Streaming & Analytics* and *AI & ML Infrastructure* families | 4 problems | 7 of 8 gates green; `system design` red on 16 pending sheets |
-| **P4 — Tier 1B content** | `p23` RAG · `p20` Job Scheduler · `p24` Proximity · `p25` Search Engine | 4 problems | ″ |
-| **P5 — Tier 2 content** | `p26` Observability · `p27` Live Streaming · `p28` Short-Form Video · `p29` Webhooks · `p30` Feature Store · `p31` Moderation · `p32` Auth/SSO | 7 problems | ″ |
-| **P2 — Plans** *(moved last)* | `plans.json`; plan strip; plan runner + persisted `activePlan` (§ 6.4); plan routes; generated company sets; validator rule 6 | none | new `tools/cdp/sd-plans.js` |
+| **P4 — Tier 1B content** ✅ | `p23` RAG · `p20` Job Scheduler · `p24` Proximity · `p25` Search Engine | 4 problems | ″ |
+| **P5 — Tier 2 content** ✅ | `p26` Observability · `p27` Live Streaming · `p28` Short-Form Video · `p29` Webhooks · `p30` Feature Store · `p31` Moderation · `p32` Auth/SSO | 7 problems | ″ |
+| **P2 — Plans** *(moved last)* ✅ | `plans.json`; plan strip; plan runner + persisted `activePlan` (§ 6.4); plan routes; generated company sets; validator rule 6 | none | `sd-plans.js` 59/59 · `sync-merge.js` +4 · `system design` still red on artwork only |
 
 **P1 shipped real value with zero authoring** — the 17 existing problems became
 searchable by mechanism, difficulty and company, and the shelf finally teaches

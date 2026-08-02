@@ -53,6 +53,45 @@ const MECHANISMS = facetValues('mechanism');
 const DIFFICULTIES = facetValues('difficulty');
 const COMPANIES = facetValues('company');
 
+// --- Study plans (data/system-design/plans.json) -----------------------------
+// A plan is a route through existing content, never a copy of it. The rule that
+// matters: every referenced unit must exist, or the plan runner builds a queue
+// with holes in it and the failure surfaces mid-session as a blank screen.
+const PLANS_FILE = readJson(path.join(SD, 'plans.json'));
+function validatePlans(unitIdsByTopic, cruxUnits) {
+  if (!PLANS_FILE) return;                     // optional file
+  const topic = PLANS_FILE.appliesTo;
+  const known = unitIdsByTopic[topic];
+  if (!known) { fail('plans.json', `appliesTo "${topic}" is not a known topic`); return; }
+  if (!Array.isArray(PLANS_FILE.plans) || !PLANS_FILE.plans.length) {
+    fail('plans.json', 'plans must be a non-empty array'); return;
+  }
+  const seen = new Set();
+  for (const p of PLANS_FILE.plans) {
+    const at = `plans.json/${p && p.id ? p.id : '?'}`;
+    if (!p || !p.id || !/^[a-z0-9-]+$/.test(p.id)) { fail(at, 'plan needs a kebab-case id'); continue; }
+    if (seen.has(p.id)) fail(at, `duplicate plan id ${p.id}`);
+    seen.add(p.id);
+    for (const f of ['title', 'budget', 'blurb']) if (!p[f]) fail(at, `missing ${f}`);
+    if (!['all', 'crux'].includes(p.mode)) fail(at, `mode must be "all" or "crux", got ${JSON.stringify(p.mode)}`);
+    if (p.units === '*') continue;             // every unit, resolved at load
+    if (!Array.isArray(p.units) || p.units.length < 2) { fail(at, 'units must be "*" or an array of >= 2 unit ids'); continue; }
+    if (new Set(p.units).size !== p.units.length) fail(at, 'units has duplicates');
+    for (const u of p.units) {
+      if (!known.has(u)) fail(at, `references unknown unit "${u}"`);
+      // A crux plan over a unit with no crux questions yields an empty step —
+      // the user taps through to nothing and the plan silently under-delivers.
+      else if (p.mode === 'crux' && !cruxUnits.has(`${topic}/${u}`)) {
+        fail(at, `crux plan references "${u}", which has no crux:true questions`);
+      }
+    }
+  }
+  const cp = PLANS_FILE.companyPlans;
+  if (cp && (!Number.isInteger(cp.minUnits) || cp.minUnits < 2)) {
+    fail('plans.json', 'companyPlans.minUnits must be an integer >= 2');
+  }
+}
+
 function validateTagRegistry() {
   if (!TAGS.facets) { fail('tags.json', 'missing or unreadable — expected a facets[] array'); return; }
   const seen = new Set();
@@ -245,6 +284,8 @@ if (!registry || !Array.isArray(registry.topics)) {
 
 validateTagRegistry();
 
+const unitIdsByTopic = {};
+const cruxUnits = new Set();
 for (const topic of registry.topics) {
   const t = topic.id;
   const dir = path.join(SD, t);
@@ -279,6 +320,8 @@ for (const topic of registry.topics) {
     if (!ch) continue;
     const at = `${t}/${id}`;
     registeredLessons.add(at);
+    (unitIdsByTopic[t] || (unitIdsByTopic[t] = new Set())).add(id);
+    if (Array.isArray(ch.questions) && ch.questions.some(q => q && q.crux)) cruxUnits.add(at);
 
     if (ch.id !== id) fail(at, `id "${ch.id}" != manifest "${id}"`);
     const num = ch.num != null ? ch.num : ch.chapter;
@@ -379,6 +422,8 @@ for (const key of registeredLessons) {
 }
 
 console.log('');
+validatePlans(unitIdsByTopic, cruxUnits);
+
 if (errors === 0) {
   const pending = totalPending ? `, ${totalPending} pending artwork` : '';
   console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, ${totalInfographics} infographics${pending}, 0 errors.`);

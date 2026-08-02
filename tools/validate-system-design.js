@@ -23,6 +23,13 @@ const ROOT = path.resolve(__dirname, '..');
 const SD = path.join(ROOT, 'data', 'system-design');
 const INFOGRAPHICS = path.join(ROOT, 'assets', 'system-design', 'infographics');
 const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
+
+// Declared before the config reads below: readJson() reports parse failures
+// through fail(), so a malformed infographic JSON would otherwise die with
+// "Cannot access 'fail' before initialization" instead of naming the file.
+let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0, totalInfographics = 0;
+const fail = (where, msg) => { errors++; console.error(`  ✗ [${where}] ${msg}`); };
+
 const INFOGRAPHIC_SPECS = readJson(path.join(SD, 'infographic-specs.json')) || {};
 const INFOGRAPHIC_SETS = (readJson(path.join(SD, 'infographic-sets.json')) || {}).sets || {};
 const INFOGRAPHIC_PLAN = (readJson(path.join(SD, 'infographic-plan.json')) || {}).lessons || {};
@@ -41,9 +48,6 @@ const INFOGRAPHIC_VISUAL_TYPES = new Set([
 const MIN_QUESTIONS = 8;      // MC + open combined, per chapter
 const MIN_TAKEAWAYS = 3;
 const MIN_OPEN_POINTS = 3;
-
-let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0, totalInfographics = 0;
-const fail = (where, msg) => { errors++; console.error(`  ✗ [${where}] ${msg}`); };
 
 const DIAGRAM_ROLES = new Set(['overview', 'request-flow', 'mechanism', 'comparison', 'failure', 'lifecycle']);
 

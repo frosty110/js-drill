@@ -48,6 +48,9 @@
       .infographic-viewer__image{position:absolute;left:0;top:0;width:auto;height:auto;max-width:none;max-height:none;transform-origin:0 0;will-change:transform;pointer-events:none;box-shadow:0 16px 60px rgba(0,0,0,.55)}
       .infographic-viewer__help{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);padding:6px 10px;border-radius:999px;background:rgba(17,19,24,.82);color:#a7adb7;font:600 11px/1.2 system-ui,sans-serif;pointer-events:none;white-space:nowrap}
       .infographic-set{border:1px solid var(--panel-2,#343840);border-radius:var(--radius-lg,14px);background:var(--ds-surface-2,#1b1e24);overflow:hidden}
+      /* Host pages commonly style their page header with a bare element rule.
+         These nested headers must never inherit sticky positioning from it. */
+      .infographic-set__head,.infographic-study__head{position:static;top:auto;z-index:auto}
       .infographic-set__head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px;border-bottom:1px solid var(--panel-2,#343840);background:linear-gradient(135deg,rgba(245,182,43,.08),transparent 55%)}
       .infographic-set__eyebrow{display:block;color:var(--accent,#f5b62b);font-size:10px;font-weight:850;letter-spacing:.09em;text-transform:uppercase;margin-bottom:4px}
       .infographic-set__head h3{margin:0;color:var(--text-strong,#f4f5f7);font-size:19px;line-height:1.3}
@@ -259,12 +262,18 @@
         const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
         const cx = (points[0].x + points[1].x) / 2;
         const cy = (points[0].y + points[1].y) / 2;
-        if (this.pinchOrigin && this.pinchOrigin.distance) {
-          const target = clamp(this.pinchOrigin.scale * distance / this.pinchOrigin.distance, Math.min(this.fitScale * .5, .1), 4);
-          this.scale = this.pinchOrigin.scale;
-          this.x = this.pinchOrigin.x;
-          this.y = this.pinchOrigin.y;
-          this.zoomAt(target / this.scale, cx, cy);
+        if (this.pinchOrigin && this.pinchOrigin.distance && this.image.naturalWidth) {
+          // Re-pin the image point that was under the fingers at pinch start to
+          // wherever the midpoint is NOW. Deriving from the live midpoint via
+          // zoomAt instead would cancel two-finger panning (at constant finger
+          // spacing the transform algebraically restores the start x/y) and let
+          // the anchored point drift when panning and zooming at once.
+          const origin = this.pinchOrigin;
+          const rect = this.stage.getBoundingClientRect();
+          this.scale = clamp(origin.scale * distance / origin.distance, Math.min(this.fitScale * .5, .1), 4);
+          this.x = cx - rect.left - origin.imageX * this.scale;
+          this.y = cy - rect.top - origin.imageY * this.scale;
+          this.paint();
         }
       } else if (this.dragOrigin) {
         this.x = this.dragOrigin.x + event.clientX - this.dragOrigin.px;
@@ -288,9 +297,16 @@
 
     startPinch() {
       const points = [...this.pointers.values()];
+      const rect = this.stage.getBoundingClientRect();
+      const localX = (points[0].x + points[1].x) / 2 - rect.left;
+      const localY = (points[0].y + points[1].y) / 2 - rect.top;
       this.pinchOrigin = {
         distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
-        scale: this.scale, x: this.x, y: this.y
+        scale: this.scale,
+        // Image-space anchor under the initial midpoint; pointerMove keeps this
+        // point beneath the fingers for the whole gesture.
+        imageX: (localX - this.x) / this.scale,
+        imageY: (localY - this.y) / this.scale
       };
       this.dragOrigin = null;
     }

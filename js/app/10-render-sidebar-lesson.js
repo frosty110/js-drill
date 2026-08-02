@@ -431,7 +431,14 @@ function _parseHash() {
   // mode slug from ever colliding with a lesson id.
   if (parts[0] === 'm') {
     const mode = parts[1] ? parts[1].replace(/[^a-z0-9-]/gi, '') : '';
-    return mode ? { mode } : null;
+    // Optional third segment = the mode's argument. Used by the scoped review
+    // routes (#/m/review/trees, #/m/review/all — js/app/23-review.js); modes
+    // that take no argument simply ignore it.
+    let modeArg = null;
+    if (parts[2]) {
+      try { modeArg = decodeURIComponent(parts[2]).replace(/[^a-z0-9-]/gi, ''); } catch (_) { modeArg = null; }
+    }
+    return mode ? { mode, modeArg } : null;
   }
   let lessonId;
   try { lessonId = decodeURIComponent(parts[0]); } catch (_) { return null; }
@@ -472,8 +479,14 @@ const MODE_ROUTE_SURFACE = {
   'reset': 'settings'
 };
 
-function _dispatchModeRoute(mode) {
+function _dispatchModeRoute(mode, modeArg) {
   if (!mode) return false;
+  // Scoped review (#/m/review/<scope-slug>) takes an argument rather than a
+  // hidden button — the queue is built per scope at click time.
+  if (mode === 'review' && modeArg) {
+    if (typeof startScopedReview === 'function') { startScopedReview(modeArg); return true; }
+    return false;
+  }
   const surface = MODE_ROUTE_SURFACE[mode];
   if (surface === 'browse') {
     // Open Browse with the Filters disclosure expanded so the toggle the URL
@@ -513,7 +526,7 @@ function _updateHash() {
 function _handleHashChange() {
   const parsed = _parseHash();
   if (!parsed) return;
-  if (parsed.mode) { _dispatchModeRoute(parsed.mode); return; }
+  if (parsed.mode) { _dispatchModeRoute(parsed.mode, parsed.modeArg); return; }
   const lesson = findLesson(parsed.lessonId);
   if (!lesson || lesson.status !== 'full') return;
   if (state.currentLessonId !== parsed.lessonId) {

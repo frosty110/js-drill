@@ -62,8 +62,8 @@ function _progTodayHtml(buckets) {
     ? `<p class="ds-mute" style="margin: var(--ds-s1) 0 0; font-size: var(--ds-fs-sm);">This session · ${s.minActive} min · ${s.lessonsTouched} lesson${s.lessonsTouched === 1 ? '' : 's'} · ${s.passes} pass${s.passes === 1 ? '' : 'es'}${s.missCount ? ` · ${s.missCount} miss${s.missCount === 1 ? '' : 'es'}` : ''}</p>`
     : '';
   return `
-    <section data-prog-today>
-      <span class="ds-label prog-sec-label">Today</span>
+    <section class="ds-section" data-prog-today>
+      <span class="ds-label ds-section__label">Today</span>
       <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--ds-s2);">
         <div class="ds-stat ds-stat--accent"><b>${today.passes || 0}</b><span>Solved</span></div>
         <div class="ds-stat"><b>${today.misses || 0}</b><span>Missed</span></div>
@@ -127,8 +127,8 @@ function _progActivityHtml(buckets) {
     : `Peak streak <strong style="color: var(--ds-good);">${peakStreak} day${peakStreak === 1 ? '' : 's'}</strong> · ${gapDays === 0 ? 'drilled today' : gapDays === 1 ? 'last rep: yesterday' : `last rep: ${gapDays} days ago`} · ${activeDays}/60 active`;
 
   return `
-    <section data-prog-activity>
-      <span class="ds-label prog-sec-label">Activity</span>
+    <section class="ds-section" data-prog-activity>
+      <span class="ds-label ds-section__label">Activity</span>
       <div class="ds-card ds-card--flat">
         ${weekChips}
         <div class="prog-bars" style="margin-top: var(--ds-s4);" role="img" aria-label="Reps per day, last 14 days">${bars}</div>
@@ -222,8 +222,8 @@ function _progAttentionHtml() {
          <p class="ds-dim" style="margin: 0;">Nothing needs repair — every signal is clear.</p>
        </div>`;
   return `
-    <section data-prog-attention>
-      <span class="ds-label prog-sec-label">Fix first</span>
+    <section class="ds-section" data-prog-attention>
+      <span class="ds-label ds-section__label">Fix first</span>
       ${card}
     </section>`;
 }
@@ -259,8 +259,8 @@ function _progMasteryHtml() {
     least ? `<span class="ds-chip">least covered: ${least.label}</span>` : '',
   ].join('');
   return `
-    <section data-prog-mastery>
-      <span class="ds-label prog-sec-label">Mastery</span>
+    <section class="ds-section" data-prog-mastery>
+      <span class="ds-label ds-section__label">Mastery</span>
       <div class="ds-card ds-card--flat">
         <div style="display:flex; align-items: baseline; gap: var(--ds-s2);">
           <span class="ds-num" style="font-size: var(--ds-fs-2xl); font-weight: var(--ds-fw-black); color: var(--ds-text-strong); line-height: 1;">${mastered}</span>
@@ -457,7 +457,7 @@ function _progInsightsHtml() {
     ? blocks.join('')
     : `<p class="prog-insight prog-insight-note">Lifetime insights appear here as you drill — accuracy per drill family, miss patterns, retention and more.</p>`;
   return `
-    <section>
+    <section class="ds-section">
       <details class="prog-details" data-prog-more>
         <summary>More insights<span class="prog-caret">›</span></summary>
         <div class="prog-details-body">${body}</div>
@@ -567,11 +567,13 @@ function openProgress(opts = {}) {
   // `dashboard-page` kept alongside `progress-page`: the nav active-state
   // observer and existing probes key on it (this page IS its successor).
   shell.innerHTML = `
-    <div class="ds-root progress-page dashboard-page" style="max-width: 560px; margin: 0 auto; background: transparent;">
-      <div style="display:flex; align-items: center; justify-content: space-between; gap: var(--ds-s3);">
-        <h1 class="ds-title">Progress</h1>
-        ${streakChip}
-      </div>
+    <div class="ds-root ds-page progress-page dashboard-page">
+      <header class="ds-page__head">
+        <div class="ds-page__titlerow">
+          <h1 class="ds-title">Progress</h1>
+          <div class="ds-page__actions">${streakChip}</div>
+        </div>
+      </header>
       ${_progTodayHtml(buckets)}
       ${_progActivityHtml(buckets)}
       ${_progAttentionHtml()}

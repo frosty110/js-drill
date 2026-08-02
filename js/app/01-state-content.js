@@ -336,6 +336,7 @@ const state = {
   repairFilter: false, // Phase E: when true, sidebar shows ONLY lessons needing work (due/weak/overdue/reveal)
   tagFilter: {},      // faceted filter over the merged Problems list: { source:[], topic:[], difficulty:[], company:[] } (additive, no `__v` bump)
   tagFilterOpen: false, // UI: whether the sidebar tag-facet panel is expanded (additive)
+  homeOpen: {},       // UI: which Home track cards are expanded into subcategories, { areaKey: true } (additive)
   reviews: {},        // { lessonId: { lastPassedAt: ms, interval: ms, dueAt: ms } }
   weakness: {},       // { lessonId: wrongL1Count } — tracks recurring L1 misses
   sidebarTrack: 'syntax', // 'syntax' | 'patterns' — which binder tab is active

@@ -17,6 +17,7 @@
 // Mode-route stashed during initBootstrap (#/m/<mode>), dispatched at the end
 // of init() once every surface button is wired. See initBootstrap + init tail.
 let _pendingBootMode = null;
+let _pendingBootModeArg = null;
 
 async function init() {
   if (!(await initBootstrap())) return;
@@ -43,7 +44,11 @@ async function init() {
   initBootTail();
   // Boot mode-route dispatch — runs AFTER every surface button is wired, so a
   // new tab opened at #/m/<mode> lands straight on that surface.
-  if (_pendingBootMode) { _dispatchModeRoute(_pendingBootMode); _pendingBootMode = null; }
+  if (_pendingBootMode) {
+    _dispatchModeRoute(_pendingBootMode, _pendingBootModeArg);
+    _pendingBootMode = null;
+    _pendingBootModeArg = null;
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -58,6 +63,15 @@ let _paletteCursor = 0;
 
 function _paletteBuildIndex() {
   const items = [];
+  // (0-) Home — the front door (js/app/22-home.js). Reachable from the nav,
+  // but the palette is the keyboard route back to it from anywhere.
+  items.push({
+    id: 'btn:home',
+    label: 'Home',
+    kind: 'mode',
+    hint: 'Continue any track · review what’s due',
+    action: () => { const b = document.getElementById('home-btn'); if (b) b.click(); }
+  });
   // (0) Dashboard — lives in the topbar (not the sidebar scan below), so add it
   // explicitly. "stats" / "streak" still resolve via their retired sidebar
   // buttons (which now route to the Dashboard).
@@ -267,7 +281,16 @@ async function initBootstrap() {
     // _updateHash() below would clobber the hash — so stash it and dispatch at
     // the very end of init(), once every button exists.
     _pendingBootMode = hashRoute.mode;
+    _pendingBootModeArg = hashRoute.modeArg;
   }
+  // Boot policy: a bare URL (no hash at all) opens HOME, not a lesson. The
+  // root URL used to resume lastLessonId — or, for a first-time visitor, drop
+  // them inside Basics lesson 1 — which meant the app had no front door and
+  // no map. The resume still happens below (it seeds currentLessonId, so
+  // Home's hero can offer "Continue where you left off"); it just no longer
+  // decides what the user sees first. Any explicit hash — a shared lesson
+  // link, a mode route — still wins.
+  if (!hashRoute) _pendingBootMode = 'home';
   if (hashRoute && hashRoute.lessonId) {
     const target = findLesson(hashRoute.lessonId);
     if (target && target.status === 'full') {

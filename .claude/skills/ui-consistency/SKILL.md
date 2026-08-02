@@ -1,178 +1,114 @@
 ---
 name: ui-consistency
-description: Enforce shared UI tokens, storage layer, and code-rendering patterns across the JS-Drill family (main app + prep dashboard + diagnostic). Use whenever authoring a new page, adding a feature that touches localStorage, or rendering a static code block — to prevent the design-system / storage drift that surfaced in iter-35 (prep.html shipped with its own --bg, --panel, --accent vars and its own localStorage wrappers that broke when main app's schema bumped).
+description: Enforce the shared design system, page frame, navigation contract, and storage layer across the JS-Drill family (index.html · system-design.html · diagnostic.html). Use whenever authoring a new page or surface, adding a mode, changing layout/styles, or touching localStorage — so parallel loops can't drift the product apart (the iter-35 incident + the design-loop's one-system rule).
 ---
 
 # ui-consistency
 
-This project has three user-facing pages: `index.html` (main drill app),
-`prep.html` (4-day interview prep dashboard), and `diagnostic.html` (self-test).
-They share an audience, a visual language, and a localStorage origin. When they
-drift apart, the user pays — same color name means different colors per page,
-prep auto-checks lessons by reading the main app's storage with stale
-assumptions about the schema, etc.
+Three user-facing pages (`index.html`, `system-design.html`, `diagnostic.html`)
+share one audience, one visual language, and one localStorage origin. This skill
+is the contract that keeps them — and every surface inside the main app —
+feeling like one product.
 
-This skill is the contract that keeps the three in sync.
+**Full reference:** [`docs/ui-ux-guide.md`](../../../docs/ui-ux-guide.md).
+Read it before building a new surface. This file is the enforceable short form.
 
-## The three sources of truth
+## The sources of truth
 
-| Concern | File | What it owns |
+| Concern | File | Never instead |
 |---|---|---|
-| Design tokens (colors, radii, type, spacing) | `ds/tokens.css` | Every color, radius, font, and spacing constant used across the family. |
-| localStorage I/O | `js/storage.js` (exposed as `window.DrillStorage`) | All reads, writes, schema versioning, and cross-page bridge helpers. |
-| Static code blocks (Reference, L2 templates, Code shapes, Review answers) | CodeMirror `runMode` addon | Syntax-highlighted, Dracula-themed, mobile-readable code. |
+| Color · type · space · radius · motion · z-layers · breakpoint | `ds/tokens.css` | a hex in a component, a `:root` override per page |
+| Reusable primitives (page frame, button, card, chip, row, sheet, nav, field, MC option, switch, segment, stat, progress, empty, skeleton) | `ds/components.css` | a per-surface copy of the same box |
+| Icons | `ds/icons.js` → `dsIcon(name, px)` | inline one-off `<svg>`, emoji in chrome (D07) |
+| Visual catalog | `ds/gallery.html` | guessing what exists |
+| App-side styling of a ds surface | `css/06-ds-nav.css` … `10-ds-lesson.css` | app selectors inside `ds/` (breaks D04) |
+| localStorage I/O | `js/storage.js` (`window.DrillStorage`) | `localStorage.getItem/setItem` |
+| Static code blocks | CodeMirror `runMode` + Dracula theme | `<pre><code>` |
 
-Anything that touches these concerns goes through the corresponding file.
-Period. No inline forks "just for this page."
+## The ten rules
 
-## The five rules
+1. **Reuse → extend → compose → build.** A new bespoke component needs a
+   `DECISIONS.md` entry saying why nothing existing fits.
+2. **390px first.** No horizontal scroll ever; every target ≥ `var(--ds-tap)` (44px).
+3. **Tokens only.** No hex, no raw px for type/space/radius, no invented `z-index`.
+4. **One page frame:** `.ds-page` → `.ds-page__head` (one `<h1>`) → `.ds-section`.
+5. **One nav model.** 5 destinations + 2 rail-aux items, closed set. New modes go
+   in the Practice launcher / palette, not the nav.
+6. **Every launchable surface has a hidden `#<slug>-btn`** — that gives it the
+   launcher, the palette, and the `#/m/<slug>` route. Routes must be safe to
+   replay (never silently flip a setting or destroy data on arrival).
+7. **Design all five states:** first-run · loading (skeleton, not spinner) ·
+   empty (honest, one CTA — never fake/blurred sample data) · error (inline +
+   retry) · offline.
+8. **Right feedback channel:** toast = transient confirmation; inline = component
+   failure; sheet/modal = must decide now; a Progress "Fix first" row = standing
+   work. No notification bell, no modal for the non-blocking.
+9. **Numbers never lie.** `0` when measured-and-zero, `—` when unknown. Invert
+   trend colors where up-is-bad. Every stat is a real rep.
+10. **Unverified at 390px = unshipped.** Screenshot + CDP probe assertion.
 
-### 1. Don't define colors in component CSS
-
-```css
-/* WRONG — drift incoming */
-.my-card { background: #1e293b; border: 1px solid #334155; }
-
-/* RIGHT — consume tokens */
-.my-card { background: var(--panel); border: 1px solid var(--panel-2); }
-```
-
-If you need a new color, add it to `ds/tokens.css` with a semantic name. Don't
-hard-code hex in a component file. Don't redeclare a token in a page's `:root`
-block — that just creates a per-page shadow that defeats the whole point.
-
-The single exception: page-specific layout vars like `--tabbar-h` or
-`--safe-bottom` belong in that page's `:root`. They're not palette.
-
-### 2. Don't touch `localStorage` directly
-
-```js
-/* WRONG — bypasses versioning, no migration handshake, silent break when schema bumps */
-const raw = localStorage.getItem('jsdrill.progress.v1');
-const data = JSON.parse(raw);
-
-/* RIGHT — versioned + defensive */
-const data = window.DrillStorage.loadAppProgress();
-```
-
-`DrillStorage` exposes:
-- `loadAppProgress()` / `saveAppProgress(state)` — main app
-- `loadPrepState()` / `savePrepState(state)` — prep dashboard
-- `loadDiagnostic()` / `saveDiagnostic(state)` — diagnostic
-
-For cross-app reads (prep checking main-app lesson completion) use the bridge
-helpers, never raw `localStorage`:
-- `readMainProgressMap()` — defensive `{}` fallback on any failure
-- `isLessonFullyDone(lessonId)` / `isLessonPartiallyDone(lessonId)`
-- `setMainLastLessonId(lessonId)` — for deep-linking into a lesson
-
-The only direct `localStorage` calls left in the codebase are:
-- The backup-download button in `app.js` (needs the exact persisted bytes)
-- The multi-tab `storage` event listener in `app.js` (needs the raw key for filtering)
-- The reset button in `diagnostic.html` (`removeItem` only)
-
-If you find yourself reaching for `localStorage.getItem` outside these
-exceptions, stop and add a method to `DrillStorage` instead.
-
-### 3. Static code blocks go through CodeMirror `runMode`
-
-The main app already loads CodeMirror 5.65.16 + the Dracula theme + the
-`runmode` addon. `prep.html` and `diagnostic.html` should `<link>` and
-`<script>` the same CDN URLs (copy them from `index.html`'s head).
+## Copy-this page skeleton
 
 ```js
-/* WRONG — plain <pre><code> renders without highlighting; looks unpolished
-   on mobile and differs from the main app's polish. */
-host.innerHTML = `<pre><code>${escapeHtml(code)}</code></pre>`;
-
-/* RIGHT — same tokenizer + theme the main app uses */
-function renderCmInto(host, code) {
-  host.innerHTML = '';
-  const pre = document.createElement('pre');
-  pre.className = 'CodeMirror cm-s-dracula';
-  pre.style.cssText = 'margin:0;padding:10px 12px;background:#282a36;' +
-    'color:#f8f8f2;font:inherit;overflow-x:auto;-webkit-overflow-scrolling:touch';
-  const codeEl = document.createElement('code');
-  codeEl.style.cssText = 'background:none;padding:0;color:inherit;' +
-    'font:inherit;display:block;white-space:pre';
-  pre.appendChild(codeEl);
-  host.appendChild(pre);
-  window.CodeMirror.runMode(code, 'javascript', codeEl);
-}
+shell.innerHTML = `
+  <div class="ds-root ds-page foo-page">
+    <header class="ds-page__head">
+      <div class="ds-page__meta"><span>${escapeHtml(context)}</span>${chip}</div>
+      <div class="ds-page__titlerow">
+        <h1 class="ds-title">Foo</h1>
+        <div class="ds-page__actions">${actions}</div>
+      </div>
+      <p class="ds-page__sub">${sub}</p>
+    </header>
+    <section class="ds-section">
+      <span class="ds-label ds-section__label">Today</span>
+      …
+    </section>
+  </div>`;
 ```
 
-This pattern lives in `prep.html` as `renderCmInto`. If you add a third page
-that renders static code, hoist this function into `js/storage.js` (or a new
-`js/code-render.js`) and consume it from there. Don't fork it inline.
+Live examples: `js/app/17-today-home.js`, `19-browse.js`, `20-progress.js`.
+Overlays use `.ds-scrim` + `.ds-sheet` (see `18-practice-launcher.js`).
 
-### 4. Load shared infrastructure in the right order
+## Don't-reinvent checklist
 
-Every page that consumes the shared layer needs this in `<head>`, BEFORE its
-own styles and scripts:
+- [ ] Does this color/size/duration already exist as a token? → use it; else add a
+      *semantic* token to `ds/tokens.css` first.
+- [ ] Does this component exist in `ds/gallery.html`? → card, chip, row, stat,
+      sheet, switch, segment, MC option, field, empty, skeleton all do.
+- [ ] Is this a page? → `.ds-page`. A picker? → `.ds-sheet`. Extra detail? →
+      inline `<details>`. Blocking? → modal (rare).
+- [ ] Icon? → `dsIcon()`; add new glyphs to `ds/icons.js`, never inline a path.
+- [ ] Persisting state? → `state` + `saveProgress()`, mirrored in
+      `loadProgress`, registered in a `js/sync.js` key registry.
+- [ ] Reading another page's state? → a `DrillStorage` bridge helper
+      (`readMainProgressMap`, `isLessonFullyDone`, `setMainLastLessonId`).
+- [ ] Rendering static code? → CodeMirror `runMode`, not `<pre><code>`.
+- [ ] New launchable surface? → hidden `#<slug>-btn` + taxonomy entry + route.
+- [ ] Runs on a phone (the 80% case)? → probe it at 390×844.
 
-```html
-<!-- CodeMirror (theme + tokenizer + runMode) -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/runmode/runmode.min.js"></script>
-
-<!-- Shared design tokens + storage layer. Source of truth across pages. -->
-<link rel="stylesheet" href="ds/tokens.css">
-<script src="js/storage.js"></script>
-```
-
-Then your page's own `<style>` and `<script>` go after. Order matters: if your
-page declares `:root { --panel: …; }` AFTER `ds/tokens.css` loads, you shadow the
-shared token. Don't.
-
-### 5. Verify with the mobile probe
-
-Any change to `prep.html` or `diagnostic.html` runs:
+## Verify
 
 ```bash
-node tools/cdp/prep-mobile.js
+node tools/validate-data.js        # content + runner semantics
+node tools/cdp/appsplit-smoke.js   # app boots, all slices load, no 404s
+node tools/cdp/ds-page-frame.js    # page frame + nav invariants, both viewports
+node tools/check-sync-coverage.js  # new state fields are registered for sync
 ```
 
-The probe asserts CodeMirror tokens are present (`.cm-keyword/.cm-def/.cm-variable`
-count > 10), checkboxes work, the storage bridge survives a write+read+grade flow,
-and nothing horizontally overflows at iPhone-13 viewport (390×844). If you add
-a new tab or interactive surface to prep, add a matching assertion.
+Screenshot at 390×844 and 1280×900; keep the before/after pair. Chrome bootstrap
+for Linux/CI environments is in `docs/ui-ux-guide.md` § 16.
 
-For changes to `index.html` / `app.js` / `app.css`, the existing CDP probes
-under `tools/cdp/` cover the main flows. Add a new probe if you ship a new
-surface; don't bolt assertions onto unrelated probes.
+## Why this exists
 
-## The "don't reinvent" checklist
+**iter-35:** `prep.html` shipped with its own `--bg`/`--panel`/`--accent`, its own
+`localStorage` wrappers, and unhighlighted `<pre><code>` blocks. The user asked
+"are we not reusing components?" — we weren't. The fix extracted the shared token
++ storage layers and wrote this skill.
 
-Before authoring a new page or feature, run through this list:
-
-- [ ] Does this color already exist as a token in `ds/tokens.css`?
-  → If yes: reference it. If no: add it with a semantic name first, then reference.
-- [ ] Does this UI need to persist state across sessions?
-  → If yes: add a method to `DrillStorage`. Don't call `localStorage` directly.
-- [ ] Does this UI need to read state from another page (main app's progress)?
-  → If yes: use a `DrillStorage` bridge helper. Don't read another page's
-    localStorage key directly.
-- [ ] Does this UI render static code?
-  → If yes: use `renderCmInto` (or hoist it to a shared helper). Don't use
-    plain `<pre><code>`.
-- [ ] Will this UI run on a phone (the 80% case per PROFILE.md)?
-  → If yes: write a CDP probe. iPhone-13 viewport. Assert no horizontal overflow.
-
-## Why this exists (the iter-35 lesson)
-
-When `prep.html` first shipped, it had its own `--bg`/`--panel`/`--accent` CSS
-vars (different colors from main app's Tailwind palette), its own
-`save()`/`load()` wrappers around `localStorage`, and its own
-`<pre><code>`-rendered code blocks (no syntax highlighting). The user noticed
-that "the code viewer doesn't look good on mobile" and asked "are we not
-reusing components?" — the answer was no, we'd reinvented the wheel.
-
-The fix (iter-35) extracted `ds/tokens.css` + `js/storage.js`, migrated all three
-pages to consume them, and authored this skill so the drift can't recur.
-
-If a future iteration adds a fourth page (e.g., a stats dashboard, a mentor
-board, a shared playground), it MUST consume `ds/tokens.css` and `DrillStorage`.
-No exceptions without a documented reason.
+**The design loop (D01–D14)** then rebuilt navigation, Browse, Progress, and
+Settings on `ds/`. That work is only durable if every later change stays on the
+system — which is what this skill checks. The measured legacy debt (hardcoded
+hexes, breakpoint drift, off-system toasts) is inventoried in
+`docs/ui-ux-guide.md` § 15: don't add to it, and clean only the block you're
+already editing.

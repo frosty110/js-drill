@@ -111,29 +111,31 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   await m.snap('02b-browse-filters-in-page');
   await m.click('[data-bf="toggle-panel"]'); await m.sleep(300);
 
-  // Today tab opens the Today HOME page (P2) with a one-tap next rep.
-  await m.click('[data-nav="today"]'); await m.sleep(700);
+  // Home tab opens the Home page (2026-08) with a one-tap next rep. (The
+  // nav's first destination was "Today" until Home absorbed it; Today's Plan
+  // is now a row in Home's More list and keeps #/m/today-home.)
+  await m.click('[data-nav="home"]'); await m.sleep(700);
   const home = await m.eval(`(() => {
-    const page = document.querySelector('.today-home-page');
+    const page = document.querySelector('.home-page');
     if (!page) return { page: false };
     return {
       page: true,
       greeting: /Good (morning|afternoon|evening)/.test(page.querySelector('.ds-title')?.textContent || ''),
-      hero: !!page.querySelector('[data-today-start]'),
-      stats: page.querySelectorAll('.ds-stat').length,
-      ariaCurrent: document.querySelector('[data-nav="today"]')?.getAttribute('aria-current') === 'page',
+      hero: !!page.querySelector('[data-home-start]'),
+      tracks: page.querySelectorAll('.home-area').length,
+      ariaCurrent: document.querySelector('[data-nav="home"]')?.getAttribute('aria-current') === 'page',
     };
   })()`);
-  m.assert(home.page, 'Today opens the Today home page');
+  m.assert(home.page, 'Home opens the Home page');
   m.assert(home.greeting, 'home shows a time-of-day greeting');
   m.assert(home.hero, 'home shows the hero Start CTA');
-  m.assert(home.stats === 3, `home shows 3 stat tiles (got ${home.stats})`);
-  m.assert(home.ariaCurrent, 'Today nav item carries aria-current="page"');
-  await m.snap('03-today-home');
+  m.assert(home.tracks === 3, `home shows 3 track cards (got ${home.tracks})`);
+  m.assert(home.ariaCurrent, 'Home nav item carries aria-current="page"');
+  await m.snap('03-home');
 
   // Hero Start routes into the picked lesson (one tap → drilling).
-  const heroId = await m.eval(`document.querySelector('[data-today-start]')?.getAttribute('data-lesson-id')`);
-  await m.click('[data-today-start]'); await m.sleep(900);
+  const heroId = await m.eval(`document.querySelector('[data-home-start]')?.getAttribute('data-home-start')`);
+  await m.click('[data-home-start]'); await m.sleep(900);
   const landed = await m.eval(`typeof state !== 'undefined' && state.currentLessonId`);
   m.assert(landed === heroId, `Start routes into the picked lesson (${landed} === ${heroId})`);
   await m.snap('03b-hero-landed');
@@ -198,7 +200,9 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   m.assert(dock.above, `audio dock sits above the nav bar (${JSON.stringify(dock)})`);
 
   // L3 hides the nav (immersive rep) and the Run bar owns the bottom.
-  await m.eval(`location.hash = ''`); await m.reload();
+  // A bare URL now boots to Home (2026-08 boot policy), so route to a lesson
+  // explicitly — an explicit lesson hash still beats the Home boot.
+  await m.eval(`location.hash = '#/two-sum/L3'`); await m.reload();
   await m.waitFor(`document.querySelector('.tab-btn[data-level="L3"]')`, { timeoutMs: 6000 });
   await m.click('.tab-btn[data-level="L3"]'); await m.sleep(700);
   const l3 = await m.eval(`(() => {
@@ -257,8 +261,8 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p1-nav';
   await m.eval(`history.replaceState(null, '', location.pathname)`);
   await m.reload();
   await m.waitFor(`document.querySelector('#ds-appnav')`, { timeoutMs: 6000 });
-  await m.click('[data-nav="today"]'); await m.sleep(600);
-  const graceChip = await m.eval(`document.querySelector('.today-home-page .ds-chip--accent')?.textContent || ''`);
+  await m.click('[data-nav="home"]'); await m.sleep(600);
+  const graceChip = await m.eval(`document.querySelector('.home-page .ds-chip--accent')?.textContent || ''`);
   m.assert(/2-day · keep it today/.test(graceChip),
     `pre-drill mid-streak shows grace copy (got ${JSON.stringify(graceChip)})`);
 

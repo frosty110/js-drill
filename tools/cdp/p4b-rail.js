@@ -85,16 +85,16 @@ const OUT = process.argv[2] || '/tmp/jsdrill-probe-p4b-rail';
   await d.snap('01-rail-lesson');
 
   // 3 · Destinations route + active state tracks the rendered page.
-  await d.click('#ds-appnav [data-nav="today"]'); await d.sleep(700);
+  await d.click('#ds-appnav [data-nav="home"]'); await d.sleep(700);
   const today = await d.eval(`(() => ({
-    page: !!document.querySelector('.today-home-page'),
-    current: document.querySelector('#ds-appnav [data-nav="today"]')?.getAttribute('aria-current') === 'page',
-    bg: getComputedStyle(document.querySelector('#ds-appnav [data-nav="today"]')).backgroundColor,
+    page: !!document.querySelector('.home-page'),
+    current: document.querySelector('#ds-appnav [data-nav="home"]')?.getAttribute('aria-current') === 'page',
+    bg: getComputedStyle(document.querySelector('#ds-appnav [data-nav="home"]')).backgroundColor,
   }))()`);
-  d.assert(today.page, 'rail Today opens the Today home');
-  d.assert(today.current, 'Today carries aria-current="page"');
+  d.assert(today.page, 'rail Home opens the Home page');
+  d.assert(today.current, 'Home carries aria-current="page"');
   d.assert(today.bg !== 'rgba(0, 0, 0, 0)', `active rail item gets the accent-soft fill (got ${today.bg})`);
-  await d.snap('02-rail-today');
+  await d.snap('02-rail-home');
 
   await d.click('#ds-appnav [data-nav="browse"]'); await d.sleep(700);
   const browse = await d.eval(`(() => ({

@@ -192,7 +192,9 @@ const SEED = {
     return {
       pathModalOpen: pm && pm.style.display === 'block',
       diagnosticLinkVisible: !!document.querySelector('#path-modal a[href="diagnostic.html"]') && pm.style.display === 'block',
-      surface: document.querySelector('.today-home-page') ? 'today-home' : (state.currentLessonId ? 'lesson:' + state.currentLessonId : 'empty'),
+      surface: document.querySelector('.home-page') ? 'home'
+        : document.querySelector('.today-home-page') ? 'today-home'
+        : (state.currentLessonId ? 'lesson:' + state.currentLessonId : 'empty'),
       navVisible: getComputedStyle(document.getElementById('ds-appnav')).display !== 'none',
     };
   })()`);
@@ -205,7 +207,8 @@ const SEED = {
       const shell = document.getElementById('lesson-shell');
       const txt = (shell.textContent || '').trim();
       return {
-        surface: document.querySelector('.today-home-page') ? 'today' : document.querySelector('.browse-page') ? 'browse'
+        surface: document.querySelector('.home-page') ? 'home'
+          : document.querySelector('.today-home-page') ? 'today' : document.querySelector('.browse-page') ? 'browse'
           : document.querySelector('.progress-page, .dashboard-page') ? 'progress'
           : document.getElementById('practice-launcher')?.classList.contains('is-open') ? 'launcher' : 'other',
         hasNaN: /NaN|undefined|null/.test(txt.slice(0, 3000)),

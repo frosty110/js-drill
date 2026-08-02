@@ -19,6 +19,7 @@ for validation, browser-driven QA, and historical migrations.
 | `cdp/walkthrough-tab.js` | Walkthrough tab regression — 17 assertions × desktop + mobile. Tab order (Conversation → Walkthrough → Reference → L1-L3), initial step 1, line highlight, prev/next/reset, example dropdown switch, end-of-trace `returns` value, non-walkthrough lessons omit tab. |
 | `cdp/walkthrough-cross-shapes.js` | Cross-shape Walkthrough audit — one representative per shape family (14 shapes including hash-map, two-pointers, class-based, binary-search, linked-list, tree-recursion, graph-matrix-DFS, DP-1d, DP-2d, backtracking, bit-manipulation, applied/timing, applied/board-evolution, class-based design). 70 assertions × desktop + mobile. Run after wide content changes that might break a shape's rendering. |
 | `cdp/tab-switch-preserves-state.js` | BS-12 regression — L1/L2/L3/Walkthrough state survives tab round-trip; cleared on lesson switch. |
+| `cdp/home-nav.js` | Home front door + scoped review + System Design deep links — boot policy, track/subcategory cards, Continue-vs-Review semantics, review HUD, routes. Mobile + desktop. |
 
 ### Running
 

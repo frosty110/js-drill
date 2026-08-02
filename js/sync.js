@@ -722,7 +722,7 @@
     'offlinePack', 'syncHintShown', 'clarifyRitualOn', 'hotseatOn',
     'calibrateOn', 'paceBarOn', 'hapticOn', 'adhdMode', 'fontScale',
     'subscribedPathId', 'cramView', 'hideMastered', 'repairFilter',
-    'tagFilter', 'tagFilterOpen', 'sidebarTrack', 'surface', 'surfaceCtx'
+    'tagFilter', 'tagFilterOpen', 'homeOpen', 'sidebarTrack', 'surface', 'surfaceCtx'
   ];
 
   function mergeProgress(local, cloud) {

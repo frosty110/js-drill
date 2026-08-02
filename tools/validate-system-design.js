@@ -117,6 +117,16 @@ for (const topic of registry.topics) {
     if (!Array.isArray(ch.questions) || ch.questions.length < MIN_QUESTIONS) {
       fail(at, `expected >= ${MIN_QUESTIONS} questions, got ${ch.questions ? ch.questions.length : 0}`); continue;
     }
+    // The manifest carries a `questions` count per unit so the main app's Home
+    // page can show System Design progress (mastered/total per topic) from 5
+    // small fetches instead of pulling all 43 unit files. It's a denormalized
+    // count, so it has to be gated — a drifted number would silently misreport
+    // progress on the front door.
+    if (!Number.isInteger(entry.questions)) {
+      fail(at, `manifest entry missing "questions" count (expected ${ch.questions.length})`);
+    } else if (entry.questions !== ch.questions.length) {
+      fail(at, `manifest "questions": ${entry.questions} != actual ${ch.questions.length}`);
+    }
     if (t === 'design-problems') {
       if (!Array.isArray(ch.diagrams) || ch.diagrams.length !== 4) {
         fail(at, `design problem needs exactly 4 architecture diagrams, got ${ch.diagrams ? ch.diagrams.length : 0}`);

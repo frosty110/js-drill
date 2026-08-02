@@ -53,6 +53,24 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   s.assert(secondId === 'p14', `second card is p14, got ${secondId}`);
   s.assert(secondNum === '2' || secondNum === '✓', `p14 displays as 2, got ${secondNum}`);
 
+  // ── Unit-level rollup ────────────────────────────────────────────────────
+  // topicStats() counts QUESTIONS; the hero headline must count UNITS, or a
+  // 21-problem topic reads "0 of 195 mastered". Both appear, each with its noun.
+  const heroCopy = await s.eval(`document.querySelector('.overall .stat-copy').textContent.replace(/\\s+/g,' ').trim()`);
+  s.assert(/of 21 problems mastered/.test(heroCopy), `hero counts units, got: ${heroCopy}`);
+  // Don't hardcode the question total — it moves with every authored problem.
+  // What must hold is that both grains appear and the question count is larger.
+  const qm = heroCopy.match(/(\d+)\/(\d+) questions/);
+  s.assert(qm && Number(qm[2]) > 21, `hero still reports question grain and it exceeds unit count, got: ${heroCopy}`);
+  s.assert(/problems? due for review/.test(heroCopy), `due count carries the unit noun, got: ${heroCopy}`);
+  // The noun comes from the manifest's unitLabel, so other topics say their own.
+  await s.eval(`location.hash = '#/ddia'`);
+  await s.sleep(900);
+  const ddiaCopy = await s.eval(`document.querySelector('.overall .stat-copy').textContent.replace(/\\s+/g,' ').trim()`);
+  s.assert(/of 12 chapters mastered/.test(ddiaCopy), `ddia uses its own unit noun, got: ${ddiaCopy}`);
+  await s.eval(`location.hash = '#/design-problems'`);
+  await s.sleep(900);
+
   // ── Tag chips on cards ───────────────────────────────────────────────────
   const chipCount = await s.eval(`document.querySelectorAll('.ch-card .ch-tags .sd-chip').length`);
   s.assert(chipCount >= 21, `every card carries chips, got ${chipCount}`);

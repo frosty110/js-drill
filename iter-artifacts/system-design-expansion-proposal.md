@@ -254,8 +254,10 @@ Constraints: mobile is 80% of use (PROFILE.md); `ds/components.css` primitives o
 ```
 ┌─────────────────────────────────┐
 │ ‹ All topics                    │
-│ Canonical Design Problems       │  ← existing hero: ring, n/32 mastered, due
-│ ◔ 34%   11 of 32   4 due        │
+│ Canonical Design Problems       │  ← hero: ring (question %), unit count, due
+│ ◔ 34%   11 of 32 problems       │
+│         148/295 questions       │
+│         4 problems due          │
 │ [ Continue: Ad Click Aggr. ]    │  ← resume (existing, relabelled)
 ├─────────────────────────────────┤
 │ PICK A TIME BUDGET              │  ← NEW · horizontal scroll, .ds-card
@@ -303,8 +305,28 @@ One Week Core   ·   3/14   ·   Skip   ·   Exit
 ```
 
 Advance on unit completion; `mode:"crux"` runs each unit's crux-only subset (the
-`drill-crux` path already exists). Session state in-memory; only unit SR progress
-persists — so abandoning a plan costs nothing.
+`drill-crux` path already exists).
+
+**Persistence (revised — review finding).** An earlier draft kept *all* plan
+state in memory. That cannot hold: the plan must survive a refresh, and the main
+app's Home lives on a different page entirely (§ 6.6), so an in-memory-only plan
+is invisible the moment the user leaves `system-design.html`. Worse, SR entries
+are keyed by unit and shared across overlapping plans, so nothing in the existing
+store can say *which* plan was active.
+
+Split it:
+
+```jsonc
+// persisted, schema-additive on jsdrill.systemdesign.v1
+"activePlan": { "id": "one-week", "index": 6, "startedAt": 1754... }
+```
+
+Persist the plan id, the cursor, and the start time — enough to resume and to
+render "One Week Core · 6/14" from a cold load on either page. The transient
+question queue stays in memory and is rebuilt from `plans.json` + the cursor,
+so nothing derived is stored twice. Completion is still *derived* from unit SR
+state rather than tracked separately — progress belongs to the unit, not the
+plan, which is what keeps switching plans from ever resetting mastery.
 
 ### 6.5 Routes
 
@@ -321,10 +343,34 @@ Extends `parseRoute`/`applyRoute`; every screen keeps publishing via `replaceSta
 
 ### 6.6 Main-app Home
 
-`_sdTopicStats` already rolls up from manifest `questions` counts, so 32 problems
-report correctly with no change. One addition: when a plan is active, the System
-Design track card shows **plan progress** instead of global mastery — "One Week Core ·
-6/14" is a more actionable number than "11/32" mid-plan.
+`_sdTopicStats` rolls up from manifest `questions` counts. That grain is correct
+for the meter and for the due count, and Home already labels it honestly
+("design cards", not "problems") — so no change is forced there. When a plan is
+active, the System Design track card additionally shows **plan progress** —
+"One Week Core · 6/14" is a more actionable number than "11/32" mid-plan — which
+is what § 6.4's persisted `activePlan` exists to make readable across pages.
+
+### 6.7 Unit mastery must be defined (review finding — SHIPPED)
+
+The mockup above said "11 of 32", but `topicStats()` sums `chapterItems()`, i.e.
+**questions**. On the live 21-problem topic the hero read *"0 of 193 mastered"* —
+a number with no stated noun that looks like a problem count and isn't. Nothing in
+the codebase defined unit mastery at all.
+
+Fixed in `system-design.html`:
+
+- `topicUnitStats(t)` — a unit is mastered when **every** one of its questions is,
+  which is the same rule the chapter card's ✓ badge already applied. Reusing it
+  means the hero and the card can never disagree.
+- `unitNoun(t, n)` reads the manifest's own `unitLabel`, so design problems say
+  "problems", DDIA says "chapters", and the other topics say "sections".
+- The hero now leads with the unit count, keeps the question count as a labeled
+  sub-line, and puts the unit noun on the due count too. The ring stays on the
+  question percentage — it is the finer grain and gives honest partial credit,
+  where a unit-grain ring would read 0% until a whole problem was finished.
+
+Locked by `tools/cdp/sd-tags-nav.js` (4 assertions), which asserts the pattern
+rather than the totals so it survives new content.
 
 ---
 
@@ -350,31 +396,52 @@ Design track card shows **plan progress** instead of global mastery — "One Wee
    ```
 
    Reported in the summary line — `System Design validation OK — 32 units, 4 pending
-   artwork, 0 errors` — so pending art is visible, never silent. ~10 lines. This is
-   what lets lesson content land green while artwork is produced out-of-band, instead
-   of red-lining the whole gate (`process.exit(1)` is all-or-nothing, so one missing
-   PNG would blank the signal on ~300 new questions, diagram schemas, manifest parity
-   and question-count sync — precisely when the content is newest and least verified).
+   artwork, 0 errors` — so pending art is visible, never silent. ~10 lines.
+
+   **The flag ships but is deliberately unused (owner decision, 2026-08-02).** The
+   repo owner wants a missing PNG to be a hard failure, so the red validator *is*
+   the artwork to-do list. The mechanism stays available if that call is ever
+   reversed. What this makes mandatory instead is that **every other error class
+   stays at zero** — a red gate is only a usable to-do list if nothing else is
+   hiding inside it. `tools/list-pending-infographics.js` exists for exactly that
+   reason: it separates "missing artwork" from "actually broken".
 
 ---
 
 ## 8. Phasing
 
-Five phases. **Each is independently shippable and leaves the validator green.**
-Navigation lands before content, so the first 15 problems don't arrive into an
-unusable list.
+Five phases, each independently shippable.
+
+**Revised ordering (review finding).** The original plan put P2 (plans) before the
+content phases, while `plans.json` referenced `p18`–`p31` — units that would not
+exist yet. Validator rule 6 requires every referenced unit to exist, so P2 could
+not have been both "independently shippable" and green as written. Rather than add
+a placeholder mechanism for units that are only weeks away, **content now lands
+before plans**: P2 moves after the content phases and composes plans only from
+units that exist. Executed order is therefore **P1 → P3 → P4 → P5 → P2**.
+
+That also avoids authoring `plans.json` twice — a plan set built over 17 problems
+would have needed rewriting the moment 15 more arrived.
+
+The one caveat this ordering accepts: from P3 onward the validator is red on
+artwork (§ 7 rule 7), so "leaves the validator green" holds for every gate except
+`system design`. Every other gate stays green in every phase.
 
 | Phase | Deliverable | New content? | Gate |
 |---|---|---|---|
-| **P1 — Taxonomy & tags** | Re-part the existing 17 into 7 families; `displayNum`; author tags on all 17; `tags.json`; filter panel; chip rows; tag routes; validator rules 1–5 | none | validator green · `ds-page-frame.js` · new `tools/cdp/sd-tags-nav.js` |
-| **P2 — Plans** | `plans.json`; plan strip; plan runner + HUD; plan routes; generated company sets; validator rule 6 | none | new `tools/cdp/sd-plans.js` |
-| **P3 — Tier 1A content** | `p18` Ad Click Aggregator · `p19` Message Queue · `p21` Key-Value Store · `p22` LLM Inference | 4 problems | validator green incl. infographics |
+| **P1 — Taxonomy & tags** ✅ | Re-part the existing 17 into 5 families; `displayNum`; author tags on all 17; `tags.json`; filter panel; chip rows; tag routes; validator rules 1–5; unit-level rollup (§ 6.7) | none | ✅ all gates green · `sd-tags-nav.js` 39/39 |
+| **P3 — Tier 1A content** ✅ | `p18` Ad Click Aggregator · `p19` Message Queue · `p21` Key-Value Store · `p22` LLM Inference — adds the *Streaming & Analytics* and *AI & ML Infrastructure* families | 4 problems | 7 of 8 gates green; `system design` red on 16 pending sheets |
 | **P4 — Tier 1B content** | `p23` RAG · `p20` Job Scheduler · `p24` Proximity · `p25` Search Engine | 4 problems | ″ |
 | **P5 — Tier 2 content** | `p26` Observability · `p27` Live Streaming · `p28` Short-Form Video · `p29` Webhooks · `p30` Feature Store · `p31` Moderation · `p32` Auth/SSO | 7 problems | ″ |
+| **P2 — Plans** *(moved last)* | `plans.json`; plan strip; plan runner + persisted `activePlan` (§ 6.4); plan routes; generated company sets; validator rule 6 | none | new `tools/cdp/sd-plans.js` |
 
-**P1 ships real value with zero authoring** — 17 problems become searchable by
-mechanism, difficulty and company, and the shelf finally teaches something. If the
-content phases stall, P1+P2 still stand on their own.
+**P1 shipped real value with zero authoring** — the 17 existing problems became
+searchable by mechanism, difficulty and company, and the shelf finally teaches
+something. It stands on its own if the content phases stall.
+
+P2 moving last is the direct consequence of the sequencing finding above: plans are
+cheap to author once, expensive to author twice, and cannot reference units that do
+not exist.
 
 P3 is deliberately one problem per weak/new family: it proves the authored arc *and*
 the infographic pipeline on genuinely unfamiliar material before committing to eleven

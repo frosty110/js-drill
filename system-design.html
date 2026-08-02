@@ -89,6 +89,7 @@
   .ring-wrap{position:relative;display:grid;place-items:center}
   .overall .stat-copy{font-size:13px;color:var(--muted)}
   .overall .stat-copy b{color:var(--text-strong)}
+  .overall .stat-sub{font-size:12px;color:var(--dim)}
   .cta-row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
   .due-pill{display:inline-flex;align-items:center;justify-content:center;background:var(--warn);color:var(--ds-surface);
     font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:2px;min-width:18px}
@@ -593,6 +594,28 @@ function topicStats(t) {
   (META[t] ? META[t].chapters : []).forEach(c => { const s = chapterStats(t, CH[t][c.id]); total += s.total; mastered += s.mastered; due += s.due; });
   return { total, mastered, due, pct: total ? Math.round(mastered / total * 100) : 0 };
 }
+// UNIT-level rollup. topicStats() counts questions, which is the right grain for
+// a progress meter but the wrong one for "how many problems do I know?" — on a
+// 21-problem topic it reads "0 of 195". A unit counts as mastered when every one
+// of its questions is (the same rule the chapter card's ✓ already uses), so the
+// two numbers can't drift apart. Both are shown, each labeled with its own noun.
+function topicUnitStats(t) {
+  let total = 0, mastered = 0, due = 0, started = 0;
+  (META[t] ? META[t].chapters : []).forEach(c => {
+    const ch = CH[t] && CH[t][c.id]; if (!ch) return;
+    const s = chapterStats(t, ch); if (!s.total) return;
+    total++;
+    if (s.mastered === s.total) mastered++;
+    else if (s.mastered > 0) started++;
+    if (s.due) due++;
+  });
+  return { total, mastered, started, due, pct: total ? Math.round(mastered / total * 100) : 0 };
+}
+// "Problem" / "Section" / "Chapter" — the manifest's own noun for a unit.
+function unitNoun(t, n) {
+  const label = (META[t] && META[t].unitLabel) || 'Chapter';
+  return n === 1 ? label.toLowerCase() : label.toLowerCase() + 's';
+}
 
 // ============================================================================
 // TOPIC LANDING
@@ -642,6 +665,7 @@ async function renderTopicHome(t) {
   await loadTags();
   const meta = TOPICS.find(x => x.id === t) || {};
   const s = topicStats(t);
+  const u = topicUnitStats(t);
   const byId = Object.fromEntries(m.chapters.map(c => [c.id, CH[t][c.id]]));
   const resume = progress.lastChapter && byId[progress.lastChapter] ? progress.lastChapter : null;
 
@@ -654,8 +678,9 @@ async function renderTopicHome(t) {
       <p class="book-desc">${esc(m.description || '')}</p>
       <div class="overall">
         <div class="ring-wrap"><div class="ring" style="--pct:${s.pct}"></div><span>${s.pct}%</span></div>
-        <div class="stat-copy"><b>${s.mastered}</b> of <b>${s.total}</b> mastered<br>
-          <b>${s.due}</b> due for review</div>
+        <div class="stat-copy"><b>${u.mastered}</b> of <b>${u.total}</b> ${esc(unitNoun(t, u.total))} mastered<br>
+          <span class="stat-sub">${s.mastered}/${s.total} questions${u.started ? ` · ${u.started} in progress` : ''}</span><br>
+          <b>${u.due}</b> ${esc(unitNoun(t, u.due))} due for review</div>
       </div>
       <div class="cta-row">
         <button class="cta ds-btn ds-btn--primary" id="mixed-btn" ${s.total ? '' : 'disabled'}>⚡ Mixed review${s.due ? ` <span class="due-pill">${s.due}</span>` : ''}</button>

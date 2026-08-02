@@ -158,8 +158,17 @@ function _browseControlsHtml(repIdx) {
           : (Array.isArray(facet.values) ? facet.values : []);
         if (!values.length) return '';
         const sel = state.tagFilter[facet.id] || [];
-        const chips = values.map(v => {
-          const n = countFor(facet, v.id);
+        const counts = values.map(v => countFor(facet, v.id));
+        // audit F17: a facet whose EVERY value matches zero lessons is a dead
+        // control — today `company` ships 8 registry chips and 0/171 lessons
+        // carry the tag, so a phone user scrolls past a row of noughts that
+        // can only ever empty the list. Hide the whole group until at least
+        // one value has stock. The registry (data/tags.json) is untouched:
+        // tag one lesson and the facet reappears by itself. A facet with an
+        // ACTIVE selection always renders, or the pick would be unclearable.
+        if (!sel.length && counts.every(n => n === 0)) return '';
+        const chips = values.map((v, i) => {
+          const n = counts[i];
           const on = sel.includes(v.id);
           return `<button class="browse-chip${on ? ' is-on' : ''}${n === 0 ? ' is-muted' : ''}" data-facet="${escapeHtml(facet.id)}" data-value="${escapeHtml(String(v.id))}" aria-pressed="${on ? 'true' : 'false'}">${escapeHtml(v.label)} <span class="n">${n}</span></button>`;
         }).join('');
@@ -354,6 +363,16 @@ function _browseControlClick(e, shell) {
 function openBrowse() {
   const shell = document.getElementById('lesson-shell');
   if (!shell) return;
+  // audit F10: Browse owns the URL while it is the rendered surface — the same
+  // replaceState contract Home (22-home.js) and the scoped review session
+  // (23-review.js) already honour. Without it the address bar kept whatever
+  // lesson hash _updateHash() last wrote, so reload / copy-link / cmd+click
+  // from Browse all resolved to a lesson the user wasn't looking at.
+  // `#/m/browse` is the slug that round-trips: _dispatchModeRoute's generic
+  // `<mode>-btn` lookup finds #browse-btn, which calls straight back here.
+  // Written inside openBrowse (not on the button handler like Home) because
+  // the drawer redirect in 14-init-core also calls this function directly.
+  try { history.replaceState(null, '', '#/m/browse'); } catch (_) {}
   if (!_BROWSE_TRACKS.some(t => t.key === state.sidebarTrack)) state.sidebarTrack = 'patterns';
   _browseQ = '';
 

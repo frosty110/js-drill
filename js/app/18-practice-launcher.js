@@ -55,7 +55,14 @@
     const badge = `<span class="ds-row__badge" aria-hidden="true">${
       iconName ? dsIcon(iconName, 16) : escapeHtml((it.label || '?').charAt(0))
     }</span>`;
-    const main = `<div class="ds-row__main"><b>${escapeHtml(it.label)}</b>${it.desc ? `<span style="display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(it.desc)}</span>` : ''}</div>`;
+    // audit F14: the subtitle is the ONLY thing that tells two adjacent rows
+    // apart ("Smart-pick: if you have due reviews /…" vs "Recommended
+    // session: due reviews +…"), and a 1-line clamp truncated every one of
+    // them mid-phrase at 390px — the 80% surface. Two lines is the readable
+    // floor; the clamp stays so a long desc can't grow a row past a
+    // comfortable thumb tile. (The authored strings still want shortening —
+    // they live in TOPBAR_MENU_TAXONOMY / the hidden buttons' title attrs.)
+    const main = `<div class="ds-row__main"><b>${escapeHtml(it.label)}</b>${it.desc ? `<span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:var(--ds-lh-sm);">${escapeHtml(it.desc)}</span>` : ''}</div>`;
     const chev = `<span class="ds-row__chev">›</span>`;
     if (it.action === 'shuffle') {
       const idList = Array.isArray(it.ids) ? it.ids : [];

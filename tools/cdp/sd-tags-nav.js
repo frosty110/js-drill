@@ -31,15 +31,15 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
 
   const parts = await s.eval(`
     Array.from(document.querySelectorAll('.part-head')).map(e => e.textContent.trim())`);
-  s.assert(Array.isArray(parts) && parts.length === 5, `expected 5 families, got ${parts && parts.length}`);
+  s.assert(Array.isArray(parts) && parts.length === 7, `expected 7 families, got ${parts && parts.length}`);
   s.assert(parts[0] === 'Read-Heavy Systems & Search', `first family: ${parts[0]}`);
   s.assert(parts.includes('Infrastructure Primitives'), 'Infrastructure Primitives family present');
   s.assert(!parts.includes('Feeds & Read-Heavy Systems'), 'old part names gone');
 
-  // displayNum: contiguous 1..17 in parts order, NOT the p-number order.
+  // displayNum: contiguous 1..N in parts order, NOT the p-number order.
   const nums = await s.eval(`
     Array.from(document.querySelectorAll('.ch-card .ch-num')).map(e => e.textContent.trim())`);
-  s.assert(nums.length === 17, `expected 17 cards, got ${nums.length}`);
+  s.assert(nums.length === 21, `expected 21 cards, got ${nums.length}`);
   const asNums = nums.filter(n => /^\d+$/.test(n)).map(Number);
   s.assert(asNums.length === 0 || asNums.every((n, i, a) => i === 0 || n > a[i - 1]),
     `displayNum must ascend, got ${nums.join(',')}`);
@@ -55,7 +55,7 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
 
   // ── Tag chips on cards ───────────────────────────────────────────────────
   const chipCount = await s.eval(`document.querySelectorAll('.ch-card .ch-tags .sd-chip').length`);
-  s.assert(chipCount >= 17, `every card carries chips, got ${chipCount}`);
+  s.assert(chipCount >= 21, `every card carries chips, got ${chipCount}`);
   const firstChips = await s.eval(`
     Array.from(document.querySelectorAll('.ch-card')[0].querySelectorAll('.sd-chip')).map(e => e.textContent.trim()).join('|')`);
   s.assert(/Easy/.test(firstChips), `p01 shows its difficulty chip, got ${firstChips}`);
@@ -79,7 +79,7 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   await s.sleep(400);
   await s.snap('03-filter-caching');
   const cachingHits = await s.eval(`document.querySelectorAll('.ch-card').length`);
-  s.assert(cachingHits >= 5 && cachingHits < 17, `caching narrows the list, got ${cachingHits}`);
+  s.assert(cachingHits >= 5 && cachingHits < 21, `caching narrows the list, got ${cachingHits}`);
   s.assert(await s.eval(`document.querySelectorAll('.part-head').length === 1`),
     'filtered view collapses families into one flat list');
   s.assert(/match/.test(await s.eval(`document.querySelector('.part-head').textContent`)),
@@ -96,8 +96,8 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   // Clear returns to the grouped view.
   await s.eval(`document.getElementById('filter-clear').click()`);
   await s.sleep(400);
-  s.assert(await s.eval(`document.querySelectorAll('.ch-card').length === 17`), 'clear restores all 17');
-  s.assert(await s.eval(`document.querySelectorAll('.part-head').length === 5`), 'clear restores families');
+  s.assert(await s.eval(`document.querySelectorAll('.ch-card').length === 21`), 'clear restores all 21');
+  s.assert(await s.eval(`document.querySelectorAll('.part-head').length === 7`), 'clear restores families');
 
   // ── Empty state ──────────────────────────────────────────────────────────
   await s.eval(`
@@ -127,7 +127,7 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   await s.snap('06-tag-deeplink');
   const chIds = await s.eval(`
     Array.from(document.querySelectorAll('.ch-card')).map(e => e.dataset.ch).sort().join(',')`);
-  s.assert(chIds === 'p08,p12', `consistent-hashing deep link lists p08+p12, got ${chIds}`);
+  s.assert(chIds === 'p08,p12,p21', `consistent-hashing deep link lists p08+p12+p21, got ${chIds}`);
   s.assert(await s.eval(`document.querySelectorAll('.sd-chip--btn.is-on').length === 1`),
     'deep link REPLACES the filter rather than adding to saved state');
 
@@ -161,8 +161,8 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   await s.eval(`location.hash = '#/design-problems'`);
   await s.sleep(900);
   await s.snap('08-topic-home-desktop');
-  s.assert(await s.eval(`document.querySelectorAll('.ch-card').length === 17`), 'desktop lists 17');
-  s.assert(await s.eval(`document.querySelectorAll('.part-head').length === 5`), 'desktop shows 5 families');
+  s.assert(await s.eval(`document.querySelectorAll('.ch-card').length === 21`), 'desktop lists 21');
+  s.assert(await s.eval(`document.querySelectorAll('.part-head').length === 7`), 'desktop shows 7 families');
   const dScroll = await s.eval(`document.documentElement.scrollWidth - document.documentElement.clientWidth`);
   s.assert(dScroll <= 1, `no horizontal scroll on desktop, overflow=${dScroll}px`);
 

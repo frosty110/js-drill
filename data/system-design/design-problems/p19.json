@@ -1,0 +1,180 @@
+{
+  "id": "p19",
+  "num": 19,
+  "part": "Streaming & Analytics",
+  "title": "Design a Distributed Message Queue",
+  "summary": "Build the log itself — a Kafka-style partitioned, replicated commit log with durable ordered storage, consumer groups, and offset tracking. The signature challenge is getting durability and throughput from the same design instead of trading one for the other.",
+  "keyTakeaways": [
+    "The core data structure is an append-only segmented log per partition — sequential writes are what make a disk-backed queue faster than a memory-backed one.",
+    "Ordering is per-partition, never global. Global ordering would mean one partition, which caps throughput at one machine.",
+    "Consumers track an offset rather than the broker tracking per-message acks; that's what makes replay possible and keeps broker state O(consumers), not O(messages).",
+    "Replication is leader-follower per partition, with an in-sync replica set; a write is committed once it's on all in-sync replicas.",
+    "`acks` is the durability dial the producer holds: fire-and-forget, leader-only, or all in-sync replicas — each a real point on the latency/durability curve.",
+    "Zero-copy transfer (`sendfile`) and batching are why brokers push GB/s: the payload never enters application memory.",
+    "Retention is time or size based, not consumption based — messages are not deleted when read, which is what makes multiple independent consumer groups possible."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a distributed message queue. What are the functional requirements, and which non-functional targets actually shape the architecture?",
+      "points": [
+        "Functional: producers publish messages to a named topic; consumers subscribe and read them; messages are retained for a configured period and can be re-read.",
+        "Multiple independent consumer groups read the same topic at their own pace without interfering.",
+        "Ordering guarantee: per-partition (per-key) ordering — say this explicitly, because promising global ordering changes the whole design.",
+        "Delivery guarantee: at-least-once by default, with a path to effectively-once via idempotent producers and transactional writes.",
+        "Non-functional: very high throughput (millions of msg/sec cluster-wide), durability across broker loss, horizontal scalability, and bounded end-to-end latency (single-digit ms).",
+        "Clarify pub/sub vs. work-queue semantics — this design serves both, via consumer groups, but the interviewer may care about one."
+      ],
+      "answer": "Producers publish to topics, consumers subscribe, and messages are retained for a window so they can be re-read — that last part is what separates a log from a classic queue. I'd nail down the ordering guarantee immediately: per-partition ordering, not global, because global ordering means a single partition and therefore a single machine's throughput ceiling. Delivery is at-least-once by default with an effectively-once path. Non-functionally I'm targeting millions of messages/sec cluster-wide, single-digit-millisecond latency, durability across broker failure, and the ability to add brokers to add capacity.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the scale: throughput, storage, and what that implies for the cluster.",
+      "points": [
+        "Assume a target: 1M messages/sec, average message 1 KB → 1 GB/sec ingress.",
+        "With replication factor 3, that's 3 GB/sec written across the cluster plus cross-broker replication traffic — network is often the binding constraint, not disk.",
+        "Storage for 7-day retention: 1 GB/s × 86,400 × 7 ≈ 600 TB replicated (200 TB logical). This is why retention policy is a first-class design decision.",
+        "Per-broker: a commodity node handles ~100-200 MB/s sustained sequential write comfortably, so ~15-30 brokers for ingress alone, more for headroom and read fan-out.",
+        "Read amplification: each additional consumer group re-reads the topic. 3 consumer groups triples egress; egress commonly exceeds ingress.",
+        "Partition count sizing: partitions are the unit of parallelism, so target partitions >= max expected consumers in a group."
+      ],
+      "answer": "At 1M msg/sec and 1 KB average, that's 1 GB/sec in. With replication factor 3 it's 3 GB/sec of writes plus replication traffic between brokers, and network usually binds before disk does. Seven days of retention is roughly 600 TB replicated, which is exactly why retention is a design decision and not a config afterthought. A commodity broker sustains a couple hundred MB/s of sequential write, so I'm in the tens-of-brokers range for ingress, and I'd size up for read fan-out — every extra consumer group re-reads the whole topic, so egress often exceeds ingress by several times."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the API and the core storage layout. What does a partition actually look like on disk?",
+      "points": [
+        "Producer: `send(topic, key, value)` — the key determines the partition via `hash(key) % partitions`, which is what preserves per-key ordering.",
+        "Consumer: `poll()` returns a batch; `commit(offset)` records progress for the consumer group.",
+        "Admin: create topic with partition count and replication factor.",
+        "On disk, a partition is an append-only log split into fixed-size segments (e.g. 1 GB), each a file. Only the last segment is open for writes.",
+        "A sparse index per segment maps offset → byte position, so a seek is a binary search over the index then a sequential scan — not a full scan.",
+        "Segmenting is what makes retention cheap: expiring data is deleting whole segment files, not compacting rows.",
+        "Offsets are monotonically increasing per partition and are the message's identity — there is no per-message ack state on the broker."
+      ],
+      "answer": "Producers call `send(topic, key, value)` where the key hashes to a partition, which is what preserves per-key ordering. Consumers `poll()` for batches and `commit(offset)`. On disk each partition is an append-only log cut into fixed-size segment files, with only the newest open for writing, plus a sparse offset→byte index per segment so a seek is a binary search and then a short sequential read. Segmenting is what makes retention nearly free — expiring old data is unlinking whole files rather than compacting rows. And critically, the broker stores no per-message ack state; the offset is the only progress marker.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "Why can a disk-backed log broker outperform an in-memory queue for streaming workloads?",
+      "options": [
+        "Modern SSDs have lower access latency than DRAM for large reads",
+        "Appends are sequential, so they hit the OS page cache and stream to disk at near-memory rates, while zero-copy `sendfile` sends pages to the socket without entering application memory",
+        "Disk-backed brokers can skip replication because the disk is already durable",
+        "In-memory queues cannot batch messages, so they issue one syscall per message"
+      ],
+      "answer": 1,
+      "explain": "Two effects compound. First, the access pattern is purely sequential — appends at the head, reads trailing just behind — so the OS page cache serves most reads and writes stream out sequentially, which is orders of magnitude faster than random I/O and close to memory bandwidth. Second, because the broker never transforms the payload, it can `sendfile` straight from page cache to socket, skipping the copy into user space entirely. Disks are not faster than DRAM, disk durability doesn't remove the need for replication across machines, and in-memory queues can batch too.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how does replication work, and what exactly does a producer's `acks` setting buy?",
+      "points": [
+        "Each partition has one leader and N-1 followers; all reads and writes go to the leader, followers pull from it like ordinary consumers.",
+        "The in-sync replica (ISR) set is the followers currently caught up within a lag threshold. A message is *committed* once it is on all ISR members.",
+        "Consumers can only read up to the high-water mark — the highest committed offset — so they never see a record that could be lost in a leader failover.",
+        "`acks=0`: fire and forget; lowest latency, loses data on any failure. `acks=1`: leader persisted; loses data if the leader dies before followers catch up. `acks=all`: on every ISR member; survives leader loss.",
+        "`acks=all` alone isn't enough — pair it with `min.insync.replicas >= 2`, or an ISR that has shrunk to just the leader silently degrades `all` back to `1`.",
+        "On leader failure a new leader is elected from the ISR. Allowing election from outside the ISR (unclean election) trades data loss for availability — a deliberate choice, not a default."
+      ],
+      "answer": "Each partition has a leader that serves all reads and writes, and followers that pull from it exactly like consumers do. The in-sync replica set is the followers currently caught up, and a message counts as committed once it's on all of them; consumers can only read up to that high-water mark, so they never see a record that a failover could erase. `acks` is the producer's dial on that: 0 is fire-and-forget, 1 waits for the leader only and loses data if it dies before followers catch up, and `all` waits for the full ISR. The trap is that `acks=all` without `min.insync.replicas >= 2` degrades silently to `acks=1` when the ISR shrinks to just the leader — so those two settings have to be reasoned about together.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "A topic has 6 partitions. A consumer group scales from 6 to 10 consumers. What happens?",
+      "options": [
+        "Throughput increases by ~67% as the load rebalances across 10 consumers",
+        "Six consumers each own one partition and four sit idle — partition count is the parallelism ceiling for a single consumer group",
+        "The broker automatically splits partitions to match the consumer count",
+        "The group fails to rebalance and consumption stops until consumers are scaled back down"
+      ],
+      "answer": 1,
+      "explain": "A partition is assigned to at most one consumer within a group — that is what preserves per-partition ordering. So partition count is a hard ceiling on a group's parallelism, and the four extra consumers idle as hot standbys. This is why partition count is sized up front against expected peak consumer parallelism: brokers do not split partitions automatically, and increasing partition count later changes `hash(key) % partitions`, which breaks the ordering guarantee for existing keys."
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: consumers track offsets rather than the broker tracking acks. What does that design choice buy, and what does it cost?",
+      "points": [
+        "Buys O(consumer-groups) broker state instead of O(messages) — no per-message ack table, which is what lets retention be time-based and throughput stay flat as backlog grows.",
+        "Buys replay: rewinding a consumer group to an earlier offset re-delivers history, enabling reprocessing after a bug fix and bootstrapping new consumers.",
+        "Buys independent consumer groups: because reading doesn't delete, N groups consume the same topic at their own pace.",
+        "Costs: the delivery guarantee moves into the consumer. Commit before processing = at-most-once (lose on crash); commit after = at-least-once (duplicate on crash).",
+        "There is no per-message redelivery or dead-letter primitive — a poison message blocks its partition until the consumer skips it explicitly.",
+        "Head-of-line blocking is real: one slow message delays everything behind it on that partition. Mitigate with a retry topic rather than blocking in place.",
+        "Offsets are themselves stored in an internal compacted topic, so offset commits are just more log writes."
+      ],
+      "answer": "It buys three big things. Broker state becomes O(consumer groups) instead of O(messages), so a growing backlog doesn't degrade throughput and retention can be time-based. It buys replay — rewind a group's offset and reprocess history after a bug fix. And because reading doesn't delete, independent groups read the same topic at their own pace. The cost is that the delivery guarantee moves into the consumer: commit before processing gives at-most-once, commit after gives at-least-once, and there's no in-between the broker can give you. You also lose per-message redelivery and dead-lettering — a poison message blocks its partition until you explicitly skip it, so the usual pattern is a separate retry topic rather than blocking in place.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "How do you support effectively-once end-to-end, and what does that actually guarantee?",
+      "points": [
+        "Idempotent producer: each producer gets an ID and attaches a monotonic sequence number per partition, so the broker drops a duplicate caused by a producer retry.",
+        "That solves producer-side duplicates only — it does not make consumption exactly-once.",
+        "Transactions let a producer write to multiple partitions and commit consumer offsets atomically, which gives consume-transform-produce exactly-once within the system.",
+        "Consumers must set read-committed isolation, or they'll see records from aborted transactions.",
+        "The honest boundary: this is exactly-once *for state inside the system*. A side effect outside it — an email, a card charge — is not covered and needs its own idempotency key.",
+        "Cost: transactional writes add coordination latency and a transaction coordinator; not free, so use it where correctness demands it."
+      ],
+      "answer": "Two mechanisms. The idempotent producer gives each producer an ID and a per-partition sequence number so the broker can drop retry duplicates — but that only fixes the producer side. For the real thing you need transactions: the producer writes output records and commits the input offsets atomically, so a consume-transform-produce pipeline is exactly-once, provided consumers read with read-committed isolation. The boundary I'd state clearly is that this covers state inside the system only. If the transform sends an email or charges a card, the transaction can't roll that back — that side effect needs its own idempotency key."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks at scale, and what would you monitor?",
+      "points": [
+        "Consumer lag per partition is the primary health metric — aggregate lag hides one stuck partition.",
+        "ISR shrink events are the durability early-warning: a chronically shrinking ISR means `acks=all` is quietly weaker than intended.",
+        "Partition count doesn't scale free: each partition costs file handles, memory, and leader-election work. Tens of thousands of partitions per cluster is where controller and metadata pressure appears.",
+        "Rebalance storms: a flapping consumer triggers group rebalances that stop consumption. Static membership and longer session timeouts mitigate.",
+        "Repartitioning is the painful operation — increasing partitions changes key→partition mapping and breaks per-key ordering for existing keys, so size ahead or use a partitioner that tolerates it.",
+        "Cross-datacenter: replicate asynchronously (MirrorMaker-style) rather than stretching the ISR across regions; a stretched ISR pays WAN latency on every committed write.",
+        "Tiered storage moves cold segments to object storage, decoupling retention length from broker disk — the modern answer to '600 TB of retention'.",
+        "Alert on: lag, ISR size, under-replicated partitions, request latency percentiles, and disk headroom per broker."
+      ],
+      "answer": "Per-partition consumer lag is what I'd watch first — an aggregate number hides the one stuck partition that's actually the outage. Next is ISR size and under-replicated partitions, because a chronically shrunk ISR means the durability you think `acks=all` is buying isn't there. At scale the things that bite are partition count (file handles, memory, controller pressure) and rebalance storms from flapping consumers, which stop consumption entirely. The genuinely painful operation is repartitioning, since it changes the key-to-partition mapping and breaks per-key ordering — so I'd size partitions ahead. For 600 TB of retention I'd reach for tiered storage to push cold segments into object storage, and for multi-region I'd replicate asynchronously rather than stretching the ISR across a WAN and paying that latency on every committed write."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "A topic is a set of independently ordered partitions; consumer groups read the same partitions at their own offsets without interfering.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  P([\"Producers\"]) -->|\"hash(key)\"| T{{\"Topic\"}}\n  T --> P0[\"Partition 0<br/>append-only log\"]\n  T --> P1[\"Partition 1\"]\n  T --> P2[\"Partition 2\"]\n  P0 --> G1[\"Group A<br/>offset 4210\"]\n  P1 --> G1\n  P2 --> G1\n  P0 --> G2[\"Group B<br/>offset 91\"]\n  P1 --> G2\n  P2 --> G2"
+    },
+    {
+      "id": "segmented-log",
+      "title": "Partition storage: segments and the sparse index",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Sequential appends into fixed-size segments make writes fast and retention cheap — expiring data is deleting a file.",
+      "afterQuestion": 3,
+      "code": "flowchart TD\n  W([\"append\"]) --> ACT[\"segment 3 (open)<br/>offsets 3000+\"]\n  subgraph LOG[\"partition directory\"]\n    S1[\"segment 1<br/>0-999 · closed\"]\n    S2[\"segment 2<br/>1000-2999 · closed\"]\n    ACT\n  end\n  IDX[\"sparse index<br/>offset -> byte pos\"] -.->|\"binary search\"| S2\n  R([\"read offset 1500\"]) --> IDX\n  S1 -->|\"retention expiry\"| DEL([\"unlink file\"])"
+    },
+    {
+      "id": "replication-isr",
+      "title": "Leader, followers, and the in-sync replica set",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "A record is committed once it reaches every in-sync replica; consumers read only up to that high-water mark.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  PR([\"Producer<br/>acks=all\"]) --> L[\"Leader<br/>partition 0\"]\n  L -->|\"fetch\"| F1[\"Follower 1<br/>in ISR\"]\n  L -->|\"fetch\"| F2[\"Follower 2<br/>in ISR\"]\n  L -.->|\"lagging — evicted\"| F3[\"Follower 3<br/>out of ISR\"]\n  F1 --> HW{{\"high-water mark<br/>= min(ISR offsets)\"}}\n  F2 --> HW\n  HW --> C([\"Consumers read<br/>only below HW\"])"
+    },
+    {
+      "id": "leader-failover",
+      "title": "Leader failure and the unclean-election choice",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Electing from the ISR preserves committed data; electing outside it trades data loss for availability — a decision, not a default.",
+      "afterQuestion": 8,
+      "code": "flowchart TD\n  X[\"Leader fails\"] --> Q{\"ISR non-empty?\"}\n  Q -->|\"yes\"| E[\"elect from ISR\"]\n  E --> OK([\"no committed data lost\"])\n  Q -->|\"no\"| U{\"unclean election<br/>allowed?\"}\n  U -->|\"no\"| DOWN([\"partition unavailable<br/>until an ISR returns\"])\n  U -->|\"yes\"| LOSS([\"stale replica leads<br/>committed records lost\"])"
+    }
+  ]
+}

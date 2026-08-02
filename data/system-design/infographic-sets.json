@@ -4809,6 +4809,953 @@
           ]
         }
       ]
+    },
+    "design-problems/p18": {
+      "title": "Ad Click Aggregator visual study set",
+      "summary": "Four sheets separate the ingest map from the three mechanisms that make the counts billable: event-time windowing, hot-key salting, and exactly-once recovery.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Ad click aggregator system map",
+          "purpose": "Establish the component map and the two-consumer split before any mechanism sheet goes deep.",
+          "description": "One durable log feeds two consumers: a stream job for freshness and a raw archive for the nightly batch that produces the number you invoice on.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Collect and batch",
+              "detail": "Ad servers emit clicks to a collector that validates, enriches and batches into the log."
+            },
+            {
+              "step": 2,
+              "title": "Partition by ad_id",
+              "detail": "Every event for one ad lands on one partition so aggregation uses local state, never a shuffle."
+            },
+            {
+              "step": 3,
+              "title": "Aggregate in event time",
+              "detail": "The stream job keeps per-ad windowed counters in checkpointed state and emits completed minutes."
+            },
+            {
+              "step": 4,
+              "title": "Archive and reconcile",
+              "detail": "A parallel sink writes raw events to object storage; a nightly batch recomputes and overwrites finalized periods."
+            },
+            {
+              "step": 5,
+              "title": "Serve precomputed rollups",
+              "detail": "The query service reads only (ad_id, minute) rollups — never raw events."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Write volume",
+              "value": "1B clicks/day",
+              "detail": "~11.5K events/sec average, designed for ~50K/sec peak."
+            },
+            {
+              "label": "Raw retention",
+              "value": "150 GB/day",
+              "detail": "~150 bytes per event; cheap in object storage, too much to keep hot."
+            },
+            {
+              "label": "Freshness target",
+              "value": "1-2 min",
+              "detail": "Near-real-time, not real-time — the watermark slack is the dial."
+            }
+          ],
+          "priorities": [
+            "Correctness good enough to bill on",
+            "Write-path throughput over read-path flexibility",
+            "Reconcilability over instantaneous accuracy"
+          ],
+          "tradeoffs": [
+            "Stream layer gives freshness but is approximate under failure",
+            "Batch layer gives truth but lags by hours",
+            "Two aggregation implementations can drift — alert on the delta"
+          ]
+        },
+        {
+          "id": "event-time-windows",
+          "kind": "Mechanism",
+          "title": "Event time, watermarks and late events",
+          "purpose": "Show why the bucket a click lands in is decided by when it happened, not when it arrived.",
+          "description": "A window closes when the watermark passes its end. Allowed lateness buys a correction; anything later goes to a side output the batch layer reconciles.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Stamp event time",
+              "detail": "The click carries the time it happened; processing time is only when the aggregator saw it."
+            },
+            {
+              "step": 2,
+              "title": "Advance the watermark",
+              "detail": "Watermark = max observed event time minus slack, declaring \"all events up to T are believed seen\"."
+            },
+            {
+              "step": 3,
+              "title": "Close the window",
+              "detail": "When the watermark passes a window end, the window emits its value."
+            },
+            {
+              "step": 4,
+              "title": "Accept late corrections",
+              "detail": "Within allowed lateness a straggler updates the window and re-emits a corrected number."
+            },
+            {
+              "step": 5,
+              "title": "Divert the very late",
+              "detail": "Beyond that, events go to a side output — never to the floor."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Watermark slack",
+              "value": "~30 sec",
+              "detail": "The explicit latency-versus-completeness dial."
+            },
+            {
+              "label": "Window grain",
+              "value": "1 minute",
+              "detail": "Minutes roll asynchronously into hours and days."
+            }
+          ],
+          "priorities": [
+            "Event time over processing time",
+            "Explicit late policy over silent drops",
+            "Corrected re-emission over frozen windows"
+          ],
+          "tradeoffs": [
+            "More slack means later results but fewer late events",
+            "Less slack means fresher numbers but more corrections",
+            "Processing time is simpler but reassigns revenue during lag spikes"
+          ]
+        },
+        {
+          "id": "hot-key-salting",
+          "kind": "Mechanism",
+          "title": "Two-stage aggregation for a whale advertiser",
+          "purpose": "Make it obvious that adding partitions cannot split a single key, and show the shape that can.",
+          "description": "One advertiser at 40% of traffic saturates a single partition. Salting the key into sub-keys spreads it across partitions at the cost of a merge stage.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Detect the skew",
+              "detail": "Per-partition throughput — not the healthy aggregate — reveals the hot key."
+            },
+            {
+              "step": 2,
+              "title": "Salt the key",
+              "detail": "ad_42 becomes ad_42:0..N, so one logical key hashes to many partitions."
+            },
+            {
+              "step": 3,
+              "title": "Aggregate in parallel",
+              "detail": "Each salted bucket keeps its own local counter on its own consumer."
+            },
+            {
+              "step": 4,
+              "title": "Merge in stage two",
+              "detail": "A second aggregation sums the salted buckets back into one (ad_id, minute) value."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Skew example",
+              "value": "40% of clicks",
+              "detail": "A single campaign can dominate the entire firehose."
+            },
+            {
+              "label": "Salt width",
+              "value": "N = 8-32",
+              "detail": "Wide enough to spread, narrow enough to keep the merge cheap."
+            }
+          ],
+          "priorities": [
+            "Per-partition visibility over aggregate averages",
+            "Bounded merge cost over unbounded skew",
+            "Generalized fix over per-advertiser special cases"
+          ],
+          "tradeoffs": [
+            "Salting adds a second aggregation stage and latency",
+            "More partitions alone cannot split one hash value",
+            "A dedicated cluster per whale does not generalize"
+          ]
+        },
+        {
+          "id": "exactly-once-recovery",
+          "kind": "Failure",
+          "title": "Why a crash does not double-count",
+          "purpose": "Show the precise crash window and the two properties that close it.",
+          "description": "Offsets and sink writes commit in one transaction, and windows are written as absolute upserts — so a replay overwrites rather than increments.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Checkpoint state and offsets",
+              "detail": "The processor snapshots keyed state together with its source position."
+            },
+            {
+              "step": 2,
+              "title": "Process a batch",
+              "detail": "Counters advance in local state; nothing is durable yet."
+            },
+            {
+              "step": 3,
+              "title": "Crash before commit",
+              "detail": "On restart the job restores the checkpoint and replays from that exact offset."
+            },
+            {
+              "step": 4,
+              "title": "Commit atomically",
+              "detail": "Source offsets and sink writes land in a single transaction, so there is no gap or overlap."
+            },
+            {
+              "step": 5,
+              "title": "Upsert absolute values",
+              "detail": "Writing the window total rather than a delta makes any replay idempotent."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Delivery guarantee",
+              "value": "at-least-once",
+              "detail": "The log redelivers; the state transition is what happens once."
+            },
+            {
+              "label": "Checkpoint interval",
+              "value": "seconds",
+              "detail": "Longer intervals mean cheaper steady state and slower recovery."
+            }
+          ],
+          "priorities": [
+            "Idempotent effect over idempotent delivery",
+            "Absolute upserts over increments",
+            "Atomic commit over best-effort ordering"
+          ],
+          "tradeoffs": [
+            "Transactional sinks add coordination latency",
+            "Long checkpoints destabilize recovery",
+            "Exactly-once covers internal state, never external side effects"
+          ]
+        }
+      ]
+    },
+    "design-problems/p19": {
+      "title": "Distributed Message Queue visual study set",
+      "summary": "Four sheets separate the topic-and-consumer-group map from the storage layout, the replication protocol, and the failover decision that trades data for availability.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Message queue system map",
+          "purpose": "Establish that a topic is a set of independently ordered partitions read by independent consumer groups.",
+          "description": "Producers hash keys to partitions; each consumer group tracks its own offsets, so groups read the same data at their own pace without interfering.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Hash the key",
+              "detail": "hash(key) % partitions picks the partition, which is what preserves per-key ordering."
+            },
+            {
+              "step": 2,
+              "title": "Append to the log",
+              "detail": "The partition leader appends to a segmented, append-only file."
+            },
+            {
+              "step": 3,
+              "title": "Replicate to followers",
+              "detail": "Followers pull from the leader exactly like ordinary consumers."
+            },
+            {
+              "step": 4,
+              "title": "Track offsets per group",
+              "detail": "The broker holds one offset per group per partition, not per-message ack state."
+            },
+            {
+              "step": 5,
+              "title": "Retain by time or size",
+              "detail": "Messages are not deleted on read, which is what makes replay and multiple groups possible."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Target throughput",
+              "value": "1M msg/sec",
+              "detail": "~1 GB/sec at 1 KB average, 3 GB/sec written at RF=3."
+            },
+            {
+              "label": "Retention",
+              "value": "7 days",
+              "detail": "~600 TB replicated — retention is a design decision, not a config afterthought."
+            },
+            {
+              "label": "Broker sustained write",
+              "value": "100-200 MB/s",
+              "detail": "Sequential; network usually binds before disk does."
+            }
+          ],
+          "priorities": [
+            "Per-partition ordering over global ordering",
+            "Consumer-tracked offsets over broker-tracked acks",
+            "Horizontal partition scaling over vertical broker scaling"
+          ],
+          "tradeoffs": [
+            "Global ordering would cap throughput at one machine",
+            "Each extra consumer group re-reads the topic, multiplying egress",
+            "Partition count is a hard ceiling on a group’s parallelism"
+          ]
+        },
+        {
+          "id": "segmented-log",
+          "kind": "Mechanism",
+          "title": "Partition storage: segments and the sparse index",
+          "purpose": "Show why a disk-backed log outruns an in-memory queue.",
+          "description": "Appends are sequential into fixed-size segment files; a sparse offset index turns a seek into a binary search plus a short scan, and expiry is a file unlink.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Append to the open segment",
+              "detail": "Only the newest segment accepts writes; older ones are immutable."
+            },
+            {
+              "step": 2,
+              "title": "Index sparsely",
+              "detail": "An offset-to-byte index per segment avoids scanning the file to find a position."
+            },
+            {
+              "step": 3,
+              "title": "Serve reads from page cache",
+              "detail": "Trailing reads hit the OS page cache rather than the disk."
+            },
+            {
+              "step": 4,
+              "title": "Send without copying",
+              "detail": "sendfile pushes pages straight to the socket, never entering application memory."
+            },
+            {
+              "step": 5,
+              "title": "Expire whole segments",
+              "detail": "Retention deletes files instead of compacting rows."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Segment size",
+              "value": "~1 GB",
+              "detail": "Bounds index size and makes expiry coarse and cheap."
+            },
+            {
+              "label": "Copy count",
+              "value": "zero",
+              "detail": "The broker never transforms the payload, so it never has to materialize it."
+            }
+          ],
+          "priorities": [
+            "Sequential I/O over random access",
+            "Immutable segments over in-place mutation",
+            "Page cache over an application-managed cache"
+          ],
+          "tradeoffs": [
+            "Immutability means space is reclaimed only at segment granularity",
+            "Zero-copy is lost the moment the broker must transform payloads",
+            "Cold reads that miss page cache fall back to disk latency"
+          ]
+        },
+        {
+          "id": "replication-isr",
+          "kind": "Mechanism",
+          "title": "Leader, followers and the in-sync replica set",
+          "purpose": "Make the commit rule and the acks dial concrete.",
+          "description": "A record is committed once it reaches every in-sync replica, and consumers read only up to that high-water mark — so a failover can never erase a record a consumer already saw.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Write to the leader",
+              "detail": "All reads and writes for a partition go to its leader."
+            },
+            {
+              "step": 2,
+              "title": "Followers fetch",
+              "detail": "Followers replicate by pulling, and fall out of the ISR when they lag."
+            },
+            {
+              "step": 3,
+              "title": "Commit at the ISR",
+              "detail": "The high-water mark is the minimum offset present on every in-sync replica."
+            },
+            {
+              "step": 4,
+              "title": "Gate consumer reads",
+              "detail": "Consumers cannot read past the high-water mark."
+            },
+            {
+              "step": 5,
+              "title": "Acknowledge per policy",
+              "detail": "acks=0, 1 or all decides how much of this the producer waits for."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Replication factor",
+              "value": "3",
+              "detail": "Two follower copies; survives one broker loss with room to spare."
+            },
+            {
+              "label": "min.insync.replicas",
+              "value": "2",
+              "detail": "Without this, acks=all silently degrades to acks=1 as the ISR shrinks."
+            }
+          ],
+          "priorities": [
+            "Durability of acknowledged writes",
+            "Read safety over read freshness",
+            "Explicit producer control over hidden defaults"
+          ],
+          "tradeoffs": [
+            "acks=all costs latency on every write",
+            "acks=1 loses data if the leader dies before followers catch up",
+            "A shrunk ISR weakens guarantees without any error being raised"
+          ]
+        },
+        {
+          "id": "leader-failover",
+          "kind": "Failure",
+          "title": "Leader failure and the unclean-election choice",
+          "purpose": "Present the availability-versus-durability decision as a decision, not a default.",
+          "description": "Electing from the ISR preserves every committed record. Electing outside it restores availability by accepting data loss — which is a policy choice someone must make deliberately.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Detect the failure",
+              "detail": "The controller notices the leader is gone."
+            },
+            {
+              "step": 2,
+              "title": "Check the ISR",
+              "detail": "If any in-sync replica survives, elect from it and lose nothing committed."
+            },
+            {
+              "step": 3,
+              "title": "Face the empty ISR",
+              "detail": "If none survives, the partition is unavailable until one returns."
+            },
+            {
+              "step": 4,
+              "title": "Decide unclean election",
+              "detail": "Allowing a stale replica to lead restores writes and discards committed records."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Clean election loss",
+              "value": "zero committed records",
+              "detail": "The high-water mark guarantees the new leader has them all."
+            },
+            {
+              "label": "Unclean election loss",
+              "value": "up to the replica lag",
+              "detail": "Whatever the stale replica never received is gone."
+            }
+          ],
+          "priorities": [
+            "Committed-data safety by default",
+            "Explicit operator choice over silent degradation",
+            "Fast detection over slow certainty"
+          ],
+          "tradeoffs": [
+            "Refusing unclean election means accepting downtime",
+            "Allowing it means acknowledged writes can vanish",
+            "Aggressive failure detection risks flapping leadership"
+          ]
+        }
+      ]
+    },
+    "design-problems/p21": {
+      "title": "Distributed Key-Value Store visual study set",
+      "summary": "Four sheets separate the masterless system map from ring placement, the quorum overlap argument, and the three repair mechanisms that make leaderless writes converge.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Key-value store system map",
+          "purpose": "Establish that any node can coordinate, and that no node is special.",
+          "description": "The ring decides placement, gossip keeps membership current, and every node runs the same LSM engine — so there is no master to lose.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Accept anywhere",
+              "detail": "Any node can act as coordinator for any request."
+            },
+            {
+              "step": 2,
+              "title": "Look up the ring",
+              "detail": "hash(key) walks clockwise to its owner and the next distinct physical replicas."
+            },
+            {
+              "step": 3,
+              "title": "Fan out to the preference list",
+              "detail": "The coordinator writes to W replicas and reads from R."
+            },
+            {
+              "step": 4,
+              "title": "Store in an LSM engine",
+              "detail": "Writes append to a commit log and a memtable, flushing to immutable SSTables."
+            },
+            {
+              "step": 5,
+              "title": "Gossip membership",
+              "detail": "Nodes swap state with random peers, spreading liveness without a coordinator."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Replication factor",
+              "value": "N = 3",
+              "detail": "Survives one node loss with quorum intact."
+            },
+            {
+              "label": "Sizing example",
+              "value": "100 TB logical",
+              "detail": "300 TB replicated, ~450 TB provisioned once compaction headroom is included."
+            },
+            {
+              "label": "Virtual nodes",
+              "value": "128-256 per node",
+              "detail": "Smooths ownership and parallelizes rebuild across many peers."
+            }
+          ],
+          "priorities": [
+            "Write availability over immediate consistency",
+            "No single point of failure",
+            "Linear scale-out by adding nodes"
+          ],
+          "tradeoffs": [
+            "Leaderless writes mean replicas diverge by design",
+            "AP posture rules out globally strict read-after-write",
+            "Tiny interface buys scale but forbids joins and multi-key transactions"
+          ]
+        },
+        {
+          "id": "consistent-hash-ring",
+          "kind": "Mechanism",
+          "title": "Ring placement with virtual nodes",
+          "purpose": "Show why membership change moves ~1/N of keys instead of nearly all of them.",
+          "description": "Keys and nodes hash onto one ring. A key belongs to the first node clockwise; replicas are the next distinct physical nodes, skipping vnodes on a machine already chosen.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Hash onto the ring",
+              "detail": "Both keys and virtual nodes occupy positions on a fixed hash space."
+            },
+            {
+              "step": 2,
+              "title": "Walk clockwise",
+              "detail": "The first vnode past the key’s hash is its coordinator."
+            },
+            {
+              "step": 3,
+              "title": "Skip duplicates",
+              "detail": "Replica selection skips vnodes mapping to a physical node or rack already in the list."
+            },
+            {
+              "step": 4,
+              "title": "Rebalance narrowly",
+              "detail": "A join or leave reassigns only the affected arc, not the whole keyspace."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Keys moved on change",
+              "value": "~1/N",
+              "detail": "Versus nearly 100% with hash(key) % node_count."
+            },
+            {
+              "label": "Vnodes per node",
+              "value": "128-256",
+              "detail": "More vnodes means smoother ownership and faster parallel rebuild."
+            }
+          ],
+          "priorities": [
+            "Minimal remapping on membership change",
+            "Even load across heterogeneous hardware",
+            "Rack and AZ diversity within the preference list"
+          ],
+          "tradeoffs": [
+            "More vnodes means more metadata and gossip state",
+            "Skipping duplicates complicates replica selection",
+            "Without the skip, three replicas can silently be one machine"
+          ]
+        },
+        {
+          "id": "quorum-overlap",
+          "kind": "Mechanism",
+          "title": "Why R + W > N works",
+          "purpose": "Reduce the quorum rule to the pigeonhole argument a candidate can redraw from memory.",
+          "description": "If writes land on W replicas and reads consult R, and R + W exceeds N, the sets must share a node — so a read always sees at least one copy of the newest acknowledged write.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Write to W replicas",
+              "detail": "The write is acknowledged once W members confirm."
+            },
+            {
+              "step": 2,
+              "title": "Read from R replicas",
+              "detail": "The coordinator gathers R responses and compares versions."
+            },
+            {
+              "step": 3,
+              "title": "Force an overlap",
+              "detail": "R + W > N guarantees at least one replica appears in both sets."
+            },
+            {
+              "step": 4,
+              "title": "Resolve by version",
+              "detail": "The newest version wins, and read repair pushes it to the stale replicas."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Typical setting",
+              "value": "N=3, R=2, W=2",
+              "detail": "Overlap of one, tolerating a single replica being down on each path."
+            },
+            {
+              "label": "Fast-read variant",
+              "value": "R=1, W=3",
+              "detail": "Cheapest reads, most expensive and least available writes."
+            }
+          ],
+          "priorities": [
+            "Read-your-writes overlap",
+            "Per-query tunability",
+            "Availability under single-replica loss"
+          ],
+          "tradeoffs": [
+            "Higher W means more durable writes and worse write availability",
+            "Higher R means safer reads and higher read latency",
+            "Overlap does not mean all replicas are current — only that one is"
+          ]
+        },
+        {
+          "id": "anti-entropy-repair",
+          "kind": "Failure",
+          "title": "Three repair mechanisms on three timescales",
+          "purpose": "Show that no single repair mechanism is sufficient, and which one covers cold data.",
+          "description": "Read repair fixes what is read, hinted handoff covers brief outages, and Merkle-tree anti-entropy is the only mechanism that ever repairs data nobody touches.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Repair on read",
+              "detail": "A quorum read compares versions and asynchronously pushes the newest to stale replicas."
+            },
+            {
+              "step": 2,
+              "title": "Hold a hint",
+              "detail": "If a replica is briefly down, a peer accepts the write and replays it on recovery."
+            },
+            {
+              "step": 3,
+              "title": "Compare Merkle roots",
+              "detail": "Replicas exchange a hash tree over a key range; equal roots mean the range is in sync."
+            },
+            {
+              "step": 4,
+              "title": "Descend only where they differ",
+              "detail": "Unequal subtrees are walked down to isolate the differing keys."
+            },
+            {
+              "step": 5,
+              "title": "Sync the differing keys",
+              "detail": "Only those keys move, not the whole range."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Merkle comparison cost",
+              "value": "O(log n)",
+              "detail": "Locating differences costs a few exchanges, not a full range stream."
+            },
+            {
+              "label": "Tombstone lifetime",
+              "value": "> max repair window",
+              "detail": "Collect a delete marker too early and an offline replica resurrects the value."
+            }
+          ],
+          "priorities": [
+            "Convergence without coordination",
+            "Coverage of cold as well as hot data",
+            "Bounded repair bandwidth"
+          ],
+          "tradeoffs": [
+            "Read repair never touches data nobody reads",
+            "Hinted handoff helps only for transient failures",
+            "Anti-entropy costs background CPU and network continuously"
+          ]
+        }
+      ]
+    },
+    "design-problems/p22": {
+      "title": "LLM Inference Platform visual study set",
+      "summary": "Four sheets separate the serving map from the three mechanisms that decide GPU economics: continuous batching, paged KV cache, and prefill/decode interference.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "LLM inference platform system map",
+          "purpose": "Establish that admission is gated on GPU memory, not on worker count.",
+          "description": "Requests queue by priority and are admitted only when free KV blocks exist — because the real capacity unit is cache memory, not connections.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Authenticate and route",
+              "detail": "The gateway applies auth, rate limits and model routing."
+            },
+            {
+              "step": 2,
+              "title": "Queue by priority",
+              "detail": "Interactive chat and offline batch occupy separate classes."
+            },
+            {
+              "step": 3,
+              "title": "Admit on free blocks",
+              "detail": "The scheduler admits a sequence only when KV cache capacity exists for it."
+            },
+            {
+              "step": 4,
+              "title": "Prefill then decode",
+              "detail": "The prompt is processed in parallel, then tokens are generated one step at a time."
+            },
+            {
+              "step": 5,
+              "title": "Stream and release",
+              "detail": "Tokens stream to the client; finishing or disconnecting frees blocks immediately."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Model weights",
+              "value": "140 GB",
+              "detail": "70B parameters at 2 bytes — tensor parallelism across GPUs is mandatory."
+            },
+            {
+              "label": "KV per token",
+              "value": "~0.3 MB",
+              "detail": "With grouped-query attention; roughly 8x larger without it."
+            },
+            {
+              "label": "Concurrent sequences",
+              "value": "~130",
+              "detail": "4K-token sequences in ~160 GB of leftover memory on a 4x80 GB node."
+            }
+          ],
+          "priorities": [
+            "Tokens per second per dollar",
+            "Separate TTFT and TPOT targets",
+            "Immediate reclamation of abandoned sequences"
+          ],
+          "tradeoffs": [
+            "Bigger batches raise throughput and worsen per-user latency",
+            "GPU autoscaling takes minutes, so headroom is mandatory",
+            "Long-context requests displace many ordinary ones"
+          ]
+        },
+        {
+          "id": "continuous-batching",
+          "kind": "Comparison",
+          "title": "Static versus continuous batching",
+          "purpose": "Show where the wasted GPU time goes in the naive design.",
+          "description": "Output lengths vary by orders of magnitude, so static batches idle on finished sequences. Re-evaluating every decode step retires and admits continuously, so slots never sit empty.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Admit a static batch",
+              "detail": "N requests start together and the batch returns together."
+            },
+            {
+              "step": 2,
+              "title": "Watch short ones idle",
+              "detail": "A sequence finishing at token 20 holds its slot until the longest finishes."
+            },
+            {
+              "step": 3,
+              "title": "Re-evaluate each step",
+              "detail": "Continuous batching inspects the batch after every decode step."
+            },
+            {
+              "step": 4,
+              "title": "Retire and admit",
+              "detail": "Finished sequences free their blocks and queued requests join immediately."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Length spread",
+              "value": "20 to 2000 tokens",
+              "detail": "Utilization in a static batch trends toward average/maximum length."
+            },
+            {
+              "label": "Scheduling grain",
+              "value": "every decode step",
+              "detail": "The finer the grain, the shorter the queueing delay."
+            }
+          ],
+          "priorities": [
+            "Slot utilization",
+            "Low queueing delay",
+            "Predictable admission under load"
+          ],
+          "tradeoffs": [
+            "Per-step scheduling costs CPU overhead on the critical path",
+            "Larger batches improve throughput but raise per-user TPOT",
+            "Admission must be memory-aware or the batch overcommits the cache"
+          ]
+        },
+        {
+          "id": "paged-kv-cache",
+          "kind": "Mechanism",
+          "title": "PagedAttention: block tables and prefix sharing",
+          "purpose": "Show the OS-paging analogy and the prefix-sharing win it unlocks.",
+          "description": "Fixed-size blocks allocated on demand bound waste to one partial block per sequence — and because blocks are referenced, sequences sharing a system prompt share its compute.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Partition memory into blocks",
+              "detail": "Each block holds the KV entries for a fixed number of tokens."
+            },
+            {
+              "step": 2,
+              "title": "Map through a block table",
+              "detail": "Each sequence maps logical token positions to physical blocks, exactly like page tables."
+            },
+            {
+              "step": 3,
+              "title": "Allocate as you grow",
+              "detail": "Memory tracks tokens actually generated rather than max_tokens reserved."
+            },
+            {
+              "step": 4,
+              "title": "Share a prefix by reference",
+              "detail": "Sequences with the same system prompt point at the same blocks with a refcount."
+            },
+            {
+              "step": 5,
+              "title": "Copy on write",
+              "detail": "Blocks are copied only when the sequences diverge."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Naive waste",
+              "value": "60-80%",
+              "detail": "Reserved-but-unused memory plus fragmentation in contiguous allocation."
+            },
+            {
+              "label": "Block size",
+              "value": "~16 tokens",
+              "detail": "Bounds internal fragmentation to one partial block per sequence."
+            }
+          ],
+          "priorities": [
+            "Memory utilization",
+            "Prefix reuse across requests",
+            "Preemption instead of request failure"
+          ],
+          "tradeoffs": [
+            "Requires a custom attention kernel that understands block tables",
+            "Adds an indirection per attention access",
+            "Copy-on-write costs a copy exactly when sequences diverge"
+          ]
+        },
+        {
+          "id": "prefill-decode-interference",
+          "kind": "Failure",
+          "title": "Why one long prompt stalls everyone else",
+          "purpose": "Make the cross-request interference visible, since it is invisible in fleet dashboards.",
+          "description": "Prefill is compute-bound and decode is memory-bandwidth-bound. Mixed in one step, a single 8K-token prompt becomes every other user’s visible stutter.",
+          "width": 1600,
+          "height": 2400,
+          "flow": [
+            {
+              "step": 1,
+              "title": "A long prompt arrives",
+              "detail": "An 8K-token prefill enters the same batch as streaming users."
+            },
+            {
+              "step": 2,
+              "title": "The step goes compute-bound",
+              "detail": "Prefill saturates the matrix units for a long step."
+            },
+            {
+              "step": 3,
+              "title": "Decode stalls behind it",
+              "detail": "Every streaming user waits, and their TPOT spikes for reasons they did not cause."
+            },
+            {
+              "step": 4,
+              "title": "Chunk the prefill",
+              "detail": "Splitting the prompt and interleaving with decode keeps any single step short."
+            },
+            {
+              "step": 5,
+              "title": "Or disaggregate",
+              "detail": "Separate GPU pools for prefill and decode, shipping the KV cache between them."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Prompt spread",
+              "value": "128 to 128K tokens",
+              "detail": "Prefill cost scales with prompt length; decode does not."
+            },
+            {
+              "label": "Decode parallelism",
+              "value": "one token",
+              "detail": "No parallelism within a sequence — only across sequences in the batch."
+            }
+          ],
+          "priorities": [
+            "Isolation between tenants’ latency",
+            "Independent TTFT and TPOT targets",
+            "Throughput without tail-latency collapse"
+          ],
+          "tradeoffs": [
+            "Chunking adds scheduling complexity",
+            "Disaggregation needs a fast interconnect to ship the KV cache",
+            "Overload shows as slower tokens, not errors — dashboards look healthy"
+          ]
+        }
+      ]
     }
   }
 }

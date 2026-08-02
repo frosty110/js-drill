@@ -17,7 +17,7 @@ const { window } = dom;
 window.eval(source);
 
 const card = window.document.createElement('drill-infographic');
-card.setAttribute('src', 'assets/system-design/infographics/components/c01/request-routing-map.png');
+card.setAttribute('src', 'assets/system-design/infographics/components/c01.png');
 card.setAttribute('title', 'Load Balancing & Routing');
 card.setAttribute('download-name', 'load-balancing.png');
 window.document.body.appendChild(card);

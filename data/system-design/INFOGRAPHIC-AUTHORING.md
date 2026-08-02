@@ -1,37 +1,53 @@
 # Lesson infographic authoring
 
 The System Design drill supports an ordered set of downloadable PNG study
-graphics per lesson. Every Building Blocks, DDIA, and Canonical Design Problems
-lesson now has a multi-sheet set. Architecture, write, read, failure, and
-consistency mechanisms are split whenever they need independent reading space.
+graphics per lesson. Simple lessons may keep one overview; complex lessons split
+architecture, write, read, failure, and consistency mechanisms so each graphic
+has enough room to teach its flow.
 
 ## Content sources
 
 - `infographic-plan.json` records the target count and distinct study job for
   every Building Blocks, DDIA, and Canonical Design Problems lesson. It prevents
   later additions from being squeezed into an already-dense overview.
-- Authored multi-image sets live in `infographic-sets.json`. Each sheet defines
+- Authored multi-image pilots live in `infographic-sets.json`. Each sheet defines
   its purpose, prose description, numbered flow, numbers, priorities, trade-offs,
   dimensions, and stable ID before an image is created.
-- Building Blocks and DDIA source material also lives in
+- Legacy single-image Building Blocks and DDIA lessons use
   `infographic-specs.json`. Each entry selects a
   registered `visualType` and supplies a core idea, a 3–5 node mental-model
   flow, labels for every connection, four source notes, and one explicit
   trade-off. The source notes feed callouts inside the illustration; they are
   not rendered as a repeated card grid.
-- Canonical Design Problems reuse the lesson's authored overview Mermaid graph,
+- Legacy Canonical Design Problems reuse the lesson's authored overview Mermaid graph,
   diagram takeaways, and key takeaways. That keeps the final interview sheet in
   sync with the drill rather than maintaining a second architecture description.
 
-All PNGs live at
-`assets/system-design/infographics/<topic>/<lesson>/<graphic>.png` and are
+Legacy generated PNGs live at
+`assets/system-design/infographics/<topic>/<lesson>.png`. Multi-image sets live
+at `assets/system-design/infographics/<topic>/<lesson>/<graphic>.png`. Both are
 committed so GitHub Pages and downloads do not need a runtime renderer.
 
-`npm run author:infographic-sets` rebuilds compiler-authored sheets from the
-reviewed lesson material while preserving the ten hand-authored pilot sheets.
-`npm run generate:infographic-sets` renders every compiler-authored sheet as a
-static PNG and preserves the hand-drawn pilots. `npm run generate:infographics`
-remains a compatibility command for any future unregistered legacy lesson.
+`npm run generate:infographics` regenerates only legacy single-image lessons.
+It skips and preserves lessons registered in `infographic-sets.json`.
+`npm run author:infographic-sets` rebuilds compiler-authored study copy from
+reviewed lesson takeaways, diagram captions, explanations, and interview
+rubrics. `npm run generate:infographic-sets` renders those authored sheets.
+
+## Current coverage, and the quality bar for converting a lesson
+
+| Topic | Form | Why |
+|---|---|---|
+| Canonical Design Problems | multi-image sets (all 17) | Each problem has an authored `diagrams[]` deck, so every sheet gets a real title and takeaway. Read, write, failure, and consistency paths need separate sheets. |
+| Building Blocks · DDIA | single illustrated sheet (except the `c05`/`ch05` pilots) | Their compiler input is lesson prose and MC explanations, not authored diagram decks. |
+
+A lesson converts to a multi-image set only when the generated sheets survive a
+read-through. The DDIA and Building Blocks sets were reverted to their single
+illustrated sheets because generating from prose produced sheets whose step
+titles were the detail text truncated mid-sentence, whose flow titles duplicated
+the paragraph beside them, and — in `ddia/ch01` — a trade-off card carrying
+another lesson's content entirely. Compiler output is a draft, not a ship gate:
+read the sheet before registering the set.
 
 ## Author text before pixels
 
@@ -45,11 +61,10 @@ remains a compatibility command for any future unregistered legacy lesson.
 
 ## Visual grammar
 
-The multi-sheet renderer provides reusable primitives for clients, services,
-databases, queues, caches, policy shields, numbered arrows, scale cards,
-priority lists, trade-off panels, page typography, and PNG export. The authored
-flow selects and composes those primitives; technical text remains exact and
-searchable rather than being baked into an opaque image-generation prompt.
+The generator provides reusable primitives for entities, arrows, callouts,
+section labels, page typography, and export. Lesson-specific scene functions
+compose those primitives into one of the registered visual types. New lessons
+should reuse the primitives while adding the composition their mechanism needs.
 
 Canonical Design Problems use a family of annotated final-whiteboard graphics:
 an overview establishes the component map, then focused request or failure flows

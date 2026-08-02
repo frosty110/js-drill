@@ -24,9 +24,9 @@ const SD = path.join(ROOT, 'data', 'system-design');
 const INFOGRAPHICS = path.join(ROOT, 'assets', 'system-design', 'infographics');
 const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
 
-// Declared before the first readJson() below: its catch calls fail(), so a missing
-// or malformed file would otherwise hit this const's temporal dead zone and crash
-// with a ReferenceError instead of naming the offending file.
+// Declared before the config reads below: readJson() reports parse failures
+// through fail(), so a malformed infographic JSON would otherwise die with
+// "Cannot access 'fail' before initialization" instead of naming the file.
 let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0, totalInfographics = 0;
 const fail = (where, msg) => { errors++; console.error(`  ✗ [${where}] ${msg}`); };
 
@@ -111,7 +111,13 @@ function validateInfographic(topic, id, where) {
     if (!Array.isArray(plan.graphics) || plan.graphics.length !== plan.count) fail(where, 'infographic plan graphics must match count');
     else if (new Set(plan.graphics).size !== plan.graphics.length) fail(where, 'infographic plan graphic ids must be unique');
   }
-  if (!set) { fail(where, 'every infographic lesson needs an authored multi-image set'); return; }
+  // Mixed model: a lesson either has an authored multi-image set (design problems,
+  // plus the hand-authored pilots) or keeps its single illustrated sheet. The plan
+  // records the eventual target either way, so it stays the roadmap for conversion.
+  if (!set) {
+    validateInfographicFile(`${topic}/${id}.png`, 1600, 2000, where);
+    return;
+  }
   if (!set.title || !set.summary) fail(where, 'infographic set needs title and summary');
   if (!Array.isArray(set.items) || set.items.length < 2) {
     fail(where, 'authored infographic set needs at least two focused graphics');

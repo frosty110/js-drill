@@ -27,10 +27,13 @@ const OUT = process.argv[2] || '/tmp/jsdrill-system-design-visual-deck';
   await s.eval(`document.querySelector('.topic-card[data-topic="design-problems"]').click()`);
   await s.waitFor(`document.querySelector('.ch-card[data-ch="p01"]')`, { timeoutMs: 6000 });
   await s.eval(`document.querySelector('.ch-card[data-ch="p01"]').click()`);
-  // The sheets are loading="lazy" and sit below the fold at 390px, so scroll the
-  // first one into view or it never fetches and the wait below times out.
-  await s.waitFor(`document.querySelector('drill-infographic img')`, { timeoutMs: 6000 });
-  await s.eval(`document.querySelector('drill-infographic img').scrollIntoView({ block: 'center' })`);
+  // The sheets carry loading="lazy" and sit ~2500px down a 390px viewport, so on
+  // a fast local connection Chrome never enters them into the viewport margin and
+  // the image stays complete=false forever. Scroll it into view before waiting —
+  // the lazy attribute is deliberate (mobile is the design centre), so the probe
+  // has to meet the app rather than the app dropping the optimisation.
+  await s.waitFor(`!!document.querySelector('drill-infographic img')`, { timeoutMs: 6000 });
+  await s.eval(`document.querySelector('drill-infographic').scrollIntoView()`);
   await s.waitFor(`(() => { const img = document.querySelector('drill-infographic img'); return img && img.complete && img.naturalWidth; })()`, { timeoutMs: 10000 });
 
   const initial = await s.eval(`(() => {

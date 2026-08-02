@@ -172,18 +172,13 @@ function validateInfographic(topic, id, where) {
     else if (new Set(plan.graphics).size !== plan.graphics.length) fail(where, 'infographic plan graphic ids must be unique');
   }
   // `pending: true` = the lesson's text is authored and gated, but its hand-drawn
-  // sheets haven't landed yet. Without this the gate is all-or-nothing (one missing
-  // PNG would blank the signal on every question, diagram and manifest check in the
-  // run), so new content could not land green while artwork is produced out-of-band.
-  // Counted and reported in the summary line — pending art is visible, never silent.
+  // sheets haven't landed yet. SHIPPED BUT DELIBERATELY UNUSED: the repo owner
+  // wants a missing sheet to fail hard, so the red gate is the artwork to-do list.
+  // Kept available in case that call is ever reversed.
   if (plan && plan.pending === true) { totalPending++; return; }
-  // Mixed model: a lesson either has an authored multi-image set (design problems,
-  // plus the hand-authored pilots) or keeps its single illustrated sheet. The plan
-  // records the eventual target either way, so it stays the roadmap for conversion.
-  if (!set) {
-    validateInfographicFile(`${topic}/${id}.png`, 1600, 2000, where);
-    return;
-  }
+  // Every infographic lesson now has an authored multi-image set — the old
+  // single-illustrated-sheet fallback retired when the last lesson converted.
+  if (!set) { fail(where, 'every infographic lesson needs an authored multi-image set'); return; }
   if (!set.title || !set.summary) fail(where, 'infographic set needs title and summary');
   if (!Array.isArray(set.items) || set.items.length < 2) {
     fail(where, 'authored infographic set needs at least two focused graphics');

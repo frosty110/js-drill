@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Compile the existing reviewed lesson material into explicit multi-sheet study
 // guides. This is intentionally separate from raster rendering: copy is built
-// and reviewed first, then tools/generate-system-design-infographic-sets.js
-// turns the registered guides into downloadable PNGs.
+// and reviewed first, then the registered guides become downloadable PNGs.
+// Sets whose reviewed static artwork is already registered are preserved.
 
 const fs = require('fs');
 const path = require('path');
@@ -244,8 +244,8 @@ function buildSet(key, plan) {
 }
 
 for (const [key, plan] of Object.entries(PLAN)) {
-  const handAuthored = existing[key] && existing[key].items && existing[key].items.every(item => !item.renderer);
-  if (handAuthored) continue;
+  const reviewedArtwork = existing[key] && existing[key].items && existing[key].items.every(item => !item.renderer);
+  if (reviewedArtwork) continue;
   existing[key] = buildSet(key, plan);
 }
 

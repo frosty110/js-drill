@@ -16,11 +16,6 @@ const OUT = path.join(ROOT, 'assets/system-design/infographics');
 const SPECS = JSON.parse(fs.readFileSync(path.join(DATA, 'infographic-specs.json'), 'utf8'));
 const MULTI_SETS = JSON.parse(fs.readFileSync(path.join(DATA, 'infographic-sets.json'), 'utf8')).sets || {};
 const WIDTH = 1600, HEIGHT = 2000;
-// The design-problem whiteboard page has exactly four authored slots: one wide
-// system map plus three focus columns, mirrored by the four "answer in four
-// passes" checkpoints. Deriving the count from a constant keeps problemPage()
-// and main() from drifting apart.
-const MOMENTS_PER_PAGE = 4;
 
 const C = {
   bg: '#101216', grid: '#1b2027', paper: '#171a20', line: '#3c434d',
@@ -461,7 +456,7 @@ async function architecture(code, graphlib, layout, frame) {
 function problemPage(problem, diagrams) {
   const title = wrap(problem.title.replace(/^Design a /,''),38,2);
   const invariant = wrap(problem.keyTakeaways[0],95,3);
-  const moments = problem.diagrams.slice(0,MOMENTS_PER_PAGE);
+  const moments = problem.diagrams.slice(0,4);
   const tradeoff = wrap(problem.diagrams[problem.diagrams.length-1].takeaway,100,2);
   const focus = moments.slice(1).map((d,i)=>{
     const x=80+i*480, color=[C.cyan,C.purple,C.coral][i];
@@ -508,21 +503,11 @@ async function main(){
       fs.writeFileSync(source,page(chapter,topic,spec,sceneFor(spec)));exportPng(source,raster,output,`${topic}/${entry.id}`);count++;console.log(`  ✓ ${path.relative(ROOT,output)}`);
     }
   }
-  // Iterate the design-problem manifest rather than a hard-coded p01..p17 range,
-  // so adding, removing, or renaming a canonical problem regenerates exactly the
-  // set the validator derives from that same manifest.
-  const problemManifest=JSON.parse(fs.readFileSync(path.join(DATA,'design-problems','manifest.json'),'utf8'));
-  for(const entry of problemManifest.chapters){
-    const id=entry.id;
+  for(let n=1;n<=17;n++){
+    const id=`p${String(n).padStart(2,'0')}`;
     if(MULTI_SETS[`design-problems/${id}`])continue;
     const problem=JSON.parse(fs.readFileSync(path.join(DATA,'design-problems',`${id}.json`),'utf8'));
-    const authored=Array.isArray(problem.diagrams)?problem.diagrams:[];
-    // The page layout has a fixed number of slots. Fail loudly on a short deck
-    // instead of emitting a page with empty columns, and never drop extras
-    // silently — say which visuals the whiteboard left out.
-    if(authored.length<MOMENTS_PER_PAGE)throw new Error(`design-problems/${id}: whiteboard needs ${MOMENTS_PER_PAGE} authored diagrams, found ${authored.length}`);
-    if(authored.length>MOMENTS_PER_PAGE)console.log(`  · ${id}: whiteboard renders the first ${MOMENTS_PER_PAGE} of ${authored.length} diagrams`);
-    const moments=authored.slice(0,MOMENTS_PER_PAGE);
+    const moments=problem.diagrams.slice(0,4);
     const diagrams=[];
     diagrams.push(await architecture(moments[0].code,graphlib,layout,{x:80,y:420,w:1440,h:350}));
     for(let i=1;i<moments.length;i++){

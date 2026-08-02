@@ -226,6 +226,13 @@ reordered options. The pages are committed because GitHub Pages serves from the
 repo, so stale output ships silently otherwise; `--check` is the guard.
 
 **Never reorder existing questions or options in a lesson JSON.** Appending is
-safe. Reordering silently invalidates every share code ever generated for that
-lesson — the staleness detector will catch contradictions, but a reorder that
-happens to stay self-consistent will quietly point at the wrong question.
+safe, and so is rewording in place. Reordering silently invalidates every share
+code ever generated for that lesson — the staleness detector catches
+contradictions, but a reorder that happens to stay self-consistent will quietly
+point at the wrong question.
+
+This is enforced, not just documented: `tools/check-content-order.js` locks the
+authored order of every question and option in
+`data/content-order.lock.json`, distinguishes a reorder from an edit, and fails
+the commit on the former. `--accept` re-baselines when the break is intended.
+See [`invariants.md`](invariants.md) § 1.

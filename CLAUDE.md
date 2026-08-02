@@ -27,6 +27,32 @@
   - **Patterns (90)**: Arrays & Hashing · Two Pointers · Sliding Window · Stack · Binary Search · Linked List · Trees · Tries · Heap · Graphs · Greedy · Dynamic Programming · Backtracking · Intervals · Matrix · Bit Manipulation · System Design
   - **Applied (37)**: Applied Problems — implementation problems (decks, games, hash maps, throttle/debounce, undo-redo, CSV roll-ups, rules engines, fetch-and-reshape, etc.)
 
+## Standing constraints (read before changing content or adding assets)
+
+**[docs/invariants.md](docs/invariants.md) is the rules doc.** Six constraints
+whose failure mode is invisible — the app stays green and the meaning quietly
+becomes wrong. Every one has a gate:
+
+```bash
+node tools/check-all.js          # verify every gate
+node tools/check-all.js --fix    # regenerate generated output, then verify
+git config core.hooksPath .githooks   # once per clone: run them pre-commit
+```
+
+The two that bite most often:
+
+1. **Never reorder or delete a question or an option.** Share codes are
+   positional — character N is question N, the letter is the option's authored
+   index — so a swap silently repoints every URL already shared for that lesson.
+   Appending and rewording in place are both safe. Gated by
+   `tools/check-content-order.js` against `data/content-order.lock.json`;
+   `--accept` re-baselines when a break is genuinely intended.
+2. **Regenerate `p/`, `sd/`, `sitemap.xml` after any content change** — the
+   output is committed and GitHub Pages serves it from the repo, so stale pages
+   ship silently.
+
+CI runs the same command on every push (`.github/workflows/checks.yml`).
+
 ## What this project is
 
 A **JavaScript syntax + interview-pattern memorization web app**. No build step —
@@ -162,6 +188,10 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
 | `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |
 | `js/core/runner.js` | Sandboxed code runner (`window.DrillRunner`). Erases TypeScript types for `lang:"ts"` lessons by lazy-loading the TS compiler on first use, then executes via `new Function`. Mirror semantics in `tools/validate-data.js`. |
+| `docs/invariants.md` | **The rules doc** — the six standing constraints whose failure mode is invisible (positional share codes, committed generated output, offline precache parity, sync key coverage, single-source-of-truth ownership, executable lesson content). Each names its gate and its escape hatch. |
+| `tools/check-all.js` | Runs every gate in one command; `--fix` regenerates first. What `.githooks/pre-commit` and `.github/workflows/checks.yml` both run. |
+| `tools/check-content-order.js` | Locks authored question/option order into `data/content-order.lock.json` — fails on reorder/removal, allows append and in-place rewording, `--accept` re-baselines. Also gates the ≤8-option share-alphabet ceiling. |
+| `tools/check-sw-shell.js` | Asserts `service-worker.js`'s `APP_SHELL` covers every local asset `index.html` loads (and vice versa). A gap breaks offline users only. |
 | `tools/validate-data.js` | Runs every L2 fill + L3 canonical, diffs manifest vs disk, gates banned syntax and walkthrough trace line ranges. Erases TS types via Node's built-in stripper. Run before commits. |
 | `tools/cdp/check.js` | Probes a deployed URL via Chrome's :9222 port (basic) |
 | `tools/cdp/deep-check.js` | Multi-tab + multi-lesson navigation probe with screenshots |

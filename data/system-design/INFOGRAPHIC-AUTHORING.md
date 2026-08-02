@@ -30,6 +30,24 @@ committed so GitHub Pages and downloads do not need a runtime renderer.
 
 `npm run generate:infographics` regenerates only legacy single-image lessons.
 It skips and preserves lessons registered in `infographic-sets.json`.
+`npm run author:infographic-sets` rebuilds compiler-authored study copy from
+reviewed lesson takeaways, diagram captions, explanations, and interview
+rubrics. `npm run generate:infographic-sets` renders those authored sheets.
+
+## Current coverage, and the quality bar for converting a lesson
+
+| Topic | Form | Why |
+|---|---|---|
+| Canonical Design Problems | multi-image sets (all 17) | Each problem has an authored `diagrams[]` deck, so every sheet gets a real title and takeaway. Read, write, failure, and consistency paths need separate sheets. |
+| Building Blocks · DDIA | single illustrated sheet (except the `c05`/`ch05` pilots) | Their compiler input is lesson prose and MC explanations, not authored diagram decks. |
+
+A lesson converts to a multi-image set only when the generated sheets survive a
+read-through. The DDIA and Building Blocks sets were reverted to their single
+illustrated sheets because generating from prose produced sheets whose step
+titles were the detail text truncated mid-sentence, whose flow titles duplicated
+the paragraph beside them, and — in `ddia/ch01` — a trade-off card carrying
+another lesson's content entirely. Compiler output is a draft, not a ship gate:
+read the sheet before registering the set.
 
 ## Author text before pixels
 

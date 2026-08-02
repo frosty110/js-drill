@@ -111,6 +111,9 @@ function validateInfographic(topic, id, where) {
     if (!Array.isArray(plan.graphics) || plan.graphics.length !== plan.count) fail(where, 'infographic plan graphics must match count');
     else if (new Set(plan.graphics).size !== plan.graphics.length) fail(where, 'infographic plan graphic ids must be unique');
   }
+  // Mixed model: a lesson either has an authored multi-image set (design problems,
+  // plus the hand-authored pilots) or keeps its single illustrated sheet. The plan
+  // records the eventual target either way, so it stays the roadmap for conversion.
   if (!set) {
     validateInfographicFile(`${topic}/${id}.png`, 1600, 2000, where);
     return;
@@ -129,6 +132,7 @@ function validateInfographic(topic, id, where) {
     else if (ids.has(item.id)) fail(at, `duplicate id ${item.id}`);
     else ids.add(item.id);
     for (const field of ['kind', 'title', 'purpose', 'description']) if (!item[field] || typeof item[field] !== 'string') fail(at, `missing ${field}`);
+    if (item.renderer != null && item.renderer !== 'diagram-v1') fail(at, `unknown renderer ${JSON.stringify(item.renderer)}`);
     if (!Array.isArray(item.flow) || item.flow.length < 3) fail(at, 'flow needs at least three numbered steps');
     else item.flow.forEach((step, stepIndex) => {
       if (step.step !== stepIndex + 1 || !step.title || !step.detail) fail(at, `flow step ${stepIndex + 1} needs sequential number, title, and detail`);
@@ -138,7 +142,9 @@ function validateInfographic(topic, id, where) {
       if (!number.label || !number.value || !number.detail) fail(at, `number ${numberIndex + 1} needs label, value, and detail`);
     });
     if (!Array.isArray(item.priorities) || item.priorities.length < 2) fail(at, 'priorities needs at least two entries');
+    else if (new Set(item.priorities.map(value => value.toLowerCase())).size !== item.priorities.length) fail(at, 'priorities must be distinct');
     if (!Array.isArray(item.tradeoffs) || item.tradeoffs.length < 2) fail(at, 'tradeoffs needs at least two entries');
+    else if (new Set(item.tradeoffs.map(value => value.toLowerCase())).size !== item.tradeoffs.length) fail(at, 'tradeoffs must be distinct');
     if (!Number.isInteger(item.width) || !Number.isInteger(item.height) || item.width < 1200 || item.height < 1600 || item.height <= item.width) {
       fail(at, 'image dimensions must describe a high-resolution portrait asset');
     } else if (item.id) {

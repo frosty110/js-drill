@@ -44,7 +44,7 @@ const check = (ok, msg) => { out.push(`${ok ? '  ✓' : '  ✗'} ${msg}`); retur
   // ── 2. Pinch: real PointerEvents on the workspace stage ──────────────────
   const res = await s.eval(`(async () => {
     window.DrillInfographicViewer.open({
-      src: 'assets/system-design/infographics/design-problems/p02.png',
+      src: 'assets/system-design/infographics/design-problems/p02/overview.png',
       title: 'probe', alt: 'probe', downloadName: 'probe.png'
     });
     const stage = document.querySelector('.infographic-viewer__stage');

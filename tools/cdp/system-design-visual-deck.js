@@ -27,6 +27,10 @@ const OUT = process.argv[2] || '/tmp/jsdrill-system-design-visual-deck';
   await s.eval(`document.querySelector('.topic-card[data-topic="design-problems"]').click()`);
   await s.waitFor(`document.querySelector('.ch-card[data-ch="p01"]')`, { timeoutMs: 6000 });
   await s.eval(`document.querySelector('.ch-card[data-ch="p01"]').click()`);
+  // The sheets are loading="lazy" and sit below the fold at 390px, so scroll the
+  // first one into view or it never fetches and the wait below times out.
+  await s.waitFor(`document.querySelector('drill-infographic img')`, { timeoutMs: 6000 });
+  await s.eval(`document.querySelector('drill-infographic img').scrollIntoView({ block: 'center' })`);
   await s.waitFor(`(() => { const img = document.querySelector('drill-infographic img'); return img && img.complete && img.naturalWidth; })()`, { timeoutMs: 10000 });
 
   const initial = await s.eval(`(() => {

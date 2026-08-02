@@ -631,6 +631,29 @@
     return out;
   }
 
+  // Per-lesson LAST-ATTEMPT records (state.answers): { id: { L1: {…, at},
+  // L2: {…, at}, L3: {…, at} } }. Each level's entry is one coherent snapshot
+  // of one sitting — the picks and the timestamp belong together — so this
+  // resolves per LEVEL by newest `at` instead of unioning or summing. Blending
+  // two devices' picks would fabricate an attempt neither device recorded.
+  function mergeLatestAttempt(local, cloud) {
+    const out = {};
+    for (const id of unionKeys(local, cloud)) {
+      const l = (local && local[id]) || {};
+      const c = (cloud && cloud[id]) || {};
+      const entry = {};
+      for (const level of unionKeys(l, c)) {
+        const lv = l[level];
+        const cv = c[level];
+        if (!lv) { if (cv) entry[level] = cv; continue; }
+        if (!cv) { entry[level] = lv; continue; }
+        entry[level] = (cv.at || 0) > (lv.at || 0) ? cv : lv;
+      }
+      if (Object.keys(entry).length) out[id] = entry;
+    }
+    return out;
+  }
+
   // Generic ADDITIVE merge for lifetime-stat objects (recognize, bugHunt, …)
   // and per-lesson counter maps (flash, walkthrough, commandUsage). Rules,
   // applied recursively by key name:
@@ -711,7 +734,7 @@
   const EXPLICIT_MERGE_KEYS = [
     '__v', 'progress', 'bestTimes', 'mockHistory', 'revealed', 'revealedAt',
     'revealedClearedAt', 'partialL1', 'reviews', 'weakness', 'welcomed',
-    'history', 'misses', 'cramTaskChecks'
+    'history', 'misses', 'cramTaskChecks', 'answers'
   ];
 
   // Device-state / settings scalars that DELIBERATELY ride the carry-over
@@ -848,6 +871,12 @@
     // mistake-tagging postmortem — so they MUST aggregate both devices.
     merged.history = mergeEventLog(local.history, cloud.history, EVENT_LOG_CAP);
     merged.misses  = mergeEventLog(local.misses,  cloud.misses,  EVENT_LOG_CAP);
+
+    // answers: the most recent ATTEMPT per lesson per level (share codes).
+    // Not additive and not unionable — a level's record is one coherent
+    // snapshot of one sitting, so blending two devices' picks would invent an
+    // attempt that never happened. Newest `at` wins, per lesson per level.
+    merged.answers = mergeLatestAttempt(local.answers, cloud.answers);
 
     // Lifetime drill stats + per-lesson counter maps → additive merge (SUM
     // counters, MAX timestamps/records, etc. — see mergeAdditive).

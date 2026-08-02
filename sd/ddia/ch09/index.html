@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Consistency and Consensus — Designing Data-Intensive Applications</title>
+<meta name="description" content="The strongest correctness guarantees for distributed systems and what they cost. Covers linearizability (single-object recency) and how it differs from serializability, causal ordering versus total ordering, total order broadcast, two-phase commit for atomic commit, and fault-tolerant consensus (Raft/Paxos/Zab) and the coordination services built on it.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ddia/ch09">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Consistency and Consensus — Designing Data-Intensive Applications">
+<meta property="og:description" content="The strongest correctness guarantees for distributed systems and what they cost. Covers linearizability (single-object recency) and how it differs from serializability, causal ordering versus total ordering, total order broadcast, two-phase commit for atomic commit, and fault-tolerant consensus (Raft/Paxos/Zab) and the coordination services built on it.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ddia/ch09">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ddia/">Designing Data-Intensive Applications</a></p>
+    <h1>Consistency and Consensus</h1>
+    <p class="sharepage__lede">The strongest correctness guarantees for distributed systems and what they cost. Covers linearizability (single-object recency) and how it differs from serializability, causal ordering versus total ordering, total order broadcast, two-phase commit for atomic commit, and fault-tolerant consensus (Raft/Paxos/Zab) and the coordination services built on it.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Data-Intensive Applications</span> <span class="ds-chip">17 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Linearizability makes a system behave as if there is a single copy of the data with atomic operations: a recency guarantee on reads and writes of a single object.</li><li>Linearizability is NOT serializability: serializability is a transaction-isolation property over multiple objects (transactions equivalent to some serial order); combining both is &#39;strict serializability&#39;.</li><li>The CAP theorem: under a network partition you must choose between linearizable (Consistent) and totally Available; and linearizability is often dropped for speed, not just availability.</li><li>Causal consistency preserves happens-before (a partial order) and is the strongest consistency achievable without slowing down under partitions; linearizability imposes a total order.</li><li>Total order broadcast (atomic broadcast) delivers messages reliably in the same order to all nodes and is equivalent to consensus and to linearizable compare-and-set.</li><li>Two-phase commit (2PC) is an atomic commit protocol with a coordinator; after a participant votes &#39;yes&#39; it is in doubt and blocks holding locks if the coordinator crashes.</li><li>Fault-tolerant consensus (Paxos, Raft, Zab, VSR) provides uniform agreement, integrity, validity, and termination using epochs and quorums; FLP proves it is impossible in a purely asynchronous model but achievable with timeouts.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">17</span></h2>
+    <p class="sharepage__note">Positions 1–17 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA&#39;s precise definition, what does linearizability guarantee?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> That a set of transactions is equivalent to executing them one at a time in some serial order</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> That the system behaves as if there were a single copy of the data, so once a read returns a new value every later read returns that value or newer (a recency guarantee on a single object) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> That all replicas eventually converge to the same value given no new writes</li>
+        <li><span class="sharepage__key">D</span> That reads never block writes and writes never block reads</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Linearizability (atomic/strong consistency) makes concurrent operations on a single object appear to take effect atomically at one instant, so the data looks like a single up-to-date copy: after any read observes a new value, all subsequent reads see it too. Option A is serializability, and option C describes mere eventual consistency.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does linearizability differ from serializability?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They are two names for the same guarantee</li>
+        <li><span class="sharepage__key">B</span> Serializability concerns a single object, while linearizability concerns whole transactions</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Linearizability is a recency guarantee on reads/writes of a single object; serializability is an isolation guarantee that a set of multi-object transactions is equivalent to some serial order <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Linearizability is weaker than eventual consistency, whereas serializability is stronger</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Serializability is a transaction-isolation property: transactions (which may touch many objects) behave as if run one at a time in some serial order, but that order need not match real time. Linearizability is about the recency of individual object reads/writes in real-time order. A system providing both is called strictly serializable.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which of these genuinely requires linearizability to be correct?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Rendering a social-media timeline where slightly stale data is acceptable</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Electing a single leader / acquiring a distributed lock, where two nodes must never both believe they hold it <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Serving cached product images from the nearest region</li>
+        <li><span class="sharepage__key">D</span> Computing an approximate count of active users</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Leader election and locking need linearizability: all nodes must agree on the single current holder, so a stale read could produce a dangerous split-brain. This is why coordination services like ZooKeeper/etcd provide linearizable operations. The other cases tolerate stale reads and do not need a recency guarantee.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>According to DDIA, what does the CAP theorem actually say?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A system can pick at most two of Consistency, Availability, and Partition tolerance at all times</li>
+        <li><span class="sharepage__key">B</span> Consistency and availability are always mutually exclusive regardless of partitions</li>
+        <li><span class="sharepage__key">C</span> Partitions never happen in a well-designed datacenter, so CAP is irrelevant</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> When a network partition occurs, a system must choose between being linearizable (Consistent) and being totally Available; when there is no partition it can be both <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> DDIA reframes CAP as: if the network is partitioned, you must sacrifice either linearizability or total availability; without a partition you can have both. The popular &#39;pick 2 of 3&#39; phrasing is misleading because partition tolerance is not optional — partitions are a fact you must handle, not a property you choose. Note too that linearizability is often dropped for performance, not only availability.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is causal consistency, and what is its relationship to linearizability?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It preserves the happens-before (causal) partial order between operations, and is the strongest consistency model that does not slow down or become unavailable under network partitions <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It enforces a single total order on all operations, making it stronger than linearizability</li>
+        <li><span class="sharepage__key">C</span> It is identical to eventual consistency but with vector clocks</li>
+        <li><span class="sharepage__key">D</span> It guarantees recency on single objects but not ordering between them</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Causal consistency enforces only the partial order of causally related operations (happens-before), so concurrent operations may be seen in different orders on different nodes. Crucially it can remain available during partitions, making it the strongest consistency achievable without the coordination cost of linearizability, which instead imposes a full total order.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Lamport timestamps provide a total order consistent with causality. Why are they nonetheless insufficient for something like enforcing a unique-username constraint?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because Lamport timestamps can go backward, unlike wall clocks</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because the total order is only known in hindsight — a node cannot tell in the moment whether some other node is concurrently claiming the same name, so it needs total order broadcast to know when the order is finalized <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because Lamport timestamps require synchronized physical clocks to work</li>
+        <li><span class="sharepage__key">D</span> Because they only order operations on the same object, not across objects</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Lamport timestamps define a total order, but to reject a duplicate username immediately a node must know it has seen all other claims — and it cannot, because a lower timestamp could still arrive later. You need the order finalized at the moment of the decision, which is what total order broadcast provides.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does total order broadcast (atomic broadcast) guarantee?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Messages are delivered to at least one node, in any order</li>
+        <li><span class="sharepage__key">B</span> Messages are delivered in causal order, but nodes may disagree on the order of concurrent messages</li>
+        <li><span class="sharepage__key">C</span> Messages are delivered in FIFO order per sender but not globally ordered</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Messages are delivered reliably and in the exact same total order to every node <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Total order broadcast requires two properties: reliable delivery (no message lost, all nodes get it) and totally ordered delivery (every node sees messages in the identical order). This is exactly what state-machine replication needs, and it turns out to be equivalent to consensus.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In two-phase commit (2PC), what happens after a participant replies &#39;yes&#39; in the prepare phase but the coordinator then crashes before sending the decision?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The participant unilaterally aborts and releases its locks after a short timeout</li>
+        <li><span class="sharepage__key">B</span> The participant commits automatically, since a &#39;yes&#39; vote implies commit</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> The participant is &#39;in doubt&#39; and must hold its locks and block until it can learn the coordinator&#39;s decision <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The participant promotes itself to coordinator and decides for the whole cluster</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Once a participant votes yes it has promised to commit if told to and can no longer decide on its own; the coordinator&#39;s write of the commit decision is the point of no return. If the coordinator crashes at that moment, the participant is stuck in doubt, holding locks and blocking, until the coordinator recovers — 2PC&#39;s central weakness.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How is two-phase commit (2PC) related to, but distinct from, consensus algorithms like Paxos/Raft?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> 2PC is an atomic commit protocol requiring all participants to vote yes and is blocking if the coordinator fails; consensus needs only a majority to agree and can tolerate node failures <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> 2PC and consensus are the same protocol under different names</li>
+        <li><span class="sharepage__key">C</span> Consensus requires unanimity while 2PC needs only a majority</li>
+        <li><span class="sharepage__key">D</span> 2PC tolerates coordinator failure automatically, whereas consensus blocks on a single failure</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 2PC achieves atomic commit but requires every participant to agree and blocks if its single coordinator dies. Fault-tolerant consensus instead reaches agreement with only a majority (quorum) and survives minority failures, including of its leader. They are related — both about agreement — but 2PC is not fault-tolerant consensus.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which set of formal properties defines fault-tolerant consensus in DDIA?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Atomicity, consistency, isolation, durability</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Uniform agreement, integrity, validity, and termination <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Linearizability, causality, availability, and partition tolerance</li>
+        <li><span class="sharepage__key">D</span> Prepare, promise, accept, and learn</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Consensus is defined by uniform agreement (no two nodes decide differently), integrity (a node decides at most once), validity (the decided value was proposed by some node), and termination (every non-crashed node eventually decides). Termination is the liveness property that FLP shows is impossible without timing assumptions. Option D lists the phases of Paxos, not the properties.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does the FLP impossibility result state about consensus?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Consensus is impossible whenever more than half the nodes fail</li>
+        <li><span class="sharepage__key">B</span> Consensus is impossible in the presence of Byzantine nodes</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> No deterministic algorithm can guarantee consensus in a purely asynchronous system if even one node may crash — though consensus is achievable in practice using timeouts or randomization <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Consensus always requires synchronized clocks with bounded drift</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> FLP proves that in a fully asynchronous model (no clocks, no timeouts) with even a single possible crash, no deterministic algorithm can always reach consensus, because you cannot tell a slow node from a dead one. Real systems escape this by adding partial-synchrony assumptions (timeouts) or randomization, so Raft and Paxos work fine in practice.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Consensus is shown to be equivalent to several other problems. Which list is correct?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Total order broadcast, linearizable compare-and-set, and leader election <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Two-phase commit, eventual consistency, and read repair</li>
+        <li><span class="sharepage__key">C</span> Snapshot isolation, causal consistency, and sloppy quorums</li>
+        <li><span class="sharepage__key">D</span> Vector clocks, anti-entropy, and hinted handoff</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> DDIA shows total order broadcast, a linearizable compare-and-set register, and leader election are all equivalent to consensus — solving any one lets you solve the others. The distractors mix in weaker mechanisms (eventual consistency, read repair, anti-entropy) that explicitly do not require consensus.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How do consensus algorithms like Raft and Paxos use epoch (term/ballot) numbers together with quorums?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They give every node a fixed epoch at startup that never changes, avoiding elections</li>
+        <li><span class="sharepage__key">B</span> The epoch number is a wall-clock timestamp used to break ties between leaders</li>
+        <li><span class="sharepage__key">C</span> Quorums are only consulted for reads; writes go to the single leader without voting</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Each election increments a monotonically increasing epoch number, and a leader must gather votes from a quorum; overlapping quorums guarantee any new leader learns of the latest committed decisions <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Every leader election bumps a monotonically increasing epoch (term/ballot) number, and to act a leader needs votes from a quorum. Because two quorums always overlap in at least one node, any newly elected leader is guaranteed to have seen the most recent committed proposals, preventing two leaders with conflicting decisions from both succeeding.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What core capabilities do coordination services like ZooKeeper and etcd provide to applications?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> High-throughput bulk data storage for application records</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Linearizable atomic operations, total ordering of operations (e.g. via a monotonically increasing zxid), failure detection through ephemeral nodes/sessions, and change notifications (watches) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Column-oriented analytics with vectorized scans</li>
+        <li><span class="sharepage__key">D</span> Automatic sharding and rebalancing of the application&#39;s primary database</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> ZooKeeper/etcd expose a small set of consensus-backed primitives: linearizable atomic compare-and-set, a total order via a monotonically increasing transaction id, failure detection via ephemeral nodes tied to client sessions, and watches for change notifications. Applications use these for leader election, locks, service discovery, and membership — not for storing large volumes of application data.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>For a distributed lock / leader-election service you insist on linearizability, but for a social feed you&#39;re fine with causal consistency. Explain when linearizability is actually required versus when causal is enough, and what linearizability costs you.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Linearizability is a recency guarantee on a single object: once a read sees a new value, all later reads see it or newer, as if one up-to-date copy.</li><li>Locking / leader election needs it — a stale read could let two nodes both believe they hold the lock (split brain), a correctness violation.</li><li>The feed tolerates stale reads, so it needs only causal consistency: preserve happens-before (e.g. a reply never appears before its parent) while allowing concurrent ops to be seen in different orders.</li><li>Cost of linearizability: it requires coordination, so under a network partition (CAP) you must sacrifice availability, and even without partitions it adds latency.</li><li>Causal consistency is the strongest model that stays available and fast under partitions, which is why it&#39;s the default when recency isn&#39;t safety-critical.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Linearizability is a single-object recency guarantee — once anyone reads the new value, everyone does — and it&#39;s genuinely required for the lock service, because a stale read could let two nodes both think they&#39;re leader and cause split-brain. The feed only needs causal consistency: preserve happens-before so a reply never precedes its parent, while letting concurrent posts be ordered differently on different replicas. The reason not to make everything linearizable is cost: it needs coordination, so under a partition CAP forces me to give up availability, and it adds latency even without partitions. Causal is the strongest guarantee that stays available and fast, so I use it wherever stale reads aren&#39;t a safety problem.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>An interviewer asks: &#39;Two-phase commit and Raft both get nodes to agree — why do we say 2PC blocks but consensus is fault-tolerant?&#39; Explain the mechanical difference.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>2PC is an atomic-commit protocol needing a unanimous &#39;yes&#39; from every participant and driven by a single coordinator.</li><li>After a participant votes yes it is &#39;in doubt&#39; — it has promised to commit and can&#39;t decide alone; if the coordinator crashes before delivering the decision, it must hold locks and block until the coordinator recovers.</li><li>The coordinator is a single point of failure with no built-in failover, so 2PC is not fault-tolerant.</li><li>Fault-tolerant consensus (Raft/Paxos/Zab) needs agreement only from a majority (quorum), not unanimity, so it survives a minority of failures including the leader.</li><li>Consensus uses monotonically increasing epoch/term numbers and overlapping quorums so a new leader learns the latest committed decisions and progress continues without blocking.</li><li>So 2PC and consensus are related (both about agreement) but distinct: 2PC blocks on one coordinator; consensus keeps going as long as a majority is up.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> 2PC requires every participant to vote yes and is driven by one coordinator; once a participant votes yes it&#39;s in doubt — committed to obey but unable to decide itself — so if the coordinator dies before sending the verdict, the participant blocks holding locks until it recovers. That single coordinator has no failover, so 2PC isn&#39;t fault-tolerant. Consensus algorithms like Raft instead need only a majority quorum to agree, so they tolerate a minority of failures including the leader: each election bumps a monotonic epoch number and overlapping quorums guarantee a new leader sees the latest committed decisions, so progress continues without blocking. They&#39;re related but not the same — 2PC blocks on unanimity + one coordinator, consensus advances on any majority.</div>
+    </article>
+    <article class="sharepage__q" id="q17">
+      <h3><a href="#q17" class="sharepage__anchor">Q17</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You need to enforce a globally unique username across a partitioned system. Explain why Lamport timestamps alone aren&#39;t enough and how total order broadcast lets you build the constraint.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Lamport timestamps give a total order consistent with causality, but the order is only known in hindsight.</li><li>To reject a duplicate in the moment, a node must know it has seen all competing claims — but a lower timestamp could still arrive later, so it can&#39;t decide immediately.</li><li>Total order broadcast delivers every message reliably and in the identical order to all nodes, finalizing the order at delivery time.</li><li>Route all username claims through the broadcast (e.g. one log partition keyed by the name); a deterministic consumer reads them in the agreed order.</li><li>The consumer grants the first claim for a name and rejects every later one, giving a linearizable uniqueness check.</li><li>Total order broadcast is equivalent to consensus and to a linearizable compare-and-set, which is exactly the primitive a uniqueness constraint needs.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Lamport timestamps do define a total order, but only in hindsight — to reject a duplicate right now a node would have to be certain it has already seen every competing claim, and a lower timestamp could still show up later, so it can&#39;t safely decide in the moment. Total order broadcast solves this by delivering all claims reliably and in the same order to every node, finalizing the order at delivery. I route every claim for a username through the ordered log (partitioned by the name), and a deterministic consumer accepts the first claim it sees and rejects the rest. That&#39;s a linearizable compare-and-set, which is equivalent to consensus — exactly the primitive a uniqueness constraint requires.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ddia","unit":"ch09","title":"Consistency and Consensus","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"In DDIA's precise definition, what does linearizability guarantee?","options":["That a set of transactions is equivalent to executing them one at a time in some serial order","That the system behaves as if there were a single copy of the data, so once a read returns a new value every later read returns that value or newer (a recency guarantee on a single object)","That all replicas eventually converge to the same value given no new writes","That reads never block writes and writes never block reads"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"How does linearizability differ from serializability?","options":["They are two names for the same guarantee","Serializability concerns a single object, while linearizability concerns whole transactions","Linearizability is a recency guarantee on reads/writes of a single object; serializability is an isolation guarantee that a set of multi-object transactions is equivalent to some serial order","Linearizability is weaker than eventual consistency, whereas serializability is stronger"],"answer":2,"answerLetter":"C"},{"n":3,"type":"mc","prompt":"Which of these genuinely requires linearizability to be correct?","options":["Rendering a social-media timeline where slightly stale data is acceptable","Electing a single leader / acquiring a distributed lock, where two nodes must never both believe they hold it","Serving cached product images from the nearest region","Computing an approximate count of active users"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"According to DDIA, what does the CAP theorem actually say?","options":["A system can pick at most two of Consistency, Availability, and Partition tolerance at all times","Consistency and availability are always mutually exclusive regardless of partitions","Partitions never happen in a well-designed datacenter, so CAP is irrelevant","When a network partition occurs, a system must choose between being linearizable (Consistent) and being totally Available; when there is no partition it can be both"],"answer":3,"answerLetter":"D"},{"n":5,"type":"mc","prompt":"What is causal consistency, and what is its relationship to linearizability?","options":["It preserves the happens-before (causal) partial order between operations, and is the strongest consistency model that does not slow down or become unavailable under network partitions","It enforces a single total order on all operations, making it stronger than linearizability","It is identical to eventual consistency but with vector clocks","It guarantees recency on single objects but not ordering between them"],"answer":0,"answerLetter":"A"},{"n":6,"type":"mc","prompt":"Lamport timestamps provide a total order consistent with causality. Why are they nonetheless insufficient for something like enforcing a unique-username constraint?","options":["Because Lamport timestamps can go backward, unlike wall clocks","Because the total order is only known in hindsight — a node cannot tell in the moment whether some other node is concurrently claiming the same name, so it needs total order broadcast to know when the order is finalized","Because Lamport timestamps require synchronized physical clocks to work","Because they only order operations on the same object, not across objects"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"What does total order broadcast (atomic broadcast) guarantee?","options":["Messages are delivered to at least one node, in any order","Messages are delivered in causal order, but nodes may disagree on the order of concurrent messages","Messages are delivered in FIFO order per sender but not globally ordered","Messages are delivered reliably and in the exact same total order to every node"],"answer":3,"answerLetter":"D"},{"n":8,"type":"mc","prompt":"In two-phase commit (2PC), what happens after a participant replies 'yes' in the prepare phase but the coordinator then crashes before sending the decision?","options":["The participant unilaterally aborts and releases its locks after a short timeout","The participant commits automatically, since a 'yes' vote implies commit","The participant is 'in doubt' and must hold its locks and block until it can learn the coordinator's decision","The participant promotes itself to coordinator and decides for the whole cluster"],"answer":2,"answerLetter":"C"},{"n":9,"type":"mc","prompt":"How is two-phase commit (2PC) related to, but distinct from, consensus algorithms like Paxos/Raft?","options":["2PC is an atomic commit protocol requiring all participants to vote yes and is blocking if the coordinator fails; consensus needs only a majority to agree and can tolerate node failures","2PC and consensus are the same protocol under different names","Consensus requires unanimity while 2PC needs only a majority","2PC tolerates coordinator failure automatically, whereas consensus blocks on a single failure"],"answer":0,"answerLetter":"A"},{"n":10,"type":"mc","prompt":"Which set of formal properties defines fault-tolerant consensus in DDIA?","options":["Atomicity, consistency, isolation, durability","Uniform agreement, integrity, validity, and termination","Linearizability, causality, availability, and partition tolerance","Prepare, promise, accept, and learn"],"answer":1,"answerLetter":"B"},{"n":11,"type":"mc","prompt":"What does the FLP impossibility result state about consensus?","options":["Consensus is impossible whenever more than half the nodes fail","Consensus is impossible in the presence of Byzantine nodes","No deterministic algorithm can guarantee consensus in a purely asynchronous system if even one node may crash — though consensus is achievable in practice using timeouts or randomization","Consensus always requires synchronized clocks with bounded drift"],"answer":2,"answerLetter":"C"},{"n":12,"type":"mc","prompt":"Consensus is shown to be equivalent to several other problems. Which list is correct?","options":["Total order broadcast, linearizable compare-and-set, and leader election","Two-phase commit, eventual consistency, and read repair","Snapshot isolation, causal consistency, and sloppy quorums","Vector clocks, anti-entropy, and hinted handoff"],"answer":0,"answerLetter":"A"},{"n":13,"type":"mc","prompt":"How do consensus algorithms like Raft and Paxos use epoch (term/ballot) numbers together with quorums?","options":["They give every node a fixed epoch at startup that never changes, avoiding elections","The epoch number is a wall-clock timestamp used to break ties between leaders","Quorums are only consulted for reads; writes go to the single leader without voting","Each election increments a monotonically increasing epoch number, and a leader must gather votes from a quorum; overlapping quorums guarantee any new leader learns of the latest committed decisions"],"answer":3,"answerLetter":"D"},{"n":14,"type":"mc","prompt":"What core capabilities do coordination services like ZooKeeper and etcd provide to applications?","options":["High-throughput bulk data storage for application records","Linearizable atomic operations, total ordering of operations (e.g. via a monotonically increasing zxid), failure detection through ephemeral nodes/sessions, and change notifications (watches)","Column-oriented analytics with vectorized scans","Automatic sharding and rebalancing of the application's primary database"],"answer":1,"answerLetter":"B"},{"n":15,"type":"open","prompt":"For a distributed lock / leader-election service you insist on linearizability, but for a social feed you're fine with causal consistency. Explain when linearizability is actually required versus when causal is enough, and what linearizability costs you.","points":["Linearizability is a recency guarantee on a single object: once a read sees a new value, all later reads see it or newer, as if one up-to-date copy.","Locking / leader election needs it — a stale read could let two nodes both believe they hold the lock (split brain), a correctness violation.","The feed tolerates stale reads, so it needs only causal consistency: preserve happens-before (e.g. a reply never appears before its parent) while allowing concurrent ops to be seen in different orders.","Cost of linearizability: it requires coordination, so under a network partition (CAP) you must sacrifice availability, and even without partitions it adds latency.","Causal consistency is the strongest model that stays available and fast under partitions, which is why it's the default when recency isn't safety-critical."]},{"n":16,"type":"open","prompt":"An interviewer asks: 'Two-phase commit and Raft both get nodes to agree — why do we say 2PC blocks but consensus is fault-tolerant?' Explain the mechanical difference.","points":["2PC is an atomic-commit protocol needing a unanimous 'yes' from every participant and driven by a single coordinator.","After a participant votes yes it is 'in doubt' — it has promised to commit and can't decide alone; if the coordinator crashes before delivering the decision, it must hold locks and block until the coordinator recovers.","The coordinator is a single point of failure with no built-in failover, so 2PC is not fault-tolerant.","Fault-tolerant consensus (Raft/Paxos/Zab) needs agreement only from a majority (quorum), not unanimity, so it survives a minority of failures including the leader.","Consensus uses monotonically increasing epoch/term numbers and overlapping quorums so a new leader learns the latest committed decisions and progress continues without blocking.","So 2PC and consensus are related (both about agreement) but distinct: 2PC blocks on one coordinator; consensus keeps going as long as a majority is up."]},{"n":17,"type":"open","prompt":"You need to enforce a globally unique username across a partitioned system. Explain why Lamport timestamps alone aren't enough and how total order broadcast lets you build the constraint.","points":["Lamport timestamps give a total order consistent with causality, but the order is only known in hindsight.","To reject a duplicate in the moment, a node must know it has seen all competing claims — but a lower timestamp could still arrive later, so it can't decide immediately.","Total order broadcast delivers every message reliably and in the identical order to all nodes, finalizing the order at delivery time.","Route all username claims through the broadcast (e.g. one log partition keyed by the name); a deterministic consumer reads them in the agreed order.","The consumer grants the first claim for a name and rejects every later one, giving a linearizable uniqueness check.","Total order broadcast is equivalent to consensus and to a linearizable compare-and-set, which is exactly the primitive a uniqueness constraint needs."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ddia/ch09">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

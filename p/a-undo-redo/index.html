@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Undo/Redo Stack — JS Drill</title>
+<meta name="description" content="Command-pattern undo/redo — each action is an object with apply/revert. Two stacks: done and undone. Doing a fresh command clears the redo stack.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-undo-redo">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Undo/Redo Stack — JS Drill">
+<meta property="og:description" content="Command-pattern undo/redo — each action is an object with apply/revert. Two stacks: done and undone. Doing a fresh command clears the redo stack.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-undo-redo">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Undo/Redo Stack</h1>
+    <p class="sharepage__lede">Command-pattern undo/redo — each action is an object with apply/revert. Two stacks: done and undone. Doing a fresh command clears the redo stack.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Build a History class with do/undo/redo over a number variable. Sequence: do(+1), do(+2), undo (now 1), do(+10) — clears redo. Then undo, undo. Log value after each step.</p>
+    <p class="sharepage__note">Expected output: <code>1
+3
+1
+11
+1
+0</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">class History {
+  // done = applied stack; undone = redo stack. Two stacks model a linear timeline.
+  constructor() {
+    this.done = [];
+    this.undone = [];
+  }
+  do(cmd) {
+    cmd.apply();
+    this.done.push(cmd);
+    // A fresh action invalidates redo — branching destroys the old future.
+    this.undone = [];
+  }
+  undo() {
+    const cmd = this.done.pop();
+    // No-op on empty stack — don&#39;t throw; UI buttons just stay disabled.
+    if (!cmd) return;
+    cmd.revert();
+    this.undone.push(cmd);
+  }
+  redo() {
+    const cmd = this.undone.pop();
+    if (!cmd) return;
+    cmd.apply();
+    this.done.push(cmd);
+  }
+}
+// Time O(1) per do/undo/redo, Space O(n) commands</code></pre>
+    <ul class="sharepage__notes"><li>Each command must be self-contained: apply() and revert() are inverses. The history doesn&#39;t know what the command does.</li><li>Doing a new action after an undo clears the undone stack — branching destroys the redo path. Standard editor behavior.</li><li>Undo and redo are no-ops on empty stacks. Don&#39;t throw — UI buttons just stay disabled.</li><li>Time O(1) per operation; Space O(n) where n is history depth.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Cursor-index into a single command array <code>O(n) do (slice) / O(1) undo/redo</code></h3>
+      <p>Reach for this when you want to avoid two separate stacks and don&#39;t mind a slice on every do(). The cursor approach keeps all commands in one array and uses an index to mark the boundary between past and future. The two-stacks version is cleaner: &#39;clear undone&#39; is one assignment vs &#39;slice to cursor&#39;.</p>
+      <pre class="sharepage__code"><code class="language-js">class History {
+  constructor() {
+    this.cmds = [];
+    this.cursor = 0;  // index of the next slot to fill — cmds[0..cursor-1] are applied
+  }
+  do(cmd) {
+    // Truncate stale future — same as clearing the undone stack in the two-stack version.
+    this.cmds = this.cmds.slice(0, this.cursor);
+    cmd.apply();
+    this.cmds.push(cmd);
+    this.cursor++;
+  }
+  undo() {
+    if (this.cursor === 0) return;  // nothing to undo
+    this.cursor--;
+    this.cmds[this.cursor].revert();
+  }
+  redo() {
+    if (this.cursor === this.cmds.length) return;  // nothing to redo
+    this.cmds[this.cursor].apply();
+    this.cursor++;
+  }
+}
+let x = 0;
+const h = new History();
+const add = n =&gt; ({ apply: () =&gt; x += n, revert: () =&gt; x -= n });
+h.do(add(1));
+console.log(x);
+h.do(add(2));
+console.log(x);
+h.undo();
+console.log(x);
+h.do(add(10));
+console.log(x);
+h.undo();
+console.log(x);
+h.undo();
+console.log(x);</code></pre>
+      <ul class="sharepage__notes"><li><code>cursor</code> is the pivot: cmds[0..cursor-1] are applied (the &#39;done&#39; stack); cmds[cursor..] are future (the &#39;undone&#39; stack).</li><li><code>do</code> slices off the future (O(n) allocation) — equivalent to <code>this.undone = []</code> in the two-stack version, just more expensive.</li><li>Two-stacks wins on do() cost (O(1) assignment vs O(n) slice) and is easier to reason about without index arithmetic.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why does <code>do(cmd)</code> clear <code>this.undone</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Otherwise the next <code>redo</code> would re-apply both the new command and the stale undone commands as a batch</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A fresh action creates a new branch; the previously-undone commands are no longer reachable <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Without it, <code>cmd.apply()</code> would compose with the undone stack&#39;s pending reverts and cancel itself out</li>
+        <li><span class="sharepage__key">D</span> Clearing <code>undone</code> is what triggers the <code>done.push(cmd)</code> to fire — otherwise <code>do</code> is a no-op</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What pair of operations must each command expose?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> execute / cancel — <code>cancel</code> aborts an in-flight command but cannot reverse a completed one</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> apply / revert (inverses of each other) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> forward / backward — both run the same logic but with a direction flag passed in</li>
+        <li><span class="sharepage__key">D</span> commit / rollback — borrowed from transaction APIs, mapping <code>commit</code> to do and <code>rollback</code> to undo</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Where do commands sit after <code>undo()</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Garbage-collected — once reverted, the command object has no remaining references</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Moved from <code>done</code> to <code>undone</code> so redo can replay them <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Stay in <code>done</code> but flagged with an <code>inverted: true</code> property; redo unsets the flag</li>
+        <li><span class="sharepage__key">D</span> Pushed to a third <code>redoQueue</code> that decouples reapplication from the original do/undo stacks</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What does <code>redo()</code> do when <code>undone</code> is empty?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Throws an <code>EmptyHistoryError</code> — the caller must check <code>canRedo()</code> before calling</li>
+        <li><span class="sharepage__key">B</span> Replays the last <code>done</code> command as a fallback, treating redo as a <code>repeat-last-action</code> shortcut</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Returns early — it&#39;s a no-op <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Returns <code>undefined</code> and silently re-applies the most recently undone command from a prior session</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Complete History.do so that after do(+1), do(+2), undo, the value is 1.</p>
+      <pre class="sharepage__code"><code class="language-js">class History {
+  constructor() { this.done = []; this.undone = []; }
+  do(cmd) {
+    cmd.___();
+    this.done.___(cmd);
+    this.undone = ___;
+  }
+  undo() {
+    const cmd = this.done.___();
+    if (!cmd) ___;
+    cmd.___();
+    this.undone.push(cmd);
+  }
+}
+let x = 0;
+const h = new History();
+h.do({ apply: () =&gt; x += 1, revert: () =&gt; x -= 1 });
+h.do({ apply: () =&gt; x += 2, revert: () =&gt; x -= 2 });
+h.undo();
+console.log(x);</code></pre>
+      <p><strong>Answers:</strong> <code>apply</code>, <code>push</code>, <code>[]</code>, <code>pop</code>, <code>return</code>, <code>revert</code></p>
+      <p class="sharepage__note">Expected output: <code>1</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Build a History class with do/undo/redo over a number variable. Sequence: do(+1), do(+2), undo (now 1), do(+10) — clears redo. Then undo, undo. Log value after each step.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Each command is <code>{ apply, revert }</code> — the History never inspects what they do.</li><li>do() must clear the undone stack — branching invalidates redo.</li><li>undo/redo are no-ops on empty stacks; return early instead of throwing.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">class History {
+  // done = applied stack; undone = redo stack. Two stacks model a linear timeline.
+  constructor() { this.done = []; this.undone = []; }
+  // A fresh action invalidates redo — branching destroys the old future.
+  do(cmd) { cmd.apply(); this.done.push(cmd); this.undone = []; }
+  // No-op on empty stack — don&#39;t throw; UI buttons just stay disabled.
+  undo() { const c = this.done.pop(); if (!c) return; c.revert(); this.undone.push(c); }
+  redo() { const c = this.undone.pop(); if (!c) return; c.apply(); this.done.push(c); }
+}
+let x = 0;
+const h = new History();
+const add = n =&gt; ({ apply: () =&gt; x += n, revert: () =&gt; x -= n });
+h.do(add(1));
+console.log(x);
+h.do(add(2));
+console.log(x);
+h.undo();
+console.log(x);
+h.do(add(10));
+console.log(x);
+h.undo();
+console.log(x);
+h.undo();
+console.log(x);</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-undo-redo","title":"Undo/Redo Stack","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why does `do(cmd)` clear `this.undone`?","options":["Otherwise the next `redo` would re-apply both the new command and the stale undone commands as a batch","A fresh action creates a new branch; the previously-undone commands are no longer reachable","Without it, `cmd.apply()` would compose with the undone stack's pending reverts and cancel itself out","Clearing `undone` is what triggers the `done.push(cmd)` to fire — otherwise `do` is a no-op"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What pair of operations must each command expose?","options":["execute / cancel — `cancel` aborts an in-flight command but cannot reverse a completed one","apply / revert (inverses of each other)","forward / backward — both run the same logic but with a direction flag passed in","commit / rollback — borrowed from transaction APIs, mapping `commit` to do and `rollback` to undo"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Where do commands sit after `undo()`?","options":["Garbage-collected — once reverted, the command object has no remaining references","Moved from `done` to `undone` so redo can replay them","Stay in `done` but flagged with an `inverted: true` property; redo unsets the flag","Pushed to a third `redoQueue` that decouples reapplication from the original do/undo stacks"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What does `redo()` do when `undone` is empty?","options":["Throws an `EmptyHistoryError` — the caller must check `canRedo()` before calling","Replays the last `done` command as a fallback, treating redo as a `repeat-last-action` shortcut","Returns early — it's a no-op","Returns `undefined` and silently re-applies the most recently undone command from a prior session"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete History.do so that after do(+1), do(+2), undo, the value is 1.","answers":["apply","push","[]","pop","return","revert"]}],"L3":[{"n":1,"prompt":"Build a History class with do/undo/redo over a number variable. Sequence: do(+1), do(+2), undo (now 1), do(+10) — clears redo. Then undo, undo. Log value after each step.","expectedOutput":"1\n3\n1\n11\n1\n0"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-undo-redo">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

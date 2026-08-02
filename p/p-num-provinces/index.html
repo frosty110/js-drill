@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Number of Provinces (Union-Find) — JS Drill</title>
+<meta name="description" content="Count connected components in an n x n adjacency matrix using Union-Find with path compression. Each union of two distinct roots merges two components — start with n, subtract one per successful union.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-num-provinces">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Number of Provinces (Union-Find) — JS Drill">
+<meta property="og:description" content="Count connected components in an n x n adjacency matrix using Union-Find with path compression. Each union of two distinct roots merges two components — start with n, subtract one per successful union.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-num-provinces">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Graphs</p>
+    <h1>Number of Provinces (Union-Find)</h1>
+    <p class="sharepage__lede">Count connected components in an n x n adjacency matrix using Union-Find with path compression. Each union of two distinct roots merges two components — start with n, subtract one per successful union.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Graphs</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>findCircleNum(isConnected)</code> returning the number of provinces using Union-Find with path compression. Log results for [[1,1,0],[1,1,0],[0,0,1]] and [[1,0,0],[0,1,0],[0,0,1]].</p>
+    <p class="sharepage__note">Expected output: <code>2
+3</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function findCircleNum(isConnected) {
+  const n = isConnected.length;
+  // Union-Find init: parent[i] = i — every node starts as its own root (n singleton sets).
+  const parent = Array.from({ length: n }, (_, i) =&gt; i);
+  function find(x) {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]]; // path compression (halving)
+      x = parent[x];
+    }
+    return x;
+  }
+  // n unconnected nodes = n provinces; each successful union drops it by 1.
+  let count = n;
+  // Symmetric matrix — upper triangle (j &gt; i) avoids double-unioning each edge.
+  for (let i = 0; i &lt; n; i++) {
+    for (let j = i + 1; j &lt; n; j++) {
+      if (isConnected[i][j] === 1) {
+        const ra = find(i), rb = find(j);
+        // Only merge if roots differ — same root means already in one province.
+        if (ra !== rb) {
+          parent[ra] = rb;
+          count--;
+        }
+      }
+    }
+  }
+  return count;
+}
+// Time ~O(n^2 * α(n)), Space O(n)</code></pre>
+    <ul class="sharepage__notes"><li>The matrix is symmetric — only iterate j &gt; i to avoid double-unions.</li><li>Decrement count only on a SUCCESSFUL union (different roots). Same root → already in one province.</li><li>Path compression (halving or full) keeps amortized union/find at near O(α(n)) — effectively constant.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>DFS over adjacency matrix <code>O(n²) / O(n)</code></h3>
+      <p>Use DFS when you&#39;re more comfortable with the flood-fill pattern and want to reuse the same mental model as Number of Islands or Connected Components. Both approaches are O(n²) here because reading the matrix to discover neighbors costs O(n) per node regardless of algorithm.</p>
+      <pre class="sharepage__code"><code class="language-js">function findCircleNum(isConnected) {
+  const n = isConnected.length;
+  const seen = new Array(n).fill(false);
+  // Row i of the matrix is city i&#39;s neighbor list (j where isConnected[i][j] === 1).
+  function dfs(i) {
+    seen[i] = true;
+    for (let j = 0; j &lt; n; j++) {
+      if (isConnected[i][j] === 1 &amp;&amp; !seen[j]) dfs(j);
+    }
+  }
+  let count = 0;
+  for (let i = 0; i &lt; n; i++) {
+    if (!seen[i]) { count++; dfs(i); }
+  }
+  return count;
+}
+console.log(findCircleNum([[1, 1, 0], [1, 1, 0], [0, 0, 1]]));
+console.log(findCircleNum([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));</code></pre>
+      <ul class="sharepage__notes"><li>Each row of the matrix IS the adjacency list for that city — no separate build step needed.</li><li>DFS visits every cell in the matrix (O(n) per launched node × n nodes = O(n²)), identical to Union-Find&#39;s O(n²) loop.</li><li>Recursion depth can reach n; prefer Union-Find for very large n where stack overflow is a concern.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why iterate j from i + 1 instead of 0?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To skip the diagonal — j == i would self-union a city with itself, corrupting the parent array</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The matrix is symmetric; (i,j) and (j,i) are the same edge <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Otherwise the count would over-decrement because each edge would trigger two distinct unions on different roots</li>
+        <li><span class="sharepage__key">D</span> Starting at i+1 ensures finds traverse only forward indices, keeping path compression monotonic</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> When do you decrement the province count?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> On every isConnected[i][j] === 1</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Only when find(i) and find(j) return different roots <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Once per row, equal to the number of 1s above the diagonal in that row</li>
+        <li><span class="sharepage__key">D</span> Every time parent[i] is updated by path compression, since that means a new ancestor was found</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> What does path compression do?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Guarantees rank-balanced merges between two roots</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Flattens the tree so future finds run faster <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Re-roots each tree at its deepest leaf so subsequent unions are bounded by tree diameter</li>
+        <li><span class="sharepage__key">D</span> Eliminates duplicate edges by collapsing parallel parent pointers into one</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> For the matrix [[1,1,0],[1,1,0],[0,0,1]] the answer is:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 1</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 2 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 3</li>
+        <li><span class="sharepage__key">D</span> 0</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Rows 0 and 1 are connected; row 2 is alone — two provinces.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in Union-Find for Number of Provinces.</p>
+      <pre class="sharepage__code"><code class="language-js">function findCircleNum(isConnected) {
+  const n = isConnected.length;
+  const parent = Array.from({ length: n }, (_, i) =&gt; i);
+  function find(x) {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  }
+  let count = ___;
+  for (let i = 0; i &lt; n; i++) {
+    for (let j = i ___; j &lt; n; j++) {
+      if (isConnected[i][j] === 1) {
+        const ra = find(i), rb = find(j);
+        if (ra ___ rb) {
+          parent[ra] = rb;
+          count___;
+        }
+      }
+    }
+  }
+  return count;
+}
+console.log(findCircleNum([[1, 1, 0], [1, 1, 0], [0, 0, 1]]));</code></pre>
+      <p><strong>Answers:</strong> <code>n</code>, <code>+ 1</code>, <code>!==</code>, <code>--</code></p>
+      <p class="sharepage__note">Expected output: <code>2</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>findCircleNum(isConnected)</code> returning the number of provinces using Union-Find with path compression. Log results for [[1,1,0],[1,1,0],[0,0,1]] and [[1,0,0],[0,1,0],[0,0,1]].</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Init parent[i] = i; start count at n.</li><li>Iterate upper triangle (j &gt; i) since the matrix is symmetric.</li><li>On isConnected[i][j] === 1 union them; decrement count only when the roots actually differ.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function findCircleNum(isConnected) {
+  const n = isConnected.length;
+  // Union-Find init: parent[i] = i — every node starts as its own root (n singleton sets).
+  const parent = Array.from({ length: n }, (_, i) =&gt; i);
+  function find(x) {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]]; // path compression (halving)
+      x = parent[x];
+    }
+    return x;
+  }
+  // n unconnected nodes = n provinces; each successful union drops it by 1.
+  let count = n;
+  // Symmetric matrix — upper triangle (j &gt; i) avoids double-unioning each edge.
+  for (let i = 0; i &lt; n; i++) {
+    for (let j = i + 1; j &lt; n; j++) {
+      if (isConnected[i][j] === 1) {
+        const ra = find(i), rb = find(j);
+        // Only merge if roots differ — same root means already in one province.
+        if (ra !== rb) {
+          parent[ra] = rb;
+          count--;
+        }
+      }
+    }
+  }
+  return count;
+}
+console.log(findCircleNum([[1, 1, 0], [1, 1, 0], [0, 0, 1]]));
+console.log(findCircleNum([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-num-provinces","title":"Number of Provinces (Union-Find)","section":"Graphs","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why iterate j from i + 1 instead of 0?","options":["To skip the diagonal — j == i would self-union a city with itself, corrupting the parent array","The matrix is symmetric; (i,j) and (j,i) are the same edge","Otherwise the count would over-decrement because each edge would trigger two distinct unions on different roots","Starting at i+1 ensures finds traverse only forward indices, keeping path compression monotonic"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When do you decrement the province count?","options":["On every isConnected[i][j] === 1","Only when find(i) and find(j) return different roots","Once per row, equal to the number of 1s above the diagonal in that row","Every time parent[i] is updated by path compression, since that means a new ancestor was found"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What does path compression do?","options":["Guarantees rank-balanced merges between two roots","Flattens the tree so future finds run faster","Re-roots each tree at its deepest leaf so subsequent unions are bounded by tree diameter","Eliminates duplicate edges by collapsing parallel parent pointers into one"],"answer":1,"answerLetter":"B"},{"n":4,"q":"For the matrix [[1,1,0],[1,1,0],[0,0,1]] the answer is:","options":["1","2","3","0"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in Union-Find for Number of Provinces.","answers":["n","+ 1","!==","--"]}],"L3":[{"n":1,"prompt":"Write `findCircleNum(isConnected)` returning the number of provinces using Union-Find with path compression. Log results for [[1,1,0],[1,1,0],[0,0,1]] and [[1,0,0],[0,1,0],[0,0,1]].","expectedOutput":"2\n3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-num-provinces">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

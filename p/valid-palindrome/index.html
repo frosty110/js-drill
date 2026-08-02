@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Valid Palindrome — JS Drill</title>
+<meta name="description" content="Two-pointer convergence: left and right walk inward comparing characters. O(n) time, O(1) extra.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/valid-palindrome">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Valid Palindrome — JS Drill">
+<meta property="og:description" content="Two-pointer convergence: left and right walk inward comparing characters. O(n) time, O(1) extra.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/valid-palindrome">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Two Pointers</p>
+    <h1>Valid Palindrome</h1>
+    <p class="sharepage__lede">Two-pointer convergence: left and right walk inward comparing characters. O(n) time, O(1) extra.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Two Pointers</span> <span class="ds-chip">8 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>isPalindrome(s)</code> ignoring case and non-alphanumeric. Log <code>isPalindrome(&quot;A man, a plan, a canal: Panama&quot;)</code>.</p>
+    <p class="sharepage__note">Expected output: <code>true</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function isPalindrome(s) {
+  // Normalize: lowercase + strip non-alphanumeric ([^...] = negated class, /g = all).
+  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, &#39;&#39;);
+  let l = 0, r = clean.length - 1;
+  // l &lt; r (not &lt;=) — the middle char in odd-length strings trivially matches itself.
+  while (l &lt; r) {
+    if (clean[l] !== clean[r]) return false;
+    l++;
+    r--;
+  }
+  return true;
+}
+// Time O(n), Space O(n) for clean; O(1) if you skip in-place</code></pre>
+    <ul class="sharepage__notes"><li>Always lowercase + strip non-alphanumeric for &quot;ignore case/spaces&quot; palindromes.</li><li>Loop condition is <code>l &lt; r</code> (not <code>&lt;=</code>) — the middle char trivially matches itself.</li><li>/[^a-z0-9]/g: <code>^</code> inside <code>[]</code> negates the class; <code>/g</code> makes replace replace all.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>In-place O(1) space (skip non-alnum on original) <code>O(n) / O(1)</code></h3>
+      <p>Reach for this when the interviewer asks for O(1) extra space — no cleaned string is allocated. The tradeoff is fiddlier logic: each pointer must skip non-alphanumeric characters before comparing.</p>
+      <pre class="sharepage__code"><code class="language-js">function isPalindrome(s) {
+  const isAlnum = c =&gt; (c &gt;= &#39;a&#39; &amp;&amp; c &lt;= &#39;z&#39;) || (c &gt;= &#39;0&#39; &amp;&amp; c &lt;= &#39;9&#39;);
+  let l = 0, r = s.length - 1;
+  while (l &lt; r) {
+    while (l &lt; r &amp;&amp; !isAlnum(s[l].toLowerCase())) l++;
+    while (l &lt; r &amp;&amp; !isAlnum(s[r].toLowerCase())) r--;
+    if (l &lt; r) {
+      if (s[l].toLowerCase() !== s[r].toLowerCase()) return false;
+      l++;
+      r--;
+    }
+  }
+  return true;
+}
+console.log(isPalindrome(&#39;A man, a plan, a canal: Panama&#39;));</code></pre>
+      <ul class="sharepage__notes"><li>Two inner while-loops skip non-alphanumeric chars before each comparison — the <code>l &lt; r</code> guard prevents over-running on punctuation-only inputs.</li><li>The outer <code>if (l &lt; r)</code> after the skip loops protects against comparing past the midpoint when both skip-loops exhaust the window simultaneously.</li><li>O(1) extra space vs. the cleaned-string approach&#39;s O(n); the same O(n) time since each character is visited at most once by l or r.</li></ul>
+    </article>
+    <article class="sharepage__alt" id="alt2">
+      <h3>Reverse-and-compare <code>O(n) / O(n)</code></h3>
+      <p>The simplest first-pass: clean the string, reverse it, compare with ===. Correct but allocates an extra O(n) reversed string — use only when code clarity matters more than the second allocation.</p>
+      <pre class="sharepage__code"><code class="language-js">function isPalindrome(s) {
+  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, &#39;&#39;);
+  const reversed = clean.split(&#39;&#39;).reverse().join(&#39;&#39;);
+  return clean === reversed;
+}
+console.log(isPalindrome(&#39;A man, a plan, a canal: Panama&#39;));</code></pre>
+      <ul class="sharepage__notes"><li>Three array operations (split, reverse, join) each traverse the cleaned string once — still O(n), just with higher constant.</li><li>Does not short-circuit on a mismatch — must fully build the reversed string even if the first and last chars differ.</li><li>Both <code>clean</code> and <code>reversed</code> are O(n) allocations; the two-pointer approach halves this by allocating only <code>clean</code>.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">8</span></h2>
+    <p class="sharepage__note">Positions 1–8 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why <code>l &lt; r</code> rather than <code>l &lt;= r</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>l &lt;= r</code> would read clean[r] one past the end on even-length strings, returning undefined</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The middle character trivially equals itself <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>l &lt;= r</code> causes l and r to swap roles after they meet, reverse-walking the same pairs</li>
+        <li><span class="sharepage__key">D</span> <code>l &lt;= r</code> is fine; the convention is <code>&lt;</code> only to mirror C-style array bounds</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What does the regex <code>/[^a-z0-9]/g</code> match?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Any letter or digit</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Anything that is NOT a lowercase letter or digit <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Whitespace only</li>
+        <li><span class="sharepage__key">D</span> Punctuation only</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> ^ inside a character class negates it; /g replaces every match.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(log n)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n log n)</li>
+        <li><span class="sharepage__key">D</span> O(n²)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> The canonical two-pointer convergence pattern is:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Both start at 0, walk forward at different speeds (fast/slow)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> One at 0 and one at end, walking inward <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Both at the end, walking leftward in lockstep</li>
+        <li><span class="sharepage__key">D</span> Both at the midpoint, walking outward to the ends</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> On input &quot;.,&quot; (only punctuation), the cleaned string is empty, so r = -1. Why does the function still correctly return true?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> An explicit <code>if (clean.length === 0) return true</code> short-circuits the loop on empty input</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The loop condition l &lt; r is 0 &lt; -1, which is false, so the loop never runs and it falls through to return true <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> clean[0] !== clean[-1] is both undefined, so undefined === undefined keeps the loop running until l &gt; r terminates it</li>
+        <li><span class="sharepage__key">D</span> r = -1 is coerced to clean.length - 1 = 0 at the comparison, so l &lt; r becomes 0 &lt; 0 and the loop exits cleanly</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With clean = &quot;&quot;, r = -1, so 0 &lt; -1 is false; the loop is skipped and the empty/punctuation-only string is treated as a palindrome by convention.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> Why must the normalize step (lowercase + strip non-alphanumeric) run BEFORE setting up the pointers, not inside the loop?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because String.prototype.replace mutates the underlying string and would invalidate l and r mid-loop</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because the pointers index into the cleaned string, and r = clean.length - 1 needs the final cleaned length <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because toLowerCase invalidates the regex engine&#39;s compiled pattern, so it can only be called once per scope</li>
+        <li><span class="sharepage__key">D</span> Because the global /g flag preserves state between calls — running it in the loop would advance the regex past characters we still need to inspect</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> l and r index the cleaned string; r is initialized from clean.length - 1, so the cleaning must already be done before the pointers are positioned.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> What is the extra space complexity of this implementation, and could it be reduced?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(1) always — no extra allocation happens</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n) for the cleaned string; it could be O(1) by walking two pointers on the original string and skipping non-alphanumeric chars in place <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n) and it cannot be reduced below O(n)</li>
+        <li><span class="sharepage__key">D</span> O(log n) due to the regex engine</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Building <code>clean</code> allocates O(n); an in-place variant skips non-alphanumeric chars while comparing s directly, achieving O(1) extra space at the cost of fiddlier skip logic.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> If a mismatch is found at the second pair, two pointers returns immediately. How does this compare to a reverse-and-compare approach on the same non-palindrome input?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Reverse-and-compare is faster because it uses built-ins</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Two pointers short-circuits on the first mismatch, while reverse-and-compare must build the full reversed string before comparing <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> They do exactly the same amount of work</li>
+        <li><span class="sharepage__key">D</span> Reverse-and-compare also short-circuits automatically</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Both are O(n) worst case, but two pointers bails out at the first mismatch; reverse-and-compare materializes the whole reversed string first regardless of where the mismatch is.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the canonical two-pointer palindrome check. The hard blank is the negated character class.</p>
+      <pre class="sharepage__code"><code class="language-js">function isPalindrome(s) {
+  const clean = s.toLowerCase().replace(/___/g, &#39;&#39;);
+  let l = 0, r = clean.length - 1;
+  while (l ___ r) {
+    if (clean[l] ___ clean[r]) return false;
+    l___;
+    r___;
+  }
+  return true;
+}
+console.log(isPalindrome(&#39;A man, a plan, a canal: Panama&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>[^a-z0-9]</code>, <code>&lt;</code>, <code>!==</code>, <code>++</code>, <code>--</code></p>
+      <p class="sharepage__note">Expected output: <code>true</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Non-palindrome input — fill the property used for length, the loop keyword, the mismatch operator, and the early-return value on mismatch.</p>
+      <pre class="sharepage__code"><code class="language-js">function isPalindrome(s) {
+  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, &#39;&#39;);
+  let l = 0, r = clean.___ - 1;
+  ___ (l &lt; r) {
+    if (clean[l] ___ clean[r]) return ___;
+    l++;
+    r--;
+  }
+  return true;
+}
+console.log(isPalindrome(&#39;race a car&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>length</code>, <code>while</code>, <code>!==</code>, <code>false</code></p>
+      <p class="sharepage__note">Expected output: <code>false</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>isPalindrome(s)</code> ignoring case and non-alphanumeric. Log <code>isPalindrome(&quot;A man, a plan, a canal: Panama&quot;)</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Two pointers converging inward.</li><li>Lowercase + strip non-alphanumeric first.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function isPalindrome(s) {
+  // Normalize: lowercase + strip non-alphanumeric ([^...] = negated class, /g = all).
+  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, &#39;&#39;);
+  let l = 0, r = clean.length - 1;
+  // l &lt; r (not &lt;=) — the middle char in odd-length strings trivially matches itself.
+  while (l &lt; r) {
+    if (clean[l] !== clean[r]) return false;
+    l++;
+    r--;
+  }
+  return true;
+}
+console.log(isPalindrome(&#39;A man, a plan, a canal: Panama&#39;));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"valid-palindrome","title":"Valid Palindrome","section":"Two Pointers","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why `l \u003c r` rather than `l \u003c= r`?","options":["`l \u003c= r` would read clean[r] one past the end on even-length strings, returning undefined","The middle character trivially equals itself","`l \u003c= r` causes l and r to swap roles after they meet, reverse-walking the same pairs","`l \u003c= r` is fine; the convention is `\u003c` only to mirror C-style array bounds"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What does the regex `/[^a-z0-9]/g` match?","options":["Any letter or digit","Anything that is NOT a lowercase letter or digit","Whitespace only","Punctuation only"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Time complexity?","options":["O(log n)","O(n)","O(n log n)","O(n²)"],"answer":1,"answerLetter":"B"},{"n":4,"q":"The canonical two-pointer convergence pattern is:","options":["Both start at 0, walk forward at different speeds (fast/slow)","One at 0 and one at end, walking inward","Both at the end, walking leftward in lockstep","Both at the midpoint, walking outward to the ends"],"answer":1,"answerLetter":"B"},{"n":5,"q":"On input \".,\" (only punctuation), the cleaned string is empty, so r = -1. Why does the function still correctly return true?","options":["An explicit `if (clean.length === 0) return true` short-circuits the loop on empty input","The loop condition l \u003c r is 0 \u003c -1, which is false, so the loop never runs and it falls through to return true","clean[0] !== clean[-1] is both undefined, so undefined === undefined keeps the loop running until l > r terminates it","r = -1 is coerced to clean.length - 1 = 0 at the comparison, so l \u003c r becomes 0 \u003c 0 and the loop exits cleanly"],"answer":1,"answerLetter":"B"},{"n":6,"q":"Why must the normalize step (lowercase + strip non-alphanumeric) run BEFORE setting up the pointers, not inside the loop?","options":["Because String.prototype.replace mutates the underlying string and would invalidate l and r mid-loop","Because the pointers index into the cleaned string, and r = clean.length - 1 needs the final cleaned length","Because toLowerCase invalidates the regex engine's compiled pattern, so it can only be called once per scope","Because the global /g flag preserves state between calls — running it in the loop would advance the regex past characters we still need to inspect"],"answer":1,"answerLetter":"B"},{"n":7,"q":"What is the extra space complexity of this implementation, and could it be reduced?","options":["O(1) always — no extra allocation happens","O(n) for the cleaned string; it could be O(1) by walking two pointers on the original string and skipping non-alphanumeric chars in place","O(n) and it cannot be reduced below O(n)","O(log n) due to the regex engine"],"answer":1,"answerLetter":"B"},{"n":8,"q":"If a mismatch is found at the second pair, two pointers returns immediately. How does this compare to a reverse-and-compare approach on the same non-palindrome input?","options":["Reverse-and-compare is faster because it uses built-ins","Two pointers short-circuits on the first mismatch, while reverse-and-compare must build the full reversed string before comparing","They do exactly the same amount of work","Reverse-and-compare also short-circuits automatically"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the canonical two-pointer palindrome check. The hard blank is the negated character class.","answers":["[^a-z0-9]","\u003c","!==","++","--"]},{"n":2,"prompt":"Non-palindrome input — fill the property used for length, the loop keyword, the mismatch operator, and the early-return value on mismatch.","answers":["length","while","!==","false"]}],"L3":[{"n":1,"prompt":"Write `isPalindrome(s)` ignoring case and non-alphanumeric. Log `isPalindrome(\"A man, a plan, a canal: Panama\")`.","expectedOutput":"true"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/valid-palindrome">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

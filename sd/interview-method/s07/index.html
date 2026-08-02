@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Numbers Every Engineer Should Know — The System Design Interview</title>
+<meta name="description" content="The classic &#39;latency numbers every programmer should know,&#39; held at order-of-magnitude precision. Internalize the relative ordering — cache &lt;&lt; memory &lt;&lt; SSD &lt;&lt; datacenter round trip &lt;&lt; disk seek &lt;&lt; cross-continent round trip — plus rough throughput and single-machine QPS ballparks that let you reason about where time and bottlenecks go.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/interview-method/s07">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Numbers Every Engineer Should Know — The System Design Interview">
+<meta property="og:description" content="The classic &#39;latency numbers every programmer should know,&#39; held at order-of-magnitude precision. Internalize the relative ordering — cache &lt;&lt; memory &lt;&lt; SSD &lt;&lt; datacenter round trip &lt;&lt; disk seek &lt;&lt; cross-continent round trip — plus rough throughput and single-machine QPS ballparks that let you reason about where time and bottlenecks go.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/interview-method/s07">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/interview-method/">The System Design Interview</a></p>
+    <h1>Numbers Every Engineer Should Know</h1>
+    <p class="sharepage__lede">The classic &#39;latency numbers every programmer should know,&#39; held at order-of-magnitude precision. Internalize the relative ordering — cache &lt;&lt; memory &lt;&lt; SSD &lt;&lt; datacenter round trip &lt;&lt; disk seek &lt;&lt; cross-continent round trip — plus rough throughput and single-machine QPS ballparks that let you reason about where time and bottlenecks go.</p>
+    <p class="sharepage__meta"><span class="ds-chip">The System Design Interview</span> <span class="ds-chip">15 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Rough latency ladder: L1 cache ~1 ns, L2 ~10 ns, main memory ~100 ns, SSD random read ~16-150 µs, intra-datacenter round trip ~0.5 ms, disk (HDD) seek ~10 ms, cross-continent round trip ~150 ms.</li><li>Relative ordering matters more than exact figures: cache &lt;&lt; RAM &lt;&lt; SSD &lt;&lt; same-DC network &lt;&lt; spinning disk seek &lt;&lt; cross-region network.</li><li>Each rung is roughly orders of magnitude apart: memory (~100 ns) is ~100-1000x faster than an SSD read (~10-100 µs), which is ~100x faster than a disk seek (~10 ms).</li><li>Reading 1 MB sequentially: from memory ~microseconds, from SSD ~1 ms, from spinning disk ~tens of ms — sequential is far faster than random, especially on disk.</li><li>A cross-continent round trip (~150 ms) is dominated by the speed of light, so no amount of server tuning removes it — you place data near users instead.</li><li>Single-machine ballparks: an in-memory store handles ~100k+ ops/sec; a single relational DB handles low thousands of writes/sec to tens of thousands of reads/sec — order-of-magnitude anchors for when you must shard.</li><li>Use these numbers to locate the bottleneck: if a request crosses regions or hits disk randomly, that dominates; batching, caching, and locality attack the slow rungs.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">15</span></h2>
+    <p class="sharepage__note">Positions 1–15 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Order these from FASTEST to SLOWEST: (a) SSD random read, (b) main memory reference, (c) disk (HDD) seek, (d) L1 cache reference.</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> d &lt; b &lt; a &lt; c (L1 &lt; memory &lt; SSD &lt; disk seek) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> b &lt; d &lt; a &lt; c (memory &lt; L1 &lt; SSD &lt; disk seek)</li>
+        <li><span class="sharepage__key">C</span> d &lt; a &lt; b &lt; c (L1 &lt; SSD &lt; memory &lt; disk seek)</li>
+        <li><span class="sharepage__key">D</span> a &lt; d &lt; b &lt; c (SSD &lt; L1 &lt; memory &lt; disk seek)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> L1 cache (~1 ns) &lt; main memory (~100 ns) &lt; SSD random read (~tens of µs) &lt; HDD seek (~10 ms). Memory is faster than an SSD, and both are far faster than a mechanical disk seek — this ordering is the load-bearing intuition.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Roughly how long is a main-memory reference, to an order of magnitude?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~1 ns</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ~100 ns <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> ~100 µs</li>
+        <li><span class="sharepage__key">D</span> ~10 ms</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Main memory is on the order of 100 nanoseconds — about 100x slower than an L1 cache hit (~1 ns) and about 100-1000x faster than an SSD read. 100 µs is SSD territory and 10 ms is a disk seek.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A round trip within the same datacenter is closest to which order of magnitude?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~0.5 microseconds</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ~0.5 milliseconds <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> ~50 milliseconds</li>
+        <li><span class="sharepage__key">D</span> ~0.5 seconds</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An intra-datacenter round trip is roughly 0.5 ms (~500 µs). That is much slower than a memory reference but far faster than a cross-continent round trip (~150 ms).</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A round trip between continents (e.g. California to Europe and back) is on the order of:</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~1 ms</li>
+        <li><span class="sharepage__key">B</span> ~15 ms</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> ~150 ms <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> ~1.5 s</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Cross-continent round trips are roughly 150 ms, dominated by the speed of light over the distance. Because physics sets this floor, you reduce it by moving data closer to users (CDNs, regional replicas), not by faster servers.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Approximately how much slower is a spinning-disk seek (~10 ms) than a main-memory reference (~100 ns)?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> About 100x slower</li>
+        <li><span class="sharepage__key">B</span> About 1,000x slower</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> About 100,000x slower <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> About the same</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 10 ms / 100 ns = 10^7 ns / 10^2 ns = 10^5, so a disk seek is on the order of 100,000x slower than a memory reference. This enormous gap is why random disk I/O is the classic bottleneck and why caching hot data in RAM pays off so heavily.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>An SSD random read is closest to which order of magnitude?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~100 nanoseconds</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ~10-100 microseconds <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> ~10 milliseconds</li>
+        <li><span class="sharepage__key">D</span> ~1 second</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> SSD random reads are on the order of tens of microseconds (roughly 16-150 µs), sitting between main memory (~100 ns) and a spinning-disk seek (~10 ms). 100 ns is memory and 10 ms is an HDD seek.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why is reading 1 MB sequentially from disk far faster than making many random disk seeks for the same data?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Sequential reads avoid the ~10 ms mechanical seek per access; the head streams contiguous data <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Sequential reads are cached in L1 while random reads are not</li>
+        <li><span class="sharepage__key">C</span> Random reads are always served from the network instead of disk</li>
+        <li><span class="sharepage__key">D</span> Sequential and random disk access actually take the same time</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Each random access on a spinning disk pays the ~10 ms seek/rotational cost, whereas a sequential read pays it roughly once and then streams contiguous bytes. This is why algorithms and storage engines favor sequential I/O (e.g. log-structured writes).</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>You need a request to complete in under 10 ms, but it makes a cross-continent call. What does the latency ladder tell you?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Optimize the server code; the network call is negligible</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The ~150 ms cross-region round trip alone blows the budget, so you must serve from a nearby region or cache <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Add more CPU cores to absorb the round trip</li>
+        <li><span class="sharepage__key">D</span> Switch from SSD to memory to fix it</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A single ~150 ms cross-continent round trip already exceeds a 10 ms budget, and no server-side tuning removes speed-of-light latency. The fix is locality: a regional replica, edge cache, or CDN close to the user.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which is the best order-of-magnitude anchor for the write throughput of a single traditional relational database node?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A few tens of writes/sec</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A few thousand writes/sec (order of magnitude) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A few million writes/sec</li>
+        <li><span class="sharepage__key">D</span> A few billion writes/sec</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A single relational DB node handles roughly thousands of writes/sec (and higher tens-of-thousands for reads) as a working ballpark; exact numbers vary with schema and hardware. When your estimated write QPS climbs well past this, it signals you need sharding or a different store — that is the point of knowing the anchor.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why do interviewers want you to know these numbers to an ORDER OF MAGNITUDE rather than exactly?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Exact nanosecond values are required to pass</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The relative gaps between rungs are what drive design decisions like caching, locality, and sharding <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The numbers change every day so exactness is impossible</li>
+        <li><span class="sharepage__key">D</span> Only the cross-continent number actually matters</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Design decisions hinge on the ~100x-100,000x gaps between memory, SSD, disk, and network — not on whether memory is 90 or 110 ns. Knowing memory &lt;&lt; SSD &lt;&lt; disk seek &lt;&lt; cross-region tells you where the time goes and what to optimize.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>An in-memory key-value store (e.g. Redis) on a single node handles roughly what order of magnitude of simple operations per second?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~100 ops/sec</li>
+        <li><span class="sharepage__key">B</span> ~1,000 ops/sec</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> ~100,000+ ops/sec <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> ~1 billion ops/sec</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A single in-memory store node handles on the order of 100k+ simple ops/sec, far above a disk-backed relational node, because it avoids disk I/O. This anchor tells you how many cache nodes you need for a given read QPS.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Reading 1 MB sequentially from memory vs from an SSD differs by roughly which factor?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They are essentially identical</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> SSD is ~10-100x slower than memory for the same sequential 1 MB <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Memory is slower than SSD for large blocks</li>
+        <li><span class="sharepage__key">D</span> SSD is ~1,000,000x slower than memory</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A sequential 1 MB read from RAM is on the order of microseconds while from an SSD it is closer to ~1 ms, roughly a 10-100x gap. Both are far faster than the tens of milliseconds a spinning disk would take for the same block.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Recite the latency ladder from fastest to slowest and give the rough order of magnitude for each rung, then say why the relative gaps matter more than the exact numbers.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>L1 cache ~1 ns, L2 ~10 ns, main memory ~100 ns.</li><li>SSD random read ~tens of µs (16-150 µs).</li><li>Intra-datacenter round trip ~0.5 ms.</li><li>Disk (HDD) seek ~10 ms.</li><li>Cross-continent round trip ~150 ms.</li><li>Explains that ~100x-100,000x gaps drive caching, locality, sequential-vs-random, and sharding decisions.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> From fastest to slowest: L1 cache around 1 ns, L2 around 10 ns, main memory around 100 ns, SSD random read in the tens of microseconds, an intra-datacenter round trip around half a millisecond, a spinning-disk seek around 10 ms, and a cross-continent round trip around 150 ms. What matters isn&#39;t the exact figure but the gaps — memory is roughly 100,000x faster than a disk seek, and a same-datacenter hop is hundreds of times faster than crossing an ocean. Those gaps are exactly what tell me to cache hot data in RAM, prefer sequential over random I/O, keep chatty calls within a datacenter, and put replicas near users.</div>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>A teammate proposes making a synchronous cross-region database call on the critical path of a request with a 50 ms p99 target. Using the numbers you know, explain why that&#39;s a problem and what you&#39;d do.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>A cross-continent round trip is ~150 ms, which alone exceeds the 50 ms budget.</li><li>Speed-of-light latency can&#39;t be tuned away on the server.</li><li>Options: serve from a same-region replica (~0.5 ms RTT) or an edge cache.</li><li>Make the cross-region work asynchronous / off the critical path if it must happen.</li><li>Reason about the budget additively — each hop&#39;s latency adds up against the SLO.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> A cross-region round trip is on the order of 150 ms, so a single synchronous call already blows a 50 ms p99 budget three times over, and that latency is set by the speed of light — no server tuning removes it. I&#39;d keep the critical path within one region by reading from a local replica, where the round trip is under a millisecond, or serving from an edge cache. If the cross-region work is truly necessary, I&#39;d push it off the critical path and do it asynchronously, then reconcile, so the user-facing request stays within budget.</div>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You estimate a service needs to sustain 50,000 writes/sec. Using single-machine throughput anchors, what does that tell you about the architecture?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>A single relational DB node handles ~thousands of writes/sec (order of magnitude).</li><li>50k writes/sec is ~10x+ beyond one node, so a single primary won&#39;t suffice.</li><li>Implies sharding/partitioning the write path across many nodes.</li><li>Consider write-optimized storage (LSM-based) and batching.</li><li>Cross-check the anchor and note real numbers vary with schema/hardware.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> A single traditional relational node tops out around a few thousand writes/sec as a ballpark, so 50,000 writes/sec is more than an order of magnitude past what one primary can take. That tells me I need to shard the write path across many nodes — partition by a key like user or entity ID — and likely reach for write-optimized, LSM-based storage plus batching to raise per-node throughput. The exact per-node number depends on schema and hardware, so I&#39;d validate it, but the anchor is enough to know a single database won&#39;t cut it.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"interview-method","unit":"s07","title":"Numbers Every Engineer Should Know","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"Order these from FASTEST to SLOWEST: (a) SSD random read, (b) main memory reference, (c) disk (HDD) seek, (d) L1 cache reference.","options":["d \u003c b \u003c a \u003c c (L1 \u003c memory \u003c SSD \u003c disk seek)","b \u003c d \u003c a \u003c c (memory \u003c L1 \u003c SSD \u003c disk seek)","d \u003c a \u003c b \u003c c (L1 \u003c SSD \u003c memory \u003c disk seek)","a \u003c d \u003c b \u003c c (SSD \u003c L1 \u003c memory \u003c disk seek)"],"answer":0,"answerLetter":"A"},{"n":2,"type":"mc","prompt":"Roughly how long is a main-memory reference, to an order of magnitude?","options":["~1 ns","~100 ns","~100 µs","~10 ms"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"A round trip within the same datacenter is closest to which order of magnitude?","options":["~0.5 microseconds","~0.5 milliseconds","~50 milliseconds","~0.5 seconds"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"A round trip between continents (e.g. California to Europe and back) is on the order of:","options":["~1 ms","~15 ms","~150 ms","~1.5 s"],"answer":2,"answerLetter":"C"},{"n":5,"type":"mc","prompt":"Approximately how much slower is a spinning-disk seek (~10 ms) than a main-memory reference (~100 ns)?","options":["About 100x slower","About 1,000x slower","About 100,000x slower","About the same"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"An SSD random read is closest to which order of magnitude?","options":["~100 nanoseconds","~10-100 microseconds","~10 milliseconds","~1 second"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"Why is reading 1 MB sequentially from disk far faster than making many random disk seeks for the same data?","options":["Sequential reads avoid the ~10 ms mechanical seek per access; the head streams contiguous data","Sequential reads are cached in L1 while random reads are not","Random reads are always served from the network instead of disk","Sequential and random disk access actually take the same time"],"answer":0,"answerLetter":"A"},{"n":8,"type":"mc","prompt":"You need a request to complete in under 10 ms, but it makes a cross-continent call. What does the latency ladder tell you?","options":["Optimize the server code; the network call is negligible","The ~150 ms cross-region round trip alone blows the budget, so you must serve from a nearby region or cache","Add more CPU cores to absorb the round trip","Switch from SSD to memory to fix it"],"answer":1,"answerLetter":"B"},{"n":9,"type":"mc","prompt":"Which is the best order-of-magnitude anchor for the write throughput of a single traditional relational database node?","options":["A few tens of writes/sec","A few thousand writes/sec (order of magnitude)","A few million writes/sec","A few billion writes/sec"],"answer":1,"answerLetter":"B"},{"n":10,"type":"mc","prompt":"Why do interviewers want you to know these numbers to an ORDER OF MAGNITUDE rather than exactly?","options":["Exact nanosecond values are required to pass","The relative gaps between rungs are what drive design decisions like caching, locality, and sharding","The numbers change every day so exactness is impossible","Only the cross-continent number actually matters"],"answer":1,"answerLetter":"B"},{"n":11,"type":"mc","prompt":"An in-memory key-value store (e.g. Redis) on a single node handles roughly what order of magnitude of simple operations per second?","options":["~100 ops/sec","~1,000 ops/sec","~100,000+ ops/sec","~1 billion ops/sec"],"answer":2,"answerLetter":"C"},{"n":12,"type":"mc","prompt":"Reading 1 MB sequentially from memory vs from an SSD differs by roughly which factor?","options":["They are essentially identical","SSD is ~10-100x slower than memory for the same sequential 1 MB","Memory is slower than SSD for large blocks","SSD is ~1,000,000x slower than memory"],"answer":1,"answerLetter":"B"},{"n":13,"type":"open","prompt":"Recite the latency ladder from fastest to slowest and give the rough order of magnitude for each rung, then say why the relative gaps matter more than the exact numbers.","points":["L1 cache ~1 ns, L2 ~10 ns, main memory ~100 ns.","SSD random read ~tens of µs (16-150 µs).","Intra-datacenter round trip ~0.5 ms.","Disk (HDD) seek ~10 ms.","Cross-continent round trip ~150 ms.","Explains that ~100x-100,000x gaps drive caching, locality, sequential-vs-random, and sharding decisions."]},{"n":14,"type":"open","prompt":"A teammate proposes making a synchronous cross-region database call on the critical path of a request with a 50 ms p99 target. Using the numbers you know, explain why that's a problem and what you'd do.","points":["A cross-continent round trip is ~150 ms, which alone exceeds the 50 ms budget.","Speed-of-light latency can't be tuned away on the server.","Options: serve from a same-region replica (~0.5 ms RTT) or an edge cache.","Make the cross-region work asynchronous / off the critical path if it must happen.","Reason about the budget additively — each hop's latency adds up against the SLO."]},{"n":15,"type":"open","prompt":"You estimate a service needs to sustain 50,000 writes/sec. Using single-machine throughput anchors, what does that tell you about the architecture?","points":["A single relational DB node handles ~thousands of writes/sec (order of magnitude).","50k writes/sec is ~10x+ beyond one node, so a single primary won't suffice.","Implies sharding/partitioning the write path across many nodes.","Consider write-optimized storage (LSM-based) and batching.","Cross-check the anchor and note real numbers vary with schema/hardware."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/interview-method/s07">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

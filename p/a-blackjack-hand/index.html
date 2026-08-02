@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blackjack Hand Value — JS Drill</title>
+<meta name="description" content="Score a Blackjack hand. J/Q/K=10, numbers as-is, Aces are 11 unless that busts — then count that ace as 1. Demotes one ace at a time until the total fits or runs out.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-blackjack-hand">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Blackjack Hand Value — JS Drill">
+<meta property="og:description" content="Score a Blackjack hand. J/Q/K=10, numbers as-is, Aces are 11 unless that busts — then count that ace as 1. Demotes one ace at a time until the total fits or runs out.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-blackjack-hand">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Blackjack Hand Value</h1>
+    <p class="sharepage__lede">Score a Blackjack hand. J/Q/K=10, numbers as-is, Aces are 11 unless that busts — then count that ace as 1. Demotes one ace at a time until the total fits or runs out.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement handValue(cards). Log values for [&#39;A&#39;,&#39;K&#39;], [&#39;A&#39;,&#39;9&#39;,&#39;5&#39;], [&#39;A&#39;,&#39;A&#39;,&#39;9&#39;], [&#39;10&#39;,&#39;Q&#39;,&#39;2&#39;].</p>
+    <p class="sharepage__note">Expected output: <code>21
+15
+21
+22</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function handValue(cards) {
+  let total = 0, aces = 0;
+  for (const c of cards) {
+    // Count aces as 11 optimistically; demote later only if busted.
+    if (c === &#39;A&#39;)           { total += 11; aces++; }
+    // &#39;JQK&#39;.includes(c) is tighter than an array for face-card test.
+    else if (&#39;JQK&#39;.includes(c)) total += 10;
+    else                        total += Number(c);
+  }
+  // Demote one ace at a time — [&#39;A&#39;,&#39;A&#39;,&#39;9&#39;] should land at 21, not 11.
+  while (total &gt; 21 &amp;&amp; aces &gt; 0) {
+    total -= 10;
+    aces--;
+  }
+  return total;
+}</code></pre>
+    <ul class="sharepage__notes"><li>Count aces as 11 first, then demote one-by-one ONLY while the hand busts. Demoting all aces upfront under-scores [&#39;A&#39;,&#39;9&#39;] (would give 10 instead of 20).</li><li><code>&#39;JQK&#39;.includes(c)</code> is a tight way to test face cards without an array.</li><li>The while loop terminates either when total ≤ 21 or aces hit 0 — the bust is unavoidable.</li><li>Time O(n), Space O(1) where n = number of cards.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Brute-force (enumerate 2^k ace combinations) <code>O(n · 2^k) / O(k)</code></h3>
+      <p>Reach for this only when explaining WHY the greedy works — the exponential search space makes the greedy&#39;s invariant (&#39;at most one soft Ace&#39;) feel non-obvious to an interviewer who hasn&#39;t seen it before. Don&#39;t write this for production; k ≤ 4 aces keeps it fast in practice but the greedy is strictly better.</p>
+      <pre class="sharepage__code"><code class="language-js">function handValue(cards) {
+  const aces = cards.filter(c =&gt; c === &#39;A&#39;).length;
+  const baseTotal = cards.reduce((s, c) =&gt; {
+    if (c === &#39;A&#39;) return s;
+    if (&#39;JQK&#39;.includes(c)) return s + 10;
+    return s + Number(c);
+  }, 0);
+  let best = -Infinity;
+  for (let mask = 0; mask &lt; (1 &lt;&lt; aces); mask++) {
+    let total = baseTotal;
+    for (let i = 0; i &lt; aces; i++) total += (mask &gt;&gt; i &amp; 1) ? 11 : 1;
+    if (total &lt;= 21) best = Math.max(best, total);
+  }
+  return best === -Infinity ? baseTotal + aces : best;
+}
+console.log(handValue([&#39;A&#39;,&#39;K&#39;]));
+console.log(handValue([&#39;A&#39;,&#39;9&#39;,&#39;5&#39;]));
+console.log(handValue([&#39;A&#39;,&#39;A&#39;,&#39;9&#39;]));
+console.log(handValue([&#39;10&#39;,&#39;Q&#39;,&#39;2&#39;]));</code></pre>
+      <ul class="sharepage__notes"><li>Compute non-ace sum first, then try all 2^k combinations of aces as 1 or 11.</li><li>Track &#39;best non-busting total&#39;; if ALL combinations bust, fall back to the all-1s total.</li><li>O(n · 2^k): the inner loop is bounded by aces ≤ cards, but for a single deck k ≤ 4 so 2^k ≤ 16 — effectively constant.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What does the Ace contribute initially?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 1 always</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 11 always — and is demoted to 1 only if the hand busts <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 11 if it is the first card, else 1</li>
+        <li><span class="sharepage__key">D</span> 1, then is promoted to 11 at the end if total + 10 ≤ 21</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why demote aces one at a time instead of all at once?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Demoting all aces in one step would lose insertion order from the hand</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Each ace is independent — <code>[&#39;A&#39;,&#39;A&#39;,&#39;9&#39;]</code> should be 21 (one ace at 11, one at 1), not 11 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Demoting all at once costs O(n) per call instead of O(1)</li>
+        <li><span class="sharepage__key">D</span> The while loop must run at least <code>aces</code> iterations to be valid</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> What is the value of <code>[&#39;A&#39;,&#39;K&#39;]</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 11</li>
+        <li><span class="sharepage__key">B</span> 20</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> 21 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> 12</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What is the value of <code>[&#39;10&#39;,&#39;Q&#39;,&#39;2&#39;]</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 12</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 22 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 20</li>
+        <li><span class="sharepage__key">D</span> 10</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in handValue so the four test cases print 21, 15, 21, 22.</p>
+      <pre class="sharepage__code"><code class="language-js">function handValue(cards) {
+  let total = 0, aces = 0;
+  for (const c ___ cards) {
+    if (c ___ &#39;A&#39;) { total += 11; aces___; }
+    else if (&#39;JQK&#39;.___(c)) total += 10;
+    else total += ___(c);
+  }
+  while (total &gt; 21 &amp;&amp; aces &gt; 0) {
+    total -= ___;
+    aces--;
+  }
+  return total;
+}
+console.log(handValue([&#39;A&#39;,&#39;K&#39;]));
+console.log(handValue([&#39;A&#39;,&#39;9&#39;,&#39;5&#39;]));
+console.log(handValue([&#39;A&#39;,&#39;A&#39;,&#39;9&#39;]));
+console.log(handValue([&#39;10&#39;,&#39;Q&#39;,&#39;2&#39;]));</code></pre>
+      <p><strong>Answers:</strong> <code>of</code>, <code>===</code>, <code>++</code>, <code>includes</code>, <code>Number</code>, <code>10</code></p>
+      <p class="sharepage__note">Expected output: <code>21
+15
+21
+22</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement handValue(cards). Log values for [&#39;A&#39;,&#39;K&#39;], [&#39;A&#39;,&#39;9&#39;,&#39;5&#39;], [&#39;A&#39;,&#39;A&#39;,&#39;9&#39;], [&#39;10&#39;,&#39;Q&#39;,&#39;2&#39;].</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Sum aces as 11 first, count them, then demote one at a time while busted.</li><li>Treat J/Q/K as 10 with <code>&#39;JQK&#39;.includes(c)</code>.</li><li>Use <code>Number(c)</code> to parse &#39;10&#39; through &#39;2&#39; to integers.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function handValue(cards) {
+  let total = 0, aces = 0;
+  for (const c of cards) {
+    // Count aces as 11 optimistically; demote later only if busted.
+    if (c === &#39;A&#39;) { total += 11; aces++; }
+    // &#39;JQK&#39;.includes(c) is tighter than an array for face-card test.
+    else if (&#39;JQK&#39;.includes(c)) total += 10;
+    else total += Number(c);
+  }
+  // Demote one ace at a time — [&#39;A&#39;,&#39;A&#39;,&#39;9&#39;] should land at 21, not 11.
+  while (total &gt; 21 &amp;&amp; aces &gt; 0) {
+    total -= 10;
+    aces--;
+  }
+  return total;
+}
+console.log(handValue([&#39;A&#39;,&#39;K&#39;]));
+console.log(handValue([&#39;A&#39;,&#39;9&#39;,&#39;5&#39;]));
+console.log(handValue([&#39;A&#39;,&#39;A&#39;,&#39;9&#39;]));
+console.log(handValue([&#39;10&#39;,&#39;Q&#39;,&#39;2&#39;]));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-blackjack-hand","title":"Blackjack Hand Value","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does the Ace contribute initially?","options":["1 always","11 always — and is demoted to 1 only if the hand busts","11 if it is the first card, else 1","1, then is promoted to 11 at the end if total + 10 ≤ 21"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why demote aces one at a time instead of all at once?","options":["Demoting all aces in one step would lose insertion order from the hand","Each ace is independent — `['A','A','9']` should be 21 (one ace at 11, one at 1), not 11","Demoting all at once costs O(n) per call instead of O(1)","The while loop must run at least `aces` iterations to be valid"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What is the value of `['A','K']`?","options":["11","20","21","12"],"answer":2,"answerLetter":"C"},{"n":4,"q":"What is the value of `['10','Q','2']`?","options":["12","22","20","10"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in handValue so the four test cases print 21, 15, 21, 22.","answers":["of","===","++","includes","Number","10"]}],"L3":[{"n":1,"prompt":"Implement handValue(cards). Log values for ['A','K'], ['A','9','5'], ['A','A','9'], ['10','Q','2'].","expectedOutput":"21\n15\n21\n22"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-blackjack-hand">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

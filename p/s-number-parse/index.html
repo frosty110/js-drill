@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Number parsing &amp; coercion — JS Drill</title>
+<meta name="description" content="Every input is a string until you parse it — pick the right tool (parseInt, parseFloat, Number, unary `+`) and know why `Number.isNaN` is safer than the global `isNaN`.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/s-number-parse">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Number parsing &amp; coercion — JS Drill">
+<meta property="og:description" content="Every input is a string until you parse it — pick the right tool (parseInt, parseFloat, Number, unary `+`) and know why `Number.isNaN` is safer than the global `isNaN`.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/s-number-parse">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › JS Toolbox</p>
+    <h1>Number parsing &amp; coercion</h1>
+    <p class="sharepage__lede">Every input is a string until you parse it — pick the right tool (parseInt, parseFloat, Number, unary `+`) and know why `Number.isNaN` is safer than the global `isNaN`.</p>
+    <p class="sharepage__meta"><span class="ds-chip">syntax</span> <span class="ds-chip">JS Toolbox</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>toIntStrict(s)</code> that returns the integer if <code>s</code> is a clean base-10 integer string (optional leading <code>-</code>), else <code>null</code>. Log results for <code>&#39;42&#39;</code>, <code>&#39;-7&#39;</code>, <code>&#39;3.14&#39;</code>, <code>&#39; 5 &#39;</code>, <code>&#39;5px&#39;</code>.</p>
+    <p class="sharepage__note">Expected output: <code>42
+-7
+null
+null
+null</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// parseInt — leading digits, stops at first non-digit
+parseInt(&#39;42px&#39;, 10);     // 42
+parseInt(&#39;  -7 &#39;, 10);    // -7
+parseInt(&#39;0.9&#39;, 10);      // 0   (stops at &#39;.&#39;)
+parseInt(&#39;abc&#39;, 10);      // NaN
+
+// ALWAYS pass the radix — &#39;0x10&#39; would parse as hex without it
+parseInt(&#39;0x10&#39;, 10);     // 0
+parseInt(&#39;0x10&#39;);         // 16  (legacy hex detection)
+
+// parseFloat — accepts decimals + exponent
+parseFloat(&#39;3.14abc&#39;);    // 3.14
+parseFloat(&#39;1e3&#39;);        // 1000
+
+// Number — STRICT, whole string must be numeric (trims whitespace)
+Number(&#39;42&#39;);             // 42
+Number(&#39;42px&#39;);           // NaN  (unlike parseInt)
+Number(&#39;&#39;);               // 0    (gotcha)
+Number(&#39;  3.14  &#39;);       // 3.14
+
+// Unary + — same as Number(x), shorter
++&#39;5&#39;;                     // 5
++&#39;&#39;;                      // 0
++&#39;5px&#39;;                   // NaN
+
+// Validation helpers (DO NOT coerce — false for non-numbers)
+Number.isInteger(3);       // true
+Number.isInteger(3.0);     // true   (3.0 === 3)
+Number.isInteger(&#39;3&#39;);     // false  (no coercion)
+Number.isFinite(Infinity); // false
+Number.isFinite(&#39;1&#39;);      // false  (no coercion)
+Number.isNaN(NaN);         // true
+Number.isNaN(&#39;foo&#39;);       // false  (no coercion)
+isNaN(&#39;foo&#39;);              // true   (global — coerces first, surprise)</code></pre>
+    <ul class="sharepage__notes"><li>Always pass the radix to <code>parseInt(s, 10)</code> — otherwise <code>&#39;08&#39;</code> and <code>&#39;0x10&#39;</code> get parsed oddly across engines.</li><li><code>Number(&#39;&#39;)</code> and <code>Number(&#39;  &#39;)</code> are <code>0</code>, not <code>NaN</code>. Reject empty input explicitly.</li><li>Prefer <code>Number.isNaN(x)</code> over global <code>isNaN(x)</code> — the global coerces first so <code>isNaN(&#39;foo&#39;)</code> is misleadingly <code>true</code>.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What is <code>parseInt(&#39;42px&#39;, 10)</code>?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> 42 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> NaN</li>
+        <li><span class="sharepage__key">C</span> 4210</li>
+        <li><span class="sharepage__key">D</span> throws</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>parseInt</code> reads leading digits and stops at the first non-digit.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What is <code>Number(&#39;42px&#39;)</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 42</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> NaN <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> &#39;42px&#39;</li>
+        <li><span class="sharepage__key">D</span> 0</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>Number</code> is strict — the whole string must be numeric (whitespace-trimmed).</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> What is <code>Number(&#39;&#39;)</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> NaN</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 0 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> undefined</li>
+        <li><span class="sharepage__key">D</span> throws</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Empty/whitespace-only strings coerce to 0. Validate first.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why prefer <code>Number.isNaN(x)</code> over global <code>isNaN(x)</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Global <code>isNaN</code> was deprecated in ES2020</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Number.isNaN does not coerce; global isNaN does <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Global <code>isNaN</code> returns <code>false</code> for actual NaN values (the historical bug)</li>
+        <li><span class="sharepage__key">D</span> They are identical</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>isNaN(&#39;foo&#39;)</code> is <code>true</code> because it coerces; <code>Number.isNaN(&#39;foo&#39;)</code> is <code>false</code>.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Parse the leading integer from the CSS-like string. parseFloat would do the same on &#39;128px&#39; since there is no decimal.</p>
+      <pre class="sharepage__code"><code class="language-js">const a = ___(&#39;128px&#39;, ___);
+const b = ___(&#39;128px&#39;);
+console.log(a ___ b);</code></pre>
+      <p><strong>Answers:</strong> <code>parseInt</code>, <code>10</code>, <code>parseFloat</code>, <code>&amp;&amp;</code></p>
+      <p class="sharepage__note">Expected output: <code>128</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Coerce the input only if it is a pure number; otherwise log &#39;bad&#39;.</p>
+      <pre class="sharepage__code"><code class="language-js">const s = &#39;12.5&#39;;
+const n = ___(s);
+console.log(Number.___(n) ___ n ___ &#39;bad&#39;);</code></pre>
+      <p><strong>Answers:</strong> <code>Number</code>, <code>isFinite</code>, <code>?</code>, <code>:</code></p>
+      <p class="sharepage__note">Expected output: <code>12.5</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>toIntStrict(s)</code> that returns the integer if <code>s</code> is a clean base-10 integer string (optional leading <code>-</code>), else <code>null</code>. Log results for <code>&#39;42&#39;</code>, <code>&#39;-7&#39;</code>, <code>&#39;3.14&#39;</code>, <code>&#39; 5 &#39;</code>, <code>&#39;5px&#39;</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Validate with a regex (<code>/^-?\d+$/</code>) before coercing.</li><li><code>Number(s)</code> is fine once you have confirmed the shape.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function toIntStrict(s) {
+  if (typeof s !== &#39;string&#39; || !/^-?\d+$/.test(s)) return null;
+  return Number(s);
+}
+for (const v of [&#39;42&#39;, &#39;-7&#39;, &#39;3.14&#39;, &#39; 5 &#39;, &#39;5px&#39;]) {
+  console.log(toIntStrict(v));
+}</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"s-number-parse","title":"Number parsing & coercion","section":"JS Toolbox","track":"syntax","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What is `parseInt('42px', 10)`?","options":["42","NaN","4210","throws"],"answer":0,"answerLetter":"A"},{"n":2,"q":"What is `Number('42px')`?","options":["42","NaN","'42px'","0"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What is `Number('')`?","options":["NaN","0","undefined","throws"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why prefer `Number.isNaN(x)` over global `isNaN(x)`?","options":["Global `isNaN` was deprecated in ES2020","Number.isNaN does not coerce; global isNaN does","Global `isNaN` returns `false` for actual NaN values (the historical bug)","They are identical"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Parse the leading integer from the CSS-like string. parseFloat would do the same on '128px' since there is no decimal.","answers":["parseInt","10","parseFloat","&&"]},{"n":2,"prompt":"Coerce the input only if it is a pure number; otherwise log 'bad'.","answers":["Number","isFinite","?",":"]}],"L3":[{"n":1,"prompt":"Write `toIntStrict(s)` that returns the integer if `s` is a clean base-10 integer string (optional leading `-`), else `null`. Log results for `'42'`, `'-7'`, `'3.14'`, `' 5 '`, `'5px'`.","expectedOutput":"42\n-7\nnull\nnull\nnull"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/s-number-parse">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

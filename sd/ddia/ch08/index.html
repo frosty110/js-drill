@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Trouble with Distributed Systems — Designing Data-Intensive Applications</title>
+<meta name="description" content="A tour of everything that can go wrong once data spans multiple machines connected by an unreliable network: dropped and delayed messages, untrustworthy clocks, arbitrary process pauses, and nodes that cannot even trust their own judgment. The chapter builds toward the system models and safety/liveness vocabulary used to reason about these faults.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ddia/ch08">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The Trouble with Distributed Systems — Designing Data-Intensive Applications">
+<meta property="og:description" content="A tour of everything that can go wrong once data spans multiple machines connected by an unreliable network: dropped and delayed messages, untrustworthy clocks, arbitrary process pauses, and nodes that cannot even trust their own judgment. The chapter builds toward the system models and safety/liveness vocabulary used to reason about these faults.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ddia/ch08">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ddia/">Designing Data-Intensive Applications</a></p>
+    <h1>The Trouble with Distributed Systems</h1>
+    <p class="sharepage__lede">A tour of everything that can go wrong once data spans multiple machines connected by an unreliable network: dropped and delayed messages, untrustworthy clocks, arbitrary process pauses, and nodes that cannot even trust their own judgment. The chapter builds toward the system models and safety/liveness vocabulary used to reason about these faults.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Data-Intensive Applications</span> <span class="ds-chip">17 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>In distributed systems faults are partial and nondeterministic: some parts work while others fail in confusing ways, unlike a single computer that tends to fail totally and deterministically.</li><li>The network is asynchronous and unreliable; a timeout cannot distinguish a lost request, a crashed node, or a slow-but-alive node.</li><li>There is no correct timeout value: too long delays failover, too short declares live nodes dead and triggers duplicate actions and cascading failures.</li><li>Time-of-day clocks can jump (NTP, leap seconds) and must not be trusted for ordering events; use monotonic clocks for durations, and prefer logical clocks for ordering.</li><li>A process can pause arbitrarily long (GC, VM migration, paging), so a leader holding a lease may keep acting after the lease expired.</li><li>Truth is defined by the quorum/majority, not by any single node; fencing tokens stop a paused or deposed leader from corrupting shared state.</li><li>System models are defined by timing assumptions (synchronous / partially synchronous / asynchronous) and failure assumptions (crash-stop / crash-recovery / Byzantine), and correctness is stated as safety and liveness properties.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">17</span></h2>
+    <p class="sharepage__note">Positions 1–17 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does DDIA characterize faults in a distributed system compared with faults on a single computer?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Distributed faults are total and deterministic, so they are easier to reproduce than single-machine faults</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Distributed faults are partial and nondeterministic: some components fail unpredictably while others keep working <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Distributed systems have no more failure modes than a single machine; they just occur more often</li>
+        <li><span class="sharepage__key">D</span> A single computer fails partially, whereas a distributed system always fails completely</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A single computer usually fails cleanly and deterministically (it either works or crashes entirely), which is a deliberate design choice. Distributed systems instead suffer partial failures that are nondeterministic — one node or link misbehaves while the rest run — which is what makes them hard to reason about.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>When a node sends a request over an asynchronous network and gets no reply, what can it actually conclude?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> That the remote node has definitely crashed</li>
+        <li><span class="sharepage__key">B</span> That the request was definitely lost in transit</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Nothing definite; it cannot distinguish a lost request, a dead node, or a slow/queued response — only that no reply arrived yet <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> That the network has partitioned and will stay partitioned</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> On an asynchronous packet network the sender cannot tell whether the request was lost, the node died, the response was lost, or everything is merely slow. The only signal available is the absence of a reply within some timeout, which is inherently ambiguous.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does DDIA say there is no universally correct timeout for detecting a failed node?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because timeouts should always be set to twice the average round-trip time</li>
+        <li><span class="sharepage__key">B</span> Because TCP already guarantees delivery, so timeouts are only needed for UDP</li>
+        <li><span class="sharepage__key">C</span> Because clocks are unsynchronized, so any timeout measured in wall-clock time is meaningless</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Because a long timeout means slow detection/failover while a short timeout risks declaring a live node dead, causing duplicate actions and cascading load <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A long timeout makes users wait a long time before failover; a short timeout prematurely declares a healthy-but-slow node dead, which can hand its work to another node (risking double execution) and pile extra load onto an already struggling system, causing cascading failures. Network delay has no upper bound, so no single value is correct.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the key difference between a traditional synchronous (circuit-switched) telephone network and a packet-switched data network?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> A circuit reserves a fixed amount of bandwidth end-to-end giving bounded latency, whereas packet switching dynamically shares links and gives variable, unbounded delay <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Packet-switched networks reserve bandwidth per call, so they have lower latency</li>
+        <li><span class="sharepage__key">C</span> Circuit-switched networks use queueing, which is the main cause of bufferbloat</li>
+        <li><span class="sharepage__key">D</span> Packet-switched networks guarantee delivery order, whereas circuits do not</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A telephone circuit reserves a fixed slice of bandwidth for the whole call, giving bounded latency with no queueing. Packet-switched networks are optimized for bursty traffic by sharing links dynamically, so packets queue in buffers (bufferbloat) and delay is variable with no guaranteed upper bound — the tradeoff is efficiency for predictability.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA&#39;s terms, what is a time-of-day clock (wall-clock) and why is it dangerous for ordering events?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> A clock returning the current calendar time that is synchronized via NTP and can jump forwards or backwards, so timestamps can order events incorrectly <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> A clock that only moves forward and is ideal for ordering events across machines</li>
+        <li><span class="sharepage__key">C</span> A hardware counter measuring elapsed durations that never goes backward</li>
+        <li><span class="sharepage__key">D</span> A logical counter incremented on every message, immune to clock drift</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A time-of-day clock reports calendar time and is kept in sync by NTP, so it can jump backward (or forward) when corrected, and different nodes disagree by their sync error. Using such timestamps to order events across machines can silently misorder them; that is why last-write-wins based on wall clocks can drop writes.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is a monotonic clock best used for, and what does it guarantee?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> For reading calendar time; it guarantees agreement with other machines&#39; wall clocks</li>
+        <li><span class="sharepage__key">B</span> For ordering events globally; it guarantees a total order consistent with causality</li>
+        <li><span class="sharepage__key">C</span> For timestamping database writes; it guarantees NTP-corrected accuracy</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> For measuring elapsed time/durations; it only ever moves forward and never jumps backward, but its absolute value is meaningless across machines <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A monotonic clock is a counter guaranteed never to go backward, so it is the right tool for measuring a duration (e.g. a timeout or request latency) on one machine. Its absolute value has no meaning and comparing monotonic readings across nodes is nonsensical — it says nothing about calendar time or cross-machine ordering.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does last-write-wins (LWW) conflict resolution based on wall-clock timestamps fail?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It always deadlocks when two writes have the same timestamp</li>
+        <li><span class="sharepage__key">B</span> It requires a global lock, which does not scale</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because clocks are not perfectly synchronized, a write with an earlier real time but a later timestamp can silently overwrite (drop) a newer write <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It corrupts data whenever a leap second is inserted</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> LWW keeps the write with the highest timestamp, but clock skew means the highest timestamp does not reliably correspond to the write that actually happened last. A node whose clock is ahead can make its stale write win, so a genuinely newer write is silently discarded — data loss with no error.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What problem does Google Spanner&#39;s TrueTime address, and how?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It eliminates clock drift entirely by using a single global master clock</li>
+        <li><span class="sharepage__key">B</span> It replaces physical clocks with Lamport timestamps to get a total order for free</li>
+        <li><span class="sharepage__key">C</span> It uses GPS to make every server&#39;s clock read exactly the same value</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> It returns time as a confidence interval [earliest, latest] and waits out the uncertainty so it can safely order transactions despite clock error <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> TrueTime acknowledges clocks are uncertain by exposing time as an interval bounding the true time, using GPS and atomic clocks to keep that interval narrow. Spanner deliberately waits for the interval&#39;s uncertainty to pass (commit-wait) before releasing a transaction, guaranteeing non-overlapping intervals reflect real ordering.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why is a process pause (e.g. a stop-the-world garbage collection) dangerous for a node that holds a lease as leader?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The pause corrupts the node&#39;s memory, forcing a restart</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The node may be paused past the lease&#39;s expiry, so another node becomes leader while the paused node, on resuming, still believes it is leader <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> GC pauses reset the monotonic clock, breaking duration measurements</li>
+        <li><span class="sharepage__key">D</span> Leases are unaffected by pauses because they are enforced in hardware</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A node can be paused for an arbitrarily long time (GC, VM live migration, paging, suspended laptop) with no awareness that time passed. If the pause outlasts the lease, the cluster elects a new leader; when the old node wakes it acts as leader without knowing it was superseded, risking split-brain corruption.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How do fencing tokens prevent a paused or deposed leader from corrupting shared storage?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Each write is stamped with a monotonically increasing token, and the storage rejects any write bearing a token lower than one it has already seen <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> The old leader is guaranteed to be killed before a new one starts, so no conflicting write is possible</li>
+        <li><span class="sharepage__key">C</span> Every request must include a wall-clock timestamp, and the newest timestamp wins</li>
+        <li><span class="sharepage__key">D</span> Clients hold a mutex that the storage releases only after a heartbeat</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The lock service hands out a monotonically increasing fencing token with each grant; clients attach it to their writes, and the resource refuses any write carrying a token older than the highest already accepted. So a woken-up former leader, holding a now-stale token, is fenced out even though it still thinks it holds the lock.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA&#39;s discussion of &#39;knowledge, truth, and lies&#39;, how is the truth about the cluster&#39;s state defined?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> By whichever node has the most up-to-date wall clock</li>
+        <li><span class="sharepage__key">B</span> By the current leader, whose word is authoritative</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> By the majority/quorum of nodes, because no single node&#39;s perception can be trusted <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> By the node with the lowest ID, chosen deterministically</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A single node cannot trust its own view — it may be paused, partitioned, or have a dead network card even though it feels fine. DDIA&#39;s principle is that decisions require agreement among a quorum (majority) of nodes, so the majority defines truth and a node declared dead by the quorum must comply even if it disagrees.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is a Byzantine fault, and what assumption do most datacenter systems make about it?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> A node that sends arbitrary, possibly malicious or contradictory information (&#39;lies&#39;); most datacenter systems assume nodes are non-Byzantine (trusted) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> A node that crashes and never recovers; most systems assume this cannot happen</li>
+        <li><span class="sharepage__key">C</span> A network partition that splits the cluster in two; most systems tolerate it automatically</li>
+        <li><span class="sharepage__key">D</span> A clock that drifts beyond NTP correction; most systems handle it with fencing tokens</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A Byzantine fault is when a node behaves arbitrarily — it may lie, send conflicting messages to different peers, or be actively malicious. Byzantine fault-tolerant algorithms exist (and matter in aerospace or blockchains) but are costly, so most systems inside a single trusted datacenter assume non-Byzantine behavior.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA&#39;s system-model taxonomy, what distinguishes the three timing models — synchronous, partially synchronous, and asynchronous?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They describe whether nodes crash-stop, crash-recover, or act Byzantine</li>
+        <li><span class="sharepage__key">B</span> They describe whether the algorithm uses locks, leases, or fencing tokens</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> They describe assumptions about bounds on network delay and clock drift: bounded always, bounded most of the time, or no timing guarantees at all <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> They describe whether messages are delivered in FIFO, causal, or total order</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The timing models concern assumptions about delays: a synchronous model assumes bounded network delay and clock skew, an asynchronous model assumes no timing guarantees at all (and cannot use timeouts), and the partially synchronous model — the most realistic — assumes the system behaves synchronously most of the time but occasionally exceeds any bound. Crash-stop vs Byzantine is the separate node-failure axis.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the difference between a safety property and a liveness property?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Safety means the system stays available under partitions; liveness means it stays consistent</li>
+        <li><span class="sharepage__key">B</span> Safety applies to synchronous models and liveness to asynchronous ones</li>
+        <li><span class="sharepage__key">C</span> Safety concerns data durability; liveness concerns network throughput</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> A safety property says &#39;nothing bad ever happens&#39; (a violation is irreversible), while a liveness property says &#39;something good eventually happens&#39; <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A safety property requires that nothing bad ever happens — once violated the damage is done and cannot be undone (e.g. two leaders elected). A liveness property requires that something good eventually happens (e.g. a request eventually gets a response); it can be pending for a while without being violated. DDIA usually insists safety always holds while allowing liveness to depend on timing assumptions.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Your failure detector marks a node dead after a 5-second timeout and reassigns its work. In production this occasionally double-executes jobs. Explain why you fundamentally can&#39;t distinguish a slow node from a dead one, and how you&#39;d design around it instead of just tuning the timeout.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>On an asynchronous network a missing reply is ambiguous: lost request, dead node, or slow/queued response are indistinguishable from the outside.</li><li>There is no correct timeout — too long delays failover, too short declares live-but-slow nodes dead, triggering duplicate work and cascading load.</li><li>Network delay has no guaranteed upper bound, so no single value eliminates the ambiguity.</li><li>Design around it: don&#39;t rely on timeouts for correctness — make reassigned work idempotent or guard shared state with fencing tokens so a wrongly-declared-dead node can&#39;t corrupt anything.</li><li>Let a quorum, not one observer, decide liveness, and accept the timeout only as a liveness/latency heuristic, never a safety guarantee.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The absence of a reply is inherently ambiguous — I can&#39;t tell whether the node crashed, the network dropped the packet, or the node is just slow, because packet delay has no upper bound. So any timeout is a guess: shorter ones declare healthy-but-slow nodes dead and cause the double execution I&#39;m seeing. Rather than chase a magic value, I&#39;d stop treating the timeout as truth: make the reassigned work idempotent and protect shared state with fencing tokens, so even if the &#39;dead&#39; node is actually alive and resumes, it can&#39;t corrupt results. Liveness should be a quorum decision and the timeout only a heuristic for when to react.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>A leader acquires a lease on a lock service, then suffers a 30-second stop-the-world GC pause; meanwhile the cluster elects a new leader. When the old leader wakes it writes to shared storage believing it still holds the lock. Walk through how fencing tokens prevent corruption here.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>A process can pause arbitrarily (GC, VM migration, paging) with no awareness that time passed, so a lease can silently expire mid-pause.</li><li>During the pause the cluster times out the lease and elects a new leader, creating a split-brain window.</li><li>The lock service hands out a monotonically increasing fencing token with each grant; the new leader gets a higher token than the old one.</li><li>Clients attach their token to every write to the storage/resource.</li><li>The storage rejects any write bearing a token lower than the highest it has already accepted, so the woken old leader&#39;s stale-token write is refused.</li><li>Correctness comes from the resource enforcing the token, not from trusting the lock client to behave.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The GC pause is invisible to the old leader — it can&#39;t know its lease expired while it was frozen, so on waking it still thinks it&#39;s leader (split brain). Fencing fixes this at the resource: each lock grant carries a monotonically increasing token, so the new leader holds a higher token than the old one. Every write to shared storage includes its token, and the storage refuses any write whose token is lower than the highest it has seen. The old leader&#39;s write, stamped with a now-stale token, is rejected — and crucially the guarantee lives in the resource enforcing the token, not in the paused client behaving correctly.</div>
+    </article>
+    <article class="sharepage__q" id="q17">
+      <h3><a href="#q17" class="sharepage__anchor">Q17</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>A colleague proposes ordering events across servers by their time-of-day (wall-clock) timestamps and resolving conflicts with last-write-wins. What breaks, and what would you use instead for (a) measuring a request&#39;s duration and (b) ordering events causally?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Time-of-day clocks are NTP-synced and can jump forward or backward; nodes disagree by their sync error, so timestamps can misorder events.</li><li>LWW on wall clocks silently drops data: a write with an earlier real time but a higher timestamp (skewed-ahead clock) wins, discarding a genuinely newer write with no error.</li><li>For durations use a monotonic clock — it only moves forward and never jumps, though its absolute value is meaningless across machines.</li><li>For cross-machine event ordering use logical clocks (Lamport timestamps / version vectors), which order by causality, not wall time.</li><li>If real-time ordering is truly required, something like Spanner&#39;s TrueTime (bounded uncertainty interval + commit-wait) is needed, not raw NTP timestamps.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Wall-clock ordering breaks because time-of-day clocks are NTP-corrected and can jump backward or disagree between nodes; LWW then keeps the highest timestamp, so a node whose clock runs fast can make a stale write win and silently drop a newer one — data loss with no error. For measuring a request&#39;s duration I&#39;d use a monotonic clock, which never goes backward (its absolute value is meaningless, but deltas are reliable). For ordering events across machines I&#39;d use logical clocks like Lamport timestamps or version vectors, which capture causality; only something like TrueTime with bounded uncertainty and commit-wait can safely order by real time.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ddia","unit":"ch08","title":"The Trouble with Distributed Systems","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"How does DDIA characterize faults in a distributed system compared with faults on a single computer?","options":["Distributed faults are total and deterministic, so they are easier to reproduce than single-machine faults","Distributed faults are partial and nondeterministic: some components fail unpredictably while others keep working","Distributed systems have no more failure modes than a single machine; they just occur more often","A single computer fails partially, whereas a distributed system always fails completely"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"When a node sends a request over an asynchronous network and gets no reply, what can it actually conclude?","options":["That the remote node has definitely crashed","That the request was definitely lost in transit","Nothing definite; it cannot distinguish a lost request, a dead node, or a slow/queued response — only that no reply arrived yet","That the network has partitioned and will stay partitioned"],"answer":2,"answerLetter":"C"},{"n":3,"type":"mc","prompt":"Why does DDIA say there is no universally correct timeout for detecting a failed node?","options":["Because timeouts should always be set to twice the average round-trip time","Because TCP already guarantees delivery, so timeouts are only needed for UDP","Because clocks are unsynchronized, so any timeout measured in wall-clock time is meaningless","Because a long timeout means slow detection/failover while a short timeout risks declaring a live node dead, causing duplicate actions and cascading load"],"answer":3,"answerLetter":"D"},{"n":4,"type":"mc","prompt":"What is the key difference between a traditional synchronous (circuit-switched) telephone network and a packet-switched data network?","options":["A circuit reserves a fixed amount of bandwidth end-to-end giving bounded latency, whereas packet switching dynamically shares links and gives variable, unbounded delay","Packet-switched networks reserve bandwidth per call, so they have lower latency","Circuit-switched networks use queueing, which is the main cause of bufferbloat","Packet-switched networks guarantee delivery order, whereas circuits do not"],"answer":0,"answerLetter":"A"},{"n":5,"type":"mc","prompt":"In DDIA's terms, what is a time-of-day clock (wall-clock) and why is it dangerous for ordering events?","options":["A clock returning the current calendar time that is synchronized via NTP and can jump forwards or backwards, so timestamps can order events incorrectly","A clock that only moves forward and is ideal for ordering events across machines","A hardware counter measuring elapsed durations that never goes backward","A logical counter incremented on every message, immune to clock drift"],"answer":0,"answerLetter":"A"},{"n":6,"type":"mc","prompt":"What is a monotonic clock best used for, and what does it guarantee?","options":["For reading calendar time; it guarantees agreement with other machines' wall clocks","For ordering events globally; it guarantees a total order consistent with causality","For timestamping database writes; it guarantees NTP-corrected accuracy","For measuring elapsed time/durations; it only ever moves forward and never jumps backward, but its absolute value is meaningless across machines"],"answer":3,"answerLetter":"D"},{"n":7,"type":"mc","prompt":"How does last-write-wins (LWW) conflict resolution based on wall-clock timestamps fail?","options":["It always deadlocks when two writes have the same timestamp","It requires a global lock, which does not scale","Because clocks are not perfectly synchronized, a write with an earlier real time but a later timestamp can silently overwrite (drop) a newer write","It corrupts data whenever a leap second is inserted"],"answer":2,"answerLetter":"C"},{"n":8,"type":"mc","prompt":"What problem does Google Spanner's TrueTime address, and how?","options":["It eliminates clock drift entirely by using a single global master clock","It replaces physical clocks with Lamport timestamps to get a total order for free","It uses GPS to make every server's clock read exactly the same value","It returns time as a confidence interval [earliest, latest] and waits out the uncertainty so it can safely order transactions despite clock error"],"answer":3,"answerLetter":"D"},{"n":9,"type":"mc","prompt":"Why is a process pause (e.g. a stop-the-world garbage collection) dangerous for a node that holds a lease as leader?","options":["The pause corrupts the node's memory, forcing a restart","The node may be paused past the lease's expiry, so another node becomes leader while the paused node, on resuming, still believes it is leader","GC pauses reset the monotonic clock, breaking duration measurements","Leases are unaffected by pauses because they are enforced in hardware"],"answer":1,"answerLetter":"B"},{"n":10,"type":"mc","prompt":"How do fencing tokens prevent a paused or deposed leader from corrupting shared storage?","options":["Each write is stamped with a monotonically increasing token, and the storage rejects any write bearing a token lower than one it has already seen","The old leader is guaranteed to be killed before a new one starts, so no conflicting write is possible","Every request must include a wall-clock timestamp, and the newest timestamp wins","Clients hold a mutex that the storage releases only after a heartbeat"],"answer":0,"answerLetter":"A"},{"n":11,"type":"mc","prompt":"In DDIA's discussion of 'knowledge, truth, and lies', how is the truth about the cluster's state defined?","options":["By whichever node has the most up-to-date wall clock","By the current leader, whose word is authoritative","By the majority/quorum of nodes, because no single node's perception can be trusted","By the node with the lowest ID, chosen deterministically"],"answer":2,"answerLetter":"C"},{"n":12,"type":"mc","prompt":"What is a Byzantine fault, and what assumption do most datacenter systems make about it?","options":["A node that sends arbitrary, possibly malicious or contradictory information ('lies'); most datacenter systems assume nodes are non-Byzantine (trusted)","A node that crashes and never recovers; most systems assume this cannot happen","A network partition that splits the cluster in two; most systems tolerate it automatically","A clock that drifts beyond NTP correction; most systems handle it with fencing tokens"],"answer":0,"answerLetter":"A"},{"n":13,"type":"mc","prompt":"In DDIA's system-model taxonomy, what distinguishes the three timing models — synchronous, partially synchronous, and asynchronous?","options":["They describe whether nodes crash-stop, crash-recover, or act Byzantine","They describe whether the algorithm uses locks, leases, or fencing tokens","They describe assumptions about bounds on network delay and clock drift: bounded always, bounded most of the time, or no timing guarantees at all","They describe whether messages are delivered in FIFO, causal, or total order"],"answer":2,"answerLetter":"C"},{"n":14,"type":"mc","prompt":"What is the difference between a safety property and a liveness property?","options":["Safety means the system stays available under partitions; liveness means it stays consistent","Safety applies to synchronous models and liveness to asynchronous ones","Safety concerns data durability; liveness concerns network throughput","A safety property says 'nothing bad ever happens' (a violation is irreversible), while a liveness property says 'something good eventually happens'"],"answer":3,"answerLetter":"D"},{"n":15,"type":"open","prompt":"Your failure detector marks a node dead after a 5-second timeout and reassigns its work. In production this occasionally double-executes jobs. Explain why you fundamentally can't distinguish a slow node from a dead one, and how you'd design around it instead of just tuning the timeout.","points":["On an asynchronous network a missing reply is ambiguous: lost request, dead node, or slow/queued response are indistinguishable from the outside.","There is no correct timeout — too long delays failover, too short declares live-but-slow nodes dead, triggering duplicate work and cascading load.","Network delay has no guaranteed upper bound, so no single value eliminates the ambiguity.","Design around it: don't rely on timeouts for correctness — make reassigned work idempotent or guard shared state with fencing tokens so a wrongly-declared-dead node can't corrupt anything.","Let a quorum, not one observer, decide liveness, and accept the timeout only as a liveness/latency heuristic, never a safety guarantee."]},{"n":16,"type":"open","prompt":"A leader acquires a lease on a lock service, then suffers a 30-second stop-the-world GC pause; meanwhile the cluster elects a new leader. When the old leader wakes it writes to shared storage believing it still holds the lock. Walk through how fencing tokens prevent corruption here.","points":["A process can pause arbitrarily (GC, VM migration, paging) with no awareness that time passed, so a lease can silently expire mid-pause.","During the pause the cluster times out the lease and elects a new leader, creating a split-brain window.","The lock service hands out a monotonically increasing fencing token with each grant; the new leader gets a higher token than the old one.","Clients attach their token to every write to the storage/resource.","The storage rejects any write bearing a token lower than the highest it has already accepted, so the woken old leader's stale-token write is refused.","Correctness comes from the resource enforcing the token, not from trusting the lock client to behave."]},{"n":17,"type":"open","prompt":"A colleague proposes ordering events across servers by their time-of-day (wall-clock) timestamps and resolving conflicts with last-write-wins. What breaks, and what would you use instead for (a) measuring a request's duration and (b) ordering events causally?","points":["Time-of-day clocks are NTP-synced and can jump forward or backward; nodes disagree by their sync error, so timestamps can misorder events.","LWW on wall clocks silently drops data: a write with an earlier real time but a higher timestamp (skewed-ahead clock) wins, discarding a genuinely newer write with no error.","For durations use a monotonic clock — it only moves forward and never jumps, though its absolute value is meaningless across machines.","For cross-machine event ordering use logical clocks (Lamport timestamps / version vectors), which order by causality, not wall time.","If real-time ordering is truly required, something like Spanner's TrueTime (bounded uncertainty interval + commit-wait) is needed, not raw NTP timestamps."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ddia/ch08">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

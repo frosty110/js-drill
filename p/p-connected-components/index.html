@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connected Components — JS Drill</title>
+<meta name="description" content="Build an adjacency list, then DFS from every unvisited node — each fresh DFS launch is one new component. O(V + E).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-connected-components">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Connected Components — JS Drill">
+<meta property="og:description" content="Build an adjacency list, then DFS from every unvisited node — each fresh DFS launch is one new component. O(V + E).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-connected-components">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Graphs</p>
+    <h1>Connected Components</h1>
+    <p class="sharepage__lede">Build an adjacency list, then DFS from every unvisited node — each fresh DFS launch is one new component. O(V + E).</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Graphs</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>countComponents(n, edges)</code> using DFS over an adjacency list. Log the count for (n=5, edges=[[0,1],[1,2],[3,4]]) and for (n=5, edges=[[0,1],[1,2],[2,3],[3,4]]).</p>
+    <p class="sharepage__note">Expected output: <code>2
+1</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function countComponents(n, edges) {
+  const adj = Array.from({ length: n }, () =&gt; []);
+  // Undirected — push BOTH directions so DFS can traverse either way.
+  for (const [u, v] of edges) {
+    adj[u].push(v);
+    adj[v].push(u);
+  }
+  const seen = new Array(n).fill(false);
+  let count = 0;
+  function dfs(u) {
+    seen[u] = true;
+    for (const v of adj[u]) if (!seen[v]) dfs(v);
+  }
+  for (let i = 0; i &lt; n; i++) {
+    // Each fresh launch from an unvisited node is exactly one new component.
+    if (!seen[i]) { count++; dfs(i); }
+  }
+  return count;
+}
+// Time O(V + E), Space O(V + E) for adj + O(V) seen</code></pre>
+    <ul class="sharepage__notes"><li>Push BOTH directions when building adj — the graph is undirected.</li><li>Increment count exactly when you START a new DFS from an unvisited node.</li><li>Union-Find (DSU) is an alternative: O((V + E) * α(V)). DFS is simpler when you already have the adjacency list.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Union-Find (DSU) <code>O((V+E)*α(V)) / O(V)</code></h3>
+      <p>Prefer Union-Find when edges arrive as a stream and you must report the component count after each addition — DFS would need to rebuild the adjacency list and re-scan from scratch. For a fully batched edge list like this problem, DFS and UF are equivalent; UF requires no adjacency list.</p>
+      <pre class="sharepage__code"><code class="language-js">function countComponents(n, edges) {
+  const parent = Array.from({length: n}, (_, i) =&gt; i);
+  function find(x) {
+    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+    return x;
+  }
+  // Start with n isolated nodes; each successful union merges two components.
+  let count = n;
+  for (const [u, v] of edges) {
+    const ru = find(u), rv = find(v);
+    if (ru !== rv) { parent[ru] = rv; count--; }
+  }
+  return count;
+}
+console.log(countComponents(5, [[0, 1], [1, 2], [3, 4]]));
+console.log(countComponents(5, [[0, 1], [1, 2], [2, 3], [3, 4]]));</code></pre>
+      <ul class="sharepage__notes"><li>No adjacency list needed — each edge is consumed directly as a union(u, v) call.</li><li>Decrement count only on a successful union (different roots); same-root edges are already in one component.</li><li>Path compression (halving) keeps amortized find near O(α(n)) — effectively constant for any practical n.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why push both adj[u].push(v) AND adj[v].push(u)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Pushing both halves the DFS recursion depth by letting it descend either neighbor first</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The graph is undirected — edges connect in both directions <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It deduplicates parallel edges by ensuring each endpoint records the connection symmetrically</li>
+        <li><span class="sharepage__key">D</span> DFS needs each edge in both directions to compute correct in-degree and out-degree counts</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> When do you increment the component count?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> On every dfs call</li>
+        <li><span class="sharepage__key">B</span> Once per edge</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> When you launch a new dfs from an unvisited node <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Each time the recursion stack unwinds back to depth 0</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(V)</li>
+        <li><span class="sharepage__key">B</span> O(E)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(V + E) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(V * E)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> For n=5 and edges [[0,1],[1,2],[3,4]] the answer is:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 1</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 2 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 3</li>
+        <li><span class="sharepage__key">D</span> 5</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Components: {0,1,2} and {3,4}.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in DFS-based component counting. Remember undirected edges go both ways.</p>
+      <pre class="sharepage__code"><code class="language-js">function countComponents(n, edges) {
+  const adj = Array.from({ length: n }, () =&gt; []);
+  for (const [u, v] of edges) {
+    adj[u].push(v);
+    adj[v].push(___);
+  }
+  const seen = new Array(n).fill(false);
+  let count = 0;
+  function dfs(u) {
+    seen[u] = true;
+    for (const v of adj[u]) if (!seen[v]) ___(v);
+  }
+  for (let i = 0; i &lt; n; i++) {
+    if (!seen[i]) { count___; dfs(i); }
+  }
+  return ___;
+}
+console.log(countComponents(5, [[0, 1], [1, 2], [3, 4]]));</code></pre>
+      <p><strong>Answers:</strong> <code>u</code>, <code>dfs</code>, <code>++</code>, <code>count</code></p>
+      <p class="sharepage__note">Expected output: <code>2</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>countComponents(n, edges)</code> using DFS over an adjacency list. Log the count for (n=5, edges=[[0,1],[1,2],[3,4]]) and for (n=5, edges=[[0,1],[1,2],[2,3],[3,4]]).</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Build adj with both directions; track seen[] over indices 0..n-1.</li><li>Outer loop launches a fresh DFS for every unvisited node — each launch is +1 component.</li><li>Union-Find would also work in O((V+E) * α(V)); DFS is simpler with adjacency list in hand.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function countComponents(n, edges) {
+  const adj = Array.from({ length: n }, () =&gt; []);
+  // Undirected — push BOTH directions so DFS can traverse either way.
+  for (const [u, v] of edges) {
+    adj[u].push(v);
+    adj[v].push(u);
+  }
+  const seen = new Array(n).fill(false);
+  let count = 0;
+  function dfs(u) {
+    seen[u] = true;
+    for (const v of adj[u]) if (!seen[v]) dfs(v);
+  }
+  for (let i = 0; i &lt; n; i++) {
+    // Each fresh launch from an unvisited node is exactly one new component.
+    if (!seen[i]) { count++; dfs(i); }
+  }
+  return count;
+}
+console.log(countComponents(5, [[0, 1], [1, 2], [3, 4]]));
+console.log(countComponents(5, [[0, 1], [1, 2], [2, 3], [3, 4]]));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-connected-components","title":"Connected Components","section":"Graphs","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why push both adj[u].push(v) AND adj[v].push(u)?","options":["Pushing both halves the DFS recursion depth by letting it descend either neighbor first","The graph is undirected — edges connect in both directions","It deduplicates parallel edges by ensuring each endpoint records the connection symmetrically","DFS needs each edge in both directions to compute correct in-degree and out-degree counts"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When do you increment the component count?","options":["On every dfs call","Once per edge","When you launch a new dfs from an unvisited node","Each time the recursion stack unwinds back to depth 0"],"answer":2,"answerLetter":"C"},{"n":3,"q":"Time complexity?","options":["O(V)","O(E)","O(V + E)","O(V * E)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"For n=5 and edges [[0,1],[1,2],[3,4]] the answer is:","options":["1","2","3","5"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in DFS-based component counting. Remember undirected edges go both ways.","answers":["u","dfs","++","count"]}],"L3":[{"n":1,"prompt":"Write `countComponents(n, edges)` using DFS over an adjacency list. Log the count for (n=5, edges=[[0,1],[1,2],[3,4]]) and for (n=5, edges=[[0,1],[1,2],[2,3],[3,4]]).","expectedOutput":"2\n1"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-connected-components">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

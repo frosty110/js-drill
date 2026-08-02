@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Index arithmetic (r-l+1, midpoint, slice, wrap) — JS Drill</title>
+<meta name="description" content="The +1 / -1 / midpoint / modulo idioms behind sliding windows, binary search, fixed-length slices, and circular indexing — the arithmetic you reach for before the algorithm.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/s-index-math">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Index arithmetic (r-l+1, midpoint, slice, wrap) — JS Drill">
+<meta property="og:description" content="The +1 / -1 / midpoint / modulo idioms behind sliding windows, binary search, fixed-length slices, and circular indexing — the arithmetic you reach for before the algorithm.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/s-index-math">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Algorithms</p>
+    <h1>Index arithmetic (r-l+1, midpoint, slice, wrap)</h1>
+    <p class="sharepage__lede">The +1 / -1 / midpoint / modulo idioms behind sliding windows, binary search, fixed-length slices, and circular indexing — the arithmetic you reach for before the algorithm.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Algorithms</span> <span class="ds-chip">4 concept · 3 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>maxWindowSum(arr, k)</code> that returns the maximum sum over any sliding window of size k, using r - l + 1 = k as the window-length invariant. Log <code>maxWindowSum([2, 1, 5, 1, 3, 2], 3)</code>.</p>
+    <p class="sharepage__note">Expected output: <code>9</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// ────────────────────────────────────────────────────────────
+// 1. INCLUSIVE INTERVAL LENGTH:  r - l + 1
+// ────────────────────────────────────────────────────────────
+//
+//   arr  =  [ a , b , c , d , e ]
+//   idx     0   1   2   3   4
+//               ↑       ↑
+//               l       r        l=1, r=3
+//               └───┬───┘
+//                  3 items       r - l + 1 = 3
+//
+//   Drop the +1 to get the GAP (steps from l to r):
+//                                 r - l     = 2
+const inclusiveLen = (l, r) =&gt; r - l + 1;
+const gap          = (l, r) =&gt; r - l;
+
+
+// ────────────────────────────────────────────────────────────
+// 2. MIDPOINT:  (lo + hi) &gt;&gt; 1     ← integer floor-divide
+// ────────────────────────────────────────────────────────────
+//
+//   lo                            hi
+//    ▼                            ▼
+//   [ _ , _ , _ , _ , _ , _ , _ , _ ]
+//     3   4   5   6   7   8   9   10
+//                  ▲
+//                 mid = (3 + 10) &gt;&gt; 1 = 6
+//
+//   `&gt;&gt; 1` is a faster `Math.floor((a+b)/2)` and the idiomatic
+//   write-up interviewers expect.
+const mid = (lo, hi) =&gt; (lo + hi) &gt;&gt; 1;
+
+
+// ────────────────────────────────────────────────────────────
+// 3. FIXED-LENGTH SLICE:  arr.slice(start, start + n)
+//    slice&#39;s 2nd arg is EXCLUSIVE → start + n yields n items.
+// ────────────────────────────────────────────────────────────
+//
+//   [10, 20, 30, 40, 50].slice(1, 1 + 3)
+//          ┌──────────────┐
+//          │   take 3     │
+//          ▼              ▼
+//   [10,  20, 30, 40,  50 ]   →   [20, 30, 40]
+//
+//   Shorthand for last n:
+//   [10, 20, 30, 40, 50].slice(-2)   →   [40, 50]
+
+
+// ────────────────────────────────────────────────────────────
+// 4. SLIDING WINDOW OF SIZE k:   k = r - l + 1
+// ────────────────────────────────────────────────────────────
+//
+//   arr = [2, 1, 5, 1, 3, 2]   k=3
+//          0  1  2  3  4  5
+//
+//         [────────]                sum=8    (l=0, r=2)
+//            [────────]             sum=7    -arr[0] +arr[3]
+//               [────────]   ★      sum=9    -arr[1] +arr[4]
+//                  [────────]       sum=6    -arr[2] +arr[5]
+//
+//   When r advances and length &gt; k, shrink:   l = r - k + 1
+//   Element LEAVING the window:               arr[r - k]
+
+
+// ────────────────────────────────────────────────────────────
+// 5. CIRCULAR INDEXING:  ((i % n) + n) % n
+//    JS arr[-1] is undefined — NOT the last element.
+// ────────────────────────────────────────────────────────────
+//
+//   arr = [a, b, c, d]   n=4
+//          0  1  2  3
+//
+//   i = -1  →  ((-1 % 4) + 4) % 4 = 3  →  &#39;d&#39;   ← wraps left
+//   i =  5  →  (( 5 % 4) + 4) % 4 = 1  →  &#39;b&#39;   ← wraps right
+//
+//   The double modulo handles negative i (JS `%` keeps the sign
+//   of the dividend, so -1 % 4 === -1, not 3).
+const circ = (arr, i) =&gt; arr[((i % arr.length) + arr.length) % arr.length];
+
+
+// ────────────────────────────────────────────────────────────
+// 6. NTH FROM END:  arr[arr.length - n]   (or arr.at(-n))
+// ────────────────────────────────────────────────────────────
+//
+//   arr = [a, b, c, d, e]    length=5
+//                       ▲
+//                       n=1  →  arr[5-1] = &#39;e&#39;   (last)
+//                    ▲
+//                    n=2  →  arr[5-2] = &#39;d&#39;
+//
+//   Off-by-one trap: n must be ≥ 1.
+//   arr[arr.length - 0] = arr[5] = undefined.</code></pre>
+    <ul class="sharepage__notes"><li>Inclusive length needs +1 because subtraction undercounts the left endpoint.</li><li><code>(lo + hi) &gt;&gt; 1</code> is the idiomatic floor-divide for midpoint — interviewers expect it over <code>Math.floor((lo+hi)/2)</code>.</li><li><code>slice(start, start + n)</code> gives exactly n items because slice&#39;s end is EXCLUSIVE — a frequent off-by-one source.</li><li>JS <code>%</code> keeps the sign of the dividend, so wrapping a negative index needs <code>((i % n) + n) % n</code>, not just <code>i % n</code>.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> How many elements are between indices l=2 and r=6, INCLUSIVE of both endpoints?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 4 — that&#39;s r - l</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 5 — that&#39;s r - l + 1 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 6 — that&#39;s r - l + 2</li>
+        <li><span class="sharepage__key">D</span> 7 — that&#39;s r + 1</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Inclusive length is r - l + 1. The +1 counts the left endpoint that the subtraction would otherwise drop.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Binary search: what is the midpoint of lo=3 and hi=10 using <code>(lo + hi) &gt;&gt; 1</code>?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> 6 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> 6.5</li>
+        <li><span class="sharepage__key">C</span> 7</li>
+        <li><span class="sharepage__key">D</span> 13</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> (3 + 10) &gt;&gt; 1 = 13 &gt;&gt; 1 = 6. Right-shift by 1 is integer divide by 2 (floor).</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> You want a sub-array of exactly 4 elements starting at index 2. Which call?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> arr.slice(2, 4)</li>
+        <li><span class="sharepage__key">B</span> arr.slice(2, 5)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> arr.slice(2, 2 + 4) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> arr.slice(2, 2 + 4 - 1)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> slice&#39;s 2nd arg is EXCLUSIVE, so end = start + n gives exactly n items. arr.slice(2, 4) returns only 2 elements.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What does <code>arr[-1]</code> return in JavaScript when arr = [10, 20, 30]?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 30 — the last element, like Python</li>
+        <li><span class="sharepage__key">B</span> 10 — wraps to the first element</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> undefined — JS arrays don&#39;t support negative bracket indices <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> ReferenceError</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> JS array bracket access with a negative index is just a missing property lookup → undefined. Use <code>arr.at(-1)</code> for the Python-style behavior.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">3</span></h2>
+    <p class="sharepage__note">Positions 1–3 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Count elements between l=2 and r=7 INCLUSIVE — fill in the arithmetic.</p>
+      <pre class="sharepage__code"><code class="language-js">const l = ___, r = ___;
+const count = r ___ l ___ 1;
+console.log(count);</code></pre>
+      <p><strong>Answers:</strong> <code>2</code>, <code>7</code>, <code>-</code>, <code>+</code></p>
+      <p class="sharepage__note">Expected output: <code>6</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Take exactly 3 elements from index 1 using slice — fill in the second arg.</p>
+      <pre class="sharepage__code"><code class="language-js">const arr = [10, 20, 30, 40, 50];
+const start = ___, n = ___;
+console.log(JSON.stringify(arr.___(start, start ___ n)));</code></pre>
+      <p><strong>Answers:</strong> <code>1</code>, <code>3</code>, <code>slice</code>, <code>+</code></p>
+      <p class="sharepage__note">Expected output: <code>[20,30,40]</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-3">
+      <h3><a href="#l2-3" class="sharepage__anchor">Exercise 3</a></h3>
+      <p>Wrap a possibly-negative index into a circular array — fill in the modulo dance.</p>
+      <pre class="sharepage__code"><code class="language-js">const arr = [&#39;a&#39;, &#39;b&#39;, &#39;c&#39;, &#39;d&#39;];
+const n = arr.___;
+const i = -1;
+const safeIdx = ((i ___ n) ___ n) ___ n;
+console.log(arr[safeIdx]);</code></pre>
+      <p><strong>Answers:</strong> <code>length</code>, <code>%</code>, <code>+</code>, <code>%</code></p>
+      <p class="sharepage__note">Expected output: <code>d</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>maxWindowSum(arr, k)</code> that returns the maximum sum over any sliding window of size k, using r - l + 1 = k as the window-length invariant. Log <code>maxWindowSum([2, 1, 5, 1, 3, 2], 3)</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Seed <code>sum</code> with the first k elements, then slide.</li><li>When the right pointer advances to r, the element leaving the window is arr[r - k] (because window length k = r - l + 1 means l = r - k + 1).</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function maxWindowSum(arr, k) {
+  let sum = 0;
+  for (let i = 0; i &lt; k; i++) sum += arr[i];
+  let best = sum;
+  // r is the new right edge; window covers [r - k + 1, r] inclusive,
+  // so the element dropping off the left is arr[r - k].
+  for (let r = k; r &lt; arr.length; r++) {
+    sum += arr[r] - arr[r - k];
+    if (sum &gt; best) best = sum;
+  }
+  return best;
+}
+console.log(maxWindowSum([2, 1, 5, 1, 3, 2], 3));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"s-index-math","title":"Index arithmetic (r-l+1, midpoint, slice, wrap)","section":"Algorithms","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"How many elements are between indices l=2 and r=6, INCLUSIVE of both endpoints?","options":["4 — that's r - l","5 — that's r - l + 1","6 — that's r - l + 2","7 — that's r + 1"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Binary search: what is the midpoint of lo=3 and hi=10 using `(lo + hi) >> 1`?","options":["6","6.5","7","13"],"answer":0,"answerLetter":"A"},{"n":3,"q":"You want a sub-array of exactly 4 elements starting at index 2. Which call?","options":["arr.slice(2, 4)","arr.slice(2, 5)","arr.slice(2, 2 + 4)","arr.slice(2, 2 + 4 - 1)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"What does `arr[-1]` return in JavaScript when arr = [10, 20, 30]?","options":["30 — the last element, like Python","10 — wraps to the first element","undefined — JS arrays don't support negative bracket indices","ReferenceError"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Count elements between l=2 and r=7 INCLUSIVE — fill in the arithmetic.","answers":["2","7","-","+"]},{"n":2,"prompt":"Take exactly 3 elements from index 1 using slice — fill in the second arg.","answers":["1","3","slice","+"]},{"n":3,"prompt":"Wrap a possibly-negative index into a circular array — fill in the modulo dance.","answers":["length","%","+","%"]}],"L3":[{"n":1,"prompt":"Write `maxWindowSum(arr, k)` that returns the maximum sum over any sliding window of size k, using r - l + 1 = k as the window-length invariant. Log `maxWindowSum([2, 1, 5, 1, 3, 2], 3)`.","expectedOutput":"9"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/s-index-math">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

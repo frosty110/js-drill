@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>delete arr[i] leaves holes — JS Drill</title>
+<meta name="description" content="`delete arr[i]` does not shift later elements or shrink `length` — it leaves a sparse hole where the slot reads as `undefined`, and most array methods silently skip it. Use `splice` (mutate) or `filter` (new array) to actually remove an element.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/t-delete-array-holes">
+<meta property="og:type" content="article">
+<meta property="og:title" content="delete arr[i] leaves holes — JS Drill">
+<meta property="og:description" content="`delete arr[i]` does not shift later elements or shrink `length` — it leaves a sparse hole where the slot reads as `undefined`, and most array methods silently skip it. Use `splice` (mutate) or `filter` (new array) to actually remove an element.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/t-delete-array-holes">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › JS Traps</p>
+    <h1>delete arr[i] leaves holes</h1>
+    <p class="sharepage__lede">`delete arr[i]` does not shift later elements or shrink `length` — it leaves a sparse hole where the slot reads as `undefined`, and most array methods silently skip it. Use `splice` (mutate) or `filter` (new array) to actually remove an element.</p>
+    <p class="sharepage__meta"><span class="ds-chip">syntax</span> <span class="ds-chip">JS Traps</span> <span class="ds-chip">4 concept · 3 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>removeAt(arr, i)</code> that removes the element at index <code>i</code> from <code>arr</code> IN PLACE (no holes, length shrinks) and returns the mutated array. Then call it on <code>[10, 20, 30, 40]</code> removing index 1 and log <code>JSON.stringify(result)</code> and <code>result.length</code> on separate lines.</p>
+    <p class="sharepage__note">Expected output: <code>[10,30,40]
+3</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// `delete` was designed for object properties. On an array it removes
+// the slot BUT leaves the length alone — you get a sparse &quot;hole&quot;.
+const a = [1, 2, 3];
+delete a[1];
+console.log(JSON.stringify(a));  // [1,null,3] — JSON.stringify writes holes as null
+console.log(a.length);           // 3  (NOT 2 — length unchanged)
+console.log(a[1]);               // undefined  (the hole reads as undefined)
+
+// How iteration methods treat the hole — silently inconsistent:
+const b = [1, 2, 3];
+delete b[1];
+let feCount = 0;
+b.forEach(() =&gt; feCount++);
+console.log(feCount);                       // 2  (forEach SKIPS holes)
+console.log(JSON.stringify(b.map(x =&gt; x))); // [1,null,3]  (map PRESERVES holes)
+console.log(JSON.stringify(b.filter(() =&gt; true))); // [1,3]  (filter SKIPS holes)
+let forCount = 0;
+for (let i = 0; i &lt; b.length; i++) forCount++;
+console.log(forCount);                      // 3  (index-for VISITS the hole as undefined)
+
+// The fix — splice mutates in place AND shifts + shrinks length.
+const c = [1, 2, 3];
+c.splice(1, 1);
+console.log(JSON.stringify(c), c.length);   // [1,3] 2
+
+// Or filter, for a non-mutating new array.
+const d = [1, 2, 3];
+const e = d.filter((_, i) =&gt; i !== 1);
+console.log(JSON.stringify(e));             // [1,3]</code></pre>
+    <ul class="sharepage__notes"><li><code>delete arr[i]</code> was inherited from object-property semantics — on arrays it almost never does what you want.</li><li>Length is unchanged after <code>delete</code>, so loops over <code>arr.length</code> still visit the hole (as <code>undefined</code>).</li><li><code>JSON.stringify</code> serializes holes as <code>null</code> — that&#39;s why <code>[1, , 3]</code> prints as <code>[1,null,3]</code> in the runner.</li><li>Iteration methods are split: <code>forEach</code>, <code>map</code> (preserves but doesn&#39;t invoke the callback), <code>filter</code>, <code>reduce</code>, <code>some</code>, <code>every</code> SKIP holes; index-based <code>for</code> and <code>for...of</code> VISIT them.</li><li><code>Array.from(arr)</code> and the spread <code>[...arr]</code> MATERIALIZE holes into real <code>undefined</code> slots — useful when you need consistent iteration.</li><li>To actually remove by index, use <code>arr.splice(i, 1)</code> (mutates, returns the removed slice) or <code>arr.filter((_, j) =&gt; j !== i)</code> (new array).</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> After <code>const a = [1, 2, 3]; delete a[1];</code>, what is <code>a.length</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 2</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 3 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> undefined</li>
+        <li><span class="sharepage__key">D</span> Throws TypeError</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>delete</code> clears the slot but does not change <code>length</code> — the array is now sparse but still reports length 3.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> After <code>const a = [1, 2, 3]; delete a[1];</code>, what does <code>a[1]</code> evaluate to?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 2</li>
+        <li><span class="sharepage__key">B</span> null</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> undefined <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Throws ReferenceError</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Reading a hole returns <code>undefined</code> — same as reading any unset property on an object.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Which expression removes the element at index 1 AND shifts later elements down?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> delete a[1]</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> a.splice(1, 1) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> a[1] = null</li>
+        <li><span class="sharepage__key">D</span> a.length--</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>splice(1, 1)</code> removes one element at index 1 and shifts the rest left, decrementing length. The other three leave the array in a broken state.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> After <code>const a = [1, 2, 3]; delete a[1];</code>, how many times does <code>a.forEach(fn)</code> call <code>fn</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 3 — once per index</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 2 — forEach skips holes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 1 — only the first defined element</li>
+        <li><span class="sharepage__key">D</span> 0 — forEach throws on sparse arrays</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>forEach</code>, <code>map</code> (callback), <code>filter</code>, and <code>reduce</code> all silently skip holes. That&#39;s why <code>delete</code> produces hard-to-spot bugs — the count is just off by one.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">3</span></h2>
+    <p class="sharepage__note">Positions 1–3 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Show that <code>delete</code> leaves length intact but the slot reads as undefined. Pick the keyword and the property.</p>
+      <pre class="sharepage__code"><code class="language-js">const a = [1, 2, 3];
+___ a[___];
+console.log(a.___);
+console.log(a[___]);</code></pre>
+      <p><strong>Answers:</strong> <code>delete</code>, <code>1</code>, <code>length</code>, <code>1</code></p>
+      <p class="sharepage__note">Expected output: <code>3
+undefined</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Use the right mutating method to actually remove the element at index 1 — length should drop to 2.</p>
+      <pre class="sharepage__code"><code class="language-js">const a = [1, 2, 3];
+a.___(___, ___);
+console.log(JSON.___(a), a.___);</code></pre>
+      <p><strong>Answers:</strong> <code>splice</code>, <code>1</code>, <code>1</code>, <code>stringify</code>, <code>length</code></p>
+      <p class="sharepage__note">Expected output: <code>[1,3] 2</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-3">
+      <h3><a href="#l2-3" class="sharepage__anchor">Exercise 3</a></h3>
+      <p>Compare: forEach skips the hole, but an index-based for visits it. Fill the method and the loop keyword.</p>
+      <pre class="sharepage__code"><code class="language-js">const a = [1, 2, 3];
+___ a[1];
+let fe = 0;
+a.___(() =&gt; fe___);
+let idx = 0;
+___ (let i = 0; i ___ a.length; i++) idx++;
+console.log(fe, idx);</code></pre>
+      <p><strong>Answers:</strong> <code>delete</code>, <code>forEach</code>, <code>++</code>, <code>for</code>, <code>&lt;</code></p>
+      <p class="sharepage__note">Expected output: <code>2 3</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>removeAt(arr, i)</code> that removes the element at index <code>i</code> from <code>arr</code> IN PLACE (no holes, length shrinks) and returns the mutated array. Then call it on <code>[10, 20, 30, 40]</code> removing index 1 and log <code>JSON.stringify(result)</code> and <code>result.length</code> on separate lines.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li><code>delete arr[i]</code> is the trap this lesson is about — don&#39;t reach for it.</li><li><code>splice(i, 1)</code> mutates the array, removing 1 element at index <code>i</code> and shifting later elements left.</li><li><code>splice</code> returns the REMOVED slice, not the mutated array — return <code>arr</code> directly.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function removeAt(arr, i) {
+  arr.splice(i, 1);
+  return arr;
+}
+
+const result = removeAt([10, 20, 30, 40], 1);
+console.log(JSON.stringify(result));
+console.log(result.length);</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"t-delete-array-holes","title":"delete arr[i] leaves holes","section":"JS Traps","track":"syntax","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"After `const a = [1, 2, 3]; delete a[1];`, what is `a.length`?","options":["2","3","undefined","Throws TypeError"],"answer":1,"answerLetter":"B"},{"n":2,"q":"After `const a = [1, 2, 3]; delete a[1];`, what does `a[1]` evaluate to?","options":["2","null","undefined","Throws ReferenceError"],"answer":2,"answerLetter":"C"},{"n":3,"q":"Which expression removes the element at index 1 AND shifts later elements down?","options":["delete a[1]","a.splice(1, 1)","a[1] = null","a.length--"],"answer":1,"answerLetter":"B"},{"n":4,"q":"After `const a = [1, 2, 3]; delete a[1];`, how many times does `a.forEach(fn)` call `fn`?","options":["3 — once per index","2 — forEach skips holes","1 — only the first defined element","0 — forEach throws on sparse arrays"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Show that `delete` leaves length intact but the slot reads as undefined. Pick the keyword and the property.","answers":["delete","1","length","1"]},{"n":2,"prompt":"Use the right mutating method to actually remove the element at index 1 — length should drop to 2.","answers":["splice","1","1","stringify","length"]},{"n":3,"prompt":"Compare: forEach skips the hole, but an index-based for visits it. Fill the method and the loop keyword.","answers":["delete","forEach","++","for","\u003c"]}],"L3":[{"n":1,"prompt":"Write `removeAt(arr, i)` that removes the element at index `i` from `arr` IN PLACE (no holes, length shrinks) and returns the mutated array. Then call it on `[10, 20, 30, 40]` removing index 1 and log `JSON.stringify(result)` and `result.length` on separate lines.","expectedOutput":"[10,30,40]\n3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/t-delete-array-holes">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

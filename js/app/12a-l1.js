@@ -210,6 +210,10 @@ function _pickCarryoverL1Question(currentLessonId) {
   return { lessonId, lessonTitle: lessonMeta ? lessonMeta.title : lessonId, q };
 }
 
+// Monotonic counter behind the per-sitting L1 session token — Date.now() alone
+// can repeat when a render follows a Retry inside the same millisecond.
+let _l1SessionSeq = 0;
+
 function renderL1(body, lesson, content) {
   const qs = content.L1.questions;
   // Per-session shuffle: question order + per-question option order. Both
@@ -235,6 +239,9 @@ function renderL1(body, lesson, content) {
         optOrder: _shuffleIndices(q.options.length)
       }))
     };
+    // Token identifying this sitting, so the share record knows a pick belongs
+    // to a NEW attempt and resets instead of blending (js/app/24-share.js).
+    localState.sessionToken = `${Date.now()}-${++_l1SessionSeq}`;
     _cacheSet(lesson.id, 'L1', localState);
   }
   // Capture per-question render handles so we can replay locked-state
@@ -367,6 +374,10 @@ function renderL1(body, lesson, content) {
         perQ.locked = true;
         const isRightClick = displayOi === correctDisplayIdx;
         if (!isRightClick) recordWrong(lesson.id);
+        // Share capture: store the AUTHORED indices, not the shuffled display
+        // ones — the display order dies with this session, the authored order
+        // is what a share code positions against (js/app/24-share.js).
+        recordL1Pick(lesson.id, qi, origOi, localState.sessionToken);
         // mark correctness
         [...optsContainer.children].forEach((el, idx) => {
           el.classList.add('disabled');

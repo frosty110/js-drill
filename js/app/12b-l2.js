@@ -180,6 +180,7 @@ function renderL2(body, lesson, content) {
       outputWrap.classList.remove('hidden');
 
       const matched = result.ok && outputsMatch(result.output, ex.expectedOutput);
+      recordL2Result(lesson.id, exi, matched);   // share capture (js/app/24-share.js)
       // If the user passes after struggling (≥3 attempts), flag once
       // as a weakness signal — surfaces "struggled-but-eventually-passed"
       // middle case the SR loop previously couldn't see (audits/l2.md
@@ -408,6 +409,7 @@ function renderL2Mobile(body, lesson, content) {
       outputWrap.classList.remove('hidden');
 
       const matched = result.ok && outputsMatch(result.output, ex.expectedOutput);
+      recordL2Result(lesson.id, exi, matched);   // share capture (js/app/24-share.js)
       // If the user passes after struggling (≥3 attempts), flag once
       // as a weakness signal — surfaces "struggled-but-eventually-passed"
       // middle case the SR loop previously couldn't see (audits/l2.md

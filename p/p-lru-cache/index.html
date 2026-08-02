@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LRU Cache — JS Drill</title>
+<meta name="description" content="Least Recently Used cache with O(1) get and put. JS Map preserves INSERTION order — delete+re-set on every hit promotes to most-recent end; the first key is the LRU evict target.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-lru-cache">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LRU Cache — JS Drill">
+<meta property="og:description" content="Least Recently Used cache with O(1) get and put. JS Map preserves INSERTION order — delete+re-set on every hit promotes to most-recent end; the first key is the LRU evict target.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-lru-cache">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › System Design</p>
+    <h1>LRU Cache</h1>
+    <p class="sharepage__lede">Least Recently Used cache with O(1) get and put. JS Map preserves INSERTION order — delete+re-set on every hit promotes to most-recent end; the first key is the LRU evict target.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">System Design</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement LRUCache(capacity) with O(1) get (returns value or -1) and put. Run capacity-2: put(1,1), put(2,2), get(1), put(3,3), get(2), put(4,4), get(1), get(3), get(4). Logs: 1, -1, -1, 3, 4.</p>
+    <p class="sharepage__note">Expected output: <code>1
+-1
+-1
+3
+4</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">class LRUCache {
+  constructor(capacity) {
+    this.capacity = capacity;
+    // JS Map preserves INSERTION order — leverage that to skip a doubly-linked list.
+    this.map = new Map();
+  }
+  get(key) {
+    if (!this.map.has(key)) return -1;
+    const v = this.map.get(key);
+    // Delete + re-set bumps key to the back (most-recent end). Skip this and it becomes FIFO.
+    this.map.delete(key);
+    this.map.set(key, v);
+    return v;
+  }
+  put(key, value) {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size &gt;= this.capacity) {
+      // First key in iteration order = LRU. Evict the front.
+      const oldest = this.map.keys().next().value;
+      this.map.delete(oldest);
+    }
+    this.map.set(key, value);
+  }
+}
+// Time O(1) per op, Space O(capacity)</code></pre>
+    <ul class="sharepage__notes"><li>Map preserves insertion order — leverage that to skip a doubly-linked list.</li><li>On HIT, delete + set to move the key to the end. Forgetting this turns the cache into FIFO.</li><li>Evict from the FRONT via <code>this.map.keys().next().value</code> — that key is the oldest.</li><li>Time O(1) amortized per op, Space O(capacity).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Doubly-linked list + HashMap (language-agnostic classic) <code>O(1) / O(capacity)</code></h3>
+      <p>This is the canonical interview answer in Java, C++, or Python — languages without an ordered map. Also reach for it if the interviewer explicitly asks for the &#39;classic&#39; implementation or asks you to avoid relying on Map insertion order. Sentinel head/tail nodes eliminate all null-pointer edge cases in the link/unlink helpers.</p>
+      <pre class="sharepage__code"><code class="language-js">class LRUCache {
+  constructor(capacity) {
+    this.capacity = capacity;
+    this.map = new Map(); // key -&gt; DLL node
+    // Sentinel dummy nodes — head.next = LRU, tail.prev = MRU
+    this.head = { key: null, val: null, prev: null, next: null };
+    this.tail = { key: null, val: null, prev: null, next: null };
+    this.head.next = this.tail;
+    this.tail.prev = this.head;
+  }
+  _remove(node) {
+    node.prev.next = node.next;
+    node.next.prev = node.prev;
+  }
+  _insertBack(node) {
+    node.prev = this.tail.prev;
+    node.next = this.tail;
+    this.tail.prev.next = node;
+    this.tail.prev = node;
+  }
+  get(key) {
+    if (!this.map.has(key)) return -1;
+    const node = this.map.get(key);
+    this._remove(node);
+    this._insertBack(node);
+    return node.val;
+  }
+  put(key, value) {
+    if (this.map.has(key)) {
+      const node = this.map.get(key);
+      node.val = value;
+      this._remove(node);
+      this._insertBack(node);
+    } else {
+      if (this.map.size &gt;= this.capacity) {
+        const lru = this.head.next; // oldest
+        this._remove(lru);
+        this.map.delete(lru.key);
+      }
+      const node = { key, val: value, prev: null, next: null };
+      this._insertBack(node);
+      this.map.set(key, node);
+    }
+  }
+}
+const c = new LRUCache(2);
+c.put(1, 1);
+c.put(2, 2);
+console.log(c.get(1));
+c.put(3, 3);
+console.log(c.get(2));
+c.put(4, 4);
+console.log(c.get(1));
+console.log(c.get(3));
+console.log(c.get(4));</code></pre>
+      <ul class="sharepage__notes"><li>Sentinel dummy head/tail nodes mean _remove and _insertBack never handle null neighbors — no edge-case checks needed inside those helpers.</li><li>HashMap stores key → DLL node so O(1) lookup → O(1) move-to-back on both get and put, without scanning the list.</li><li>Eviction is O(1): head.next is always the LRU node; unlink it and delete its key from the map.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why use a Map instead of a plain object for the LRU store?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Maps allow non-string keys, which the LRU spec requires</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Maps preserve insertion order — recency tracking for free <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Object key order is undefined, so eviction would be non-deterministic</li>
+        <li><span class="sharepage__key">D</span> Map.delete is O(1) but object property deletion is O(n) due to deoptimization</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> On a cache HIT, what must <code>get</code> do?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Return the value — recency is only updated by <code>put</code></li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Return the value AND delete+re-set the key to mark it most recent <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Increment a per-key access counter and compare on eviction</li>
+        <li><span class="sharepage__key">D</span> Swap the hit key with the back key, an O(1) reorder</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> When the cache is at capacity, which key do we evict?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A random key</li>
+        <li><span class="sharepage__key">B</span> The most recently used (back of the map)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> The least recently used (front of the map) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The smallest key</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Time complexity of get and put?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(log n) — eviction needs a balanced tree by access time</li>
+        <li><span class="sharepage__key">B</span> O(n) — finding the LRU requires scanning all entries</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(1) amortized <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(1) for get, O(n) for put because eviction must scan for the oldest</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the LRUCache so capacity 2 evicts key 2 after a get(1) and put(3, 3).</p>
+      <pre class="sharepage__code"><code class="language-js">class LRUCache {
+  constructor(capacity) {
+    this.capacity = capacity;
+    this.map = new ___();
+  }
+  get(key) {
+    if (!this.map.___(key)) return -1;
+    const v = this.map.get(key);
+    this.map.___(key);
+    this.map.set(key, v);
+    return v;
+  }
+  put(key, value) {
+    if (this.map.has(key)) this.map.delete(key);
+    else if (this.map.size ___ this.capacity) {
+      const oldest = this.map.keys().___().value;
+      this.map.delete(oldest);
+    }
+    this.map.set(key, value);
+  }
+}
+const c = new LRUCache(2);
+c.put(1, 1);
+c.put(2, 2);
+console.log(c.get(1));
+c.put(3, 3);
+console.log(c.get(2));</code></pre>
+      <p><strong>Answers:</strong> <code>Map</code>, <code>has</code>, <code>delete</code>, <code>&gt;=</code>, <code>next</code></p>
+      <p class="sharepage__note">Expected output: <code>1
+-1</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement LRUCache(capacity) with O(1) get (returns value or -1) and put. Run capacity-2: put(1,1), put(2,2), get(1), put(3,3), get(2), put(4,4), get(1), get(3), get(4). Logs: 1, -1, -1, 3, 4.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Use a Map and rely on insertion order as recency order.</li><li>On hits and updates: delete + set to move the key to the back.</li><li>Evict via <code>this.map.keys().next().value</code> — the oldest key.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">class LRUCache {
+  constructor(capacity) {
+    this.capacity = capacity;
+    // JS Map preserves INSERTION order — leverage that to skip a doubly-linked list.
+    this.map = new Map();
+  }
+  get(key) {
+    if (!this.map.has(key)) return -1;
+    const v = this.map.get(key);
+    // Delete + re-set bumps key to the back (most-recent end). Skip this and it becomes FIFO.
+    this.map.delete(key);
+    this.map.set(key, v);
+    return v;
+  }
+  put(key, value) {
+    if (this.map.has(key)) this.map.delete(key);
+    else if (this.map.size &gt;= this.capacity) {
+      // First key in iteration order = LRU. Evict the front.
+      const oldest = this.map.keys().next().value;
+      this.map.delete(oldest);
+    }
+    this.map.set(key, value);
+  }
+}
+const c = new LRUCache(2);
+c.put(1, 1);
+c.put(2, 2);
+console.log(c.get(1));
+c.put(3, 3);
+console.log(c.get(2));
+c.put(4, 4);
+console.log(c.get(1));
+console.log(c.get(3));
+console.log(c.get(4));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-lru-cache","title":"LRU Cache","section":"System Design","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why use a Map instead of a plain object for the LRU store?","options":["Maps allow non-string keys, which the LRU spec requires","Maps preserve insertion order — recency tracking for free","Object key order is undefined, so eviction would be non-deterministic","Map.delete is O(1) but object property deletion is O(n) due to deoptimization"],"answer":1,"answerLetter":"B"},{"n":2,"q":"On a cache HIT, what must `get` do?","options":["Return the value — recency is only updated by `put`","Return the value AND delete+re-set the key to mark it most recent","Increment a per-key access counter and compare on eviction","Swap the hit key with the back key, an O(1) reorder"],"answer":1,"answerLetter":"B"},{"n":3,"q":"When the cache is at capacity, which key do we evict?","options":["A random key","The most recently used (back of the map)","The least recently used (front of the map)","The smallest key"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Time complexity of get and put?","options":["O(log n) — eviction needs a balanced tree by access time","O(n) — finding the LRU requires scanning all entries","O(1) amortized","O(1) for get, O(n) for put because eviction must scan for the oldest"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in the LRUCache so capacity 2 evicts key 2 after a get(1) and put(3, 3).","answers":["Map","has","delete",">=","next"]}],"L3":[{"n":1,"prompt":"Implement LRUCache(capacity) with O(1) get (returns value or -1) and put. Run capacity-2: put(1,1), put(2,2), get(1), put(3,3), get(2), put(4,4), get(1), get(3), get(4). Logs: 1, -1, -1, 3, 4.","expectedOutput":"1\n-1\n-1\n3\n4"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-lru-cache">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

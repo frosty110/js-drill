@@ -27,6 +27,32 @@
   - **Patterns (90)**: Arrays & Hashing · Two Pointers · Sliding Window · Stack · Binary Search · Linked List · Trees · Tries · Heap · Graphs · Greedy · Dynamic Programming · Backtracking · Intervals · Matrix · Bit Manipulation · System Design
   - **Applied (37)**: Applied Problems — implementation problems (decks, games, hash maps, throttle/debounce, undo-redo, CSV roll-ups, rules engines, fetch-and-reshape, etc.)
 
+## Standing constraints (read before changing content or adding assets)
+
+**[docs/invariants.md](docs/invariants.md) is the rules doc.** Six constraints
+whose failure mode is invisible — the app stays green and the meaning quietly
+becomes wrong. Every one has a gate:
+
+```bash
+node tools/check-all.js          # verify every gate
+node tools/check-all.js --fix    # regenerate generated output, then verify
+git config core.hooksPath .githooks   # once per clone: run them pre-commit
+```
+
+The two that bite most often:
+
+1. **Never reorder or delete a question or an option.** Share codes are
+   positional — character N is question N, the letter is the option's authored
+   index — so a swap silently repoints every URL already shared for that lesson.
+   Appending and rewording in place are both safe. Gated by
+   `tools/check-content-order.js` against `data/content-order.lock.json`;
+   `--accept` re-baselines when a break is genuinely intended.
+2. **Regenerate `p/`, `sd/`, `sitemap.xml` after any content change** — the
+   output is committed and GitHub Pages serves it from the repo, so stale pages
+   ship silently.
+
+CI runs the same command on every push (`.github/workflows/checks.yml`).
+
 ## What this project is
 
 A **JavaScript syntax + interview-pattern memorization web app**. No build step —
@@ -73,6 +99,7 @@ persistence). Live on GitHub Pages: https://frosty110.github.io/js-drill/
 - **🔀 Swap-Bench** (iter 86, expanded iter 87) — pairwise idiom-equivalence drill. Sidebar 🔀 button → 6-card session reading curated `data/idiom-pairs.json` (18 entries as of iter 87, expandable by appending); each card stacks two JS snippets vertically (mobile-first; ≤8 lines per snippet) and asks "Same behavior?". Covers canonical JS confusions: map-vs-for-mutates, for-of-vs-for-in (on arrays), slice-vs-splice, `||`-vs-`??`, Array.fill shared-reference trap, Map-vs-object key types, parseInt-vs-Number, sort-vs-toSorted, `==` vs `===`, async/await vs .then chain, JSON-deep-clone vs shallow-spread, etc. **First surface drilling RELATIONAL retrieval** ("are these two equivalent?") rather than categorical pick-one. Schema-additive `state.swapBench`.
 - **🏷 Merged Problems list + faceted tag filter** (2026-05-27) — on the **Problems** surface, Patterns + Applied render as ONE section-grouped list (no per-track sub-tabs; the Type facet recovers the split). A collapsible 🏷 Filter panel at the top of the sidebar offers 4 facets — **Type** + **Topic** (derived from track/section, no authoring), **Difficulty** (easy/med/hard, authored), **Company** (authored, seeded empty for future per-company problem sets). Faceting is AND-across / OR-within, via a `renderSidebar()` predicate (`tagMatch`); registry in `data/tags.json`, authored tags on manifest entries, validator-gated. Schema-additive `state.tagFilter`/`state.tagFilterOpen`. First step of the navigation refactor's Problems⇄Reference model (`iter-artifacts/navigation-refactor-design.md`).
 - **📊 Dashboard (unified) + deep-link routes** (2026-05-31) — a new top-nav **Dashboard** entry opens ONE scrollable surface merging **daily progress** (today's solved/missed + due/weak counts + today-vs-yesterday delta), a **gamified Activity view** (🔥 current streak, weekly solved/per-day/first-try chips, a 14-day solved-per-day bar chart with green-solved/amber-miss split, and the 60-day consistency heatmap), and the full **mastery/stats** body. Every number is a real rep (PROFILE.md L72 endorses streak/delta "progress at a glance"; L109 only bars gamification that *obscures* readiness — so all stats derive from `_streakMapBuckets`' pass/miss classifier, no hollow points). The standalone Stats and Streak Map modals are retired into it — their hidden buttons (`stats-btn`/`streak-map-btn`) now route to `openDashboard()`. Rendering is shared via module-level `renderStatsInto`/`renderActivityInto`/`renderDailyInto` in `js/app/14-init-core.js`. **(2026-07-10, design-loop P5:** `openDashboard` now delegates to `openProgress` in `js/app/20-progress.js` — the Dashboard rebuilt as the ds-system **Progress** surface (Today snapshot → Activity charts → Fix first → Mastery → More insights), additionally absorbing the At-Risk list; `#at-risk-btn`/`#/m/at-risk` land there too. The legacy renderers remain in 14-init-core.js as delegation fallback.) Alongside it, **every launchable mode is a deep-link route** `#/m/<mode>` (slug = button id minus `-btn`): topbar menu items render as `<a href="#/m/…">` so **cmd+click / middle-click / right-click → "Open in New Tab"** boots a fresh app instance straight into that surface (`_parseHash`/`_dispatchModeRoute` in `js/app/10-render-sidebar-lesson.js`; boot dispatch via `_pendingBootMode`). Plain left-click still opens in place. No new state.
+- **🔗 Shareable, crawlable URLs + score codes** (2026-08-02) — every drillable surface now has a stable URL that resolves to a **plain HTML page an AI agent can fetch**, optionally carrying the user's per-question result set. The app is client-rendered behind hash routes, and a fragment never reaches a server, so an agent handed an app URL got an empty shell; `tools/build-share-pages.js` renders the fetchable form — `p/<lesson>/` × 171 and `sd/<topic>/<unit>/` × 43, complete without JavaScript, questions numbered with `#qN` anchors, answer key included, plus a `#drill-data` JSON index. A share link appends `?s=` — one character per question in authored order, **case carrying correctness** (`AbbCdAbC.Yn.n`), so it records *which distractor pulled you*, not merely that you missed. The URL can't be decoded server-side on Pages and doesn't need to be: the page prints the legend, the agent holds the URL, zipping the two is trivial. Built on demand from live state — no share records, no cache, no sign-in, nothing stored server-side. **Copy for AI** adds the code the user actually typed at L3 (too big for a URL, free via the clipboard). Needed a new question-grained record, `state.answers` (schema-additive), because `progress[id].L1='passed'` can't say which option was picked; system design gained `lastOutcome`/`lastPick` on its Leitner boxes for the same reason. Codec in `js/sharecode.js`, surface registry in `js/routes.js`, spec in [`docs/share-urls.md`](docs/share-urls.md). **Never reorder questions or options in a lesson JSON** — appending is safe, reordering invalidates every code ever generated for it.
 - **🏠 Home + scoped review** (2026-08-01) — the root URL finally has a front door. `/` used to resume `lastLessonId` (or, for a first-time visitor, drop them inside Basics lesson 1), so the app had no map; now a bare URL boots to **Home** (`js/app/22-home.js`, `#/m/home`) and the resumed lesson is offered as the CONTINUE hero instead of being the screen. Any explicit hash — a shared `#/two-sum/L1`, a `#/m/<mode>` route — still wins. Home shows every drillable surface at three altitudes: the global Continue, three **track cards** (Coding · Syntax · System Design) with mastery meter + due count, and each track expanding into its **subcategories** (29 sections, 4 SD topics) — every row carrying the same two affordances. The two affordances mean exactly one thing each: **Continue** = forward progress (first non-mastered lesson in authored order, at its first unpassed level; a fully-mastered scope's becomes *Refresh*), **⟲ Review** = that scope's repair queue. The ⟲ renders only where there's work. **Scoped review sessions** (`js/app/23-review.js`, `#/m/review/<slug>`) are the new half: `dueReviewIds()` was global-only, so "what's rotting in Trees?" was unanswerable and there was no way to work a queue to the end. A session reuses L1/L2/L3 as-is — SR scheduling, weakness clearing and reveal-flag clearing stay in one place — and owns only the queue, a HUD strip (label · n/N · Skip · Exit) and the advance rule. System Design joins the model via new hash routes on its page plus per-chapter `questions` counts in the topic manifests. Schema-additive `state.homeOpen`.
 
 
@@ -146,6 +173,11 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `ds/gallery.html` | Visual catalog of every primitive in both themes. Open it before building anything new. |
 | `docs/ui-ux-guide.md` | **The UI/UX law** — ten rules, page frame, navigation + launcher contract, state/empty/error patterns, feedback hierarchy, number/chart rules, motion, z-layer ladder, a11y floor, checklists, measured legacy debt. Enforced via `.claude/skills/ui-consistency/`. |
 | `tools/cdp/ds-page-frame.js` | Durable probe: page-frame + nav invariants across Today/Browse/Progress at 390px and 1280px (one `<h1>`, shared column, `.ds-section`, no h-scroll, ≥44px nav, truthful `aria-current`). Append a row to `PAGES` when you add a destination. |
+| `js/sharecode.js` | **The share-code codec** — per-question result set ⇄ compact URL-safe string. One character per question in AUTHORED order; case carries correctness (`A`=picked option 0 and right, `a`=picked option 0 and wrong, `Y`/`p`/`n`=self-graded, `-`=unattempted). Every character is self-describing, so a decoder needs no schema. Runs in the browser and under Node. **The character table lives here and nowhere else.** See [`docs/share-urls.md`](docs/share-urls.md). |
+| `js/routes.js` | **The addressable-surface registry** — one row per surface (static share path, live-app hash, path parser, sitemap flag). Share URLs, backlinks, parsing and `sitemap.xml` all derive from it, so adding a crawlable surface is a one-line change. |
+| `js/share-page.js` | Progressive enhancement on the generated static pages: decodes `?s=`, marks the picked option inline, renders a results table, and flags rows whose code contradicts the current content ("code out of date") instead of reporting a false verdict. |
+| `tools/build-share-pages.js` | Renders the crawlable pages — `p/<lesson>/` (171), `sd/<topic>/<unit>/` (43), indexes, `sitemap.xml`, `robots.txt`. Output is **committed** (Pages serves from the repo); `--check` fails when it's stale. Run after any content change. |
+| `p/`, `sd/`, `sitemap.xml`, `robots.txt` | **Generated — do not hand-edit.** The static, no-JavaScript form of every lesson and system-design unit. This is what an AI agent or a crawler actually fetches. |
 | `js/storage.js` | **Single source of truth** for localStorage I/O across pages. Exposes `window.DrillStorage`. See `.claude/skills/ui-consistency/`. |
 | `js/supabase-config.js` | Supabase project URL + anon key. Anon key is public-by-design; RLS protects data. |
 | `js/supabase-client.js` | Initializes `@supabase/supabase-js` v2 client. Exposes `window.SupabaseClient`. No-op if config missing. |
@@ -156,6 +188,10 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
 | `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |
 | `js/core/runner.js` | Sandboxed code runner (`window.DrillRunner`). Erases TypeScript types for `lang:"ts"` lessons by lazy-loading the TS compiler on first use, then executes via `new Function`. Mirror semantics in `tools/validate-data.js`. |
+| `docs/invariants.md` | **The rules doc** — the six standing constraints whose failure mode is invisible (positional share codes, committed generated output, offline precache parity, sync key coverage, single-source-of-truth ownership, executable lesson content). Each names its gate and its escape hatch. |
+| `tools/check-all.js` | Runs every gate in one command; `--fix` regenerates first. What `.githooks/pre-commit` and `.github/workflows/checks.yml` both run. |
+| `tools/check-content-order.js` | Locks authored question/option order into `data/content-order.lock.json` — fails on reorder/removal, allows append and in-place rewording, `--accept` re-baselines. Also gates the ≤8-option share-alphabet ceiling. |
+| `tools/check-sw-shell.js` | Asserts `service-worker.js`'s `APP_SHELL` covers every local asset `index.html` loads (and vice versa). A gap breaks offline users only. |
 | `tools/validate-data.js` | Runs every L2 fill + L3 canonical, diffs manifest vs disk, gates banned syntax and walkthrough trace line ranges. Erases TS types via Node's built-in stripper. Run before commits. |
 | `tools/cdp/check.js` | Probes a deployed URL via Chrome's :9222 port (basic) |
 | `tools/cdp/deep-check.js` | Multi-tab + multi-lesson navigation probe with screenshots |
@@ -320,6 +356,14 @@ The alternate's `code` must end with a `console.log(...)` matching `L3.expectedO
    app uses, and flags any manifest/disk drift. Must show `184 passed, 0 failed`
    (or whatever the new total is — it scales with lessons).
 5. Flip both the file's `"status"` and the manifest entry's `"status"` to `"full"`.
+5b. Regenerate the crawlable share page for it:
+   ```bash
+   node tools/build-share-pages.js
+   ```
+   The `p/<lesson-id>/index.html` output is committed — Pages serves it from the
+   repo, so a new lesson has no shareable/crawlable page until this runs.
+   **Append questions and options, never reorder existing ones**: share codes
+   are positional against authored order (see [`docs/share-urls.md`](docs/share-urls.md)).
 6. Open `index.html` in a browser (via `python3 -m http.server 8765`) — the lesson
    appears with its status dot.
 
@@ -449,6 +493,16 @@ python3 -m http.server 8765
 
 # Validate all exercises + manifest/disk parity
 node tools/validate-data.js
+
+# Regenerate the crawlable share pages — REQUIRED after any content change,
+# because the output is committed and GitHub Pages serves it from the repo.
+node tools/build-share-pages.js
+node tools/build-share-pages.js --check   # fails if the committed output is stale
+node tools/test-sharecode.js              # share-code codec + route registry
+
+# Offline-pack parity — run after adding ANY script or stylesheet to index.html.
+# A missing APP_SHELL entry breaks only offline users, so it never shows locally.
+node tools/check-sw-shell.js
 
 # Drive Chrome at :9222 (start with: open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-jsdrill)
 node tools/cdp/deep-check.js http://127.0.0.1:8765/ /tmp/shots

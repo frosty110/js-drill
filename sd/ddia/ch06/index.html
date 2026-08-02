@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Partitioning — Designing Data-Intensive Applications</title>
+<meta name="description" content="How to break a large dataset into partitions (shards) spread across many nodes for scalability, how to choose a partitioning scheme, keep it balanced as the cluster grows, and route requests to the right partition.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ddia/ch06">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Partitioning — Designing Data-Intensive Applications">
+<meta property="og:description" content="How to break a large dataset into partitions (shards) spread across many nodes for scalability, how to choose a partitioning scheme, keep it balanced as the cluster grows, and route requests to the right partition.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ddia/ch06">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ddia/">Designing Data-Intensive Applications</a></p>
+    <h1>Partitioning</h1>
+    <p class="sharepage__lede">How to break a large dataset into partitions (shards) spread across many nodes for scalability, how to choose a partitioning scheme, keep it balanced as the cluster grows, and route requests to the right partition.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Data-Intensive Applications</span> <span class="ds-chip">17 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Partitioning spreads data and query load across nodes for scalability; it is normally combined with replication so each partition has copies.</li><li>Key-range partitioning keeps keys sorted (enabling range scans) but risks hot spots; hash partitioning spreads load evenly but loses efficient range queries.</li><li>Even hashing does not fix a single hot key; that needs application-level splitting such as appending a random suffix.</li><li>Secondary indexes are either document-partitioned (local, scatter/gather reads) or term-partitioned (global, writes fan out but reads hit one partition).</li><li>Rebalancing should avoid hash-mod-N; fixed-partition-count, dynamic split/merge, and per-node-proportional strategies move data without reshuffling everything.</li><li>Request routing (node forwarding, a routing tier, or a partition-aware client) needs consensus on partition assignments — often via ZooKeeper or a gossip protocol.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">17</span></h2>
+    <p class="sharepage__note">Positions 1–17 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA, what is the main goal of partitioning (sharding)?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To keep multiple copies of the same data for fault tolerance</li>
+        <li><span class="sharepage__key">B</span> To guarantee transactions execute in a serial order</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> To spread data and query load across many nodes so the system scales beyond one machine <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> To compress data by removing duplicate rows</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Partitioning splits a large dataset so different nodes hold different subsets, scaling storage and throughput. Keeping copies for fault tolerance is replication — the two are usually combined but are distinct concerns.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does it mean for a partitioning scheme to be &#39;skewed&#39;, and why is it bad?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Partitions are unevenly loaded so some nodes (&#39;hot spots&#39;) get disproportionate data or traffic, undermining the scalability partitioning was meant to provide <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Data is sorted incorrectly, breaking range queries</li>
+        <li><span class="sharepage__key">C</span> Replicas of a partition disagree on the current value</li>
+        <li><span class="sharepage__key">D</span> The partition key is stored in a different byte order than the sort key</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Skew means load isn&#39;t spread evenly; hot spots bottleneck on a few nodes while others idle. The goal of a good scheme is even distribution across partitions.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the key tradeoff of partitioning by key range (keys kept sorted within each partition)?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It distributes load perfectly evenly but makes point lookups slow</li>
+        <li><span class="sharepage__key">B</span> It loses the ability to do point lookups entirely</li>
+        <li><span class="sharepage__key">C</span> It requires rehashing all data whenever a node is added</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> It enables efficient range scans, but certain access patterns (e.g., a timestamp key) can create hot spots <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sorted key ranges support range queries, but a key like a timestamp funnels all recent writes into one partition, creating a hot spot. Even distribution is the strength of hash partitioning, not key-range.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does partitioning by hash of the key gain and lose compared to key-range partitioning?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Gains efficient range queries, loses even distribution</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Gains even load distribution, loses efficient range queries (adjacent keys scatter across partitions) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Gains both range queries and even distribution with no downside</li>
+        <li><span class="sharepage__key">D</span> Gains stronger consistency, loses availability</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Hashing spreads keys uniformly (good for load) but destroys key adjacency, so a range scan must query every partition. Key-range partitioning is the opposite tradeoff.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does Cassandra&#39;s compound primary key compromise between hash and range partitioning?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It hashes every column of the key together into one partition ID</li>
+        <li><span class="sharepage__key">B</span> It stores each column in a separate partition</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It hashes the first part of the key to choose a partition, then keeps rows sorted by the remaining columns within that partition <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It uses consistent hashing across all key columns</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The first column of a Cassandra compound key is hashed to pick the partition (even spread), while the remaining columns sort rows inside the partition (efficient range scans within one partition key). This gives one-partition range queries without global hot spots.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does hash partitioning fail to solve the problem of a single hot key (e.g., a celebrity&#39;s user ID getting huge traffic)?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> All requests for one key still hash to the same single partition, so hashing can&#39;t split load for an individual key <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Hashing makes the hot key even hotter by duplicating it</li>
+        <li><span class="sharepage__key">C</span> Hashing only distributes writes, not reads</li>
+        <li><span class="sharepage__key">D</span> Hash functions are too slow to keep up with a hot key</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A hash spreads different keys evenly, but every request for the same key lands on one partition — a single hot key stays on one node. The book&#39;s mitigation is application-level: e.g., append a random number to the key to split it across N partitions, at the cost of more complex reads.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does a document-partitioned (local) secondary index behave on reads?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A single partition holds the whole index, so reads hit exactly one partition</li>
+        <li><span class="sharepage__key">B</span> Reads never use the index; they scan primary keys</li>
+        <li><span class="sharepage__key">C</span> The index is stored on the client, so no partition is queried</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Each partition indexes only its own documents, so a query on the secondary index must scatter to all partitions and gather results <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A local (document-partitioned) index keeps each partition&#39;s index alongside its own data, so a secondary-index query fans out to every partition (scatter/gather). Writes stay local — the opposite tradeoff from a global/term-partitioned index.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the tradeoff of a term-partitioned (global) secondary index versus a local one?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Reads must query all partitions, but writes touch only one</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Reads hit a single partition (fast), but a write may need to update index entries on several partitions <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Both reads and writes always touch exactly one partition</li>
+        <li><span class="sharepage__key">D</span> It eliminates the need to store a primary index</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A global index is partitioned by the indexed term, so a read on that term hits one partition — but a single document write can affect several terms living on different partitions, making writes fan out (and often asynchronous). This is the mirror image of the local-index tradeoff.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why should rebalancing NOT be done with &#39;hash mod N&#39; (where N is the number of nodes)?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Modulo is too computationally expensive at scale</li>
+        <li><span class="sharepage__key">B</span> Modulo produces collisions that corrupt keys</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Changing N reassigns most keys to different nodes, forcing an enormous, disruptive data movement <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It only works when N is a power of two</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With <code>hash mod N</code>, adding or removing a node changes N and remaps almost every key, so nearly all data must move. Rebalancing strategies aim to move as little data as possible.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does the &#39;fixed number of partitions&#39; rebalancing strategy work?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It creates many more partitions than nodes up front and, when nodes are added, moves whole partitions between nodes without changing how keys map to partitions <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It picks the partition count equal to the current node count and re-splits on every change</li>
+        <li><span class="sharepage__key">C</span> It splits a partition in two whenever it exceeds a size threshold</li>
+        <li><span class="sharepage__key">D</span> It uses hash mod N but caches the result</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> You over-provision partitions (e.g., 1000 for 10 nodes) so rebalancing just reassigns entire partitions to new nodes; the key→partition mapping never changes. Splitting on a size threshold is the separate &#39;dynamic partitioning&#39; strategy (HBase/B-trees).</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What characterizes &#39;dynamic partitioning&#39; as used by HBase and range-partitioned stores?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The number of partitions is fixed forever at cluster creation</li>
+        <li><span class="sharepage__key">B</span> Partitions are reassigned every time a client connects</li>
+        <li><span class="sharepage__key">C</span> Each node always holds exactly one partition</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Partitions are split when they grow too large and merged when they shrink, so partition count adapts to the data volume — analogous to a B-tree <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Dynamic partitioning splits an overgrown partition and merges under-filled ones, letting the number of partitions track the dataset size (like B-tree node splits/merges). Fixed-count is the alternative where partition count never changes.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which three approaches to request routing does DDIA describe?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Only client-side routing is possible in distributed databases</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A node receives the request and forwards it; a routing tier decides and forwards; or a partition-aware client connects directly to the right node <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> DNS round-robin, load balancer, and reverse proxy</li>
+        <li><span class="sharepage__key">D</span> Leader forwarding, follower forwarding, and quorum voting</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The three models are: any node forwards to the owner, a dedicated routing tier acts as a partition-aware load balancer, or the client itself knows the partition assignment. All three need current knowledge of which partition lives on which node.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What role does ZooKeeper commonly play in a partitioned system&#39;s request routing?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It stores the actual partitioned data as a backup</li>
+        <li><span class="sharepage__key">B</span> It hashes keys to partitions on behalf of clients</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It maintains authoritative metadata about partition-to-node assignments, and routing components subscribe to it for changes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It executes the parallel query plan across partitions</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> ZooKeeper acts as the coordination service holding the authoritative mapping of partitions to nodes; routing tiers/clients watch it so they learn about rebalancing. A gossip protocol among the nodes is the decentralized alternative that avoids a separate coordinator.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is massively parallel processing (MPP) in the context of partitioning?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Running the same query on every replica and voting on the result</li>
+        <li><span class="sharepage__key">B</span> A routing scheme that picks the least-loaded node</li>
+        <li><span class="sharepage__key">C</span> A replication topology for multi-datacenter writes</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Breaking a complex analytic query into stages that execute in parallel across many partitions/nodes to speed up throughput-heavy workloads <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> MPP query engines parallelize a single analytic query across the partitions/nodes holding the data, which suits scan-heavy analytics rather than the point queries typical of OLTP. It is about query execution, not replication or routing.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You&#39;re partitioning a large event store keyed by timestamp. Product wants efficient &#39;give me everything in this time window&#39; scans, but ingestion is all recent-time writes. Explain the tension and design a scheme that gets range scans without a write hot spot.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Key-range partitioning keeps keys sorted so time-window range scans are efficient — but a pure timestamp key funnels all current writes into the newest partition, a write hot spot.</li><li>Pure hash partitioning spreads writes evenly but scatters adjacent timestamps, destroying efficient range scans — the opposite failure.</li><li>The fix is a compound key: prefix with a higher-cardinality field (e.g., sensor/tenant/customer id) so writes spread across partitions, then sort by timestamp within each partition.</li><li>This mirrors Cassandra&#39;s compound primary key: hash the first component for even spread, keep remaining columns sorted for in-partition range scans.</li><li>Tradeoff: a time-window query now scatters across the id partitions and gathers, but each partition still does an efficient sorted range scan and the write hot spot is gone.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The tension is that a raw timestamp key gives me great time-window range scans because keys stay sorted, but it dumps every recent write into the single newest partition — a classic write hot spot; pure hashing would fix the hot spot but scatter adjacent times and kill the range scan. So I&#39;d use a compound key: prefix with a higher-cardinality field like sensor or tenant id to spread writes across partitions, then sort by timestamp within each partition — exactly Cassandra&#39;s compound-key trick of hashing the first component and range-sorting the rest. A window query then scatters across those id-partitions and gathers, but each partition still does an efficient sorted scan and no single node is a write bottleneck.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>One key in your hashed-partitioned system is a celebrity account taking massive traffic, and it&#39;s pinning a single node even though hashing usually spreads load. Why doesn&#39;t hashing help, and what would you actually do?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Hashing distributes DIFFERENT keys evenly, but every request for the SAME key hashes to one partition — a single hot key stays on one node.</li><li>So hash partitioning solves skew across keys, not skew concentrated in one key.</li><li>Application-level mitigation: split the hot key by appending a random suffix (e.g., 1..N), spreading its traffic across N partitions.</li><li>Cost: reads must now fan out to all N sub-keys and combine results, and you must track which keys are hot.</li><li>Apply it selectively to the few known hot keys, not every key, to avoid making all reads more expensive.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Hashing only spreads load across different keys — every request for the same key hashes to the same partition, so one celebrity key inevitably lands on one node no matter how good the hash is. The book&#39;s mitigation is application-level: split that hot key by appending a random suffix, say 1 through N, so its traffic spreads across N partitions. The cost is that reads for that key now have to fan out to all N variants and merge the results, and I have to track which keys are actually hot — so I&#39;d apply this only to the handful of known hot keys, not universally, to avoid taxing every read.</div>
+    </article>
+    <article class="sharepage__q" id="q17">
+      <h3><a href="#q17" class="sharepage__anchor">Q17</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Your partitioned product catalog needs to serve queries like &#39;all red cars&#39; by a secondary attribute. Compare a document-partitioned (local) secondary index versus a term-partitioned (global) one for this, and pick based on the read/write pattern.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Local (document-partitioned) index: each partition indexes only its own docs, so a secondary-index query must scatter to ALL partitions and gather — reads expensive, writes cheap (stay on one partition).</li><li>Global (term-partitioned) index: partitioned by the indexed term, so a query for &#39;red&#39; hits one partition — reads cheap — but a single document write may update index entries on several partitions, so writes fan out.</li><li>Global indexes are often updated asynchronously, so the index can lag the data.</li><li>Pick local when writes dominate and secondary-index reads are rare/tolerant of scatter-gather; pick global when secondary-index reads are frequent/latency-sensitive and you can absorb heavier, possibly-lagging writes.</li><li>Frame it as the mirror-image tradeoff: you&#39;re choosing which of read or write pays the cross-partition cost.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> A local (document-partitioned) index stores each partition&#39;s index next to its own data, so writes stay on one partition but a &#39;red cars&#39; query has to scatter to every partition and gather — cheap writes, expensive reads. A global (term-partitioned) index is partitioned by the term itself, so &#39;red&#39; resolves on a single partition (fast reads), but one product write can touch index entries on several partitions, making writes fan out and often lag asynchronously. So it&#39;s the mirror-image tradeoff of which side pays the cross-partition cost: if this attribute query is frequent and latency-sensitive I&#39;d go global and absorb the heavier, eventually-consistent writes; if writes dominate and these lookups are rare, the local index with scatter-gather reads is simpler.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ddia","unit":"ch06","title":"Partitioning","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"In DDIA, what is the main goal of partitioning (sharding)?","options":["To keep multiple copies of the same data for fault tolerance","To guarantee transactions execute in a serial order","To spread data and query load across many nodes so the system scales beyond one machine","To compress data by removing duplicate rows"],"answer":2,"answerLetter":"C"},{"n":2,"type":"mc","prompt":"What does it mean for a partitioning scheme to be 'skewed', and why is it bad?","options":["Partitions are unevenly loaded so some nodes ('hot spots') get disproportionate data or traffic, undermining the scalability partitioning was meant to provide","Data is sorted incorrectly, breaking range queries","Replicas of a partition disagree on the current value","The partition key is stored in a different byte order than the sort key"],"answer":0,"answerLetter":"A"},{"n":3,"type":"mc","prompt":"What is the key tradeoff of partitioning by key range (keys kept sorted within each partition)?","options":["It distributes load perfectly evenly but makes point lookups slow","It loses the ability to do point lookups entirely","It requires rehashing all data whenever a node is added","It enables efficient range scans, but certain access patterns (e.g., a timestamp key) can create hot spots"],"answer":3,"answerLetter":"D"},{"n":4,"type":"mc","prompt":"What does partitioning by hash of the key gain and lose compared to key-range partitioning?","options":["Gains efficient range queries, loses even distribution","Gains even load distribution, loses efficient range queries (adjacent keys scatter across partitions)","Gains both range queries and even distribution with no downside","Gains stronger consistency, loses availability"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"How does Cassandra's compound primary key compromise between hash and range partitioning?","options":["It hashes every column of the key together into one partition ID","It stores each column in a separate partition","It hashes the first part of the key to choose a partition, then keeps rows sorted by the remaining columns within that partition","It uses consistent hashing across all key columns"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"Why does hash partitioning fail to solve the problem of a single hot key (e.g., a celebrity's user ID getting huge traffic)?","options":["All requests for one key still hash to the same single partition, so hashing can't split load for an individual key","Hashing makes the hot key even hotter by duplicating it","Hashing only distributes writes, not reads","Hash functions are too slow to keep up with a hot key"],"answer":0,"answerLetter":"A"},{"n":7,"type":"mc","prompt":"How does a document-partitioned (local) secondary index behave on reads?","options":["A single partition holds the whole index, so reads hit exactly one partition","Reads never use the index; they scan primary keys","The index is stored on the client, so no partition is queried","Each partition indexes only its own documents, so a query on the secondary index must scatter to all partitions and gather results"],"answer":3,"answerLetter":"D"},{"n":8,"type":"mc","prompt":"What is the tradeoff of a term-partitioned (global) secondary index versus a local one?","options":["Reads must query all partitions, but writes touch only one","Reads hit a single partition (fast), but a write may need to update index entries on several partitions","Both reads and writes always touch exactly one partition","It eliminates the need to store a primary index"],"answer":1,"answerLetter":"B"},{"n":9,"type":"mc","prompt":"Why should rebalancing NOT be done with 'hash mod N' (where N is the number of nodes)?","options":["Modulo is too computationally expensive at scale","Modulo produces collisions that corrupt keys","Changing N reassigns most keys to different nodes, forcing an enormous, disruptive data movement","It only works when N is a power of two"],"answer":2,"answerLetter":"C"},{"n":10,"type":"mc","prompt":"How does the 'fixed number of partitions' rebalancing strategy work?","options":["It creates many more partitions than nodes up front and, when nodes are added, moves whole partitions between nodes without changing how keys map to partitions","It picks the partition count equal to the current node count and re-splits on every change","It splits a partition in two whenever it exceeds a size threshold","It uses hash mod N but caches the result"],"answer":0,"answerLetter":"A"},{"n":11,"type":"mc","prompt":"What characterizes 'dynamic partitioning' as used by HBase and range-partitioned stores?","options":["The number of partitions is fixed forever at cluster creation","Partitions are reassigned every time a client connects","Each node always holds exactly one partition","Partitions are split when they grow too large and merged when they shrink, so partition count adapts to the data volume — analogous to a B-tree"],"answer":3,"answerLetter":"D"},{"n":12,"type":"mc","prompt":"Which three approaches to request routing does DDIA describe?","options":["Only client-side routing is possible in distributed databases","A node receives the request and forwards it; a routing tier decides and forwards; or a partition-aware client connects directly to the right node","DNS round-robin, load balancer, and reverse proxy","Leader forwarding, follower forwarding, and quorum voting"],"answer":1,"answerLetter":"B"},{"n":13,"type":"mc","prompt":"What role does ZooKeeper commonly play in a partitioned system's request routing?","options":["It stores the actual partitioned data as a backup","It hashes keys to partitions on behalf of clients","It maintains authoritative metadata about partition-to-node assignments, and routing components subscribe to it for changes","It executes the parallel query plan across partitions"],"answer":2,"answerLetter":"C"},{"n":14,"type":"mc","prompt":"What is massively parallel processing (MPP) in the context of partitioning?","options":["Running the same query on every replica and voting on the result","A routing scheme that picks the least-loaded node","A replication topology for multi-datacenter writes","Breaking a complex analytic query into stages that execute in parallel across many partitions/nodes to speed up throughput-heavy workloads"],"answer":3,"answerLetter":"D"},{"n":15,"type":"open","prompt":"You're partitioning a large event store keyed by timestamp. Product wants efficient 'give me everything in this time window' scans, but ingestion is all recent-time writes. Explain the tension and design a scheme that gets range scans without a write hot spot.","points":["Key-range partitioning keeps keys sorted so time-window range scans are efficient — but a pure timestamp key funnels all current writes into the newest partition, a write hot spot.","Pure hash partitioning spreads writes evenly but scatters adjacent timestamps, destroying efficient range scans — the opposite failure.","The fix is a compound key: prefix with a higher-cardinality field (e.g., sensor/tenant/customer id) so writes spread across partitions, then sort by timestamp within each partition.","This mirrors Cassandra's compound primary key: hash the first component for even spread, keep remaining columns sorted for in-partition range scans.","Tradeoff: a time-window query now scatters across the id partitions and gathers, but each partition still does an efficient sorted range scan and the write hot spot is gone."]},{"n":16,"type":"open","prompt":"One key in your hashed-partitioned system is a celebrity account taking massive traffic, and it's pinning a single node even though hashing usually spreads load. Why doesn't hashing help, and what would you actually do?","points":["Hashing distributes DIFFERENT keys evenly, but every request for the SAME key hashes to one partition — a single hot key stays on one node.","So hash partitioning solves skew across keys, not skew concentrated in one key.","Application-level mitigation: split the hot key by appending a random suffix (e.g., 1..N), spreading its traffic across N partitions.","Cost: reads must now fan out to all N sub-keys and combine results, and you must track which keys are hot.","Apply it selectively to the few known hot keys, not every key, to avoid making all reads more expensive."]},{"n":17,"type":"open","prompt":"Your partitioned product catalog needs to serve queries like 'all red cars' by a secondary attribute. Compare a document-partitioned (local) secondary index versus a term-partitioned (global) one for this, and pick based on the read/write pattern.","points":["Local (document-partitioned) index: each partition indexes only its own docs, so a secondary-index query must scatter to ALL partitions and gather — reads expensive, writes cheap (stay on one partition).","Global (term-partitioned) index: partitioned by the indexed term, so a query for 'red' hits one partition — reads cheap — but a single document write may update index entries on several partitions, so writes fan out.","Global indexes are often updated asynchronously, so the index can lag the data.","Pick local when writes dominate and secondary-index reads are rare/tolerant of scatter-gather; pick global when secondary-index reads are frequent/latency-sensitive and you can absorb heavier, possibly-lagging writes.","Frame it as the mirror-image tradeoff: you're choosing which of read or write pays the cross-partition cost."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ddia/ch06">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

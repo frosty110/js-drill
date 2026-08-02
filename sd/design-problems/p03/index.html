@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Design a Photo-Sharing Service — Canonical Design Problems</title>
+<meta name="description" content="An Instagram-style service where users upload photos, follow others, and browse a media-rich feed. The signature challenge is separating heavy binary media (blob storage + CDN) from lightweight metadata (a DB), processing uploads asynchronously into multiple sizes, and generating a feed over a media-heavy read-dominated workload.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/design-problems/p03">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Design a Photo-Sharing Service — Canonical Design Problems">
+<meta property="og:description" content="An Instagram-style service where users upload photos, follow others, and browse a media-rich feed. The signature challenge is separating heavy binary media (blob storage + CDN) from lightweight metadata (a DB), processing uploads asynchronously into multiple sizes, and generating a feed over a media-heavy read-dominated workload.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/design-problems/p03">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/design-problems/">Canonical Design Problems</a></p>
+    <h1>Design a Photo-Sharing Service</h1>
+    <p class="sharepage__lede">An Instagram-style service where users upload photos, follow others, and browse a media-rich feed. The signature challenge is separating heavy binary media (blob storage + CDN) from lightweight metadata (a DB), processing uploads asynchronously into multiple sizes, and generating a feed over a media-heavy read-dominated workload.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Canonical Design Problems</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Store the photo bytes in blob storage (S3) and serve them via CDN; keep only metadata + the media URL in the DB — never blobs in the DB.</li><li>Upload is a two-phase flow: write the original to blob storage, then enqueue async resize/thumbnail/transcode work.</li><li>A queue-driven media pipeline generates multiple sizes (thumbnail, feed, full) so clients fetch the right resolution.</li><li>Metadata (photoId, ownerId, caption, mediaUrls, ts) lives in a sharded DB keyed by photo or user.</li><li>Feed generation reuses fan-out (push/pull hybrid), but the feed carries media URLs, not bytes — hydration is a CDN fetch.</li><li>The workload is overwhelmingly read-heavy and bandwidth-dominated; CDN hit rate is the primary scaling lever.</li><li>Decoupling media from metadata lets each scale independently — blob storage for capacity, DB for query, CDN for delivery.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Open the design: functional and non-functional requirements for a photo-sharing service, and what makes it different from a text feed.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Functional: upload photos (with caption); follow users; view a media feed; view a user&#39;s profile grid; like/comment (optional).</li><li>Non-functional: highly read-heavy, bandwidth-dominated (media is MBs, not KBs), low feed/media latency, high durability (never lose a user&#39;s photos).</li><li>Durability of media is paramount — photos are irreplaceable, so replicated blob storage.</li><li>The differentiator vs a text feed: large binary payloads, so storage/delivery of bytes dominates over the metadata/feed logic.</li><li>Confirm scale: DAU, uploads/day, avg photo size, read:write ratio, follower distribution.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Functionally: upload photos with captions, follow users, browse a media-rich home feed and profile grids, and optionally like/comment. Non-functionally it&#39;s extremely read-heavy and bandwidth-dominated — payloads are megabytes, not kilobytes — so I optimize media delivery latency and, critically, durability, because a user&#39;s photos are irreplaceable. What sets it apart from a text feed is exactly that binary weight: the hard part shifts from feed logic to storing and delivering bytes cheaply and durably. I&#39;d confirm DAU, uploads/day, average photo size, and the follower distribution up front.</div>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Estimate capacity. Assume 100M DAU, 10M photo uploads/day, average stored size 2MB (across all generated variants), and a 100:1 read:view ratio. Derive upload QPS, new storage/day and /year, and read bandwidth.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Uploads: 10M/day ÷ 86,400 ≈ 116 uploads/s; peak ~2–3× ≈ 300/s.</li><li>New media storage: 10M × 2MB = 20 TB/day → ~7.3 PB/year (before replication; ~22 PB at 3× replication).</li><li>Views: 100:1 → 1B photo-views/day ÷ 86,400 ≈ ~11.6K reads/s; peak ≈ 23K+/s.</li><li>Read bandwidth: at ~200KB per delivered (feed-size) image, 1B views/day ≈ 200 TB/day egress — served from CDN, not origin.</li><li>Metadata is tiny by comparison (~1KB/photo) — the cost and scale story is entirely media bytes + egress.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> 10M uploads/day is only ~116/s, ~300/s at peak — writes are modest. But at 2MB stored per photo across variants that&#39;s 20 TB/day of new media, ~7.3 PB/year before replication and roughly 22 PB at 3× durability. On the read side, 100:1 gives 1B photo-views/day, ~12K reads/s, and at ~200KB per delivered feed image that&#39;s on the order of 200 TB/day of egress — which is why this must be served from CDN, not origin. Metadata is a rounding error at ~1KB/photo; the entire cost and scale story is media bytes and bandwidth.</div>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Design the upload and read APIs. How does a client upload a large photo, and how does it fetch feed media?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Upload: request a pre-signed/direct upload URL, PUT the bytes straight to blob storage (bypassing the app tier), then POST /photos {mediaKey, caption} to register metadata.</li><li>Alternatively POST /photos multipart → app streams to blob store (simpler but app-tier bandwidth cost).</li><li>Register returns photoId; processing status is async.</li><li>Read: GET /feed?cursor=&amp;limit → returns metadata + CDN media URLs per size; client picks resolution.</li><li>GET /users/{id}/photos for the profile grid (thumbnails).</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> For upload I prefer a direct-to-blob flow: the client asks for a pre-signed URL, PUTs the bytes straight to S3 (bypassing the app tier so we don&#39;t pay app bandwidth), then calls <code>POST /photos {mediaKey, caption}</code> to register metadata and returns a photoId, with processing done async. Reads are metadata-plus-URLs: <code>GET /feed?cursor=&amp;limit</code> returns each post&#39;s metadata and a set of CDN URLs (thumbnail/feed/full) so the client fetches the right resolution directly from the CDN, and <code>GET /users/{id}/photos</code> backs the thumbnail profile grid.</div>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Give the high-level architecture and the data model, emphasizing the media/metadata split.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Components: app tier, blob storage (S3) for originals + variants, CDN for delivery, metadata DB (sharded), a queue + worker pool for processing, feed service.</li><li>Media path is fully separate from metadata: blobs in S3, URLs/metadata in the DB.</li><li>Data model: Photos{photoId, ownerId, caption, mediaKeys{thumb,feed,full}, createdAt, status}; Follows{followerId, followeeId}; Feed{userId → [photoId...]}.</li><li>Feed rows carry photoIds → hydrate to metadata → resolve to CDN URLs; bytes never touch the DB or feed store.</li><li>Each layer scales independently: S3 for capacity/durability, DB for queries, CDN for egress, workers for processing throughput.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The key move is separating media from metadata. Photo bytes — original and generated variants — live in blob storage (S3) and are delivered by CDN; the DB holds only metadata and the media keys/URLs. Components are an app tier, S3, CDN, a sharded metadata DB, and a queue with a worker pool for processing, plus a feed service. The model is <code>Photos{photoId, ownerId, caption, mediaKeys{thumb,feed,full}, createdAt, status}</code>, <code>Follows</code>, and per-user <code>Feed{userId → [photoId…]}</code>. Feed rows carry photo IDs that hydrate to metadata and resolve to CDN URLs — bytes never touch the DB or the feed store — so blob storage, the DB, the CDN, and the worker pool each scale on their own axis.</div>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span> <span class="ds-chip">crux</span></h3>
+      <p>Where should the actual photo bytes be stored, and how served?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> As BLOB columns in the relational metadata DB, served through the app tier</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> In distributed blob/object storage (e.g. S3) with only the URL/key in the DB, served via CDN <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> In Redis alongside the feed post IDs for fast access</li>
+        <li><span class="sharepage__key">D</span> On the app servers&#39; local disks, load-balanced across them</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Photos are large, immutable binaries — object storage (S3) is built for exactly this: cheap, effectively unbounded, replicated for durability. The DB stores just the key/URL and metadata so it stays small and queryable, and delivery goes through a CDN to serve the bandwidth close to users. BLOBs in the DB bloat it and kill query performance; Redis is expensive RAM for MB payloads; and local app-server disks aren&#39;t durable or shareable.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>Crux deep dive: design the asynchronous media-processing pipeline. Why async, what runs, and what does the client see before processing finishes?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Why async: resizing/transcoding a 2MB+ image takes seconds — doing it inline blocks the upload and couples user latency to CPU work.</li><li>Flow: original lands in S3 → an event/message goes on a queue → a worker pool pulls jobs and generates thumbnail/feed/full variants (+ format transcode, EXIF strip, moderation).</li><li>Workers write variants back to S3 and update the photo&#39;s status/mediaKeys in the DB.</li><li>Client sees status=processing (show original or a placeholder), flips to ready when variants exist — or upload is confirmed immediately and variants appear shortly after.</li><li>Queue gives elasticity + retry + backpressure: spikes buffer, failed jobs retry, workers scale independently.</li><li>Idempotent workers (keyed on photoId+variant) so retries don&#39;t duplicate work.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Resizing and transcoding a multi-megabyte image takes seconds of CPU, so doing it inline would block the upload and tie user latency to that work — hence async. The original lands in S3, which emits an event onto a queue; a worker pool pulls jobs and produces the variants (thumbnail, feed, full), transcodes format, strips EXIF, and runs moderation, then writes them back to S3 and updates the photo&#39;s <code>status</code> and <code>mediaKeys</code> in the DB. The client gets an immediate upload confirmation with <code>status=processing</code> — showing the original or a placeholder — and flips to ready once variants exist. The queue is what makes this robust: it buffers upload spikes, retries failed jobs, applies backpressure, and lets processing workers scale independently, with jobs keyed by photoId+variant so retries stay idempotent.</div>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span> <span class="ds-chip">crux</span></h3>
+      <p>The service is overwhelmingly read-heavy and bandwidth-dominated. What is the single most important lever for scaling media delivery?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Adding read replicas to the metadata database</li>
+        <li><span class="sharepage__key">B</span> Sharding the feed store across more Redis nodes</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Maximizing CDN cache hit rate so most image bytes are served from edge caches, not origin/S3 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Vertically scaling the app tier with more CPU</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The dominant cost and latency is delivering hundreds of TB/day of image bytes, and photo access is power-law skewed toward recent/popular content — so a high CDN cache hit rate means the vast majority of bytes are served from edge caches near users, sparing origin/S3 bandwidth and slashing latency. Metadata replicas, feed-store shards, and app CPU all matter, but they address the tiny metadata/logic side, not the bytes that actually saturate the system.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Explain feed generation here. How do you reuse push/pull fan-out, and what&#39;s the media-heavy twist versus a text feed?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Reuse the same hybrid fan-out: push photoIds into follower feeds for normal users, pull for high-follower accounts, merge at read.</li><li>The feed stores lightweight photoIds/metadata refs — NOT media — so fan-out amplification is cheap regardless of photo size.</li><li>The twist is hydration: after assembling photoIds, resolve each to its CDN variant URLs; the actual bytes are fetched by the client from the CDN.</li><li>Serve the right resolution per surface — thumbnails for grids, feed-size for scroll, full for detail — to control bandwidth.</li><li>Prefetch/lazy-load and progressive images to keep the media feed responsive on mobile.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Feed generation reuses the same push/pull hybrid: for normal users I fan out photoIds into follower timelines on write, for high-follower accounts I pull at read time, and merge the two. The crucial point is that the feed carries only lightweight photoId/metadata references, never media, so fan-out is just as cheap as a text feed regardless of the 2MB payloads. The media-heavy twist is hydration: once I have the photoIds I resolve each to its CDN variant URLs and the client fetches the bytes directly from the CDN, choosing thumbnail for grids, feed-size for scrolling, and full for detail. Serving the right resolution per surface, plus lazy-loading and progressive images, is what keeps a media feed responsive on mobile.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Staff-level: cover durability, failure modes, and scale tradeoffs — what breaks, and how do you keep photos safe and delivery fast globally?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Durability: replicate blob storage across zones/regions (S3 multi-AZ + cross-region replication); metadata and blobs must not diverge — write blob first, then metadata, and reconcile orphans.</li><li>Failure: worker crash mid-processing → idempotent retry from the original; DB points to a not-yet-ready variant → serve original or placeholder until status=ready.</li><li>Orphan/consistency: garbage-collect blobs whose metadata write failed; treat metadata as source of truth for &#39;exists&#39;.</li><li>Global delivery: geo-distributed CDN + regional S3 replicas so users fetch from a nearby edge; upload to nearest region.</li><li>Hot content: a viral photo is a CDN hot object — edge caching absorbs it; origin shielding prevents an origin stampede.</li><li>Cost tradeoff: tiered storage (hot recent photos on fast storage, cold archives to cheaper/Glacier), and cap generated variants to control storage multiplication.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Durability comes first: blobs are replicated multi-AZ and cross-region, and I order writes blob-first then metadata, treating metadata as the source of truth for existence and garbage-collecting orphaned blobs whose metadata write failed. Failure modes are handled by idempotent workers that reprocess from the durable original, and by serving the original or a placeholder whenever the DB references a variant that isn&#39;t ready yet. Globally, a geo-distributed CDN over regional S3 replicas lets users fetch from a nearby edge and upload to the nearest region; a viral photo becomes a hot CDN object that edge caching plus origin shielding absorb without stampeding S3. The main tradeoff is cost — I&#39;d tier storage so hot recent photos sit on fast storage and cold archives move to cheaper/Glacier, and cap the number of generated variants since each one multiplies petabyte-scale storage.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"design-problems","unit":"p03","title":"Design a Photo-Sharing Service","codeShape":["Q"],"questions":[{"n":1,"type":"open","prompt":"Open the design: functional and non-functional requirements for a photo-sharing service, and what makes it different from a text feed.","points":["Functional: upload photos (with caption); follow users; view a media feed; view a user's profile grid; like/comment (optional).","Non-functional: highly read-heavy, bandwidth-dominated (media is MBs, not KBs), low feed/media latency, high durability (never lose a user's photos).","Durability of media is paramount — photos are irreplaceable, so replicated blob storage.","The differentiator vs a text feed: large binary payloads, so storage/delivery of bytes dominates over the metadata/feed logic.","Confirm scale: DAU, uploads/day, avg photo size, read:write ratio, follower distribution."]},{"n":2,"type":"open","prompt":"Estimate capacity. Assume 100M DAU, 10M photo uploads/day, average stored size 2MB (across all generated variants), and a 100:1 read:view ratio. Derive upload QPS, new storage/day and /year, and read bandwidth.","points":["Uploads: 10M/day ÷ 86,400 ≈ 116 uploads/s; peak ~2–3× ≈ 300/s.","New media storage: 10M × 2MB = 20 TB/day → ~7.3 PB/year (before replication; ~22 PB at 3× replication).","Views: 100:1 → 1B photo-views/day ÷ 86,400 ≈ ~11.6K reads/s; peak ≈ 23K+/s.","Read bandwidth: at ~200KB per delivered (feed-size) image, 1B views/day ≈ 200 TB/day egress — served from CDN, not origin.","Metadata is tiny by comparison (~1KB/photo) — the cost and scale story is entirely media bytes + egress."]},{"n":3,"type":"open","prompt":"Design the upload and read APIs. How does a client upload a large photo, and how does it fetch feed media?","points":["Upload: request a pre-signed/direct upload URL, PUT the bytes straight to blob storage (bypassing the app tier), then POST /photos {mediaKey, caption} to register metadata.","Alternatively POST /photos multipart → app streams to blob store (simpler but app-tier bandwidth cost).","Register returns photoId; processing status is async.","Read: GET /feed?cursor=&limit → returns metadata + CDN media URLs per size; client picks resolution.","GET /users/{id}/photos for the profile grid (thumbnails)."]},{"n":4,"type":"open","prompt":"Give the high-level architecture and the data model, emphasizing the media/metadata split.","points":["Components: app tier, blob storage (S3) for originals + variants, CDN for delivery, metadata DB (sharded), a queue + worker pool for processing, feed service.","Media path is fully separate from metadata: blobs in S3, URLs/metadata in the DB.","Data model: Photos{photoId, ownerId, caption, mediaKeys{thumb,feed,full}, createdAt, status}; Follows{followerId, followeeId}; Feed{userId → [photoId...]}.","Feed rows carry photoIds → hydrate to metadata → resolve to CDN URLs; bytes never touch the DB or feed store.","Each layer scales independently: S3 for capacity/durability, DB for queries, CDN for egress, workers for processing throughput."]},{"n":5,"type":"mc","prompt":"Where should the actual photo bytes be stored, and how served?","options":["As BLOB columns in the relational metadata DB, served through the app tier","In distributed blob/object storage (e.g. S3) with only the URL/key in the DB, served via CDN","In Redis alongside the feed post IDs for fast access","On the app servers' local disks, load-balanced across them"],"answer":1,"answerLetter":"B"},{"n":6,"type":"open","prompt":"Crux deep dive: design the asynchronous media-processing pipeline. Why async, what runs, and what does the client see before processing finishes?","points":["Why async: resizing/transcoding a 2MB+ image takes seconds — doing it inline blocks the upload and couples user latency to CPU work.","Flow: original lands in S3 → an event/message goes on a queue → a worker pool pulls jobs and generates thumbnail/feed/full variants (+ format transcode, EXIF strip, moderation).","Workers write variants back to S3 and update the photo's status/mediaKeys in the DB.","Client sees status=processing (show original or a placeholder), flips to ready when variants exist — or upload is confirmed immediately and variants appear shortly after.","Queue gives elasticity + retry + backpressure: spikes buffer, failed jobs retry, workers scale independently.","Idempotent workers (keyed on photoId+variant) so retries don't duplicate work."]},{"n":7,"type":"mc","prompt":"The service is overwhelmingly read-heavy and bandwidth-dominated. What is the single most important lever for scaling media delivery?","options":["Adding read replicas to the metadata database","Sharding the feed store across more Redis nodes","Maximizing CDN cache hit rate so most image bytes are served from edge caches, not origin/S3","Vertically scaling the app tier with more CPU"],"answer":2,"answerLetter":"C"},{"n":8,"type":"open","prompt":"Explain feed generation here. How do you reuse push/pull fan-out, and what's the media-heavy twist versus a text feed?","points":["Reuse the same hybrid fan-out: push photoIds into follower feeds for normal users, pull for high-follower accounts, merge at read.","The feed stores lightweight photoIds/metadata refs — NOT media — so fan-out amplification is cheap regardless of photo size.","The twist is hydration: after assembling photoIds, resolve each to its CDN variant URLs; the actual bytes are fetched by the client from the CDN.","Serve the right resolution per surface — thumbnails for grids, feed-size for scroll, full for detail — to control bandwidth.","Prefetch/lazy-load and progressive images to keep the media feed responsive on mobile."]},{"n":9,"type":"open","prompt":"Staff-level: cover durability, failure modes, and scale tradeoffs — what breaks, and how do you keep photos safe and delivery fast globally?","points":["Durability: replicate blob storage across zones/regions (S3 multi-AZ + cross-region replication); metadata and blobs must not diverge — write blob first, then metadata, and reconcile orphans.","Failure: worker crash mid-processing → idempotent retry from the original; DB points to a not-yet-ready variant → serve original or placeholder until status=ready.","Orphan/consistency: garbage-collect blobs whose metadata write failed; treat metadata as source of truth for 'exists'.","Global delivery: geo-distributed CDN + regional S3 replicas so users fetch from a nearby edge; upload to nearest region.","Hot content: a viral photo is a CDN hot object — edge caching absorbs it; origin shielding prevents an origin stampede.","Cost tradeoff: tiered storage (hot recent photos on fast storage, cold archives to cheaper/Glacier), and cap generated variants to control storage multiplication."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/design-problems/p03">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

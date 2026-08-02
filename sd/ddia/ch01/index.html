@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reliable, Scalable, and Maintainable Applications — Designing Data-Intensive Applications</title>
+<meta name="description" content="Introduces the three concerns that shape every data system — reliability, scalability, and maintainability — and the vocabulary (faults vs failures, load parameters, response-time percentiles, operability/simplicity/evolvability) for reasoning about them.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ddia/ch01">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Reliable, Scalable, and Maintainable Applications — Designing Data-Intensive Applications">
+<meta property="og:description" content="Introduces the three concerns that shape every data system — reliability, scalability, and maintainability — and the vocabulary (faults vs failures, load parameters, response-time percentiles, operability/simplicity/evolvability) for reasoning about them.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ddia/ch01">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ddia/">Designing Data-Intensive Applications</a></p>
+    <h1>Reliable, Scalable, and Maintainable Applications</h1>
+    <p class="sharepage__lede">Introduces the three concerns that shape every data system — reliability, scalability, and maintainability — and the vocabulary (faults vs failures, load parameters, response-time percentiles, operability/simplicity/evolvability) for reasoning about them.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Data-Intensive Applications</span> <span class="ds-chip">17 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Data-intensive applications are built by composing standard building blocks — databases, caches, search indexes, stream processing, batch processing — each solving a different need.</li><li>Reliability means continuing to work correctly even when things go wrong; a fault is one component deviating from spec, a failure is the whole system stopping service, and fault-tolerance means preventing faults from becoming failures.</li><li>Hardware faults are largely random and independent (mitigated by redundancy), while software errors are systematic and correlated across nodes; human error causes most outages.</li><li>Scalability is describing load with load parameters and asking what happens to performance as load grows, and what resources you must add to hold performance steady.</li><li>Response time should be described with percentiles (p50/p95/p99/p999 tail latencies), not the mean, because tail latency reflects the worst user experiences.</li><li>Maintainability rests on operability (easy for ops), simplicity (managing complexity via good abstractions), and evolvability (making change easy).</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">17</span></h2>
+    <p class="sharepage__note">Positions 1–17 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA&#39;s terms, what distinguishes a <code>fault</code> from a <code>failure</code>?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A fault is a bug in application code; a failure is a hardware defect</li>
+        <li><span class="sharepage__key">B</span> A fault is recoverable; a failure is permanent and unrecoverable by definition</li>
+        <li><span class="sharepage__key">C</span> A fault affects a single user&#39;s request; a failure affects all users simultaneously</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> A fault is one component deviating from its spec; a failure is the system as a whole stopping to provide the required service to users <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> DDIA defines a fault as one component deviating from spec, and a failure as the whole system stopping service to users. Fault-tolerance is about preventing faults from cascading into failures — the distinction is component-level vs system-level, not hardware-vs-software or recoverable-vs-permanent.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does DDIA describe hardware faults as easier to reason about than software errors?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Hardware faults never cause outages because redundancy always masks them</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Hardware faults tend to be random and independent across machines, whereas software errors are systematic and often correlated across many nodes at once <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Hardware faults are always detected instantly, while software errors are silent</li>
+        <li><span class="sharepage__key">D</span> Software errors can be fixed by rebooting, but hardware faults cannot</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Hardware faults (disk crash, RAM fault, power loss) are mostly random and independent, so redundancy like RAID and dual power supplies helps. Software errors are systematic bugs correlated across nodes — a bad input or leap-second bug can take down every replica at once, which redundancy does not protect against.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>According to DDIA, what is the leading cause of outages, and which mitigation matches it?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Disk failures — mitigated by RAID and off-site backups</li>
+        <li><span class="sharepage__key">B</span> Network partitions — mitigated by multi-region deployment</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Human errors (operator/config mistakes) — mitigated by good abstractions, sandboxes, thorough testing, quick rollback, and telemetry <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Memory leaks — mitigated by automatic garbage collection</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> DDIA cites studies finding humans (configuration errors by operators) as the leading cause of outages. Mitigations target the human loop: well-designed abstractions and APIs, sandbox environments, comprehensive testing, fast rollback of config changes, and detailed telemetry to catch problems early.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the purpose of deliberately inducing faults in production, as with Netflix&#39;s <code>Chaos Monkey</code>?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> To continuously exercise and validate the fault-tolerance machinery so that it works when a real fault occurs, rather than staying untested <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> To reduce cloud costs by shutting down idle machines</li>
+        <li><span class="sharepage__key">C</span> To measure raw throughput under peak load</li>
+        <li><span class="sharepage__key">D</span> To force developers to write more unit tests</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Fault-tolerance code that is never triggered may be broken when you finally need it. Deliberately injecting faults (killing random processes) keeps the recovery paths continuously exercised, increasing confidence that the system tolerates real faults. It is not a cost or throughput optimization.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA, <code>scalability</code> is best described as…</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The maximum number of servers a system can run on</li>
+        <li><span class="sharepage__key">B</span> A property a system either has or lacks, determined by its programming language</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A system&#39;s ability to cope with increased load, discussed by defining load parameters and asking how performance changes as load grows <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The guarantee that response time stays constant no matter how much data is stored</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Scalability is not a one-dimensional label (&#39;X is scalable&#39;); it is the ability to cope with increased load, reasoned about by first choosing load parameters, then asking what happens to performance when load grows and what resources are needed to hold performance steady.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In the Twitter home-timeline example, what is the <code>fan-out on write</code> approach and its main tradeoff?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Timelines are computed by querying all followees&#39; tweets at read time, making writes cheap but reads expensive</li>
+        <li><span class="sharepage__key">B</span> Tweets are stored only once and never copied, minimizing both read and write cost</li>
+        <li><span class="sharepage__key">C</span> Followers poll a central queue on a fixed schedule, decoupling read and write entirely</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Each new tweet is inserted into a precomputed cache for every follower at post time, making reads fast but writes costly — especially for users with millions of followers <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Fan-out on write pushes each tweet into a cache for every follower when it is posted, so reads are cheap lookups but writes are expensive and amplified by follower count. The read-time alternative (fan-out on read) is cheap to write but expensive to read; Twitter uses a hybrid, fanning out most users on write while handling celebrity accounts on read.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>DDIA distinguishes <code>response time</code> from <code>latency</code>. Which statement is correct?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They are synonyms and can be used interchangeably</li>
+        <li><span class="sharepage__key">B</span> Response time is the duration a request waits before being handled; latency is the total time the client observes</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Response time is what the client sees (service time plus network delays plus queueing); latency is the duration a request waits to be serviced <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Latency is measured on the server; response time is measured only on the client&#39;s CPU</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> DDIA defines response time as what the client sees — service time plus network and queueing delays — while latency is the duration a request spends waiting to be serviced. The two are related but not identical; conflating them obscures where time is actually spent.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does DDIA recommend percentiles (e.g. p95, p99) over the arithmetic mean for reporting response times?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The mean is harder to compute than percentiles</li>
+        <li><span class="sharepage__key">B</span> Percentiles are always smaller than the mean, making the numbers look better</li>
+        <li><span class="sharepage__key">C</span> The mean cannot be computed for skewed distributions</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> The mean does not reveal how many users experience slow responses; percentiles (especially tail latencies) show the worst-case experiences that the mean hides <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The mean tells you nothing about how many users hit slow responses and is easily skewed by outliers in both directions. Percentiles — p50 as the typical case, p95/p99/p999 as tail latencies — directly express the experience of the slowest requests, which often correspond to your most valuable, data-heavy customers.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is <code>tail latency amplification</code>?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A caching technique that reduces the p99 by precomputing results</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> When a single user request fans out to many backend calls and must wait for the slowest one, so the end-to-end request is slow if any backend call is slow <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The tendency of median latency to grow faster than mean latency under load</li>
+        <li><span class="sharepage__key">D</span> A monitoring artifact where percentiles are overcounted at high throughput</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> When one front-end request depends on multiple backend calls, it completes only when the slowest backend responds. As the number of backend calls grows, the chance that at least one is slow rises, so a larger fraction of end-user requests are slow — the tail is amplified. It is a real problem, not a monitoring artifact.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does DDIA mean by <code>head-of-line blocking</code> in the context of response-time measurement?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> A few slow requests hold up a server&#39;s limited processing slots, delaying subsequent (even cheap) requests queued behind them <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> The first request in a batch always gets priority scheduling</li>
+        <li><span class="sharepage__key">C</span> Network packets are reordered so the head of the queue arrives last</li>
+        <li><span class="sharepage__key">D</span> The database blocks writes while a read is in progress</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With limited parallelism, a small number of slow requests can occupy all processing slots and delay every request queued behind them, even quick ones — so client-observed response time rises. This is why load should be measured client-side, since server-side timing misses queueing delay.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>DDIA contrasts <code>scaling up</code> and <code>scaling out</code>. Which description is accurate?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Scaling up adds more machines; scaling out buys a bigger machine</li>
+        <li><span class="sharepage__key">B</span> Scaling up increases network bandwidth; scaling out increases disk capacity</li>
+        <li><span class="sharepage__key">C</span> They are the same technique described with different vocabulary</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Scaling up (vertical) means a more powerful single machine; scaling out (horizontal) means distributing load across many smaller machines, often a shared-nothing architecture <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Scaling up is vertical — a single, more powerful machine. Scaling out is horizontal — spreading load over many commodity machines, commonly shared-nothing. Good architectures usually mix both; DDIA stresses there is no one-size-fits-all &#39;magic scaling sauce.&#39;</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does DDIA mean by an <code>elastic</code> system?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> A system that automatically adds computing resources when it detects a load increase, rather than being scaled manually <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> A system whose data model can change shape without downtime</li>
+        <li><span class="sharepage__key">C</span> A system that compresses data to fit more into memory</li>
+        <li><span class="sharepage__key">D</span> A system that guarantees constant latency regardless of load</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An elastic system automatically provisions more resources as load rises (and releases them when it falls). The alternative is manual scaling, where a human analyzes capacity and adds machines. Elasticity is about automatic resource adjustment, not data-model flexibility or latency guarantees.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>DDIA breaks maintainability into three design principles. Which set is correct?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Availability, consistency, partition-tolerance</li>
+        <li><span class="sharepage__key">B</span> Durability, isolation, atomicity</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Operability, simplicity, and evolvability <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Throughput, latency, and capacity</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> DDIA names operability (make it easy for operations teams to keep the system running), simplicity (manage complexity so new engineers can understand the system), and evolvability (make it easy to change the system for future requirements). The other options describe CAP, ACID, and performance metrics — not maintainability.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is <code>accidental complexity</code> as DDIA (drawing on Moseley and Marks) uses the term?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Complexity inherent in the problem the software solves, which cannot be removed</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Complexity that arises only from the implementation, not from the problem itself, and can be removed with better abstractions <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Complexity introduced by hardware faults occurring at random times</li>
+        <li><span class="sharepage__key">D</span> The unavoidable overhead of running in a distributed environment</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Accidental complexity is not inherent to the problem but stems from the implementation — tangled dependencies, inconsistent naming, hacks. It can be removed with good abstractions, unlike essential complexity, which is intrinsic to what the software must do. Managing complexity is the core of the simplicity principle.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Your API&#39;s p50 is 30 ms but p99 is 900 ms and product wants a &#39;200 ms for 99% of requests&#39; SLO. How do you reason about where that tail comes from and how to attack it?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Optimize the tail (p99/p999) specifically, not the mean/p50 — the mean hides the slow requests the SLO targets.</li><li>Measure response time client-side to capture queueing/head-of-line blocking that server-side timing misses.</li><li>Name likely tail causes: head-of-line blocking under limited parallelism, GC pauses, cold caches, contention on the slowest backend.</li><li>Watch for tail-latency amplification — if one user request fans out to many backend calls, the request is only as fast as the slowest call.</li><li>The heaviest/most-valuable customers (most data) often live in the tail, so the p99 matters commercially, not just cosmetically.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> First I&#39;d stop looking at the mean and drive off the p99/p999 directly, measured client-side so I capture queueing and head-of-line blocking, not just server service time. Then I&#39;d decompose the tail: is one request fanning out to many backends so it inherits the slowest one (tail-latency amplification), or is it GC pauses, cold caches, and head-of-line blocking where a few slow requests hog limited slots? I&#39;d attack whichever dominates — cap fan-out, add parallel hedged requests, or fix contention — because the tail is where our heaviest, most valuable users actually live.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>A service is hitting its capacity ceiling. Walk me through how you&#39;d decide between scaling up (a bigger machine) and scaling out (more machines), and what makes the decision.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>First define the load parameters that are growing (requests/sec, data volume, fan-out) — scalability is relative to a specific load, not an absolute label.</li><li>Scaling up (vertical) is simpler operationally but has a hard ceiling and cost/failure-blast-radius grows nonlinearly.</li><li>Scaling out (horizontal, shared-nothing) has no single ceiling and improves fault tolerance but adds distributed-systems complexity (coordination, partitioning, consistency).</li><li>Stateless request-serving scales out easily; stateful data scaling out forces partitioning/replication decisions.</li><li>Real architectures mix both — there is no one-size-fits-all &#39;magic scaling sauce&#39;; the right split depends on the workload&#39;s specific shape.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I&#39;d start by naming which load parameter is actually growing, because scalability is always relative to a specific load, not a badge a system has. If the workload is stateful and heading past what one box can hold, or I need fault tolerance, I lean toward scaling out shared-nothing — but that buys distributed-systems complexity like partitioning and coordination. If a bigger machine buys me runway cheaply and keeps the system simple, I scale up first, since vertical is operationally simpler until it hits its ceiling. In practice it&#39;s a mix tuned to the workload; there&#39;s no universal scaling recipe.</div>
+    </article>
+    <article class="sharepage__q" id="q17">
+      <h3><a href="#q17" class="sharepage__anchor">Q17</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You&#39;re designing a social feed. Contrast fan-out-on-write versus fan-out-on-read, and tell me which you&#39;d default to and how you&#39;d handle a user with 30 million followers.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Fan-out-on-write precomputes each follower&#39;s timeline at post time: cheap reads, expensive/amplified writes proportional to follower count.</li><li>Fan-out-on-read assembles the timeline by querying followees at read time: cheap writes, expensive reads.</li><li>The right default depends on the read:write ratio — feeds are read-heavy, so fan-out-on-write usually wins for the average user.</li><li>A celebrity with millions of followers makes write fan-out explode, so handle those accounts on read (hybrid).</li><li>The hybrid (fan-out-on-write for normal users, fan-out-on-read for celebrities) is the pragmatic answer Twitter actually adopted.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Fan-out-on-write pushes each new post into every follower&#39;s precomputed timeline, so reads are cheap lookups but writes are amplified by follower count; fan-out-on-read does the opposite, querying followees at read time. Since feeds are overwhelmingly read-heavy, I&#39;d default to fan-out-on-write for the typical user. But a 30-million-follower account would make a single post trigger 30 million writes, so I&#39;d special-case celebrities and merge their posts in at read time — the hybrid Twitter converged on.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ddia","unit":"ch01","title":"Reliable, Scalable, and Maintainable Applications","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"In DDIA's terms, what distinguishes a `fault` from a `failure`?","options":["A fault is a bug in application code; a failure is a hardware defect","A fault is recoverable; a failure is permanent and unrecoverable by definition","A fault affects a single user's request; a failure affects all users simultaneously","A fault is one component deviating from its spec; a failure is the system as a whole stopping to provide the required service to users"],"answer":3,"answerLetter":"D"},{"n":2,"type":"mc","prompt":"Why does DDIA describe hardware faults as easier to reason about than software errors?","options":["Hardware faults never cause outages because redundancy always masks them","Hardware faults tend to be random and independent across machines, whereas software errors are systematic and often correlated across many nodes at once","Hardware faults are always detected instantly, while software errors are silent","Software errors can be fixed by rebooting, but hardware faults cannot"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"According to DDIA, what is the leading cause of outages, and which mitigation matches it?","options":["Disk failures — mitigated by RAID and off-site backups","Network partitions — mitigated by multi-region deployment","Human errors (operator/config mistakes) — mitigated by good abstractions, sandboxes, thorough testing, quick rollback, and telemetry","Memory leaks — mitigated by automatic garbage collection"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"What is the purpose of deliberately inducing faults in production, as with Netflix's `Chaos Monkey`?","options":["To continuously exercise and validate the fault-tolerance machinery so that it works when a real fault occurs, rather than staying untested","To reduce cloud costs by shutting down idle machines","To measure raw throughput under peak load","To force developers to write more unit tests"],"answer":0,"answerLetter":"A"},{"n":5,"type":"mc","prompt":"In DDIA, `scalability` is best described as…","options":["The maximum number of servers a system can run on","A property a system either has or lacks, determined by its programming language","A system's ability to cope with increased load, discussed by defining load parameters and asking how performance changes as load grows","The guarantee that response time stays constant no matter how much data is stored"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"In the Twitter home-timeline example, what is the `fan-out on write` approach and its main tradeoff?","options":["Timelines are computed by querying all followees' tweets at read time, making writes cheap but reads expensive","Tweets are stored only once and never copied, minimizing both read and write cost","Followers poll a central queue on a fixed schedule, decoupling read and write entirely","Each new tweet is inserted into a precomputed cache for every follower at post time, making reads fast but writes costly — especially for users with millions of followers"],"answer":3,"answerLetter":"D"},{"n":7,"type":"mc","prompt":"DDIA distinguishes `response time` from `latency`. Which statement is correct?","options":["They are synonyms and can be used interchangeably","Response time is the duration a request waits before being handled; latency is the total time the client observes","Response time is what the client sees (service time plus network delays plus queueing); latency is the duration a request waits to be serviced","Latency is measured on the server; response time is measured only on the client's CPU"],"answer":2,"answerLetter":"C"},{"n":8,"type":"mc","prompt":"Why does DDIA recommend percentiles (e.g. p95, p99) over the arithmetic mean for reporting response times?","options":["The mean is harder to compute than percentiles","Percentiles are always smaller than the mean, making the numbers look better","The mean cannot be computed for skewed distributions","The mean does not reveal how many users experience slow responses; percentiles (especially tail latencies) show the worst-case experiences that the mean hides"],"answer":3,"answerLetter":"D"},{"n":9,"type":"mc","prompt":"What is `tail latency amplification`?","options":["A caching technique that reduces the p99 by precomputing results","When a single user request fans out to many backend calls and must wait for the slowest one, so the end-to-end request is slow if any backend call is slow","The tendency of median latency to grow faster than mean latency under load","A monitoring artifact where percentiles are overcounted at high throughput"],"answer":1,"answerLetter":"B"},{"n":10,"type":"mc","prompt":"What does DDIA mean by `head-of-line blocking` in the context of response-time measurement?","options":["A few slow requests hold up a server's limited processing slots, delaying subsequent (even cheap) requests queued behind them","The first request in a batch always gets priority scheduling","Network packets are reordered so the head of the queue arrives last","The database blocks writes while a read is in progress"],"answer":0,"answerLetter":"A"},{"n":11,"type":"mc","prompt":"DDIA contrasts `scaling up` and `scaling out`. Which description is accurate?","options":["Scaling up adds more machines; scaling out buys a bigger machine","Scaling up increases network bandwidth; scaling out increases disk capacity","They are the same technique described with different vocabulary","Scaling up (vertical) means a more powerful single machine; scaling out (horizontal) means distributing load across many smaller machines, often a shared-nothing architecture"],"answer":3,"answerLetter":"D"},{"n":12,"type":"mc","prompt":"What does DDIA mean by an `elastic` system?","options":["A system that automatically adds computing resources when it detects a load increase, rather than being scaled manually","A system whose data model can change shape without downtime","A system that compresses data to fit more into memory","A system that guarantees constant latency regardless of load"],"answer":0,"answerLetter":"A"},{"n":13,"type":"mc","prompt":"DDIA breaks maintainability into three design principles. Which set is correct?","options":["Availability, consistency, partition-tolerance","Durability, isolation, atomicity","Operability, simplicity, and evolvability","Throughput, latency, and capacity"],"answer":2,"answerLetter":"C"},{"n":14,"type":"mc","prompt":"What is `accidental complexity` as DDIA (drawing on Moseley and Marks) uses the term?","options":["Complexity inherent in the problem the software solves, which cannot be removed","Complexity that arises only from the implementation, not from the problem itself, and can be removed with better abstractions","Complexity introduced by hardware faults occurring at random times","The unavoidable overhead of running in a distributed environment"],"answer":1,"answerLetter":"B"},{"n":15,"type":"open","prompt":"Your API's p50 is 30 ms but p99 is 900 ms and product wants a '200 ms for 99% of requests' SLO. How do you reason about where that tail comes from and how to attack it?","points":["Optimize the tail (p99/p999) specifically, not the mean/p50 — the mean hides the slow requests the SLO targets.","Measure response time client-side to capture queueing/head-of-line blocking that server-side timing misses.","Name likely tail causes: head-of-line blocking under limited parallelism, GC pauses, cold caches, contention on the slowest backend.","Watch for tail-latency amplification — if one user request fans out to many backend calls, the request is only as fast as the slowest call.","The heaviest/most-valuable customers (most data) often live in the tail, so the p99 matters commercially, not just cosmetically."]},{"n":16,"type":"open","prompt":"A service is hitting its capacity ceiling. Walk me through how you'd decide between scaling up (a bigger machine) and scaling out (more machines), and what makes the decision.","points":["First define the load parameters that are growing (requests/sec, data volume, fan-out) — scalability is relative to a specific load, not an absolute label.","Scaling up (vertical) is simpler operationally but has a hard ceiling and cost/failure-blast-radius grows nonlinearly.","Scaling out (horizontal, shared-nothing) has no single ceiling and improves fault tolerance but adds distributed-systems complexity (coordination, partitioning, consistency).","Stateless request-serving scales out easily; stateful data scaling out forces partitioning/replication decisions.","Real architectures mix both — there is no one-size-fits-all 'magic scaling sauce'; the right split depends on the workload's specific shape."]},{"n":17,"type":"open","prompt":"You're designing a social feed. Contrast fan-out-on-write versus fan-out-on-read, and tell me which you'd default to and how you'd handle a user with 30 million followers.","points":["Fan-out-on-write precomputes each follower's timeline at post time: cheap reads, expensive/amplified writes proportional to follower count.","Fan-out-on-read assembles the timeline by querying followees at read time: cheap writes, expensive reads.","The right default depends on the read:write ratio — feeds are read-heavy, so fan-out-on-write usually wins for the average user.","A celebrity with millions of followers makes write fan-out explode, so handle those accounts on read (hybrid).","The hybrid (fan-out-on-write for normal users, fan-out-on-read for celebrities) is the pragmatic answer Twitter actually adopted."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ddia/ch01">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

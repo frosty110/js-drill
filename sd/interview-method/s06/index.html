@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QPS, Storage &amp; Bandwidth Math — The System Design Interview</title>
+<meta name="description" content="The worked-example layer of estimation: turning users and payload sizes into QPS, storage, and bandwidth figures. Practice the standard formulas — QPS from DAU and actions, peak-from-average, storage from item count × size × replication × retention, bandwidth from QPS × payload — plus cache sizing with the 80/20 rule.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/interview-method/s06">
+<meta property="og:type" content="article">
+<meta property="og:title" content="QPS, Storage &amp; Bandwidth Math — The System Design Interview">
+<meta property="og:description" content="The worked-example layer of estimation: turning users and payload sizes into QPS, storage, and bandwidth figures. Practice the standard formulas — QPS from DAU and actions, peak-from-average, storage from item count × size × replication × retention, bandwidth from QPS × payload — plus cache sizing with the 80/20 rule.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/interview-method/s06">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/interview-method/">The System Design Interview</a></p>
+    <h1>QPS, Storage &amp; Bandwidth Math</h1>
+    <p class="sharepage__lede">The worked-example layer of estimation: turning users and payload sizes into QPS, storage, and bandwidth figures. Practice the standard formulas — QPS from DAU and actions, peak-from-average, storage from item count × size × replication × retention, bandwidth from QPS × payload — plus cache sizing with the 80/20 rule.</p>
+    <p class="sharepage__meta"><span class="ds-chip">The System Design Interview</span> <span class="ds-chip">14 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Read/write QPS ≈ (DAU × actions-per-user-per-day) / 86,400; use ~10^5 for the divisor.</li><li>Peak QPS ≈ average QPS × peak factor (~2-3x, more for spiky traffic).</li><li>Storage ≈ items × item-size × replication-factor × retention-period; don&#39;t forget replication (often 3x) and metadata/indexes.</li><li>Bandwidth ≈ QPS × average payload size; separate ingress (write) from egress (read) since read-heavy systems push far more egress.</li><li>Cache sizing via the 80/20 rule: caching the hot ~20% of data often serves ~80% of requests, so you can size the cache to the working set, not the whole dataset.</li><li>Keep read and write paths separate throughout — a 100:1 read:write ratio means the read side dominates QPS, bandwidth, and cache design.</li><li>Multiply by replication for storage AND account for it in write bandwidth (each write may fan out to N replicas).</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">14</span></h2>
+    <p class="sharepage__note">Positions 1–14 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>150 million DAU each make 20 read requests per day. What is the approximate average read QPS?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~3,000 QPS</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ~30,000 QPS <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> ~300,000 QPS</li>
+        <li><span class="sharepage__key">D</span> ~3,000,000 QPS</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 150×10^6 × 20 = 3×10^9 reads/day; ÷ 10^5 seconds ≈ 3×10^4 = 30,000 QPS average. You&#39;d then apply a peak factor to size for the busy period.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A system does 30,000 average QPS. Using a 3x peak factor, what capacity should you plan for?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~10,000 QPS</li>
+        <li><span class="sharepage__key">B</span> ~30,000 QPS</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> ~90,000 QPS <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> ~900,000 QPS</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Peak QPS = average × peak factor = 30,000 × 3 = 90,000 QPS. Capacity planning targets the peak, not the daily average, or the system tips over during busy hours.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>You store 500 million records at 2 KB each with a replication factor of 3. Approximately how much raw storage?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~1 TB</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ~3 TB <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> ~30 TB</li>
+        <li><span class="sharepage__key">D</span> ~300 GB</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 500×10^6 × 2×10^3 bytes = 10^12 bytes = 1 TB of primary data; × replication factor 3 ≈ 3 TB. Forgetting the replication multiplier is a common under-estimate.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which formula best captures long-term storage for a system that retains data for a fixed window?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> items-per-day × item-size × replication-factor × retention-in-days <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> items × item-size, ignoring replication and retention</li>
+        <li><span class="sharepage__key">C</span> QPS × item-size × 86,400</li>
+        <li><span class="sharepage__key">D</span> DAU × replication-factor</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> New items per day × size per item × replication × how many days you keep them gives the standing storage requirement. Ignoring replication and retention (option 1) undercounts; the QPS/DAU forms conflate throughput or users with stored volume.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A read-heavy service serves 40,000 QPS with an average response payload of 50 KB. What is the approximate egress bandwidth?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~200 MB/s</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ~2 GB/s <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> ~20 GB/s</li>
+        <li><span class="sharepage__key">D</span> ~200 GB/s</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Bandwidth ≈ QPS × payload = 4×10^4 × 5×10^4 bytes = 2×10^9 bytes/s = 2 GB/s of egress. Read-heavy systems are typically egress-dominated, so this is the number that sizes your serving/CDN tier.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Under the 80/20 rule for cache sizing, what is the practical takeaway?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> You must cache 100% of the data to get any hit-rate benefit</li>
+        <li><span class="sharepage__key">B</span> Only 20% of requests can ever be cached regardless of data</li>
+        <li><span class="sharepage__key">C</span> The cache must be 80% the size of the database</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Caching the hot ~20% of data can serve ~80% of requests, so size the cache to the working set <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Access is skewed: a small hot subset absorbs most traffic, so a cache sized to that working set captures the bulk of reads cheaply. You don&#39;t need to cache the whole dataset, and the hit potential is on the hot 80% of requests, not capped at 20%.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Daily reads are 8.6 billion. Rounding a day to ~10^5 seconds, the average read QPS is closest to:</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~8,600</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ~86,000 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> ~860,000</li>
+        <li><span class="sharepage__key">D</span> ~8,600,000</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 8.6×10^9 ÷ 10^5 ≈ 8.6×10^4 = 86,000 QPS. The rounded 86,400 ≈ 10^5 divisor keeps this a one-step mental calculation.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>You want to cache the hot working set of 1 billion objects averaging 1 KB, assuming ~20% are hot. Roughly how much cache memory?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~2 GB</li>
+        <li><span class="sharepage__key">B</span> ~20 GB</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> ~200 GB <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> ~2 TB</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 20% of 10^9 objects = 2×10^8 hot objects × 10^3 bytes = 2×10^11 bytes ≈ 200 GB. That figure tells you how many cache nodes (each with tens of GB of RAM) you need for the working set.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why should you keep read QPS and write QPS as separate numbers throughout the estimate?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because reads and writes always occur at exactly the same rate</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because they drive different design decisions — reads → caches/replicas, writes → sharding/write path — and are often orders of magnitude apart <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because only write QPS affects storage</li>
+        <li><span class="sharepage__key">D</span> Because the interviewer only grades the write path</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A typical read:write ratio like 100:1 means the read path dominates and needs caching/replicas while the write path drives sharding and durability — collapsing them into one number hides the dominant force. Both paths matter, and reads certainly affect serving/bandwidth even if not primary storage.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A write of 1 KB is replicated to 3 nodes and also written to a message queue consumed by 2 downstream services. Roughly how much write-side traffic does one logical write generate?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 1 KB — replication and fan-out are free</li>
+        <li><span class="sharepage__key">B</span> ~3 KB — only replication counts</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> ~5 KB or more — 3x for replicas plus the queue fan-out to consumers <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> ~0.5 KB — writes are compressed in half</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> One logical write amplifies: ~3 KB across replicas plus the queue write and its delivery to 2 consumers, so real write-side bandwidth is several times the payload. Assuming replication or fan-out is free is exactly the under-estimate this question guards against.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>You estimate 10 TB of new data per day with 3x replication, retained for 30 days. Approximate standing storage?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> ~90 TB</li>
+        <li><span class="sharepage__key">B</span> ~300 TB</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> ~900 TB <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> ~30 TB</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 10 TB/day × 3 (replication) × 30 (days) = 900 TB ≈ just under 1 PB. This shows how replication and retention together dominate storage sizing, and why you&#39;d then consider tiering older data to cheaper storage.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Your average QPS estimate comes out to 5 million for a service you know runs on a handful of machines. What should you do?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Trust the number and design for 5 million QPS</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Re-check your assumptions and arithmetic — the figure likely has an order-of-magnitude error <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Multiply by a 3x peak factor and move on</li>
+        <li><span class="sharepage__key">D</span> Round it up to 10 million to be safe</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A result that contradicts a known real-world scale is a signal to hunt for a misplaced power of ten in your inputs or division. Sanity-checking against reality is the whole point of estimation; blindly designing for or inflating a suspicious number compounds the error.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Estimate the storage and daily egress bandwidth for a photo-sharing service: 100M DAU, each uploads 2 photos/day at 1.5 MB, and each photo is viewed 20 times/day on average. Assume 3x replication for storage.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Uploads/day: 100M × 2 = 200M photos ≈ 2×10^8/day.</li><li>Raw new storage/day: 2×10^8 × 1.5 MB = 3×10^14 bytes ≈ 300 TB/day; × 3 replication ≈ 900 TB/day (note retention would multiply further).</li><li>Daily views: 200M photos × 20 = 4×10^9 view-reads/day serving 1.5 MB each.</li><li>Egress/day ≈ 4×10^9 × 1.5 MB = 6×10^15 bytes ≈ 6 PB/day; or ~70 GB/s average, higher at peak.</li><li>State replication, note read egress dominates, and suggest a CDN for the egress.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Uploads are 100M × 2 = 200M photos/day; at 1.5 MB that&#39;s about 300 TB/day of new data, and with 3x replication roughly 900 TB/day before retention. On the read side, 200M photos viewed 20 times is 4 billion view-reads/day at 1.5 MB each, which is about 6 PB/day of egress, or on the order of 70 GB/s averaged and higher at peak. The egress dwarfs everything, so I&#39;d front this with a CDN and object storage rather than serving photos from the origin, and I&#39;d tier or expire cold photos to control the standing storage.</div>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>How do you use the 80/20 rule to size a cache, and what does it save you? Give the reasoning you&#39;d narrate in an interview.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Access is skewed — a small hot subset of data serves most requests.</li><li>Caching roughly the hot 20% can satisfy roughly 80% of reads.</li><li>So you size cache memory to the working set, not the full dataset.</li><li>Compute cache size = fraction-hot × item-count × item-size.</li><li>Payoff: high hit rate offloads the database and cuts read latency at a fraction of the memory cost of caching everything.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Real access patterns are skewed, so I lean on the 80/20 rule: caching the hot ~20% of objects typically absorbs ~80% of read traffic. That means I size the cache to the working set instead of the whole dataset — for a billion 1 KB objects, ~20% hot is about 200 GB of RAM rather than a terabyte. The payoff is a high hit rate that offloads most reads from the database and cuts tail latency, at a fraction of the memory cost of caching everything, and I&#39;d validate the assumed hotness against real access logs if I had them.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"interview-method","unit":"s06","title":"QPS, Storage & Bandwidth Math","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"150 million DAU each make 20 read requests per day. What is the approximate average read QPS?","options":["~3,000 QPS","~30,000 QPS","~300,000 QPS","~3,000,000 QPS"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"A system does 30,000 average QPS. Using a 3x peak factor, what capacity should you plan for?","options":["~10,000 QPS","~30,000 QPS","~90,000 QPS","~900,000 QPS"],"answer":2,"answerLetter":"C"},{"n":3,"type":"mc","prompt":"You store 500 million records at 2 KB each with a replication factor of 3. Approximately how much raw storage?","options":["~1 TB","~3 TB","~30 TB","~300 GB"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"Which formula best captures long-term storage for a system that retains data for a fixed window?","options":["items-per-day × item-size × replication-factor × retention-in-days","items × item-size, ignoring replication and retention","QPS × item-size × 86,400","DAU × replication-factor"],"answer":0,"answerLetter":"A"},{"n":5,"type":"mc","prompt":"A read-heavy service serves 40,000 QPS with an average response payload of 50 KB. What is the approximate egress bandwidth?","options":["~200 MB/s","~2 GB/s","~20 GB/s","~200 GB/s"],"answer":1,"answerLetter":"B"},{"n":6,"type":"mc","prompt":"Under the 80/20 rule for cache sizing, what is the practical takeaway?","options":["You must cache 100% of the data to get any hit-rate benefit","Only 20% of requests can ever be cached regardless of data","The cache must be 80% the size of the database","Caching the hot ~20% of data can serve ~80% of requests, so size the cache to the working set"],"answer":3,"answerLetter":"D"},{"n":7,"type":"mc","prompt":"Daily reads are 8.6 billion. Rounding a day to ~10^5 seconds, the average read QPS is closest to:","options":["~8,600","~86,000","~860,000","~8,600,000"],"answer":1,"answerLetter":"B"},{"n":8,"type":"mc","prompt":"You want to cache the hot working set of 1 billion objects averaging 1 KB, assuming ~20% are hot. Roughly how much cache memory?","options":["~2 GB","~20 GB","~200 GB","~2 TB"],"answer":2,"answerLetter":"C"},{"n":9,"type":"mc","prompt":"Why should you keep read QPS and write QPS as separate numbers throughout the estimate?","options":["Because reads and writes always occur at exactly the same rate","Because they drive different design decisions — reads → caches/replicas, writes → sharding/write path — and are often orders of magnitude apart","Because only write QPS affects storage","Because the interviewer only grades the write path"],"answer":1,"answerLetter":"B"},{"n":10,"type":"mc","prompt":"A write of 1 KB is replicated to 3 nodes and also written to a message queue consumed by 2 downstream services. Roughly how much write-side traffic does one logical write generate?","options":["1 KB — replication and fan-out are free","~3 KB — only replication counts","~5 KB or more — 3x for replicas plus the queue fan-out to consumers","~0.5 KB — writes are compressed in half"],"answer":2,"answerLetter":"C"},{"n":11,"type":"mc","prompt":"You estimate 10 TB of new data per day with 3x replication, retained for 30 days. Approximate standing storage?","options":["~90 TB","~300 TB","~900 TB","~30 TB"],"answer":2,"answerLetter":"C"},{"n":12,"type":"mc","prompt":"Your average QPS estimate comes out to 5 million for a service you know runs on a handful of machines. What should you do?","options":["Trust the number and design for 5 million QPS","Re-check your assumptions and arithmetic — the figure likely has an order-of-magnitude error","Multiply by a 3x peak factor and move on","Round it up to 10 million to be safe"],"answer":1,"answerLetter":"B"},{"n":13,"type":"open","prompt":"Estimate the storage and daily egress bandwidth for a photo-sharing service: 100M DAU, each uploads 2 photos/day at 1.5 MB, and each photo is viewed 20 times/day on average. Assume 3x replication for storage.","points":["Uploads/day: 100M × 2 = 200M photos ≈ 2×10^8/day.","Raw new storage/day: 2×10^8 × 1.5 MB = 3×10^14 bytes ≈ 300 TB/day; × 3 replication ≈ 900 TB/day (note retention would multiply further).","Daily views: 200M photos × 20 = 4×10^9 view-reads/day serving 1.5 MB each.","Egress/day ≈ 4×10^9 × 1.5 MB = 6×10^15 bytes ≈ 6 PB/day; or ~70 GB/s average, higher at peak.","State replication, note read egress dominates, and suggest a CDN for the egress."]},{"n":14,"type":"open","prompt":"How do you use the 80/20 rule to size a cache, and what does it save you? Give the reasoning you'd narrate in an interview.","points":["Access is skewed — a small hot subset of data serves most requests.","Caching roughly the hot 20% can satisfy roughly 80% of reads.","So you size cache memory to the working set, not the full dataset.","Compute cache size = fraction-hot × item-count × item-size.","Payoff: high hit rate offloads the database and cuts read latency at a fraction of the memory cost of caching everything."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/interview-method/s06">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deep Clone — JS Drill</title>
+<meta name="description" content="Recursively clone plain objects and arrays so mutating the clone never touches the original — the canonical recursion + WeakMap-for-cycles pattern.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-deep-clone">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Deep Clone — JS Drill">
+<meta property="og:description" content="Recursively clone plain objects and arrays so mutating the clone never touches the original — the canonical recursion + WeakMap-for-cycles pattern.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-deep-clone">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Deep Clone</h1>
+    <p class="sharepage__lede">Recursively clone plain objects and arrays so mutating the clone never touches the original — the canonical recursion + WeakMap-for-cycles pattern.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement deepClone(value) with cycle detection. Clone a nested object, mutate the clone, log original.nested.x and clone.nested.x to prove independence, then clone a cyclic object and confirm cycle.self === cycle.</p>
+    <p class="sharepage__note">Expected output: <code>1
+99
+true
+true</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function deepClone(value, seen = new WeakMap()) {
+  // Primitives (incl. null which is typeof &#39;object&#39;) are immutable — return as-is.
+  if (value === null || typeof value !== &#39;object&#39;) return value;
+  // Cycle guard: a child pointing back to value finds the in-progress clone.
+  if (seen.has(value)) return seen.get(value);
+  const out = Array.isArray(value) ? [] : {};
+  // Register BEFORE recursing so cyclic graphs don&#39;t recurse forever.
+  seen.set(value, out);
+  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);
+  return out;
+}</code></pre>
+    <ul class="sharepage__notes"><li>Primitives (number, string, boolean, null, undefined) are immutable — return as-is, no copy needed.</li><li>Register the new object in the WeakMap before recursing into children, or cyclic graphs recurse forever.</li><li>This minimal version skips Date, Map, Set, RegExp, and class prototypes. Real <code>structuredClone</code> handles those; interviews usually only ask for the recursive core.</li><li>Time O(n) where n = total nodes. Space O(n) for the clone + WeakMap + recursion stack.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>structuredClone (built-in, production answer) <code>O(n) / O(n)</code></h3>
+      <p>Use in production code when you&#39;re targeting Node 17+ or modern browsers — it handles Date, Map, Set, ArrayBuffer, typed arrays, and cyclic references natively and is faster than a JS implementation. The recursive version in the primary is what an interviewer wants (shows you understand the algorithm); structuredClone is what you&#39;d ship in real code.</p>
+      <pre class="sharepage__code"><code class="language-js">function deepClone(value) {
+  return structuredClone(value);
+}
+const a = { nested: { x: 1 }, list: [1, 2, 3] };
+const b = deepClone(a);
+b.nested.x = 99;
+console.log(a.nested.x);
+console.log(b.nested.x);
+console.log(a.list !== b.list);
+const cyc = { name: &#39;root&#39; };
+cyc.self = cyc;
+const cycClone = deepClone(cyc);
+console.log(cycClone.self === cycClone);</code></pre>
+      <ul class="sharepage__notes"><li>structuredClone is a W3C standard built into browsers (Chrome 98+, Node 17+) — no library needed.</li><li>Handles cycles, Date, Map, Set, ArrayBuffer; throws on functions, DOM nodes, and class instances that aren&#39;t serializable.</li><li>Prefer this in production; use the recursive version in interviews to demonstrate you understand the algorithm.</li></ul>
+    </article>
+    <article class="sharepage__alt" id="alt2">
+      <h3>JSON round-trip (JSON.parse + JSON.stringify) <code>O(n) / O(n)</code></h3>
+      <p>Acceptable for plain JSON-shaped data where you know there are no functions, undefined values, Date objects, cycles, or class instances. It is the one-liner answer — name it first to show you know it, then explain why the recursive version is correct for the general case.</p>
+      <pre class="sharepage__code"><code class="language-js">function deepClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+const a = { nested: { x: 1 }, list: [1, 2, 3] };
+const b = deepClone(a);
+b.nested.x = 99;
+console.log(a.nested.x);
+console.log(b.nested.x);
+console.log(a.list !== b.list);
+// Note: cyclic inputs throw &quot;Converting circular structure to JSON&quot;.
+// The line below demonstrates independence without cycles:
+console.log(b.nested.x === 99);</code></pre>
+      <ul class="sharepage__notes"><li>Silently drops functions, undefined, and Symbol keys — the clone will be missing those properties entirely.</li><li>Converts Date to ISO string, Map/Set/RegExp to {} — prototypes are lost.</li><li>Throws on cyclic references (circular structure); use the recursive+WeakMap version or structuredClone for those.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why must you set <code>seen.set(value, out)</code> before iterating the object&#39;s keys?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Reads in WeakMap return stale values until a write commits, so it primes the cache</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> To handle cycles: a child that references back to value must find the in-progress clone <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Setting after the loop overwrites the populated children with the empty <code>out</code></li>
+        <li><span class="sharepage__key">D</span> Otherwise <code>seen.has(value)</code> short-circuits the recursion before children are copied</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What does <code>deepClone(42)</code> return?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> An object wrapping 42</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 42 — primitives are returned as-is <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> undefined</li>
+        <li><span class="sharepage__key">D</span> Throws because 42 is not cloneable</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> After <code>const b = deepClone(a); b.nested.x = 99;</code>, why is <code>a.nested.x</code> unchanged?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Spread <code>{...a}</code> would copy <code>nested</code> by reference, but deepClone returns a structuredClone-backed proxy</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because <code>b.nested</code> is a new object, distinct from <code>a.nested</code> <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because the WeakMap pins the original so writes to <code>b</code> are rerouted to a new sub-object</li>
+        <li><span class="sharepage__key">D</span> Because <code>Object.assign</code> copies values, and deepClone is built on top of it</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why WeakMap instead of Map for the <code>seen</code> cache?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Map keys are compared by <code>==</code>, so two equal objects would collide; WeakMap uses identity</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> WeakMap holds keys weakly, so the cache doesn&#39;t block GC of cloned graphs <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> WeakMap&#39;s <code>.has()</code> is O(1); Map&#39;s <code>.has()</code> is O(log n)</li>
+        <li><span class="sharepage__key">D</span> Map throws if a key is reassigned, which would fire when registering the clone</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Complete deepClone so the clone is independent — mutating clone.nested.x must not change original.nested.x.</p>
+      <pre class="sharepage__code"><code class="language-js">function deepClone(value, seen = new ___()) {
+  if (value === null || ___ value !== &#39;object&#39;) return value;
+  if (seen.___(value)) return seen.get(value);
+  const out = Array.___(value) ? [] : {};
+  seen.___(value, out);
+  for (const k of Object.keys(value)) out[k] = ___(value[k], seen);
+  return out;
+}
+const a = { nested: { x: 1 } };
+const b = deepClone(a);
+b.nested.x = 99;
+console.log(a.nested.x);
+console.log(b.nested.x);</code></pre>
+      <p><strong>Answers:</strong> <code>WeakMap</code>, <code>typeof</code>, <code>has</code>, <code>isArray</code>, <code>set</code>, <code>deepClone</code></p>
+      <p class="sharepage__note">Expected output: <code>1
+99</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement deepClone(value) with cycle detection. Clone a nested object, mutate the clone, log original.nested.x and clone.nested.x to prove independence, then clone a cyclic object and confirm cycle.self === cycle.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Guard with <code>typeof value !== &#39;object&#39; || value === null</code> — null is typeof &#39;object&#39;.</li><li>Set the WeakMap entry BEFORE the recursion loop so cyclic children find the in-progress clone.</li><li>Arrays and plain objects branch on <code>Array.isArray(value)</code>.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function deepClone(value, seen = new WeakMap()) {
+  // Primitives (incl. null which is typeof &#39;object&#39;) are immutable — return as-is.
+  if (value === null || typeof value !== &#39;object&#39;) return value;
+  // Cycle guard: a child pointing back to value finds the in-progress clone.
+  if (seen.has(value)) return seen.get(value);
+  const out = Array.isArray(value) ? [] : {};
+  // Register BEFORE recursing so cyclic graphs don&#39;t recurse forever.
+  seen.set(value, out);
+  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);
+  return out;
+}
+const a = { nested: { x: 1 }, list: [1, 2, 3] };
+const b = deepClone(a);
+b.nested.x = 99;
+console.log(a.nested.x);
+console.log(b.nested.x);
+console.log(a.list !== b.list);
+const cyc = { name: &#39;root&#39; };
+cyc.self = cyc;
+const cycClone = deepClone(cyc);
+console.log(cycClone.self === cycClone);</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-deep-clone","title":"Deep Clone","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why must you set `seen.set(value, out)` before iterating the object's keys?","options":["Reads in WeakMap return stale values until a write commits, so it primes the cache","To handle cycles: a child that references back to value must find the in-progress clone","Setting after the loop overwrites the populated children with the empty `out`","Otherwise `seen.has(value)` short-circuits the recursion before children are copied"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What does `deepClone(42)` return?","options":["An object wrapping 42","42 — primitives are returned as-is","undefined","Throws because 42 is not cloneable"],"answer":1,"answerLetter":"B"},{"n":3,"q":"After `const b = deepClone(a); b.nested.x = 99;`, why is `a.nested.x` unchanged?","options":["Spread `{...a}` would copy `nested` by reference, but deepClone returns a structuredClone-backed proxy","Because `b.nested` is a new object, distinct from `a.nested`","Because the WeakMap pins the original so writes to `b` are rerouted to a new sub-object","Because `Object.assign` copies values, and deepClone is built on top of it"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why WeakMap instead of Map for the `seen` cache?","options":["Map keys are compared by `==`, so two equal objects would collide; WeakMap uses identity","WeakMap holds keys weakly, so the cache doesn't block GC of cloned graphs","WeakMap's `.has()` is O(1); Map's `.has()` is O(log n)","Map throws if a key is reassigned, which would fire when registering the clone"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Complete deepClone so the clone is independent — mutating clone.nested.x must not change original.nested.x.","answers":["WeakMap","typeof","has","isArray","set","deepClone"]}],"L3":[{"n":1,"prompt":"Implement deepClone(value) with cycle detection. Clone a nested object, mutate the clone, log original.nested.x and clone.nested.x to prove independence, then clone a cyclic object and confirm cycle.self === cycle.","expectedOutput":"1\n99\ntrue\ntrue"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-deep-clone">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

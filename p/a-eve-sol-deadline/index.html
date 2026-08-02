@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Statute-of-Limitations Deadline — JS Drill</title>
+<meta name="description" content="Date arithmetic + classify — compute each claim&#39;s filing deadline (incident date + statutory years, rebuilt by string) and days remaining vs a reference date, then bucket as EXPIRED / URGENT / OK.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-eve-sol-deadline">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Statute-of-Limitations Deadline — JS Drill">
+<meta property="og:description" content="Date arithmetic + classify — compute each claim&#39;s filing deadline (incident date + statutory years, rebuilt by string) and days remaining vs a reference date, then bucket as EXPIRED / URGENT / OK.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-eve-sol-deadline">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Statute-of-Limitations Deadline</h1>
+    <p class="sharepage__lede">Date arithmetic + classify — compute each claim&#39;s filing deadline (incident date + statutory years, rebuilt by string) and days remaining vs a reference date, then bucket as EXPIRED / URGENT / OK.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>For each claim, compute the filing deadline (incident date + statutory years for its type) and days remaining as of a reference date. Classify EXPIRED (past), URGENT (≤30 days left), or OK. Limits: personal injury 2yr, medical malpractice 3yr, property 4yr.</p>
+    <p class="sharepage__note">Expected output: <code>C-1 (personal injury): deadline 2026-06-01, 5 days — URGENT
+C-2 (medical malpractice): deadline 2026-05-15, -12 days — EXPIRED
+C-3 (property): deadline 2024-01-01, -877 days — EXPIRED</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function checkDeadlines(claims, today) {
+  const limits = { &#39;personal injury&#39;: 2, &#39;medical malpractice&#39;: 3, &#39;property&#39;: 4 };
+  const nowMs = Date.parse(today);
+  return claims.map(c =&gt; {
+    const years = limits[c.type];
+    // Rebuild the deadline by adding to the YEAR component as a string —
+    // avoids Date-object month/leap-day drift from setFullYear etc.
+    const [y, m, d] = c.incident.split(&#39;-&#39;).map(Number);
+    const deadline = `${y + years}-${String(m).padStart(2, &#39;0&#39;)}-${String(d).padStart(2, &#39;0&#39;)}`;
+    const daysLeft = Math.round((Date.parse(deadline) - nowMs) / 86400000);
+    let status;
+    if (daysLeft &lt; 0) status = &#39;EXPIRED&#39;;
+    else if (daysLeft &lt;= 30) status = &#39;URGENT&#39;;
+    else status = &#39;OK&#39;;
+    return `${c.id} (${c.type}): deadline ${deadline}, ${daysLeft} days — ${status}`;
+  });
+}</code></pre>
+    <ul class="sharepage__notes"><li>The deadline is rebuilt by adding statutory years to the YEAR string component and re-padding month/day, NOT by mutating a Date object — <code>setFullYear</code>-style math can drift across leap days and month lengths.</li><li>Both sides of the day-diff use <code>Date.parse</code> on ISO strings, which parse as UTC midnight, so the subtraction is timezone-consistent and <code>/86400000</code> gives whole days.</li><li>Classification order matters: test <code>daysLeft &lt; 0</code> (EXPIRED) first, then <code>&lt;= 30</code> (URGENT); a deadline exactly 0 days out is URGENT, not EXPIRED.</li><li>Time O(n), Space O(n) — one <code>.map</code> pass over n claims; each claim is O(1) constant work (lookup, string split, string rebuild, two Date.parse calls, divide + classify).</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why is the deadline rebuilt by adding years to the year string instead of mutating a Date object?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>setFullYear</code> returns the new timestamp but does not mutate the original Date, so the new year is silently discarded</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Adding to the year component as a string avoids the month/leap-day drift that Date mutation (e.g. setFullYear) can introduce <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Date constructors interpret a four-digit year as a Unix epoch offset, shifting deadlines into 1970</li>
+        <li><span class="sharepage__key">D</span> Date arithmetic on years that span a daylight-saving boundary returns a fractional result that cannot be re-stringified</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Keeping the month and day fixed by reconstructing the string sidesteps the subtle drift Date arithmetic can cause across leap years and month boundaries.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why does the function call <code>Date.parse</code> on both the deadline and <code>today</code> rather than mixing parsing styles?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>Date.parse</code> strips the timezone offset before returning a millisecond value, so any input format produces a consistent UTC result</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ISO date strings parse as UTC midnight, so both sides are on the same timezone basis and the day diff is consistent <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Subtracting two <code>Date</code> objects requires both sides to come from <code>Date.parse</code> rather than <code>new Date()</code></li>
+        <li><span class="sharepage__key">D</span> Mixing <code>new Date(str)</code> with <code>Date.parse(str)</code> returns objects with different epoch origins and silently corrupts the diff</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Date-only ISO strings are interpreted as UTC; parsing both sides the same way keeps the millisecond subtraction timezone-consistent.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> A claim&#39;s deadline is exactly 30 days out. How is it classified, and why does branch order matter?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> EXPIRED — the <code>&lt;= 30</code> branch is inclusive of the threshold, which the spec treats as already lapsed</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> URGENT — the check is <code>daysLeft &lt; 0</code> first (not &lt;0), then <code>daysLeft &lt;= 30</code> catches 0..30 inclusive <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> OK — <code>&lt;= 30</code> is checked with <code>&lt;</code> semantics in JavaScript when one operand is a string-cast comparison, so exactly 30 falls through</li>
+        <li><span class="sharepage__key">D</span> URGENT, but only because the branches are reordered at runtime by V8&#39;s predicate optimizer</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> EXPIRED is tested first (<code>daysLeft &lt; 0</code>); anything from 0 to 30 inclusive falls into the URGENT branch.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why is <code>String(m).padStart(2, &#39;0&#39;)</code> applied to the month and day when rebuilding the deadline?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>String(m)</code> returns the numeric Unicode code point unless padded, so single-digit months render as control characters</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> To keep the YYYY-MM-DD width fixed (e.g. month 6 becomes &#39;06&#39;) so the result is a valid ISO string and sorts correctly <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Without padStart, the <code>+</code> operator in the template literal would treat month as a numeric add and produce <code>${y+years+m}</code> style collisions</li>
+        <li><span class="sharepage__key">D</span> <code>Date.parse</code> rejects any month value below 10 unless it is explicitly cast to a two-character string</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> ISO dates need zero-padded two-digit month and day; padStart restores the fixed width after <code>.map(Number)</code> stripped leading zeros.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Rebuild an ISO deadline by adding 2 years to the incident year. Fill the blanks.</p>
+      <pre class="sharepage__code"><code class="language-js">const incident = &#39;2024-06-01&#39;;
+const [y, m, d] = incident.___(&#39;-&#39;).___(___);
+const deadline = `${y + ___}-${String(m).___(2, &#39;0&#39;)}-${String(d).padStart(2, &#39;0&#39;)}`;
+console.log(deadline);</code></pre>
+      <p><strong>Answers:</strong> <code>split</code>, <code>map</code>, <code>Number</code>, <code>2</code>, <code>padStart</code></p>
+      <p class="sharepage__note">Expected output: <code>2026-06-01</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Classify days-left into EXPIRED / URGENT / OK. Fill the comparisons so 5 days left is URGENT.</p>
+      <pre class="sharepage__code"><code class="language-js">const daysLeft = 5;
+let status;
+if (daysLeft ___ 0) status = &#39;___&#39;;
+else if (daysLeft ___ 30) status = &#39;___&#39;;
+else status = &#39;___&#39;;
+console.log(status);</code></pre>
+      <p><strong>Answers:</strong> <code>&lt;</code>, <code>EXPIRED</code>, <code>&lt;=</code>, <code>URGENT</code>, <code>OK</code></p>
+      <p class="sharepage__note">Expected output: <code>URGENT</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>For each claim, compute the filing deadline (incident date + statutory years for its type) and days remaining as of a reference date. Classify EXPIRED (past), URGENT (≤30 days left), or OK. Limits: personal injury 2yr, medical malpractice 3yr, property 4yr.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Look up statutory years per claim type from a <code>limits</code> object.</li><li>Rebuild the deadline string by adding years to the year component and re-padding month/day with <code>padStart(2, &#39;0&#39;)</code>.</li><li>Days left = <code>Math.round((Date.parse(deadline) - Date.parse(today)) / 86400000)</code>; classify EXPIRED (&lt;0), URGENT (&lt;=30), else OK.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function checkDeadlines(claims, today) {
+  const limits = { &#39;personal injury&#39;: 2, &#39;medical malpractice&#39;: 3, &#39;property&#39;: 4 };
+  const nowMs = Date.parse(today);
+  return claims.map(c =&gt; {
+    const years = limits[c.type];
+    const [y, m, d] = c.incident.split(&#39;-&#39;).map(Number);
+    const deadline = `${y + years}-${String(m).padStart(2, &#39;0&#39;)}-${String(d).padStart(2, &#39;0&#39;)}`;
+    const daysLeft = Math.round((Date.parse(deadline) - nowMs) / 86400000);
+    let status;
+    if (daysLeft &lt; 0) status = &#39;EXPIRED&#39;;
+    else if (daysLeft &lt;= 30) status = &#39;URGENT&#39;;
+    else status = &#39;OK&#39;;
+    return `${c.id} (${c.type}): deadline ${deadline}, ${daysLeft} days — ${status}`;
+  });
+}
+const claims = [
+  { id: &#39;C-1&#39;, type: &#39;personal injury&#39;, incident: &#39;2024-06-01&#39; },
+  { id: &#39;C-2&#39;, type: &#39;medical malpractice&#39;, incident: &#39;2023-05-15&#39; },
+  { id: &#39;C-3&#39;, type: &#39;property&#39;, incident: &#39;2020-01-01&#39; },
+];
+checkDeadlines(claims, &#39;2026-05-27&#39;).forEach(l =&gt; console.log(l));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-eve-sol-deadline","title":"Statute-of-Limitations Deadline","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why is the deadline rebuilt by adding years to the year string instead of mutating a Date object?","options":["`setFullYear` returns the new timestamp but does not mutate the original Date, so the new year is silently discarded","Adding to the year component as a string avoids the month/leap-day drift that Date mutation (e.g. setFullYear) can introduce","Date constructors interpret a four-digit year as a Unix epoch offset, shifting deadlines into 1970","Date arithmetic on years that span a daylight-saving boundary returns a fractional result that cannot be re-stringified"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why does the function call `Date.parse` on both the deadline and `today` rather than mixing parsing styles?","options":["`Date.parse` strips the timezone offset before returning a millisecond value, so any input format produces a consistent UTC result","ISO date strings parse as UTC midnight, so both sides are on the same timezone basis and the day diff is consistent","Subtracting two `Date` objects requires both sides to come from `Date.parse` rather than `new Date()`","Mixing `new Date(str)` with `Date.parse(str)` returns objects with different epoch origins and silently corrupts the diff"],"answer":1,"answerLetter":"B"},{"n":3,"q":"A claim's deadline is exactly 30 days out. How is it classified, and why does branch order matter?","options":["EXPIRED — the `\u003c= 30` branch is inclusive of the threshold, which the spec treats as already lapsed","URGENT — the check is `daysLeft \u003c 0` first (not \u003c0), then `daysLeft \u003c= 30` catches 0..30 inclusive","OK — `\u003c= 30` is checked with `\u003c` semantics in JavaScript when one operand is a string-cast comparison, so exactly 30 falls through","URGENT, but only because the branches are reordered at runtime by V8's predicate optimizer"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why is `String(m).padStart(2, '0')` applied to the month and day when rebuilding the deadline?","options":["`String(m)` returns the numeric Unicode code point unless padded, so single-digit months render as control characters","To keep the YYYY-MM-DD width fixed (e.g. month 6 becomes '06') so the result is a valid ISO string and sorts correctly","Without padStart, the `+` operator in the template literal would treat month as a numeric add and produce `${y+years+m}` style collisions","`Date.parse` rejects any month value below 10 unless it is explicitly cast to a two-character string"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Rebuild an ISO deadline by adding 2 years to the incident year. Fill the blanks.","answers":["split","map","Number","2","padStart"]},{"n":2,"prompt":"Classify days-left into EXPIRED / URGENT / OK. Fill the comparisons so 5 days left is URGENT.","answers":["\u003c","EXPIRED","\u003c=","URGENT","OK"]}],"L3":[{"n":1,"prompt":"For each claim, compute the filing deadline (incident date + statutory years for its type) and days remaining as of a reference date. Classify EXPIRED (past), URGENT (≤30 days left), or OK. Limits: personal injury 2yr, medical malpractice 3yr, property 4yr.","expectedOutput":"C-1 (personal injury): deadline 2026-06-01, 5 days — URGENT\nC-2 (medical malpractice): deadline 2026-05-15, -12 days — EXPIRED\nC-3 (property): deadline 2024-01-01, -877 days — EXPIRED"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-eve-sol-deadline">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

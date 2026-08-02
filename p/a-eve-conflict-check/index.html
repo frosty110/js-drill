@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conflict-of-Interest Check — JS Drill</title>
+<meta name="description" content="Hash-map-of-sets adjacency lookup — build a Map of adverse-party -&gt; matter-ids and a Set of our own clients from existing matters in one pass, then check a prospective client against both indexes in O(1).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-eve-conflict-check">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Conflict-of-Interest Check — JS Drill">
+<meta property="og:description" content="Hash-map-of-sets adjacency lookup — build a Map of adverse-party -&gt; matter-ids and a Set of our own clients from existing matters in one pass, then check a prospective client against both indexes in O(1).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-eve-conflict-check">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Conflict-of-Interest Check</h1>
+    <p class="sharepage__lede">Hash-map-of-sets adjacency lookup — build a Map of adverse-party -&gt; matter-ids and a Set of our own clients from existing matters in one pass, then check a prospective client against both indexes in O(1).</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>We represent plaintiffs against defendants. Given existing matters ({id, plaintiff, defendants[]}) and a prospective client name, flag a conflict if the prospect is an adverse party (a defendant) in any matter — list those matter ids — or is already a current client. Otherwise CLEAR. Print the result for an adverse party, a clear name, and an existing client.</p>
+    <p class="sharepage__note">Expected output: <code>Globex: CONFLICT — adverse party in M-1; adverse party in M-2
+Stark Inc: CLEAR
+Acme Corp: CONFLICT — already a current client</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// We represent plaintiffs against defendants. A prospect conflicts if they are
+// an adverse party (a defendant) in any matter, or are already our client.
+function checkConflict(matters, prospect) {
+  // adverse: defendant name -&gt; list of matter ids where they&#39;re opposed.
+  const adverse = new Map();
+  const ourClients = new Set();
+  for (const m of matters) {
+    ourClients.add(m.plaintiff);
+    for (const def of m.defendants) {
+      if (!adverse.has(def)) adverse.set(def, []);
+      adverse.get(def).push(m.id);   // one party can be adverse across many matters
+    }
+  }
+  const conflicts = [];
+  if (adverse.has(prospect)) {
+    for (const id of adverse.get(prospect)) conflicts.push(`adverse party in ${id}`);
+  }
+  if (ourClients.has(prospect)) conflicts.push(&#39;already a current client&#39;);
+  if (conflicts.length === 0) return `${prospect}: CLEAR`;
+  // Note the em-dash character — joins the conflict reasons.
+  return `${prospect}: CONFLICT — ${conflicts.join(&#39;; &#39;)}`;
+}</code></pre>
+    <ul class="sharepage__notes"><li>Index defendant -&gt; [matter ids] in a Map, because one party can be a defendant across multiple matters. A plain Set of defendant names would lose which matters they appear in.</li><li>Track our own plaintiffs in a separate Set too: we cannot represent someone we are already adverse to, AND we should not double-represent an existing client, so both indexes are checked.</li><li>The output uses a literal em-dash character (—, U+2014), not a hyphen-minus. The expected output will not match if you type a regular &#39;-&#39;.</li><li>Time O(m·d̄ + q·k) build + query — m matters, d̄ avg defendants/matter to build indexes; q prospects each O(1) membership check + O(k) to list k adverse matter ids. Space O(m·d̄).</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why index defendants as a Map of name -&gt; array-of-matter-ids rather than a plain Set of defendant names?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A Set&#39;s <code>has()</code> is O(n); a Map&#39;s <code>has()</code> is O(1), so the conflict check must use Map</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> One party can be a defendant across multiple matters, and we need to report which matter ids they appear in <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Set deduplicates entries silently, so two matters with the same defendant would be collapsed into one</li>
+        <li><span class="sharepage__key">D</span> Iterating a Set is non-deterministic, so the matter-id list would come out in a different order each call</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A Set would tell you only that someone is adverse, not in which matters. The Map preserves the matter ids so the conflict report can name them.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why does the function also track our own plaintiffs in a separate Set?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To filter the prospect out of the <code>adverse</code> index before reporting</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> We cannot represent both sides, so a prospect who is already our client is also a conflict — a different reason than being adverse <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Plaintiffs are stored in <code>adverse</code> too, so the Set deduplicates them on output</li>
+        <li><span class="sharepage__key">D</span> So the rebuild logic can re-derive plaintiffs without re-scanning every matter&#39;s defendant list</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Two distinct conflict reasons: the prospect is on the other side of a matter (adverse), or we already represent them (current client). Both must be checked.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> The CONFLICT output joins reasons with a special character. Which is it?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A regular hyphen-minus &#39;-&#39;</li>
+        <li><span class="sharepage__key">B</span> An en-dash &#39;–&#39;</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> An em-dash &#39;—&#39; (U+2014) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> An underscore &#39;_&#39;</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The format string uses a literal em-dash (—). Typing a plain hyphen would make the output fail an exact-match comparison.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What is the lookup cost of checking a single prospect after the indexes are built?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n) — must rescan all matters</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(1) for the membership checks, plus O(k) to list the k matters they&#39;re adverse in <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n^2) for the nested defendant loop</li>
+        <li><span class="sharepage__key">D</span> O(log n) via binary search</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Map/Set membership is constant time; the only extra work is iterating the (usually small) list of matter ids the prospect appears in.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Index defendant -&gt; [matter ids] in a Map of arrays. Fill the lazy-init guard and the append so &#39;Globex&#39; lists both matters.</p>
+      <pre class="sharepage__code"><code class="language-js">const matters = [
+  { id: &#39;M-1&#39;, defendants: [&#39;Globex&#39;] },
+  { id: &#39;M-2&#39;, defendants: [&#39;Globex&#39;] },
+];
+const adverse = new ___();
+for (const m ___ matters) {
+  for (const def of m.defendants) {
+    if (!adverse.___(def)) adverse.___(def, []);
+    adverse.___(def).___(m.id);
+  }
+}
+console.log(adverse.get(&#39;Globex&#39;).join(&#39;, &#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>Map</code>, <code>of</code>, <code>has</code>, <code>set</code>, <code>get</code>, <code>push</code></p>
+      <p class="sharepage__note">Expected output: <code>M-1, M-2</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Build the CONFLICT message. Fill the em-dash character and the separator used to join the reasons.</p>
+      <pre class="sharepage__code"><code class="language-js">const prospect = &#39;Globex&#39;;
+const conflicts = [&#39;adverse party in M-1&#39;, &#39;adverse party in M-2&#39;];
+const label = conflicts.length ? &#39;___&#39; : &#39;CLEAR&#39;;
+const reasons = conflicts.___(&#39;___ &#39;);
+console.log(`${prospect}: ${label} ___ ${reasons}`);</code></pre>
+      <p><strong>Answers:</strong> <code>CONFLICT</code>, <code>join</code>, <code>;</code>, <code>—</code></p>
+      <p class="sharepage__note">Expected output: <code>Globex: CONFLICT — adverse party in M-1; adverse party in M-2</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>We represent plaintiffs against defendants. Given existing matters ({id, plaintiff, defendants[]}) and a prospective client name, flag a conflict if the prospect is an adverse party (a defendant) in any matter — list those matter ids — or is already a current client. Otherwise CLEAR. Print the result for an adverse party, a clear name, and an existing client.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>First pass: build a Map of defendant -&gt; [matter ids] and a Set of plaintiff names from the matters.</li><li>Collect conflict reasons into an array: one &#39;adverse party in &lt;id&gt;&#39; per matter the prospect is a defendant in, plus &#39;already a current client&#39; if they&#39;re a plaintiff.</li><li>If no reasons, return &#39;&lt;name&gt;: CLEAR&#39;; otherwise join the reasons with &#39;; &#39; after a literal em-dash (—).</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function checkConflict(matters, prospect) {
+  const adverse = new Map();
+  const ourClients = new Set();
+  for (const m of matters) {
+    ourClients.add(m.plaintiff);
+    for (const def of m.defendants) {
+      if (!adverse.has(def)) adverse.set(def, []);
+      adverse.get(def).push(m.id);
+    }
+  }
+  const conflicts = [];
+  if (adverse.has(prospect)) {
+    for (const id of adverse.get(prospect)) conflicts.push(`adverse party in ${id}`);
+  }
+  if (ourClients.has(prospect)) conflicts.push(&#39;already a current client&#39;);
+  if (conflicts.length === 0) return `${prospect}: CLEAR`;
+  return `${prospect}: CONFLICT — ${conflicts.join(&#39;; &#39;)}`;
+}
+const matters = [
+  { id: &#39;M-1&#39;, plaintiff: &#39;Acme Corp&#39;, defendants: [&#39;Globex&#39;, &#39;Initech&#39;] },
+  { id: &#39;M-2&#39;, plaintiff: &#39;Wayne LLC&#39;, defendants: [&#39;Globex&#39;] },
+];
+console.log(checkConflict(matters, &#39;Globex&#39;));
+console.log(checkConflict(matters, &#39;Stark Inc&#39;));
+console.log(checkConflict(matters, &#39;Acme Corp&#39;));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-eve-conflict-check","title":"Conflict-of-Interest Check","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why index defendants as a Map of name -> array-of-matter-ids rather than a plain Set of defendant names?","options":["A Set's `has()` is O(n); a Map's `has()` is O(1), so the conflict check must use Map","One party can be a defendant across multiple matters, and we need to report which matter ids they appear in","Set deduplicates entries silently, so two matters with the same defendant would be collapsed into one","Iterating a Set is non-deterministic, so the matter-id list would come out in a different order each call"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why does the function also track our own plaintiffs in a separate Set?","options":["To filter the prospect out of the `adverse` index before reporting","We cannot represent both sides, so a prospect who is already our client is also a conflict — a different reason than being adverse","Plaintiffs are stored in `adverse` too, so the Set deduplicates them on output","So the rebuild logic can re-derive plaintiffs without re-scanning every matter's defendant list"],"answer":1,"answerLetter":"B"},{"n":3,"q":"The CONFLICT output joins reasons with a special character. Which is it?","options":["A regular hyphen-minus '-'","An en-dash '–'","An em-dash '—' (U+2014)","An underscore '_'"],"answer":2,"answerLetter":"C"},{"n":4,"q":"What is the lookup cost of checking a single prospect after the indexes are built?","options":["O(n) — must rescan all matters","O(1) for the membership checks, plus O(k) to list the k matters they're adverse in","O(n^2) for the nested defendant loop","O(log n) via binary search"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Index defendant -> [matter ids] in a Map of arrays. Fill the lazy-init guard and the append so 'Globex' lists both matters.","answers":["Map","of","has","set","get","push"]},{"n":2,"prompt":"Build the CONFLICT message. Fill the em-dash character and the separator used to join the reasons.","answers":["CONFLICT","join",";","—"]}],"L3":[{"n":1,"prompt":"We represent plaintiffs against defendants. Given existing matters ({id, plaintiff, defendants[]}) and a prospective client name, flag a conflict if the prospect is an adverse party (a defendant) in any matter — list those matter ids — or is already a current client. Otherwise CLEAR. Print the result for an adverse party, a clear name, and an existing client.","expectedOutput":"Globex: CONFLICT — adverse party in M-1; adverse party in M-2\nStark Inc: CLEAR\nAcme Corp: CONFLICT — already a current client"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-eve-conflict-check">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Coin Change — JS Drill</title>
+<meta name="description" content="Fewest coins to make `amount`. Bottom-up dp[a] = min over coins of dp[a - c] + 1. Returns -1 if no combination reaches the amount.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-coin-change">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Coin Change — JS Drill">
+<meta property="og:description" content="Fewest coins to make `amount`. Bottom-up dp[a] = min over coins of dp[a - c] + 1. Returns -1 if no combination reaches the amount.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-coin-change">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Dynamic Programming</p>
+    <h1>Coin Change</h1>
+    <p class="sharepage__lede">Fewest coins to make `amount`. Bottom-up dp[a] = min over coins of dp[a - c] + 1. Returns -1 if no combination reaches the amount.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Dynamic Programming</span> <span class="ds-chip">8 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>coinChange(coins, amount)</code> returning the fewest coins that sum to <code>amount</code>, or -1 if impossible. Log <code>coinChange([1, 2, 5], 11)</code>.</p>
+    <p class="sharepage__note">Expected output: <code>3</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function coinChange(coins, amount) {
+  // Infinity = unreachable; any subproblem still Infinity at the end becomes -1.
+  const dp = new Array(amount + 1).fill(Infinity);
+  // Base case: 0 coins make amount 0 — anchors the recurrence.
+  dp[0] = 0;
+  // Bottom-up: solve every amount from 1..target, reusing smaller solutions.
+  for (let a = 1; a &lt;= amount; a++) {
+    for (const c of coins) {
+      // Skip coins bigger than current amount; otherwise try using one of c + best for the remainder.
+      if (c &lt;= a) dp[a] = Math.min(dp[a], dp[a - c] + 1);
+    }
+  }
+  return dp[amount] === Infinity ? -1 : dp[amount];
+}
+// Time O(amount * coins.length), Space O(amount)</code></pre>
+    <ul class="sharepage__notes"><li>Fill dp with Infinity so any unreachable subproblem stays Infinity and bubbles up to -1.</li><li>dp[0] = 0 anchors the recurrence — zero coins to make amount 0.</li><li>Unbounded coin supply means the inner loop reuses dp[a - c] from the SAME iteration (forward fill).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>BFS layer-by-layer (shortest path) <code>O(amount * coins.length) / O(amount)</code></h3>
+      <p>Reach for this when the interviewer frames the problem as &#39;fewest steps&#39; and you want to make the shortest-path lens explicit — treat each remaining sum as a node, coins as edges, and BFS depth IS the coin count. Often beats DP in practice because BFS short-circuits the moment it reaches <code>amount</code>, while bottom-up DP always fills the whole table.</p>
+      <pre class="sharepage__code"><code class="language-js">function coinChange(coins, amount) {
+  // Zero-amount base case — no coins needed, no BFS layer to run.
+  if (amount === 0) return 0;
+  // Visited set prevents re-expanding sums; without it BFS would revisit nodes exponentially.
+  const visited = new Set([0]);
+  let frontier = [0];
+  let depth = 0;
+  while (frontier.length) {
+    depth++;
+    const next = [];
+    for (const sum of frontier) {
+      for (const c of coins) {
+        const ns = sum + c;
+        // First time we reach `amount` IS the shortest path — BFS guarantees minimum depth.
+        if (ns === amount) return depth;
+        if (ns &lt; amount &amp;&amp; !visited.has(ns)) {
+          visited.add(ns);
+          next.push(ns);
+        }
+      }
+    }
+    frontier = next;
+  }
+  // Frontier exhausted without hitting amount — unreachable.
+  return -1;
+}
+console.log(coinChange([1, 2, 5], 11));</code></pre>
+      <ul class="sharepage__notes"><li>BFS guarantees the first time <code>sum === amount</code> we return is the minimum coin count — that&#39;s the shortest-path invariant in disguise.</li><li>The <code>visited</code> Set is load-bearing: without it the same partial sum gets re-expanded from every path that reaches it, blowing up to exponential work.</li><li>Often faster than bottom-up DP in practice — BFS exits as soon as it touches <code>amount</code>, while DP fills <code>dp[1..amount]</code> regardless of when the answer is found.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">8</span></h2>
+    <p class="sharepage__note">Positions 1–8 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> The bottom-up recurrence for Coin Change is:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> dp[a] = dp[a-1] + 1</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> dp[a] = min over coins c of dp[a-c] + 1 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> dp[a] = sum over coins of dp[a-c]</li>
+        <li><span class="sharepage__key">D</span> dp[a] = dp[a / 2] + 1</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why fill the dp array with Infinity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> So <code>Math.min(dp[a], cand)</code> returns <code>cand</code> on the first valid coin instead of needing a special initial check</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> So unreachable amounts stay Infinity and convert to -1 at the end <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> So the dp array allocates as a packed Float64Array, which is faster than a sparse holey array</li>
+        <li><span class="sharepage__key">D</span> So <code>dp[a - c]</code> returns Infinity instead of undefined when <code>a - c</code> is out of bounds</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> What does dp[0] represent and why is it 0?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It&#39;s a sentinel slot to detect off-by-one errors when the inner loop wraps around</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Zero coins needed to make amount 0 — anchors the recurrence <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It holds the smallest coin denomination, used as a tie-breaker in the inner min</li>
+        <li><span class="sharepage__key">D</span> It marks the array&#39;s lower bound so <code>dp[a - c]</code> returns 0 when <code>c === a</code></li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(amount)</li>
+        <li><span class="sharepage__key">B</span> O(coins.length)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(amount * coins.length) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(amount^2)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Outer loop runs <code>amount</code> times, inner loop tries every coin — O(amount * coins.length).</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> Why does a greedy &#39;always take the largest coin&#39; strategy fail? Take coins=[1,3,4], amount=6.</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Greedy is too slow</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Greedy picks 4 then 1+1 = 3 coins, but the optimum is 3+3 = 2 coins <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Greedy returns -1 incorrectly</li>
+        <li><span class="sharepage__key">D</span> Greedy works fine here; it only fails on large inputs</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Committing to the biggest coin first (4) strands you needing 2, costing three coins; DP explores all last-coin choices and finds the 3+3 two-coin optimum.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> What does dp[a] represent in this solution?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The number of distinct ways to make amount a</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The fewest coins that sum exactly to amount a <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Whether amount a is reachable (boolean)</li>
+        <li><span class="sharepage__key">D</span> The largest coin usable for amount a</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> dp[a] is the minimum coin count for amount a; the answer is dp[amount], or -1 if it stayed Infinity.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> The &#39;try each coin as the LAST coin used&#39; framing makes each subproblem:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> dp[a + c] — moving forward by one coin, which forces top-down recursion</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> dp[a - c], a strictly smaller amount — which is why bottom-up works <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> dp[c], the cost of making just the last coin&#39;s denomination (independent of a)</li>
+        <li><span class="sharepage__key">D</span> dp[a / c], dividing the remaining amount by the coin to skip already-counted multiples</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Fixing coin c as the last one leaves the smaller amount a-c, so solving amounts in increasing order guarantees dp[a-c] is already final.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> Coin Change II asks for the NUMBER OF WAYS to make the amount. How does the recurrence change?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Nothing changes</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> You SUM dp[a-c] over coins instead of taking the min, and loop coins on the outside to avoid double-counting <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> You take the max instead of the min</li>
+        <li><span class="sharepage__key">D</span> You switch from DP to greedy</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Counting ways accumulates (sum) rather than optimizing (min); iterating coins outermost counts combinations, not permutations.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the bottom-up Coin Change.</p>
+      <pre class="sharepage__code"><code class="language-js">function coinChange(coins, amount) {
+  const dp = new Array(amount + 1).fill(___);
+  dp[0] = ___;
+  for (let a = 1; a &lt;= amount; a++) {
+    for (const c of coins) {
+      if (c ___ a) dp[a] = Math.___(dp[a], dp[a ___ c] + 1);
+    }
+  }
+  return dp[amount] === Infinity ? -1 : dp[amount];
+}
+console.log(coinChange([1, 2, 5], 11));</code></pre>
+      <p><strong>Answers:</strong> <code>Infinity</code>, <code>0</code>, <code>&lt;=</code>, <code>min</code>, <code>-</code></p>
+      <p class="sharepage__note">Expected output: <code>3</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>coinChange(coins, amount)</code> returning the fewest coins that sum to <code>amount</code>, or -1 if impossible. Log <code>coinChange([1, 2, 5], 11)</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Fill dp with Infinity, set dp[0] = 0.</li><li>For each amount a, try every coin c &lt;= a; take min(dp[a], dp[a-c] + 1).</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function coinChange(coins, amount) {
+  // Infinity = unreachable; any subproblem still Infinity at the end becomes -1.
+  const dp = new Array(amount + 1).fill(Infinity);
+  // Base case: 0 coins make amount 0 — anchors the recurrence.
+  dp[0] = 0;
+  // Bottom-up: solve every amount from 1..target, reusing smaller solutions.
+  for (let a = 1; a &lt;= amount; a++) {
+    for (const c of coins) {
+      // Skip coins bigger than current amount; otherwise try using one of c + best for the remainder.
+      if (c &lt;= a) dp[a] = Math.min(dp[a], dp[a - c] + 1);
+    }
+  }
+  return dp[amount] === Infinity ? -1 : dp[amount];
+}
+console.log(coinChange([1, 2, 5], 11));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-coin-change","title":"Coin Change","section":"Dynamic Programming","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"The bottom-up recurrence for Coin Change is:","options":["dp[a] = dp[a-1] + 1","dp[a] = min over coins c of dp[a-c] + 1","dp[a] = sum over coins of dp[a-c]","dp[a] = dp[a / 2] + 1"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why fill the dp array with Infinity?","options":["So `Math.min(dp[a], cand)` returns `cand` on the first valid coin instead of needing a special initial check","So unreachable amounts stay Infinity and convert to -1 at the end","So the dp array allocates as a packed Float64Array, which is faster than a sparse holey array","So `dp[a - c]` returns Infinity instead of undefined when `a - c` is out of bounds"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What does dp[0] represent and why is it 0?","options":["It's a sentinel slot to detect off-by-one errors when the inner loop wraps around","Zero coins needed to make amount 0 — anchors the recurrence","It holds the smallest coin denomination, used as a tie-breaker in the inner min","It marks the array's lower bound so `dp[a - c]` returns 0 when `c === a`"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Time complexity?","options":["O(amount)","O(coins.length)","O(amount * coins.length)","O(amount^2)"],"answer":2,"answerLetter":"C"},{"n":5,"q":"Why does a greedy 'always take the largest coin' strategy fail? Take coins=[1,3,4], amount=6.","options":["Greedy is too slow","Greedy picks 4 then 1+1 = 3 coins, but the optimum is 3+3 = 2 coins","Greedy returns -1 incorrectly","Greedy works fine here; it only fails on large inputs"],"answer":1,"answerLetter":"B"},{"n":6,"q":"What does dp[a] represent in this solution?","options":["The number of distinct ways to make amount a","The fewest coins that sum exactly to amount a","Whether amount a is reachable (boolean)","The largest coin usable for amount a"],"answer":1,"answerLetter":"B"},{"n":7,"q":"The 'try each coin as the LAST coin used' framing makes each subproblem:","options":["dp[a + c] — moving forward by one coin, which forces top-down recursion","dp[a - c], a strictly smaller amount — which is why bottom-up works","dp[c], the cost of making just the last coin's denomination (independent of a)","dp[a / c], dividing the remaining amount by the coin to skip already-counted multiples"],"answer":1,"answerLetter":"B"},{"n":8,"q":"Coin Change II asks for the NUMBER OF WAYS to make the amount. How does the recurrence change?","options":["Nothing changes","You SUM dp[a-c] over coins instead of taking the min, and loop coins on the outside to avoid double-counting","You take the max instead of the min","You switch from DP to greedy"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the bottom-up Coin Change.","answers":["Infinity","0","\u003c=","min","-"]}],"L3":[{"n":1,"prompt":"Write `coinChange(coins, amount)` returning the fewest coins that sum to `amount`, or -1 if impossible. Log `coinChange([1, 2, 5], 11)`.","expectedOutput":"3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-coin-change">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

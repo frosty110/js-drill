@@ -1,0 +1,173 @@
+{
+  "id": "p20",
+  "num": 20,
+  "part": "Infrastructure Primitives",
+  "title": "Design a Distributed Job Scheduler",
+  "summary": "Run millions of scheduled and on-demand jobs across a worker fleet, on time and without accidental duplicates. The signature challenge is that at-least-once execution is the only guarantee a distributed system can actually offer, so correctness has to come from idempotent jobs rather than from perfect delivery.",
+  "keyTakeaways": [
+    "Exactly-once execution is not achievable across a network — a worker can complete a job and die before acknowledging. Design for at-least-once and make jobs idempotent.",
+    "Separate the scheduler (decides what is due) from the queue (holds ready work) from the workers (execute). Each scales on a different axis.",
+    "Polling a `WHERE next_run <= now()` index is the simplest correct design and scales further than people expect; a hierarchical timing wheel is the answer only at extreme scale.",
+    "Leases, not assignments: a worker holds a job for a bounded time and must heartbeat to keep it, so a crashed worker's job returns automatically.",
+    "Exclusive execution of a scheduled tick needs leader election or a conditional update — two scheduler replicas firing the same cron is the classic duplicate-run bug.",
+    "Retries need exponential backoff with jitter plus a dead-letter queue; unbounded retries of a poisoned job burn the fleet.",
+    "Long jobs and short jobs must not share a queue — one slow job class starves everything behind it."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a distributed job scheduler. What are the functional requirements, and which guarantee do you commit to?",
+      "points": [
+        "Functional: submit one-off jobs with a run-at time, submit recurring jobs with a cron expression, cancel, and query status/history.",
+        "Jobs have priorities, timeouts, retry policies and dependencies in richer versions — scope which of those are in.",
+        "The guarantee question is the crux: at-least-once versus at-most-once. Commit to at-least-once and require idempotent job handlers, because at-most-once silently drops work.",
+        "Non-functional: scheduling accuracy (fire within a few seconds of the target), high availability of the scheduler itself, and horizontal scale in both job count and worker count.",
+        "Durability: an accepted job must survive scheduler and broker restarts — losing a scheduled payment run is unacceptable.",
+        "Isolation: one tenant's flood of jobs must not starve another's.",
+        "State scale: e.g. 10M scheduled jobs, 50K executions/sec peak, jobs from 100ms to hours."
+      ],
+      "answer": "Submit one-off and recurring jobs, cancel them, query status. The decision I'd make explicitly up front is the delivery guarantee: at-least-once, with idempotent handlers required by contract. At-most-once sounds safer but it silently drops work, and exactly-once isn't achievable — a worker can finish and die before its acknowledgement lands, and no amount of protocol removes that window. Non-functionally: fire within a few seconds of target, survive scheduler restarts without losing an accepted job, scale horizontally in both jobs and workers, and isolate tenants so one flood doesn't starve another. I'd anchor at 10M scheduled jobs and 50K executions/sec peak, with durations from 100ms to hours — that spread is itself a design constraint.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Work the numbers: what does 10M scheduled jobs at 50K executions/sec imply?",
+      "points": [
+        "Storage: 10M jobs × ~1 KB (payload, schedule, metadata) ≈ 10 GB — small. The scheduler's state is not a storage problem.",
+        "The scheduler's hot query is 'which jobs are due now' — an index on `next_run_at` scanned every second. Only the due slice is touched, not all 10M rows.",
+        "50K executions/sec against a queue is well within one Kafka/SQS-class system, but it means the scheduler must enqueue at that rate too.",
+        "Worker fleet sizing depends entirely on job duration, and this is where the estimate gets interesting: 50K/sec × 100ms average = 5,000 concurrent slots; at 10s average it's 500,000 slots.",
+        "So the fleet is sized by concurrency (rate × duration), not by rate — a point worth saying explicitly because it's Little's Law and it drives cost.",
+        "History retention: 50K/sec of execution records is 4.3B rows/day — this, not the job table, is the storage problem. Retain summarized, expire raw.",
+        "Scheduling accuracy of a few seconds means the due-scan interval must be ~1s, which bounds how expensive that scan can be."
+      ],
+      "answer": "The job table itself is trivial — 10M jobs at about 1 KB is 10 GB, and the hot query only touches the due slice via an index on next-run time, not all 10M rows. The interesting number is the worker fleet, and it's Little's Law: concurrency equals rate times duration. At 50K/sec with 100ms jobs that's 5,000 concurrent slots; at 10 seconds average it's 500,000. So the fleet is sized by duration, not by rate, which is why mixing job classes matters so much. The actual storage problem is execution history — 50K/sec is 4.3 billion records a day, so that needs summarizing and expiry, not the job table."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the architecture and the API. What are the components and why are they separate?",
+      "points": [
+        "API service: accepts submissions, validates, writes to the job store. Returns immediately — submission is not execution.",
+        "Job store: durable record of every job, its schedule, its state (pending/running/succeeded/failed) and its next run time, indexed on `next_run_at`.",
+        "Scheduler: periodically finds due jobs and pushes them onto a ready queue. This is the only component that needs exclusivity.",
+        "Queue: holds ready work, decoupling scheduling rate from execution rate and absorbing bursts.",
+        "Worker pool: pulls from the queue, leases a job, executes, reports the outcome.",
+        "They're separate because they scale on different axes — scheduler on due-job rate, queue on burst size, workers on total concurrency — and because a slow worker fleet must not stall scheduling.",
+        "API: `POST /jobs {type, payload, run_at | cron, priority, max_retries, timeout}`, `DELETE /jobs/{id}`, `GET /jobs/{id}`.",
+        "An idempotency key on submission prevents a retried client request from creating two identical jobs — the duplicate problem starts at the front door, not just at execution."
+      ],
+      "answer": "An API service accepts and durably records the job, a job store keeps state indexed by next run time, a scheduler finds due jobs and enqueues them, a queue holds ready work, and a worker pool executes. They're separate because they scale on different axes — the scheduler on due-job rate, the queue on burst absorption, workers on total concurrency — and because a saturated worker fleet must not stall scheduling. The API is a straightforward `POST /jobs` with either a run-at time or a cron expression, plus priority, retries and timeout. One detail I'd insist on: an idempotency key on submission, because the duplicate problem starts at the front door when a client retries a request it never got a response to, not only at execution time.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "Three scheduler replicas run for availability. Each polls for due jobs every second. What goes wrong, and what is the standard fix?",
+      "options": [
+        "Nothing — the queue deduplicates identical messages automatically",
+        "All three find the same due job and enqueue it three times; fix with leader election, or by having each replica claim jobs via a conditional update that only one can win",
+        "The replicas will deadlock competing for the same database rows",
+        "Scheduling accuracy degrades to three seconds because the replicas interleave"
+      ],
+      "answer": 1,
+      "explain": "Every replica sees the same `next_run_at <= now()` rows, so without coordination each enqueues the job — three runs of a nightly billing job. Two standard fixes: elect one leader that alone performs the due-scan, which is simple but caps scan throughput at one node; or let all replicas scan and claim each job with a conditional update (`UPDATE ... SET state='claimed', owner=me WHERE id=? AND state='pending'`), where only one update succeeds. The conditional-claim approach keeps all replicas useful and is usually preferred. Queues do not deduplicate by content, so relying on that is not an option.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how do you find due jobs efficiently, and when does a simple index stop working?",
+      "points": [
+        "Baseline: a B-tree index on `next_run_at`; every second, `SELECT ... WHERE next_run_at <= now() AND state='pending' LIMIT n`. Cost is proportional to the due slice, not the table.",
+        "This is genuinely good — it handles millions of jobs, is trivially durable, and is easy to reason about. Don't skip past it in an interview.",
+        "Where it strains: very high due-rate with many scheduler replicas contending on the same hot index range, and the write amplification of updating `next_run_at` on every recurring job.",
+        "Hot-range contention is mitigated by sharding the scan — partition jobs by hash and give each replica a partition, so replicas don't compete for the same rows.",
+        "At extreme scale, a hierarchical timing wheel gives O(1) insert and tick: buckets for seconds, minutes, hours, with jobs cascading down as time advances.",
+        "The timing wheel's cost is that it is in-memory and must be rebuilt from durable state on restart, so it's an optimization layered over the store, not a replacement for it.",
+        "Far-future jobs shouldn't sit in the wheel at all — keep them in the store and load them into the wheel only when they enter the near horizon.",
+        "Clock skew between schedulers matters: jobs fire against wall-clock time, so schedulers need NTP discipline or a job can fire twice at a boundary."
+      ],
+      "answer": "The baseline is a B-tree index on next-run-time and a once-per-second query for due rows, and I'd defend it rather than reach past it — cost is proportional to the due slice, not the table, and it handles millions of jobs while being trivially durable. It strains in two places: replicas contending on the same hot index range, and write amplification from updating next-run-time on every recurring job. Sharding the scan by hash so each replica owns a partition fixes the contention. At genuinely extreme scale a hierarchical timing wheel gives O(1) insert and tick with buckets cascading from hours to minutes to seconds — but it's in-memory, so it's a layer over the durable store rather than a replacement, and far-future jobs stay in the store until they enter the near horizon. The subtle one is clock skew: jobs fire against wall-clock time, so without NTP discipline a job can fire twice at a boundary.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "A worker pulls a job, runs it for 40 seconds, then its host dies. How does the job get retried without a second worker having also run it concurrently?",
+      "options": [
+        "The scheduler detects the dead host via heartbeat and immediately re-enqueues the job",
+        "The worker holds a time-bounded lease it must renew by heartbeating; if renewal stops, the lease expires and the job becomes claimable again — the lease duration bounds the window in which a zombie worker could still be running",
+        "The queue tracks per-message acknowledgements and redelivers instantly on TCP disconnect",
+        "Jobs are replicated to three workers and the first to finish wins"
+      ],
+      "answer": 1,
+      "explain": "Leasing is the mechanism. A worker claims the job with an expiry and renews while it works; if the worker dies, renewal stops, the lease lapses, and another worker can claim it. The honest part is that this doesn't guarantee the first worker isn't still running — it may be partitioned rather than dead, unable to renew but still executing. That's precisely why the guarantee is at-least-once and why handlers must be idempotent. Lease duration is the tuning knob: too short and healthy long jobs get stolen, too long and recovery from a genuine crash is slow.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: jobs fail. Design the retry and failure-handling behaviour.",
+      "points": [
+        "Classify failures: transient (network blip, downstream 503) should retry; permanent (malformed payload, 400) should not — retrying a permanent failure just burns capacity.",
+        "Exponential backoff with jitter. Backoff stops hammering a struggling dependency; jitter stops all retries synchronizing into a thundering herd.",
+        "Cap retries and move exhausted jobs to a dead-letter queue with the failure history, so a poisoned job stops consuming fleet capacity and becomes visible.",
+        "Timeouts are mandatory: a job that hangs forever holds a slot and its lease renewal may keep it alive indefinitely.",
+        "Idempotency is the contract that makes retries safe. Give each execution attempt a stable id so the handler can deduplicate its own side effects.",
+        "For multi-step jobs, checkpoint progress so a retry resumes rather than restarting an hour of work.",
+        "Circuit-break per job type: if a job type's failure rate spikes, pause that type rather than letting it consume the whole fleet's retry budget.",
+        "Missed windows need an explicit policy: if the scheduler was down for an hour, does an hourly job run once, catch up all runs, or skip? This must be per-job configuration, not an accident of implementation."
+      ],
+      "answer": "First classify: transient failures retry, permanent ones go straight to dead-letter, because retrying a malformed payload just burns capacity. Retries use exponential backoff with jitter — backoff to stop hammering a struggling dependency, jitter so retries don't synchronize into a thundering herd. Cap the attempts and dead-letter the exhausted ones with their failure history so a poisoned job becomes visible instead of silently eating the fleet. Timeouts are mandatory, or a hung job holds its slot while its lease keeps renewing. And I'd circuit-break per job type so one broken type can't consume everyone's retry budget. The policy question people forget is catch-up: if the scheduler was down an hour, does an hourly job run once, run every missed occurrence, or skip? That has to be per-job configuration, not whatever the implementation happens to do."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks at scale, and what would you monitor?",
+      "points": [
+        "Head-of-line blocking: mixing 100ms jobs with multi-hour jobs in one queue starves the short ones. Partition queues by expected duration or priority class.",
+        "Noisy-neighbour: one tenant submitting a million jobs starves everyone. Per-tenant rate limits and fair-share scheduling (weighted round-robin across tenant queues).",
+        "Thundering herd at round times: everyone schedules cron at midnight, so 00:00 is a spike. Jitter recurring schedules automatically.",
+        "Scheduling lag — time between due and enqueued — is the health metric that matters; queue depth alone doesn't reveal whether jobs are late.",
+        "Monitor per-job-type success rate, p99 duration, retry rate, and dead-letter growth; a rising retry rate is the early warning before a dependency fully fails.",
+        "Worker starvation versus saturation are different problems: track slot utilization alongside queue depth.",
+        "Long jobs and deploys conflict — draining workers gracefully means waiting for hour-long jobs, so long jobs should checkpoint and be resumable.",
+        "Multi-region: schedule in the region that owns the data, and be explicit about time zones — cron in local time with daylight-saving transitions creates duplicate and skipped runs twice a year."
+      ],
+      "answer": "The failure I'd design against first is head-of-line blocking: mixing 100-millisecond jobs and multi-hour jobs in one queue starves the short ones, so queues get partitioned by duration class or priority. Next is the noisy neighbour, handled with per-tenant limits and fair-share scheduling. And there's a self-inflicted one — everybody writes cron for midnight, so 00:00 is a spike; I'd jitter recurring schedules automatically. For monitoring, the metric that matters is scheduling lag, the gap between due and enqueued, because queue depth alone never tells you whether jobs are actually late. Beyond that, per-type success rate, retry rate as the early warning before a dependency fully fails, and dead-letter growth. The operational trap worth naming is daylight saving: cron in local time creates duplicate and skipped runs twice a year, which is a correctness bug that only appears on two days."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Submission, scheduling, queueing and execution are separate because each scales on a different axis and a saturated fleet must not stall scheduling.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  C([\"Client\"]) -->|\"POST /jobs<br/>+ idempotency key\"| API[\"API service\"]\n  API --> ST[(\"Job store<br/>index on next_run_at\")]\n  SCH[\"Scheduler replicas<br/>due-scan every 1s\"] --> ST\n  SCH -->|\"claimed jobs\"| Q[[\"Ready queue<br/>partitioned by duration class\"]]\n  Q --> W[\"Worker pool<br/>lease + heartbeat\"]\n  W -->|\"outcome\"| ST\n  W -->|\"exhausted retries\"| DLQ[(\"Dead letter\")]"
+    },
+    {
+      "id": "exclusive-claim",
+      "title": "Stopping three schedulers firing one job three times",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "A conditional update lets every replica scan while only one wins the row — keeping all replicas useful, unlike a single elected leader.",
+      "afterQuestion": 3,
+      "code": "flowchart TD\n  D([\"job due at 00:00\"]) --> S1[\"scheduler A scans\"]\n  D --> S2[\"scheduler B scans\"]\n  D --> S3[\"scheduler C scans\"]\n  S1 --> U{\"UPDATE ... SET state='claimed'<br/>WHERE id=? AND state='pending'\"}\n  S2 --> U\n  S3 --> U\n  U -->|\"one row updated\"| WIN([\"A enqueues once\"])\n  U -->|\"zero rows updated\"| LOSE([\"B and C move on\"])"
+    },
+    {
+      "id": "lease-and-recovery",
+      "title": "Leases, heartbeats and at-least-once",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "An expired lease returns the job, but cannot prove the old worker stopped — which is exactly why handlers must be idempotent.",
+      "afterQuestion": 5,
+      "code": "flowchart TD\n  W([\"worker claims job<br/>lease 60s\"]) --> HB{\"heartbeat renews?\"}\n  HB -->|\"yes\"| RUN[\"keeps executing\"]\n  RUN --> HB\n  HB -->|\"no — crashed\"| EXP[\"lease expires\"]\n  HB -->|\"no — partitioned\"| ZOM[\"zombie may still<br/>be running\"]\n  EXP --> RECLAIM([\"another worker claims\"])\n  ZOM --> RECLAIM\n  RECLAIM --> IDEM([\"at-least-once:<br/>handler must be idempotent\"])"
+    },
+    {
+      "id": "retry-policy",
+      "title": "Retry, backoff and dead-lettering",
+      "kind": "mermaid",
+      "role": "lifecycle",
+      "takeaway": "Classify before retrying, jitter so retries don't synchronize, and dead-letter on exhaustion so a poisoned job stops consuming the fleet.",
+      "afterQuestion": 6,
+      "code": "flowchart TD\n  F([\"job fails\"]) --> CL{\"transient or permanent?\"}\n  CL -->|\"permanent — 400, bad payload\"| DLQ([\"dead letter immediately\"])\n  CL -->|\"transient — 503, timeout\"| BO[\"exponential backoff<br/>+ jitter\"]\n  BO --> AT{\"attempts < max?\"}\n  AT -->|\"yes\"| RQ([\"re-enqueue\"])\n  AT -->|\"no\"| DLQ\n  CB[\"per-type circuit breaker\"] -.->|\"failure rate spike\"| PAUSE([\"pause that job type\"])\n  BO --> CB"
+    }
+  ]
+}

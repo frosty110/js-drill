@@ -9153,6 +9153,1459 @@
           ]
         }
       ]
+    },
+    "design-problems/p23": {
+      "title": "RAG / Semantic Search visual study set",
+      "summary": "Four sheets separate the two-pipeline map from the three decisions that set answer quality: chunking, hybrid two-stage retrieval, and embedding-model migration.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "RAG system map",
+          "purpose": "Show that ingest and query are separate pipelines joined only by the index.",
+          "description": "Documents are chunked, embedded and indexed once; queries embed, retrieve, rerank and ground the model. The embedding model is the schema shared by both halves.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Chunk the corpus",
+              "detail": "Split on structure with overlap so no answer is cut at a boundary."
+            },
+            {
+              "step": 2,
+              "title": "Embed and index",
+              "detail": "Store vectors plus ACL tags, document id and a content hash for incremental re-ingest."
+            },
+            {
+              "step": 3,
+              "title": "Retrieve on query",
+              "detail": "Embed the query, search lexically and semantically, pre-filter by permission."
+            },
+            {
+              "step": 4,
+              "title": "Rerank",
+              "detail": "A cross-encoder scores query-passage pairs jointly and keeps the best few."
+            },
+            {
+              "step": 5,
+              "title": "Ground and cite",
+              "detail": "The model answers only from retrieved passages and returns provenance."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Corpus",
+              "value": "10M docs",
+              "detail": "About 40M chunks at roughly four chunks per document."
+            },
+            {
+              "label": "Index size",
+              "value": "~120 GB",
+              "detail": "768-dimension float32; near 30 GB after int8 quantization."
+            },
+            {
+              "label": "Retrieval budget",
+              "value": "<200ms",
+              "detail": "So generation, not retrieval, dominates end-to-end latency."
+            }
+          ],
+          "priorities": [
+            "Retrieval quality over model size",
+            "Citations and provenance end to end",
+            "Permission filtering inside retrieval"
+          ],
+          "tradeoffs": [
+            "Bigger chunks give context but dilute the embedding",
+            "ANN buys speed by giving up recall",
+            "Fresher indexes cost continuous re-embedding"
+          ]
+        },
+        {
+          "id": "chunking-strategy",
+          "kind": "Mechanism",
+          "title": "Chunking and parent-document retrieval",
+          "purpose": "Make the precision-versus-context tension concrete and show the technique that resolves it.",
+          "description": "An embedding is one fixed-size vector, so a large chunk averages ideas into a vague point and a small one lacks context. Match on the small chunk, return the large one.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Split on structure",
+              "detail": "Headings and sections beat fixed size when the corpus has shape."
+            },
+            {
+              "step": 2,
+              "title": "Overlap the edges",
+              "detail": "Roughly 50 tokens of overlap stops an answer being severed at a boundary."
+            },
+            {
+              "step": 3,
+              "title": "Prepend context",
+              "detail": "Document title and section path travel with each chunk."
+            },
+            {
+              "step": 4,
+              "title": "Match small",
+              "detail": "Embedding and search operate on the precise child chunk."
+            },
+            {
+              "step": 5,
+              "title": "Return the parent",
+              "detail": "The model receives the larger section the match came from."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Chunk size",
+              "value": "~500 tokens",
+              "detail": "Baseline before structure-aware splitting."
+            },
+            {
+              "label": "Overlap",
+              "value": "~50 tokens",
+              "detail": "Cheap insurance against boundary loss."
+            }
+          ],
+          "priorities": [
+            "Recall of the correct passage",
+            "Coherent units over uniform sizes",
+            "Measurable change via recall@k"
+          ],
+          "tradeoffs": [
+            "Small chunks match precisely but lack context",
+            "Large chunks carry context but blur the vector",
+            "Overlap raises index size and duplicate hits"
+          ]
+        },
+        {
+          "id": "hybrid-retrieval",
+          "kind": "Request flow",
+          "title": "Two-stage hybrid retrieval",
+          "purpose": "Explain why retrieval splits into a cheap recall stage and an expensive precision stage.",
+          "description": "Bi-encoders can be precomputed but never see the pair; cross-encoders read the pair but cannot be precomputed. So recall about 100 cheaply, then rerank to about five.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Embed the query",
+              "detail": "One small forward pass, roughly 10 milliseconds."
+            },
+            {
+              "step": 2,
+              "title": "Search both ways",
+              "detail": "ANN for meaning, BM25 for rare literal tokens such as error codes."
+            },
+            {
+              "step": 3,
+              "title": "Fuse the rankings",
+              "detail": "Reciprocal rank fusion merges two ordered lists into one."
+            },
+            {
+              "step": 4,
+              "title": "Rerank the survivors",
+              "detail": "A cross-encoder scores each query-passage pair jointly."
+            },
+            {
+              "step": 5,
+              "title": "Apply a relevance floor",
+              "detail": "If nothing clears it, answer \"I do not know\" rather than grounding on noise."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Recall stage",
+              "value": "~100 candidates",
+              "detail": "Optimised for not missing the answer."
+            },
+            {
+              "label": "Precision stage",
+              "value": "~5 passages",
+              "detail": "What actually reaches the context window."
+            }
+          ],
+          "priorities": [
+            "Not missing the answer at stage one",
+            "Exact-term matching alongside semantic",
+            "Permission pre-filter, never post-filter"
+          ],
+          "tradeoffs": [
+            "Cross-encoders are accurate but cannot be indexed",
+            "Wider candidate sets cost rerank latency",
+            "Post-filtering permissions leaks through counts and timing"
+          ]
+        },
+        {
+          "id": "embedding-migration",
+          "kind": "Lifecycle",
+          "title": "Migrating the embedding model",
+          "purpose": "Show why an embedding upgrade is a schema migration rather than a config change.",
+          "description": "Vectors from two models occupy different spaces, so a new query against an old index returns nonsense rather than degraded results. Dual-index and gate the cutover on quality.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Stand up index B",
+              "detail": "Build alongside A rather than in place."
+            },
+            {
+              "step": 2,
+              "title": "Dual-write on ingest",
+              "detail": "New documents land in both indexes so B stays current."
+            },
+            {
+              "step": 3,
+              "title": "Backfill the corpus",
+              "detail": "Re-embed everything, at a cost estimated up front rather than discovered."
+            },
+            {
+              "step": 4,
+              "title": "Gate on quality",
+              "detail": "Compare A and B on a fixed evaluation set before moving traffic."
+            },
+            {
+              "step": 5,
+              "title": "Cut over, keep A warm",
+              "detail": "Rollback must stay cheap because regressions surface late."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Backfill cost",
+              "value": "~11 GPU-hours",
+              "detail": "40M chunks at roughly 1000 chunks per second per GPU."
+            },
+            {
+              "label": "Rollback window",
+              "value": "keep A live",
+              "detail": "Quality regressions are often noticed a day later."
+            }
+          ],
+          "priorities": [
+            "Zero-downtime cutover",
+            "Quality gate over completion percentage",
+            "Detectable mixed-generation data"
+          ],
+          "tradeoffs": [
+            "Dual indexes double storage during migration",
+            "Backfill competes with live ingest for GPUs",
+            "Cutting over early risks an unmeasured regression"
+          ]
+        }
+      ]
+    },
+    "design-problems/p30": {
+      "title": "Feature Store visual study set",
+      "summary": "Four sheets separate the dual-store map from the three things that decide whether a model behaves the same in production as in training.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Feature store system map",
+          "purpose": "Establish that one registered definition compiles into both materialization paths.",
+          "description": "A feature is declared once and compiled to a batch path and a streaming path, landing in a low-latency online store for inference and a full-history offline store for training.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Register the definition",
+              "detail": "Entity, source, transformation, freshness TTL and target stores, all versioned."
+            },
+            {
+              "step": 2,
+              "title": "Compile to both paths",
+              "detail": "The same definition drives the batch job and the stream processor."
+            },
+            {
+              "step": 3,
+              "title": "Materialize online",
+              "detail": "Current values only, keyed by entity, for single-digit-millisecond reads."
+            },
+            {
+              "step": 4,
+              "title": "Materialize offline",
+              "detail": "Full history with timestamps, stored columnar for large temporal joins."
+            },
+            {
+              "step": 5,
+              "title": "Serve both consumers",
+              "detail": "Inference reads online by key; training reads offline as of a label time."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Online footprint",
+              "value": "~500 GB",
+              "detail": "50M entities by 200 features at roughly 50 bytes."
+            },
+            {
+              "label": "Online latency",
+              "value": "<10ms p99",
+              "detail": "It sits inside the model request path."
+            },
+            {
+              "label": "Inference load",
+              "value": "10K QPS",
+              "detail": "Fetched as one row per entity, not 200 separate gets."
+            }
+          ],
+          "priorities": [
+            "One definition, never two implementations",
+            "Online latency inside the request budget",
+            "Reproducible training sets"
+          ],
+          "tradeoffs": [
+            "Two stores mean two materialization paths to keep honest",
+            "Streaming freshness costs continuous compute",
+            "Materializing every feature for every entity wastes storage"
+          ]
+        },
+        {
+          "id": "point-in-time-join",
+          "kind": "Mechanism",
+          "title": "Point-in-time correctness",
+          "purpose": "Show exactly which feature value a training row is allowed to contain.",
+          "description": "A training row may only use values knowable at its label timestamp. Using a later value teaches the model to rely on information it will never have at prediction time.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Start from label rows",
+              "detail": "Entity id, label timestamp and label, potentially hundreds of millions of rows."
+            },
+            {
+              "step": 2,
+              "title": "Keep feature history",
+              "detail": "Every value stored with the event timestamp it became valid."
+            },
+            {
+              "step": 3,
+              "title": "Join as-of, backward",
+              "detail": "Take the latest value at or before the label timestamp."
+            },
+            {
+              "step": 4,
+              "title": "Bound with a TTL",
+              "detail": "Without one, a row happily matches a value from a year earlier."
+            },
+            {
+              "step": 5,
+              "title": "Sort-merge at scale",
+              "detail": "Both sides stream past each other once instead of per-row lookups."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Join type",
+              "value": "as-of backward",
+              "detail": "Not a key join — the timestamp is the whole point."
+            },
+            {
+              "label": "Failure mode",
+              "value": "label leakage",
+              "detail": "Excellent backtest, broken production model."
+            }
+          ],
+          "priorities": [
+            "Only knowable values enter training",
+            "Reproducible output for the same inputs",
+            "Event time distinguished from processing time"
+          ],
+          "tradeoffs": [
+            "Temporal joins cost far more than key lookups",
+            "Longer history improves training and grows storage",
+            "Tight TTLs drop valid rows, loose ones admit stale values"
+          ]
+        },
+        {
+          "id": "training-serving-skew",
+          "kind": "Failure",
+          "title": "Where training/serving skew comes from",
+          "purpose": "Name the silent failure the whole system exists to prevent.",
+          "description": "Two implementations of one definition drift at the edges — timezones, cancellations, null handling — so the model receives a different distribution than it trained on.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Feature defined once",
+              "detail": "A single logical definition, for example a 30-day average order value."
+            },
+            {
+              "step": 2,
+              "title": "Reimplemented twice",
+              "detail": "Batch SQL in a notebook, live computation in the serving path."
+            },
+            {
+              "step": 3,
+              "title": "Edges disagree",
+              "detail": "Timezone boundaries, cancelled orders, inclusive or exclusive windows, nulls."
+            },
+            {
+              "step": 4,
+              "title": "Distributions diverge",
+              "detail": "Serving inputs no longer match what the model learned."
+            },
+            {
+              "step": 5,
+              "title": "Fix structurally",
+              "detail": "Compile both paths from one definition so no second implementation exists."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Symptom",
+              "value": "good offline, bad live",
+              "detail": "The most common cause of a model that validates and then fails."
+            },
+            {
+              "label": "Direct test",
+              "value": "recompute and compare",
+              "detail": "Recompute offline what was served online for the same entity and time."
+            }
+          ],
+          "priorities": [
+            "One source of truth per feature",
+            "Detectable divergence before accuracy moves",
+            "Logged feature vectors per prediction"
+          ],
+          "tradeoffs": [
+            "Structural fixes cost more up front than a quick reimplementation",
+            "Continuous skew checks consume compute",
+            "Statistical fixes such as regularization address a different failure"
+          ]
+        },
+        {
+          "id": "freshness-tiers",
+          "kind": "Lifecycle",
+          "title": "Per-feature freshness and missing values",
+          "purpose": "Show that freshness is declared per feature and that a missing value must be explicit.",
+          "description": "A 30-day average tolerates hours of staleness; a session click count tolerates seconds. A missing value must be a flagged default, never a silent zero.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Declare a TTL",
+              "detail": "Freshness is a property of the feature, not of the system."
+            },
+            {
+              "step": 2,
+              "title": "Serve if fresh",
+              "detail": "Value within TTL is returned normally."
+            },
+            {
+              "step": 3,
+              "title": "Expire if stale",
+              "detail": "Past TTL, serve the default and raise a staleness alert."
+            },
+            {
+              "step": 4,
+              "title": "Default if absent",
+              "detail": "Cold-start entities get a documented default plus a was-defaulted flag."
+            },
+            {
+              "step": 5,
+              "title": "Log what was served",
+              "detail": "The served vector is both the debugging record and the skew baseline."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Batch features",
+              "value": "hours",
+              "detail": "Slow-moving aggregates and demographics."
+            },
+            {
+              "label": "Streaming features",
+              "value": "seconds",
+              "detail": "Session and last-N-minutes counters."
+            }
+          ],
+          "priorities": [
+            "Explicit defaults over silent zeros",
+            "Alerting on staleness before accuracy drops",
+            "Per-feature rather than system-wide SLOs"
+          ],
+          "tradeoffs": [
+            "Streaming freshness costs continuous compute",
+            "Short TTLs raise default rates",
+            "Logging every served vector adds storage"
+          ]
+        }
+      ]
+    },
+    "design-problems/p31": {
+      "title": "Content Moderation visual study set",
+      "summary": "Four sheets separate the cascade map from the three decisions that make the system workable: threshold bands, overload triage, and the reviewer feedback loop.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Moderation pipeline system map",
+          "purpose": "Show the cheap-first cascade and the three-way routing decision.",
+          "description": "Hash matching runs before any model, the publish decision splits by stakes, and scores route three ways. The architecture decides what a human never has to see.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Match known-bad hashes",
+              "detail": "Exact and perceptual hashes catch re-uploads in microseconds."
+            },
+            {
+              "step": 2,
+              "title": "Split by stakes",
+              "detail": "Catastrophic categories block before publish; the rest publish and scan asynchronously."
+            },
+            {
+              "step": 3,
+              "title": "Run the cascade",
+              "detail": "Cheap text and image classifiers first, large multimodal models only on survivors."
+            },
+            {
+              "step": 4,
+              "title": "Route on score",
+              "detail": "Auto-remove above the high threshold, auto-approve below the low one, review between."
+            },
+            {
+              "step": 5,
+              "title": "Enforce and record",
+              "detail": "Apply the action and write an audit record with a policy reason code."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Volume",
+              "value": "100M items/day",
+              "detail": "About 1,150 per second average, designed for 5K peak."
+            },
+            {
+              "label": "Review load",
+              "value": "1M/day at 1%",
+              "detail": "Roughly 8,300 reviewer-hours daily, over 1,000 full-time reviewers."
+            },
+            {
+              "label": "Cascade order",
+              "value": "hash to model",
+              "detail": "Microseconds, then milliseconds, then hundreds of milliseconds."
+            }
+          ],
+          "priorities": [
+            "Reviewer attention spent only where needed",
+            "Auditable decisions with reason codes",
+            "Latency proportional to stakes"
+          ],
+          "tradeoffs": [
+            "Blocking pre-publish protects users but delays every post",
+            "Publishing optimistically is fast but leaves harm briefly live",
+            "Larger models are more accurate and far more expensive"
+          ]
+        },
+        {
+          "id": "threshold-bands",
+          "kind": "Mechanism",
+          "title": "Two thresholds, not one",
+          "purpose": "Show why a single cut-off is the wrong shape for this problem.",
+          "description": "One threshold turns every borderline item into an automated error. A band converts model uncertainty into the one resource that can resolve it — human judgement.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Calibrate the score",
+              "detail": "An uncalibrated 0.8 is not a probability, and thresholds mean nothing without calibration."
+            },
+            {
+              "step": 2,
+              "title": "Set the high cut-off",
+              "detail": "Above it, auto-remove without review."
+            },
+            {
+              "step": 3,
+              "title": "Set the low cut-off",
+              "detail": "Below it, auto-approve without review."
+            },
+            {
+              "step": 4,
+              "title": "Route the band",
+              "detail": "Between them, send to a human — where the model knows least."
+            },
+            {
+              "step": 5,
+              "title": "Tune per category",
+              "detail": "Child safety favours recall; spam favours precision."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Band width",
+              "value": "headcount dial",
+              "detail": "Halving the uncertain band halves a thousand-person operation."
+            },
+            {
+              "label": "False-positive signal",
+              "value": "appeal overturns",
+              "detail": "Without appeals the false-positive rate is unobservable."
+            }
+          ],
+          "priorities": [
+            "Error ratio owned jointly with policy",
+            "Calibration before threshold tuning",
+            "Measurable false positives via appeals"
+          ],
+          "tradeoffs": [
+            "Favouring recall raises review cost",
+            "Favouring precision leaves more harm live",
+            "Recalibration after a model update silently shifts every threshold"
+          ]
+        },
+        {
+          "id": "priority-triage",
+          "kind": "Failure",
+          "title": "Triage when the queue exceeds capacity",
+          "purpose": "Show why arrival order is the worst possible allocation under overload.",
+          "description": "FIFO treats a viral threat identically to a three-view meme. Ranking by severity times predicted reach puts scarce human attention where damage accrues fastest.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Measure the overflow",
+              "detail": "Arrival exceeds review capacity, so something must be dropped or deferred."
+            },
+            {
+              "step": 2,
+              "title": "Score expected harm",
+              "detail": "Severity multiplied by predicted reach from follower count and early velocity."
+            },
+            {
+              "step": 3,
+              "title": "Review the top slice",
+              "detail": "Human attention goes to the highest-damage items first."
+            },
+            {
+              "step": 4,
+              "title": "Apply an explicit tail policy",
+              "detail": "Auto-action conservatively or expire with an audit record."
+            },
+            {
+              "step": 5,
+              "title": "Alert on queue age",
+              "detail": "Age percentiles reveal starvation that queue length hides."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Arrival",
+              "value": "1.3M/day",
+              "detail": "Against a review capacity of 1M per day."
+            },
+            {
+              "label": "Overflow",
+              "value": "300K/day",
+              "detail": "Needs a stated policy, not silent accumulation."
+            }
+          ],
+          "priorities": [
+            "Highest-harm items reviewed first",
+            "Bounded, stated tail behaviour",
+            "Starvation visible in metrics"
+          ],
+          "tradeoffs": [
+            "Priority ranking starves low-severity items by design",
+            "Auto-actioning the tail raises false positives",
+            "Expiring the tail leaves some harm unreviewed"
+          ]
+        },
+        {
+          "id": "label-feedback-loop",
+          "kind": "Lifecycle",
+          "title": "The reviewer feedback loop and its failure modes",
+          "purpose": "Show what the loop buys and the three ways it degrades.",
+          "description": "Reviewer decisions are labels from exactly where the model is weakest, which is active learning by construction — and also a biased sample that automates reviewer bias at scale.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Humans decide the band",
+              "detail": "Every review produces a label plus a policy reason code."
+            },
+            {
+              "step": 2,
+              "title": "Labels feed retraining",
+              "detail": "The uncertain band narrows, cutting review cost over time."
+            },
+            {
+              "step": 3,
+              "title": "Correct sampling bias",
+              "detail": "Label a random sample too, or the training set only reflects the band."
+            },
+            {
+              "step": 4,
+              "title": "Audit for bias",
+              "detail": "Golden sets and per-group error rates catch reviewer bias before it is automated."
+            },
+            {
+              "step": 5,
+              "title": "Red-team the blind spots",
+              "detail": "The model never learns about content it never surfaced."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Retraining cadence",
+              "value": "a safety property",
+              "detail": "Adversaries adapt continuously, so a static model degrades by design."
+            },
+            {
+              "label": "Agreement metric",
+              "value": "inter-rater",
+              "detail": "Low agreement means the policy is ambiguous, not that reviewers are careless."
+            }
+          ],
+          "priorities": [
+            "Labels where the model is weakest",
+            "Bias detected before it is automated",
+            "Coverage of what the model never surfaces"
+          ],
+          "tradeoffs": [
+            "Band-only labels are an unrepresentative sample",
+            "Reviewer bias becomes uniform, invisible model bias",
+            "Multi-review improves labels and consumes scarce capacity"
+          ]
+        }
+      ]
+    },
+    "design-problems/p26": {
+      "title": "Observability Platform visual study set",
+      "summary": "Four sheets separate the three-store map from the things that actually decide whether the platform survives: cardinality, compression, and cross-signal correlation.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Observability platform system map",
+          "purpose": "Show why three signals need three stores behind one ingest path.",
+          "description": "Metrics, logs and traces have conflicting access patterns — range reads, filtered scans and graph assembly — so they share ingest and diverge at storage.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Collect at the host",
+              "detail": "Agents batch locally and never block the application thread."
+            },
+            {
+              "step": 2,
+              "title": "Validate and quota",
+              "detail": "The gateway enforces per-tenant limits before anything reaches storage."
+            },
+            {
+              "step": 3,
+              "title": "Buffer durably",
+              "detail": "A queue absorbs storage restarts so ingest never back-pressures production."
+            },
+            {
+              "step": 4,
+              "title": "Split by signal",
+              "detail": "Time series, log objects and spans land in stores shaped for their reads."
+            },
+            {
+              "step": 5,
+              "title": "Query and alert",
+              "detail": "Dashboards and alert rules read metrics; investigation crosses all three."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Metric points",
+              "value": "670K/sec",
+              "detail": "10M active series scraped every 15 seconds."
+            },
+            {
+              "label": "Log volume",
+              "value": "5 TB/day",
+              "detail": "About 58 MB/sec sustained — the storage cost driver."
+            },
+            {
+              "label": "Spans unsampled",
+              "value": "~1 GB/sec",
+              "detail": "100K requests/sec at roughly 20 spans each."
+            }
+          ],
+          "priorities": [
+            "Ingest availability above query availability",
+            "Never back-pressure the monitored application",
+            "Correlation across all three signals"
+          ],
+          "tradeoffs": [
+            "Three stores cost more to operate than one",
+            "Durable buffering adds delivery latency",
+            "Sampling saves money and loses detail"
+          ]
+        },
+        {
+          "id": "cardinality-explosion",
+          "kind": "Failure",
+          "title": "Why cardinality, not volume, kills metrics",
+          "purpose": "Name the single most common way a metrics system falls over.",
+          "description": "A series is identified by its full label set, so one unbounded label creates one series per value — and the label index is memory-resident, so it fails hard rather than degrading.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Start with a normal metric",
+              "detail": "A request counter with roughly 100 series."
+            },
+            {
+              "step": 2,
+              "title": "Add a bounded label",
+              "detail": "Status code with five values gives 500 series — entirely fine."
+            },
+            {
+              "step": 3,
+              "title": "Add an unbounded label",
+              "detail": "User id with a million values gives 100 million series."
+            },
+            {
+              "step": 4,
+              "title": "Watch the index grow",
+              "detail": "The label-to-series index lives in memory and grows without bound."
+            },
+            {
+              "step": 5,
+              "title": "Fail hard",
+              "detail": "Out-of-memory kills and query timeouts hit every tenant on the node."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Safe label",
+              "value": "low cardinality",
+              "detail": "Status, method, region — small closed sets."
+            },
+            {
+              "label": "Unsafe label",
+              "value": "unbounded",
+              "detail": "User id, request id, session id, full URL path."
+            }
+          ],
+          "priorities": [
+            "Per-tenant series quotas",
+            "Cardinality visible as a first-class metric",
+            "Blast radius contained to one tenant"
+          ],
+          "tradeoffs": [
+            "Quotas protect the cluster and reject some legitimate metrics",
+            "High-cardinality data still needs a home in logs or traces",
+            "Rejecting at ingest loses data that cannot be recovered"
+          ]
+        },
+        {
+          "id": "tsdb-compression",
+          "kind": "Mechanism",
+          "title": "Delta-of-delta and XOR compression",
+          "purpose": "Explain why the highest-volume signal is also the cheapest to store.",
+          "description": "Timestamps arrive at near-fixed intervals and values change slowly, so a 16-byte pair compresses to one or two bytes.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Store the first point",
+              "detail": "A full timestamp and value anchor the series."
+            },
+            {
+              "step": 2,
+              "title": "Delta the timestamps",
+              "detail": "Then store only the change in delta — zero for a regular scrape."
+            },
+            {
+              "step": 3,
+              "title": "XOR the values",
+              "detail": "Similar floats share leading and trailing bits, so only the middle window is stored."
+            },
+            {
+              "step": 4,
+              "title": "Chunk by time window",
+              "detail": "The current chunk is in memory behind a write-ahead log; closed chunks are immutable."
+            },
+            {
+              "step": 5,
+              "title": "Downsample the old",
+              "detail": "Five-minute and hourly rollups keep long-range queries cheap."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Raw point",
+              "value": "16 bytes",
+              "detail": "A timestamp plus a float64."
+            },
+            {
+              "label": "Compressed point",
+              "value": "1-2 bytes",
+              "detail": "Which is why 670K points/sec is only about 115 GB/day."
+            }
+          ],
+          "priorities": [
+            "Sequential immutable chunks",
+            "Bounded query cost over long ranges",
+            "Crash safety via write-ahead log"
+          ],
+          "tradeoffs": [
+            "Compression assumes regular intervals and slow change",
+            "Downsampling loses spikes that were briefly real",
+            "Immutable chunks make late-arriving points awkward"
+          ]
+        },
+        {
+          "id": "trace-sampling-and-correlation",
+          "kind": "Mechanism",
+          "title": "Tail sampling and cross-signal correlation",
+          "purpose": "Show why the sampling decision must come after the outcome, and what makes the three signals one workflow.",
+          "description": "Head sampling keeps 1% of everything including 1% of the failures you needed. Tail sampling decides once the trace is complete, so every error can be kept.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Propagate context",
+              "detail": "A trace id travels with the request across every service boundary."
+            },
+            {
+              "step": 2,
+              "title": "Buffer the spans",
+              "detail": "Hold them until the trace completes rather than deciding at the root."
+            },
+            {
+              "step": 3,
+              "title": "Apply tail policy",
+              "detail": "Keep every trace with an error or high latency, sample the rest at 1%."
+            },
+            {
+              "step": 4,
+              "title": "Link from metrics",
+              "detail": "An exemplar attaches a sample trace id to a histogram bucket."
+            },
+            {
+              "step": 5,
+              "title": "Link to logs",
+              "detail": "Logs carrying the trace id turn timestamp archaeology into a lookup."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Unsampled cost",
+              "value": "1 GB/sec",
+              "detail": "Which is why sampling is a requirement, not a tuning knob."
+            },
+            {
+              "label": "At 1%",
+              "value": "10 MB/sec",
+              "detail": "The difference between feasible and not."
+            }
+          ],
+          "priorities": [
+            "Every failure trace retained",
+            "One filter across all three signals",
+            "Alert to root cause in minutes"
+          ],
+          "tradeoffs": [
+            "Tail sampling requires buffering and consistent routing",
+            "Head sampling is cheaper and discards the interesting traces",
+            "Exemplars add storage to every histogram"
+          ]
+        }
+      ]
+    },
+    "design-problems/p20": {
+      "title": "Distributed Job Scheduler visual study set",
+      "summary": "Four sheets separate the component map from the three mechanisms that make scheduling correct: exclusive claiming, leases, and retry discipline.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Job scheduler system map",
+          "purpose": "Show why submission, scheduling, queueing and execution are separate components.",
+          "description": "Each scales on a different axis, and a saturated worker fleet must never stall scheduling. Submission is durable and immediate; execution is asynchronous.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Accept and persist",
+              "detail": "The API records the job durably and returns — submission is not execution."
+            },
+            {
+              "step": 2,
+              "title": "Scan for due work",
+              "detail": "Schedulers query an index on next-run-time roughly once a second."
+            },
+            {
+              "step": 3,
+              "title": "Claim exclusively",
+              "detail": "A conditional update ensures exactly one replica enqueues each job."
+            },
+            {
+              "step": 4,
+              "title": "Queue by class",
+              "detail": "Ready work is partitioned so long jobs cannot block short ones."
+            },
+            {
+              "step": 5,
+              "title": "Lease and execute",
+              "detail": "Workers hold a renewable lease and report the outcome."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Scheduled jobs",
+              "value": "10M",
+              "detail": "About 10 GB — the job table is not the storage problem."
+            },
+            {
+              "label": "Peak executions",
+              "value": "50K/sec",
+              "detail": "Well within one queue system."
+            },
+            {
+              "label": "Concurrency needed",
+              "value": "rate x duration",
+              "detail": "5,000 slots at 100ms average; 500,000 at 10 seconds."
+            }
+          ],
+          "priorities": [
+            "Durability of an accepted job",
+            "Scheduling accuracy within seconds",
+            "Tenant isolation under load"
+          ],
+          "tradeoffs": [
+            "Frequent due-scans cost database load",
+            "Queue partitioning adds operational surface",
+            "Execution history dwarfs the job table and needs expiry"
+          ]
+        },
+        {
+          "id": "exclusive-claim",
+          "kind": "Mechanism",
+          "title": "Stopping three schedulers firing one job three times",
+          "purpose": "Show the duplicate-run bug and the two ways to prevent it.",
+          "description": "Every replica sees the same due rows, so without coordination each enqueues the job. A conditional update lets all replicas scan while only one wins.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "All replicas scan",
+              "detail": "Each finds the same rows past their next-run time."
+            },
+            {
+              "step": 2,
+              "title": "Attempt a conditional claim",
+              "detail": "Update to claimed only where the state is still pending."
+            },
+            {
+              "step": 3,
+              "title": "One update succeeds",
+              "detail": "That replica enqueues the job exactly once."
+            },
+            {
+              "step": 4,
+              "title": "The others no-op",
+              "detail": "Zero rows updated means move on without enqueueing."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Alternative",
+              "value": "leader election",
+              "detail": "Simpler, but caps scan throughput at a single node."
+            },
+            {
+              "label": "Chosen",
+              "value": "conditional claim",
+              "detail": "Keeps every replica useful and scales the scan."
+            }
+          ],
+          "priorities": [
+            "Exactly one enqueue per due job",
+            "All replicas remain useful",
+            "No single scheduling bottleneck"
+          ],
+          "tradeoffs": [
+            "Conditional claims add write contention on hot rows",
+            "Leader election is simpler but wastes replicas",
+            "Clock skew between schedulers can still double-fire at boundaries"
+          ]
+        },
+        {
+          "id": "lease-and-recovery",
+          "kind": "Failure",
+          "title": "Leases, heartbeats and at-least-once",
+          "purpose": "Show why recovery is possible but exactly-once is not.",
+          "description": "A worker renews a time-bounded lease while it works. If renewal stops the job returns — but a partitioned worker may still be running, which is why handlers must be idempotent.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Claim with an expiry",
+              "detail": "The worker takes the job under a bounded lease."
+            },
+            {
+              "step": 2,
+              "title": "Heartbeat to renew",
+              "detail": "Continued renewal signals the worker is alive and progressing."
+            },
+            {
+              "step": 3,
+              "title": "Renewal stops",
+              "detail": "Either the worker crashed or it is partitioned and still running."
+            },
+            {
+              "step": 4,
+              "title": "Lease expires",
+              "detail": "Another worker becomes eligible to claim the job."
+            },
+            {
+              "step": 5,
+              "title": "Accept at-least-once",
+              "detail": "The two cases are indistinguishable, so the handler must tolerate a rerun."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Lease duration",
+              "value": "the tuning knob",
+              "detail": "Too short steals healthy long jobs; too long slows recovery."
+            },
+            {
+              "label": "Guarantee",
+              "value": "at-least-once",
+              "detail": "Exactly-once is not achievable across a network."
+            }
+          ],
+          "priorities": [
+            "Automatic recovery from worker loss",
+            "Bounded duplicate-execution window",
+            "Idempotency as an explicit contract"
+          ],
+          "tradeoffs": [
+            "Short leases risk stealing work from healthy slow jobs",
+            "Long leases delay recovery after a crash",
+            "A partitioned worker can run concurrently with its replacement"
+          ]
+        },
+        {
+          "id": "retry-policy",
+          "kind": "Lifecycle",
+          "title": "Retry, backoff and dead-lettering",
+          "purpose": "Show that not every failure deserves a retry, and that retries need a bound.",
+          "description": "Classify first, back off with jitter, cap the attempts, and dead-letter what remains so a poisoned job stops consuming fleet capacity.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Classify the failure",
+              "detail": "Transient faults retry; malformed input never will succeed."
+            },
+            {
+              "step": 2,
+              "title": "Back off exponentially",
+              "detail": "Give a struggling dependency room to recover."
+            },
+            {
+              "step": 3,
+              "title": "Add jitter",
+              "detail": "Prevent every retry synchronizing into a thundering herd."
+            },
+            {
+              "step": 4,
+              "title": "Cap the attempts",
+              "detail": "Bound the budget rather than retrying forever."
+            },
+            {
+              "step": 5,
+              "title": "Dead-letter and surface",
+              "detail": "Exhausted jobs become visible with their failure history."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Circuit breaker",
+              "value": "per job type",
+              "detail": "One broken type must not consume everyone else retry budget."
+            },
+            {
+              "label": "Catch-up policy",
+              "value": "per job",
+              "detail": "After downtime: run once, run every missed occurrence, or skip."
+            }
+          ],
+          "priorities": [
+            "Fleet capacity protected from poison jobs",
+            "Failures visible rather than silent",
+            "Explicit behaviour after downtime"
+          ],
+          "tradeoffs": [
+            "Aggressive retries can amplify a downstream outage",
+            "Dead-lettering early risks abandoning recoverable work",
+            "Catch-up runs can stampede after a long outage"
+          ]
+        }
+      ]
+    },
+    "design-problems/p29": {
+      "title": "Webhook Delivery visual study set",
+      "summary": "Four sheets separate the async delivery map from the three things that make third-party endpoints survivable: isolation, retry discipline, and outbound security.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Webhook delivery system map",
+          "purpose": "Establish the synchronous/asynchronous boundary.",
+          "description": "Accept and enqueue synchronously, deliver asynchronously. The producer write path never waits on a customer-controlled endpoint.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Publish internally",
+              "detail": "Producers emit to an event bus and return immediately."
+            },
+            {
+              "step": 2,
+              "title": "Expand by subscription",
+              "detail": "A matcher turns one event into per-subscription deliveries."
+            },
+            {
+              "step": 3,
+              "title": "Queue per destination",
+              "detail": "Partitioning is what keeps one endpoint from blocking others."
+            },
+            {
+              "step": 4,
+              "title": "Deliver and sign",
+              "detail": "Workers POST with an HMAC signature over the raw body."
+            },
+            {
+              "step": 5,
+              "title": "Retry or dead-letter",
+              "detail": "Failures reschedule with backoff until the budget is exhausted."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Event volume",
+              "value": "10M/day",
+              "detail": "About 116/sec average, 600 at peak."
+            },
+            {
+              "label": "In-flight requests",
+              "value": "~1,800",
+              "detail": "Rate times a multi-second average delivery."
+            },
+            {
+              "label": "Retry budget",
+              "value": "24-72 hours",
+              "detail": "Then dead-letter into something the customer can replay."
+            }
+          ],
+          "priorities": [
+            "Producer never blocked by a receiver",
+            "Isolation between customers",
+            "Customer-visible delivery history"
+          ],
+          "tradeoffs": [
+            "Asynchronous delivery means no immediate confirmation",
+            "Per-destination queues multiply operational surface",
+            "Longer retry budgets grow the backlog during outages"
+          ]
+        },
+        {
+          "id": "isolation-and-breaker",
+          "kind": "Failure",
+          "title": "Stopping one slow endpoint taking down delivery",
+          "purpose": "Show head-of-line blocking across tenants and the two fixes.",
+          "description": "Workers are shared, so every one parked on a 30-second timeout is unavailable to everyone. Per-destination caps plus a circuit breaker bound the damage.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "One endpoint slows",
+              "detail": "Responses stretch toward the timeout."
+            },
+            {
+              "step": 2,
+              "title": "Shared workers park",
+              "detail": "Each blocked worker is capacity removed from all customers."
+            },
+            {
+              "step": 3,
+              "title": "Cap per destination",
+              "detail": "Limit simultaneous in-flight requests to any single endpoint."
+            },
+            {
+              "step": 4,
+              "title": "Break the circuit",
+              "detail": "After repeated failures stop sending and probe periodically."
+            },
+            {
+              "step": 5,
+              "title": "Tell the owner",
+              "detail": "Only the endpoint owner can actually fix it."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Slow endpoint cost",
+              "value": "10x a healthy one",
+              "detail": "A 10-second timeout versus a 1-second response."
+            },
+            {
+              "label": "Breaker probe",
+              "value": "single request",
+              "detail": "Cheap liveness check instead of full delivery volume."
+            }
+          ],
+          "priorities": [
+            "One tenant cannot degrade another",
+            "Dead endpoints stop consuming workers",
+            "Failures surfaced to the party who can fix them"
+          ],
+          "tradeoffs": [
+            "Per-destination caps reduce peak throughput for big customers",
+            "Open circuits delay legitimate recovery slightly",
+            "Probing too often re-loads a struggling endpoint"
+          ]
+        },
+        {
+          "id": "retry-schedule",
+          "kind": "Lifecycle",
+          "title": "Backoff, jitter and the retry budget",
+          "purpose": "Show that response class decides whether a retry makes sense at all.",
+          "description": "Retrying a 401 never succeeds. Retrying without jitter re-kills a recovering endpoint as every subscriber fires at once.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Classify the response",
+              "detail": "Only 5xx, timeouts and 429 are worth retrying."
+            },
+            {
+              "step": 2,
+              "title": "Honour Retry-After",
+              "detail": "A 429 tells you exactly when to come back."
+            },
+            {
+              "step": 3,
+              "title": "Back off exponentially",
+              "detail": "Ten seconds to six hours across the budget."
+            },
+            {
+              "step": 4,
+              "title": "Jitter every interval",
+              "detail": "Otherwise all subscribers retry simultaneously."
+            },
+            {
+              "step": 5,
+              "title": "Dead-letter and expose",
+              "detail": "Exhausted deliveries become a replayable customer-visible record."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Backoff ladder",
+              "value": "10s to 6h",
+              "detail": "Fast recovery for blips, patience for outages."
+            },
+            {
+              "label": "Non-retryable",
+              "value": "4xx",
+              "detail": "A malformed or unauthorized request will never succeed."
+            }
+          ],
+          "priorities": [
+            "Recovery without amplification",
+            "Bounded attempts per delivery",
+            "Self-service replay over support tickets"
+          ],
+          "tradeoffs": [
+            "Longer budgets improve delivery and grow queue depth",
+            "Immediate dead-lettering of 4xx can hide transient auth issues",
+            "Jitter makes delivery timing less predictable"
+          ]
+        },
+        {
+          "id": "signing-and-ssrf",
+          "kind": "Mechanism",
+          "title": "Signing outbound, and not becoming an SSRF vector",
+          "purpose": "Separate two security concerns that are easy to conflate.",
+          "description": "Signatures prove the sender to the receiver. They do nothing about the fact that a customer chose the URL your worker is about to request from inside your network.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Sign the raw body",
+              "detail": "HMAC over timestamp plus raw bytes, not a re-serialized object."
+            },
+            {
+              "step": 2,
+              "title": "Include the timestamp",
+              "detail": "Signed timestamps plus receiver-side age checks prevent replay."
+            },
+            {
+              "step": 3,
+              "title": "Resolve the destination",
+              "detail": "Turn the hostname into an IP before trusting it."
+            },
+            {
+              "step": 4,
+              "title": "Reject private ranges",
+              "detail": "Loopback, link-local and private addresses are never valid targets."
+            },
+            {
+              "step": 5,
+              "title": "Re-validate on redirect",
+              "detail": "A public URL can 302 to an internal one."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Signature",
+              "value": "HMAC-SHA256",
+              "detail": "Per-endpoint secret, two active during rotation."
+            },
+            {
+              "label": "Classic target",
+              "value": "link-local metadata",
+              "detail": "The reason destination validation is mandatory."
+            }
+          ],
+          "priorities": [
+            "Receiver can verify authenticity",
+            "Replay window bounded by timestamp age",
+            "No route from delivery workers to internal services"
+          ],
+          "tradeoffs": [
+            "Raw-body signing complicates proxies that rewrite payloads",
+            "Strict IP validation can reject legitimate customer infrastructure",
+            "Secret rotation needs an overlap window that briefly doubles signatures"
+          ]
+        }
+      ]
     }
   }
 }

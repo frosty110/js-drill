@@ -1,0 +1,172 @@
+{
+  "id": "p26",
+  "num": 26,
+  "part": "Streaming & Analytics",
+  "title": "Design an Observability Platform",
+  "summary": "Ingest metrics, logs and traces from thousands of services and make them queryable fast enough to debug an incident. The signature challenge is cardinality — the number of distinct label combinations, not the request rate, is what actually kills a metrics system.",
+  "keyTakeaways": [
+    "The three signals have different shapes and need different stores: metrics are dense numeric time series, logs are high-volume text, traces are causally linked spans.",
+    "Cardinality is the real scaling limit for metrics. One unbounded label — user id, request id — multiplies series count without limit and no amount of hardware fixes it.",
+    "Time-series storage wins on delta-of-delta timestamp encoding and XOR value compression, getting typical points to 1-2 bytes.",
+    "Logs are write-once, read-rarely: index only the fields you filter on and keep the payload in cheap object storage.",
+    "Traces must be sampled, and head-based sampling discards the errors you needed; tail-based sampling decides after the trace completes so you can keep every failure.",
+    "Correlation is the product: an exemplar linking a latency spike to a specific trace id is what turns three tools into one workflow.",
+    "Retention is tiered by resolution — raw for hours, downsampled rollups for months — because nobody queries per-second data from last quarter."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope an observability platform. What are the functional requirements, and which non-functional targets shape it?",
+      "points": [
+        "Functional: ingest metrics, logs and traces from thousands of services; query them; alert on metric conditions; correlate across the three signals.",
+        "The core use case is incident debugging: from an alert, to which service, to which request, in minutes. That workflow — not any single query — is the product.",
+        "Non-functional: ingest must be highly available and must never block the applications it observes. A monitoring system that takes down production is worse than none.",
+        "Query latency: dashboards under ~1s over recent windows; ad-hoc historical queries can be slower.",
+        "Freshness: metrics visible within seconds — an alert on 5-minute-old data is 5 minutes of extra outage.",
+        "Retention differs per signal and per age: raw traces for days, metrics rollups for a year.",
+        "State scale: e.g. 5,000 hosts, 10M active metric series, 5 TB logs/day — the numbers that decide whether this is one database or three."
+      ],
+      "answer": "We ingest metrics, logs and traces, make them queryable, alert on metrics, and — the part that matters — let someone go from an alert to the failing request in minutes. That correlation workflow is the actual product; three separate tools that don't link are much less than the sum. Non-functionally the hard constraint is that ingest must never block the applications being observed: a monitoring system that takes production down with it is worse than not having one. Dashboards under a second on recent windows, metrics visible within seconds because stale alerts are just extra outage, and retention tiered per signal. I'd anchor on something like 5,000 hosts, 10M active series and 5 TB of logs a day, since those numbers decide whether this is one store or three.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the load for each signal, and say which number is the dangerous one.",
+      "points": [
+        "Metrics: 10M active series scraped every 15s = ~670K data points/sec. Each point compresses to ~2 bytes, so ~1.3 MB/sec, ~115 GB/day before replication. Surprisingly small.",
+        "Logs: 5 TB/day ≈ 58 MB/sec sustained. This dominates storage cost and is why logs go to object storage, not a hot index.",
+        "Traces: 100K requests/sec × ~20 spans = 2M spans/sec unsampled at ~500 bytes = 1 GB/sec. Unaffordable, hence sampling.",
+        "The dangerous number is cardinality, not throughput: 10M series is fine, but adding one label with 1M distinct values to a metric with 100 existing series creates 100M series instantly.",
+        "Memory is the binding constraint for metrics — a time-series database keeps an inverted index of label→series in memory, roughly a few KB per active series, so 10M series is tens of GB of index alone.",
+        "Query cost scales with series touched, not with time range: `sum by (service)` over a high-cardinality metric can scan millions of series and time out.",
+        "Sampled traces at 1% bring 1 GB/sec down to 10 MB/sec, which is the difference between feasible and not."
+      ],
+      "answer": "Metrics are the smallest: 10M series at a 15-second scrape is ~670K points/sec, and at ~2 bytes compressed that's only about 115 GB/day. Logs are 5 TB/day, roughly 58 MB/sec sustained, and dominate storage — which is why they belong in object storage rather than a hot index. Traces unsampled would be about 1 GB/sec, which is simply unaffordable, so sampling isn't an optimization, it's a requirement. But the dangerous number isn't any of those — it's cardinality. Adding one label with a million distinct values to a metric that had a hundred series creates a hundred million series instantly, and since the label index lives in memory, that's an out-of-memory kill rather than a slowdown.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Design the ingest and storage layer. Why not one store for all three signals?",
+      "points": [
+        "Agent on each host collects and batches; a gateway receives, validates, and writes to a durable queue so a storage outage doesn't back-pressure applications.",
+        "Metrics → time-series database: columnar per-series chunks, delta-of-delta timestamp encoding, XOR-compressed float values, with an inverted index from label to series id.",
+        "Logs → an append-only store in object storage, partitioned by time and service, with a separate index only over the fields people actually filter on (service, level, trace id).",
+        "Traces → span store keyed by trace id, optimized for 'fetch the whole trace' rather than analytical scans.",
+        "One store cannot serve all three because the access patterns conflict: metrics are read as ranges over a series, logs as filtered scans over time, traces as a key lookup assembling a graph.",
+        "The queue between gateway and storage is what makes ingest survivable — it absorbs storage restarts and backfills afterwards.",
+        "Push versus pull: pull (scrape) gives the platform control over rate and gives free target liveness; push suits short-lived jobs that die before a scrape. Most real systems support both."
+      ],
+      "answer": "Agents collect and batch on each host, a gateway validates, and — importantly — writes into a durable queue so that a storage outage never back-pressures the applications being observed. From there the three signals split, because their access patterns genuinely conflict: metrics are range reads over a series, logs are filtered scans over time, traces are a key lookup that assembles a graph. So metrics go to a time-series database with delta-of-delta timestamps and XOR-compressed values plus a label index; logs go append-only to object storage with an index over only the fields people actually filter on; traces go to a span store keyed by trace id. On collection I'd support both pull and push — pull gives rate control and free liveness detection, push is the only option for short-lived jobs that die before a scrape."
+    },
+    {
+      "type": "mc",
+      "q": "A team adds a `user_id` label to their `http_requests_total` metric. What happens?",
+      "options": [
+        "Query results become slightly less accurate due to label dilution",
+        "Cardinality explodes — one new series per distinct user — and since the label-to-series index is held in memory, the time-series database degrades and eventually runs out of memory",
+        "The metric is automatically sharded across more nodes to absorb the new label",
+        "Ingest slows proportionally to the number of users, but storage is unaffected"
+      ],
+      "answer": 1,
+      "explain": "A time series is uniquely identified by its metric name plus its full label set, so a label with unbounded values creates one series per value. A metric with 100 series and a million users becomes 100 million series. The failure isn't gradual: the inverted index from labels to series ids is memory-resident, so this shows up as OOM kills and query timeouts across every tenant on the node, not just for the offending metric. This is the single most common way metrics systems fall over, which is why high-cardinality identifiers belong on traces and logs — where they're indexed differently — and never as metric labels.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how does a time-series database store 670K points/sec in ~2 bytes each?",
+      "points": [
+        "Two observations drive it: timestamps arrive at near-fixed intervals, and consecutive values usually change very little.",
+        "Timestamps use delta-of-delta encoding: store the first timestamp, then the delta, then only the *change* in delta. For a perfectly regular 15s scrape, the delta-of-delta is 0 and costs a single bit.",
+        "Values use XOR compression: XOR the current float with the previous one. Similar floats share leading and trailing bits, so only the differing middle window is stored.",
+        "Together these bring a 16-byte (timestamp, float64) pair to roughly 1-2 bytes for typical series.",
+        "Data is chunked by time window (e.g. 2 hours) per series; the current chunk is in memory and appended to, closed chunks are compressed and flushed immutably.",
+        "A write-ahead log covers the in-memory head chunk so an unclean restart doesn't lose the last two hours.",
+        "The inverted index maps each label pair to a posting list of series ids; a query intersects posting lists to find matching series, then reads their chunks — the same shape as a search engine.",
+        "Downsampling produces lower-resolution rollups (5m, 1h) for old data, so a year-long dashboard query reads thousands of points instead of millions."
+      ],
+      "answer": "It exploits two facts: timestamps are near-regular and consecutive values barely change. Timestamps use delta-of-delta encoding — store the first, then the delta, then only the change in delta, so a perfectly regular 15-second scrape costs a single bit per point. Values use XOR against the previous value, and since similar floats share leading and trailing bits, only the differing middle window is stored. That takes a 16-byte pair down to one or two bytes. Structurally it's chunked by time window per series, with the current chunk in memory behind a write-ahead log and closed chunks compressed and flushed immutably. Queries go through an inverted index from label pairs to posting lists of series ids — the same shape as a search engine — and old data gets downsampled into rollups so a year-long dashboard reads thousands of points instead of millions.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "You can afford to keep 1% of traces. Why is head-based sampling (decide at the root span) usually the wrong choice?",
+      "options": [
+        "Head-based sampling requires coordination between services and is too slow",
+        "The decision is made before the outcome is known, so a uniform 1% keeps 1% of errors and slow requests — exactly the traces you needed — while tail-based sampling decides after the trace completes and can keep all of them",
+        "Head-based sampling produces incomplete traces because downstream services may disagree",
+        "Head-based sampling cannot propagate trace context across service boundaries"
+      ],
+      "answer": 1,
+      "explain": "Head-based sampling is cheap and gives consistent traces, but it commits before anything interesting has happened — so you keep a representative 1% of *everything*, including only 1% of the failures you'll actually want to look at. Tail-based sampling buffers spans until the trace finishes, then applies policy: keep 100% of traces containing an error or exceeding a latency threshold, and 1% of the boring ones. The cost is real — you must buffer in-flight spans and route all spans of a trace to the same collector — but the resulting dataset is dramatically more useful per byte stored.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how do the three signals actually get correlated during an incident?",
+      "points": [
+        "Context propagation is the foundation: a trace id and span id travel with the request across service boundaries via headers (W3C `traceparent`).",
+        "Logs must include the trace id. That single field turns 'find the logs for this failing request' from a timestamp-guessing exercise into a lookup.",
+        "Exemplars link metrics to traces: a latency histogram bucket stores a sample trace id, so clicking the p99 spike on a dashboard jumps to a real slow request.",
+        "Consistent resource attribution — service, version, region, host — as labels on all three signals lets a single filter apply across them.",
+        "The debugging path becomes: alert fires on a metric → filter by service → exemplar to a slow trace → span shows which downstream call was slow → trace-id-filtered logs from that service explain why.",
+        "Without correlation the same investigation is three separate tools joined by copy-pasting timestamps, which is where most of the time in an incident actually goes.",
+        "This is why an open instrumentation standard matters more than any single backend: the value comes from all three signals sharing identifiers."
+      ],
+      "answer": "It rests on context propagation — a trace id travelling with the request across services in a standard header. Once that exists, two links do the real work. Logs carry the trace id, which turns 'find the logs for this failing request' from timestamp archaeology into a lookup. And exemplars attach a sample trace id to histogram buckets, so clicking a p99 spike on a dashboard jumps straight into a genuinely slow request. Add consistent resource attributes — service, version, region — as labels on all three, and one filter applies everywhere. The debugging path becomes alert, service, exemplar trace, slow span, trace-filtered logs. Without that, the same investigation is three tools joined by pasting timestamps, and that's where most incident time actually goes.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks at scale, and how do you keep the platform from taking down what it monitors?",
+      "points": [
+        "Cardinality governance: enforce per-tenant series limits, reject or drop offending metrics at the gateway, and expose cardinality as a first-class metric so teams see their own cost.",
+        "Blast radius: a single tenant's cardinality explosion must not evict another tenant's data — isolate by tenant, with quotas.",
+        "The observability system must not depend on itself for alerting; its own health needs an independent, simpler monitor, or an outage becomes invisible at exactly the wrong moment.",
+        "Agents must degrade safely: bounded local buffers, drop-oldest on overflow, and never block the application thread.",
+        "Query guardrails: per-query series limits and timeouts, or one careless dashboard query starves the cluster.",
+        "Retention tiering by resolution — raw for hours, 5-minute rollups for weeks, hourly for a year — is what keeps storage cost sublinear in retention.",
+        "Alert quality is an operational metric: page volume and false-positive rate should be tracked, since alert fatigue silently degrades response more than any technical failure.",
+        "Multi-region: keep ingest and storage regional and query across regions, rather than shipping the full firehose to one place."
+      ],
+      "answer": "The governance problem is cardinality: per-tenant series limits enforced at the gateway, with cardinality exposed as a metric so teams can see the cost they're creating rather than discovering it during an outage. Isolation matters as much — one tenant's explosion must not evict another's data. The self-dependency trap is the one I'd raise explicitly: the platform cannot be its own alerting path, because then an outage is invisible exactly when you need it most, so its health needs a simpler independent monitor. Agents must have bounded buffers and drop rather than block, and queries need per-query series limits and timeouts or one careless dashboard starves the cluster. Retention tiering by resolution keeps cost sublinear. And I'd track alert quality — page volume and false-positive rate — because alert fatigue degrades incident response more than most technical failures do."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "One ingest path, three stores — because range reads, filtered scans and graph assembly are genuinely different access patterns.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  A([\"Agents on hosts\"]) --> GW[\"Gateway<br/>validate + quota\"]\n  GW --> Q[[\"Durable queue<br/>absorbs storage outages\"]]\n  Q --> TS[(\"TSDB<br/>metrics\")]\n  Q --> LG[(\"Object store<br/>logs\")]\n  Q --> TR[(\"Span store<br/>traces\")]\n  TS --> QRY[\"Query + dashboards\"]\n  LG --> QRY\n  TR --> QRY\n  TS --> AL[\"Alerting\"]"
+    },
+    {
+      "id": "cardinality-explosion",
+      "title": "Why cardinality, not volume, kills metrics",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "A series is its label set, so one unbounded label multiplies series without limit — and the index is in memory, so it fails hard rather than slowly.",
+      "afterQuestion": 3,
+      "code": "flowchart TD\n  M([\"http_requests_total<br/>100 series\"]) --> ADD{\"add a label\"}\n  ADD -->|\"status: 5 values\"| OK[\"500 series — fine\"]\n  ADD -->|\"user_id: 1M values\"| BOOM[\"100,000,000 series\"]\n  BOOM --> IDX[\"in-memory label index<br/>grows without bound\"]\n  IDX --> OOM([\"OOM kill + query timeouts<br/>for every tenant on the node\"])\n  OK --> FIX[\"high-cardinality ids belong on<br/>traces and logs, never labels\"]"
+    },
+    {
+      "id": "tsdb-compression",
+      "title": "Delta-of-delta and XOR compression",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Regular timestamps and slowly-changing values compress a 16-byte pair to 1-2 bytes — which is why metrics are the cheapest of the three signals.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  P([\"(timestamp, float64)<br/>16 bytes raw\"]) --> T[\"timestamps:<br/>delta-of-delta\"]\n  P --> V[\"values:<br/>XOR with previous\"]\n  T --> T1[\"regular 15s scrape<br/>delta-of-delta = 0\"]\n  T1 --> T2([\"1 bit\"])\n  V --> V1[\"similar floats share<br/>leading + trailing bits\"]\n  V1 --> V2([\"store only the<br/>differing window\"])\n  T2 --> R([\"~1-2 bytes per point\"])\n  V2 --> R"
+    },
+    {
+      "id": "trace-sampling-and-correlation",
+      "title": "Tail sampling and cross-signal correlation",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Deciding after the trace completes keeps every error; a shared trace id is what turns three stores into one debugging workflow.",
+      "afterQuestion": 6,
+      "code": "flowchart TD\n  SP([\"spans arrive\"]) --> BUF[\"buffer until<br/>trace completes\"]\n  BUF --> POL{\"tail policy\"}\n  POL -->|\"error or slow\"| KEEP([\"keep 100%\"])\n  POL -->|\"normal\"| SAMP([\"keep ~1%\"])\n  ALERT([\"metric alert fires\"]) --> EX[\"exemplar:<br/>trace id on p99 bucket\"]\n  EX --> KEEP\n  KEEP --> SPAN[\"slow downstream span\"]\n  SPAN --> LOGS[\"logs filtered by trace id\"]\n  LOGS --> CAUSE([\"root cause\"])"
+    }
+  ]
+}

@@ -128,6 +128,8 @@
     ]
   },
   "reference": {
+    "approach": "Command pattern over two stacks",
+    "complexity": "O(1) per op / O(n)",
     "code": "class History {\n  // done = applied stack; undone = redo stack. Two stacks model a linear timeline.\n  constructor() {\n    this.done = [];\n    this.undone = [];\n  }\n  do(cmd) {\n    cmd.apply();\n    this.done.push(cmd);\n    // A fresh action invalidates redo — branching destroys the old future.\n    this.undone = [];\n  }\n  undo() {\n    const cmd = this.done.pop();\n    // No-op on empty stack — don't throw; UI buttons just stay disabled.\n    if (!cmd) return;\n    cmd.revert();\n    this.undone.push(cmd);\n  }\n  redo() {\n    const cmd = this.undone.pop();\n    if (!cmd) return;\n    cmd.apply();\n    this.done.push(cmd);\n  }\n}\n// Time O(1) per do/undo/redo, Space O(n) commands",
     "notes": [
       "Each command must be self-contained: apply() and revert() are inverses. The history doesn't know what the command does.",
@@ -159,7 +161,8 @@
           "Without it, `cmd.apply()` would compose with the undone stack's pending reverts and cancel itself out",
           "Clearing `undone` is what triggers the `done.push(cmd)` to fire — otherwise `do` is a no-op"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "After an `undo` the timeline forks, and the undone command belongs to the future you just abandoned. `this.undone = []` discards it — which is why an editor greys out Redo the moment you type something new."
       },
       {
         "q": "What pair of operations must each command expose?",
@@ -169,7 +172,8 @@
           "forward / backward — both run the same logic but with a direction flag passed in",
           "commit / rollback — borrowed from transaction APIs, mapping `commit` to do and `rollback` to undo"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`do` and `redo` both call `cmd.apply()`; `undo` calls `cmd.revert()`. `History` never inspects the command — `add(n)` supplies `() => x += n` and `() => x -= n`, and that inverse pair is the entire contract."
       },
       {
         "q": "Where do commands sit after `undo()`?",
@@ -179,7 +183,8 @@
           "Stay in `done` but flagged with an `inverted: true` property; redo unsets the flag",
           "Pushed to a third `redoQueue` that decouples reapplication from the original do/undo stacks"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`undo` is `const c = this.done.pop(); … this.undone.push(c)` — the command object survives, it just changes stacks. `redo` pops it straight back the other way, which is only possible because nothing discarded it."
       },
       {
         "q": "What does `redo()` do when `undone` is empty?",
@@ -189,7 +194,8 @@
           "Returns early — it's a no-op",
           "Returns `undefined` and silently re-applies the most recently undone command from a prior session"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "`const c = this.undone.pop(); if (!c) return;` — popping an empty array yields `undefined` and the guard bails before `c.apply()` could throw. `undo` carries the same guard; the UI just leaves the button disabled instead of handling an exception."
       }
     ]
   },

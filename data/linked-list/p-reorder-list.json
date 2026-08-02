@@ -122,6 +122,8 @@
     ]
   },
   "reference": {
+    "approach": "Find middle (slow/fast) → reverse second half → weave",
+    "complexity": "O(n) / O(1)",
     "code": "function reorderList(head) {\n  if (!head || !head.next) return head;\n  // 1) find middle — slow ends at the start of the second half\n  let slow = head, fast = head;\n  while (fast.next && fast.next.next) {\n    slow = slow.next;\n    fast = fast.next.next;\n  }\n  // 2) reverse the second half starting at slow.next\n  let prev = null, curr = slow.next;\n  slow.next = null;                          // cut the list in two\n  while (curr) {\n    const nxt = curr.next;\n    curr.next = prev;\n    prev = curr;\n    curr = nxt;\n  }\n  // 3) weave: first half = head, reversed second half = prev\n  let a = head, b = prev;\n  while (b) {\n    const an = a.next, bn = b.next;\n    a.next = b;\n    b.next = an;\n    a = an;\n    b = bn;\n  }\n  return head;\n}\n// Time O(n), Space O(1)",
     "notes": [
       "Slow/fast with the guard `fast.next && fast.next.next` leaves slow at the LAST node of the first half — convenient for cutting.",
@@ -159,7 +161,8 @@
           "At the first node of the second half",
           "At the tail"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Guarding on `fast.next && fast.next.next` stops fast one hop short: slow ends at 3 for [1,2,3,4,5] and at 2 for [1,2,3,4] — one before the second half, which is exactly where `slow.next = null` has to cut."
       },
       {
         "q": "Why set slow.next = null before reversing?",
@@ -169,7 +172,8 @@
           "Marks slow as visited so the weave loop knows where the halves meet",
           "Lets `prev = null` in the reverse loop signal end-of-list to GC the original second half"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Skip the cut and the first half's last node still points into the second half, so the weave leaves a cycle — [1,2,3,4,5] comes out as 1→5→2→4→3→4→3→… forever."
       },
       {
         "q": "Which half drives the weave loop?",
@@ -179,7 +183,8 @@
           "Whichever ends in null first — they alternate roles each iteration",
           "Both, joined by `a && b` — either being null exits the loop"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "On an odd-length list the first half keeps the extra middle node, already sitting in its final tail position; driving on `b` stops exactly there, while `while (a)` runs one iteration too many and throws on `b.next`."
       },
       {
         "q": "Space complexity?",
@@ -189,7 +194,8 @@
           "O(n) — need a temp array",
           "O(n^2)"
         ],
-        "answer": 0
+        "answer": 0,
+        "explain": "All three phases rewrite `next` on the existing nodes; the only extras are a fixed handful of pointers. O(n) is what the collect-into-an-array alternate costs."
       }
     ]
   },

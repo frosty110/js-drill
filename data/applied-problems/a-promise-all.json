@@ -120,6 +120,8 @@
     ]
   },
   "reference": {
+    "approach": "Preallocated result array + completion counter",
+    "complexity": "O(n) / O(n)",
     "code": "function promiseAll(arr) {\n  return new Promise((resolve, reject) => {\n    // Preallocate so out-of-order resolves still land at the right index.\n    const out = new Array(arr.length);\n    let done = 0;\n    // Empty input must resolve to [] — forgetting this leaves a forever-pending promise.\n    if (arr.length === 0) return resolve(out);\n    arr.forEach((item, i) => {\n      // Lift bare values into promises so plain entries still go through .then.\n      Promise.resolve(item)\n        .then(v => {\n          out[i] = v;\n          // Count completions; resolved `undefined` is still a real result.\n          if (++done === arr.length) resolve(out);\n        })\n        // First rejection wins — later errors are ignored.\n        .catch(reject);\n    });\n  });\n}",
     "notes": [
       "Wrap each entry with `Promise.resolve()` — values may be raw, not promises, but you still want a microtask boundary.",
@@ -151,7 +153,8 @@
           "`.push` inside a `.then` callback executes on a different microtask queue than the constructor, so it skips the outer Promise's resolve",
           "Preallocating sets `out.length` upfront, which is what makes the `done === out.length` completion check valid"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The handler writes `out[i] = v` with `i` captured from `forEach`, so a promise that settles third still lands in its input slot; `.push` would order the output by completion time. Note the completion check is `++done === arr.length`, not `out.length` — preallocation isn't what makes it valid."
       },
       {
         "q": "What happens when one input rejects?",
@@ -161,7 +164,8 @@
           "It waits for all to settle, then collects errors into a `.errors` array on the rejection reason",
           "It silently resolves with `undefined` at the rejected index and keeps the other resolutions"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`.catch(reject)` is attached to every entry and a Promise settles once, so the first rejection wins and later `reject` calls are no-ops. Nothing is cancelled — the other promises keep running, their results just have nowhere to land. `AggregateError` belongs to `Promise.any`; collect-all-errors is `Promise.allSettled`."
       },
       {
         "q": "Why wrap each item in `Promise.resolve(item)`?",
@@ -171,7 +175,8 @@
           "It defers the value to a different microtask queue so the outer Promise constructor's resolve can complete first",
           "`Promise.resolve` triggers internal reference-counting so the runtime can GC each input once it settles"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`arr` may hold bare values — the driver passes `[Promise.resolve(1), 2, Promise.resolve(3)]`. Calling `.then` on `2` throws `TypeError: 2.then is not a function`; `Promise.resolve` returns a promise untouched and wraps anything else, so one code path handles both."
       },
       {
         "q": "What must `promiseAll([])` resolve to?",
@@ -181,7 +186,8 @@
           "[] — an empty array",
           "It should reject with a TypeError — an empty iterable is invalid input by the spec"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The explicit `if (arr.length === 0) return resolve(out)` exists for exactly this case: `forEach` over an empty array never runs, so without the guard nothing ever calls `resolve` and the returned promise hangs forever."
       }
     ]
   },

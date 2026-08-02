@@ -121,6 +121,8 @@
     ]
   },
   "reference": {
+    "approach": "DFS memoized on an original-node -> clone Map",
+    "complexity": "O(V+E) / O(V)",
     "code": "function cloneGraph(node) {\n  if (!node) return null;\n  // Map original-node OBJECT → clone — identity keys, vals can repeat.\n  const map = new Map();\n  function dfs(orig) {\n    // Already cloned (or mid-clone) — return the recorded copy to break cycles.\n    if (map.has(orig)) return map.get(orig);\n    const copy = { val: orig.val, neighbors: [] };\n    // CRITICAL: record BEFORE recursing — otherwise a cycle infinite-loops.\n    map.set(orig, copy);\n    for (const nb of orig.neighbors) copy.neighbors.push(dfs(nb));\n    return copy;\n  }\n  return dfs(node);\n}\n// Time O(V + E), Space O(V) for the map + recursion stack",
     "notes": [
       "CRITICAL: set map.set(orig, copy) BEFORE recursing into neighbors. Otherwise a cycle re-enters dfs and infinite-loops.",
@@ -151,7 +153,8 @@
           "Map.set assigns a stable identity hash that neighbor recursions rely on for ordering",
           "The Map's insertion order determines the clone's neighbor order in the result"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "In a cycle the neighbor loop re-enters `dfs` on a node whose clone is still being wired; the earlier `map.set(orig, copy)` makes `map.has(orig)` true so that call returns the in-progress copy instead of building a second one and recursing again."
       },
       {
         "q": "What are the keys of the visited Map?",
@@ -161,7 +164,8 @@
           "Clone references",
           "A tuple of (original, clone) pairs, with the original side compared by identity"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`map.set(orig, copy)` keys on the original node object, and `Map` compares object keys by identity — so two distinct originals that happen to share a `val` still get distinct clones."
       },
       {
         "q": "Time complexity?",
@@ -171,7 +175,8 @@
           "O(V * E)",
           "O(V^2)"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The `map.has` guard limits object creation to one clone per original (V), and the `for (const nb of orig.neighbors)` loop walks each stored adjacency entry exactly once (2E for an undirected graph), with O(1) Map operations throughout."
       },
       {
         "q": "For a null input, the function returns:",

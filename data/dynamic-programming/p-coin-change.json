@@ -103,6 +103,8 @@
     ]
   },
   "reference": {
+    "approach": "Bottom-up DP over amounts — try every coin as the last one",
+    "complexity": "O(amount·k) / O(amount)",
     "code": "function coinChange(coins, amount) {\n  // Infinity = unreachable; any subproblem still Infinity at the end becomes -1.\n  const dp = new Array(amount + 1).fill(Infinity);\n  // Base case: 0 coins make amount 0 — anchors the recurrence.\n  dp[0] = 0;\n  // Bottom-up: solve every amount from 1..target, reusing smaller solutions.\n  for (let a = 1; a <= amount; a++) {\n    for (const c of coins) {\n      // Skip coins bigger than current amount; otherwise try using one of c + best for the remainder.\n      if (c <= a) dp[a] = Math.min(dp[a], dp[a - c] + 1);\n    }\n  }\n  return dp[amount] === Infinity ? -1 : dp[amount];\n}\n// Time O(amount * coins.length), Space O(amount)",
     "notes": [
       "Fill dp with Infinity so any unreachable subproblem stays Infinity and bubbles up to -1.",
@@ -139,7 +141,8 @@
           "dp[a] = sum over coins of dp[a-c]",
           "dp[a] = dp[a / 2] + 1"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Fixing coin c as the LAST one used leaves the smaller subproblem a-c, so that plan costs `dp[a - c] + 1`; the min over all coins tries every possible last coin. Summing instead counts the number of ways (that is Coin Change II), it does not minimise."
       },
       {
         "q": "Why fill the dp array with Infinity?",
@@ -149,7 +152,8 @@
           "So the dp array allocates as a packed Float64Array, which is faster than a sparse holey array",
           "So `dp[a - c]` returns Infinity instead of undefined when `a - c` is out of bounds"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Infinity means \"no known way yet\", so it never wins a `Math.min` and any amount still Infinity at the end maps to -1. The out-of-bounds worry is moot — the `c <= a` guard keeps `a - c` at 0 or above."
       },
       {
         "q": "What does dp[0] represent and why is it 0?",
@@ -159,7 +163,8 @@
           "It holds the smallest coin denomination, used as a tie-breaker in the inner min",
           "It marks the array's lower bound so `dp[a - c]` returns 0 when `c === a`"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "It is the base case: no coins are needed to make 0. It is the only cell not derived from the recurrence, and every other cell bottoms out here — a coin with `c === a` reads `dp[0] + 1 = 1`, which is what makes a single-coin amount come out right."
       },
       {
         "q": "Time complexity?",

@@ -107,6 +107,8 @@
     ]
   },
   "reference": {
+    "approach": "8-neighbor scan into a fresh grid",
+    "complexity": "O(h·w) / O(h·w)",
     "code": "function nextGen(grid) {\n  const h = grid.length, w = grid[0].length;\n  // Write to a fresh grid — in-place would corrupt neighbor counts of unvisited cells.\n  const out = Array.from({ length: h }, () => Array(w).fill(0));\n  for (let r = 0; r < h; r++) {\n    for (let c = 0; c < w; c++) {\n      let n = 0;\n      for (let dr = -1; dr <= 1; dr++) {\n        for (let dc = -1; dc <= 1; dc++) {\n          // Skip the cell itself when summing the 8 neighbors.\n          if (dr === 0 && dc === 0) continue;\n          const nr = r + dr, nc = c + dc;\n          if (nr >= 0 && nr < h && nc >= 0 && nc < w) n += grid[nr][nc];\n        }\n      }\n      // Live survives on 2 or 3; dead births on EXACTLY 3. Anything else dies.\n      if (grid[r][c] === 1) out[r][c] = (n === 2 || n === 3) ? 1 : 0;\n      else                  out[r][c] = (n === 3) ? 1 : 0;\n    }\n  }\n  return out;\n}\n// Time O(h*w), Space O(h*w) for the new grid",
     "notes": [
       "Always write to a separate output grid. In-place mutation corrupts the neighbor counts of cells you have not visited yet.",
@@ -138,7 +140,8 @@
           "Row-major iteration only reads cells from earlier rows, so writes to the same row in a later cell are safe",
           "In-place updates are correct, but copy-on-write semantics make the new-grid version use less memory in practice"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Every cell reads its row above, its own row and its row below, so a row-major in-place pass feeds already-updated values into the counts of cells it hasn't visited yet. Run the blinker in place and gen 1 comes out `[[0,1,1],[1,0,1],[0,0,0]]` instead of the correct `[[0,1,0],[0,1,0],[0,1,0]]`."
       },
       {
         "q": "A dead cell becomes alive when its live-neighbor count is...",
@@ -148,7 +151,8 @@
           "exactly 3",
           "3 or more — overcrowding still births a cell on a dead site"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The dead branch is `(n === 3) ? 1 : 0` — a single equality, no range. The 2-or-3 option is the SURVIVE rule from the live branch; the two rules are deliberately asymmetric, which is why the code needs two branches at all."
       },
       {
         "q": "A live cell with 4 live neighbors...",
@@ -158,7 +162,8 @@
           "Becomes a still life — the cell freezes and is exempt from future ticks",
           "Triggers a birth in an adjacent dead cell"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`(n === 2 || n === 3)` is false at 4, so the live branch writes 0. Note each cell's fate is decided independently from the OLD grid — a cell dying never triggers a change in its neighbors' counts this generation."
       },
       {
         "q": "How many neighbors does an interior cell have?",
@@ -168,7 +173,8 @@
           "8",
           "9 — the cell itself counts as one of its own neighbors"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The `dr`/`dc` loops sweep the full 3×3 block — 9 offsets — and `if (dr === 0 && dc === 0) continue` drops the cell itself, leaving 8. Conway's neighborhood includes diagonals; the 4-neighbor (von Neumann) version is a different automaton."
       }
     ]
   },

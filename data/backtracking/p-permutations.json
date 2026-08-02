@@ -106,6 +106,8 @@
     ]
   },
   "reference": {
+    "approach": "Backtracking with a used[] flag, snapshot at full-length leaves",
+    "complexity": "O(n·n!) / O(n)",
     "code": "function permute(nums) {\n  const res = [];\n  // Parallel flags so we can scan every index each level (order matters).\n  const used = new Array(nums.length).fill(false);\n  function backtrack(path) {\n    // Base case: path is a full permutation — snapshot before mutations on backtrack.\n    if (path.length === nums.length) {\n      res.push([...path]);             // full permutation\n      return;\n    }\n    // Start at 0 every level — unlike Subsets, permutations care about ordering.\n    for (let i = 0; i < nums.length; i++) {\n      if (used[i]) continue;           // skip already-placed\n      used[i] = true;\n      path.push(nums[i]);\n      backtrack(path);\n      // Mirror every mutation: pop pairs with push, false pairs with true.\n      path.pop();                      // un-choose\n      used[i] = false;\n    }\n  }\n  backtrack([]);\n  return res;\n}\n// Time O(n * n!), Space O(n) + output",
     "notes": [
       "Loop from 0 every level — permutations care about order, so any unused index is fair game.",
@@ -136,7 +138,8 @@
           "Each level must re-scan from 0 so `used[i]` can be reset before the next branch examines it",
           "Starting at `start` would produce only the lex-smallest permutation [1,2,...,n]"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Permutations are ordered, so `[1,2,3]` and `[3,2,1]` are both answers and any index not currently in `path` is a legal choice at every depth. `used[]` is what enforces \"each element once\"; a `start` floor would instead enforce \"in index order\", which is what Subsets wants and this problem doesn't."
       },
       {
         "q": "What does `used[]` track?",
@@ -146,7 +149,8 @@
           "How many times each index has been chosen across all permutations so far",
           "Which indices have been pruned because they violated a constraint"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`used[i] = true` fires immediately before `path.push(nums[i])` and flips back to `false` immediately after `path.pop()`, so the flags mirror `path` exactly — they answer \"is index i already in the branch I'm building right now?\", not anything cumulative."
       },
       {
         "q": "When is the recursion base case reached?",
@@ -156,7 +160,8 @@
           "When every `used[i]` flag is true",
           "When the current index `i` reaches `nums.length`"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`if (path.length === nums.length)` is the only base case: a full-length path is a complete permutation, so it snapshots and returns. Every `used[i]` being true happens at the same moment, but the code measures the path, not the flags."
       },
       {
         "q": "Time complexity for n elements?",
@@ -166,7 +171,8 @@
           "O(n * n!)",
           "O(n!)"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "There are n! complete permutations and each one costs O(n) to copy out via `[...path]`, so the copies alone are n·n!. Plain `O(n!)` undercounts by treating the snapshot as free."
       }
     ]
   },

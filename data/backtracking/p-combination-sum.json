@@ -105,6 +105,8 @@
     ]
   },
   "reference": {
+    "approach": "Backtracking with reuse — recurse on i, subtract from remaining",
+    "complexity": "O(N^(T/M)) / O(T/M)",
     "code": "function combinationSum(candidates, target) {\n  const res = [];\n  const path = [];\n  function backtrack(start, remaining) {\n    // Base case: hit target exactly — snapshot path (later mutations corrupt refs).\n    if (remaining === 0) { res.push([...path]); return; }\n    // Loop from `start`, not 0 — keeps combos sorted, blocks [2,3] vs [3,2].\n    for (let i = start; i < candidates.length; i++) {\n      if (candidates[i] > remaining) continue;\n      path.push(candidates[i]);\n      // Recurse with SAME i (not i+1) — that allows reusing this number.\n      backtrack(i, remaining - candidates[i]);\n      path.pop();\n    }\n  }\n  backtrack(0, target);\n  return res;\n}\n// Time O(N^(T/M)) where M = min candidate, Space O(T/M) recursion depth",
     "notes": [
       "Recurse with the SAME i (not i+1) — that is what permits reusing the same number.",
@@ -123,7 +125,8 @@
           "Because the for-loop already increments to `i+1` on the next iteration, so passing `i+1` would advance by two",
           "Because `i+1` would shift the start index, producing the sibling problem Combinations rather than Combination Sum with reuse"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`backtrack(i, remaining - candidates[i])` re-enters with the same floor, so the next level may pick `candidates[i]` again — that is what makes `[2,2,3]` reachable from `[2,3,6,7]`. The for-loop's own `i++` advances only the CURRENT level; it has no say in what the recursive call is allowed to see."
       },
       {
         "q": "Why does the loop start at `start` instead of 0?",
@@ -133,7 +136,8 @@
           "It skips candidates already added to `path`, preventing the same index from appearing twice in one combo",
           "It avoids re-checking the `remaining === 0` base case on candidates the parent call already pruned"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The floor makes every combination come out in non-decreasing index order, so `[3,2]` is unreachable by construction and no dedup pass is needed. It bans going BACKWARD, not staying put — reuse still works because the recursion passes `i`, not `i + 1`."
       },
       {
         "q": "Why push `[...path]` instead of `path` itself?",
@@ -143,7 +147,8 @@
           "`res` is a Set internally and rejects duplicate array references, so each push must be a distinct object",
           "Without the spread, the path's prototype chain still points to the recursion's lexical scope and pins it in memory"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`path` is a single array shared by every frame, and the `path.pop()` on the way back up would hollow out any reference already sitting in `res`. The spread copies the contents at the instant `remaining` hit 0."
       },
       {
         "q": "When does the recursion record a result?",
@@ -153,7 +158,8 @@
           "When path length equals target",
           "When every candidate has been tried at least once at the current depth"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`if (remaining === 0) { res.push([...path]); return; }` — the target is tracked by subtraction, so a combination is complete exactly when there is nothing left to pay. It can never overshoot into negatives because `if (candidates[i] > remaining) continue` refuses a candidate that is too big."
       }
     ]
   },

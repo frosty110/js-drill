@@ -123,6 +123,8 @@
     ]
   },
   "reference": {
+    "approach": "Stack DFS flood fill (8-neighbor)",
+    "complexity": "O(h·w) / O(h·w)",
     "code": "function reveal(board, click) {\n  const [r, c] = click;\n  const h = board.length, w = board[0].length;\n  // Clicked a mine: flip to 'X' and short-circuit before entering the flood loop.\n  if (board[r][c] === \"M\") { board[r][c] = \"X\"; return board; }\n  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];\n  // Stack DFS instead of recursion — avoids depth blow-up on large boards.\n  const stack = [[r, c]];\n  while (stack.length) {\n    const [cr, cc] = stack.pop();\n    // Already revealed (B or digit) — skip; prevents double-counting.\n    if (board[cr][cc] !== \"E\") continue;\n    let n = 0;\n    for (const [dr, dc] of dirs) {\n      const nr = cr + dr, nc = cc + dc;\n      if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === \"M\") n++;\n    }\n    // Numbered cell — flood-fill stops here; do NOT push neighbors.\n    if (n > 0) { board[cr][cc] = String(n); }\n    else {\n      // Mark BEFORE pushing neighbors — same cell could be reached via many paths.\n      board[cr][cc] = \"B\";\n      for (const [dr, dc] of dirs) {\n        const nr = cr + dr, nc = cc + dc;\n        if (nr >= 0 && nr < h && nc >= 0 && nc < w && board[nr][nc] === \"E\") stack.push([nr, nc]);\n      }\n    }\n  }\n  return board;\n}\n// Time O(h*w), Space O(h*w) worst case",
     "notes": [
       "Set the cell BEFORE pushing neighbors, otherwise the same cell gets enqueued many times and you re-count its mines.",
@@ -154,7 +156,8 @@
           "Cells where the mine count exceeds the 4-direction (cardinal) neighbor count, ignoring diagonals",
           "Cells with exactly 1 neighboring mine — '2' through '8' cells continue the flood"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The `if (n > 0)` branch writes `String(n)` and pushes nothing, so a numbered cell is revealed but never propagates — only the `else` branch ('B') pushes neighbors. That's what produces the ring of `1`s around the mine in the expected board while the rest of the grid opens up."
       },
       {
         "q": "Why mark the cell BEFORE pushing its neighbors in DFS?",
@@ -164,7 +167,8 @@
           "Marking after the push would mutate the array during iteration of the neighbor loop, throwing a 'cannot modify' error",
           "The `'B'` sentinel is what makes neighbors recognize this cell as a valid push source"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Neighbors are pushed by every adjacent zero-cell, so the same coordinate can enter the stack many times; writing `'B'` first means the `if (board[cr][cc] !== 'E') continue` guard rejects the duplicates when they pop. Leaving the cell as `'E'` until after the pushes lets it re-expand its neighbors on each visit — the work blows up even though the final board still looks right."
       },
       {
         "q": "Clicking a numbered cell (n>0 mine-neighbors) — does the flood-fill propagate past it?",

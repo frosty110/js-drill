@@ -99,6 +99,8 @@
     ]
   },
   "reference": {
+    "approach": "Recursive schema walk collecting dotted paths",
+    "complexity": "O(n) / O(d + m)",
     "code": "// required: true = a required leaf; object = a required subtree.\n// Return dotted paths of every missing required field.\n// Missing = undefined, null, or '' (a blank form field is not filled).\nfunction findMissing(required, data, prefix = '') {\n  const missing = [];\n  for (const key of Object.keys(required)) {\n    const path = prefix ? `${prefix}.${key}` : key;\n    const spec = required[key];\n    const val = data == null ? undefined : data[key];\n    if (spec === true) {\n      // Leaf: required and empty -> report this path.\n      if (val === undefined || val === null || val === '') missing.push(path);\n    } else if (typeof spec === 'object') {\n      // Subtree: if the whole parent is missing, recurse into {} so every\n      // required leaf underneath still gets reported (not just the parent).\n      if (val === undefined || val === null) {\n        missing.push(...findMissing(spec, {}, path));\n      } else {\n        missing.push(...findMissing(spec, val, path));\n      }\n    }\n  }\n  return missing;\n}",
     "notes": [
       "Recursion is what handles arbitrary nesting depth: the schema can nest subtrees inside subtrees, and the same function walks any depth without hardcoding levels.",

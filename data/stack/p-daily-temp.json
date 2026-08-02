@@ -102,6 +102,8 @@
     ]
   },
   "reference": {
+    "approach": "Monotonic decreasing stack of indices",
+    "complexity": "O(n) / O(n)",
     "code": "function dailyTemperatures(temps) {\n  // Default 0 stays for any index that never finds a warmer day.\n  const res = new Array(temps.length).fill(0);\n  const stack = [];                       // indices, temps[stack] decreasing\n  for (let i = 0; i < temps.length; i++) {\n    // Strict > keeps the stack monotonically decreasing; equal temps don't resolve.\n    while (stack.length && temps[i] > temps[stack[stack.length - 1]]) {\n      const j = stack.pop();\n      res[j] = i - j;                     // days waited\n    }\n    // Push the INDEX (not temp) — we need it to compute i - j later.\n    stack.push(i);\n  }\n  return res;\n}\n// Time O(n) — each index is pushed and popped at most once\n// Space O(n)",
     "notes": [
       "Stack stores INDICES, not temperatures — you need the index to compute i - j.",
@@ -138,7 +140,8 @@
           "Wait counts",
           "Pairs of (index, temp)"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`stack.push(i)` stores the position; the temperature is read back on demand as `temps[stack[stack.length - 1]]`, so the index is the strictly more useful half of the pair."
       },
       {
         "q": "Time complexity?",
@@ -148,7 +151,8 @@
           "O(n) — each index pushed and popped at most once",
           "O(1)"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "Nothing sorts (ruling out O(n log n)) and nothing rescans: an index enters the stack once and leaves once, so the inner `while` fires at most n times across the whole outer loop."
       },
       {
         "q": "Why initialize the result array with zeros?",
@@ -158,7 +162,8 @@
           "Zeros are needed as sentinels for the strict `>` comparison to fall through",
           "`new Array(n)` returns a sparse array — fill(0) densifies it for fast V8 iteration"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`res[j] = i - j` only runs on a pop, so indices still on the stack when the loop ends are never written — `fill(0)` is what already gives them the right answer, which is why there is no cleanup pass."
       },
       {
         "q": "The stack stays monotonically:",
@@ -168,7 +173,8 @@
           "Sorted by index only",
           "Unordered"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The `while` clears out every pending index colder than `temps[i]` before pushing `i`, so bottom-to-top the temperatures only ever fall — on `[73,74,75,71,69,…]` the stack reads 75 > 71 > 69."
       },
       {
         "q": "What does it mean when you pop index `j` because `temps[i] > temps[j]`?",

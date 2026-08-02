@@ -126,6 +126,8 @@
     ]
   },
   "reference": {
+    "approach": "Body queue + cell Set for collisions",
+    "complexity": "O(1) per move / O(n)",
     "code": "class Snake {\n  constructor(width, height, food) {\n    this.w = width; this.h = height;\n    // Food is a FIFO queue — only food[0] is eligible to eat.\n    this.food = food.slice();\n    this.snake = [[0, 0]];              // head is last; tail is first\n    // Set keyed 'r,c' — O(1) self-collision lookup; array gives ordering.\n    this.set = new Set([\"0,0\"]);\n    this.score = 0;\n  }\n  move(dir) {\n    const [r, c] = this.snake[this.snake.length - 1];\n    let nr = r, nc = c;\n    if (dir === \"U\") nr--; else if (dir === \"D\") nr++;\n    else if (dir === \"L\") nc--; else if (dir === \"R\") nc++;\n    if (nr < 0 || nr >= this.h || nc < 0 || nc >= this.w) return -1;\n    const ate = this.food.length && this.food[0][0] === nr && this.food[0][1] === nc;\n    // Drop tail BEFORE self-check so moving into the old tail cell isn't a false collision.\n    if (!ate) {\n      const t = this.snake.shift();\n      this.set.delete(t[0] + \",\" + t[1]);\n    }\n    const key = nr + \",\" + nc;\n    if (this.set.has(key)) return -1;   // self-collision\n    this.snake.push([nr, nc]); this.set.add(key);\n    if (ate) { this.food.shift(); this.score++; }\n    return this.score;\n  }\n}\n// Time O(1) per move, Space O(snake length)",
     "notes": [
       "Drop the tail BEFORE checking self-overlap — otherwise legal moves that occupy the old tail cell falsely register as collisions.",
@@ -156,7 +158,8 @@
           "The Set persists across `move` calls while the array is rebuilt each frame, so it caches the previous tail",
           "JavaScript arrays can't store `[r, c]` tuples because nested arrays lose identity across calls"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`this.set.has(nr + ',' + nc)` is the collision test and has to be constant-time on every move, but a Set has no notion of which cell is the tail — that is what `this.snake.shift()` needs the array for. The two are kept in lockstep: every add and delete touches both."
       },
       {
         "q": "When the snake eats food, what changes vs a regular move?",
@@ -166,7 +169,8 @@
           "The tail is NOT removed, so the snake grows by one",
           "The food queue rotates so the next food spawns adjacent to the new head"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The tail `shift()` is wrapped in `if (!ate)`. A normal move pushes a head and drops a tail for net-zero length; eating just skips the drop, and `this.food.shift(); this.score++` runs afterwards once the move is known to be legal."
       },
       {
         "q": "Why remove the tail before the self-collision check?",
@@ -176,7 +180,8 @@
           "Otherwise moving into the old tail cell would falsely flag as a collision",
           "The tail must be removed first to free up its slot in the food queue for the next eat"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The tail vacates its cell on the same tick the head arrives, so a head landing there is legal. Run `set.has(key)` first and it still sees the stale tail key, returning `-1` on a perfectly valid move."
       },
       {
         "q": "What does move return on a wall or self crash?",
@@ -186,7 +191,8 @@
           "-1",
           "Throws `GameOverError` — the caller is expected to wrap `move` in a try/catch"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "Both failure paths — the wall test `nr < 0 || nr >= this.h || nc < 0 || nc >= this.w` and `this.set.has(key)` — `return -1`. A legal move returns `this.score`, which starts at `0`, so the crash sentinel has to be a value a score can never take."
       }
     ]
   },

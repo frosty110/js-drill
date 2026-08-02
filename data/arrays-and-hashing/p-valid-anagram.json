@@ -112,6 +112,8 @@
     ]
   },
   "reference": {
+    "approach": "Frequency counter (+1 over s, −1 over t)",
+    "complexity": "O(n) / O(1)",
     "code": "function isAnagram(s, t) {\n  // Different lengths cannot be anagrams — and lets us skip a final zero-check.\n  if (s.length !== t.length) return false;\n  const count = new Map();\n  // +1 per char in s — Map key is char, value is remaining quota.\n  for (const c of s) count.set(c, (count.get(c) || 0) + 1);\n  for (const c of t) {\n    if (!count.has(c)) return false;\n    count.set(c, count.get(c) - 1);\n    // Negative means t has an extra of c that s didn't.\n    if (count.get(c) < 0) return false;\n  }\n  return true;\n}\n// Time O(n), Space O(1) for a bounded alphabet",
     "notes": [
       "Length check first — different lengths cannot be anagrams, and it lets us skip a final zero-check.",
@@ -148,7 +150,8 @@
           "It prevents `s` and `t` from being implicitly coerced to numbers during the loop",
           "The Map throws when its internal load factor exceeds the size hint passed at construction"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Equal multisets imply equal lengths, so a mismatch is an instant `false`. Without the guard a shorter `t` would leave positive leftovers the decrement loop never inspects, forcing a trailing scan of the Map for non-zero entries — nothing throws, `for...of` over `t` just stops early."
       },
       {
         "q": "What does it mean if a counter goes BELOW zero during the t scan?",
@@ -158,7 +161,8 @@
           "We've already matched every occurrence of that char and should switch to comparing the next one",
           "It indicates a hash collision in the Map and the count for that key should be reset"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The stored count is `s`'s remaining quota for that character, so dropping below zero means `t` spent more of it than `s` ever had. The mirror case (a count left ABOVE zero) can't happen once the lengths match."
       },
       {
         "q": "Why is the space complexity considered O(1) here?",
@@ -168,7 +172,8 @@
           "The Map is allocated once at module-load time and reused across all calls",
           "Map entries with value 0 are garbage-collected during iteration, bounding live size to O(1)"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The Map holds one entry per DISTINCT character, capped by the alphabet (26 lowercase, 128 ASCII) rather than by n. Entries hit zero but are never deleted, so it's the fixed alphabet — not shrinkage — that bounds the size."
       },
       {
         "q": "Time complexity?",
@@ -178,7 +183,8 @@
           "O(n log n)",
           "O(n^2)"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Two sequential passes — one over `s` to build the counts, one over `t` to decrement — each doing O(1) Map work per character. 2n is O(n); the sort-and-compare alternative is the O(n log n) one."
       },
       {
         "q": "The counter approach beats the 'sort both strings and compare' approach because:",

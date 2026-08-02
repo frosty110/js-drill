@@ -113,6 +113,8 @@
     ]
   },
   "reference": {
+    "approach": "Three-phase linear scan (before / merge / after)",
+    "complexity": "O(n) / O(n)",
     "code": "function insert(intervals, newInterval) {\n  const res = [];\n  let i = 0, n = intervals.length;\n  // 1) append intervals strictly BEFORE newInterval\n  while (i < n && intervals[i][1] < newInterval[0]) {\n    res.push(intervals[i++]);\n  }\n  // 2) merge any that overlap by expanding newInterval bounds\n  while (i < n && intervals[i][0] <= newInterval[1]) {\n    newInterval[0] = Math.min(newInterval[0], intervals[i][0]);\n    newInterval[1] = Math.max(newInterval[1], intervals[i][1]);\n    i++;\n  }\n  res.push(newInterval);\n  // 3) append the rest, all strictly after\n  while (i < n) res.push(intervals[i++]);\n  return res;\n}\n// Time O(n), Space O(n) for the output",
     "notes": [
       "Three-phase walk: BEFORE (end < newStart), OVERLAP (start <= newEnd), AFTER. Each interval is visited once.",
@@ -136,7 +138,8 @@
           "All interval endpoints are integers, allowing a counting-sort-style bucket pass",
           "The number of overlaps with newInterval is bounded by O(log n) on average"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The input arrives already sorted and non-overlapping, so 'before', 'overlapping' and 'after' are three contiguous runs that one forward-only `i` can walk — no sort needed."
       },
       {
         "q": "How do you decide an interval comes BEFORE newInterval?",
@@ -157,7 +160,8 @@
           "Pushing the overlapping interval into `res` and leaving newInterval unchanged",
           "Taking the average of starts and ends to produce a centered merged range"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`newInterval[0] = Math.min(...)` and `newInterval[1] = Math.max(...)` grow the merged range to swallow each overlapper; the absorbed intervals are never pushed themselves — only the expanded `newInterval`, once, after the loop."
       },
       {
         "q": "Why Math.min for the start and Math.max for the end?",
@@ -167,7 +171,8 @@
           "Because intervals are sorted by start, so newInterval's start is always the min — Math.min is a no-op but Math.max is needed for the end",
           "To clamp the merged interval into the convex hull of the two endpoint pairs, which is what `min,max` computes"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "An overlapping interval may extend past `newInterval` on either side, or sit entirely inside it, so the merged range is their union — assigning either endpoint outright could shrink it."
       },
       {
         "q": "newInterval partitions the sorted list into how many regions the algorithm handles as separate phases?",

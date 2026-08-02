@@ -139,7 +139,8 @@
       {
         "q": "Three rapid calls in quick succession to a debounced fn (ms=100) result in how many invocations of the underlying fn (assuming time advances past 100ms only after the third call)?",
         "options": ["3", "0", "1 — only the last", "2"],
-        "answer": 2
+        "answer": 2,
+        "explain": "Each call overwrites `scheduled = api._now + ms` rather than queuing a new timer, so the burst leaves exactly one due-time behind. That is the difference from throttle, which would let the leading call through and rate-limit the rest."
       },
       {
         "q": "Which args does the underlying fn receive when the debounced wrapper finally fires?",
@@ -149,7 +150,8 @@
           "All accumulated args concatenated into one array",
           "Whatever args are passed to `tick()` — the wrapper's args are discarded"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`lastArgs = args` overwrites on every call, so `d('a'); d('b'); d('c')` fires with `'c'` — this is a trailing-edge debounce. Keeping the FIRST call's args instead would be the leading-edge variant."
       },
       {
         "q": "Why expose a `tick(delta)` method instead of using real setTimeout?",
@@ -159,7 +161,8 @@
           "tick can fire before the debounce window even starts",
           "Real setTimeout would prevent the test from awaiting the callback's args"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`tick(delta)` advances `api._now` and checks the due-time in the same synchronous call, so the whole L3 script runs start to finish with no timers and no waiting. Injecting the clock is also how you'd test a real debounce — the production version takes `setTimeout`, the test passes a fake."
       },
       {
         "q": "After a debounced call, what should happen if `tick(ms-1)` is called (less than the debounce window)?",
@@ -169,7 +172,8 @@
           "`scheduled` is set to null because the partial tick consumed the timer",
           "fn fires with a partial-progress flag set"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`api._now >= scheduled` is false at `ms - 1`, so the guard falls through and `scheduled` is left intact — a later `tick(1)` would still fire it. Only the branch that actually fires clears `scheduled` to null."
       }
     ]
   },

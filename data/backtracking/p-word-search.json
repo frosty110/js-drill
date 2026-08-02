@@ -118,6 +118,8 @@
     ]
   },
   "reference": {
+    "approach": "Grid DFS with mark-and-restore backtracking",
+    "complexity": "O(m·n·4^L) / O(L)",
     "code": "function exist(board, word) {\n  const rows = board.length, cols = board[0].length;\n  function dfs(r, c, i) {\n    // Success base FIRST — check before bounds so a tail match ends cleanly.\n    if (i === word.length) return true;                  // matched all chars\n    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;\n    if (board[r][c] !== word[i]) return false;\n    const tmp = board[r][c];\n    board[r][c] = \"#\";                                   // mark visited\n    // Short-circuit `||` — first successful neighbor stops the recursion.\n    const found = dfs(r+1,c,i+1) || dfs(r-1,c,i+1)\n               || dfs(r,c+1,i+1) || dfs(r,c-1,i+1);\n    board[r][c] = tmp;                                   // restore (backtrack)\n    return found;\n  }\n  // Try every cell as a possible starting point.\n  for (let r = 0; r < rows; r++)\n    for (let c = 0; c < cols; c++)\n      if (dfs(r, c, 0)) return true;\n  return false;\n}\n// Time O(m*n*4^L) where L = word.length, Space O(L) recursion",
     "notes": [
       "Mutate-then-restore is the backtracking signature — save the char, overwrite to mark visited, recurse, then put it back.",
@@ -159,7 +161,8 @@
           "Because mutating the input is undefined behavior in strict mode",
           "So that a later DFS at the same cell can detect the cell was tried and bail early"
         ],
-        "answer": 0
+        "answer": 0,
+        "explain": "`board[r][c] = tmp` un-marks the cell so a different branch — or a different starting square entirely — can walk through it later. Skip the restore and the grid stays scarred with `\"#\"`: the second and third `exist(board, ...)` calls in the canonical run on a board the first call already vandalized."
       },
       {
         "q": "Time complexity?",
@@ -169,7 +172,8 @@
           "O(m*n*4^L) where L = word.length",
           "O(m*n*L!)"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "Every one of the m·n cells is tried as a start, and each DFS branches into 4 neighbours to depth L = `word.length`. The real branching is nearer 3 (the cell you came from is marked `\"#\"`), but 4^L is the bound to state."
       },
       {
         "q": "What does `||` chaining the four DFS calls accomplish?",
@@ -179,7 +183,8 @@
           "Aggregates the per-direction booleans into the OR of all four (always evaluating each)",
           "Coerces each falsy 0/false return into a boolean so the outer return type stays bool"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`||` stops at the first truthy operand, so once a neighbour returns `true` the remaining DFS calls never run at all. Evaluating all four would still return the right boolean — it would just keep searching after the answer is known."
       },
       {
         "q": "Why check `i === word.length` at the top of dfs?",
@@ -189,7 +194,8 @@
           "To skip the bounds check on the wrap-around when L exceeds m*n",
           "So the visited-marker overwrite doesn't happen on a cell we won't recurse from"
         ],
-        "answer": 0
+        "answer": 0,
+        "explain": "It is the success base case: `i === word.length` means the previous level matched the last character. It has to be tested BEFORE the bounds check, or a match ending in a corner — every neighbour out of range — would be rejected before the success test ever fires. Reading past the end of `word` wouldn't throw anyway; it yields `undefined`."
       }
     ]
   },

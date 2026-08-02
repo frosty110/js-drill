@@ -109,6 +109,8 @@
     ]
   },
   "reference": {
+    "approach": "Lookup table + string-rebuilt date math, then classify",
+    "complexity": "O(n) / O(n)",
     "code": "function checkDeadlines(claims, today) {\n  const limits = { 'personal injury': 2, 'medical malpractice': 3, 'property': 4 };\n  const nowMs = Date.parse(today);\n  return claims.map(c => {\n    const years = limits[c.type];\n    // Rebuild the deadline by adding to the YEAR component as a string —\n    // avoids Date-object month/leap-day drift from setFullYear etc.\n    const [y, m, d] = c.incident.split('-').map(Number);\n    const deadline = `${y + years}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;\n    const daysLeft = Math.round((Date.parse(deadline) - nowMs) / 86400000);\n    let status;\n    if (daysLeft < 0) status = 'EXPIRED';\n    else if (daysLeft <= 30) status = 'URGENT';\n    else status = 'OK';\n    return `${c.id} (${c.type}): deadline ${deadline}, ${daysLeft} days — ${status}`;\n  });\n}",
     "notes": [
       "The deadline is rebuilt by adding statutory years to the YEAR string component and re-padding month/day, NOT by mutating a Date object — `setFullYear`-style math can drift across leap days and month lengths.",

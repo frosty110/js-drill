@@ -120,6 +120,8 @@
     ]
   },
   "reference": {
+    "approach": "Insertion-ordered Map as hash + recency list",
+    "complexity": "O(1) / O(capacity)",
     "code": "class LRUCache {\n  constructor(capacity) {\n    this.capacity = capacity;\n    // JS Map preserves INSERTION order — leverage that to skip a doubly-linked list.\n    this.map = new Map();\n  }\n  get(key) {\n    if (!this.map.has(key)) return -1;\n    const v = this.map.get(key);\n    // Delete + re-set bumps key to the back (most-recent end). Skip this and it becomes FIFO.\n    this.map.delete(key);\n    this.map.set(key, v);\n    return v;\n  }\n  put(key, value) {\n    if (this.map.has(key)) {\n      this.map.delete(key);\n    } else if (this.map.size >= this.capacity) {\n      // First key in iteration order = LRU. Evict the front.\n      const oldest = this.map.keys().next().value;\n      this.map.delete(oldest);\n    }\n    this.map.set(key, value);\n  }\n}\n// Time O(1) per op, Space O(capacity)",
     "notes": [
       "Map preserves insertion order — leverage that to skip a doubly-linked list.",
@@ -151,7 +153,8 @@
           "Object key order is undefined, so eviction would be non-deterministic",
           "Map.delete is O(1) but object property deletion is O(n) due to deoptimization"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Eviction reads `this.map.keys().next().value`, which only means 'least recently used' because `delete` + `set` re-inserts a touched key at the end. An object's key order isn't undefined — it's worse for this: integer-like keys iterate in ascending numeric order regardless of insertion, so numeric cache keys would evict by value."
       },
       {
         "q": "On a cache HIT, what must `get` do?",
@@ -161,7 +164,8 @@
           "Increment a per-key access counter and compare on eviction",
           "Swap the hit key with the back key, an O(1) reorder"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`this.map.delete(key)` then `this.map.set(key, v)` is what moves the key to the back of the iteration order. Drop those two lines and reads stop counting as uses — the cache silently becomes FIFO and evicts a key you just read."
       },
       {
         "q": "When the cache is at capacity, which key do we evict?",
@@ -171,7 +175,8 @@
           "The least recently used (front of the map)",
           "The smallest key"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "Every hit and every write re-inserts its key at the back, so whatever is still at the front was touched longest ago — `this.map.keys().next().value` reads it without iterating the rest."
       },
       {
         "q": "Time complexity of get and put?",
@@ -181,7 +186,8 @@
           "O(1) amortized",
           "O(1) for get, O(n) for put because eviction must scan for the oldest"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "Each op is a fixed number of `has` / `get` / `delete` / `set` calls plus at most one `keys().next()` — nothing walks the cache, so eviction never costs O(n). 'Amortized' is the honest qualifier because hash tables occasionally rehash on growth."
       }
     ]
   },

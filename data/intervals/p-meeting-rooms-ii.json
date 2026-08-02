@@ -109,6 +109,8 @@
     ]
   },
   "reference": {
+    "approach": "Sorted start/end sweep (peak concurrency)",
+    "complexity": "O(n log n) / O(n)",
     "code": "function minMeetingRooms(intervals) {\n  const n = intervals.length;\n  if (n === 0) return 0;\n  // Decouple starts and ends — only the event timeline matters, not which start pairs with which end.\n  const starts = intervals.map(x => x[0]).sort((a, b) => a - b);\n  const ends   = intervals.map(x => x[1]).sort((a, b) => a - b);\n  let rooms = 0, used = 0, e = 0;\n  for (let s = 0; s < n; s++) {\n    // Strict < — a start equal to an end can reuse the freed room.\n    if (starts[s] < ends[e]) {\n      used++;\n      rooms = Math.max(rooms, used);\n    } else {\n      e++;\n    }\n  }\n  return rooms;\n}\n// Time O(n log n), Space O(n)",
     "notes": [
       "The starts/ends arrays are decoupled — pairing is irrelevant; only the timeline of events matters.",
@@ -145,7 +147,8 @@
           "Independent sorts allow the two pointers to advance simultaneously instead of sequentially, halving wall-clock time",
           "Because pairing intervals at sort time would require an O(n log n) stable sort, but two unstable sorts suffice"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Rooms in use is a property of the event timeline — how many starts precede the next end — so which start belongs to which end never enters the count."
       },
       {
         "q": "When `starts[s] < ends[e]`, what happens?",
@@ -155,7 +158,8 @@
           "We skip the current start because no end has yet been reached on the timeline",
           "We pair `starts[s]` with `ends[e]` and remove both pointers' entries from consideration"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The next meeting begins before the earliest in-progress one ends, so `used++` and `rooms` takes the new max; a room is freed in the `else` branch, where `e++` consumes an end event."
       },
       {
         "q": "Why is the comparison `<` and not `<=`?",
@@ -165,7 +169,8 @@
           "`<=` would make `e` advance past `s` and cause `ends[e]` to read out of bounds",
           "Because integer endpoints in floating-point JS Numbers can compare unreliably at `===`, `<` is the safer test"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Endpoints are half-open here: a meeting starting exactly when another ends can reuse that room, so that case must fall through to the `else` and advance `e` instead of allocating."
       },
       {
         "q": "Overall time complexity?",

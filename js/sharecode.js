@@ -5,8 +5,8 @@
 // answered one drillable unit. One character per question, in AUTHORED order.
 // It is the payload of every shareable URL in this project:
 //
-//     https://frosty110.github.io/js-drill/p/two-sum?s=AbbCdAbC.Yn.n
-//     https://frosty110.github.io/js-drill/sd/design-problems/p01?s=YppnY-YnYY
+//     https://frosty110.github.io/js-drill/p/two-sum/?s=AbbCdAbC.Yn.n
+//     https://frosty110.github.io/js-drill/sd/design-problems/p01/?s=YppnY-YnYY
 //
 // WHY POSITIONAL. Authored question order never changes (adding a question
 // appends; reordering is a content bug the validator catches). So position N

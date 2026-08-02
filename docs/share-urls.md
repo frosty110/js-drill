@@ -16,13 +16,20 @@ it points at.
 
 | Surface | Share URL | Live app |
 |---|---|---|
-| Coding lesson | `p/two-sum?s=AbbCdAbC.Yn.n` | `index.html#/two-sum/L1` |
+| Coding lesson | `p/two-sum/?s=AbbCdAbC.Yn.n` | `index.html#/two-sum/L1` |
 | All lessons | `p/` | `index.html#/m/browse` |
-| System-design unit | `sd/design-problems/p01?s=YppnY-YnYY` | `system-design.html#/design-problems/p01` |
-| System-design topic | `sd/ddia` | `system-design.html#/ddia` |
+| System-design unit | `sd/design-problems/p01/?s=YppnY-YnYY` | `system-design.html#/design-problems/p01` |
+| System-design topic | `sd/ddia/` | `system-design.html#/ddia` |
 | System-design index | `sd/` | `system-design.html#/` |
 
-Deep anchors work on every page — `p/two-sum?s=AbbCdAbC.Yn.n#q3` opens on
+Every URL ends in a **trailing slash**. Each surface is written to disk as
+`<dir>/index.html`, so the slash form is the file's real address and GitHub
+Pages serves it in one hop. The slashless form only 301-redirects there —
+fetchers that don't follow redirects fail outright, and some drop the `?s=`
+across the hop, silently losing the result set. Links shared before this
+became the default still parse, so nothing already sent out breaks.
+
+Deep anchors work on every page — `p/two-sum/?s=AbbCdAbC.Yn.n#q3` opens on
 question 3. A whole session across lessons fits one URL:
 
 ```

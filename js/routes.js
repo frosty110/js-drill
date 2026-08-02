@@ -8,8 +8,8 @@
 //
 // Two URL families, deliberately kept apart:
 //
-//   SHARE / CRAWL   p/two-sum                    static, server-rendered by
-//                   sd/design-problems/p01       tools/build-share-pages.js.
+//   SHARE / CRAWL   p/two-sum/                   static, server-rendered by
+//                   sd/design-problems/p01/      tools/build-share-pages.js.
 //                                                Complete without JavaScript,
 //                                                so an agent or a crawler that
 //                                                fetches it gets the content.
@@ -44,7 +44,14 @@
   //   dir        first path segment of its static home ('' = the root index)
   //   arity      how many path segments follow `dir`
   //   codeKind   which sharecode grammar its ?s= uses ('lesson' | 'unit' | null)
-  //   path()     params  → share path, no leading slash, no trailing slash
+  //   path()     params  → share path, no leading slash, WITH a trailing
+  //              slash. Every surface is written to disk as <dir>/index.html,
+  //              so the slash form is the file's real address and resolves in
+  //              one hop. Emitting it slashless made every share link cost a
+  //              301 on GitHub Pages — fetchers that don't follow redirects
+  //              failed outright, and some dropped the ?s= across the hop.
+  //              parseSharePath() still accepts the slashless form, so links
+  //              shared before this change keep working.
   //   appHash()  params  → the live-app URL that renders the same thing
   //   params()   segments → params, or null when the shape doesn't match
   //   sitemap    include in sitemap.xml
@@ -56,7 +63,7 @@
       codeKind: null,
       sitemap: true,
       title: 'All coding lessons',
-      path: () => 'p',
+      path: () => 'p/',
       appHash: () => 'index.html#/m/browse',
       params: segs => (segs.length === 0 ? {} : null)
     },
@@ -66,7 +73,7 @@
       arity: 1,
       codeKind: 'lesson',
       sitemap: true,
-      path: p => `p/${encodeURIComponent(p.id)}`,
+      path: p => `p/${encodeURIComponent(p.id)}/`,
       appHash: p => `index.html#/${encodeURIComponent(p.id)}${p.tab ? '/' + p.tab : ''}`,
       params: segs => (segs.length === 1 ? { id: segs[0] } : null)
     },
@@ -77,7 +84,7 @@
       codeKind: null,
       sitemap: true,
       title: 'System design topics',
-      path: () => 'sd',
+      path: () => 'sd/',
       appHash: () => 'system-design.html#/',
       params: segs => (segs.length === 0 ? {} : null)
     },
@@ -87,7 +94,7 @@
       arity: 1,
       codeKind: null,
       sitemap: true,
-      path: p => `sd/${encodeURIComponent(p.topic)}`,
+      path: p => `sd/${encodeURIComponent(p.topic)}/`,
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}`,
       params: segs => (segs.length === 1 ? { topic: segs[0] } : null)
     },
@@ -97,7 +104,7 @@
       arity: 2,
       codeKind: 'unit',
       sitemap: true,
-      path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}`,
+      path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/`,
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}`,
       params: segs => (segs.length === 2 ? { topic: segs[0], unit: segs[1] } : null)
     }
@@ -137,7 +144,7 @@
 
   // Absolute (or base-relative) URL of a surface's static, crawlable page.
   //   shareUrl('lesson', {id:'two-sum'}, 'AbbC.Y.n')
-  //     → https://…/js-drill/p/two-sum?s=AbbC.Y.n
+  //     → https://…/js-drill/p/two-sum/?s=AbbC.Y.n
   function shareUrl(kind, params, code, opts) {
     const o = opts || {};
     const base = o.base != null ? o.base : baseUrl(o.loc);

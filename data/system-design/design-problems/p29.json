@@ -119,6 +119,23 @@
     },
     {
       "type": "open",
+      "prompt": "Deep dive: how do subscriptions get matched to events, and what happens when one event matches thousands of them?",
+      "points": [
+        "Each subscription declares an endpoint plus a filter — event types, and often a resource scope or attribute predicate.",
+        "Matching is the fan-out step: one published event expands into N deliveries, and N is entirely customer-controlled.",
+        "Index subscriptions by event type so matching is a lookup rather than a scan over every subscription in the system.",
+        "The pathological case: a popular event type with thousands of subscribers produces an instant burst of thousands of deliveries from a single publish.",
+        "Expand lazily rather than eagerly — write one fan-out task and let workers page through matching subscriptions, so a single event can't enqueue 50,000 rows synchronously.",
+        "Rate-limit the expansion so a burst is smoothed across seconds rather than hitting the queue in one spike.",
+        "Filters should be evaluated before enqueueing, not at delivery time, or you pay queue and worker cost for deliveries that were never going to be sent.",
+        "Subscription changes need care mid-flight: an event already expanded shouldn't be delivered to a subscription deleted a second ago, so check subscription validity at delivery as well as at match.",
+        "Wildcard and prefix subscriptions ('all events on this resource') multiply fan-out and deserve their own limits."
+      ],
+      "answer": "A subscription is an endpoint plus a filter — event types and usually a resource scope — and matching is indexed by event type so it's a lookup rather than a scan across every subscription. The interesting part is that fan-out is customer-controlled: one publish can match thousands of subscriptions and produce an instant burst. So I'd expand lazily, writing a single fan-out task that workers page through, rather than enqueueing fifty thousand rows synchronously from one event, and rate-limit the expansion so the burst smooths across seconds. Filters get evaluated before enqueueing, not at delivery, or you pay queue and worker cost for deliveries that were never going to be sent. One subtlety: a subscription deleted after expansion but before delivery should not receive the event, so validity gets checked at delivery too, not only at match time.",
+      "crux": true
+    },
+    {
+      "type": "open",
       "prompt": "Staff-level wrap-up: what breaks at scale, and what would you expose to customers?",
       "points": [
         "Fan-out storms: one event matching many subscriptions creates a burst; rate-limit per destination and smooth the expansion rather than enqueueing everything instantly.",

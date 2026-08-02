@@ -117,6 +117,23 @@
     },
     {
       "type": "open",
+      "prompt": "Deep dive: design the alerting path. What makes an alerting rule evaluate correctly, and what makes an alert useful?",
+      "points": [
+        "Rules are queries evaluated on a schedule against recent metrics; a rule that holds for a declared duration fires an alert.",
+        "The `for` duration is what suppresses flapping — requiring the condition to hold for five minutes stops a single scrape blip paging someone.",
+        "Evaluation must tolerate late and missing data: a rule that treats 'no data' as 'condition false' silently stops alerting exactly when ingestion breaks.",
+        "So 'no data' needs to be its own alert — the absence of a signal is a signal.",
+        "Alert on symptoms users feel (error rate, latency) rather than causes (CPU), because cause-based alerts fire constantly without anyone being affected.",
+        "Deduplicate and group before notifying: one failing dependency across 200 services should be one page, not 200.",
+        "Route by ownership and severity, with an inhibition rule so a cluster-down alert suppresses the hundred downstream alerts it obviously causes.",
+        "Alerting must not depend on the platform it monitors — if the metrics pipeline is the outage, the alert about it cannot travel through the metrics pipeline.",
+        "Track page volume and false-positive rate as first-class metrics: alert fatigue degrades response more than most technical failures."
+      ],
+      "answer": "Rules are scheduled queries over recent metrics, and the `for` duration is what stops a single scrape blip paging someone. The subtlety that bites is missing data: a rule that treats 'no data' as 'condition false' quietly stops alerting exactly when ingestion breaks, so absence of signal has to be its own alert. Beyond mechanics, the design question is what to alert on — symptoms users actually feel, like error rate and latency, rather than causes like CPU, because cause-based alerts fire constantly with nobody affected. Then dedupe and group so one failing dependency across two hundred services is one page rather than two hundred, with inhibition rules so a cluster-down alert suppresses its obvious downstream consequences. And critically the alerting path can't depend on the platform it monitors. I'd track page volume and false-positive rate as real metrics, because alert fatigue degrades incident response more than most outages do.",
+      "crux": true
+    },
+    {
+      "type": "open",
       "prompt": "Staff-level wrap-up: what breaks at scale, and how do you keep the platform from taking down what it monitors?",
       "points": [
         "Cardinality governance: enforce per-tenant series limits, reject or drop offending metrics at the gateway, and expose cardinality as a first-class metric so teams see their own cost.",

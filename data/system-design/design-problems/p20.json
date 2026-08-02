@@ -118,6 +118,22 @@
     },
     {
       "type": "open",
+      "prompt": "Deep dive: recurring jobs are defined by cron expressions. What goes wrong with wall-clock scheduling, and how do you handle it?",
+      "points": [
+        "Cron is wall-clock, and wall clocks are not monotonic — they jump. Twice a year daylight saving makes an hour repeat or vanish.",
+        "Spring forward: a job scheduled for 02:30 local never runs, because 02:30 does not exist that day.",
+        "Fall back: 02:30 happens twice, so a naive scheduler fires the job twice — a duplicate run that only ever reproduces on one day of the year.",
+        "Fix: store schedules with an explicit IANA timezone, compute the next run in UTC, and define a policy for the ambiguous and skipped hours rather than inheriting the library's default.",
+        "Jobs that must run every N hours regardless of local time should be defined as intervals, not cron — those two are different requirements that cron conflates.",
+        "Catch-up policy after downtime is the sibling question: run once, run every missed occurrence, or skip. A daily report wants 'once'; a billing job may want every occurrence.",
+        "Cap catch-up, or a scheduler returning from a long outage stampedes the fleet with a backlog of missed runs.",
+        "Schedule jitter is worth adding automatically: everyone writes midnight, so 00:00 is a self-inflicted thundering herd across every tenant."
+      ],
+      "answer": "Cron is wall-clock time, and wall clocks jump. Twice a year daylight saving either deletes an hour or repeats it, so a job at 02:30 local either never runs in spring or runs twice in autumn — a duplicate-execution bug that reproduces on exactly one day a year and is therefore usually found in production. The fix is to store an explicit IANA timezone, compute the next run in UTC, and choose a deliberate policy for the ambiguous and skipped hours rather than inheriting whatever the library does. I'd also push anything that means 'every N hours' to an interval schedule rather than cron, since cron conflates those. Then the catch-up policy after downtime: once, every missed occurrence, or skip — capped, or a scheduler returning from a long outage stampedes the fleet. And I'd jitter recurring schedules automatically, because everybody writes midnight.",
+      "crux": true
+    },
+    {
+      "type": "open",
       "prompt": "Staff-level wrap-up: what breaks at scale, and what would you monitor?",
       "points": [
         "Head-of-line blocking: mixing 100ms jobs with multi-hour jobs in one queue starves the short ones. Partition queues by expected duration or priority class.",

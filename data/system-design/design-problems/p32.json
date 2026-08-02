@@ -1,0 +1,195 @@
+{
+  "id": "p32",
+  "num": 32,
+  "part": "Transactions, Storage & Commerce",
+  "title": "Design an Authentication & Session Service",
+  "summary": "Authenticate users once and let every service verify them without a round trip, while still being able to revoke access immediately. The signature challenge is that stateless tokens and instant revocation are in direct tension — the property that makes JWTs scale is exactly the property that makes them impossible to cancel.",
+  "keyTakeaways": [
+    "Stateless tokens scale because verification is a local signature check; that same statelessness is why you cannot un-issue one.",
+    "The standard resolution is a short-lived access token plus a long-lived, revocable refresh token — revocation latency becomes the access-token TTL.",
+    "Store passwords with a slow, salted, memory-hard hash (bcrypt/argon2). Speed is the vulnerability, not a feature.",
+    "Signing keys need rotation from day one: publish a key set with key ids so verifiers can accept the old key while the new one rolls out.",
+    "Refresh-token rotation with reuse detection turns a stolen token from a permanent compromise into a detectable one.",
+    "Sessions and tokens are different things — a session is the user's login, a token is a bearer credential derived from it, and revoking a session must invalidate its tokens.",
+    "OAuth/OIDC exists for delegated access to third parties; using it internally where a plain signed token would do adds a great deal of machinery for nothing."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope an authentication and session service. What are the functional requirements, and what makes the non-functional bar unusual?",
+      "points": [
+        "Functional: register, log in, log out; issue credentials that other services can verify; refresh without re-login; revoke a session; support MFA; optionally social/SSO login.",
+        "Every other service depends on this one, so availability is the headline requirement — if auth is down, the entire product is down, even services that are healthy.",
+        "That dependency shape argues strongly for verification that does not require calling this service on every request.",
+        "Latency: verification must be sub-millisecond because it's on every single request to every service.",
+        "Security requirements are functional here, not aspirational: credential storage, brute-force resistance, session fixation, token theft, and immediate revocation on compromise.",
+        "Revocation latency is a requirement to state explicitly — 'immediate' and 'stateless verification' cannot both be fully true.",
+        "Scale: e.g. 100M users, 50K logins/sec peak, and a verification on essentially every request across the fleet."
+      ],
+      "answer": "Register, log in, log out, issue credentials other services verify, refresh without re-login, revoke, and support MFA. The unusual property is the dependency shape: every service depends on this one, so if auth is down the whole product is down even where nothing else is broken. That pushes hard toward verification that doesn't require calling this service per request, which then sets up the central tension. Verification is sub-millisecond because it's on literally every request. And I'd make revocation latency an explicit stated requirement rather than an assumption, because 'immediate revocation' and 'stateless verification' cannot both be fully true — deciding where on that line you sit is the design.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the load and say where the cost actually is.",
+      "points": [
+        "100M users, say 20M daily actives. Logins: if each logs in once a day plus token refreshes, ~230 logins/sec average, several thousand at peak.",
+        "Login is expensive by design: a memory-hard password hash takes ~100ms of CPU deliberately, so 5K logins/sec needs ~500 cores just for hashing.",
+        "That's the counterintuitive cost — the slow hash is the point, so login capacity is a CPU planning exercise rather than an I/O one.",
+        "Verification is the opposite: with stateless tokens it's a local signature check, ~10 microseconds, done in the service being called. It costs the auth service nothing.",
+        "If verification instead required a lookup, every request across the fleet — perhaps 500K/sec — would hit this service. That difference is why stateless tokens exist.",
+        "Refresh: access tokens with a 15-minute TTL mean each active session refreshes ~4 times/hour, so 20M actives generate a meaningful but manageable refresh rate.",
+        "Storage: user records at ~1 KB × 100M = 100 GB. Refresh tokens/sessions at ~200 bytes × active sessions is small. Neither is a scaling problem.",
+        "So: login is CPU-bound, verification is free if stateless, refresh is the steady-state traffic, and storage is trivial."
+      ],
+      "answer": "With 20M daily actives, logins run a few hundred per second average and a few thousand at peak — but login is deliberately expensive, because a memory-hard hash burns around 100ms of CPU on purpose. So 5K logins/sec is roughly 500 cores just for hashing, which makes login a CPU planning exercise rather than an I/O one. Verification is the mirror image: with stateless tokens it's a local signature check of about ten microseconds inside whichever service was called, costing the auth service nothing. Had verification required a lookup, every request across the fleet — maybe 500K/sec — would land here. That contrast is the entire reason stateless tokens exist. Storage is trivial at both ends.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "How are passwords stored, and what does the login path look like?",
+      "points": [
+        "Never store passwords or reversible encryption. Store a hash from a deliberately slow, memory-hard algorithm — argon2id or bcrypt — with a unique per-user salt.",
+        "Slowness is the security property: it makes offline brute-force of a leaked database expensive per guess. A fast hash like SHA-256 is a vulnerability here precisely because it's fast.",
+        "Salt per user defeats rainbow tables and ensures two users with the same password have different hashes.",
+        "Memory-hardness (argon2) specifically resists GPU and ASIC attacks, which parallelize compute far more easily than memory.",
+        "Cost parameters must be tunable and revisited — hardware gets faster, so today's parameters are tomorrow's weakness. Store the parameters with the hash so they can be upgraded on next login.",
+        "Login path: look up user, hash the submitted password with the stored salt and parameters, compare in constant time to avoid timing leaks.",
+        "Rate-limit by account and by IP, with exponential lockout — otherwise the endpoint is an online brute-force oracle.",
+        "Always do the same work whether or not the account exists, or response timing reveals which emails are registered.",
+        "On success, create a session record and issue tokens; on failure, return an identical generic error regardless of cause."
+      ],
+      "answer": "Store an argon2id or bcrypt hash with a unique per-user salt — never the password, never reversible encryption. The slowness is the security property: it makes each offline guess against a leaked database expensive, which is why a fast hash like SHA-256 is actively wrong here. Memory-hardness specifically resists GPU and ASIC attacks, since memory parallelizes much worse than compute. I'd store the cost parameters alongside the hash so they can be raised over time and upgraded transparently on next login. On the login path: constant-time comparison to avoid timing leaks, rate limiting by account and IP with exponential lockout since otherwise the endpoint is a brute-force oracle, and doing identical work whether or not the account exists — otherwise response timing tells an attacker which emails are registered."
+    },
+    {
+      "type": "mc",
+      "q": "You issue stateless JWTs valid for 24 hours. A user's token is stolen. How do you revoke it?",
+      "options": [
+        "Delete the user's session record — the token becomes invalid immediately",
+        "You cannot, without giving up statelessness: verifiers check only the signature and expiry, so the token stays valid until it expires unless you add a revocation lookup that reintroduces the round trip you were avoiding",
+        "Rotate the signing key, which invalidates only that token",
+        "Add the token to the response headers of subsequent requests to mark it invalid"
+      ],
+      "answer": 1,
+      "explain": "This is the central tradeoff. A stateless token is self-contained: any service verifies it with the public key and never consults the issuer, which is exactly what makes verification free — and exactly what makes revocation impossible, because there's nothing to change. Deleting a session record does nothing if verifiers never read it. Rotating the signing key invalidates *every* token, logging out all users. A denylist works but reintroduces a lookup on every request, which is the cost you adopted JWTs to avoid — though checking a small in-memory denylist of recently-revoked ids is a reasonable middle ground. The standard answer is to make access tokens short-lived so the exposure window is bounded.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: design the access-token / refresh-token split. Why two tokens?",
+      "points": [
+        "Access token: short-lived (5-15 minutes), stateless, signed, carrying user id, roles and expiry. Sent with every request; verified locally by any service.",
+        "Refresh token: long-lived (days to weeks), opaque, stored server-side, and used only against the auth service to mint a new access token.",
+        "The split resolves the tension by separating the two properties: the frequently-verified credential is stateless and cheap, and the revocable credential is stateful but rarely used.",
+        "Revocation latency becomes bounded by the access-token TTL — revoke the refresh token and the session dies within 15 minutes, without any per-request lookup.",
+        "That TTL is the explicit dial: shorter means faster revocation and more refresh traffic; longer means less traffic and a longer window for a stolen token.",
+        "Refresh-token rotation: each refresh issues a new refresh token and invalidates the old one, so a stolen refresh token is usable at most once.",
+        "Reuse detection is the payoff — if an already-used refresh token is presented, either the attacker or the legitimate user is replaying it, so revoke the entire token family and force re-login. That converts silent theft into a detected event.",
+        "Store refresh tokens hashed, not raw: the token database is as sensitive as the password database if stored in the clear.",
+        "For high-value operations (changing a password, making a payment), require step-up re-authentication regardless of token validity."
+      ],
+      "answer": "Two tokens because the two requirements have opposite shapes. The access token is short-lived, stateless and signed — sent with every request and verified locally by any service, so verification stays free. The refresh token is long-lived, opaque, stored server-side, and only ever presented to the auth service. That separation means the frequently-verified credential is stateless while the revocable one is stateful but rarely used, so revocation latency becomes bounded by the access-token TTL rather than requiring a per-request lookup. Fifteen minutes is the usual dial. On top I'd rotate refresh tokens so each one is single-use, and add reuse detection: if an already-consumed refresh token appears, someone is replaying it, so revoke the whole family and force re-login. That's what turns silent token theft into a detected event.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "Services verify JWT signatures locally. You need to rotate the signing key. What must be true for this not to log everyone out?",
+      "options": [
+        "All services must be restarted simultaneously with the new key",
+        "Tokens must carry a key id and verifiers must fetch a key set containing both old and new keys, so tokens signed with either verify during the overlap window",
+        "The new key must be mathematically derived from the old one",
+        "Key rotation requires switching from asymmetric to symmetric signing"
+      ],
+      "answer": 1,
+      "explain": "Rotation only works if old and new keys are valid simultaneously for at least the lifetime of the longest-lived outstanding token. The mechanism is a `kid` (key id) in the token header plus a published key set (JWKS) that verifiers fetch and cache: sign new tokens with the new key, keep the old key in the set until every token signed with it has expired, then retire it. Simultaneous restart is operationally impossible at scale and would still reject in-flight tokens. Deriving keys from each other defeats the purpose of rotation. And symmetric signing makes this worse, not better — it requires distributing the secret to every verifier, so any compromised service can mint tokens.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: what is the difference between a session and a token, and how does logout actually work across devices?",
+      "points": [
+        "A session represents a user's authenticated presence on a device — created at login, holding device info, IP, creation time, last-seen.",
+        "A token is a bearer credential derived from a session. One session can produce many access tokens over its life.",
+        "Keeping them distinct is what makes 'log out all devices' expressible: revoke all sessions for the user, which invalidates every refresh token, and access tokens expire within their TTL.",
+        "Single-device logout deletes that session's refresh token; the access token remains briefly valid, which must be an accepted and documented consequence.",
+        "If truly immediate logout is required, the access token must be checked against a revocation list — the cost is per-request state again, so scope it narrowly (a short-TTL in-memory denylist of recently revoked session ids).",
+        "Session listing is a real user-facing feature: showing active sessions with device and location lets users revoke suspicious ones themselves.",
+        "Bind sessions to a device fingerprint where possible so a stolen refresh token used from a new device is detectable.",
+        "On password change, revoke all sessions except the current one — a password change usually means the user suspects compromise.",
+        "Session records need a TTL and cleanup, or the table grows without bound from abandoned logins."
+      ],
+      "answer": "A session is the user's authenticated presence on a device — created at login, carrying device, IP and last-seen. A token is a bearer credential derived from that session, and one session mints many access tokens over its life. Keeping them separate is what makes 'log out everywhere' expressible: revoke all sessions for the user, which kills every refresh token, and access tokens die within their TTL. Single-device logout deletes that session's refresh token, and the brief remaining validity of its access token is a consequence to document rather than hide. If immediate is genuinely required, you check against a short-TTL in-memory denylist of recently revoked session ids — narrow enough to be cheap. I'd also expose session listing as a user-facing feature, bind sessions to a device fingerprint so a refresh token used from a new device is detectable, and revoke all other sessions on password change.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "When do you need OAuth 2.0 / OIDC, and when is it the wrong tool?",
+      "points": [
+        "OAuth 2.0 is an authorization-delegation framework: it lets a third-party application act on a user's behalf without the user handing over their password.",
+        "OIDC is the authentication layer on top, adding an ID token so the client learns who the user is, not just what it may do.",
+        "Use it when there is genuinely a third party — 'log in with Google', or a partner integration calling your API as one of your users.",
+        "Use it for SSO across an organization, where one identity provider serves many applications.",
+        "It's the wrong tool for first-party login to your own app with your own backend: you already control both sides, so a signed session token does everything without the redirect dance, client registration and consent screens.",
+        "Adopting it internally 'for correctness' adds significant machinery — authorization codes, PKCE, client secrets, discovery documents — for no delegation benefit.",
+        "If you do use it, use the authorization-code flow with PKCE; implicit flow is deprecated because it exposes tokens in the URL.",
+        "As a relying party, validate the issuer, audience, expiry and signature of ID tokens against the provider's key set — accepting an unvalidated token is a complete authentication bypass.",
+        "Account linking is the operational complexity people forget: the same human arriving via Google, GitHub and email must resolve to one account, and getting that wrong either fragments identities or lets one provider's compromise take over an account."
+      ],
+      "answer": "OAuth 2.0 is delegated authorization — it exists so a third party can act on a user's behalf without holding their password — and OIDC adds the authentication layer so the client learns who the user is. So it's right when there's a genuine third party, like 'log in with Google' or a partner calling your API as one of your users, and right for organizational SSO. It's the wrong tool for first-party login to your own app with your own backend: you control both sides, so a signed session token does the whole job without redirects, client registration and consent screens. Adopting it internally for correctness adds a lot of machinery for no delegation benefit. If you do use it, authorization-code with PKCE, and as a relying party validate issuer, audience, expiry and signature — accepting an unvalidated ID token is a complete auth bypass. The part people underestimate is account linking: the same human arriving via three providers must resolve to one account."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks at scale, and how do you keep this from being a single point of failure?",
+      "points": [
+        "The dependency shape is the risk: every service needs auth, so an outage is total. Stateless verification is the primary mitigation — services keep working for the life of outstanding access tokens even if auth is down.",
+        "That reframes the availability requirement: the auth service must be available for login and refresh, not for verification, which is a far easier bar.",
+        "Cache the public key set aggressively in every service with a long TTL and a stale-if-error policy, or a JWKS-endpoint outage becomes a fleet-wide auth outage.",
+        "Login is CPU-bound on password hashing, so it needs its own autoscaling and should be isolated from the token-refresh path — a login spike must not starve refreshes.",
+        "Thundering herd on token expiry: if many tokens are issued together they expire together and all refresh at once. Jitter the TTLs.",
+        "Credential-stuffing attacks are the routine adversarial load: rate-limit per account and per IP, detect distributed attempts across accounts, and monitor login failure rate by source.",
+        "Monitor login success/failure rate, refresh-reuse detections (a spike means token theft), token verification failures by reason, and p99 login latency.",
+        "Multi-region: replicate user records and validate tokens locally in every region; refresh-token writes need a clear ownership model or a token rotated in two regions concurrently can trigger false reuse detection.",
+        "Have a break-glass path for mass revocation — key rotation logs everyone out, which is drastic but is the correct response to a signing-key compromise."
+      ],
+      "answer": "The dependency shape is the whole risk: everything needs auth, so an outage is total. Stateless verification is the primary mitigation, and it reframes the requirement usefully — auth must be available for login and refresh, not for verification, which is a much easier bar. That only holds if every service caches the public key set with a long TTL and stale-if-error, otherwise a JWKS outage becomes a fleet-wide auth outage. Operationally, login is CPU-bound on hashing and should be isolated from refresh so a login spike can't starve it, and I'd jitter token TTLs so tokens issued together don't all expire together. The metric I'd watch most closely is refresh-reuse detections — a spike there means token theft, and it's the earliest signal you'll get. For multi-region, validate locally everywhere but define clear ownership for refresh writes, or concurrent rotation in two regions triggers false reuse alarms and logs real users out."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "Verification never calls the auth service — which is why an auth outage doesn't stop every request in the fleet.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  U([\"User\"]) -->|\"credentials + MFA\"| AS[\"Auth service\"]\n  AS --> H[\"argon2id verify<br/>~100ms by design\"]\n  H --> SES[(\"Session + refresh<br/>token store, hashed\")]\n  AS -->|\"access token (15m)<br/>+ refresh token\"| U\n  U -->|\"access token\"| SVC[\"Any service\"]\n  SVC -->|\"local signature check<br/>~10us, no round trip\"| OK([\"authorized\"])\n  JWKS[(\"Public key set<br/>cached, stale-if-error\")] --> SVC\n  AS --> JWKS"
+    },
+    {
+      "id": "stateless-vs-revocable",
+      "title": "The tension the two-token split resolves",
+      "kind": "mermaid",
+      "role": "comparison",
+      "takeaway": "Statelessness is what makes verification free and revocation impossible — so put the two properties on two different credentials.",
+      "afterQuestion": 3,
+      "code": "flowchart TD\n  W([\"want: free verification\"]) --> ST[\"stateless token\"]\n  ST --> GOOD([\"any service verifies locally\"])\n  ST --> BAD([\"nothing to change<br/>= cannot revoke\"])\n  W2([\"want: instant revocation\"]) --> LOOK[\"lookup per request\"]\n  LOOK --> BAD2([\"round trip on every request<br/>= the cost you avoided\"])\n  BAD --> SPLIT[\"split the credential\"]\n  BAD2 --> SPLIT\n  SPLIT --> A[\"access token: short, stateless\"]\n  SPLIT --> R[\"refresh token: long, stateful\"]\n  A --> RES([\"revocation latency<br/>= access token TTL\"])\n  R --> RES"
+    },
+    {
+      "id": "refresh-rotation",
+      "title": "Refresh rotation and reuse detection",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Single-use refresh tokens turn a stolen credential into a detectable event rather than a silent long-term compromise.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  R1([\"refresh token v1\"]) --> USE[\"presented to auth service\"]\n  USE --> NEW[\"issue access token<br/>+ refresh token v2\"]\n  NEW --> INV[\"invalidate v1\"]\n  INV --> LATER{\"v1 presented again?\"}\n  LATER -->|\"no\"| FINE([\"normal operation\"])\n  LATER -->|\"yes\"| THEFT[\"either attacker or user<br/>is replaying it\"]\n  THEFT --> KILL([\"revoke the entire token family<br/>+ force re-login\"])\n  KILL --> ALERT([\"reuse detections spiking<br/>= token theft signal\"])"
+    },
+    {
+      "id": "key-rotation",
+      "title": "Rotating the signing key without logging everyone out",
+      "kind": "mermaid",
+      "role": "lifecycle",
+      "takeaway": "Both keys must verify for at least the lifetime of the longest outstanding token — that overlap window is what makes rotation non-disruptive.",
+      "afterQuestion": 5,
+      "code": "flowchart TD\n  K1([\"key A signing\"]) --> ADD[\"publish key set: A + B\"]\n  ADD --> WAIT[\"verifiers fetch and cache<br/>both keys\"]\n  WAIT --> SWITCH[\"sign new tokens with B<br/>(kid in the header)\"]\n  SWITCH --> OVER[\"overlap: tokens signed with A<br/>still verify\"]\n  OVER --> EXP{\"all A-signed tokens<br/>expired?\"}\n  EXP -->|\"no\"| OVER\n  EXP -->|\"yes\"| DROP([\"retire A from the key set\"])\n  BAD[\"rotating without overlap<br/>logs out every user at once\"] --> SWITCH"
+    }
+  ]
+}

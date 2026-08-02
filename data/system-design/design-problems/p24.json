@@ -1,0 +1,189 @@
+{
+  "id": "p24",
+  "num": 24,
+  "part": "Geo, Media & Recommendation",
+  "title": "Design a Proximity Service",
+  "summary": "Answer \"what's near me?\" over hundreds of millions of places at interactive latency. The signature challenge is that latitude and longitude are two dimensions and every index we have is one-dimensional, so the whole design is about flattening 2D space into a sortable key without losing locality.",
+  "keyTakeaways": [
+    "A B-tree can index latitude or longitude but not both usefully — two range scans intersected is a huge candidate set, which is why a spatial encoding exists at all.",
+    "Geohash interleaves latitude and longitude bits into one string, so a shared prefix means spatial proximity and a normal string index does the work.",
+    "Geohash has a boundary problem: two points metres apart can differ from the first character. Always query the cell plus its eight neighbours.",
+    "Precision is a tradeoff, not a constant — pick the geohash length whose cell size is nearest the search radius, then filter exactly.",
+    "Quadtrees adapt to density where geohash cells are uniform, which matters when Manhattan and Montana are in the same index.",
+    "The read path is overwhelmingly dominant for static places: precompute, cache aggressively, and treat the index as near-read-only.",
+    "Always re-filter candidates by true distance — a geohash cell is a rectangle, and the answer needs a circle."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a proximity service. What are the functional requirements, and which non-functional targets shape the design?",
+      "points": [
+        "Functional: given a latitude, longitude and radius, return nearby places ranked by distance; support filters (category, open now, rating); add/update/delete places.",
+        "Clarify the entity: static businesses versus moving vehicles. Static changes the design entirely — updates are rare, so the index can be optimized purely for reads.",
+        "Non-functional: p99 under ~100ms for a search, because it sits in a user-facing map interaction.",
+        "Read-heavy by a large margin — searches vastly outnumber place edits, which justifies precomputation and caching.",
+        "Scale: e.g. 200M places, 5K searches/sec, with heavy geographic skew toward dense cities.",
+        "Correctness: results must be complete within the radius — silently missing a nearby place is worse than being slightly slow.",
+        "Out of scope unless asked: routing/directions, real-time traffic, and ranking beyond distance."
+      ],
+      "answer": "Given a point and a radius, return nearby places ranked by distance, with category and open-now filters, plus place CRUD. The clarifying question I'd ask first is whether the entities are static businesses or moving vehicles, because that changes everything — static places update rarely, so the index can be optimized almost entirely for reads. Assuming static: 200M places, 5K searches/sec, p99 under 100ms because this is inside a map interaction, and heavily skewed toward dense cities. The correctness bar worth stating is completeness — missing a place that's genuinely within the radius is a worse failure than being a bit slow, and it's the failure mode the naive implementations actually have.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate storage and load, and identify where the skew hurts.",
+      "points": [
+        "200M places × ~1 KB (name, address, category, hours, coordinates) ≈ 200 GB. Fits comfortably on a sharded store; not a big-data problem.",
+        "The geo index itself is small: place id plus geohash is ~30 bytes, so 200M × 30 B ≈ 6 GB — small enough to hold in memory, which is the key realization.",
+        "5K searches/sec with a p99 of 100ms means ~500 concurrent queries; trivial if each query touches a bounded candidate set.",
+        "The danger is candidate-set size, not query rate. A 5 km radius in Manhattan can contain 50,000 places; the same radius in rural Montana contains 3.",
+        "So the cost per query varies by three or four orders of magnitude across the same code path — this is the thing to design around.",
+        "Cap and paginate: return the nearest N rather than everything in the radius, so worst-case work is bounded.",
+        "Write load is negligible for static places (thousands of edits per day), which is what makes an aggressive read-optimized design correct here."
+      ],
+      "answer": "200M places at about 1 KB is 200 GB, which is unremarkable. The important number is the geo index itself: place id plus geohash is roughly 30 bytes, so about 6 GB — small enough to hold in memory, and that realization drives the whole design. 5K searches/sec is only ~500 concurrent queries. The real variance is candidate-set size: a 5 km radius covers maybe 50,000 places in Manhattan and 3 in rural Montana, so the same code path varies by orders of magnitude in cost. That's what I'd design around — cap and paginate to the nearest N so worst-case work is bounded rather than proportional to city density."
+    },
+    {
+      "type": "mc",
+      "q": "Why not just index latitude and longitude as two columns and query `WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?`?",
+      "options": [
+        "Floating-point comparison is too slow at this scale",
+        "A B-tree index can only efficiently serve one range condition; the database narrows on one dimension and then filters the rest, so a latitude band spanning a continent is scanned to find a few nearby places",
+        "Latitude and longitude cannot be indexed because they are signed values",
+        "The query returns a rectangle rather than a circle, which is the primary problem"
+      ],
+      "answer": 1,
+      "explain": "This is the fundamental limitation that motivates every spatial index. A composite B-tree on (lat, lng) sorts by latitude first, so a range on latitude is efficient but the longitude condition can only be applied as a filter over everything in that band — and a narrow latitude band still stretches around the entire planet. Two separate indexes let the planner intersect two large result sets, which is also expensive. Spatial encodings solve it by mapping two dimensions onto one ordered key so a single range scan captures spatial locality. Rectangle-versus-circle is a real issue, but it's solved trivially by a distance filter afterwards.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: explain how geohash works and why a shared prefix means spatial proximity.",
+      "points": [
+        "Recursively bisect the world: each bit answers 'which half?' — longitude splits east/west, latitude splits north/south, alternating.",
+        "Interleaving those bits produces a single binary string, base32-encoded into a short text geohash.",
+        "Because each character further subdivides the previous cell, two locations sharing a prefix are inside the same cell — so prefix length is precision.",
+        "That turns proximity search into a string prefix query, which any ordinary B-tree or key-value store already does well.",
+        "Precision table worth knowing: 4 chars ≈ 20 km, 5 ≈ 5 km, 6 ≈ 1.2 km, 7 ≈ 150 m.",
+        "Choose the precision whose cell size is closest to the search radius — too coarse returns far too many candidates, too fine requires scanning many cells.",
+        "The result is a candidate set, never the answer: cells are rectangles, so filter by true haversine distance and then sort.",
+        "It also composes with other filters: prefix-match the geohash, then filter category or open-now on the much smaller candidate set."
+      ],
+      "answer": "You recursively bisect the world — one bit for which half of the longitude range, one for latitude, alternating — and interleave those bits into a single string, base32-encoded. Because each additional character subdivides the previous cell, two points sharing a prefix are inside the same cell, so prefix length *is* precision: four characters is about 20 km, five about 5 km, six about 1.2 km. That's the trick — it converts a 2D proximity question into a string prefix query, which every ordinary index already does well. I'd pick the precision whose cell size is nearest the search radius, then treat the result strictly as a candidate set: cells are rectangles and the answer is a circle, so filter by true haversine distance and sort.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "A coffee shop 50 metres from the user doesn't appear in the results. Its geohash shares no prefix with the user's. What happened?",
+      "options": [
+        "The geohash was computed with the wrong precision and must be recomputed",
+        "The two points sit on opposite sides of a cell boundary — geohash proximity is sufficient but not necessary, so the query must search the user's cell plus its eight neighbours",
+        "Floating-point rounding assigned the shop to the wrong cell",
+        "The shop's coordinates are stored as longitude-latitude instead of latitude-longitude"
+      ],
+      "answer": 1,
+      "explain": "This is the geohash boundary problem, and it's the single most common bug in naive implementations. A shared prefix guarantees closeness, but closeness does not guarantee a shared prefix — two points either side of a major division can differ from the very first character, even at the equator or prime meridian where they're metres apart. The fix is standard: compute the eight neighbouring cells at the chosen precision and query all nine, then distance-filter. Because the failure only affects places near boundaries, it passes casual testing and surfaces as sporadic user reports of missing results.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: compare geohash with quadtrees and S2. When would you choose something other than geohash?",
+      "points": [
+        "Geohash: fixed uniform grid. Simple, stores as a string, works in any existing index, no special infrastructure. Cells are uniform regardless of density.",
+        "Quadtree: recursively subdivides only cells that exceed a capacity threshold, so dense cities get deep subdivision and empty ocean stays one node. Adaptive to density.",
+        "That adaptiveness is the real difference: with geohash, a Manhattan cell holds 50,000 places and a Montana cell holds 3, so query cost is wildly uneven.",
+        "Quadtree cost: it's an in-memory tree structure that must be built and rebalanced, and it's harder to shard and persist than a string column.",
+        "S2 maps the sphere onto a cube and uses a Hilbert curve, which preserves locality better than geohash's z-order and avoids the worst boundary discontinuities. Also handles polar distortion properly.",
+        "Geohash cells are not equal-area — they narrow toward the poles because longitude lines converge, which matters for high-latitude accuracy.",
+        "Practical recommendation: geohash for simplicity and because it needs no new infrastructure; quadtree or S2 when density skew or precise cell geometry actually bites.",
+        "Say the criterion out loud: choose based on density variance and whether you can afford specialized infrastructure, not on which is theoretically nicest."
+      ],
+      "answer": "Geohash is a fixed uniform grid — simple, stores as a plain string, and works in any index you already have. Its weakness is exactly that uniformity: a Manhattan cell holds 50,000 places and a Montana cell holds 3, so query cost is wildly uneven. A quadtree subdivides only where density demands it, which evens that out, but it's an in-memory tree that has to be built and rebalanced and is harder to shard and persist than a string column. S2 projects the sphere onto a cube and orders cells along a Hilbert curve, which preserves locality better than geohash's z-order and handles polar distortion — geohash cells aren't equal-area because longitude lines converge toward the poles. My default is geohash for the simplicity and zero new infrastructure, moving to quadtree or S2 when density skew actually shows up in the latency percentiles rather than pre-emptively."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the read path end to end, including caching and filters.",
+      "points": [
+        "Request arrives with lat, lng, radius and filters. Choose the geohash precision matching the radius.",
+        "Compute the user's cell and its eight neighbours; query the index for places whose geohash starts with any of those nine prefixes.",
+        "Apply cheap attribute filters (category, open now) to shrink the candidate set before the expensive step.",
+        "Compute true haversine distance for survivors, drop those beyond the radius, sort ascending, paginate.",
+        "Hydrate only the returned page with full place details — don't fetch full records for 50,000 candidates.",
+        "Caching is unusually effective here: the geohash cell is a natural cache key, and popular cells are queried constantly. Cache cell → place-id list with a long TTL, since static places rarely change.",
+        "That caching works precisely because the data is near-read-only; if these were moving vehicles it would be useless, which is why the static/moving distinction mattered in scoping.",
+        "Shard by geohash prefix so a query touches few shards, but be aware this reintroduces density skew at the shard level — dense-city shards get disproportionate load and may need splitting."
+      ],
+      "answer": "Pick the precision matching the radius, compute the user's cell plus its eight neighbours, and prefix-query the index for those nine. Then order the work cheapest-first: apply attribute filters like category and open-now to shrink the candidate set, compute true haversine distance only on survivors, drop anything outside the radius, sort and paginate — and hydrate full place records only for the page being returned, never for all 50,000 candidates. Caching is unusually powerful here because the cell is a natural cache key and popular cells are queried constantly, with long TTLs since static places barely change. That only works because the data is near-read-only, which is exactly why I asked about static versus moving up front. I'd shard by geohash prefix, while noting it reintroduces density skew at the shard level — dense-city shards will need splitting."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the API and the data model. What does a client send, and what is actually stored?",
+      "points": [
+        "`GET /search?lat=&lng=&radius=&category=&limit=&cursor=` returning places ordered by distance, each with its computed distance so the client needn't recompute.",
+        "Cap and default the radius and limit server-side — an uncapped radius in a dense area is the pathological query, and clients will send one.",
+        "Cursor pagination rather than offset: offsets force recomputation of the whole ordered set for each page.",
+        "Place CRUD: `POST /places`, `PATCH /places/{id}`, `DELETE /places/{id}` — low volume, since these are static entities.",
+        "Two stores, deliberately: a place table holding the full record, and a geo index holding only place id plus geohash. Keeping the index narrow is what lets it stay in memory.",
+        "Precompute the geohash at write time at several precisions (say 5, 6 and 7 characters) so a query picks the right one without recomputing.",
+        "A write must update both stores; since places change rarely, eventual consistency between them is acceptable and worth stating.",
+        "Return a stable place id so clients can fetch details separately, keeping the search response small.",
+        "Version or timestamp responses so a client caching results can tell whether they are stale."
+      ],
+      "answer": "`GET /search` with latitude, longitude, radius, filters and a cursor, returning places ordered by distance with the computed distance included so the client doesn't redo the maths. I'd cap radius and limit server-side, because an uncapped radius in a dense city is the pathological query and clients will absolutely send one, and use cursor pagination since offsets force recomputing the whole ordered set per page. Place writes are ordinary CRUD and low volume. The data model is deliberately two stores: a place table with the full record, and a narrow geo index of just place id plus geohash — narrow specifically so it stays memory-resident. I'd precompute the geohash at a few precisions at write time so queries pick one rather than computing it, and since places change rarely, eventual consistency between the two stores is fine and worth saying out loud.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks at scale, and what changes if the entities start moving?",
+      "points": [
+        "Density hot spots: dense-city shards take disproportionate traffic. Split hot shards by using a finer geohash prefix for those regions specifically.",
+        "Unbounded candidate sets: a large radius in a dense area is the pathological query. Cap results, cap radius, and consider progressive expansion — search a small radius first and widen only if too few results.",
+        "Cache stampede on popular cells when a TTL expires — use staggered TTLs or request coalescing.",
+        "Monitor p99 by geohash region, not globally; a global p99 hides that dense cities are consistently slow.",
+        "If entities move (drivers, delivery riders), the design inverts: writes now dominate, because each vehicle updates location every few seconds.",
+        "For moving entities, a persistent disk index is wrong — keep current locations in memory (a hash from vehicle id to cell, plus cell to vehicle set) and accept losing state on restart since positions refresh within seconds.",
+        "Update cost then becomes the concern: a vehicle crossing a cell boundary requires removing it from one cell set and adding to another, so cell size trades update churn against query selectivity.",
+        "Caching becomes near-useless for moving entities, which is the clearest illustration of why that scoping question decides the architecture."
+      ],
+      "answer": "Density hot spots are the scaling pain — dense-city shards take disproportionate load, so I'd split them by using a finer prefix in those regions specifically, and monitor p99 by geohash region rather than globally, since a global percentile hides that cities are consistently slow. The pathological query is a large radius in a dense area, bounded by capping results and progressively expanding from a small radius rather than starting wide. The more interesting part is what changes if entities move: the whole thing inverts. Writes dominate because every vehicle reports every few seconds, a persistent disk index becomes the wrong choice in favour of in-memory cell membership that you can afford to lose on restart, and caching becomes almost useless. That inversion is the clearest argument for asking the static-versus-moving question during scoping rather than discovering it later."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The geo index is small enough to keep in memory, and the cell is a natural cache key — both only because static places are near-read-only.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  U([\"User: lat, lng, radius\"]) --> API[\"Search service\"]\n  API --> C{\"cell cached?\"}\n  C -->|\"hit\"| CACHE[(\"Cell cache<br/>geohash -> place ids\")]\n  C -->|\"miss\"| IDX[(\"Geo index<br/>geohash -> place id\")]\n  IDX --> CACHE\n  CACHE --> F[\"filter: category,<br/>open now\"]\n  F --> D[\"haversine distance<br/>+ sort + paginate\"]\n  D --> H[(\"Place store<br/>hydrate page only\")]\n  H --> R([\"ranked results\"])"
+    },
+    {
+      "id": "geohash-encoding",
+      "title": "Interleaving two dimensions into one sortable key",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "Each character subdivides the previous cell, so prefix length is precision and a shared prefix means the points are in the same box.",
+      "afterQuestion": 3,
+      "code": "flowchart TD\n  P([\"lat 40.7128, lng -74.0060\"]) --> B1[\"bit 1: which half<br/>of longitude?\"]\n  B1 --> B2[\"bit 2: which half<br/>of latitude?\"]\n  B2 --> B3[\"alternate, recursively\"]\n  B3 --> IL[\"interleave the bits\"]\n  IL --> B32[\"base32 encode\"]\n  B32 --> G([\"dr5regw\"])\n  G --> PREC[\"4 chars = 20km<br/>5 = 5km<br/>6 = 1.2km<br/>7 = 150m\"]"
+    },
+    {
+      "id": "boundary-problem",
+      "title": "Why you must query nine cells, not one",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "A shared prefix proves closeness, but closeness does not prove a shared prefix — so a place metres away can be invisible to a single-cell query.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  U([\"user in cell dr5ru\"]) --> NAIVE{\"query only<br/>the user cell?\"}\n  NAIVE -->|\"yes — the bug\"| MISS[\"shop 50m away sits<br/>across the boundary\"]\n  MISS --> SILENT([\"missing result;<br/>passes casual testing\"])\n  NAIVE -->|\"no — correct\"| NINE[\"user cell + 8 neighbours\"]\n  NINE --> CAND[\"candidate set\"]\n  CAND --> DIST[\"haversine filter<br/>rectangle to circle\"]\n  DIST --> OK([\"complete results\"])"
+    },
+    {
+      "id": "density-skew",
+      "title": "Uniform cells versus adaptive subdivision",
+      "kind": "mermaid",
+      "role": "comparison",
+      "takeaway": "Geohash cells are the same size everywhere, so query cost tracks population density; a quadtree subdivides only where density demands it.",
+      "afterQuestion": 5,
+      "code": "flowchart TD\n  R([\"5km radius query\"]) --> GH[\"geohash: uniform grid\"]\n  GH --> MAN[\"Manhattan cell:<br/>50,000 places\"]\n  GH --> MON[\"Montana cell:<br/>3 places\"]\n  MAN --> SKEW([\"same code path,<br/>orders of magnitude apart\"])\n  R --> QT[\"quadtree: split only<br/>past a capacity threshold\"]\n  QT --> EVEN([\"even candidate sets,<br/>at the cost of a rebalancing tree\"])\n  SKEW --> FIX[\"finer prefix for dense regions<br/>+ cap results\"]"
+    }
+  ]
+}

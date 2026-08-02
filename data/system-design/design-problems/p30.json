@@ -117,6 +117,22 @@
     },
     {
       "type": "open",
+      "prompt": "Some features can't be precomputed — they depend on the request itself. How do on-demand features work, and where do they break the model?",
+      "points": [
+        "Example: `amount / user_avg_order_value_30d` for a fraud model. The denominator is precomputed; the numerator arrives with the request.",
+        "So the feature can only be computed at request time, joining stored features with request context.",
+        "They must be defined in the same registry and compiled from the same definition as materialized features, or they reintroduce exactly the skew the store exists to prevent — now in the one path nobody is monitoring.",
+        "For training, on-demand features must be computed by replaying the same transformation over historical request logs, which means request payloads have to be logged with their timestamps.",
+        "If request context isn't logged, the feature is untrainable — you can serve it but never learn from it, which is a silent and expensive discovery.",
+        "Latency: this computation is inside the request path, so it must be cheap; heavy on-demand transformations belong in the model itself, not the feature layer.",
+        "They're also where feature leakage sneaks back in — a transformation that accidentally references a post-outcome field looks fine online and poisons training.",
+        "Rule of thumb: precompute anything that depends only on stored state; compute on demand only what genuinely requires the request."
+      ],
+      "answer": "The canonical case is a ratio like transaction amount over the user's 30-day average — the denominator is precomputed, the numerator arrives with the request, so the feature only exists at request time. The requirement I'd insist on is that it's declared in the same registry and compiled from the same definition as materialized features, because otherwise it reintroduces training/serving skew in the one path nobody is monitoring. The trap is training: to build a training set you have to replay that same transformation over historical requests, which means request payloads and their timestamps must be logged. If they aren't, the feature is servable but untrainable, and that's an expensive thing to discover late. Latency-wise it sits in the request path so it has to be cheap. My rule is: precompute anything that depends only on stored state, and compute on demand only what genuinely needs the request.",
+      "crux": true
+    },
+    {
+      "type": "open",
       "prompt": "Staff-level wrap-up: what breaks at scale, and how do you detect a problem before the model does?",
       "points": [
         "Monitor the served distribution against the training distribution per feature — drift in the input is detectable long before accuracy metrics move.",

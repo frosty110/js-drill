@@ -20,6 +20,12 @@ const BASE = process.argv[2] || 'http://localhost:8765/';
 const OUT = process.argv[3] || '/tmp/sd-tags-nav';
 const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
 
+// Derived, never hardcoded: the manifest is the source of truth for how many
+// problems and families exist, so adding content never breaks this probe.
+const MANIFEST = require('../../data/system-design/design-problems/manifest.json');
+const N_PROBLEMS = MANIFEST.chapters.length;
+const N_FAMILIES = MANIFEST.parts.length;
+
 (async () => {
   await ensureServer({ port: 8765 });
   await ensureChrome();
@@ -31,7 +37,7 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
 
   const parts = await s.eval(`
     Array.from(document.querySelectorAll('.part-head')).map(e => e.textContent.trim())`);
-  s.assert(Array.isArray(parts) && parts.length === 7, `expected 7 families, got ${parts && parts.length}`);
+  s.assert(Array.isArray(parts) && parts.length === N_FAMILIES, `expected ${N_FAMILIES} families, got ${parts && parts.length}`);
   s.assert(parts[0] === 'Read-Heavy Systems & Search', `first family: ${parts[0]}`);
   s.assert(parts.includes('Infrastructure Primitives'), 'Infrastructure Primitives family present');
   s.assert(!parts.includes('Feeds & Read-Heavy Systems'), 'old part names gone');
@@ -39,7 +45,7 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   // displayNum: contiguous 1..N in parts order, NOT the p-number order.
   const nums = await s.eval(`
     Array.from(document.querySelectorAll('.ch-card .ch-num')).map(e => e.textContent.trim())`);
-  s.assert(nums.length === 21, `expected 21 cards, got ${nums.length}`);
+  s.assert(nums.length === N_PROBLEMS, `expected ${N_PROBLEMS} cards, got ${nums.length}`);
   const asNums = nums.filter(n => /^\d+$/.test(n)).map(Number);
   s.assert(asNums.length === 0 || asNums.every((n, i, a) => i === 0 || n > a[i - 1]),
     `displayNum must ascend, got ${nums.join(',')}`);
@@ -57,11 +63,11 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   // topicStats() counts QUESTIONS; the hero headline must count UNITS, or a
   // 21-problem topic reads "0 of 195 mastered". Both appear, each with its noun.
   const heroCopy = await s.eval(`document.querySelector('.overall .stat-copy').textContent.replace(/\\s+/g,' ').trim()`);
-  s.assert(/of 21 problems mastered/.test(heroCopy), `hero counts units, got: ${heroCopy}`);
+  s.assert(new RegExp(`of ${N_PROBLEMS} problems mastered`).test(heroCopy), `hero counts units, got: ${heroCopy}`);
   // Don't hardcode the question total — it moves with every authored problem.
   // What must hold is that both grains appear and the question count is larger.
   const qm = heroCopy.match(/(\d+)\/(\d+) questions/);
-  s.assert(qm && Number(qm[2]) > 21, `hero still reports question grain and it exceeds unit count, got: ${heroCopy}`);
+  s.assert(qm && Number(qm[2]) > N_PROBLEMS, `hero reports question grain exceeding unit count, got: ${heroCopy}`);
   s.assert(/problems? due for review/.test(heroCopy), `due count carries the unit noun, got: ${heroCopy}`);
   // The noun comes from the manifest's unitLabel, so other topics say their own.
   await s.eval(`location.hash = '#/ddia'`);
@@ -73,7 +79,7 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
 
   // ── Tag chips on cards ───────────────────────────────────────────────────
   const chipCount = await s.eval(`document.querySelectorAll('.ch-card .ch-tags .sd-chip').length`);
-  s.assert(chipCount >= 21, `every card carries chips, got ${chipCount}`);
+  s.assert(chipCount >= N_PROBLEMS, `every card carries chips, got ${chipCount}`);
   const firstChips = await s.eval(`
     Array.from(document.querySelectorAll('.ch-card')[0].querySelectorAll('.sd-chip')).map(e => e.textContent.trim()).join('|')`);
   s.assert(/Easy/.test(firstChips), `p01 shows its difficulty chip, got ${firstChips}`);
@@ -97,7 +103,7 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   await s.sleep(400);
   await s.snap('03-filter-caching');
   const cachingHits = await s.eval(`document.querySelectorAll('.ch-card').length`);
-  s.assert(cachingHits >= 5 && cachingHits < 21, `caching narrows the list, got ${cachingHits}`);
+  s.assert(cachingHits >= 5 && cachingHits < N_PROBLEMS, `caching narrows the list, got ${cachingHits}`);
   s.assert(await s.eval(`document.querySelectorAll('.part-head').length === 1`),
     'filtered view collapses families into one flat list');
   s.assert(/match/.test(await s.eval(`document.querySelector('.part-head').textContent`)),
@@ -114,8 +120,8 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   // Clear returns to the grouped view.
   await s.eval(`document.getElementById('filter-clear').click()`);
   await s.sleep(400);
-  s.assert(await s.eval(`document.querySelectorAll('.ch-card').length === 21`), 'clear restores all 21');
-  s.assert(await s.eval(`document.querySelectorAll('.part-head').length === 7`), 'clear restores families');
+  s.assert(await s.eval(`document.querySelectorAll('.ch-card').length`) === N_PROBLEMS, `clear restores all ${N_PROBLEMS}`);
+  s.assert(await s.eval(`document.querySelectorAll('.part-head').length`) === N_FAMILIES, 'clear restores families');
 
   // ── Empty state ──────────────────────────────────────────────────────────
   await s.eval(`
@@ -179,8 +185,8 @@ const SD = (hash) => `${BASE}system-design.html${hash || ''}`;
   await s.eval(`location.hash = '#/design-problems'`);
   await s.sleep(900);
   await s.snap('08-topic-home-desktop');
-  s.assert(await s.eval(`document.querySelectorAll('.ch-card').length === 21`), 'desktop lists 21');
-  s.assert(await s.eval(`document.querySelectorAll('.part-head').length === 7`), 'desktop shows 7 families');
+  s.assert(await s.eval(`document.querySelectorAll('.ch-card').length`) === N_PROBLEMS, `desktop lists ${N_PROBLEMS}`);
+  s.assert(await s.eval(`document.querySelectorAll('.part-head').length`) === N_FAMILIES, `desktop shows ${N_FAMILIES} families`);
   const dScroll = await s.eval(`document.documentElement.scrollWidth - document.documentElement.clientWidth`);
   s.assert(dScroll <= 1, `no horizontal scroll on desktop, overflow=${dScroll}px`);
 

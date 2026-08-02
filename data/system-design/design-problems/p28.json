@@ -1,0 +1,195 @@
+{
+  "id": "p28",
+  "num": 28,
+  "part": "Geo, Media & Recommendation",
+  "title": "Design a Short-Form Video Feed",
+  "summary": "Serve an endless, personalized stream of short videos where the recommendation engine — not a social graph — decides what plays next. The signature challenge is that the feed must be ranked per user in tens of milliseconds while the video for the *next* swipe is already downloading.",
+  "keyTakeaways": [
+    "Unlike a follow-based feed, the candidate pool is the entire catalogue, so retrieval is a recommendation problem before it is a fan-out problem.",
+    "Recommendation is two-stage: cheap candidate generation narrows billions to hundreds, an expensive ranker orders those — the same shape as search and RAG.",
+    "Prefetching the next few videos is what makes the swipe feel instant, and it is the single biggest perceived-quality lever.",
+    "Prefetch aggressiveness trades user-perceived speed against wasted bandwidth for videos never watched.",
+    "Watch time and completion rate are the training signal, but optimizing them naively produces degenerate content — the objective needs explicit counterweights.",
+    "Cold start cuts both ways: a new user has no history, and a new video has no engagement data, so it needs deliberate exploration traffic or it can never be discovered.",
+    "Short videos are small enough to cache aggressively at the edge, which makes a CDN hit rate the dominant cost lever."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a short-form video feed. How is this different from designing a follow-based news feed?",
+      "points": [
+        "Functional: upload short videos; serve an endless personalized feed; capture engagement (watch time, likes, shares, skips); search and hashtags optionally.",
+        "The structural difference: a news feed's candidates come from who you follow — a bounded set. Here the candidate pool is the entire catalogue, most of it from creators the user has never seen.",
+        "So the hard problem moves from fan-out to retrieval and ranking. Fan-out-on-write is meaningless when the feed isn't derived from a graph.",
+        "Non-functional: feed request p99 under ~200ms so the next batch is ready before the user swipes; video start under ~100ms, which is really a prefetch requirement.",
+        "Engagement events are high-volume and are the product's training data, not just analytics — that shapes the ingestion path.",
+        "Scale: e.g. 100M DAU, each watching 100 videos/day = 10B video views/day.",
+        "Quality target: the feed must stay interesting for hours, which means diversity is a requirement rather than a nice-to-have."
+      ],
+      "answer": "Upload short videos, serve an endless personalized feed, capture engagement. The structural difference from a news feed is that there's no graph to fan out from — the candidate pool is the entire catalogue, and most of what a user sees comes from creators they've never heard of. So the hard problem shifts from fan-out to retrieval and ranking; fan-out-on-write doesn't even mean anything here. Targets: feed requests under about 200ms so the next batch is ready before the swipe, and video start under 100ms, which is really a statement about prefetching rather than about serving. At 100M daily users watching a hundred videos each that's 10 billion views a day, and those engagement events are the training data, not just analytics.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate storage, bandwidth and the engagement event volume.",
+      "points": [
+        "Uploads: say 10M videos/day at ~10 MB average (15-60 seconds, compressed) = 100 TB/day of source, plus transcoded renditions multiplying that ~3x.",
+        "Views: 10B/day ≈ 115K views/sec average, peak several times that.",
+        "Bandwidth: 115K/sec × ~5 MB average delivered ≈ 575 GB/sec, or ~4.6 Tbps. Overwhelmingly a CDN problem.",
+        "The saving grace is that short videos are small and popularity is extremely skewed — a small hot set serves most views, so cache hit rates are very high and origin traffic is a fraction of edge traffic.",
+        "Engagement events: 10B views/day plus scroll, like, share and pause events could be 50B+ events/day ≈ 600K events/sec. This rivals the video serving path in volume.",
+        "That event firehose feeds both real-time features (what did this user just watch) and offline training, so it needs a streaming pipeline, not batch upload.",
+        "Feed requests: users request a batch of ~10 videos rather than one at a time, so feed QPS is roughly views/10 ≈ 12K/sec.",
+        "Ranking cost per request is the real compute constraint: 12K/sec × a few hundred candidates scored is millions of model evaluations per second."
+      ],
+      "answer": "10M uploads a day at ~10 MB is 100 TB of source before transcoding multiplies it. On the read side, 10 billion views is about 115K/sec average and roughly 4.6 Tbps — a CDN problem, though it's helped enormously by short videos being small and popularity being extremely skewed, so a small hot set serves most views and origin traffic is a fraction of the edge. The number people miss is engagement: views plus scrolls, likes and pauses is easily 50 billion events a day, around 600K/sec, which rivals the serving path and needs a streaming pipeline because it feeds both real-time features and offline training. And the compute constraint is ranking — 12K feed requests a second scoring a few hundred candidates each is millions of model evaluations per second."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the architecture. What happens when a user opens the app?",
+      "points": [
+        "Feed service receives the request with user id and session context.",
+        "Candidate generation: retrieve a few hundred to a few thousand candidates from multiple sources in parallel — embedding-similar to recent watches (ANN over video embeddings), trending, followed creators, and an exploration slice of under-served new videos.",
+        "Multiple retrieval sources matter: a single source produces a monotonous feed, so diversity starts at retrieval, not at ranking.",
+        "Feature fetch: pull user features and candidate video features from a feature store — this is exactly the low-latency online read discussed in the feature-store problem.",
+        "Ranking: score candidates with a model predicting watch time and engagement probability.",
+        "Post-ranking: apply diversity rules, deduplicate against recently-seen, enforce policy filters, and blend in exploration.",
+        "Return a batch of ~10 video ids plus CDN URLs, so the client can start prefetching immediately.",
+        "The client prefetches the first video fully and the next few partially while the current one plays.",
+        "Engagement events stream back through a queue into both real-time feature updates and the offline training pipeline."
+      ],
+      "answer": "The feed service takes user id and session context and runs candidate generation across several sources in parallel — ANN over video embeddings similar to recent watches, trending, followed creators, and an exploration slice of under-served new videos. Using multiple sources is deliberate: a single retriever produces a monotonous feed, so diversity begins at retrieval rather than being patched on later. Then it fetches user and candidate features from the feature store, ranks with a model predicting watch time and engagement, and applies post-ranking rules for diversity, dedup against recently seen, and policy filters. It returns a batch of about ten video ids with CDN URLs so the client can start prefetching immediately, and engagement events stream back through a queue into both real-time features and offline training.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "Why is recommendation split into candidate generation and ranking rather than scoring everything with the best model?",
+      "options": [
+        "Candidate generation and ranking optimize for different business metrics",
+        "The accurate ranking model is far too expensive to run over a catalogue of billions, so a cheap retrieval stage narrows to hundreds first — the expensive model only ever sees what survived",
+        "Candidate generation handles new videos while ranking handles established ones",
+        "Ranking models cannot process more than a few hundred items due to memory limits"
+      ],
+      "answer": 1,
+      "explain": "It's the same funnel as search retrieval-then-rerank and RAG recall-then-rerank, and it exists for the same reason: cost per item. A deep ranking model using hundreds of features and cross-features might take a millisecond per candidate — fine for 500 candidates inside a 200ms budget, impossible for a billion. Candidate generation uses cheap, precomputable methods — approximate nearest neighbour over embeddings, precomputed trending lists — that reduce the pool by six or seven orders of magnitude. Recognizing this as the same pattern across three different problems is exactly the transfer that makes it worth learning once.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how does the app make a swipe feel instant when each video is several megabytes?",
+      "points": [
+        "The feed response returns a batch of video ids with URLs, not just the current one — that's what makes prefetching possible at all.",
+        "While video N plays, the client fully buffers N+1 and partially buffers N+2 and N+3.",
+        "Partial prefetch is the key refinement: fetch only the first second or two of the further-ahead videos, enough to start playback instantly, then continue on demand.",
+        "That bounds wasted bandwidth — a user who swipes past N+2 has only downloaded a fraction of it.",
+        "The tradeoff is explicit: aggressive prefetch means instant swipes and wasted data; conservative prefetch means occasional loading spinners. Tune by network type — much more aggressive on wifi than on cellular.",
+        "Videos are encoded so the first segment is independently playable (a keyframe at the start), otherwise partial prefetch gives you nothing.",
+        "Short videos are small and popularity is skewed, so edge cache hit rates are very high — prefetch requests mostly hit warm edges rather than origin.",
+        "Adaptive bitrate still applies: pick the rendition from measured throughput, and prefer starting fast at lower quality over waiting for higher quality.",
+        "Measure it as start-time percentile and rebuffer rate, not as prefetch hit rate — the user-facing metric is whether the swipe felt instant."
+      ],
+      "answer": "It works because the feed returns a batch of ids rather than one video, which is what makes prefetching possible at all. While the current video plays the client fully buffers the next one and partially buffers the two after that — and partial is the important refinement, fetching just the first second or two so playback can start instantly without paying for a whole video the user may skip. That bounds the waste. The tradeoff is explicit and tunable by network type: aggressive prefetch on wifi for instant swipes, conservative on cellular to respect data. It also requires the encoding to put a keyframe at the start of each video, or a partial download is useless. And I'd measure it as start-time percentile and rebuffer rate rather than prefetch hit rate, since the user-facing question is whether the swipe felt instant.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "The ranking model is trained purely to maximize predicted watch time. What is the likely outcome?",
+      "options": [
+        "The feed becomes optimally engaging with no downside",
+        "The model converges on content that maximizes short-term attention — repetitive, sensational or borderline material — while diversity, creator variety and long-term retention all degrade",
+        "Watch time is unmeasurable so the model cannot train",
+        "The model will overfit to the most popular videos and show everyone the same feed"
+      ],
+      "answer": 1,
+      "explain": "Optimizing one proxy metric hard is a classic failure. Watch time correlates with quality but also with content that exploits attention — outrage, cliffhangers, and near-policy-violating material. A model with only that objective will find those, because they genuinely do maximize the target. It also creates a feedback loop: the model shows what it predicts you'll watch, that becomes the training data, and the feed narrows. Real systems use a multi-objective function combining watch time with completion, shares, explicit signals like 'not interested', and creator diversity, plus post-ranking diversity constraints and forced exploration. The lesson generalizes: when a metric becomes the target, it stops being a good measure.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: a brand-new video has no engagement data. How does it ever get shown?",
+      "points": [
+        "This is item cold start, and without a deliberate mechanism it's self-reinforcing: no impressions means no engagement data, which means the model never ranks it, which means no impressions.",
+        "Content-based bootstrapping: derive an embedding from the video itself — visual features, audio, captions, hashtags — so it can be retrieved by similarity before any engagement exists.",
+        "Creator prior: a new video from a creator with strong history starts with a better prior than one from an unknown account.",
+        "Explicit exploration budget: reserve a slice of every feed (a few percent) for under-served content, which is the only reliable way to gather data on new items.",
+        "Multi-armed bandit framing: exploration has a cost in immediate engagement and a payoff in information, and that's a tunable balance rather than a bug.",
+        "Graduated rollout: show a new video to a small audience, measure completion and engagement rate relative to expectation, and expand distribution only if it performs.",
+        "That also serves as a quality and safety gate — a video that performs poorly or gets reported stops early rather than reaching millions.",
+        "User cold start is the mirror problem: a new user gets popular, broadly-appealing, diverse content, and the feed personalizes rapidly over the first session because short videos give a strong signal every few seconds.",
+        "The fast feedback loop is genuinely distinctive here — a few minutes of swiping yields dozens of labelled preferences, far more than a long-form video product ever gets."
+      ],
+      "answer": "Without a deliberate mechanism it's self-reinforcing — no impressions, no engagement data, so the model never ranks it, so no impressions. Three things break the loop. Content-based bootstrapping gives the video an embedding derived from its own visuals, audio and captions, so it can be retrieved by similarity before any engagement exists. A creator prior means a new upload from someone with strong history starts better positioned than an unknown account. And an explicit exploration budget — a few percent of every feed reserved for under-served content — is the only reliable way to actually gather the data. I'd frame it as a bandit tradeoff rather than a bug: exploration costs immediate engagement and buys information. Graduated rollout then doubles as a safety gate, since a video that underperforms or gets reported stops early instead of reaching millions. User cold start is the mirror, and it resolves fast — a few minutes of swiping produces dozens of labelled preferences.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Design the upload and processing path. What happens between a creator posting and the video being servable?",
+      "points": [
+        "Client uploads to object storage directly (pre-signed URL) rather than through the application tier, so the app servers never proxy 10 MB payloads.",
+        "Upload completion emits an event that kicks off processing asynchronously.",
+        "Transcode to a small ladder — fewer renditions than long-form, since short videos are mostly watched on phones.",
+        "Generate a thumbnail and extract content features (visual embedding, audio fingerprint, on-screen text) for both recommendation and moderation.",
+        "Moderation runs before wide distribution: hash-match against known-bad content, then classifier scan, with the graduated rollout acting as the second gate.",
+        "Publish to CDN and mark the video eligible for candidate generation with its content embedding.",
+        "The creator sees their video as posted immediately while processing completes — optimistic UI over an asynchronous pipeline.",
+        "Duplicate detection via perceptual hashing matters commercially: re-uploaded content is rampant, and attribution affects creator payouts.",
+        "Processing latency target of a minute or two, because creators expect near-immediate distribution and a slow pipeline suppresses posting."
+      ],
+      "answer": "The client uploads straight to object storage via a pre-signed URL so app servers never proxy megabyte payloads, and completion emits an event that starts asynchronous processing. That processing transcodes to a small ladder — fewer renditions than long-form since this is overwhelmingly phone viewing — generates a thumbnail, and extracts content features: a visual embedding, audio fingerprint and on-screen text, which serve recommendation and moderation simultaneously. Moderation runs before wide distribution, with hash matching first and classifiers after, and graduated rollout acting as a second gate. The creator sees the post immediately while this completes. Two things I'd add: perceptual hashing for duplicate detection, because re-uploads are rampant and attribution drives payouts, and a processing target of a minute or two, since a slow pipeline actively suppresses posting."
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks at scale, and how do you know the feed is good?",
+      "points": [
+        "Feature-store latency is inside the request path — a slow feature fetch delays the whole feed, so it needs its own aggressive SLO and a documented default-on-timeout path.",
+        "Ranking cost grows with candidates × features; cap candidates and use model distillation or quantization to keep per-candidate cost low.",
+        "Viral spikes: one video going viral concentrates enormous read load on a few objects. CDN absorbs most of it, but the metadata and counter paths need hot-key handling.",
+        "Feedback-loop narrowing (filter bubbles) is a slow failure — measure diversity of what users are shown, not just engagement, or you won't see it until retention drops.",
+        "Evaluate online, not offline: offline metrics on logged data suffer from presentation bias, since you only observe engagement on what was already shown. A/B testing is the ground truth.",
+        "Long-term metrics matter more than session ones — an experiment that raises session watch time but lowers 30-day retention is a loss disguised as a win.",
+        "Guard against degenerate optimization with explicit counterweights: diversity constraints, creator-variety floors, and honouring explicit negative feedback.",
+        "Storage growth is relentless: 100 TB/day of uploads needs a tiering policy, since most videos are watched almost entirely in their first days.",
+        "Monitor start time, rebuffer rate, feed latency percentiles, ranking model staleness, and the exploration slice actually being served — that last one silently gets squeezed out under load."
+      ],
+      "answer": "In-request risks first: the feature-store fetch sits inside the feed path, so it needs its own aggressive SLO and a documented default-on-timeout, and ranking cost scales with candidates times features, which caps candidate counts and pushes toward distilled or quantized models. Virality concentrates read load on a few objects, mostly absorbed by CDN but not by the counter and metadata paths. The failure that's hardest to see is feedback-loop narrowing — the model shows what it predicts you'll watch, that becomes training data, and the feed contracts — so I'd measure the diversity of what's shown, not just engagement. On evaluation, offline metrics suffer presentation bias because you only observe engagement on what was already shown, so A/B is the ground truth, and I'd weight long-term retention over session watch time, since an experiment that raises watch time and lowers 30-day retention is a loss wearing a win's clothes. One thing I'd explicitly monitor is whether the exploration slice is actually being served — it quietly gets squeezed out under load."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "High-level architecture",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "With no social graph to fan out from, the feed is a recommendation funnel — and the engagement firehose flowing back is the product's training data.",
+      "afterQuestion": 2,
+      "code": "flowchart LR\n  U([\"Open app\"]) --> FS[\"Feed service\"]\n  FS --> CG[\"Candidate generation<br/>ANN + trending + follows + explore\"]\n  CG --> FEAT[(\"Feature store<br/><10ms\")]\n  FEAT --> RK[\"Ranker<br/>multi-objective\"]\n  RK --> PR[\"Post-rank: diversity,<br/>dedup, policy\"]\n  PR --> B([\"batch of ~10 ids + CDN URLs\"])\n  B --> PF[\"client prefetches N+1 fully,<br/>N+2/N+3 partially\"]\n  PF --> EV[[\"engagement events\"]]\n  EV --> FEAT\n  EV --> TR[\"offline training\"]"
+    },
+    {
+      "id": "two-stage-funnel",
+      "title": "Why retrieval and ranking are separate",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "The same funnel as search and RAG, for the same reason — the accurate scorer costs too much per item to run over the whole catalogue.",
+      "afterQuestion": 3,
+      "code": "flowchart TD\n  ALL([\"billions of videos\"]) --> CG{\"candidate generation<br/>cheap, precomputable\"}\n  CG -->|\"ANN on embeddings\"| C1[\"similar to recent watches\"]\n  CG -->|\"precomputed list\"| C2[\"trending\"]\n  CG -->|\"reserved slice\"| C3[\"exploration: new videos\"]\n  C1 --> POOL[\"~500 candidates\"]\n  C2 --> POOL\n  C3 --> POOL\n  POOL --> RK[\"deep ranker<br/>~1ms per candidate\"]\n  RK --> OUT([\"top ~10\"])\n  NOTE[\"1ms x 500 fits a 200ms budget;<br/>1ms x 1B does not\"] --> RK"
+    },
+    {
+      "id": "prefetch-ladder",
+      "title": "Prefetching the swipe",
+      "kind": "mermaid",
+      "role": "request-flow",
+      "takeaway": "Partial prefetch of further-ahead videos buys instant playback while bounding the bandwidth wasted on videos the user skips past.",
+      "afterQuestion": 4,
+      "code": "flowchart LR\n  N([\"video N playing\"]) --> P1[\"N+1: fully buffered\"]\n  P1 --> P2[\"N+2: first ~2s only\"]\n  P2 --> P3[\"N+3: first ~2s only\"]\n  P3 --> SW{\"user swipes\"}\n  SW -->|\"instant start\"| N2([\"N+1 plays immediately\"])\n  N2 --> CONT[\"continue fetching<br/>the rest on demand\"]\n  TUNE[\"aggressive on wifi,<br/>conservative on cellular\"] --> P2\n  KEY[\"requires a keyframe at<br/>the start of each video\"] --> P2"
+    },
+    {
+      "id": "objective-and-cold-start",
+      "title": "Degenerate objectives and the cold-start loop",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "Optimizing watch time alone finds attention-exploiting content, and without reserved exploration a new video can never earn the data it needs to rank.",
+      "afterQuestion": 6,
+      "code": "flowchart TD\n  W([\"objective: watch time only\"]) --> FIND[\"model finds sensational,<br/>repetitive content\"]\n  FIND --> LOOP[\"shown -> watched -><br/>becomes training data\"]\n  LOOP --> NARROW([\"feed narrows;<br/>retention drops later\"])\n  W --> FIX[\"multi-objective:<br/>+ completion, shares,<br/>not-interested, diversity\"]\n  NEW([\"brand-new video\"]) --> CS{\"no engagement data\"}\n  CS -->|\"no mechanism\"| DEAD([\"never ranked,<br/>never shown\"])\n  CS -->|\"content embedding\"| RET[\"retrievable by similarity\"]\n  CS -->|\"reserved explore slice\"| GRAD[\"graduated rollout,<br/>expand if it performs\"]"
+    }
+  ]
+}

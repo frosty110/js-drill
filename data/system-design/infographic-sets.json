@@ -10606,6 +10606,1221 @@
           ]
         }
       ]
+    },
+    "design-problems/p24": {
+      "title": "Proximity Service visual study set",
+      "summary": "Four sheets separate the read-optimised map from the three things that decide correctness and cost: geohash encoding, the boundary trap, and density skew.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Proximity service system map",
+          "purpose": "Show that the index is small enough to hold in memory and the cell is a natural cache key.",
+          "description": "Static places change rarely, so the whole read path can be precomputed and cached — a design that only works because the data is near-read-only.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Receive the query",
+              "detail": "Latitude, longitude, radius and attribute filters."
+            },
+            {
+              "step": 2,
+              "title": "Pick the precision",
+              "detail": "Choose the geohash length whose cell size is nearest the radius."
+            },
+            {
+              "step": 3,
+              "title": "Look up nine cells",
+              "detail": "The user cell plus its eight neighbours, from cache or index."
+            },
+            {
+              "step": 4,
+              "title": "Filter cheaply first",
+              "detail": "Category and open-now shrink the set before distance maths."
+            },
+            {
+              "step": 5,
+              "title": "Distance, sort, hydrate",
+              "detail": "Haversine filter, sort ascending, fetch full records for the page only."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Places",
+              "value": "200M",
+              "detail": "About 200 GB of records — unremarkable."
+            },
+            {
+              "label": "Geo index",
+              "value": "~6 GB",
+              "detail": "Place id plus geohash at roughly 30 bytes each: memory-resident."
+            },
+            {
+              "label": "Search load",
+              "value": "5K/sec",
+              "detail": "Only about 500 concurrent queries at a 100ms p99."
+            }
+          ],
+          "priorities": [
+            "Bounded work per query",
+            "Complete results within the radius",
+            "Aggressive caching of popular cells"
+          ],
+          "tradeoffs": [
+            "Caching only works because places are near-read-only",
+            "Sharding by prefix reintroduces density skew",
+            "Capping results bounds cost and can truncate dense areas"
+          ]
+        },
+        {
+          "id": "geohash-encoding",
+          "kind": "Mechanism",
+          "title": "Interleaving two dimensions into one sortable key",
+          "purpose": "Explain why a shared prefix means spatial proximity.",
+          "description": "Recursively bisecting longitude and latitude and interleaving the bits produces one string where prefix length is precision — so an ordinary index does spatial work.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Bisect longitude",
+              "detail": "One bit answers which half of the current range."
+            },
+            {
+              "step": 2,
+              "title": "Bisect latitude",
+              "detail": "The next bit does the same for the other axis."
+            },
+            {
+              "step": 3,
+              "title": "Alternate and recurse",
+              "detail": "Each additional bit halves a dimension again."
+            },
+            {
+              "step": 4,
+              "title": "Interleave and encode",
+              "detail": "Base32 turns the bit string into a short geohash."
+            },
+            {
+              "step": 5,
+              "title": "Match by prefix",
+              "detail": "Two points sharing a prefix are inside the same cell."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "5 characters",
+              "value": "~5 km",
+              "detail": "A good match for a city-scale radius."
+            },
+            {
+              "label": "7 characters",
+              "value": "~150 m",
+              "detail": "Street level; too fine for a wide search."
+            }
+          ],
+          "priorities": [
+            "One-dimensional keys usable by any index",
+            "Precision chosen per query",
+            "Locality preserved by construction"
+          ],
+          "tradeoffs": [
+            "Uniform cells ignore population density",
+            "Cells are rectangles while the answer is a circle",
+            "Cells are not equal-area and narrow toward the poles"
+          ]
+        },
+        {
+          "id": "boundary-problem",
+          "kind": "Failure",
+          "title": "Why you must query nine cells, not one",
+          "purpose": "Name the bug that passes casual testing and produces sporadic missing results.",
+          "description": "A shared prefix proves closeness, but closeness does not prove a shared prefix — two points metres apart can differ from the first character.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Compute the user cell",
+              "detail": "The obvious first step, and the obvious trap."
+            },
+            {
+              "step": 2,
+              "title": "Query only that cell",
+              "detail": "Everything inside is genuinely near, so results look correct."
+            },
+            {
+              "step": 3,
+              "title": "Miss across the boundary",
+              "detail": "A place 50 metres away on the other side shares no prefix."
+            },
+            {
+              "step": 4,
+              "title": "Query the eight neighbours",
+              "detail": "The correct approach covers the surrounding cells too."
+            },
+            {
+              "step": 5,
+              "title": "Filter by true distance",
+              "detail": "Convert the nine-rectangle candidate region into a circle."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Cells queried",
+              "value": "9",
+              "detail": "The user cell plus every neighbour."
+            },
+            {
+              "label": "Symptom",
+              "value": "sporadic gaps",
+              "detail": "Only affects places near boundaries, so testing rarely catches it."
+            }
+          ],
+          "priorities": [
+            "Completeness within the radius",
+            "Failures that are systematic rather than random",
+            "Exact distance as the final arbiter"
+          ],
+          "tradeoffs": [
+            "Nine cells cost more than one",
+            "Larger candidate sets need harder filtering",
+            "Neighbour computation adds edge cases at the poles and antimeridian"
+          ]
+        },
+        {
+          "id": "density-skew",
+          "kind": "Comparison",
+          "title": "Uniform cells versus adaptive subdivision",
+          "purpose": "Show why the same query costs wildly different amounts in different places.",
+          "description": "Geohash cells are the same size everywhere, so candidate-set size tracks population density; a quadtree subdivides only where density demands it.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Issue an identical query",
+              "detail": "The same radius from two different points."
+            },
+            {
+              "step": 2,
+              "title": "Hit a dense cell",
+              "detail": "A city cell can contain tens of thousands of places."
+            },
+            {
+              "step": 3,
+              "title": "Hit a sparse cell",
+              "detail": "A rural cell may contain a handful."
+            },
+            {
+              "step": 4,
+              "title": "Observe the cost gap",
+              "detail": "One code path, orders of magnitude apart in work."
+            },
+            {
+              "step": 5,
+              "title": "Adapt or bound",
+              "detail": "Finer prefixes for dense regions, or a quadtree, plus a result cap."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Dense cell",
+              "value": "~50,000 places",
+              "detail": "A 5 km radius in a major city."
+            },
+            {
+              "label": "Sparse cell",
+              "value": "~3 places",
+              "detail": "The same radius in open country."
+            }
+          ],
+          "priorities": [
+            "Predictable per-query cost",
+            "Even shard load",
+            "Latency measured per region"
+          ],
+          "tradeoffs": [
+            "Quadtrees adapt but are harder to shard and persist",
+            "Finer prefixes for cities add operational special-casing",
+            "Result caps bound cost and hide places in dense areas"
+          ]
+        }
+      ]
+    },
+    "design-problems/p25": {
+      "title": "Search Engine visual study set",
+      "summary": "Four sheets separate the shard-and-merge map from the inverted index, the immutable segment lifecycle, and the tail latency fan-out creates.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Search engine system map",
+          "purpose": "Establish that each shard is a complete index and that documents and queries scale differently.",
+          "description": "Every query fans out to every shard and merges — so more documents means more shards, and more queries means more replicas.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Analyze at index time",
+              "detail": "Tokenize, lowercase, remove stopwords, stem."
+            },
+            {
+              "step": 2,
+              "title": "Write immutable segments",
+              "detail": "Each shard holds a complete miniature index over its documents."
+            },
+            {
+              "step": 3,
+              "title": "Analyze the query identically",
+              "detail": "Any mismatch means a query token can never match its indexed form."
+            },
+            {
+              "step": 4,
+              "title": "Fan out and score locally",
+              "detail": "Each shard intersects postings and returns only its local top-K."
+            },
+            {
+              "step": 5,
+              "title": "Merge and rerank",
+              "detail": "The coordinator merges, reranks the top few hundred, and fetches the page."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Corpus",
+              "value": "1B documents",
+              "detail": "About 1 TB of raw text."
+            },
+            {
+              "label": "Index size",
+              "value": "200-300 GB",
+              "detail": "Roughly 20-30% of raw text after compression."
+            },
+            {
+              "label": "Shards",
+              "value": "5-10 primary",
+              "detail": "At around 50 GB each, replicated for query throughput."
+            }
+          ],
+          "priorities": [
+            "Query availability above indexing availability",
+            "Bounded network transfer via local top-K",
+            "Identical analysis at index and query time"
+          ],
+          "tradeoffs": [
+            "Fan-out means every shard sees every query",
+            "Local top-K is an approximation of the global ranking",
+            "Per-shard IDF differs from global IDF"
+          ]
+        },
+        {
+          "id": "inverted-index",
+          "kind": "Mechanism",
+          "title": "The inverted index and posting-list intersection",
+          "purpose": "Show why inverting the layout makes search tractable.",
+          "description": "Storing term to documents turns a query into a merge of sorted lists, and skip lists let that merge jump ahead rather than scanning every entry.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Invert the mapping",
+              "detail": "Term to posting list, not document to terms."
+            },
+            {
+              "step": 2,
+              "title": "Sort and delta-encode",
+              "detail": "Increasing document ids compress to small numbers."
+            },
+            {
+              "step": 3,
+              "title": "Intersect the lists",
+              "detail": "A multi-term AND is a merge of sorted postings."
+            },
+            {
+              "step": 4,
+              "title": "Skip ahead",
+              "detail": "Skip lists avoid scanning a common term list entry by entry."
+            },
+            {
+              "step": 5,
+              "title": "Score with BM25",
+              "detail": "Term frequency, inverse document frequency, length normalization."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Positions stored",
+              "value": "roughly 2x size",
+              "detail": "The cost of supporting phrase queries."
+            },
+            {
+              "label": "Early termination",
+              "value": "block-max WAND",
+              "detail": "Skips documents that cannot reach the top-K."
+            }
+          ],
+          "priorities": [
+            "Sublinear intersection",
+            "Compact compressed postings",
+            "Cheap first-pass scoring"
+          ],
+          "tradeoffs": [
+            "Positions double index size",
+            "Skip lists add structure to maintain",
+            "A very common term still dominates the queries it appears in"
+          ]
+        },
+        {
+          "id": "segment-lifecycle",
+          "kind": "Lifecycle",
+          "title": "Immutable segments, refresh and merge",
+          "purpose": "Show where near-real-time search comes from and what it costs.",
+          "description": "Freshness comes from sealing a small in-memory segment, not from mutating the index — and the cost is a segment count that merging has to keep bounded.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Buffer in memory",
+              "detail": "New documents accumulate without touching existing segments."
+            },
+            {
+              "step": 2,
+              "title": "Refresh to seal",
+              "detail": "The buffer becomes a small immutable segment and is searchable."
+            },
+            {
+              "step": 3,
+              "title": "Log for durability",
+              "detail": "A translog makes the document durable before it is visible."
+            },
+            {
+              "step": 4,
+              "title": "Delete by marking",
+              "detail": "An update is a deletion marker plus a reinsert, exactly like an LSM tree."
+            },
+            {
+              "step": 5,
+              "title": "Merge in the background",
+              "detail": "Small segments combine, reclaiming deleted space and bounding query cost."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Refresh interval",
+              "value": "~1 second",
+              "detail": "The freshness dial, paid for in segment count."
+            },
+            {
+              "label": "Bulk indexing",
+              "value": "suspend refresh",
+              "detail": "A standard and large speedup."
+            }
+          ],
+          "priorities": [
+            "Near-real-time visibility",
+            "Durability independent of visibility",
+            "Bounded segments per query"
+          ],
+          "tradeoffs": [
+            "Frequent refresh multiplies tiny segments",
+            "Merging competes with queries for I/O",
+            "Update-heavy corpora accumulate deleted documents"
+          ]
+        },
+        {
+          "id": "fanout-tail-latency",
+          "kind": "Failure",
+          "title": "Why p99 is the slowest shard",
+          "purpose": "Show how fan-out multiplies tail risk rather than averaging it.",
+          "description": "The coordinator waits for every shard, so one garbage-collection pause anywhere sets the latency for the whole query.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Fan out to all shards",
+              "detail": "Every query touches every shard by design."
+            },
+            {
+              "step": 2,
+              "title": "Most respond quickly",
+              "detail": "Typical shards answer in tens of milliseconds."
+            },
+            {
+              "step": 3,
+              "title": "One stalls",
+              "detail": "A GC pause or hot cache miss makes one shard slow."
+            },
+            {
+              "step": 4,
+              "title": "The coordinator waits",
+              "detail": "Total latency is the maximum, not the mean."
+            },
+            {
+              "step": 5,
+              "title": "Hedge the request",
+              "detail": "Re-send to a replica after a short delay and take the first response."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Shards",
+              "value": "10",
+              "detail": "A 1-in-100 slow shard makes roughly 1 in 10 queries slow."
+            },
+            {
+              "label": "Hedge delay",
+              "value": "~50ms",
+              "detail": "Short enough to help, long enough to avoid doubling load."
+            }
+          ],
+          "priorities": [
+            "Predictable tail latency",
+            "Redundancy used for latency, not only availability",
+            "Per-shard latency visibility"
+          ],
+          "tradeoffs": [
+            "Hedging increases total load",
+            "More shards improve capacity and worsen tail risk",
+            "Deep pagination forces every shard to return far more results"
+          ]
+        }
+      ]
+    },
+    "design-problems/p27": {
+      "title": "Live Streaming visual study set",
+      "summary": "Four sheets separate the ingest-to-edge map from the latency fork, the structural source of HLS delay, and chat fan-out arithmetic.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Live streaming system map",
+          "purpose": "Show why origin load is tiny while edge load is enormous.",
+          "description": "Each edge pulls a segment once and serves it to thousands, so origin sees a few gigabits while viewers consume terabits.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Ingest the broadcast",
+              "detail": "RTMP or SRT from the creator encoder to the nearest ingest point."
+            },
+            {
+              "step": 2,
+              "title": "Transcode in real time",
+              "detail": "One input becomes a bitrate ladder, faster than real time or not at all."
+            },
+            {
+              "step": 3,
+              "title": "Package into segments",
+              "detail": "Fixed-duration files plus a manifest listing what exists."
+            },
+            {
+              "step": 4,
+              "title": "Cache at the edge",
+              "detail": "Segments cache indefinitely; the manifest needs a very short TTL."
+            },
+            {
+              "step": 5,
+              "title": "Adapt on the client",
+              "detail": "The player picks a rendition from measured throughput at each boundary."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Viewer egress",
+              "value": "~3 Tbps",
+              "detail": "1M concurrent viewers at roughly 3 Mbps."
+            },
+            {
+              "label": "Origin egress",
+              "value": "a few Gbps",
+              "detail": "One pull per segment per edge — the whole economic argument."
+            },
+            {
+              "label": "Renditions",
+              "value": "~5",
+              "detail": "Produced in real time per broadcaster."
+            }
+          ],
+          "priorities": [
+            "Viewer scale absorbed by cache",
+            "Ingest continuity above all",
+            "Quality degradation over stalling"
+          ],
+          "tradeoffs": [
+            "Segments cache well and add latency",
+            "Caching the manifest too long freezes the stream",
+            "Viewer scale is bandwidth while broadcaster scale is compute"
+          ]
+        },
+        {
+          "id": "latency-fork",
+          "kind": "Comparison",
+          "title": "The latency target is an architectural fork",
+          "purpose": "Force the latency decision before anything else is designed.",
+          "description": "Cacheable files scale to millions for almost nothing; sub-second means a connection per viewer and cost that scales linearly with audience.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "State the target",
+              "detail": "Ten seconds, three seconds and half a second are three different systems."
+            },
+            {
+              "step": 2,
+              "title": "Segmented HTTP",
+              "detail": "Fully cacheable, marginal cost per viewer near zero."
+            },
+            {
+              "step": 3,
+              "title": "Low-latency HLS",
+              "detail": "Partial segments over chunked transfer, still mostly cacheable."
+            },
+            {
+              "step": 4,
+              "title": "WebRTC",
+              "detail": "Genuine interactivity through forwarding units, linear cost."
+            },
+            {
+              "step": 5,
+              "title": "Consider a hybrid",
+              "detail": "Interactive few on WebRTC, passive many on HLS."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "HLS",
+              "value": "10-30s",
+              "detail": "Concerts, delayed sports, talks."
+            },
+            {
+              "label": "WebRTC",
+              "value": "<500ms",
+              "detail": "Auctions, betting, two-way interaction."
+            }
+          ],
+          "priorities": [
+            "Cost per viewer at target scale",
+            "Interactivity only where it is needed",
+            "An explicit, stated decision"
+          ],
+          "tradeoffs": [
+            "Lower latency abandons HTTP caching",
+            "Hybrid paths make viewers see different moments",
+            "Smaller segments raise request rate and hurt compression"
+          ]
+        },
+        {
+          "id": "segment-latency-budget",
+          "kind": "Mechanism",
+          "title": "Where 20-30 seconds of HLS latency comes from",
+          "purpose": "Show that the delay is structural rather than slow infrastructure.",
+          "description": "A segment cannot be served until it is complete, and the player buffers several before playing — so the floor is roughly three segment durations.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Capture the moment",
+              "detail": "The camera produces frames continuously."
+            },
+            {
+              "step": 2,
+              "title": "Wait for a complete segment",
+              "detail": "An HTTP object is unservable until finished: one full segment duration."
+            },
+            {
+              "step": 3,
+              "title": "Publish and propagate",
+              "detail": "Packaging and CDN distribution add a little more."
+            },
+            {
+              "step": 4,
+              "title": "Buffer to survive jitter",
+              "detail": "Players hold about three segments before starting playback."
+            },
+            {
+              "step": 5,
+              "title": "Attack the right constraint",
+              "detail": "Low-latency HLS delivers partial segments rather than shrinking them."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "6s segments",
+              "value": "~20-30s total",
+              "detail": "One segment to build plus roughly two buffered."
+            },
+            {
+              "label": "Player buffer",
+              "value": "~3 segments",
+              "detail": "The price of not stalling on network jitter."
+            }
+          ],
+          "priorities": [
+            "Playback that does not stall",
+            "Latency understood as structural",
+            "Buffer sized to real network variance"
+          ],
+          "tradeoffs": [
+            "Shorter segments cut latency and hurt compression",
+            "Less buffering means more rebuffering events",
+            "Chunked transfer complicates caching"
+          ]
+        },
+        {
+          "id": "chat-fanout",
+          "kind": "Failure",
+          "title": "Chat fan-out at a million viewers",
+          "purpose": "Show that the naive chat design fails on arithmetic, not engineering.",
+          "description": "Inbound volume is trivial and outbound is impossible, so the reduction has to be an explicit product decision rather than a silent drop.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Count the inbound",
+              "detail": "Even a small posting rate is only hundreds per second."
+            },
+            {
+              "step": 2,
+              "title": "Multiply by the audience",
+              "detail": "Delivering each to a million viewers is hundreds of millions per second."
+            },
+            {
+              "step": 3,
+              "title": "Choose a reduction",
+              "detail": "Sample the stream, or shard viewers into rooms of a few thousand."
+            },
+            {
+              "step": 4,
+              "title": "Fan out through gateways",
+              "detail": "Pub/sub topics feed a tier of WebSocket gateway nodes."
+            },
+            {
+              "step": 5,
+              "title": "Align with video",
+              "detail": "Chat travels a faster path, so delay it to match what viewers see."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Naive outbound",
+              "value": "170M msg/sec",
+              "detail": "Arithmetically impossible, not merely expensive."
+            },
+            {
+              "label": "Connections",
+              "value": "1M WebSockets",
+              "detail": "Hundreds of gateway nodes with a memory budget per connection."
+            }
+          ],
+          "priorities": [
+            "A readable chat experience",
+            "Bounded fan-out cost",
+            "Chat and video in sync"
+          ],
+          "tradeoffs": [
+            "Sampling loses individual messages",
+            "Room sharding fragments one conversation",
+            "Delaying chat to match video makes it feel less live"
+          ]
+        }
+      ]
+    },
+    "design-problems/p28": {
+      "title": "Short-Form Video Feed visual study set",
+      "summary": "Four sheets separate the recommendation funnel from prefetching, objective design and the cold-start loop.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Short-form video feed system map",
+          "purpose": "Show that with no social graph the feed is a recommendation funnel with a feedback loop.",
+          "description": "Candidates come from the whole catalogue rather than a follow list, and the engagement firehose flowing back is the training data, not just analytics.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Generate candidates",
+              "detail": "Several retrieval sources in parallel, including a reserved exploration slice."
+            },
+            {
+              "step": 2,
+              "title": "Fetch features",
+              "detail": "User and candidate features from the online store, inside the request budget."
+            },
+            {
+              "step": 3,
+              "title": "Rank multi-objectively",
+              "detail": "Watch time plus completion, shares and explicit negative signals."
+            },
+            {
+              "step": 4,
+              "title": "Post-rank",
+              "detail": "Diversity rules, dedup against recently seen, policy filters."
+            },
+            {
+              "step": 5,
+              "title": "Return a batch",
+              "detail": "About ten ids with URLs so the client can prefetch immediately."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Views",
+              "value": "10B/day",
+              "detail": "Roughly 115K per second average."
+            },
+            {
+              "label": "Engagement events",
+              "value": "~600K/sec",
+              "detail": "Rivals the serving path and needs a streaming pipeline."
+            },
+            {
+              "label": "Feed requests",
+              "value": "~12K/sec",
+              "detail": "Batched, so far below view rate."
+            }
+          ],
+          "priorities": [
+            "Instant swipes",
+            "Diversity as a requirement",
+            "Fast personalization from a dense signal"
+          ],
+          "tradeoffs": [
+            "Richer ranking costs latency in the request path",
+            "Engagement data drives quality and creates feedback loops",
+            "Batching helps prefetch and delays reaction to fresh signals"
+          ]
+        },
+        {
+          "id": "two-stage-funnel",
+          "kind": "Mechanism",
+          "title": "Why retrieval and ranking are separate",
+          "purpose": "Show the same funnel that appears in search and RAG, and why.",
+          "description": "The accurate ranker costs about a millisecond per candidate, which fits five hundred candidates and never fits a billion.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Start from the catalogue",
+              "detail": "Billions of eligible videos, no graph to narrow them."
+            },
+            {
+              "step": 2,
+              "title": "Retrieve cheaply",
+              "detail": "ANN over embeddings, precomputed trending lists, follows."
+            },
+            {
+              "step": 3,
+              "title": "Reserve for exploration",
+              "detail": "A few percent for under-served content."
+            },
+            {
+              "step": 4,
+              "title": "Rank expensively",
+              "detail": "A deep model scores a few hundred survivors."
+            },
+            {
+              "step": 5,
+              "title": "Return the top few",
+              "detail": "Only a handful ever reach the user."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Candidates",
+              "value": "~500",
+              "detail": "What the expensive model can afford to see."
+            },
+            {
+              "label": "Reduction",
+              "value": "6-7 orders",
+              "detail": "From catalogue to candidate pool."
+            }
+          ],
+          "priorities": [
+            "Latency budget respected",
+            "Diversity beginning at retrieval",
+            "Cost per request bounded"
+          ],
+          "tradeoffs": [
+            "Cheap retrieval can miss good candidates entirely",
+            "More candidates improve quality and cost latency",
+            "Multiple sources add tuning surface"
+          ]
+        },
+        {
+          "id": "prefetch-ladder",
+          "kind": "Request flow",
+          "title": "Prefetching the swipe",
+          "purpose": "Show how the instant swipe is bought and what it costs.",
+          "description": "Partial prefetch of further-ahead videos buys instant playback while bounding the bandwidth wasted on videos the user skips past.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Return a batch, not one",
+              "detail": "A single-video response makes prefetching impossible."
+            },
+            {
+              "step": 2,
+              "title": "Fully buffer the next",
+              "detail": "The most likely next view is ready in full."
+            },
+            {
+              "step": 3,
+              "title": "Partially buffer beyond",
+              "detail": "Just the first seconds of N+2 and N+3."
+            },
+            {
+              "step": 4,
+              "title": "Start instantly on swipe",
+              "detail": "Playback begins from the prefetched head."
+            },
+            {
+              "step": 5,
+              "title": "Tune by network",
+              "detail": "Aggressive on wifi, conservative on cellular."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Prefetch depth",
+              "value": "3 videos",
+              "detail": "One full, two partial."
+            },
+            {
+              "label": "Partial head",
+              "value": "~2 seconds",
+              "detail": "Requires a keyframe at the start of each video."
+            }
+          ],
+          "priorities": [
+            "Perceived instant playback",
+            "Bounded wasted bandwidth",
+            "Respect for metered connections"
+          ],
+          "tradeoffs": [
+            "Aggressive prefetch wastes data on skipped videos",
+            "Conservative prefetch shows loading spinners",
+            "Deeper prefetch assumes the ranking will not change"
+          ]
+        },
+        {
+          "id": "objective-and-cold-start",
+          "kind": "Failure",
+          "title": "Degenerate objectives and the cold-start loop",
+          "purpose": "Show two failures that are invisible in short-term engagement metrics.",
+          "description": "Optimizing watch time alone finds attention-exploiting content, and without reserved exploration a new video can never earn the data it needs to rank.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Optimize one metric",
+              "detail": "Watch time is a genuine signal and an exploitable one."
+            },
+            {
+              "step": 2,
+              "title": "Watch the model comply",
+              "detail": "It finds sensational and repetitive content because that maximizes the target."
+            },
+            {
+              "step": 3,
+              "title": "Close the loop",
+              "detail": "What is shown becomes the training data, and the feed narrows."
+            },
+            {
+              "step": 4,
+              "title": "Counterweight the objective",
+              "detail": "Completion, shares, not-interested signals and diversity floors."
+            },
+            {
+              "step": 5,
+              "title": "Reserve exploration",
+              "detail": "New videos need impressions before they can ever earn them."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Exploration slice",
+              "value": "a few percent",
+              "detail": "The only reliable way to gather data on new items."
+            },
+            {
+              "label": "Evaluation",
+              "value": "A/B, not offline",
+              "detail": "Logged data suffers presentation bias."
+            }
+          ],
+          "priorities": [
+            "Long-term retention over session watch time",
+            "Discoverability for new creators",
+            "Diversity measured, not assumed"
+          ],
+          "tradeoffs": [
+            "Exploration costs immediate engagement",
+            "Multi-objective ranking is harder to tune and reason about",
+            "Graduated rollout slows distribution for genuinely good videos"
+          ]
+        }
+      ]
+    },
+    "design-problems/p32": {
+      "title": "Authentication & Session visual study set",
+      "summary": "Four sheets separate the verification-without-round-trip map from the statelessness tension, refresh rotation, and key rotation.",
+      "items": [
+        {
+          "id": "architecture-overview",
+          "kind": "System map",
+          "title": "Auth and session system map",
+          "purpose": "Show why an auth outage does not stop every request in the fleet.",
+          "description": "Verification is a local signature check inside the calling service, so auth must be available for login and refresh — not for every request.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Authenticate once",
+              "detail": "Credentials plus MFA, verified against a slow salted hash."
+            },
+            {
+              "step": 2,
+              "title": "Create a session",
+              "detail": "A durable record of this login on this device."
+            },
+            {
+              "step": 3,
+              "title": "Issue two credentials",
+              "detail": "A short stateless access token and a long revocable refresh token."
+            },
+            {
+              "step": 4,
+              "title": "Verify locally",
+              "detail": "Any service checks the signature against a cached public key set."
+            },
+            {
+              "step": 5,
+              "title": "Refresh periodically",
+              "detail": "Only the refresh call ever touches the auth service."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Password hash",
+              "value": "~100ms",
+              "detail": "Slow by design, which makes login CPU-bound."
+            },
+            {
+              "label": "Verification",
+              "value": "~10 microseconds",
+              "detail": "A local signature check, costing auth nothing."
+            },
+            {
+              "label": "Without stateless tokens",
+              "value": "~500K lookups/sec",
+              "detail": "What every-request verification would cost."
+            }
+          ],
+          "priorities": [
+            "Availability of the whole product",
+            "Verification off the auth critical path",
+            "Bounded revocation latency"
+          ],
+          "tradeoffs": [
+            "Stateless verification cannot be revoked directly",
+            "Cached key sets must tolerate a JWKS outage",
+            "Login capacity is CPU planning, not I/O planning"
+          ]
+        },
+        {
+          "id": "stateless-vs-revocable",
+          "kind": "Comparison",
+          "title": "The tension the two-token split resolves",
+          "purpose": "Make the central tradeoff explicit before presenting the solution.",
+          "description": "Statelessness is what makes verification free and revocation impossible, so the two properties belong on two different credentials.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Want free verification",
+              "detail": "A self-contained signed token needs no lookup."
+            },
+            {
+              "step": 2,
+              "title": "Discover the cost",
+              "detail": "There is nothing to change, so it cannot be revoked."
+            },
+            {
+              "step": 3,
+              "title": "Want instant revocation",
+              "detail": "A lookup per request gives complete control."
+            },
+            {
+              "step": 4,
+              "title": "Discover that cost too",
+              "detail": "It reintroduces the round trip the token avoided."
+            },
+            {
+              "step": 5,
+              "title": "Split the credential",
+              "detail": "Short stateless access token, long stateful refresh token."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Access token TTL",
+              "value": "5-15 minutes",
+              "detail": "This is the revocation latency."
+            },
+            {
+              "label": "Refresh token",
+              "value": "days to weeks",
+              "detail": "Opaque, stored hashed, presented only to auth."
+            }
+          ],
+          "priorities": [
+            "Free per-request verification",
+            "Revocation within a bounded window",
+            "Sensitive state kept off the hot path"
+          ],
+          "tradeoffs": [
+            "Shorter TTLs revoke faster and increase refresh traffic",
+            "Longer TTLs cut traffic and widen the theft window",
+            "A denylist restores immediacy at per-request cost"
+          ]
+        },
+        {
+          "id": "refresh-rotation",
+          "kind": "Mechanism",
+          "title": "Refresh rotation and reuse detection",
+          "purpose": "Show how theft becomes detectable rather than silent.",
+          "description": "Each refresh issues a new token and invalidates the old one, so a stolen refresh token is usable at most once and its reuse is a signal.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Present the refresh token",
+              "detail": "The only call that reaches the auth service in steady state."
+            },
+            {
+              "step": 2,
+              "title": "Issue a new pair",
+              "detail": "A fresh access token and a fresh refresh token."
+            },
+            {
+              "step": 3,
+              "title": "Invalidate the old one",
+              "detail": "The previous refresh token is now single-use and spent."
+            },
+            {
+              "step": 4,
+              "title": "Detect reuse",
+              "detail": "A spent token reappearing means someone is replaying it."
+            },
+            {
+              "step": 5,
+              "title": "Kill the family",
+              "detail": "Revoke every token in the chain and force re-login."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Reuse detections",
+              "value": "a theft signal",
+              "detail": "A spike here is the earliest warning available."
+            },
+            {
+              "label": "Storage",
+              "value": "hashed",
+              "detail": "A raw refresh token store is as sensitive as a password store."
+            }
+          ],
+          "priorities": [
+            "Stolen credentials become detectable",
+            "Blast radius limited to one token family",
+            "Step-up auth for high-value actions"
+          ],
+          "tradeoffs": [
+            "Rotation can false-positive across concurrent regions",
+            "Killing a family logs out a legitimate user too",
+            "More rotation means more refresh traffic"
+          ]
+        },
+        {
+          "id": "key-rotation",
+          "kind": "Lifecycle",
+          "title": "Rotating the signing key without logging everyone out",
+          "purpose": "Show why the overlap window is the whole mechanism.",
+          "description": "Both keys must verify for at least the lifetime of the longest outstanding token, or rotation becomes a fleet-wide forced logout.",
+          "width": 1440,
+          "height": 2280,
+          "flow": [
+            {
+              "step": 1,
+              "title": "Publish both keys",
+              "detail": "The key set contains the old and new keys together."
+            },
+            {
+              "step": 2,
+              "title": "Let verifiers refresh",
+              "detail": "Services fetch and cache the set before anything changes."
+            },
+            {
+              "step": 3,
+              "title": "Sign with the new key",
+              "detail": "Tokens carry a key id so verifiers select correctly."
+            },
+            {
+              "step": 4,
+              "title": "Wait out the overlap",
+              "detail": "Old-key tokens remain valid until they expire naturally."
+            },
+            {
+              "step": 5,
+              "title": "Retire the old key",
+              "detail": "Only once no outstanding token depends on it."
+            }
+          ],
+          "numbers": [
+            {
+              "label": "Overlap window",
+              "value": ">= longest token TTL",
+              "detail": "Retiring early invalidates live tokens."
+            },
+            {
+              "label": "Key id",
+              "value": "in the token header",
+              "detail": "What makes multi-key verification possible at all."
+            }
+          ],
+          "priorities": [
+            "Rotation without user impact",
+            "A break-glass path for key compromise",
+            "Verifiers that tolerate a stale key set"
+          ],
+          "tradeoffs": [
+            "Overlap means a compromised old key stays valid briefly",
+            "Symmetric signing would require sharing the secret everywhere",
+            "Cached key sets delay awareness of a new key"
+          ]
+        }
+      ]
     }
   }
 }

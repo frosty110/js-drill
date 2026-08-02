@@ -113,10 +113,21 @@ function _progActivityEmptyHtml(everDrilled) {
     </section>`;
 }
 
+// "Has this user EVER drilled?" — decides which empty-state copy runs. It must
+// NOT be read from `state.history` alone: history is a later addition, and
+// loadProgress (04-progress-sr.js) hands back `{}` for it on any __v 2/3/4 blob
+// or a restored older backup. Such a user has real mastery, so "No reps logged
+// yet" would flatly contradict the Mastery section further down the same page.
+// progress/reviews are the durable proof a rep happened.
+function _progEverDrilled() {
+  const nonEmpty = (o) => !!o && typeof o === 'object' && Object.keys(o).length > 0;
+  return nonEmpty(state.history) || nonEmpty(state.progress) || nonEmpty(state.reviews);
+}
+
 function _progActivityHtml(buckets) {
   // No events anywhere in the 60-day window → empty state, not empty charts.
   if (!buckets.length || buckets.every(b => b.total === 0)) {
-    return _progActivityEmptyHtml(Object.keys(state.history || {}).length > 0);
+    return _progActivityEmptyHtml(_progEverDrilled());
   }
   const last7 = buckets.slice(-7);
   const wkPass = last7.reduce((s, b) => s + b.passes, 0);

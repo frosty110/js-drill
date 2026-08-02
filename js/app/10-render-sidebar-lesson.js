@@ -795,9 +795,14 @@ function renderLesson() {
         <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Problem</div>
         <div class="text-slate-200 text-sm leading-snug">${escapeHtml(content.L3.prompt)}</div>
       </div>` : '';
+  // The disclosure has to name what's actually inside it. On L3 the PROBLEM
+  // card is suppressed (iter-26: the L3 body carries its own PROMPT box), so a
+  // row labelled "Problem" would open onto nothing but the one-line
+  // description — an affordance that lies about its payload.
+  const _briefLabel = _promptHtml ? 'Problem' : 'About this lesson';
   const _brief = _isDrillTab
     ? `<details class="lesson-brief"${_narrow ? '' : ' open'}>
-      <summary class="lesson-brief__summary"><span>Problem</span><span class="lesson-brief__chevron" aria-hidden="true">▾</span></summary>
+      <summary class="lesson-brief__summary"><span>${_briefLabel}</span><span class="lesson-brief__chevron" aria-hidden="true">▾</span></summary>
       <div class="lesson-brief__body">${_descHtml}${_promptHtml}</div>
     </details>`
     : `<div class="lesson-brief-open">${_descHtml}${_promptHtml}</div>`;
@@ -818,7 +823,7 @@ function renderLesson() {
     <!-- audit F16: the lesson page rendered ZERO <h1> — the title was an <h2>,
          so the app's most-visited destination had no document heading at all.
          Promoted to <h1>; the visual size is unchanged (same class). -->
-    <h1 class="text-2xl font-bold text-white">${escapeHtml(lesson.title)}</h1>
+    <h1 id="lesson-title" class="text-2xl font-bold text-white">${escapeHtml(lesson.title)}</h1>
     ${_brief}
     ${_isMockHere ? '' : `<div data-sparkline-slot class="mt-1">${renderSparkline(lesson.id)}</div>`}
     ${nextCta}

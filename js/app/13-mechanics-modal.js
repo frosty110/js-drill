@@ -11,6 +11,20 @@ let _mechanicsView = 'list';            // iter 63: 'list' | 'matrix' | 'detail'
 let _mechanicsPrevView = 'list';        // iter 63: which non-detail view to return to on back
 let _mechanicsSelectedId = null;        // mechanic id when view === 'detail'
 
+// audit F2: the diagnostic's mechanic-grain verdict, as a Set of
+// data/mechanics.json ids. This modal already reasons about mechanic ×
+// mastery, so the one thing it structurally could NOT know — "which idioms
+// did the 43-question diagnostic actually catch you on" — slots straight in
+// beside it. Guarded on both existence and throw: the mechanics list must
+// render identically when no diagnostic has ever been taken.
+function _diagWeakMechanicIds() {
+  if (typeof diagnosticSignal !== 'function') return new Set();
+  try {
+    const sig = diagnosticSignal();
+    return new Set((sig && sig.weakMechanics) || []);
+  } catch (e) { return new Set(); }
+}
+
 function _mechMasteryFraction(lessonIds) {
   const arr = [...lessonIds];
   const mastered = arr.filter(id => lessonOverallStatus(id) === 'mastered').length;
@@ -194,18 +208,33 @@ function _renderMechanicsListHtml() {
   // The autopilot user's "what should I drill next?" question gets answered
   // by the visually-first row instead of by scanning every card to find the
   // one with a non-zero, non-100% percent. Tier order:
+  //  -1 = diagnostic-weak, not yet complete (audit F2 — see below)
   //   0 = in-progress (0 < mastered < total)
   //   1 = untouched   (total > 0, mastered == 0)
   //   2 = complete    (total > 0, mastered == total)
   //   3 = empty       (total == 0, no lessons tagged)
   // Existing `total DESC, then alpha` becomes the tiebreaker within each tier.
-  const _tier = ({ total, mastered }) => {
+  // audit F2: a mechanic the last diagnostic caught the user on outranks the
+  // in-progress tier, because it is externally MEASURED evidence of a gap,
+  // where in-progress only means "started". Already-complete and untagged
+  // mechanics are left where they are — there is nothing to route to.
+  const diagWeak = _diagWeakMechanicIds();
+  const _isDiagWeak = ({ m, total, mastered }) =>
+    diagWeak.has(m.id) && total > 0 && mastered < total;
+  const _tier = (item) => {
+    const { total, mastered } = item;
+    if (_isDiagWeak(item)) return -1;
     if (total === 0) return 3;
     if (mastered === 0) return 1;
     if (mastered === total) return 2;
     return 0;
   };
+  const diagWeakCount = [...byCat.values()].reduce(
+    (n, items) => n + items.filter(_isDiagWeak).length, 0);
   let html = '';
+  if (diagWeakCount > 0) {
+    html += `<div style="font-size:11px; color:var(--warn); background:var(--ds-wash-accent); border:1px solid var(--ds-accent-line); border-radius:6px; padding:6px 10px; margin-bottom:10px;">⚠ ${diagWeakCount} idiom${diagWeakCount === 1 ? '' : 's'} your last diagnostic caught you on — marked ⚠ and listed first in their category.</div>`;
+  }
   for (const cat of MECHANIC_CATEGORIES) {
     const items = byCat.get(cat.id) || [];
     items.sort((a, b) => {
@@ -215,16 +244,22 @@ function _renderMechanicsListHtml() {
     });
     if (!items.length) continue;
     html += `<div data-mech-cat="${escapeHtml(cat.id)}" style="font-size:12px;text-transform:uppercase;letter-spacing:0.07em;color:#ffce5a;margin-top:14px;margin-bottom:6px;padding-left:8px;border-left:2px solid rgba(255,206,90,0.4);">${escapeHtml(cat.label)}</div>`;
-    for (const { m, total, mastered } of items) {
+    for (const item of items) {
+      const { m, total, mastered } = item;
       const empty = total === 0;
       const masteredAll = total > 0 && mastered === total;
       const badgeColor = masteredAll ? '#34d399' : (mastered > 0 ? '#ffce5a' : '#9aa0aa');
       const pct = total ? ` · ${Math.round((mastered / total) * 100)}%` : '';
       const cursor = empty ? 'default' : 'pointer';
       const opacity = empty ? '0.5' : '1';
-      html += `<button data-mech-id="${escapeHtml(m.id)}" ${empty ? 'disabled' : ''} style="text-align:left; padding:10px 12px; border-radius:8px; background:#262930; border:1px solid #363a43; color:#eef0f2; cursor:${cursor}; opacity:${opacity};">
+      // audit F2: the ⚠ says WHY this row is first — without it a promoted row
+      // just looks like an unexplained reordering of a list the user knows.
+      const diagMark = _isDiagWeak(item)
+        ? `<span style="color:var(--warn); margin-right:4px;" title="Your last diagnostic scored below your own average here">⚠</span>`
+        : '';
+      html += `<button data-mech-id="${escapeHtml(m.id)}" ${empty ? 'disabled' : ''} style="text-align:left; padding:10px 12px; border-radius:8px; background:#262930; border:1px solid ${_isDiagWeak(item) ? 'var(--ds-accent-line)' : '#363a43'}; color:#eef0f2; cursor:${cursor}; opacity:${opacity};">
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
-          <span style="font-weight:600;">${escapeHtml(m.label)}</span>
+          <span style="font-weight:600;">${diagMark}${escapeHtml(m.label)}</span>
           <span style="color:${badgeColor}; font-size:11px; white-space:nowrap;">${mastered}/${total}${pct}</span>
         </div>
       </button>`;

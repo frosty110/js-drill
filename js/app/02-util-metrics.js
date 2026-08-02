@@ -386,3 +386,252 @@ const TRACK_PILLS = {
 // Adding a new path is now a pure-data change: append an entry to data/paths.json.
 let PATHS = []; // populated by loadPaths() on boot
 
+// ──────────────────────────────────────────────────────────────────────────
+//  DIAGNOSTIC SIGNAL (audit F2)
+//  The 43-question diagnostic (diagnostic.html → localStorage
+//  `jsdrill.diagnostic.v1`) was a WRITE-ONLY SINK: asked, stored, synced to
+//  Supabase and exported for grading, but `grep -rn loadDiagnostic js/` hit
+//  only its definition in js/storage.js and the upload in js/sync.js. Nothing
+//  in js/app/* ever read it — while PROFILE.md § "Study intent — autopilot"
+//  makes the last diagnostic the thing that steers the pick ("if the last one
+//  showed complexity-pricing weak …, today's autopilot weights complexity-heavy
+//  lessons + the 🧮 Big-O drill higher"). `diagnosticSignal()` is the one
+//  reader; Home (js/app/22-home.js) and `_pickMockLessonId` are its consumers.
+//
+//  WHY A TABLE AND NOT A FUZZY MATCH: the diagnostic's taxonomy is its own —
+//  six families (Pattern Recognition / Complexity / Trade-offs / Edge Cases /
+//  Trace / Insight) that deliberately cut ACROSS the app's 29 curriculum
+//  sections, and its answer key lives inside diagnostic.html (the blob stores
+//  only `{ value, skipped }` per question id, never the key). So the mapping
+//  is written out question by question below: authored answer index + the
+//  CURRICULUM section names and data/mechanics.json ids that question is
+//  evidence about. It is a DUPLICATE of diagnostic.html's key by necessity —
+//  if a diagnostic question's `answer` is ever re-authored, this table has to
+//  move with it. Questions are keyed by id (not position), so appending a new
+//  diagnostic question is safe: it simply carries no signal until listed here.
+// ──────────────────────────────────────────────────────────────────────────
+//  Row shape: { f: family, a: authored answer index | null, sec: [], mech: [] }
+//  `a: null` marks the ten short-answer Insight questions — they are graded by
+//  a human against a rubric, so they can carry no auto-signal at all.
+const DIAGNOSTIC_QUESTIONS = {
+  // ── Pattern Recognition — "name the family". Maps 1:1 onto a section.
+  p01: { f: 'Pattern Recognition', a: 1, sec: ['Arrays & Hashing'],       mech: ['hash-complement'] },
+  p02: { f: 'Pattern Recognition', a: 0, sec: ['Sliding Window'],         mech: ['sliding-window'] },
+  p03: { f: 'Pattern Recognition', a: 1, sec: ['Greedy'],                 mech: ['greedy-single-pass'] },
+  p04: { f: 'Pattern Recognition', a: 1, sec: ['Intervals'],              mech: ['sort-then-sweep'] },
+  p05: { f: 'Pattern Recognition', a: 2, sec: ['Trees'],                  mech: ['bfs-level-snapshot'] },
+  p06: { f: 'Pattern Recognition', a: 1, sec: ['Graphs'],                 mech: ['dfs-graph-adjacency'] },
+  p07: { f: 'Pattern Recognition', a: 1, sec: ['Heap'],                   mech: ['heap-sift'] },
+  p08: { f: 'Pattern Recognition', a: 2, sec: ['Stack'],                  mech: ['array-as-stack'] },
+  p09: { f: 'Pattern Recognition', a: 1, sec: ['Linked List'],            mech: ['fast-slow-pointer'] },
+  p10: { f: 'Pattern Recognition', a: 0, sec: ['Graphs', 'Matrix'],       mech: ['dfs-grid-flood', 'four-dir-neighbors'] },
+  p11: { f: 'Pattern Recognition', a: 1, sec: ['Applied Problems'],       mech: ['array-as-queue'] },
+  p12: { f: 'Pattern Recognition', a: 2, sec: ['Tries'],                  mech: [] },
+  // ── Complexity — the "pricing" family PROFILE.md names explicitly. Each
+  //    question is priced against a concrete structure, so it maps to that
+  //    structure's section rather than to a nonexistent "Complexity" section.
+  c01: { f: 'Complexity', a: 0, sec: ['Hash Structures', 'Arrays & Hashing'], mech: ['freq-map'] },
+  c02: { f: 'Complexity', a: 1, sec: ['Trees'],                              mech: ['tree-recursion'] },
+  c03: { f: 'Complexity', a: 1, sec: ['Arrays'],                             mech: ['nested-loop-build'] },
+  c04: { f: 'Complexity', a: 1, sec: ['Heap'],                               mech: ['heap-sift'] },
+  c05: { f: 'Complexity', a: 2, sec: ['Binary Search'],                      mech: ['binary-search-interval'] },
+  c06: { f: 'Complexity', a: 0, sec: ['Dynamic Programming'],                mech: ['dp-memoization'] },
+  // ── Trade-offs — "which structure / which traversal", i.e. the choice the
+  //    Swap-Bench drill exists for.
+  t01: { f: 'Trade-offs', a: 1, sec: ['Hash Structures'],                    mech: ['freq-map', 'map-keyed-state'] },
+  t02: { f: 'Trade-offs', a: 0, sec: ['Two Pointers'],                       mech: ['two-pointer', 'sort-then-sweep'] },
+  t03: { f: 'Trade-offs', a: 1, sec: ['Graphs'],                             mech: ['bfs-level-snapshot'] },
+  t04: { f: 'Trade-offs', a: 1, sec: ['Dynamic Programming', 'Greedy'],      mech: ['dp-tabulation'] },
+  t05: { f: 'Trade-offs', a: 1, sec: ['Hash Structures'],                    mech: ['map-keyed-state'] },
+  t06: { f: 'Trade-offs', a: 1, sec: ['Trees', 'Graphs'],                    mech: ['array-as-stack', 'tree-recursion'] },
+  // ── Edge Cases — the off-by-one / trap family the Bug-Hunt drill attacks.
+  e01: { f: 'Edge Cases', a: 2, sec: ['JS Traps', 'Arrays'],                 mech: ['sort-then-sweep'] },
+  e02: { f: 'Edge Cases', a: 1, sec: ['Binary Search'],                      mech: ['binary-search-interval'] },
+  e03: { f: 'Edge Cases', a: 1, sec: ['Graphs'],                             mech: ['dfs-graph-adjacency', 'set-dedup'] },
+  e04: { f: 'Edge Cases', a: 0, sec: ['Sliding Window'],                     mech: ['sliding-window'] },
+  e05: { f: 'Edge Cases', a: 1, sec: ['Linked List', 'JS Traps'],            mech: ['linked-list-walk'] },
+  // ── Trace — read code, predict output / price it. The Crystal-ball drill.
+  r01: { f: 'Trace', a: 1, sec: ['Basics'],                                  mech: [] },
+  r02: { f: 'Trace', a: 0, sec: ['Hash Structures'],                         mech: ['set-dedup'] },
+  r03: { f: 'Trace', a: 2, sec: ['Arrays'],                                  mech: ['nested-loop-build'] },
+  r04: { f: 'Trace', a: 1, sec: ['Binary Search'],                           mech: ['binary-search-interval'] },
+  // ── Insight — ten short answers, human-graded against a rubric. Listed so
+  //    this table stays a complete mirror of the question bank, but `a: null`
+  //    keeps them out of every tally: an ungradeable answer is not evidence.
+  s01: { f: 'Insight', a: null, sec: [], mech: [] },
+  s02: { f: 'Insight', a: null, sec: [], mech: [] },
+  s03: { f: 'Insight', a: null, sec: [], mech: [] },
+  s04: { f: 'Insight', a: null, sec: [], mech: [] },
+  s05: { f: 'Insight', a: null, sec: [], mech: [] },
+  s06: { f: 'Insight', a: null, sec: [], mech: [] },
+  s07: { f: 'Insight', a: null, sec: [], mech: [] },
+  s08: { f: 'Insight', a: null, sec: [], mech: [] },
+  s09: { f: 'Insight', a: null, sec: [], mech: [] },
+  s10: { f: 'Insight', a: null, sec: [], mech: [] },
+};
+
+// "Weak" is RELATIVE, never absolute: a section counts as weak when the user
+// scored at least 15 points below their OWN average on that same sitting. An
+// absolute cut (e.g. <50%) would flag half the diagnostic for a rusty user and
+// nothing at all for a sharp one — in both cases telling them what they already
+// knew instead of where to spend the next 20 minutes.
+const DIAG_WEAK_MARGIN = 0.15;
+// Below this many graded questions the user's "own average" isn't a baseline,
+// it's one coin flip — so we report the score and stay silent about weakness.
+const DIAG_MIN_GRADED = 6;
+const DIAG_MAX_WEAK_SECTIONS = 6;
+const DIAG_MAX_WEAK_MECHANICS = 8;
+
+// Read the blob defensively. `js/storage.js` owns localStorage I/O for every
+// page (see CLAUDE.md § Shared UI + storage contract), so go through it when
+// it's there; the direct read is the fallback for a load-order or probe
+// context where DrillStorage hasn't mounted. Any throw / corrupt JSON means
+// "no diagnostic", never an exception into a render path.
+function _diagnosticBlob() {
+  try {
+    if (typeof window !== 'undefined' && window.DrillStorage &&
+        typeof window.DrillStorage.loadDiagnostic === 'function') {
+      return window.DrillStorage.loadDiagnostic();
+    }
+    if (typeof localStorage !== 'undefined') {
+      return JSON.parse(localStorage.getItem('jsdrill.diagnostic.v1') || 'null');
+    }
+  } catch (e) { /* corrupt or unreadable → treated as "never taken" */ }
+  return null;
+}
+
+// ISO-8601 string (what diagnostic.html writes) → epoch ms, or null.
+function _diagTime(iso) {
+  if (typeof iso !== 'string') return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
+}
+
+// MC answers are stored as the option INDEX. Accept a numeric string too —
+// a future input path could round-trip it through a dataset attribute.
+function _diagPick(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value)) return Number(value);
+  return null;
+}
+
+// audit F2 — the single reader of `jsdrill.diagnostic.v1`.
+// Returns { takenAt, score, weakSections, weakMechanics }; a missing or
+// malformed blob returns the all-null/empty shape rather than throwing, so
+// every caller can render unconditionally. Pure (no writes, no state reads).
+//
+// SKIPPED COUNTS AS WRONG. The diagnostic's own intro tells the user "If you
+// genuinely don't know, skip it — that's signal. Don't random-guess", so a
+// skip is a deliberate admission of not-knowing and is the cleanest evidence
+// in the whole blob. Counting it as wrong is what makes honest skipping pay
+// off; counting it as unattempted would reward it with silence.
+// UNTOUCHED questions (no entry at all) are excluded from the denominator —
+// the diagnostic is resumable, so "never reached" is not evidence.
+//
+// weakSections carries TWO GRAINS, worst-first within each: the CURRICULUM
+// section names this app can act on (drill weighting, Home copy), then the
+// diagnostic's own family names lowercased ('complexity', 'edge cases', …),
+// which is the grain a whole DRILL maps to (complexity → Big-O, edge cases →
+// Bug-Hunt). Consumers take the first entry they recognise. weakMechanics is
+// single-grain: data/mechanics.json ids.
+//
+// Not memoized on purpose: one JSON.parse of a <10KB blob plus a 43-entry walk
+// is cheaper than the staleness bug a cache would introduce when the user
+// finishes the diagnostic in the other tab.
+function diagnosticSignal() {
+  const empty = { takenAt: null, score: null, weakSections: [], weakMechanics: [] };
+  const blob = _diagnosticBlob();
+  if (!blob || typeof blob !== 'object') return empty;
+  const answers = (blob.answers && typeof blob.answers === 'object' && !Array.isArray(blob.answers))
+    ? blob.answers : null;
+  if (!answers) return empty;
+
+  const secTally = new Map(), mechTally = new Map(), famTally = new Map();
+  const tally = (map, key, ok) => {
+    const row = map.get(key) || { correct: 0, total: 0 };
+    row.total++;
+    if (ok) row.correct++;
+    map.set(key, row);
+  };
+
+  let correct = 0, total = 0, takenAt = null;
+  for (const qid of Object.keys(DIAGNOSTIC_QUESTIONS)) {
+    const q = DIAGNOSTIC_QUESTIONS[qid];
+    const a = answers[qid];
+    if (!a || typeof a !== 'object') continue;
+    const at = _diagTime(a.lastAnsweredAt) || _diagTime(a.firstAnsweredAt);
+    if (at !== null && (takenAt === null || at > takenAt)) takenAt = at;
+    if (q.a === null) continue;                       // short answer — no key
+    const skipped = a.skipped === true;
+    const picked = skipped ? null : _diagPick(a.value);
+    if (!skipped && picked === null) continue;        // entry exists, no pick
+    const ok = !skipped && picked === q.a;
+    total++;
+    if (ok) correct++;
+    for (const s of q.sec) tally(secTally, s, ok);
+    for (const m of q.mech) tally(mechTally, m, ok);
+    tally(famTally, q.f.toLowerCase(), ok);
+  }
+  // Per-answer timestamps are the truth, but a legacy blob may lack them —
+  // fall back to the sitting's start so a real score still reports an age.
+  if (takenAt === null && total > 0) takenAt = _diagTime(blob.startedAt);
+  if (takenAt === null && total === 0) return empty;  // opened, never engaged
+
+  const out = { takenAt, score: total > 0 ? { correct, total } : null, weakSections: [], weakMechanics: [] };
+  if (total < DIAG_MIN_GRADED) return out;
+
+  const avg = correct / total;
+  const weakest = (map, cap) => {
+    const rows = [];
+    for (const [key, t] of map) {
+      const rate = t.correct / t.total;
+      if (rate <= avg - DIAG_WEAK_MARGIN) rows.push({ key, rate, total: t.total });
+    }
+    // Rank by EVIDENCE-WEIGHTED deficit, not by raw rate. Bucket sizes here are
+    // wildly uneven — Graphs carries 5 questions, Matrix and Tries carry 1 each
+    // — so a rate-first sort makes a single missed question outrank four missed
+    // out of five (0/1 = rate 0 beats 1/5 = rate 0.2). weakSections[0] is what
+    // Home prints as the headline and what the mock picker biases toward, so
+    // that inversion is user-visible: "Matrix weakest" after bombing Graphs.
+    // (avg − rate) × total is "how many questions below par", which ranks the
+    // section the user actually lost the most ground on first. Membership is
+    // unchanged — still the relative-margin test above. More evidence, then
+    // alphabetical, break ties so the list is stable across calls.
+    const deficit = r => (avg - r.rate) * r.total;
+    rows.sort((x, y) => deficit(y) - deficit(x) || y.total - x.total || x.key.localeCompare(y.key));
+    return rows.slice(0, cap).map(r => r.key);
+  };
+  out.weakSections = weakest(secTally, DIAG_MAX_WEAK_SECTIONS)
+    .concat(weakest(famTally, DIAG_MAX_WEAK_SECTIONS));
+  out.weakMechanics = weakest(mechTally, DIAG_MAX_WEAK_MECHANICS);
+  return out;
+}
+
+// audit F2 — the ONE curriculum section the diagnostic says to bias toward,
+// or null. Scans weakSections (already worst-first) for the first name that is
+// a real CURRICULUM section, so the family-name grain is skipped harmlessly.
+// Deliberately singular: diagnostic.html's own results page picks a single
+// weakest section, and boosting all six would flatten into "everything is
+// weak" — which is the same as no signal, minus the interleaving.
+//
+// `isUsable(sectionName)` is an optional caller-supplied filter, and it is not
+// cosmetic. The diagnostic's questions map onto BOTH tracks — four of the
+// nineteen mapped sections (Basics, Arrays, Hash Structures, JS Traps) are
+// syntax-only. A consumer that can only act on one track (the mock interview
+// is Patterns-only) would otherwise get handed "Hash Structures", match zero
+// lessons, and silently apply no bias at all — even when weakSections also
+// names Graphs two entries down. Skipping past sections the caller cannot use
+// keeps the signal alive instead of dropping it on the floor.
+function _diagnosticWeakestCurriculumSection(isUsable) {
+  let sig;
+  try { sig = diagnosticSignal(); } catch (e) { return null; }
+  if (!sig || !sig.weakSections.length) return null;
+  const known = new Set((typeof CURRICULUM !== 'undefined' ? CURRICULUM : []).map(l => l.section));
+  for (const name of sig.weakSections) {
+    if (!known.has(name)) continue;                       // family grain — skip
+    if (typeof isUsable === 'function' && !isUsable(name)) continue;
+    return name;
+  }
+  return null;
+}
+

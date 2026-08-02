@@ -9,10 +9,19 @@
 //
 //   node tools/check-all.js          verify everything (pre-commit / CI)
 //   node tools/check-all.js --fix    regenerate what is generated, then verify
+//   node tools/check-all.js --probes …and then drive the durable browser probes
 //
-// Browser probes are deliberately NOT included — they need Chrome on :9222 and
-// take minutes. Run those before shipping anything user-facing:
-//   node tools/cdp/share-urls.js · node tools/cdp/home-nav.js · tools/cdp/ds-page-frame.js
+// The DEFAULT run is deliberately browser-free: it is what .githooks/pre-commit
+// and .github/workflows/checks.yml execute, so it has to stay fast and to need
+// nothing but node. Do not add a browser step to either.
+//
+// audit F19: leaving the browser probes out of every runner made them invisible
+// — two sat red for weeks because nothing ever ran them. `--probes` is the
+// opt-in suite: same gates, then each durable probe in turn with a per-probe
+// verdict. Run it before shipping anything user-facing (it needs Chrome on
+// :9222 — the probes bootstrap the server and the browser themselves — and
+// takes a few minutes). A probe that has to be red for a known, tracked reason
+// belongs in a finding, not in a comment here.
 // ============================================================================
 
 const { spawnSync } = require('child_process');
@@ -20,6 +29,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const FIX = process.argv.includes('--fix');
+const PROBES = process.argv.includes('--probes');
 
 // Ordered cheapest-first so a fast failure fails fast. `fix` is the command to
 // run instead when --fix is passed (a generator rather than its --check).
@@ -33,6 +43,26 @@ const GATES = [
   { name: 'system design',       cmd: ['tools/validate-system-design.js'] },
   { name: 'crawlable pages',     cmd: ['tools/build-share-pages.js', '--check'], fix: ['tools/build-share-pages.js'] }
 ];
+
+// The durable browser probes — the ones that are the standing regression net
+// for a whole surface, as opposed to the one-shot `refine-*` / `audit-*`
+// scripts in tools/cdp/ kept around as evidence for a single iteration. Each one
+// bootstraps its own server + Chrome and exits with a real status code, so the
+// suite is just "run them in order". Append a row when you add a durable probe.
+const PROBE_SUITE = [
+  { name: 'app boot smoke',      cmd: ['tools/cdp/appsplit-smoke.js'] },
+  { name: 'ds page frame',       cmd: ['tools/cdp/ds-page-frame.js'] },
+  { name: 'home + review nav',   cmd: ['tools/cdp/home-nav.js'] },
+  { name: 'share URLs',          cmd: ['tools/cdp/share-urls.js'] },
+  { name: 'sd study plans',      cmd: ['tools/cdp/sd-plans.js'] },
+  { name: 'sd tags + nav',       cmd: ['tools/cdp/sd-tags-nav.js'] },
+  { name: 'sync merge rules',    cmd: ['tools/cdp/sync-merge.js'] }
+];
+
+// A probe that wedges (Chrome never answers, a waitFor never resolves) would
+// otherwise hang the whole suite silently; cap each one and report the timeout
+// as the failure it is.
+const PROBE_TIMEOUT_MS = 6 * 60 * 1000;
 
 const results = [];
 let failed = 0;
@@ -58,3 +88,40 @@ if (failed) {
   process.exit(1);
 }
 console.log(`\n✓ all ${GATES.length} gates pass.${FIX ? ' Generated output refreshed — commit it with your change.' : ''}`);
+
+// `return`, not `process.exit(0)`: this is the DEFAULT path (pre-commit / CI),
+// and process.exit tears the process down without flushing pending stdout
+// writes — which are asynchronous when stdout is a pipe on macOS, so a piped
+// `check-all` run could lose the summary it just printed. Falling off the end
+// of the module exits 0 the same way, after the flush. (Top-level return is
+// legal here: CommonJS wraps the file in a function.)
+if (!PROBES) return;
+
+// ── Opt-in browser suite (audit F19) ────────────────────────────────────────
+// Streamed rather than captured: each probe prints its own assertion lines and
+// a run takes minutes, so swallowing the output until the end would look hung.
+console.log(`\n━━ browser probes (${PROBE_SUITE.length}) ━━`);
+console.log('Needs Chrome on :9222 — the probes start it and the server themselves.\n');
+
+const probeResults = [];
+let probesFailed = 0;
+
+for (const probe of PROBE_SUITE) {
+  console.log(`\n──── ${probe.name} · ${probe.cmd[0]} ────`);
+  const r = spawnSync(process.execPath, probe.cmd, {
+    cwd: ROOT, stdio: 'inherit', timeout: PROBE_TIMEOUT_MS
+  });
+  const timedOut = r.error && r.error.code === 'ETIMEDOUT';
+  const ok = !timedOut && r.status === 0;
+  if (!ok) probesFailed++;
+  probeResults.push({ name: probe.name, ok, note: timedOut ? ' (timed out)' : (r.error ? ` (${r.error.message})` : '') });
+}
+
+console.log('\n━━ probe summary ━━');
+for (const p of probeResults) console.log(`  ${p.ok ? '✓' : '✗'} ${p.name}${p.note}`);
+
+if (probesFailed) {
+  console.error(`\n✗ ${probesFailed} of ${PROBE_SUITE.length} browser probes failed.`);
+  process.exit(1);
+}
+console.log(`\n✓ all ${PROBE_SUITE.length} browser probes pass.`);

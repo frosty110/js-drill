@@ -4,12 +4,20 @@
 // visitor landed INSIDE Basics lesson 1 with no map, and a returning user
 // never saw an overview of where they stood. Home is the launchpad:
 //
-//   greeting + streak → CONTINUE hero → ⟲ Review all due
+//   greeting + streak (+ diagnostic chip) → CONTINUE hero
+//   → due / weak / today stat row → ⟲ Review all due
 //   → three AREA cards (Coding · Syntax · System Design), each with
 //     mastery meter, due count, Continue + scoped Review
 //   → each area expands into its SUBCATEGORIES (17/11 sections, 4 SD topics)
 //     with the same two affordances per row
 //   → More (Today's plan · Practice · Diagnostic · Progress)
+//
+// Home is the app's SINGLE front door (audit F5). The Today-home page used to
+// render the same greeting/clock/streak/hero for the same lesson and took the
+// same nav rung; it is retired to a delegation (17-today-home.js) and the one
+// thing it had that Home didn't — the ambient due/weak/today read — lives here
+// now. "Today's plan" means exactly one surface everywhere: the modal
+// (#today-btn), which is the full queue (audit F6).
 //
 // Two affordances, one meaning each — the rule that keeps the page readable:
 //   · Continue = FORWARD progress. First non-mastered lesson in authored
@@ -267,6 +275,103 @@ function _homeDuePill(n) {
   return n > 0 ? `<span class="ds-chip ds-chip--warn home-due">${n} due</span>` : '';
 }
 
+// ── Diagnostic signal (audit F2) ───────────────────────────────────────────
+// The 43-question diagnostic (diagnostic.html, jsdrill.diagnostic.v1) was a
+// write-only sink: it was asked, stored and synced, and nothing in js/app/*
+// ever read it — while PROFILE.md § "Study intent — autopilot" makes the last
+// diagnostic's per-section result the thing that steers what gets weighted
+// ("if the last one showed complexity-pricing weak, weight the 🧮 Big-O drill
+// higher"). Home is where that belongs: ONE chip, ONE tap, straight into the
+// drill that attacks the weakest area — not a second decision in the hero,
+// which keeps exactly one primary action (PROFILE: "press one thing → you're
+// drilling").
+//
+// Keys are the diagnostic's own section names, lowercased; the values are the
+// canonical launcher buttons the rest of the app already routes through.
+const HOME_DIAG_ROUTES = {
+  'complexity':          { btn: 'big-o-btn',     label: 'Big-O drill' },
+  'pattern recognition': { btn: 'recognize-btn', label: 'Recognize drill' },
+  'trace':               { btn: 'crystal-btn',   label: 'predict-the-output drill' },
+  'edge cases':          { btn: 'bug-hunt-btn',  label: 'Bug-Hunt drill' },
+  'trade-offs':          { btn: 'swap-btn',      label: 'Swap-Bench drill' },
+  'insight':             { btn: 'gotcha-btn',    label: 'crux-recall drill' },
+};
+
+// diagnosticSignal() lives in 02-util-metrics.js. Guarded on both existence
+// and throw so Home still renders if slice load order ever changes — a missing
+// diagnostic must degrade to "no chip", never to a blank front door.
+function _homeDiagSignal() {
+  if (typeof diagnosticSignal !== 'function') return null;
+  try { return diagnosticSignal() || null; } catch (_) { return null; }
+}
+
+// Weakest-first, so the first key that names a drill wins. Mechanic slugs are
+// de-slugged before lookup ('edge-cases' → 'edge cases') so either grain of
+// the signal can resolve to a route.
+function _homeDiagRoute(sig) {
+  const keys = (sig.weakSections || []).map(s => String(s).toLowerCase())
+    .concat((sig.weakMechanics || []).map(m => String(m).toLowerCase().replace(/[-_]+/g, ' ')));
+  // The matched KEY travels with the route: the chip has to name the thing the
+  // tap actually opens. weakSections[0] is a CURRICULUM section name whenever
+  // any section is weak ('Binary Search'), and no section name is routable —
+  // only the family names appended after them are — so labelling the chip
+  // weakSections[0] made the common case read "Binary Search weakest" and then
+  // open the Bug-Hunt drill.
+  for (const k of keys) if (HOME_DIAG_ROUTES[k]) return { ...HOME_DIAG_ROUTES[k], key: k };
+  return null;
+}
+
+function _homeDiagAge(takenAt) {
+  const days = Math.max(0, Math.round((Date.now() - takenAt) / 86400000));
+  return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+// The header chip. Rendered only when a diagnostic has actually been taken —
+// the never-taken case is offered by the (single, quiet) Diagnostic row in
+// More, so the offer is never duplicated and the hero never moves down the
+// page for a first-time visitor.
+function _homeDiagHtml(sig) {
+  if (!sig || !sig.takenAt) return '';
+  const weakest = (sig.weakSections || [])[0] || (sig.weakMechanics || [])[0] || '';
+  const score = sig.score ? `${sig.score.correct}/${sig.score.total}` : '';
+  const route = weakest ? _homeDiagRoute(sig) : null;
+  // Label the area the tap drills, so the chip's copy and its action agree.
+  const named = route ? route.key : weakest;
+  const text = named ? `Diagnostic: ${named} weakest` : `Diagnostic: ${score || 'done'}`;
+  const title = `Diagnostic taken ${_homeDiagAge(sig.takenAt)}` +
+    (score ? ` · scored ${score}` : '') +
+    (route ? ` · opens the ${route.label}` : ' · tap to retake');
+  const inner = `${dsIcon('target', 13)}${escapeHtml(text)}`;
+  // With a route the chip is a button that fires the canonical launcher;
+  // without one there is nothing to drill at, so it degrades to a retake link.
+  return route
+    ? `<p class="home-diag"><button class="ds-chip ds-chip--warn home-diag__chip"
+         data-home-diag="${escapeHtml(route.btn)}" title="${escapeHtml(title)}">${inner}</button></p>`
+    : `<p class="home-diag"><a class="ds-chip home-diag__chip" href="diagnostic.html"
+         title="${escapeHtml(title)}">${inner}</a></p>`;
+}
+
+// audit F5 — the one thing the retired Today-home page had that Home lacked:
+// the ambient due / weak / today read. Static tiles, not buttons: every one of
+// these numbers already has its action elsewhere on this page (⟲ Review all
+// due right below, the track cards' own ⟲), and a third tappable copy is
+// exactly the "several simultaneous options" friction PROFILE.md § Cognitive
+// style names.
+function _homeStatsHtml(dueTotal, passesToday) {
+  const weak = Object.keys(state.weakness || {}).filter(k => state.weakness[k]).length;
+  // Three zeroes is chrome, not information (the empty-state rule in
+  // docs/ui-ux-guide.md § States, and the same "rendered only where there's
+  // work" rule the ⟲ buttons already follow). A brand-new user sees the hero
+  // and the tracks, not a row of noughts.
+  if (!dueTotal && !weak && !passesToday) return '';
+  return `
+    <div class="home-stats">
+      <div class="ds-stat${dueTotal ? ' ds-stat--accent' : ''}"><b>${dueTotal}</b><span>Due</span></div>
+      <div class="ds-stat"><b>${weak}</b><span>Weak</span></div>
+      <div class="ds-stat"><b>${passesToday}</b><span>Today</span></div>
+    </div>`;
+}
+
 function _homeHeroHtml() {
   // The global Continue: the lesson the user was last on (if there's still
   // work in it), else today's plan pick, else the first thing in the path.
@@ -416,9 +521,12 @@ function _homeAreaCardHtml(area) {
     </div>`;
 }
 
-function _homeMoreHtml() {
+function _homeMoreHtml(sig) {
   const rows = [
-    { btn: 'today-home-btn', icon: 'clock', label: "Today's plan", sub: 'The full due + path + weak queue' },
+    // audit F6 — one label, one surface. This row used to fire #today-home-btn
+    // (a PAGE) while the Practice launcher's identically-labelled row fired
+    // #today-btn (the MODAL); the modal is the full queue, so both point at it.
+    { btn: 'today-btn', icon: 'clock', label: "Today's plan", sub: 'The full due + path + weak queue' },
     { btn: 'practice-launcher-btn', icon: 'zap', label: 'Practice', sub: 'Drills, streams, mock interview' },
     { btn: 'dashboard-btn', icon: 'chart', label: 'Progress', sub: 'Activity, mastery, what to fix first' },
   ];
@@ -428,10 +536,17 @@ function _homeMoreHtml() {
       <div class="ds-row__main"><b>${escapeHtml(r.label)}</b><span>${escapeHtml(r.sub)}</span></div>
       <span class="ds-row__chev">›</span>
     </div>`).join('');
+  // audit F2 — this is also the never-taken case's single quiet OFFER: say what
+  // the 43 questions buy the user (they steer the chip above), rather than
+  // describing the page. Once taken, the row reports the signal's freshness so
+  // a stale reading is visible instead of silently steering.
+  const diagSub = sig && sig.takenAt
+    ? `Last taken ${_homeDiagAge(sig.takenAt)}${sig.score ? ` · scored ${sig.score.correct}/${sig.score.total}` : ''} — retake`
+    : '43 questions — they steer what this page puts first';
   const diag = `
     <a class="ds-row" href="diagnostic.html">
       <span class="ds-row__badge" aria-hidden="true">${dsIcon('target', 16)}</span>
-      <div class="ds-row__main"><b>Diagnostic</b><span>43-question self-assessment — find the gaps</span></div>
+      <div class="ds-row__main"><b>Diagnostic</b><span>${escapeHtml(diagSub)}</span></div>
       <span class="ds-row__chev">›</span>
     </a>`;
   return `
@@ -481,19 +596,30 @@ function openHome() {
     ? `<button class="ds-btn ds-btn--subtle ds-btn--block home-reviewall" data-home-review="all">${dsIcon('refresh', 15)}Review all ${dueTotal} due</button>`
     : '';
 
+  // Home is a full-page destination, so it wears the shared page frame
+  // (docs/ui-ux-guide.md § 3 / ds/components.css) like Browse and Progress:
+  // .ds-page column, one <h1> inside .ds-page__head. It hand-rolled its own
+  // topline/greeting/subline before, which is exactly the drift the frame
+  // exists to prevent — and it kept the front door out of the
+  // tools/cdp/ds-page-frame.js probe.
+  const diagSig = _homeDiagSignal();
   shell.innerHTML = `
-    <div class="ds-root home-page">
-      <div class="home-topline">
-        <span class="ds-dim home-date">${escapeHtml(dateLine)}</span>
-        ${streakChip}
-      </div>
-      <h1 class="ds-title home-greeting">${greeting}</h1>
-      <p class="ds-dim home-subline">${escapeHtml(subLine)}</p>
+    <div class="ds-root ds-page home-page">
+      <header class="ds-page__head">
+        <div class="ds-page__meta">
+          <span class="home-date">${escapeHtml(dateLine)}</span>
+          ${streakChip}
+        </div>
+        <div class="ds-page__titlerow"><h1 class="ds-title home-greeting">${greeting}</h1></div>
+        <p class="ds-page__sub home-subline">${escapeHtml(subLine)}</p>
+      </header>
+      ${_homeDiagHtml(diagSig)}
       ${_homeHeroHtml()}
+      ${_homeStatsHtml(dueTotal, passesToday)}
       ${reviewAllHtml}
       <p class="ds-label home-sectionlabel">Tracks</p>
       ${HOME_AREAS.map(_homeAreaCardHtml).join('')}
-      ${_homeMoreHtml()}
+      ${_homeMoreHtml(diagSig)}
     </div>`;
 
   // Lazy-enrich the hero with the lesson's one-line description (manifest
@@ -506,7 +632,14 @@ function openHome() {
     }).catch(() => {});
   }
 
-  _wireHome(shell);
+  // Bind the delegated listeners to the RENDERED root, never to #lesson-shell:
+  // openHome() re-renders (the System Design rollup lands, and every expand
+  // toggle re-renders), while #lesson-shell survives all of it — so binding
+  // there stacked one more listener per render. Two stacked handlers make the
+  // expand toggle flip itself back to where it started (an even number of
+  // toggles per click), i.e. a dead button. innerHTML replaces this node, so
+  // its listeners go with it. Same pattern as Browse (19-browse.js).
+  _wireHome(shell.querySelector('.home-page') || shell);
   const main = document.querySelector('.app-main');
   if (main) main.scrollTop = 0;
 }
@@ -520,8 +653,11 @@ function _homeGoContinue(slug) {
   selectTab(target.level);
 }
 
-function _wireHome(shell) {
-  shell.addEventListener('click', (e) => {
+// `root` is the freshly rendered .home-page node, NOT #lesson-shell — see the
+// call site. Everything here is delegated, so one listener per render is enough
+// and the node's removal is the teardown.
+function _wireHome(root) {
+  root.addEventListener('click', (e) => {
     const start = e.target.closest('[data-home-start]');
     if (start) {
       selectLesson(start.getAttribute('data-home-start'));
@@ -551,13 +687,22 @@ function _wireHome(shell) {
       if (card && state.homeOpen[key]) card.scrollIntoView({ block: 'nearest' });
       return;
     }
+    // audit F2 — the diagnostic chip routes into the drill that attacks the
+    // weakest area. Falls back to the diagnostic itself if the launcher this
+    // build maps to has since been retired, so the chip is never a dead tap.
+    const diag = e.target.closest('[data-home-diag]');
+    if (diag) {
+      const btn = document.getElementById(diag.getAttribute('data-home-diag'));
+      if (btn) btn.click(); else window.location.href = 'diagnostic.html';
+      return;
+    }
     const mode = e.target.closest('[data-home-mode]');
     if (mode) {
       const btn = document.getElementById(mode.getAttribute('data-home-mode'));
       if (btn) btn.click();
     }
   });
-  shell.addEventListener('keydown', (e) => {
+  root.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const row = e.target.closest('[data-home-mode]');
     if (row) { e.preventDefault(); row.click(); }

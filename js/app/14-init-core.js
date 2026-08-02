@@ -318,6 +318,13 @@ async function initBootstrap() {
   if (state.currentLessonId) syncBinderToLesson(state.currentLessonId);
   renderSidebar();
   renderLesson();
+  // audit F12: booting on a hash whose lesson id doesn't resolve used to fall
+  // back to lastLessonId and then rewrite the URL, so a dead shared link landed
+  // the recipient on an unrelated lesson with no signal that anything was
+  // wrong. Must run BEFORE _updateHash — the page it paints carries no
+  // [data-lesson-root], which is what makes the F10 guard leave the bad id in
+  // the URL for the user to see. Self-checking: no-op unless the id is dead.
+  showLessonNotFoundIfDeadLink(hashRoute);
   _updateHash();
   // Listen for browser back/forward + paste-new-URL navigation. replaceState
   // (used internally by selectLesson/selectTab) does NOT fire this event, so

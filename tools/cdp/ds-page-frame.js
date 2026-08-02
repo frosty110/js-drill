@@ -1,5 +1,5 @@
 // tools/cdp/ds-page-frame.js — page-frame + nav invariants across the three
-// full-page destinations (Today · Browse · Progress), at both viewports.
+// full-page destinations (Home · Browse · Progress), at both viewports.
 //
 // This is the executable half of docs/ui-ux-guide.md § 3 (Page frame) and
 // § 2 (Navigation model). Every full-page surface must:
@@ -20,8 +20,16 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
 const OUT = process.argv[2] || '/tmp/jsdrill-ds-page-frame';
 
 // [label, launcher button, expected nav aria-current key]
+//
+// `['today', '#today-home-btn', 'today']` used to lead this list and was the
+// probe's one red assertion on both viewports: Today-home rendered a page but
+// 16-ds-nav.js mapped it to the `home` nav key, so aria-current could never
+// say "today" (audit F5). That page is retired — #today-home-btn now delegates
+// to Home — so Today is no longer a distinct destination and Home takes the
+// row. Every other assertion below is unchanged and now runs over the app's
+// actual front door.
 const PAGES = [
-  ['today', '#today-home-btn', 'today'],
+  ['home', '#home-btn', 'home'],
   ['browse', '#browse-btn', 'browse'],
   ['progress', '#dashboard-btn', 'progress'],
 ];

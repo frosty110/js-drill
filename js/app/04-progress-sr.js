@@ -16,30 +16,78 @@ function _invalidateStarterPathCache() {
   _activeStarterPathCacheKey = null;
 }
 
+// ── Persisted-blob shape guards (audit F24) ────────────────────────────────
+// loadProgress() used to TRUST the blob: `state.history = parsed.history || {}`
+// handed an ARRAY straight through to _heatstripCells(), whose inner
+// `for (const e of events)` throws on a non-iterable member. That throw escapes
+// init(), so one malformed field leaves the whole app half-initialised (no nav,
+// no lesson) with no recovery except clearing site data. Blobs reach us from
+// cross-device sync, from restore-from-JSON, from hand-edits and from older or
+// newer builds, so "well-formed" is not a safe assumption at the boundary.
+//
+// The guards below reject ONLY what the readers genuinely cannot consume; a
+// well-formed field is never discarded, and a single bad row never costs the
+// user the rest of the collection.
+function _blobMap(v) {
+  // Arrays are `typeof 'object'` too — precisely the hole that bit us. Every
+  // collection in this blob is a keyed map (lessonId → …), never a list.
+  return (v && typeof v === 'object' && !Array.isArray(v)) ? v : null;
+}
+function _blobMapOf(v, ok) {
+  // Keyed map whose VALUES must satisfy `ok`. Entries are filtered one at a
+  // time so a single corrupt lesson row can't wipe the user's history.
+  const src = _blobMap(v);
+  if (!src) return {};
+  const out = {};
+  for (const k of Object.keys(src)) if (ok(src[k])) out[k] = src[k];
+  return out;
+}
+const _isBlobObj = (v) => !!_blobMap(v);
+function _blobEventMap(v) {
+  // Keyed map of EVENT LISTS (history / misses). `Array.isArray` alone is not
+  // enough: _heatstripCells() reads `e.at` off each element with no null check
+  // (js/app/02-util-metrics.js), so a null/undefined ELEMENT inside an
+  // otherwise well-formed array throws the same uncaught TypeError that the
+  // array-for-a-map case did — same crash, one level down. Strip the holes and
+  // keep every real event, so a single bad element never costs the user a
+  // lesson's history.
+  const src = _blobMap(v);
+  if (!src) return {};
+  const out = {};
+  for (const k of Object.keys(src)) {
+    if (!Array.isArray(src[k])) continue;
+    out[k] = src[k].filter(e => e !== null && e !== undefined);
+  }
+  return out;
+}
+
 // I/O is delegated to window.DrillStorage (js/storage.js) — single source of
 // truth for localStorage access across main app + prep + diagnostic. Domain
 // logic (migration backfill, GC, defaults) stays here.
 function loadProgress() {
   try {
-    const parsed = window.DrillStorage ? window.DrillStorage.loadAppProgress() : null;
+    const parsed = _blobMap(window.DrillStorage ? window.DrillStorage.loadAppProgress() : null);
     if (!parsed) return;
     // DrillStorage already validated __v ∈ MAIN_APP_ACCEPTED_VERSIONS (2..6).
     // Hydrate state from the parsed shape, then apply app-domain migrations + GC.
-    state.progress = parsed.progress || {};
-    state.bestTimes = parsed.bestTimes || {};
-    state.mockHistory = parsed.mockHistory || {};
-    state.revealed = parsed.revealed || {};
+    // Every keyed collection is shape-checked on the way in (audit F24).
+    state.progress = _blobMapOf(parsed.progress, _isBlobObj);            // id → { L1?, L2?, L3? }
+    state.bestTimes = _blobMapOf(parsed.bestTimes, Number.isFinite);     // id → ms
+    state.mockHistory = _blobMapOf(parsed.mockHistory, Array.isArray);   // id → [ms, …]
+    state.revealed = _blobMapOf(parsed.revealed, _isBlobObj);            // id → { level: true }
     // Timestamp sidecars for the revealed flags (sync merge: newest set/clear
     // event wins). Legacy users (fields absent) get {} — their flags merge as
     // set-at-0, so any recorded clear beats them.
-    state.revealedAt = parsed.revealedAt && typeof parsed.revealedAt === 'object' ? parsed.revealedAt : {};
-    state.revealedClearedAt = parsed.revealedClearedAt && typeof parsed.revealedClearedAt === 'object' ? parsed.revealedClearedAt : {};
+    state.revealedAt = _blobMapOf(parsed.revealedAt, _isBlobObj);               // id → { level: ts }
+    state.revealedClearedAt = _blobMapOf(parsed.revealedClearedAt, _isBlobObj); // id → { level: ts }
     // L1 partial-pass flags: lessons passed at ≥80%/miss-one but not 100%.
     // Legacy users (field absent) get {} — every prior pass was a clean 100%,
     // so no lesson should be retro-flagged orange.
-    state.partialL1 = parsed.partialL1 && typeof parsed.partialL1 === 'object' ? parsed.partialL1 : {};
-    state.lastLessonId = parsed.lastLessonId || null;
-    state.lastTab = parsed.lastTab || null;
+    state.partialL1 = _blobMap(parsed.partialL1) ? { ...parsed.partialL1 } : {};
+    // Resume pointers are read as lesson ids / tab names — anything non-string
+    // would be handed to findLesson()/setTab() and quietly mis-route (F24).
+    state.lastLessonId = typeof parsed.lastLessonId === 'string' ? parsed.lastLessonId : null;
+    state.lastTab = typeof parsed.lastTab === 'string' ? parsed.lastTab : null;
     state.starterPath = !!parsed.starterPath;
     // iter 39: track-scoped path. Legacy users (no field) default to 'all' = existing behavior.
     state.starterPathTrack = ['all','syntax','patterns','applied'].includes(parsed.starterPathTrack) ? parsed.starterPathTrack : 'all';
@@ -300,11 +348,11 @@ function loadProgress() {
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
-    state.misses = parsed.misses && typeof parsed.misses === 'object' ? parsed.misses : {};
+    state.misses = _blobEventMap(parsed.misses);               // id → [{ at, level, tag }]
     // Per-question answer record (share codes). Legacy users get {} — their
     // level-grained progress is untouched, they simply can't share a result
     // set until they drill something again.
-    state.answers = parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {};
+    state.answers = _blobMapOf(parsed.answers, _isBlobObj);    // id → { L1?, L2?, L3? }
     // Subscribed study plan. Legacy users (no field) default to 'starter'.
     // Trust any non-empty stored string — getSubscribedPath() already falls
     // back to PATHS[0] at read time when the id is unknown, and we don't want
@@ -344,20 +392,24 @@ function loadProgress() {
       }
     }
     state.tagFilterOpen = !!parsed.tagFilterOpen;
-    state.homeOpen = (parsed.homeOpen && typeof parsed.homeOpen === 'object') ? { ...parsed.homeOpen } : {};
-    state.reviews = parsed.reviews || {};
-    state.weakness = parsed.weakness || {};
-    state.history = parsed.history || {};
+    state.homeOpen = _blobMap(parsed.homeOpen) ? { ...parsed.homeOpen } : {};
+    state.reviews = _blobMapOf(parsed.reviews, _isBlobObj);   // id → { lastPassedAt, interval, dueAt }
+    state.weakness = _blobMap(parsed.weakness) ? { ...parsed.weakness } : {};
+    // The one that actually crashed boot (audit F24): _heatstripCells() and
+    // _streakMapBuckets() both do `for (const e of history[id])`, so every
+    // value has to be iterable — an array, not a number or a string.
+    state.history = _blobEventMap(parsed.history);             // id → [{ at, event }]
     if (parsed.sidebarTrack === 'syntax' || parsed.sidebarTrack === 'patterns' || parsed.sidebarTrack === 'applied') {
       state.sidebarTrack = parsed.sidebarTrack;
     }
     // Surface follows the resumed track (kept consistent); restore per-surface
     // position memory if present (forward-compatible — absent for legacy users).
     state.surface = SURFACE_OF_TRACK[state.sidebarTrack] || 'reference';
-    if (parsed.surfaceCtx && typeof parsed.surfaceCtx === 'object') {
+    if (_blobMap(parsed.surfaceCtx)) {
+      // Both slots are lesson ids handed to findLesson() (audit F24).
       state.surfaceCtx = {
-        problems: parsed.surfaceCtx.problems || null,
-        reference: parsed.surfaceCtx.reference || null
+        problems: typeof parsed.surfaceCtx.problems === 'string' ? parsed.surfaceCtx.problems : null,
+        reference: typeof parsed.surfaceCtx.reference === 'string' ? parsed.surfaceCtx.reference : null
       };
     }
     // Backfill: if a lesson is mastered but has no review schedule (legacy

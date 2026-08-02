@@ -10,7 +10,22 @@ Everything here is machine-checked. `node tools/check-all.js` runs the lot.
 ```bash
 node tools/check-all.js          # verify (pre-commit / CI)
 node tools/check-all.js --fix    # regenerate what is generated, then verify
+node tools/check-all.js --probes # …and then drive the durable browser probes
 ```
+
+The first two forms need nothing but node, and that is load-bearing: the
+pre-commit hook and CI run exactly `node tools/check-all.js`, so it has to stay
+fast and browser-free. **Do not add a browser step to either.**
+
+`--probes` is the opt-in third form (audit F19). It runs the same gates, then
+each durable CDP probe in `PROBE_SUITE` in turn — boot smoke, page frame, home +
+review nav, share URLs, the two system-design suites, sync merge — and prints a
+pass/fail line per probe. It needs Chrome on `:9222` (the probes start Chrome and
+the static server themselves) and takes a few minutes. **Run it before shipping
+anything user-facing**, and after any change to navigation, the page frame, the
+share pages or the system-design corpus. Before F19 nothing ran these at all, and
+two sat red unnoticed — one of them for a content *addition* that a hardcoded
+expectation hadn't kept up with.
 
 Enable the pre-commit hook once per clone:
 
@@ -170,6 +185,13 @@ semantics the browser uses, plus manifest/disk parity, the banned-syntax list,
 walkthrough traces, and the PROFILE density floor (≥3 L1, ≥2 L2).
 `tools/validate-system-design.js` covers the system-design corpus.
 
+**Partial gate, read the fine print** — the executability half is fatal, the
+density floor is only a *warning* by default. `--strict-density` turns it into a
+non-zero exit, and it isn't on because the existing backlog would fail every
+build: 91 of 171 lessons sit below the ≥2 L2 floor as of 2026-08-02 (audit F4).
+Until that is cleared, "the validator is green" does **not** mean the density
+floor holds.
+
 ---
 
 ## Adding an invariant
@@ -187,3 +209,9 @@ To add a gate: write the check as a standalone `tools/check-*.js` that exits
 non-zero with an actionable message, add a row to `GATES` in
 `tools/check-all.js`, and add a section here. The hook and CI pick it up with no
 further change.
+
+If the check can only be made in a browser, it is a probe, not a gate: put it in
+`tools/cdp/`, make it exit non-zero on a failed assertion, and add a row to
+`PROBE_SUITE` in `tools/check-all.js` so `--probes` picks it up. Derive every
+expected count from the data at run time rather than hardcoding it — a probe that
+goes red when someone *adds content* teaches people to ignore it.

@@ -189,6 +189,16 @@ const base = URL.replace(/\/$/, '') + '/';
     `a code contradicting the page (claims a miss on ${answer0}, the correct option) is flagged as out of date`);
   drift.assert(await drift.eval(`/code out of date/.test(document.querySelector('#your-results').textContent)`),
     'the contradicting row is labelled rather than given a verdict');
+  // A stale row must not ALSO carry a confident verdict — neither inline nor in
+  // the headline. Both were bugs: the inline note read "you picked this —
+  // correct" beside a row the table called out of date, and the stale entry
+  // still counted toward the headline score (Codex review, PR #16).
+  drift.assert(!(await drift.eval(`/you picked this — correct/.test(document.body.textContent)`)),
+    'a stale row never claims the pick was correct');
+  drift.assert(await drift.eval(`!/\\b1\\/1 correct\\b/.test(document.querySelector('.sharepage__score').textContent)`),
+    'a stale answer is excluded from the headline score rather than counted');
+  drift.assert(await drift.eval(`/not scored|cannot be scored|No answer in this code/.test(document.querySelector('#your-results').textContent)`),
+    'the summary says the stale answer was left unscored');
   await drift.close();
   const rDrift = drift.report();
 
@@ -216,6 +226,18 @@ const base = URL.replace(/\/$/, '') + '/';
   await sd.snap('sd-share-sheet');
   sd.assert(await sd.eval(`document.querySelector('#share-sheet [data-share-url]').value === ${JSON.stringify(sdUrl)}`),
     'the sd share sheet shows the live URL');
+
+  // The AI payload must reflect the unit's ACTUAL question-type mix. ddia/ch01
+  // is multiple-choice heavy, so the payload must lead with the picked
+  // distractor and must NOT claim every question was spoken (Codex review,
+  // PR #16 — a leftover from an earlier miscount of the MC/open split).
+  const sdPayload = await sd.eval(`buildUnitAiPayload('ddia', CH.ddia.ch01)`);
+  sd.assert(/which option I picked/.test(sdPayload),
+    'an MC-heavy unit payload tells the AI the code carries the picked option');
+  sd.assert(!/These are spoken-answer questions/.test(sdPayload),
+    'an MC-heavy unit payload does not claim every question was spoken');
+  sd.assert(/multiple-choice questions/.test(sdPayload),
+    'the payload scores multiple choice separately from the open questions');
   sd.assert(sd.consoleMsgs.filter(m => m.type === 'error').length === 0,
     'the system-design page raises no console errors');
   await sd.close();

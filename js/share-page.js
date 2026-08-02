@@ -81,7 +81,7 @@
 
   const rows = [];
   let any = false;
-  let staleCount = 0;
+  const tally = { attempted: 0, full: 0, partial: 0, missed: 0, stale: 0 };
 
   for (const g of groups) {
     g.items.forEach((item, i) => {
@@ -90,7 +90,6 @@
       any = true;
       const stale = isStale(d, item);
       const v = stale ? VERDICT.stale : (VERDICT[d.credit] || VERDICT.none);
-      if (stale) staleCount++;
       const n = item.n || i + 1;
       const anchor = g.anchor(n);
 
@@ -109,6 +108,14 @@
         <td>${esc(v.label)}</td>
       </tr>`);
 
+      // Tally from the SAME pass that judged staleness, so the headline can
+      // never disagree with the rows beneath it.
+      tally.attempted++;
+      if (stale) tally.stale++;
+      else if (d.credit === 'full') tally.full++;
+      else if (d.credit === 'partial') tally.partial++;
+      else tally.missed++;
+
       // Inline: mark the option the user picked, right where they'd look.
       const card = document.getElementById(anchor);
       if (!card) return;
@@ -117,7 +124,13 @@
         const li = card.querySelectorAll('.sharepage__opts li')[d.picked];
         if (li) {
           li.classList.add('is-picked');
-          li.insertAdjacentHTML('beforeend', ` <span class="sharepage__mine">${d.credit === 'full' ? 'you picked this — correct' : 'you picked this'}</span>`);
+          // A stale row gets no verdict at all. Saying "correct" here while the
+          // table says "code out of date" is the exact confident-but-wrong
+          // reading this safeguard exists to prevent.
+          const note = stale ? 'you picked this — code out of date'
+                     : d.credit === 'full' ? 'you picked this — correct'
+                     : 'you picked this';
+          li.insertAdjacentHTML('beforeend', ` <span class="sharepage__mine">${note}</span>`);
         }
       } else {
         card.insertAdjacentHTML('afterbegin', `<p class="sharepage__mine sharepage__mine--block">${esc(answered)}</p>`);
@@ -127,11 +140,17 @@
 
   if (!any) return;
 
-  const all = groups.reduce((acc, g) => acc.concat(g.decoded.slice(0, g.items.length)), []);
-  const sum = S.summarize(all);
+  // Unattempted is the one figure the walk can't see — it skips those rows.
+  const unattempted = groups.reduce(
+    (n, g) => n + g.decoded.slice(0, g.items.length).filter(d => d && !d.attempted).length, 0);
+  // Stale answers are excluded from the score rather than counted either way:
+  // their verdict is unknowable, so scoring them would be a guess.
+  const scored = tally.attempted - tally.stale;
   body.innerHTML = `
-    <p class="sharepage__score"><strong>${sum.full}/${sum.attempted}</strong> correct on the questions attempted${sum.partial ? `, ${sum.partial} partial` : ''}${sum.unattempted ? ` · ${sum.unattempted} not attempted` : ''}.</p>
-    ${staleCount ? `<p class="sharepage__stale">⚠ ${staleCount} answer${staleCount === 1 ? '' : 's'} in this code disagree${staleCount === 1 ? 's' : ''} with the current version of ${staleCount === 1 ? 'its' : 'their'} question — the code was made before this lesson was edited, so ${staleCount === 1 ? 'that row is' : 'those rows are'} not trustworthy.</p>` : ''}
+    ${scored
+      ? `<p class="sharepage__score"><strong>${tally.full}/${scored}</strong> correct on the questions attempted${tally.partial ? `, ${tally.partial} partial` : ''}${unattempted ? ` · ${unattempted} not attempted` : ''}${tally.stale ? ` · ${tally.stale} not scored` : ''}.</p>`
+      : `<p class="sharepage__score">No answer in this code can be scored against the current version of this page.</p>`}
+    ${tally.stale ? `<p class="sharepage__stale">⚠ ${tally.stale} answer${tally.stale === 1 ? '' : 's'} in this code disagree${tally.stale === 1 ? 's' : ''} with the current version of ${tally.stale === 1 ? 'its' : 'their'} question — the code predates an edit to this content, so ${tally.stale === 1 ? 'that row is' : 'those rows are'} left unscored rather than given a verdict.</p>` : ''}
     <table class="legend"><thead><tr><th>Question</th><th>Answered</th><th>Result</th></tr></thead><tbody>${rows.join('')}</tbody></table>
     <p class="sharepage__note">Decoded from <code>${esc(code)}</code> in this page's URL.</p>`;
   mount.hidden = false;

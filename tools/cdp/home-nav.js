@@ -16,10 +16,31 @@
 //
 // Usage: node tools/cdp/home-nav.js [url] [outDir]
 
+const fs = require('fs');
+const path = require('path');
 const { ensureServer, ensureChrome, connect } = require('./lib');
 
 const URL = process.argv[2] || 'http://localhost:8765/';
 const OUT = process.argv[3] || '/tmp/home-nav-probe';
+const ROOT = path.resolve(__dirname, '../..');
+
+// audit F19: this assertion used to hardcode the question total (568). The
+// system-design corpus grows every time a chapter is authored, so the constant
+// rotted and the probe sat red for a content ADDITION — a false alarm that
+// trains people to ignore the probe. Derive the same number the page derives:
+// sum every manifest's per-chapter `questions` count, exactly as
+// `_sdLoadIndex()` in js/app/22-home.js does at runtime. Now the assertion says
+// what it means — "the card totals the whole authored corpus" — and only fails
+// when the two disagree.
+function sdAuthoredQuestionTotal() {
+  const dir = path.join(ROOT, 'data', 'system-design');
+  const reg = JSON.parse(fs.readFileSync(path.join(dir, 'topics.json'), 'utf8'));
+  return (reg.topics || []).reduce((total, t) => {
+    const m = JSON.parse(fs.readFileSync(path.join(dir, t.id, 'manifest.json'), 'utf8'));
+    return total + (m.chapters || []).reduce((n, c) => n + (+c.questions || 0), 0);
+  }, 0);
+}
+const SD_TOTAL = sdAuthoredQuestionTotal();
 
 // A seeded store: two mastered lessons (one overdue → repair queue), one weak.
 const SEED = {
@@ -222,7 +243,10 @@ const SEED = {
     await s.eval(`document.getElementById('home-btn').click()`);
     await s.waitFor(`!!document.querySelector('[data-home-area="sysdesign"] .home-subrow')`, { timeoutMs: 8000 });
     const sdFrac = await s.eval(`document.querySelector('[data-home-area="sysdesign"] .home-area__frac')?.textContent || ''`);
-    s.assert(/^\d+\/568$/.test(sdFrac), `System Design card totals all 568 authored questions (got "${sdFrac}")`);
+    s.assert(
+      new RegExp(`^\\d+/${SD_TOTAL}$`).test(sdFrac),
+      `System Design card totals all ${SD_TOTAL} authored questions (got "${sdFrac}")`
+    );
     s.assert(
       await s.eval(`(document.querySelector('[data-home-sd-continue]')?.getAttribute('href') || '').startsWith('system-design.html')`),
       'System Design Continue points at the drill page'

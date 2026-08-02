@@ -116,6 +116,8 @@
     ]
   },
   "reference": {
+    "approach": "Pairwise divide-and-conquer over mergeTwo (dummy head)",
+    "complexity": "O(N log k) / O(1)",
     "code": "function mergeTwo(a, b) {\n  // Dummy sentinel — first append doesn't need a special case.\n  const dummy = { next: null };\n  let tail = dummy;\n  while (a && b) {\n    if (a.val <= b.val) { tail.next = a; a = a.next; }\n    else { tail.next = b; b = b.next; }\n    tail = tail.next;\n  }\n  // Attach whichever list still has nodes — it's already sorted.\n  tail.next = a || b;\n  return dummy.next;\n}\nfunction mergeKLists(lists) {\n  if (lists.length === 0) return null;\n  // Pair-merge each round → log k rounds, N work per round = O(N log k).\n  while (lists.length > 1) {\n    const merged = [];\n    for (let i = 0; i < lists.length; i += 2) {\n      // Odd-length round: last list pairs with null — mergeTwo handles it.\n      merged.push(mergeTwo(lists[i], lists[i + 1] || null));\n    }\n    lists = merged;\n  }\n  return lists[0];\n}\n// Time O(N log k), Space O(1) extra",
     "notes": [
       "Pairwise merge beats naive merge-into-accumulator: that approach is O(N*k), this one is O(N log k).",
@@ -153,7 +155,8 @@
           "Pairwise allocates merged nodes lazily; sequential allocates all up front",
           "The two are equivalent — `O(N log k)` is just an overly tight bound on `O(N*k)`"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Halving the list count each round means every node is re-walked once per round, and there are log k rounds; folding into one accumulator re-walks everything already merged on each of the k-1 merges."
       },
       {
         "q": "What does the dummy head in mergeTwo buy you?",
@@ -163,7 +166,8 @@
           "Acts as a sentinel that ends the merge loop when both lists hit it",
           "Lets mergeTwo work on circular lists by closing the loop at dummy"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "With the sentinel in front, every splice is the same `tail.next = node; tail = tail.next`; without it the first one would have to assign the head instead. `return dummy.next` skips the sentinel at the end."
       },
       {
         "q": "After the inner while exits with one list null, what do you do with the survivor?",
@@ -173,7 +177,8 @@
           "Reverse the survivor first so its smallest value is closest to the tail",
           "Merge it again with the merged-so-far prefix to re-balance the result"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The `while (a && b)` loop exits the moment one side is null, and the survivor is still a sorted, null-terminated list — so one assignment splices all its remaining nodes at once."
       },
       {
         "q": "Time complexity for k sorted lists with N nodes total?",
@@ -183,7 +188,8 @@
           "O(N*k)",
           "O(N^2)"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Each round pair-merges every node exactly once (N work) and halves the list count, so there are log k rounds. O(N*k) is what the naive fold-left merge order costs."
       }
     ]
   },

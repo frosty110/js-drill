@@ -111,6 +111,8 @@
     ]
   },
   "reference": {
+    "approach": "Per-line tallies (+1 X / -1 O)",
+    "complexity": "O(1) per move / O(n)",
     "code": "class TicTacToe {\n  constructor(n) {\n    this.n = n;\n    // Per-line tallies (+1 for X, -1 for O). |tally| === n means that line wins.\n    this.rows = new Array(n).fill(0);\n    this.cols = new Array(n).fill(0);\n    this.diag = 0;\n    this.anti = 0;\n  }\n  play(player, row, col) {\n    const v = player === 'X' ? 1 : -1;\n    this.rows[row] += v;\n    this.cols[col] += v;\n    // Main diagonal: row === col. Touches at most 4 lines per move — O(1).\n    if (row === col)              this.diag += v;\n    // Anti-diagonal: row + col === n - 1.\n    if (row + col === this.n - 1) this.anti += v;\n    // abs() because X reaches +n, O reaches -n — sign tells which player won.\n    if (Math.abs(this.rows[row]) === this.n) return player;\n    if (Math.abs(this.cols[col]) === this.n) return player;\n    if (Math.abs(this.diag)        === this.n) return player;\n    if (Math.abs(this.anti)        === this.n) return player;\n    return '';\n  }\n}",
     "notes": [
       "Tally per line (+1 for X, -1 for O). |tally| === n is a win — sign tells you which player.",
@@ -141,7 +143,8 @@
           "The board scan can't detect diagonal wins because adjacent diagonal cells aren't contiguous in memory",
           "Tallies generalize to k > 2 players via additional sentinel values, which a board scan cannot"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "A move at `(row, col)` can only complete lines that pass through it — `rows[row]`, `cols[col]`, and the two diagonals when it sits on them. Rescanning would re-examine `n²` cells to learn what four counters already hold."
       },
       {
         "q": "What condition signals that `(row, col)` lies on the anti-diagonal of an n×n board?",
@@ -151,7 +154,8 @@
           "row === n - col — the diagonal passes through (1, n-1) and (n-1, 1)",
           "(row + 1) * (col + 1) === n — derived from the corner product invariant"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The anti-diagonal runs from `(0, n-1)` to `(n-1, 0)`, and every cell on it sums to `n - 1`. `row === col` is the MAIN diagonal — the code tests both separately and keeps separate `diag` and `anti` tallies."
       },
       {
         "q": "Why check `Math.abs(tally) === n`?",
@@ -161,7 +165,8 @@
           "Negative tallies would otherwise satisfy the `=== n` check via sign coercion in `===`",
           "Tallies can wrap past `Number.MAX_SAFE_INTEGER` on long games; abs collapses the overflow"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`v` is `+1` for X and `-1` for O, so a line owned outright by O tallies to `-n`, never `+n`. `Math.abs` collapses both win conditions into one comparison, and `player` is returned directly so the sign never has to be read back."
       },
       {
         "q": "What does `play` return when the move does NOT end the game?",
@@ -171,7 +176,8 @@
           "An empty string ''",
           "The current player's token — so the caller knows whose move it was, but without a win flag"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The last line is `return '';` — falsy, so a caller can just write `if (winner)`. The driver leans on exactly that with `r => console.log(r || 'no')`."
       }
     ]
   },

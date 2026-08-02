@@ -142,6 +142,8 @@
     ]
   },
   "reference": {
+    "approach": "Trie-guided grid DFS with mark-and-restore backtracking",
+    "complexity": "O(R·C·4^L) / O(W·L)",
     "code": "function findWords(board, words) {\n  const root = {};\n  for (const w of words) {\n    let n = root;\n    for (const ch of w) n = n[ch] = n[ch] || {};\n    n.word = w;            // stash the full word at the terminal\n  }\n  const found = [];\n  const R = board.length, C = board[0].length;\n  const dfs = (r, c, node) => {\n    const ch = board[r][c];\n    const next = node[ch];\n    if (!next) return;     // PRUNE: no trie edge for this character\n    if (next.word) { found.push(next.word); next.word = null; } // dedupe\n    board[r][c] = \"#\";     // mark visited in place\n    for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {\n      const nr = r + dr, nc = c + dc;\n      if (nr >= 0 && nr < R && nc >= 0 && nc < C && board[nr][nc] !== \"#\") dfs(nr, nc, next);\n    }\n    board[r][c] = ch;      // restore\n  };\n  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) dfs(r, c, root);\n  return found;\n}\n// Time O(R*C * 4^L) worst case, but trie pruning collapses huge subtrees in practice",
     "notes": [
       "Storing the full word at the terminal node avoids reconstructing it from the DFS path.",
@@ -173,7 +175,8 @@
           "Building a trie reorders the words so the longest are checked first, reducing wasted DFS depth",
           "Per-word Word Search I needs a fresh visited matrix each call; the trie version shares it"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "One grid DFS descends the trie in parallel, so words sharing a prefix walk it once instead of once each, and `if (!next) return` kills an entire subtree the moment no dictionary word continues. The W factor drops out of the bound entirely."
       },
       {
         "q": "Why store the FULL word at the terminal node?",
@@ -183,7 +186,8 @@
           "Without it, multiple words sharing a terminal node would collide on the same flag",
           "It encodes the word length so the DFS knows when to stop descending"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`found.push(next.word)` reads the finished string straight off the terminal node, so the DFS never has to carry the path characters down the recursion or re-join them on a hit."
       },
       {
         "q": "Why set next.word = null after pushing it to results?",
@@ -193,7 +197,8 @@
           "Required to terminate DFS",
           "Releases the trie node's child pointers so they can be garbage-collected mid-search"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The same terminal is reachable from more than one start cell, and nulling the field makes `if (next.word)` false on every later hit. It does NOT prune the subtree — the node's children survive, so a longer word below it is still found."
       },
       {
         "q": "Why mark board[r][c] = \"#\" during recursion?",
@@ -203,7 +208,8 @@
           "Forces neighbor DFS calls to skip this cell because '#' is not a valid trie key",
           "Caches the cell's original character at a sentinel so backtracking can restore from a single global"
         ],
-        "answer": 0
+        "answer": 0,
+        "explain": "The neighbor guard `board[nr][nc] !== \"#\"` is what stops a cell being reused inside one word, so the sentinel replaces a separate visited matrix. `board[r][c] = ch` on the way out frees the cell again for other paths — drop that line and the board stays permanently marked."
       }
     ]
   },

@@ -101,6 +101,8 @@
     ]
   },
   "reference": {
+    "approach": "Escaped word-boundary regex sweep per term",
+    "complexity": "O((1+k)·L) / O(L)",
     "code": "function redact(text, terms) {\n  let count = 0;\n  // SSN pattern first; the replacer callback lets us count every hit.\n  let out = text.replace(/\\b\\d{3}-\\d{2}-\\d{4}\\b/g, () => { count++; return '[REDACTED]'; });\n  for (const term of terms) {\n    // Escape regex metacharacters so a term like 'Dr.' is treated literally.\n    const escaped = term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n    // \\b...\\b = whole word; g = all occurrences; i = case-insensitive.\n    const re = new RegExp('\\\\b' + escaped + '\\\\b', 'gi');\n    out = out.replace(re, () => { count++; return '[REDACTED]'; });\n  }\n  return { text: out, count };\n}\nconst note = 'Patient Jane Doe, SSN 123-45-6789, treated by Dr. Smith. Jane reported pain.';\nconst result = redact(note, ['Jane', 'Smith']);\nconsole.log(result.text);\nconsole.log('Redactions: ' + result.count);",
     "notes": [
       "`\\b` word boundaries make each term match whole words only — 'Smith' won't redact inside 'Smithson', and a short term won't hit substrings of unrelated words.",

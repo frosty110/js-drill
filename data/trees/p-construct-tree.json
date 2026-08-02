@@ -124,6 +124,8 @@
     ]
   },
   "reference": {
+    "approach": "Moving preorder pointer + inorder index Map split",
+    "complexity": "O(n) / O(n)",
     "code": "function buildTree(preorder, inorder) {\n  // value → inorder index, so each root's split is O(1) instead of O(n).\n  const idx = new Map();\n  inorder.forEach((v, i) => idx.set(v, i));\n  // Single moving pointer — the next preorder element is always the next root.\n  let p = 0;\n  function build(lo, hi) {\n    if (lo > hi) return null;          // empty inorder window\n    const val = preorder[p++];\n    const node = { val, left: null, right: null };\n    const mid = idx.get(val);\n    // Left FIRST — preorder consumes the whole left subtree before the right root.\n    node.left = build(lo, mid - 1);\n    node.right = build(mid + 1, hi);\n    return node;\n  }\n  return build(0, inorder.length - 1);\n}\n// Time O(n), Space O(n) for the index map + recursion",
     "notes": [
       "The next unused preorder element is ALWAYS the root of the current inorder window — that is why a single moving pointer `p` suffices.",
@@ -141,7 +143,8 @@
           "The middle of the preorder array",
           "Always preorder[0]"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`preorder[p++]` — `p` is declared outside `build` and never resets, so each call takes the next unconsumed value. `preorder[0]` is right only for the very first call."
       },
       {
         "q": "Why must the left subtree be built before the right?",
@@ -151,7 +154,8 @@
           "Because the right subtree's root must be discovered before its left sibling can be built",
           "Right-first traversal would skip the inorder split point and read past the array end"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Preorder is root, all-of-left, all-of-right — so the shared `p` only stays aligned if `build(lo, mid - 1)` runs to completion before `build(mid + 1, hi)` starts. Swap the two lines and the right subtree starts eating the left subtree's values; `idx.get(val)` then returns a `mid` outside the current window and the recursion runs away."
       },
       {
         "q": "Purpose of the inorder→index Map?",
@@ -161,7 +165,8 @@
           "Track which preorder elements have already been consumed by the moving pointer",
           "Convert the inorder array into a binary search tree for O(log n) root lookups"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`idx.get(val)` replaces an `inorder.indexOf(val)` scan. The scan is O(n) and happens once per node, which is what makes the unoptimized version O(n²)."
       },
       {
         "q": "Time complexity of the Map-based solution?",
@@ -171,7 +176,8 @@
           "O(n log n)",
           "O(n^2)"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "n recursive calls, each doing one `p++`, one map lookup and one object allocation — all O(1). Drop the map and the per-call scan pushes it to O(n²)."
       },
       {
         "q": "How do you split inorder into the left and right subtrees once you know the root?",

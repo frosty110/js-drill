@@ -147,6 +147,8 @@
     ]
   },
   "reference": {
+    "approach": "Separate chaining (bucket arrays)",
+    "complexity": "O(1) avg / O(n + cap)",
     "code": "class HashMap {\n  constructor(capacity = 16) {\n    this.capacity = capacity;\n    // Separate chaining — each bucket is an array of [k,v] entries.\n    this.buckets = Array.from({ length: capacity }, () => []);\n    this.size = 0;\n  }\n  _hash(k) {\n    // Knuth multiplier 2654435761 ≈ 2^32/phi — good spread for sequential int keys.\n    if (typeof k === \"number\") return ((k * 2654435761) >>> 0) % this.capacity;\n    const s = String(k); let h = 0;\n    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;\n    // >>> 0 coerces to unsigned 32-bit before modulo — avoids negative bucket index.\n    return (h >>> 0) % this.capacity;\n  }\n  put(k, v) {\n    const b = this.buckets[this._hash(k)];\n    // Walk bucket FIRST to update in place; otherwise duplicates leak and size lies.\n    for (const e of b) if (e[0] === k) { e[1] = v; return; }\n    b.push([k, v]); this.size++;\n  }\n  get(k) {\n    const b = this.buckets[this._hash(k)];\n    for (const e of b) if (e[0] === k) return e[1];\n    return -1;\n  }\n  has(k) {\n    const b = this.buckets[this._hash(k)];\n    for (const e of b) if (e[0] === k) return true;\n    return false;\n  }\n  remove(k) {\n    const b = this.buckets[this._hash(k)];\n    for (let i = 0; i < b.length; i++) if (b[i][0] === k) { b.splice(i, 1); this.size--; return true; }\n    return false;\n  }\n}\n// Avg O(1) per op, worst O(n) on pathological collisions",
     "notes": [
       "Use `>>> 0` to coerce a 32-bit hash to an unsigned int before modulo — otherwise negative numbers give negative bucket indices.",
@@ -178,7 +180,8 @@
           "On collision, scan forward to the next empty slot and place the entry there (open addressing)",
           "Each key is hashed twice with two separate functions; the second hash is the 'chain' offset into a parallel table"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`this.buckets` is an array of arrays, so two keys hashing to the same index just sit side by side in that bucket and every op walks it linearly. The alternative family is open addressing (probe forward to the next free slot) — same problem, entirely different deletion story."
       },
       {
         "q": "Why must put walk the bucket before appending?",
@@ -188,7 +191,8 @@
           "`Array.prototype.push` returns the new length, not the new entry — the walk reads back the appended pair",
           "To detect a full bucket and trigger a resize before the new entry overflows"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`put(2, 'B')` after `put(2, 'b')` has to land on the existing pair, which the walk does with `e[1] = v; return`. Going straight to `push` would leave two `[2, …]` entries in the bucket — `get` returns the stale first one and `size` reports 4 for 3 keys."
       },
       {
         "q": "Purpose of `>>> 0` in the hash function?",
@@ -198,7 +202,8 @@
           "Casts the float result of the multiply to an integer, since `%` rejects non-integer operands in strict mode",
           "Bitwise OR with zero — needed because `>>` (signed) would corrupt the high bit"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`h | 0` leaves a SIGNED 32-bit int, and JS `%` keeps the dividend's sign — `'user_id'` hashes to -147132913, so `% 16` is -1 and `this.buckets[-1]` is `undefined`, which the next `for...of` throws on. `>>> 0` reinterprets the same bits as unsigned so the index always lands in 0..capacity-1."
       },
       {
         "q": "Average-case time complexity of get?",
@@ -208,7 +213,8 @@
           "O(1)",
           "O(capacity) — every get must touch every bucket until it finds the key, regardless of load factor"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "Hashing is O(1) and, with keys spread evenly, each bucket holds about n/capacity entries — constant while the load factor is bounded. The O(n) worst case is real (every key colliding into one bucket) but this fixed-capacity version has no resize policy to hold the load factor down."
       }
     ]
   },

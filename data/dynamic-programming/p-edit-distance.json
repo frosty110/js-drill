@@ -104,6 +104,8 @@
     ]
   },
   "reference": {
+    "approach": "2D tabulation over prefix pairs (delete / insert / replace)",
+    "complexity": "O(m·n) / O(m·n)",
     "code": "function minDistance(w1, w2) {\n  const m = w1.length, n = w2.length;\n  // dp[i][j] = edits to turn w1[..i] into w2[..j]; (m+1)x(n+1) including empty-prefix row/col.\n  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));\n  // Base cases: empty target costs i deletes; empty source costs j inserts.\n  for (let i = 0; i <= m; i++) dp[i][0] = i;\n  for (let j = 0; j <= n; j++) dp[0][j] = j;\n  for (let i = 1; i <= m; i++) {\n    for (let j = 1; j <= n; j++) {\n      // Chars match → no edit needed, inherit diagonal.\n      if (w1[i - 1] === w2[j - 1]) {\n        dp[i][j] = dp[i - 1][j - 1];\n      } else {\n        dp[i][j] = 1 + Math.min(\n          dp[i - 1][j],     // delete from w1\n          dp[i][j - 1],     // insert into w1\n          dp[i - 1][j - 1]  // replace\n        );\n      }\n    }\n  }\n  return dp[m][n];\n}\n// Time O(m*n), Space O(m*n)",
     "notes": [
       "Row 0 and column 0 are the base cases: converting to/from the empty string costs exactly the other length.",
@@ -140,7 +142,8 @@
           "It anchors the diagonal so dp[i-1][j-1] never reads undefined when i or j is 1",
           "i and j are the indices of the last matched character in each prefix"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Turning an i-character prefix into the empty string takes exactly i deletes, and building a j-character prefix from empty takes j inserts. Those two edges are the only cells the recurrence cannot compute, so they have to be filled by hand before the nested loops start."
       },
       {
         "q": "On a character match (w1[i-1] === w2[j-1]) the recurrence is:",
@@ -150,7 +153,8 @@
           "dp[i][j] = 1 + min(...three neighbors)",
           "dp[i][j] = 0"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Matching characters need no edit, so the cost carries across unchanged from the diagonal. The `1 + …` forms are the mismatch branch — charging +1 here would bill a replace that never happened."
       },
       {
         "q": "Which DP neighbors correspond to the three edit operations?",
@@ -160,7 +164,8 @@
           "Top = insert, Left = delete, Diagonal = match",
           "Top = delete, Left = replace, Diagonal = insert"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`dp[i-1][j]` consumed one more char of w1 than of w2, so it is a delete; `dp[i][j-1]` consumed one more of w2, so it is an insert; the diagonal advances both by one, so it is a replace. Each costs 1 on top of its predecessor, which is the `1 + Math.min(...)`."
       },
       {
         "q": "Time and space complexity of the standard 2D DP?",

@@ -104,6 +104,8 @@
     ]
   },
   "reference": {
+    "approach": "Monotonic decreasing deque of indices",
+    "complexity": "O(n) / O(k)",
     "code": "function maxSlidingWindow(nums, k) {\n  const dq = [];                              // stores indices, values strictly decreasing\n  const out = [];\n  for (let i = 0; i < nums.length; i++) {\n    // drop indices that fell out of the window\n    if (dq.length && dq[0] <= i - k) dq.shift();\n    // drop tail values smaller than nums[i] — they can never be the max again\n    while (dq.length && nums[dq[dq.length - 1]] < nums[i]) dq.pop();\n    dq.push(i);\n    // Front of deque is the max; record only once the window is fully formed.\n    if (i >= k - 1) out.push(nums[dq[0]]);\n  }\n  return out;\n}\n// Time O(n), Space O(k)",
     "notes": [
       "Deque stores INDICES, not values — you need the index to know when an item slides out of the window.",
@@ -144,7 +146,8 @@
           "Pairs of (value, count)",
           "The last k values"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`dq` holds indices — the expiry test `dq[0] <= i - k` and the read `nums[dq[0]]` both need them — and the pop-the-back rule is what keeps their values strictly decreasing, so the front is always the current window's max."
       },
       {
         "q": "Why pop from the back while the tail value is smaller than nums[i]?",
@@ -154,7 +157,8 @@
           "JavaScript requires it",
           "It keeps the deque sorted ascending"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "A smaller earlier value is dominated: `nums[i]` is both larger and expires later, so that tail can never win any future window. Popping it is also what preserves the decreasing invariant the front read depends on."
       },
       {
         "q": "When do you start writing answers to the output?",
@@ -164,7 +168,8 @@
           "Once i >= k - 1 (window is fully formed)",
           "After the loop ends"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The first complete window is `nums[0..k-1]`, which only exists once `i` reaches `k - 1`. Recording earlier would emit maxes of partial windows and make `out` longer than the required `n - k + 1`."
       },
       {
         "q": "Overall time complexity?",
@@ -219,7 +224,7 @@
           "`<=` would cause an infinite loop"
         ],
         "answer": 1,
-        "explain": "On equal values, popping with `<=` would discard a still-valid future max; `<` retains duplicates so a later identical max survives after the front shifts out."
+        "explain": "`<` keeps equal values, so when the front expires an identical max is still sitting in the deque and `dq[0]` is the EARLIEST index attaining the window max. (`<=` returns the same maxima here — the newer twin outlives the older — what it gives up is that earliest-index guarantee, which variants that report the max's position rely on.)"
       },
       {
         "q": "How would you adapt this to Sliding Window MINIMUM?",

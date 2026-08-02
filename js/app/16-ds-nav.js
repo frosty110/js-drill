@@ -7,7 +7,7 @@
 //
 // Wiring: each item synthetically clicks the canonical launcher button — the
 // same contract the command palette uses:
-//   Today    → #today-home-btn   (Today home page — js/app/17-today-home.js)
+//   Home     → #home-btn         (Home — the front door, js/app/22-home.js)
 //   Browse   → #browse-btn       (Browse page — js/app/19-browse.js)
 //   Practice → #practice-launcher-btn (ds-sheet launcher — 18-practice-launcher.js)
 //   Progress → #dashboard-btn    (unified Dashboard — becomes P5 Progress)
@@ -30,9 +30,10 @@
 
 (() => {
   const NAV_ITEMS = [
-    // Home — the front door (js/app/22-home.js). Replaces the "Today"
-    // destination in the nav; Today's Plan is still one tap away from Home's
-    // More list and keeps its own #/m/today-home route.
+    // Home — the front door (js/app/22-home.js). Replaced the "Today"
+    // destination in the nav, and since audit F5 there is no Today page left
+    // to compete with it: #/m/today-home delegates here. Today's Plan (the
+    // modal, #today-btn) is one tap away in Home's More list.
     { key: 'home', label: 'Home', target: 'home-btn',
       title: 'Home — continue any track, review what’s due',
       icon: '<path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/>' },
@@ -94,15 +95,18 @@
     for (const item of AUX_ITEMS) nav.appendChild(navButton(item, 'ds-navitem--aux'));
     document.body.appendChild(nav);
 
-    // Programmatic active state (a11y) — the visual highlight is pure CSS
-    // (body:has(.today-home-page/.dashboard-page) in css/06-ds-nav.css);
-    // aria-current must track the RENDERED page, not the last nav tap (the
-    // hero Start button, palette, and sidebar all swap the page without
-    // touching the nav). A childList observer on #lesson-shell fires on
-    // exactly those swaps — cheap, and keeps the attribute truthful.
+    // Programmatic active state (a11y) — the highlight is CSS over
+    // aria-current (css/06-ds-nav.css); aria-current must track the RENDERED
+    // page, not the last nav tap (the hero Start button, palette, and sidebar
+    // all swap the page without touching the nav). A childList observer on
+    // #lesson-shell fires on exactly those swaps — cheap, and keeps the
+    // attribute truthful.
+    //
+    // One page class per nav key — no aliases. `.today-home-page` used to map
+    // here too, so the Today page highlighted "Home" (audit F5); that page is
+    // retired and delegates to Home, so the special case is gone with it.
     const syncCurrent = () => {
       const current = document.querySelector('.home-page') ? 'home'
-        : document.querySelector('.today-home-page') ? 'home'
         : document.querySelector('.browse-page') ? 'browse'
         : document.querySelector('.dashboard-page') ? 'progress' : null;
       nav.querySelectorAll('.ds-navitem').forEach(b => {
@@ -138,9 +142,9 @@
   }
 
   // System Design launcher target: the single click-sink shared by the rail/bar
-  // "Design" item, the Practice launcher's Study row, the Today-home Explore
-  // row, the command palette, and the #/m/system-design deep-link route. It
-  // leaves the SPA for the standalone drill page.
+  // "Design" item, the Practice launcher's Study row, Home's System Design
+  // track card, the command palette, and the #/m/system-design deep-link
+  // route. It leaves the SPA for the standalone drill page.
   const sysBtn = document.getElementById('system-design-btn');
   if (sysBtn) sysBtn.addEventListener('click', () => { window.location.href = 'system-design.html'; });
 

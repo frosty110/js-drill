@@ -729,13 +729,19 @@ function endMockInterview(passed) {
   return elapsed;
 }
 // Iter 11: smart selection. Replaces uniform-random over 79 patterns with
-// a weighted pool that biases toward the user's active gaps — lessons in
-// state.weakness (recent L1 misses) and lessons whose SR review is due.
-// PROFILE.md line 66-69 mandates this ("Use recent diagnostic signal to
-// bias the pick"). Variety preserved — baseline patterns still in pool.
-// Returns the lesson ID; exposed as a separate helper so probes can call
-// it 100s of times to verify the weighting distribution without paying
-// the cost of starting an actual mock each time.
+// a weighted pool that biases toward the user's active gaps.
+// Variety preserved — baseline patterns still in pool. Returns the lesson ID;
+// exposed as a separate helper so probes can call it 100s of times to verify
+// the weighting distribution without paying the cost of starting an actual
+// mock each time.
+//
+// THREE signals, not two (audit F2). Until now the comment here cited
+// PROFILE.md L66-69 — "Use recent diagnostic signal to bias the pick" — while
+// the code weighted only `state.weakness` (recent L1 misses) and `dueReviewIds()`
+// (SR schedule). The 43-question diagnostic, the thing PROFILE.md is actually
+// talking about, was never read. `_diagnosticWeakestCurriculumSection()`
+// (js/app/02-util-metrics.js) supplies the third: the one curriculum section
+// the last diagnostic scored measurably below the user's own average on.
 function _pickMockLessonId() {
   const patternLessons = CURRICULUM.filter(l => l.status === 'full' && l.track === 'patterns');
   if (!patternLessons.length) return null;
@@ -753,15 +759,36 @@ function _pickMockLessonId() {
       return l && l.track === 'patterns';
     })
   );
-  // Weighted pool: BOTH weak AND due = 5×, either alone = 3×, neither = 1×.
+  // audit F2 — third signal. Null when no diagnostic has been taken, when it
+  // was too short to have a stable baseline, or when nothing scored below it,
+  // in which case the weights below collapse to exactly the two-signal
+  // behaviour that shipped in iter 11 (1 / 3 / 5).
+  // The filter matters: the diagnostic scores syntax sections too (Basics,
+  // Arrays, Hash Structures, JS Traps), and a mock is Patterns-only. Asking
+  // for the weakest section OUTRIGHT hands back a syntax name often enough
+  // to matter, which matches no lesson in `patternLessons` and quietly
+  // disables the signal. Ask instead for the weakest section this pool can
+  // actually act on, so a weak Graphs two rows down still gets the boost.
+  const _sectionsInPool = new Set(patternLessons.map(l => l.section));
+  const diagSection = (typeof _diagnosticWeakestCurriculumSection === 'function')
+    ? _diagnosticWeakestCurriculumSection(name => _sectionsInPool.has(name))
+    : null;
+  // Weighted pool by signal COUNT: 3 signals = 6×, 2 = 5×, 1 = 3×, none = 1×.
   // For a user with one active gap, the gap lesson appears 3× and the other
   // 78 patterns appear 1× each — ~3.6% pick rate vs ~1.2% baseline. Heavy
   // enough to bias toward gaps; light enough that interleaving still works.
+  // The diagnostic signal is section-wide, so it lifts every lesson in one
+  // section at once: the largest patterns section is 11 lessons, which at 3×
+  // is ~33% of the pool — a clear tilt that still leaves two picks in three
+  // coming from somewhere else. That ceiling is why only the SINGLE weakest
+  // section boosts; six boosted sections would end interleaving outright.
   const pool = [];
   for (const lesson of patternLessons) {
     const weak = weakSet.has(lesson.id);
     const due = dueSet.has(lesson.id);
-    const weight = (weak && due) ? 5 : (weak || due) ? 3 : 1;
+    const diag = diagSection !== null && lesson.section === diagSection;
+    const signals = (weak ? 1 : 0) + (due ? 1 : 0) + (diag ? 1 : 0);
+    const weight = signals >= 3 ? 6 : signals === 2 ? 5 : signals === 1 ? 3 : 1;
     for (let i = 0; i < weight; i++) pool.push(lesson.id);
   }
   return pool[Math.floor(Math.random() * pool.length)];

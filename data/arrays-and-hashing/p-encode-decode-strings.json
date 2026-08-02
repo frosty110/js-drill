@@ -116,6 +116,8 @@
     ]
   },
   "reference": {
+    "approach": "Length-prefix framing (len#payload), scan-and-slice decode",
+    "complexity": "O(N) / O(N)",
     "code": "function encode(strs) {\n  let out = \"\";\n  // Length-prefix is delimiter-safe — payload may contain '#' itself.\n  for (const s of strs) out += s.length + \"#\" + s;\n  return out;\n}\nfunction decode(str) {\n  const res = [];\n  let i = 0;\n  while (i < str.length) {\n    let j = i;\n    while (str[j] !== \"#\") j++;            // find delimiter\n    // Header is the digits in [i, j); the '#' lives at j.\n    const len = Number(str.slice(i, j));\n    res.push(str.slice(j + 1, j + 1 + len));\n    // Jump past '#' (1) + payload (len) to land on next header.\n    i = j + 1 + len;\n  }\n  return res;\n}\n// Time O(N) total chars, Space O(N).",
     "notes": [
       "Length-prefix is delimiter-safe: payloads can contain '#' or any character.",
@@ -139,7 +141,8 @@
           "Array.prototype.join inserts the separator between every char, not between strings — the wrong shape entirely",
           "String.prototype.split has a 65535-element output limit that join+split would silently hit"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`decode` reads the length, then consumes exactly that many chars, so a `#` inside a payload is never read as a boundary: `[\"a\",\"#b\"]` encodes to `1#a2##b` and round-trips. A pure-separator scheme needs a character the payload is guaranteed never to contain, and arbitrary strings offer none."
       },
       {
         "q": "When decoding, why scan for '#' instead of using `split('#')`?",
@@ -149,7 +152,8 @@
           "split returns a string when called with one argument and an array when called with two — too inconsistent here",
           "We need to keep the '#' character in the output, which split discards"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`\"1#a2##b\".split(\"#\")` yields four pieces for two strings. Scanning to the FIRST `#` after each header ends the search there, and the length it read decides how much of what follows is payload — including any `#` in it."
       },
       {
         "q": "How is the empty string `\"\"` encoded?",
@@ -159,7 +163,8 @@
           "As `\"0#\"`",
           "As `\"#0\"` — the delimiter must come before the length"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "`out += s.length + \"#\" + s` with `s = \"\"` concatenates `\"0\"`, `\"#\"` and nothing. The header is never skipped, and that is what keeps `[\"\"]` (encodes to `\"0#\"`) distinguishable from `[]` (encodes to `\"\"`)."
       },
       {
         "q": "After reading length L from a header ending at index j, where does the next header begin?",

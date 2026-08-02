@@ -483,7 +483,19 @@ function pollOfflinePackStats() {
     navigator.serviceWorker.controller.postMessage({ type: 'cache-stats' }, [channel.port2]);
   } catch (_) { /* SW gone between check and post — ignore */ }
 }
-init().catch(err => console.error(err));
+// audit F13: the cheatsheet Save tooltip shipped a hardcoded "all 154 lessons"
+// and rotted silently as the corpus grew to 171. index.html now carries the
+// string WITHOUT a number (a missing count is honest, a wrong one is not) and
+// the live count is filled in here from CURRICULUM — the same array the
+// sidebar counts off — so the copy can never disagree with the corpus again.
+// Runs after init() resolves because CURRICULUM is empty until loadManifest().
+function refreshDerivedCopy() {
+  const save = document.getElementById('cheatsheet-save-pdf');
+  if (!save || typeof CURRICULUM === 'undefined' || !CURRICULUM.length) return;
+  save.title = `Open all ${CURRICULUM.length} lessons in a print-ready page, then use your `
+    + `phone's Share / Print menu to Save to Files or Apple Books for offline reading`;
+}
+init().then(refreshDerivedCopy).catch(err => console.error(err));
 
 // ────────────────────────────────────────────────────────────────────────
 // iter 127: top-bar dropdown shell (Phase 2 of the nav refactor epic).
@@ -526,6 +538,29 @@ init().catch(err => console.error(err));
 // _topbarItemFromButton) OR an object { emoji, label, desc, action,
 // ids?, id? }. Object items are inert in terms of the sidebar — they
 // don't have a backing button — so they're rendered directly.
+// audit F13: this row's desc used to hardcode "16 design problems" and rotted
+// to half the real number (32). Counts baked into shipped copy always rot, so
+// derive it at render time from the system-design index and OMIT the number
+// entirely until that index is loaded — no number beats a wrong one. Written
+// as a function because `desc` is read at render time by BOTH consumers (the
+// topbar dropdown below and the Practice launcher sheet in
+// js/app/18-practice-launcher.js), so a getter keeps the derivation in one place.
+function designProblemsBlurb() {
+  let n = 0;
+  try {
+    // _sdLoadIndex()/_sdIndex live in js/app/22-home.js (loaded after this
+    // slice, but every call here happens at render time, long after boot).
+    // Home is the front door so the index is normally already warm; warm it
+    // ourselves for the deep-link-straight-into-a-menu case.
+    if (typeof _sdLoadIndex === 'function') _sdLoadIndex();
+    const topic = _sdIndex && (_sdIndex.topics || []).find(t => t.id === 'design-problems');
+    n = (topic && topic.units) ? topic.units.length : 0;
+  } catch (_) { n = 0; }
+  return n
+    ? `DDIA · building blocks · ${n} design problems`
+    : 'DDIA · building blocks · canonical design problems';
+}
+
 const TOPBAR_MENU_TAXONOMY = {
   practice: {
     label: 'Practice',
@@ -533,7 +568,12 @@ const TOPBAR_MENU_TAXONOMY = {
     items: [
       'today-btn',
       'mock-btn',
-      { emoji: '🎲', icon: 'dice', label: 'Pick one', desc: 'Smart-pick: if you have due reviews / weak spots / at-risk lessons it routes you there, else picks a random fresh lesson or mastered one.', action: 'pick-smart' },
+      // audit F14: every desc below is a ROW SUBTITLE in the Practice launcher
+      // at 390px, so anything past ~90 chars clips mid-word and the rows stop
+      // being tellable apart. Each one keeps only what distinguishes it from
+      // its siblings — the routing order here, the member list on the Drill
+      // families — since the label already carries the gloss.
+      { emoji: '🎲', icon: 'dice', label: 'Pick one', desc: 'Routes to due reviews, weak spots or at-risk first — else a fresh lesson.', action: 'pick-smart' },
       'warmup-btn',
       'audio-btn',
       // nav-audit P1-2 / P2-1: the two standalone pages get real launcher rows
@@ -541,17 +581,20 @@ const TOPBAR_MENU_TAXONOMY = {
       // entry points after first run; System Design was palette-only on the
       // phone. Both rows die in P8 when page unification lands.
       { icon: 'clipboard-list', label: 'Diagnostic', desc: '43-question baseline — retake every few weeks', action: 'href', href: 'diagnostic.html' },
-      { icon: 'sysdesign', label: 'System Design', desc: 'DDIA · building blocks · 16 design problems', action: 'href', href: 'system-design.html' }
+      { icon: 'sysdesign', label: 'System Design', get desc() { return designProblemsBlurb(); }, action: 'href', href: 'system-design.html' }
     ]
   },
   drills: {
     label: 'Drill',
     blurb: 'Pick a recall family — taps launch a random member.',
     items: [
-      { emoji: '🧠', icon: 'eye', label: 'Run it in your head', desc: 'Random pick across Predict / What-If / Trace-Hop / Reverse-Walk — mental execution drills.', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
-      { emoji: '🔧', icon: 'wrench', label: 'Judge a code change', desc: 'Random pick across Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap — change-impact drills.', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
-      { emoji: '🧭', icon: 'compass', label: 'Name the pattern', desc: 'Random pick across Recognize / Reverse / Constellation / Match — pattern-identification drills.', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
-      { emoji: '📝', icon: 'file-text', label: 'Recall the traps', desc: 'Random pick across Notes-Cloze / Notes-Locate / Crux — trick & gotcha recall drills.', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
+      // audit F14: the member list IS the distinguisher — the family label
+      // already says what the drills do, so the "… — mental execution drills."
+      // tail was pure width. Trimmed to fit two lines at 390px.
+      { emoji: '🧠', icon: 'eye', label: 'Run it in your head', desc: 'Random pick: Predict / What-If / Trace-Hop / Reverse-Walk', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
+      { emoji: '🔧', icon: 'wrench', label: 'Judge a code change', desc: 'Random pick: Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
+      { emoji: '🧭', icon: 'compass', label: 'Name the pattern', desc: 'Random pick: Recognize / Reverse / Constellation / Match', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
+      { emoji: '📝', icon: 'file-text', label: 'Recall the traps', desc: 'Random pick: Notes-Cloze / Notes-Locate / Crux', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
       'conv-drill-btn'
     ]
   },

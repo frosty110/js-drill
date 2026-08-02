@@ -135,7 +135,8 @@
       {
         "q": "Three calls within one ms window to a leading-edge throttled fn invoke the underlying fn how many times?",
         "options": ["3 — throttle records the calls but defers their firing to a single batched flush", "0 — the gate is closed on the first call until one full window has elapsed", "1 — the first one", "1 — the last one (trailing-edge default)"],
-        "answer": 2
+        "answer": 2,
+        "explain": "`t('a')` clears the gate because `_now - (-Infinity)` is `Infinity`, and it sets `lastFired = 0`; `t('b')` and `t('c')` at the same `_now` compute `0 - 0 >= 100` → false and are dropped with no queue. Firing the last one instead would be trailing-edge throttle."
       },
       {
         "q": "What is the key difference between debounce and throttle?",
@@ -145,7 +146,8 @@
           "Throttle queues calls in a buffer and replays them after the window; debounce discards everything but the first",
           "Throttle requires a real timer; debounce works purely off comparisons of call timestamps"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Throttle's gate is `_now - lastFired >= ms` — a rate limit measured from the last FIRE. Debounce restarts its timer from the last CALL, so a caller who never pauses gets zero invocations out of a debounce and a steady one-per-window out of this."
       },
       {
         "q": "Why initialize lastFired to -Infinity?",
@@ -155,7 +157,8 @@
           "Initializing to 0 would cause the first call at _now=0 to silently coerce ms to a negative value via the subtraction",
           "It prevents the closure variable from being collapsed by V8's constant-folding optimization"
         ],
-        "answer": 0
+        "answer": 0,
+        "explain": "`0 - (-Infinity)` is `Infinity`, which clears any `ms`. Initialize to `0` instead and the first call at `_now = 0` computes `0 - 0 >= 100` → false, so the very first call is silently swallowed."
       },
       {
         "q": "If the underlying fn is called inside the cool-down window, what happens to its args?",
@@ -165,7 +168,8 @@
           "Dropped — leading-edge throttle does not buffer",
           "Merged into the previous fire's args via `Object.assign` so the most recent args win"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The gate is a bare `if` with no `else` — a call that fails it falls off the end of the function and its `args` are never stored anywhere. That is the deliberate split from debounce, which keeps `lastArgs` so the deferred fire uses the most recent ones."
       }
     ]
   },

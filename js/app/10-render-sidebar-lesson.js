@@ -509,8 +509,32 @@ function _dispatchModeRoute(mode, modeArg) {
   return false;
 }
 
+// audit F10: is the LESSON the surface currently owning #lesson-shell? Read
+// from the rendered DOM rather than from a new piece of state, so the answer
+// stays truthful no matter which surface swapped the shell (Home, Browse,
+// Progress, a full-bleed drill, the dead-link page below). renderLesson marks
+// its header with [data-lesson-root]; [data-lesson-loading] counts too — that
+// placeholder IS the lesson, mid-fetch.
+function _lessonIsRenderedSurface() {
+  const shell = document.getElementById('lesson-shell');
+  return !!(shell && shell.querySelector('[data-lesson-root], [data-lesson-loading]'));
+}
+
 function _updateHash() {
   if (!state.currentLessonId) return;
+  // audit F10: _updateHash used to write the current lesson's hash whenever
+  // state.currentLessonId was set, regardless of what was actually on screen.
+  // Booting #/m/browse showed Browse but the URL became #/<lesson>/reference
+  // within ~300ms, so a reload landed on a lesson and copying the URL shared
+  // the wrong thing — the cmd+click-a-mode-into-a-new-tab feature survived
+  // exactly one paint. Only the lesson may write the lesson hash.
+  if (!_lessonIsRenderedSurface()) return;
+  // A boot mode route (#/m/<mode>) is dispatched at the very END of init(),
+  // after this runs — the lesson is legitimately in the shell right now but is
+  // about to be replaced, so writing here would clobber the route the user
+  // asked for. try/catch: `_pendingBootMode` is a `let` in slice 14, which
+  // evaluates after this slice (touching a TDZ binding throws).
+  try { if (_pendingBootMode) return; } catch (_) {}
   let h = '#/' + encodeURIComponent(state.currentLessonId);
   if (state.currentTab && state.currentTab !== 'auto' && _VALID_TABS.has(state.currentTab)) {
     h += '/' + state.currentTab;
@@ -520,6 +544,44 @@ function _updateHash() {
   }
 }
 
+// audit F12: a hash naming a lesson id this build doesn't have used to resolve
+// SILENTLY — the previously-rendered lesson stayed on screen while the URL kept
+// the bad id, and booting on one fell back to lastLessonId and rewrote the URL.
+// These links are handed to other people and to AI agents, so a dead one has to
+// say so. The page deliberately carries no [data-lesson-root], which is what
+// stops _updateHash (F10) from overwriting the bad id the user needs to see.
+function renderLessonNotFound(badId) {
+  const shell = document.getElementById('lesson-shell');
+  if (!shell) return;
+  shell.innerHTML = `
+    <div class="ds-root ds-page lesson-404-page">
+      <div class="ds-page__head">
+        <h1 class="ds-title">That lesson doesn’t exist</h1>
+        <p class="ds-page__sub">Nothing here answers to <span class="ds-code">${escapeHtml(badId || '')}</span>. The link may be mistyped, or the lesson may have been renamed since it was shared.</p>
+      </div>
+      <div class="ds-empty">
+        <div class="ds-empty__icon">${dsIcon('search', 28)}</div>
+        <p class="ds-empty__body">Every lesson has a stable id in its URL — browse the catalogue to find the one you meant.</p>
+        <button class="ds-btn ds-btn--primary" data-action="lesson-404-browse">Browse lessons</button>
+      </div>
+    </div>`;
+  shell.querySelector('[data-action="lesson-404-browse"]')?.addEventListener('click', () => {
+    document.getElementById('browse-btn')?.click();
+  });
+}
+
+// Paints the dead-link page when `route` (a _parseHash() result) names a lesson
+// id that doesn't resolve to a full lesson. Returns true when it did, so both
+// the hashchange path below and the boot path (js/app/14-init-core.js) can
+// share one definition of "dead link".
+function showLessonNotFoundIfDeadLink(route) {
+  if (!route || !route.lessonId) return false;
+  const lesson = findLesson(route.lessonId);
+  if (lesson && lesson.status === 'full') return false;
+  renderLessonNotFound(route.lessonId);
+  return true;
+}
+
 // hashchange fires for back/forward navigation, pasted URLs, and manual
 // hash edits — NOT for replaceState (which we use internally). So this
 // listener handles only external URL changes; no infinite-loop risk.
@@ -527,8 +589,7 @@ function _handleHashChange() {
   const parsed = _parseHash();
   if (!parsed) return;
   if (parsed.mode) { _dispatchModeRoute(parsed.mode, parsed.modeArg); return; }
-  const lesson = findLesson(parsed.lessonId);
-  if (!lesson || lesson.status !== 'full') return;
+  if (showLessonNotFoundIfDeadLink(parsed)) return;   // audit F12
   if (state.currentLessonId !== parsed.lessonId) {
     selectLesson(parsed.lessonId);
   }
@@ -577,6 +638,19 @@ function selectTab(tab) {
   _updateHash();
 }
 
+// audit F1: is a scoped review session live ON this lesson? `_reviewSession` is
+// a top-level `let` in js/app/23-review.js — these slices are classic scripts
+// sharing one global lexical scope, so it reads directly here. try/catch guards
+// the TDZ window: slice 23 evaluates AFTER this one, and touching a `let` before
+// its declaration throws rather than yielding undefined.
+function _reviewSessionOn(lessonId) {
+  try {
+    return !!(_reviewSession && _reviewSession.ids && _reviewSession.ids[_reviewSession.pos] === lessonId);
+  } catch (_) {
+    return false;
+  }
+}
+
 function renderLesson() {
   const shell = document.getElementById('lesson-shell');
   shell.innerHTML = '';
@@ -620,9 +694,25 @@ function renderLesson() {
     setTimeout(() => { if (!state.welcomed) openPathModal({ welcome: true }); }, 0);
   }
 
+  // audit F1 + F7: two session-scoped facts the whole header render keys off.
+  //   · _inSession — a mock interview OR a scoped review session is live on
+  //     THIS lesson. Both own the screen and both ship their own exits (the
+  //     mock banner, the review HUD's Skip/✕).
+  //   · _isDrillTab — the user is on a tapping/typing rung, so the prose
+  //     header is context rather than the task.
+  const _isMockHere = state.mock.active && state.mock.lessonId === lesson.id;
+  const _isReviewHere = _reviewSessionOn(lesson.id);
+  const _inSession = _isMockHere || _isReviewHere;
+  const _isDrillTab = state.currentTab === 'L1' || state.currentTab === 'L2' || state.currentTab === 'L3';
+  const _narrow = window.matchMedia('(max-width: 767px)').matches;
+
   // header
   const header = document.createElement('div');
-  header.className = 'mb-6';
+  // [data-lesson-root] is the marker _updateHash() reads to decide whether the
+  // lesson is the surface currently on screen (audit F10). Tighter bottom gap
+  // on a phone drill tab — every pixel above the first option is a scroll (F7).
+  header.setAttribute('data-lesson-root', lesson.id);
+  header.className = (_isDrillTab && _narrow) ? 'lesson-head mb-3' : 'lesson-head mb-6';
   const trackPill = TRACK_PILLS[lesson.track] || TRACK_PILLS.patterns;
   const pill = trackPill.cls;
   const pillText = trackPill.label;
@@ -666,7 +756,57 @@ function renderLesson() {
   // CTAs while a mock interview is active on THIS lesson. The next-lesson /
   // shuffle row is a "go elsewhere" affordance — contradictory above a timed
   // interview banner. Returns automatically once the mock ends.
-  if (state.mock.active && state.mock.lessonId === lesson.id) nextCta = '';
+  //
+  // audit F1: a scoped review session gets the SAME suppression. The row's
+  // three buttons all call selectLesson(), which is not the review advance
+  // path — each one silently abandons the queue the HUD claims to be draining.
+  // Worse, "🕒 Review N due" counted the GLOBAL due list and so contradicted
+  // the HUD's own n/N ("Review 1 due" next to "1/1"). One session, one count.
+  if (_inSession) nextCta = '';
+
+  // audit F1: prev/next arrows go with it — mid-session they mutate
+  // currentLessonId out from under the queue (the same broken affordance the
+  // mock got fixed for in iter 29). Share STAYS: it copies this lesson plus the
+  // user's results, which is a useful thing to do mid-review and navigates
+  // nowhere. Mock keeps hiding the whole row, unchanged.
+  const _navArrows = _isMockHere ? '' : `
+      <!-- iter 29 (refine): prev/next arrows suppressed during active mock —
+           clicking them mid-mock calls selectLesson() which silently breaks
+           state (currentLessonId changes; banner stays; timer ticks against
+           the wrong content). Same broken-affordance pattern as iters 24
+           (next-CTA) and 27 (tab strip). j/k keyboard shortcuts unaffected. -->
+      <div class="flex items-center gap-1 text-slate-500 text-xs">
+        <button class="hover:text-slate-300 px-1" data-action="share-lesson" title="Share this lesson — a link carrying your results, for an AI to tutor you from">${dsIcon('share', 15)}</button>
+        ${_isReviewHere ? '' : `<button class="hover:text-slate-300 px-1" data-action="prev-lesson" title="Previous (k)">◀</button>
+        <button class="hover:text-slate-300 px-1" data-action="next-lesson" title="Next (j)">▶</button>`}
+      </div>`;
+
+  // audit F7 (+ F16): on a 390×844 phone the first tappable L1 option sat at
+  // y≈800 of 844 — every lesson open cost a scroll before the primary
+  // interaction, on the surface PROFILE.md says is used 80% of the time. On the
+  // DRILL tabs the description and the PROBLEM card are context, not the task,
+  // so they fold behind one 44px "Problem" disclosure. This generalises the
+  // iter-26 precedent that already suppressed the PROBLEM card on L3 (whose own
+  // body carries a PROMPT box — still don't print it twice). At ≥768px the
+  // disclosure renders OPEN, so desktop hides nothing; on a phone it's one tap.
+  const _descHtml = `<p class="lesson-desc text-slate-400 text-sm">${escapeHtml(content.description)}</p>`;
+  const _promptHtml = (content.L3?.prompt && state.currentTab !== 'L3') ? `
+      <div class="lesson-prompt p-3 rounded-md bg-slate-900/70 border border-slate-800">
+        <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Problem</div>
+        <div class="text-slate-200 text-sm leading-snug">${escapeHtml(content.L3.prompt)}</div>
+      </div>` : '';
+  // The disclosure has to name what's actually inside it. On L3 the PROBLEM
+  // card is suppressed (iter-26: the L3 body carries its own PROMPT box), so a
+  // row labelled "Problem" would open onto nothing but the one-line
+  // description — an affordance that lies about its payload.
+  const _briefLabel = _promptHtml ? 'Problem' : 'About this lesson';
+  const _brief = _isDrillTab
+    ? `<details class="lesson-brief"${_narrow ? '' : ' open'}>
+      <summary class="lesson-brief__summary"><span>${_briefLabel}</span><span class="lesson-brief__chevron" aria-hidden="true">▾</span></summary>
+      <div class="lesson-brief__body">${_descHtml}${_promptHtml}</div>
+    </details>`
+    : `<div class="lesson-brief-open">${_descHtml}${_promptHtml}</div>`;
+
   header.innerHTML = `
     <div class="flex items-center justify-between gap-3 mb-1">
       <div class="flex items-center gap-2 flex-wrap">
@@ -676,31 +816,16 @@ function renderLesson() {
              + 🧭 Step path) during an active mock — neither is actionable mid-
              attempt; sidebar status dots carry the same per-lesson mastery
              signal. Same broken-context-affordance pattern as iters 24/27/29. -->
-        ${(state.mock.active && state.mock.lessonId === lesson.id) ? '' : `${masteredPill}${pathPill}`}
+        ${_isMockHere ? '' : `${masteredPill}${pathPill}`}
       </div>
-      ${(state.mock.active && state.mock.lessonId === lesson.id) ? '' : `
-      <!-- iter 29 (refine): prev/next arrows suppressed during active mock —
-           clicking them mid-mock calls selectLesson() which silently breaks
-           state (currentLessonId changes; banner stays; timer ticks against
-           the wrong content). Same broken-affordance pattern as iters 24
-           (next-CTA) and 27 (tab strip). j/k keyboard shortcuts unaffected. -->
-      <div class="flex items-center gap-1 text-slate-500 text-xs">
-        <button class="hover:text-slate-300 px-1" data-action="share-lesson" title="Share this lesson — a link carrying your results, for an AI to tutor you from">${dsIcon('share', 15)}</button>
-        <button class="hover:text-slate-300 px-1" data-action="prev-lesson" title="Previous (k)">◀</button>
-        <button class="hover:text-slate-300 px-1" data-action="next-lesson" title="Next (j)">▶</button>
-      </div>`}
+      ${_navArrows}
     </div>
-    <h2 class="text-2xl font-bold text-white">${escapeHtml(lesson.title)}</h2>
-    <p class="text-slate-400 mt-1 text-sm">${escapeHtml(content.description)}</p>
-    ${content.L3?.prompt && state.currentTab !== 'L3' ? `
-    <!-- iter 26 (refine): suppressed on the L3 tab — the L3 body has its own
-         PROMPT box (with expected-output cue) covering the same content;
-         showing both pushes the mobile editor ~100px farther below the fold. -->
-    <div class="lesson-prompt mt-3 p-3 rounded-md bg-slate-900/70 border border-slate-800">
-      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Problem</div>
-      <div class="text-slate-200 text-sm leading-snug">${escapeHtml(content.L3.prompt)}</div>
-    </div>` : ''}
-    ${(state.mock.active && state.mock.lessonId === lesson.id) ? '' : `<div data-sparkline-slot class="mt-1">${renderSparkline(lesson.id)}</div>`}
+    <!-- audit F16: the lesson page rendered ZERO <h1> — the title was an <h2>,
+         so the app's most-visited destination had no document heading at all.
+         Promoted to <h1>; the visual size is unchanged (same class). -->
+    <h1 id="lesson-title" class="text-2xl font-bold text-white">${escapeHtml(lesson.title)}</h1>
+    ${_brief}
+    ${_isMockHere ? '' : `<div data-sparkline-slot class="mt-1">${renderSparkline(lesson.id)}</div>`}
     ${nextCta}
   `;
   shell.appendChild(header);
@@ -726,14 +851,20 @@ function renderLesson() {
   // mock state if used (state.currentTab changes, banner stays, editor
   // disappears). Returns automatically once the mock ends because
   // endMockInterview's renderLesson() call re-fires this whole render.
-  const _isMockHere = state.mock.active && state.mock.lessonId === lesson.id;
   if (!_isMockHere) {
   // tabs
+  // audit F22: the strip is wrapped so the edge-fade overlays have something to
+  // anchor to. They live on the WRAPPER, not the scroller, so they stay put
+  // while the tabs move under them (and they're pointer-events:none — an
+  // affordance must never eat a tap). The bottom margin moves to the wrapper
+  // too, so a child margin can't collapse out from under the fades.
+  const tabsWrap = document.createElement('div');
+  tabsWrap.className = 'lesson-tabs-wrap ' + ((_isDrillTab && _narrow) ? 'mb-3' : 'mb-6');
   const tabs = document.createElement('div');
-  // overflow-x-auto so the 5-tab row (Conversation + Ref + L1 + L2 + L3)
-  // stays reachable on a phone — last tab scrolls into view instead of
-  // getting cropped behind the viewport edge.
-  tabs.className = 'flex border-b border-slate-800 mb-6 overflow-x-auto';
+  // overflow-x-auto so the 6-tab row (Conversation + Walkthrough + Ref + L1 +
+  // L2 + L3) stays reachable on a phone — last tab scrolls into view instead
+  // of getting cropped behind the viewport edge.
+  tabs.className = 'flex border-b border-slate-800 overflow-x-auto lesson-tabs';
   const tabDefs = [];
   // Conversation tab is opt-in per lesson — only Patterns/Applied lessons that
   // ship an `conversation` block (the interview walk-through) get it. Sits
@@ -771,8 +902,11 @@ function renderLesson() {
     btn.dataset.level = t.id;
     if (state.currentTab === t.id) btn.classList.add('active');
     // Prefix with "N. " so the keyboard shortcut (number key = Nth tab) is
-    // discoverable without opening the help modal.
-    const num = `<span class="text-slate-500 mr-1">${i + 1}.</span>`;
+    // discoverable without opening the help modal. audit F23: .tab-num is
+    // hidden on coarse-pointer / narrow viewports — there it advertised a
+    // shortcut that doesn't exist and ate width where six tabs already
+    // overflow. It stays wherever a real keyboard does.
+    const num = `<span class="tab-num text-slate-500 mr-1">${i + 1}.</span>`;
     // L1 can pass orange (≥80%/miss-one but not 100%) — render an amber ✓ vs
     // the emerald ✓ for a clean pass, so the remaining gap stays visible.
     let check = '';
@@ -784,7 +918,19 @@ function renderLesson() {
     btn.addEventListener('click', () => selectTab(t.id));
     tabs.appendChild(btn);
   }
-  shell.appendChild(tabs);
+  tabsWrap.appendChild(tabs);
+  shell.appendChild(tabsWrap);
+
+  // audit F22: paint the edge fade only on the side that actually has more
+  // strip to reveal, so it reads as "there's more that way" rather than as
+  // permanent decoration. Auto-centring the active tab used to leave
+  // Conversation and Walkthrough off-screen with nothing saying they existed.
+  const _syncTabFades = () => {
+    const max = tabs.scrollWidth - tabs.clientWidth;
+    tabsWrap.classList.toggle('has-left', tabs.scrollLeft > 2);
+    tabsWrap.classList.toggle('has-right', tabs.scrollLeft < max - 2);
+  };
+  tabs.addEventListener('scroll', _syncTabFades, { passive: true });
 
   // Auto-center the active tab inside the strip on mobile where 6 tabs
   // (Conv/Walk/Ref/L1/L2/L3) overflow the 390px viewport — without this,
@@ -794,9 +940,11 @@ function renderLesson() {
   // before measuring.
   requestAnimationFrame(() => {
     const activeBtn = tabs.querySelector('.tab-btn.active');
-    if (!activeBtn || tabs.scrollWidth <= tabs.clientWidth) return;
-    const targetLeft = activeBtn.offsetLeft - (tabs.clientWidth - activeBtn.offsetWidth) / 2;
-    tabs.scrollLeft = Math.max(0, Math.min(targetLeft, tabs.scrollWidth - tabs.clientWidth));
+    if (activeBtn && tabs.scrollWidth > tabs.clientWidth) {
+      const targetLeft = activeBtn.offsetLeft - (tabs.clientWidth - activeBtn.offsetWidth) / 2;
+      tabs.scrollLeft = Math.max(0, Math.min(targetLeft, tabs.scrollWidth - tabs.clientWidth));
+    }
+    _syncTabFades();
   });
   } // end if (!_isMockHere) — tabs suppressed during mock
 

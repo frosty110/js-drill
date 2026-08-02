@@ -111,6 +111,8 @@
     ]
   },
   "reference": {
+    "approach": "Union-Find with path compression, counting down from n",
+    "complexity": "O(n^2 α(n)) / O(n)",
     "code": "function findCircleNum(isConnected) {\n  const n = isConnected.length;\n  // Union-Find init: parent[i] = i — every node starts as its own root (n singleton sets).\n  const parent = Array.from({ length: n }, (_, i) => i);\n  function find(x) {\n    while (parent[x] !== x) {\n      parent[x] = parent[parent[x]]; // path compression (halving)\n      x = parent[x];\n    }\n    return x;\n  }\n  // n unconnected nodes = n provinces; each successful union drops it by 1.\n  let count = n;\n  // Symmetric matrix — upper triangle (j > i) avoids double-unioning each edge.\n  for (let i = 0; i < n; i++) {\n    for (let j = i + 1; j < n; j++) {\n      if (isConnected[i][j] === 1) {\n        const ra = find(i), rb = find(j);\n        // Only merge if roots differ — same root means already in one province.\n        if (ra !== rb) {\n          parent[ra] = rb;\n          count--;\n        }\n      }\n    }\n  }\n  return count;\n}\n// Time ~O(n^2 * α(n)), Space O(n)",
     "notes": [
       "The matrix is symmetric — only iterate j > i to avoid double-unions.",
@@ -141,7 +143,8 @@
           "Otherwise the count would over-decrement because each edge would trigger two distinct unions on different roots",
           "Starting at i+1 ensures finds traverse only forward indices, keeping path compression monotonic"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`isConnected[i][j]` and `isConnected[j][i]` encode one undirected edge, so the lower triangle just re-unions an already-merged pair. It is a constant-factor saving, not a correctness fix — the repeat call finds the same root, so `ra !== rb` is false and `count` is untouched."
       },
       {
         "q": "When do you decrement the province count?",
@@ -151,7 +154,8 @@
           "Once per row, equal to the number of 1s above the diagonal in that row",
           "Every time parent[i] is updated by path compression, since that means a new ancestor was found"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`count` starts at n and only a merge of two DISTINCT roots actually reduces the province tally. Decrementing on every `isConnected[i][j] === 1` would run 6 times on a fully-connected 4x4 and return -2."
       },
       {
         "q": "What does path compression do?",
@@ -161,7 +165,8 @@
           "Re-roots each tree at its deepest leaf so subsequent unions are bounded by tree diameter",
           "Eliminates duplicate edges by collapsing parallel parent pointers into one"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`parent[x] = parent[parent[x]]` re-points each node to its grandparent as `find` walks up, halving the chain so later finds take fewer hops. It changes the shape of the tree, never which root is returned."
       },
       {
         "q": "For the matrix [[1,1,0],[1,1,0],[0,0,1]] the answer is:",

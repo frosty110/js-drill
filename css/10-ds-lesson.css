@@ -27,3 +27,73 @@
   color: var(--ds-accent); margin-bottom: var(--ds-s2);
   padding-left: var(--ds-s2); border-left: 2px solid var(--ds-accent-line);
 }
+
+/* ── audit F7 — the lesson brief folds away on the drill tabs ────────────────
+   Measured at 390×844: the first tappable L1 option sat at y≈800 of 844, so
+   every lesson open cost a scroll before the primary interaction — on the
+   surface PROFILE.md says carries 80% of the studying. On L1/L2/L3 the
+   description + PROBLEM card are context, not the task, so they collapse into
+   one 44px disclosure row. renderLesson emits the <details> with `open` at
+   ≥768px, so nothing that was visible on desktop moved more than a tap away. */
+.lesson-brief { margin-top: var(--ds-s2); }
+.lesson-brief__summary {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--ds-s2);
+  min-height: 44px; padding: 0 var(--ds-s3);
+  background: var(--ds-surface); border: 1px solid var(--ds-line);
+  border-radius: var(--ds-r-sm);
+  font-size: var(--ds-fs-xs); font-weight: var(--ds-fw-semi);
+  text-transform: uppercase; letter-spacing: var(--ds-tracking-label);
+  color: var(--ds-text-dim);
+  transition: color var(--ds-dur-fast) var(--ds-ease), border-color var(--ds-dur-fast) var(--ds-ease);
+}
+.lesson-brief__summary::-webkit-details-marker { display: none; }
+.lesson-brief__summary:hover { color: var(--ds-text); border-color: var(--ds-line-strong); }
+.lesson-brief__chevron { transition: transform var(--ds-dur-fast) var(--ds-ease); }
+.lesson-brief[open] .lesson-brief__chevron { transform: rotate(180deg); }
+.lesson-brief__body {
+  display: flex; flex-direction: column; gap: var(--ds-s3);
+  padding-top: var(--ds-s3);
+}
+/* Reference / Conversation / Walkthrough keep the always-visible layout the
+   header has always had — same two blocks, same gaps, no disclosure chrome. */
+.lesson-brief-open {
+  display: flex; flex-direction: column; gap: var(--ds-s3);
+  margin-top: var(--ds-s1);
+}
+
+/* audit F16 follow-through — the mobile wrap rule in css/02-sidebar.css keys off
+   `#lesson-shell h2`, so promoting the lesson title from <h2> to <h1> silently
+   dropped its long-token wrapping on a phone. Restore it against the stable id
+   the title now carries. */
+@media (max-width: 767px) {
+  #lesson-title { word-break: break-word; overflow-wrap: anywhere; }
+}
+
+/* ── audit F22 — the tab strip has to READ as scrollable ─────────────────────
+   Six tabs overflow 358px at 390px wide and the strip auto-centres the active
+   one, so Conversation and Walkthrough scrolled out of view with no affordance
+   that they existed. Edge gradients fade the clipped tabs instead of
+   guillotining them. They sit on the wrapper (the scroller moves under them),
+   they are pointer-events:none so they can never intercept a tap, and each side
+   only paints when there is actually more strip that way — a permanent fade
+   would be decoration, not information. `bottom: 1px` keeps the strip's
+   border-bottom rule uncovered. */
+.lesson-tabs-wrap { position: relative; }
+.lesson-tabs-wrap::before,
+.lesson-tabs-wrap::after {
+  content: ""; position: absolute; top: 0; bottom: 1px; width: 28px;
+  pointer-events: none; opacity: 0; z-index: 1;
+  transition: opacity var(--ds-dur-fast) var(--ds-ease);
+}
+.lesson-tabs-wrap::before { left: 0;  background: linear-gradient(to right, var(--ds-bg), transparent); }
+.lesson-tabs-wrap::after  { right: 0; background: linear-gradient(to left,  var(--ds-bg), transparent); }
+.lesson-tabs-wrap.has-left::before { opacity: 1; }
+.lesson-tabs-wrap.has-right::after { opacity: 1; }
+
+/* audit F23 — the "1." … "6." tab prefixes advertise a number-key shortcut that
+   does not exist on a phone, and they eat width exactly where six tabs already
+   overflow. Keep them where the shortcut actually works. */
+@media (pointer: coarse), (max-width: 767px) {
+  .tab-num { display: none; }
+}

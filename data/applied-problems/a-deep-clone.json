@@ -107,6 +107,8 @@
     ]
   },
   "reference": {
+    "approach": "Recursive copy + WeakMap cycle guard",
+    "complexity": "O(n) / O(n), n = nodes",
     "code": "function deepClone(value, seen = new WeakMap()) {\n  // Primitives (incl. null which is typeof 'object') are immutable — return as-is.\n  if (value === null || typeof value !== 'object') return value;\n  // Cycle guard: a child pointing back to value finds the in-progress clone.\n  if (seen.has(value)) return seen.get(value);\n  const out = Array.isArray(value) ? [] : {};\n  // Register BEFORE recursing so cyclic graphs don't recurse forever.\n  seen.set(value, out);\n  for (const k of Object.keys(value)) out[k] = deepClone(value[k], seen);\n  return out;\n}",
     "notes": [
       "Primitives (number, string, boolean, null, undefined) are immutable — return as-is, no copy needed.",
@@ -149,7 +151,8 @@
           "Setting after the loop overwrites the populated children with the empty `out`",
           "Otherwise `seen.has(value)` short-circuits the recursion before children are copied"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "For `cyc.self = cyc`, the recursion into `self` re-enters with the same object; registering `out` first means that call hits `seen.has` and returns the half-built clone instead of recursing forever. Registering after the key loop would blow the stack on any cycle — the loop never gets to finish."
       },
       {
         "q": "What does `deepClone(42)` return?",
@@ -159,7 +162,8 @@
           "undefined",
           "Throws because 42 is not cloneable"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`typeof 42 !== 'object'` so the first guard returns it untouched — primitives are immutable, so sharing one is indistinguishable from copying it. That guard also carries `null`, which has to be tested explicitly because `typeof null === 'object'`."
       },
       {
         "q": "After `const b = deepClone(a); b.nested.x = 99;`, why is `a.nested.x` unchanged?",
@@ -169,7 +173,8 @@
           "Because the WeakMap pins the original so writes to `b` are rerouted to a new sub-object",
           "Because `Object.assign` copies values, and deepClone is built on top of it"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "The recursion hit `a.nested`, took the `Array.isArray ? [] : {}` branch and rebuilt it, so `b.nested` is a fresh object and the write lands only there. `{...a}` or `Object.assign` would have copied the `nested` POINTER, and this exact mutation would show up on the original."
       },
       {
         "q": "Why WeakMap instead of Map for the `seen` cache?",
@@ -179,7 +184,8 @@
           "WeakMap's `.has()` is O(1); Map's `.has()` is O(log n)",
           "Map throws if a key is reassigned, which would fire when registering the clone"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`seen` keys every source object it visits, and a plain Map would keep all of them alive for as long as the map lives — the standard leak when a cache is hoisted out of the call. Both keep keys by identity, so identity lookup is NOT the difference between them."
       }
     ]
   },

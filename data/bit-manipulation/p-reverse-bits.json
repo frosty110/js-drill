@@ -93,6 +93,8 @@
     ]
   },
   "reference": {
+    "approach": "32-pass shift-left, OR in the lowest bit, then >>> 0",
+    "complexity": "O(1) (32 bits) / O(1)",
     "code": "function reverseBits(n) {\n  let result = 0;\n  // Exactly 32 iterations — each moves n's current lowest bit into result's next slot.\n  for (let i = 0; i < 32; i++) {\n    result = (result << 1) | (n & 1);\n    // Unsigned >>> — plain >> would sign-extend and leak 1s from the top.\n    n >>>= 1;\n  }\n  // JS bitwise yields signed int32; >>> 0 reinterprets as unsigned.\n  return result >>> 0;\n}\n// Time O(32) = O(1), Space O(1)",
     "notes": [
       "Use `>>>` (unsigned right shift) on n so the sign bit does not sticky-fill from the left.",
@@ -116,7 +118,8 @@
           "It truncates the result to exactly 32 bits in case `result << 1` overflowed into a 33rd bit",
           "It coerces the result from a BigInt back to a regular Number"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`<<` and `|` both yield a SIGNED int32, so a result with bit 31 set reads back negative: `reverseBits(4294967293)` computes `-1073741825` and `>>> 0` reinterprets those same 32 bits as `3221225471`. Nothing overflows past 32 bits — JS bitwise ops truncate there by definition."
       },
       {
         "q": "Why use `>>>` instead of `>>` on n during the loop?",
@@ -126,7 +129,8 @@
           "`>>` returns a BigInt for large n; `>>>` keeps the result as a regular Number",
           "`>>>` rounds toward zero while `>>` rounds toward negative infinity — only the former preserves the bit pattern"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`>>` copies the sign bit down, so once the top bit is 1 the value sticks: `-1 >> 1` is still `-1`, and every later `n & 1` would read a 1 that isn't really there. `>>>` shifts a 0 in at the top, so 32 shifts genuinely drain `n`."
       },
       {
         "q": "Order of the two operations inside the loop?",
@@ -136,7 +140,8 @@
           "OR n's lowest bit into result FIRST, THEN shift result left so the bit moves to the next slot",
           "Read n's HIGHEST bit (via `n >>> 31`), OR into result, then shift n left"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`result = (result << 1) | (n & 1)` then `n >>>= 1` — make room in `result`, drop in `n`'s current lowest bit, and only then discard it. OR-ing before the shift would push every captured bit one slot too far, dropping the last one off the top and leaving bit 0 permanently 0."
       },
       {
         "q": "Loop count?",
@@ -146,7 +151,8 @@
           "32",
           "Math.ceil(log2(n)) + 1 to cover the high bit"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The width is fixed, so all 32 bit positions have to be placed including a small input's leading zeros — stopping early at `n === 0` would leave the captured bits stranded at the bottom of `result`. `reverseBits(1)` has to come out as 2147483648, which only happens after the full 32 shifts."
       }
     ]
   },

@@ -132,6 +132,8 @@
     ]
   },
   "reference": {
+    "approach": "Pub/sub registry: event → array of handlers",
+    "complexity": "O(k) emit / O(n) total",
     "code": "class EventEmitter {\n  constructor() {\n    this.handlers = {};                          // event -> array of fns\n  }\n  on(event, fn) {\n    (this.handlers[event] ||= []).push(fn);      // lazy-create the bucket\n  }\n  off(event, fn) {\n    const arr = this.handlers[event];\n    if (!arr) return;\n    const i = arr.indexOf(fn);                   // identity match — exact same fn reference\n    if (i !== -1) arr.splice(i, 1);\n  }\n  emit(event, ...args) {\n    const arr = this.handlers[event];\n    if (!arr) return;\n    for (const fn of arr.slice()) fn(...args);   // copy so off-during-emit is safe\n  }\n}",
     "notes": [
       "off() removes by reference — passing an equivalent-looking anonymous fn won't match. Store the fn if you plan to off it.",
@@ -150,7 +152,8 @@
           "Match by the `name` property of the function (anonymous functions share name '' so they all match)",
           "Position in the bucket — `off(event, n)` removes the nth registered listener"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`arr.indexOf(fn)` compares references, so the fn you pass to `off` must be the very object you passed to `on`. `ee.on('tick', x => f(x))` followed by `ee.off('tick', x => f(x))` silently removes nothing — the two arrows are distinct objects."
       },
       {
         "q": "Why does emit() iterate a copy of the handler array?",
@@ -160,7 +163,8 @@
           "`for...of` over a live array throws TypeError if its length changes during iteration",
           "Iterating a copy lets the engine inline the handler calls, which is faster than indexed access"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "A handler that unsubscribes itself makes `off` splice the live array, shifting every later handler down one index — the iterator then skips the next one entirely (handlers [a,b,c] where a removes itself dispatch as a, c). Iterating `arr.slice()` freezes the dispatch list, so a mid-emit `on`/`off` takes effect from the NEXT emit."
       },
       {
         "q": "What happens when you emit an event with no registered listeners?",
@@ -170,12 +174,14 @@
           "It auto-creates an empty bucket for the event and returns false",
           "It fires every listener subscribed to '*' as a wildcard fallback"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`this.handlers[event]` is `undefined` for an event nobody subscribed to, and the `if (!arr) return` guard bails before `.slice()` is reached. Drop that guard and the throw in the first distractor is exactly what you get."
       },
       {
         "q": "If on('x', fn) is called twice with the same fn, how many times will emit('x') invoke fn?",
         "options": ["0 — the second on() overwrites the first registration", "1 — `Array.prototype.push` is a Set-like operation that ignores existing entries", "2 — duplicates are stored separately", "1 the first time, 2 on subsequent emits as duplicates accrete"],
-        "answer": 2
+        "answer": 2,
+        "explain": "`on` is a bare `push` with no dedupe, so the bucket holds the same reference twice and `emit` walks both slots. Note the asymmetry with `off`: `indexOf` finds only the first, so one `off` leaves the duplicate still subscribed."
       }
     ]
   },

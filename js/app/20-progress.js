@@ -75,7 +75,60 @@ function _progTodayHtml(buckets) {
     </section>`;
 }
 
+// audit F15: on a first run every chart in this section is chrome around a
+// number that CANNOT exist yet — 0-height bars, a 60-cell grid of empty
+// tiles, "— first-try". docs/ui-ux-guide.md's empty-state rule says an empty
+// surface must explain itself and offer exactly one way out, so when there
+// isn't a single event in the window we render one ds-empty block instead of
+// the chart frame. The Today tiles above stay: their zeros are honest facts
+// about today, not placeholders for missing data.
+function _progActivityEmptyHtml(everDrilled) {
+  // Same first-run fallback the Home hero uses, so "start drilling" means the
+  // same lesson on both surfaces rather than a second opinion.
+  const target = typeof homeContinueTarget === 'function'
+    ? (homeContinueTarget({ kind: 'area', key: 'coding' }) || homeContinueTarget({ kind: 'area', key: 'syntax' }))
+    : null;
+  const lesson = target ? findLesson(target.id) : null;
+  // The label carries a lesson title of unknown length, so it wears
+  // .prog-empty-cta (07-ds-progress.css) — capped + ellipsized rather than
+  // pushing the 390px column into a horizontal scroll.
+  const cta = lesson
+    ? `<button type="button" class="ds-btn ds-btn--primary prog-empty-cta" data-prog-start="${escapeHtml(target.id)}" data-prog-start-level="${escapeHtml(target.level || 'L1')}"><span>Start ${escapeHtml(lesson.title)}</span> →</button>`
+    : `<button type="button" class="ds-btn ds-btn--primary prog-empty-cta" data-prog-action="home"><span>Find something to drill</span> →</button>`;
+  const title = everDrilled ? 'Nothing in the last 60 days' : 'No reps logged yet';
+  const body = everDrilled
+    ? 'Your charts cover the last 60 days and that window is empty. One drill re-starts the rep bars, the consistency map and the retention signals below.'
+    : 'Once you drill, this section charts reps per day, a 60-day consistency map and how fast each section decays. One lesson is enough to start it.';
+  return `
+    <section class="ds-section" data-prog-activity data-prog-activity-empty>
+      <span class="ds-label ds-section__label">Activity</span>
+      <div class="ds-card ds-card--flat">
+        <div class="ds-empty">
+          <div class="ds-empty__icon">${dsIcon('chart', 28)}</div>
+          <p class="ds-empty__title">${title}</p>
+          <p class="ds-empty__body">${body}</p>
+          ${cta}
+        </div>
+      </div>
+    </section>`;
+}
+
+// "Has this user EVER drilled?" — decides which empty-state copy runs. It must
+// NOT be read from `state.history` alone: history is a later addition, and
+// loadProgress (04-progress-sr.js) hands back `{}` for it on any __v 2/3/4 blob
+// or a restored older backup. Such a user has real mastery, so "No reps logged
+// yet" would flatly contradict the Mastery section further down the same page.
+// progress/reviews are the durable proof a rep happened.
+function _progEverDrilled() {
+  const nonEmpty = (o) => !!o && typeof o === 'object' && Object.keys(o).length > 0;
+  return nonEmpty(state.history) || nonEmpty(state.progress) || nonEmpty(state.reviews);
+}
+
 function _progActivityHtml(buckets) {
+  // No events anywhere in the 60-day window → empty state, not empty charts.
+  if (!buckets.length || buckets.every(b => b.total === 0)) {
+    return _progActivityEmptyHtml(_progEverDrilled());
+  }
   const last7 = buckets.slice(-7);
   const wkPass = last7.reduce((s, b) => s + b.passes, 0);
   const wkMiss = last7.reduce((s, b) => s + b.misses, 0);
@@ -506,9 +559,20 @@ function _wireProgress(shell, buckets) {
   }));
   shell.querySelectorAll('[data-prog-action]').forEach(b => b.addEventListener('click', () => {
     // Same one-tap direct actions the sidebar pills fire (D05 contract).
-    const target = { resurrect: 'resurrect-btn', 'reveal-replay': 'reveal-replay-btn', bridge: 'bridge-btn' }[b.getAttribute('data-prog-action')];
+    // 'home' is the audit-F15 empty-state fallback: when the corpus can't
+    // name a next lesson, hand the user to the front door rather than a
+    // dead button.
+    const target = { resurrect: 'resurrect-btn', 'reveal-replay': 'reveal-replay-btn', bridge: 'bridge-btn', home: 'home-btn' }[b.getAttribute('data-prog-action')];
     const btn = target && document.getElementById(target);
     if (btn) btn.click();
+  }));
+  // audit F15: the empty state's single primary action — drop straight into
+  // the lesson at the level Home would have opened it at (one tap to a rep,
+  // which is the only thing that fills this page).
+  shell.querySelectorAll('[data-prog-start]').forEach(b => b.addEventListener('click', () => {
+    selectLesson(b.getAttribute('data-prog-start'));
+    const lvl = b.getAttribute('data-prog-start-level');
+    if (lvl && typeof selectTab === 'function') selectTab(lvl);
   }));
   shell.querySelectorAll('[data-prog-drill]').forEach(b => b.addEventListener('click', () => {
     const btn = document.getElementById(b.getAttribute('data-prog-drill'));
@@ -552,6 +616,15 @@ function _wireProgress(shell, buckets) {
 function openProgress(opts = {}) {
   const shell = document.getElementById('lesson-shell');
   if (!shell) return;
+  // audit F10: Progress owns the URL while it is the rendered surface (same
+  // replaceState contract as Home / scoped review). The truthful slug is
+  // `dashboard`, not `progress`: _dispatchModeRoute resolves `#/m/<slug>` by
+  // clicking `#<slug>-btn`, and this page's hidden launcher button is
+  // #dashboard-btn (there is no #progress-btn, so `#/m/progress` would be a
+  // dead route). The At-Risk entry keeps its own slug so the section-focused
+  // variant round-trips to the same view it opened.
+  const slug = opts.focus === 'attention' ? 'at-risk' : 'dashboard';
+  try { history.replaceState(null, '', '#/m/' + slug); } catch (_) {}
   const buckets = typeof _streakMapBuckets === 'function' ? _streakMapBuckets(60) : [];
   // Read the routing Sets once — the heatmap detail consumer wants arrays.
   for (const b of buckets) {

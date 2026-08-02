@@ -121,6 +121,8 @@
     ]
   },
   "reference": {
+    "approach": "Reverse multi-source DFS from each ocean, then intersect",
+    "complexity": "O(R*C) / O(R*C)",
     "code": "function pacificAtlantic(heights) {\n  const R = heights.length, C = heights[0].length;\n  // Two visited grids — same cell may be reachable from one ocean but not both.\n  const pac = Array.from({length: R}, () => new Array(C).fill(false));\n  const atl = Array.from({length: R}, () => new Array(C).fill(false));\n  function dfs(r, c, seen, prev) {\n    if (r < 0 || r >= R || c < 0 || c >= C) return;\n    if (seen[r][c]) return;\n    if (heights[r][c] < prev) return;          // reverse flow: must be >= neighbor\n    seen[r][c] = true;\n    const h = heights[r][c];\n    dfs(r + 1, c, seen, h);\n    dfs(r - 1, c, seen, h);\n    dfs(r, c + 1, seen, h);\n    dfs(r, c - 1, seen, h);\n  }\n  // Pacific = top + left edges; Atlantic = bottom + right. -Infinity seeds let edge cells in.\n  for (let c = 0; c < C; c++) { dfs(0, c, pac, -Infinity); dfs(R - 1, c, atl, -Infinity); }\n  for (let r = 0; r < R; r++) { dfs(r, 0, pac, -Infinity); dfs(r, C - 1, atl, -Infinity); }\n  const out = [];\n  // Answer = intersection — drains to BOTH oceans. Row-major order = sorted output.\n  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (pac[r][c] && atl[r][c]) out.push([r, c]);\n  return out;\n}\n// Time O(R*C), Space O(R*C)",
     "notes": [
       "Flood is REVERSED: start at ocean edges and climb to cells with height >= current — that mirrors water flowing FROM a cell TO the ocean.",
@@ -162,7 +164,8 @@
           "Inward DFS lets a single visited grid serve both oceans, halving memory",
           "Outward DFS cannot distinguish Pacific reachability from Atlantic reachability without a separate ocean ID per cell"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "A per-cell outward flood re-walks the same interior cells once for every start cell. Seeding from the edges instead lets `pac` and `atl` gate each cell to one visit apiece, so the seed count never multiplies the work."
       },
       {
         "q": "Reverse-flow rule from a neighbor with height `prev` into current cell with height `h`:",
@@ -172,7 +175,8 @@
           "h > prev (strict — equal heights block reverse climb just as plateaus block natural flow)",
           "abs(h - prev) <= 1 (water climbs only one elevation step at a time)"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Water flows to equal-or-lower neighbors, so walking backwards from the ocean means climbing to equal-or-higher ones. The guard is `if (heights[r][c] < prev) return`, which admits equality — a strict `>` would wall off flat plateaus that really do drain."
       },
       {
         "q": "Which edges seed the Pacific flood?",
@@ -182,7 +186,8 @@
           "Bottom row + right column",
           "Only the top-left corner — the DFS propagates to the rest of the Pacific edge"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`pac` is seeded by `dfs(0, c, pac, …)` across every column and `dfs(r, 0, pac, …)` down every row; the Atlantic gets the mirror pair (bottom row + right column), so the top-right and bottom-left corners are seeds of BOTH grids — that is why `[0,4]` and `[4,0]` are in the 5x5 answer no matter what the heights are."
       },
       {
         "q": "How is the final answer built?",
@@ -192,7 +197,8 @@
           "Intersection: cells reachable in BOTH grids",
           "Cells whose pac[r][c] index is greater than their atl[r][c] index"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "The collection loop pushes only where `pac[r][c] && atl[r][c]` — the problem asks for cells draining to BOTH oceans. A union would answer 'reaches either ocean', which on the classic 5x5 is all 25 cells rather than 7."
       }
     ]
   },

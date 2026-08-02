@@ -130,6 +130,8 @@
     ]
   },
   "reference": {
+    "approach": "Single left-to-right cursor scan",
+    "complexity": "O(n + k·d) / O(n + m)",
     "code": "function renderTemplate(template, data) {\n  let out = '';\n  let i = 0;\n  while (i < template.length) {\n    const open = template.indexOf('{{', i);\n    if (open === -1) { out += template.slice(i); break; }\n    out += template.slice(i, open);\n    const close = template.indexOf('}}', open + 2);\n    if (close === -1) { out += template.slice(open); break; }\n    const key = template.slice(open + 2, close).trim();\n    // Dotted keys (client.name) resolve via reduce; null-guard each hop.\n    const val = key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), data);\n    // Missing key → placeholder, never a crash. A half-built letter beats an exception.\n    out += val === undefined ? `[MISSING:${key}]` : String(val);\n    i = close + 2;\n  }\n  return out;\n}\nconst tpl = 'Dear {{client.name}},\\nWe demand {{amount}} for injuries on {{date}}. Ref: {{caseId}}.';\nconst data = { client: { name: 'Jane Doe' }, amount: '$50,000', date: '2024-03-01' };\nconsole.log(renderTemplate(tpl, data));",
     "notes": [
       "A left-to-right scan beats chained `.replace` calls: it handles repeated/overlapping tokens correctly in one pass and won't re-substitute text a previous replace just inserted (template injection).",

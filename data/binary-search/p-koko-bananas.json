@@ -107,6 +107,8 @@
     ]
   },
   "reference": {
+    "approach": "Binary search on the answer (monotone predicate)",
+    "complexity": "O(n log maxPile) / O(1)",
     "code": "function minEatingSpeed(piles, h) {\n  // Binary-search the ANSWER (speed), not an array index — answer space is [1, max(piles)].\n  let l = 1, r = Math.max(...piles);\n  const canFinish = (k) => {\n    let hours = 0;\n    // Ceiling because Koko can't split a pile across hours.\n    for (const p of piles) hours += Math.ceil(p / k);\n    return hours <= h;\n  };\n  while (l < r) {\n    const m = Math.floor((l + r) / 2);\n    if (canFinish(m)) r = m;     // m works — try smaller\n    else l = m + 1;              // too slow — must go faster\n  }\n  return l;\n}\n// Time O(n log(max(piles))), Space O(1)",
     "notes": [
       "You're binary-searching the answer space, not an index in piles. The predicate `canFinish(k)` is monotonic: false for small k, true for large k.",
@@ -143,7 +145,8 @@
           "The hours h, looking for the smallest h that admits a feasible k",
           "The pile sizes after sorting, looking for the median pile"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`l` and `r` are speeds, not positions — they start at 1 and `Math.max(...piles)`. `piles` is only ever read inside `canFinish`, and it never has to be sorted."
       },
       {
         "q": "Why does this work — what property must the predicate have?",
@@ -153,7 +156,8 @@
           "It must be symmetric — `canFinish(k) === canFinish(max-k+1)` — so midpoint reflection is valid",
           "The piles must be sorted so canFinish can short-circuit on the largest pile first"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Eating faster never costs more hours, so `canFinish` is false for every speed below the answer and true for every speed at or above it. That false-then-true boundary is the same shape sortedness gives plain binary search — `canFinish` being O(n) costs time but doesn't affect correctness."
       },
       {
         "q": "Why `Math.ceil(p / k)` instead of `Math.floor`?",
@@ -163,7 +167,8 @@
           "`ceil` matches the C++/Java integer division semantics the problem assumes",
           "`floor` would count the FIRST hour of each pile as 0, off-by-one across all piles"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "Koko can't move to another pile inside the same hour, so the leftovers cost a whole hour: 7 bananas at speed 3 is 3 hours, while `Math.floor(7 / 3)` would claim 2. Undercounting hours lets a too-slow speed pass — the floor variant returns 3 instead of 4 on `[3,6,7,11], h=8`."
       },
       {
         "q": "Overall time complexity?",
@@ -173,7 +178,8 @@
           "O(n * max(piles))",
           "O(n * log(max(piles)))"
         ],
-        "answer": 3
+        "answer": 3,
+        "explain": "The loop halves the speed range `[1, max(piles)]`, so it runs about log₂(max(piles)) times — not max(piles) times — and each iteration's `canFinish` walks all n piles once."
       },
       {
         "q": "Why is the search range upper bound `max(piles)` and not `sum(piles)`?",

@@ -130,6 +130,8 @@
     ]
   },
   "reference": {
+    "approach": "Map keyed by item.name",
+    "complexity": "O(1) op, O(n) total / O(n)",
     "code": "class Cart {\n  constructor() {\n    // Map keyed by item.name — O(1) add/remove/setQty vs O(n) array.find.\n    this.lines = new Map();\n  }\n  add(item, qty = 1) {\n    const line = this.lines.get(item.name);\n    // Existing item: bump qty rather than duplicate the line (easy bug to ship).\n    if (line) line.qty += qty;\n    else this.lines.set(item.name, { item, qty });\n  }\n  remove(item) { this.lines.delete(item.name); }\n  setQty(item, qty) {\n    // qty <= 0 == remove. No phantom zero-qty rows.\n    if (qty <= 0) return this.remove(item);\n    const line = this.lines.get(item.name);\n    if (line) line.qty = qty;\n  }\n  total() {\n    let sum = 0;\n    // values() yields {item, qty} records; keys() would only give names.\n    for (const { item, qty } of this.lines.values()) sum += item.price * qty;\n    return sum;\n  }\n  items() { return [...this.lines.values()]; }\n}",
     "notes": [
       "Use a Map keyed by `item.name` (or a SKU id) — array.find is O(n) per add, Map is O(1).",
@@ -148,7 +150,8 @@
           "An array of objects doesn't survive JSON.stringify when objects share property names with array methods",
           "Map.size invalidates on every mutation, forcing recomputation that an array's cached length avoids"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`add`, `remove` and `setQty` all start with `this.lines.get(item.name)` or `.delete(item.name)` — constant-time keyed access. The array version would run `find(l => l.item.name === item.name)` on every one of those, rescanning the cart each time."
       },
       {
         "q": "What should `add(apple)` do when apple is already in the cart?",
@@ -158,7 +161,8 @@
           "Increment the existing line's qty by the new qty (default 1)",
           "Add a second line for the same item, deduping at checkout instead of at add-time"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "`if (line) line.qty += qty` mutates the record already in the Map; only the `else` branch creates a new one. Skip the check and the bare `set` overwrites — `add(apple, 2)` then `add(apple)` leaves qty at 1, not 3. Nothing throws and `total()` still returns a number, so the cart is silently short."
       },
       {
         "q": "What should `setQty(item, 0)` do?",
@@ -168,7 +172,8 @@
           "Remove the line entirely",
           "Clamp the value to 1 — carts treat 0 as an underflow and round up to the minimum positive qty"
         ],
-        "answer": 2
+        "answer": 2,
+        "explain": "`setQty` opens with `if (qty <= 0) return this.remove(item)`. A zero-qty record would survive into `items()` and contribute `price * 0` to `total()` — a phantom row that costs nothing and reads as a bug."
       },
       {
         "q": "Why does `total()` iterate `lines.values()` instead of `lines.keys()`?",
@@ -178,7 +183,8 @@
           "`keys()` iterates in hash-bucket order rather than insertion order, breaking the per-line price math",
           "Both work; `values()` is just a stylistic preference because it reads as 'sum the values'"
         ],
-        "answer": 1
+        "answer": 1,
+        "explain": "`this.lines` maps name → `{ item, qty }`, so `total()` destructures `for (const { item, qty } of this.lines.values())` to get the price and its multiplier; `keys()` would hand back only the name strings. Both iterate in insertion order — Maps always do."
       }
     ]
   },

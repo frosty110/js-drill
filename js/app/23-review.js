@@ -241,7 +241,11 @@ function _reviewToast(msg) {
 // loading placeholder first when the lesson body is still in flight, and
 // exiting on that would kill the session between reps.
 const _REVIEW_SURFACE_SELECTOR =
-  '.home-page, .today-home-page, .browse-page, .progress-page, .dashboard-page, [data-action^="exit-"]';
+  // .lesson-404-page (audit F12) counts as leaving the session: a hashchange to
+  // a dead id mid-review paints the dead-link page, and without this token the
+  // HUD stayed mounted over it advertising a queue position the user can no
+  // longer act on.
+  '.home-page, .today-home-page, .browse-page, .progress-page, .dashboard-page, .lesson-404-page, [data-action^="exit-"]';
 
 (() => {
   const shell = document.getElementById('lesson-shell');

@@ -297,6 +297,9 @@ async function initBootstrap() {
       state.currentLessonId = hashRoute.lessonId;
       if (hashRoute.tab) state.currentTab = hashRoute.tab;
       resumed = true;
+      // audit F9: a shared lesson link must land on the drill, not behind the
+      // first-run plan chooser. renderLesson reads this to skip the auto-open.
+      _bootedOnLessonDeepLink = true;
     }
   }
   // Fall back to the last lesson + tab if no valid hash, then to the first
@@ -2273,7 +2276,15 @@ function initPathSwitcher() {
   // inside openPathModal (sets subscription, saves, updates chip, closes).
   const pathModal = document.getElementById('path-modal');
   document.getElementById('path-chip').addEventListener('click', openPathModal);
-  document.getElementById('path-close').addEventListener('click', () => pathModal.style.display = 'none');
+  // audit F9: dismissing with the × has to COUNT as being welcomed. It used to
+  // only hide the modal, leaving state.welcomed false — so for any user with
+  // zero progress the picker re-opened on the next renderLesson, i.e. on every
+  // lesson they navigated to until they picked a plan. Only "Pick" and "Browse
+  // on my own" ever cleared it. Declining is an answer; persist it.
+  document.getElementById('path-close').addEventListener('click', () => {
+    pathModal.style.display = 'none';
+    if (!state.welcomed) { state.welcomed = true; saveProgress(); }
+  });
   pathModal.addEventListener('click', (e) => {
     if (e.target === pathModal) pathModal.style.display = 'none';
   });

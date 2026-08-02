@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Circular Buffer — JS Drill</title>
+<meta name="description" content="Fixed-capacity ring buffer — writes past capacity overwrite the oldest slot. Modular arithmetic on head/tail indices keeps it O(1) per op.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-circular-buffer">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Circular Buffer — JS Drill">
+<meta property="og:description" content="Fixed-capacity ring buffer — writes past capacity overwrite the oldest slot. Modular arithmetic on head/tail indices keeps it O(1) per op.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-circular-buffer">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Circular Buffer</h1>
+    <p class="sharepage__lede">Fixed-capacity ring buffer — writes past capacity overwrite the oldest slot. Modular arithmetic on head/tail indices keeps it O(1) per op.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement CircularBuffer(capacity) with write(v), read(), and a <code>size</code> field. Writes past capacity overwrite the oldest. With cap=3: write 1,2,3,4 then log size, read, read, read, read.</p>
+    <p class="sharepage__note">Expected output: <code>3
+2
+3
+4
+undefined</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Ring buffer (head/tail mod cap)</strong> · <code>O(1) / O(capacity)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">class CircularBuffer {
+  constructor(capacity) {
+    this.cap = capacity;
+    this.buf = new Array(capacity);
+    this.head = 0;        // next slot to write
+    this.tail = 0;        // next slot to read
+    // size disambiguates head === tail (could mean full OR empty).
+    this.size = 0;
+  }
+  write(v) {
+    this.buf[this.head] = v;
+    // Modulo on indices is the whole trick — never reallocate.
+    this.head = (this.head + 1) % this.cap;
+    if (this.size === this.cap) {
+      // Overwrite policy: drop oldest by advancing tail too.
+      this.tail = (this.tail + 1) % this.cap;
+    } else {
+      this.size++;
+    }
+  }
+  read() {
+    if (this.size === 0) return undefined;
+    const v = this.buf[this.tail];
+    this.tail = (this.tail + 1) % this.cap;
+    this.size--;
+    return v;
+  }
+}</code></pre>
+    <ul class="sharepage__notes"><li>Two indices (head=write, tail=read) plus a size counter — size disambiguates the full-vs-empty case where head === tail.</li><li>Decision: when full, additional writes overwrite the oldest element rather than throwing. Document the policy — both choices are valid.</li><li>All ops are O(1). Modulo on indices is the only trick — never reallocate.</li><li>Time O(1) per read/write. Space O(capacity).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Reject-on-full (bounded queue) <code>O(1) / O(capacity)</code></h3>
+      <p>Reach for this when the producer needs to KNOW that a write failed — backpressure flows, durable inbound queues, rate-limited APIs — anywhere silently dropping the oldest entry would be a data-loss bug. Same ring-buffer skeleton; only the overflow branch differs: instead of advancing tail to drop the oldest, refuse the new write and signal that to the caller (return false / throw).</p>
+      <pre class="sharepage__code"><code class="language-js">class CircularBuffer {
+  constructor(capacity) {
+    this.cap = capacity;
+    this.buf = new Array(capacity);
+    this.head = 0;
+    this.tail = 0;
+    this.size = 0;
+  }
+  write(v) {
+    // Reject policy: full buffer means caller&#39;s write is refused.
+    if (this.size === this.cap) return false;
+    this.buf[this.head] = v;
+    this.head = (this.head + 1) % this.cap;
+    this.size++;
+    return true;                                // caller checks for backpressure
+  }
+  read() {
+    if (this.size === 0) return undefined;
+    const v = this.buf[this.tail];
+    this.tail = (this.tail + 1) % this.cap;
+    this.size--;
+    return v;
+  }
+}
+const b = new CircularBuffer(3);
+b.write(2); b.write(3); b.write(4);  // buf full at [2,3,4]
+b.write(5);                          // rejected — buf still [2,3,4]
+console.log(b.size);
+console.log(b.read());
+console.log(b.read());
+console.log(b.read());
+console.log(b.read());</code></pre>
+      <ul class="sharepage__notes"><li>Same modulo/head/tail/size scaffolding — only the full-buffer branch flips. Tail NEVER advances on write; the oldest entries are preserved.</li><li>Boolean return value is the signal — <code>if (!buf.write(v)) handleBackpressure()</code>. Throw instead if the caller should treat full as exceptional rather than expected.</li><li>Contrast on cap=3 writes of 1,2,3,4: reject-on-full keeps [1,2,3] and the 4 is lost; the overwrite variant keeps [2,3,4] and the 1 is silently dropped. Which &#39;wins&#39; depends on whether oldest data or newest data is more valuable to the caller.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why track <code>size</code> separately instead of inferring it from head and tail?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>(head - tail + cap) % cap</code> would be O(cap), not O(1)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> When head === tail, it could mean either full or empty — size resolves the ambiguity <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Modulo arithmetic on signed integers can produce negative values in JS</li>
+        <li><span class="sharepage__key">D</span> head and tail get reset to 0 between writes, so their difference is meaningless</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> On a write to a full buffer (overwrite policy), which pointer must advance besides head?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Neither — head wrapping back to tail already overwrites the oldest</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> tail must also advance so the oldest entry is dropped <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> size must increment past cap so the overflow is recorded</li>
+        <li><span class="sharepage__key">D</span> tail must reset to head, since the read position is now invalid</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Time complexity of read() and write() on a circular buffer?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li><span class="sharepage__key">B</span> O(log n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(1) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(n) amortized</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> After capacity=3 and writes [1,2,3,4,5], what does the next read() return?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 1</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 3 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 4</li>
+        <li><span class="sharepage__key">D</span> 5</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Complete the wrap-around logic so reads return the oldest surviving values after overwrites.</p>
+      <pre class="sharepage__code"><code class="language-js">class CB {
+  constructor(c) { this.cap = c; this.buf = new Array(c); this.head = 0; this.tail = 0; this.size = 0; }
+  write(v) {
+    this.buf[this.head] = v;
+    this.head = (this.head + 1) ___ this.cap;
+    if (this.size ___ this.cap) this.tail = (this.tail + 1) % this.cap;
+    else this.size___;
+  }
+  read() {
+    const v = this.buf[this.tail];
+    this.tail = (this.tail + ___) % this.cap;
+    this.size___;
+    return v;
+  }
+}
+const b = new CB(3);
+b.write(1); b.write(2); b.write(3); b.write(4); b.write(5);
+console.log(b.read());
+console.log(b.read());
+console.log(b.read());</code></pre>
+      <p><strong>Answers:</strong> <code>%</code>, <code>===</code>, <code>++</code>, <code>1</code>, <code>--</code></p>
+      <p class="sharepage__note">Expected output: <code>3
+4
+5</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement CircularBuffer(capacity) with write(v), read(), and a <code>size</code> field. Writes past capacity overwrite the oldest. With cap=3: write 1,2,3,4 then log size, read, read, read, read.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Modulo on head and tail is the only wrap-around logic you need.</li><li>When full, advance tail on each write so the oldest element is the one discarded.</li><li>Reading an empty buffer should return undefined, not throw.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">class CircularBuffer {
+  constructor(capacity) {
+    this.cap = capacity;
+    this.buf = new Array(capacity);
+    this.head = 0;
+    this.tail = 0;
+    // size disambiguates head === tail (could mean full OR empty).
+    this.size = 0;
+  }
+  write(v) {
+    this.buf[this.head] = v;
+    // Modulo on indices is the whole trick — never reallocate.
+    this.head = (this.head + 1) % this.cap;
+    // Overwrite policy: drop oldest by advancing tail too.
+    if (this.size === this.cap) this.tail = (this.tail + 1) % this.cap;
+    else this.size++;
+  }
+  read() {
+    if (this.size === 0) return undefined;
+    const v = this.buf[this.tail];
+    this.tail = (this.tail + 1) % this.cap;
+    this.size--;
+    return v;
+  }
+}
+const b = new CircularBuffer(3);
+b.write(1); b.write(2); b.write(3); b.write(4);
+console.log(b.size);
+console.log(b.read());
+console.log(b.read());
+console.log(b.read());
+console.log(b.read());</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-circular-buffer","title":"Circular Buffer","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why track `size` separately instead of inferring it from head and tail?","options":["`(head - tail + cap) % cap` would be O(cap), not O(1)","When head === tail, it could mean either full or empty — size resolves the ambiguity","Modulo arithmetic on signed integers can produce negative values in JS","head and tail get reset to 0 between writes, so their difference is meaningless"],"answer":1,"answerLetter":"B"},{"n":2,"q":"On a write to a full buffer (overwrite policy), which pointer must advance besides head?","options":["Neither — head wrapping back to tail already overwrites the oldest","tail must also advance so the oldest entry is dropped","size must increment past cap so the overflow is recorded","tail must reset to head, since the read position is now invalid"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Time complexity of read() and write() on a circular buffer?","options":["O(n)","O(log n)","O(1)","O(n) amortized"],"answer":2,"answerLetter":"C"},{"n":4,"q":"After capacity=3 and writes [1,2,3,4,5], what does the next read() return?","options":["1","3","4","5"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Complete the wrap-around logic so reads return the oldest surviving values after overwrites.","answers":["%","===","++","1","--"]}],"L3":[{"n":1,"prompt":"Implement CircularBuffer(capacity) with write(v), read(), and a `size` field. Writes past capacity overwrite the oldest. With cap=3: write 1,2,3,4 then log size, read, read, read, read.","expectedOutput":"3\n2\n3\n4\nundefined"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-circular-buffer">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Date Normalizer &amp; Extractor — JS Drill</title>
+<meta name="description" content="Multi-format parse — scan text for ISO, US-slash, and long-month dates with `matchAll`, normalize each to `YYYY-MM-DD`, dedupe via a Set, and sort (ISO strings sort lexicographically = chronologically).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-eve-citation-extract">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Date Normalizer &amp; Extractor — JS Drill">
+<meta property="og:description" content="Multi-format parse — scan text for ISO, US-slash, and long-month dates with `matchAll`, normalize each to `YYYY-MM-DD`, dedupe via a Set, and sort (ISO strings sort lexicographically = chronologically).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-eve-citation-extract">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Date Normalizer &amp; Extractor</h1>
+    <p class="sharepage__lede">Multi-format parse — scan text for ISO, US-slash, and long-month dates with `matchAll`, normalize each to `YYYY-MM-DD`, dedupe via a Set, and sort (ISO strings sort lexicographically = chronologically).</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Extract every date from a medical note in three formats — <code>2024-01-05</code>, <code>01/05/2024</code> (MM/DD/YYYY), and <code>Jan 5, 2024</code> / <code>January 5, 2024</code> — normalize each to ISO <code>YYYY-MM-DD</code>, dedupe, and return sorted ascending.</p>
+    <p class="sharepage__note">Expected output: <code>2024-01-05
+2024-02-10
+2024-03-03</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function extractDates(text) {
+  const months = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12, jan:1, feb:2, mar:3, apr:4, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12 };
+  const pad = n =&gt; String(n).padStart(2, &#39;0&#39;);
+  // Set of normalized ISO strings — same date in two formats dedupes to one.
+  const found = new Set();
+  for (const m of text.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/g)) {
+    found.add(`${m[1]}-${m[2]}-${m[3]}`);
+  }
+  for (const m of text.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g)) {
+    found.add(`${m[3]}-${pad(+m[1])}-${pad(+m[2])}`);
+  }
+  for (const m of text.matchAll(/\b([A-Za-z]+)\.?\s+(\d{1,2}),\s+(\d{4})\b/g)) {
+    const mo = months[m[1].toLowerCase()];
+    if (mo) found.add(`${m[3]}-${pad(mo)}-${pad(+m[2])}`);
+  }
+  // ISO YYYY-MM-DD sorts chronologically with a plain string sort.
+  return [...found].sort();
+}
+const note = &#39;Initial visit Jan 5, 2024. Follow-up 02/10/2024. MRI on 2024-01-05 confirmed. Discharged March 3, 2024.&#39;;
+console.log(extractDates(note).join(&#39;\n&#39;));</code></pre>
+    <ul class="sharepage__notes"><li>Normalizing every format to ISO <code>YYYY-MM-DD</code> and storing in a <code>Set</code> makes &#39;Jan 5, 2024&#39; and &#39;2024-01-05&#39; dedupe automatically — they collapse to the same canonical string.</li><li>ISO <code>YYYY-MM-DD</code> is designed so lexicographic (plain string) sort equals chronological order; no Date parsing or custom comparator needed.</li><li><code>matchAll</code> with the <code>/g</code> flag returns every match as an iterable of arrays where <code>m[1]</code>, <code>m[2]</code>, <code>m[3]</code> are the capture groups — unlike <code>match</code> with <code>/g</code>, which drops the groups.</li><li>Time O(n + k log k), Space O(k) — three linear passes over text length n; k unique dates collected into a Set, then sorted (k ≤ total matches ≤ n).</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why store normalized ISO strings in a <code>Set</code> rather than pushing to an array?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A Set returns its elements in sorted order, so <code>.sort()</code> becomes a no-op</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The same calendar date written in two formats (&#39;Jan 5, 2024&#39; and &#39;2024-01-05&#39;) normalizes to the same string, and the Set dedupes them automatically <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Arrays would push the regex <code>Match</code> objects whole; Set unwraps them to strings</li>
+        <li><span class="sharepage__key">D</span> Set guarantees <code>O(1)</code> <code>.has()</code> while array <code>.includes()</code> is <code>O(n)</code>, so the regex passes run faster</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Both formats map to the canonical &#39;2024-01-05&#39;. Adding both to a Set keeps just one copy, so the multi-format extraction doesn&#39;t report the same date twice.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why does <code>[...found].sort()</code> (a plain string sort) produce chronological order?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>Array.prototype.sort</code> checks for <code>Date.parse</code>-able strings and routes through numeric comparison</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> ISO <code>YYYY-MM-DD</code> is fixed-width with the most-significant field (year) first, so lexicographic string order equals chronological order <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The hyphen is treated as a digit-zero in lexicographic comparison, so year and month align</li>
+        <li><span class="sharepage__key">D</span> Spread iteration over a Set yields entries in insertion order, which here matches chronological order</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Year-month-day ordering with zero-padding means comparing the strings character-by-character compares year, then month, then day — exactly chronological. No Date objects or comparators required.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why use <code>text.matchAll(/.../g)</code> instead of <code>text.match(/.../g)</code> here?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>match</code> advances <code>lastIndex</code> between calls, so re-running it on the same text would skip matches</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> matchAll yields each match WITH its capture groups (m[1], m[2], m[3]); match with /g returns just the full matched strings and discards the groups <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>match</code> requires the regex to be wrapped in <code>new RegExp(...)</code>; <code>matchAll</code> accepts the literal directly</li>
+        <li><span class="sharepage__key">D</span> <code>matchAll</code> returns a lazy iterator so we can <code>break</code> after the first match if needed</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The code needs the year/month/day capture groups to reassemble each date. <code>String.match</code> with <code>/g</code> throws the groups away and returns only full-match strings, so <code>matchAll</code> is required to get the parts.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> For the US-slash format, why is the group order <code>${m[3]}-${pad(+m[1])}-${pad(+m[2])}</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The matchAll iterator emits groups in regex-right-to-left order, so m[3] is the leftmost capture</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The input is MM/DD/YYYY, so group 1 is month, group 2 is day, group 3 is year — reordered and zero-padded to YYYY-MM-DD <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Capture group 3 is always the year by convention in JS regex literals</li>
+        <li><span class="sharepage__key">D</span> The <code>+</code> coercion swaps m[1] and m[3] so the year ends up first</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>02/10/2024</code> is MM/DD/YYYY: m[1]=&#39;02&#39; (month), m[2]=&#39;10&#39; (day), m[3]=&#39;2024&#39; (year). Emitting year-month-day with <code>pad</code> produces the ISO &#39;2024-02-10&#39;. The <code>+</code> coerces to number so <code>pad</code> re-pads consistently.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Dedupe two spellings of the same date by normalizing to ISO and using a Set. Fill the blanks so only one date prints.</p>
+      <pre class="sharepage__code"><code class="language-js">const found = new ___();
+found.___(&#39;2024-01-05&#39;);
+found.___(&#39;2024-01-05&#39;);
+console.log([___found].___().join(&#39;\n&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>Set</code>, <code>add</code>, <code>add</code>, <code>...</code>, <code>sort</code></p>
+      <p class="sharepage__note">Expected output: <code>2024-01-05</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Reorder an MM/DD/YYYY match into ISO with zero-padding. Fill the blanks.</p>
+      <pre class="sharepage__code"><code class="language-js">const pad = n =&gt; String(n).___(___, &#39;0&#39;);
+const m = &#39;02/10/2024&#39;.___(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+const iso = `${m[___]}-${pad(+m[1])}-${pad(+m[___])}`;
+console.log(iso);</code></pre>
+      <p><strong>Answers:</strong> <code>padStart</code>, <code>2</code>, <code>match</code>, <code>3</code>, <code>2</code></p>
+      <p class="sharepage__note">Expected output: <code>2024-02-10</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Extract every date from a medical note in three formats — <code>2024-01-05</code>, <code>01/05/2024</code> (MM/DD/YYYY), and <code>Jan 5, 2024</code> / <code>January 5, 2024</code> — normalize each to ISO <code>YYYY-MM-DD</code>, dedupe, and return sorted ascending.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Run three <code>matchAll</code> passes — one per format — and <code>found.add(...)</code> a normalized ISO string from each.</li><li>Use a Set so a date written two ways (&#39;Jan 5, 2024&#39; and &#39;2024-01-05&#39;) dedupes to one entry. Zero-pad month/day with <code>String(n).padStart(2, &#39;0&#39;)</code>.</li><li>Return <code>[...found].sort()</code> — ISO strings sort chronologically with a plain string sort, no comparator needed.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function extractDates(text) {
+  const months = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12, jan:1, feb:2, mar:3, apr:4, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12 };
+  const pad = n =&gt; String(n).padStart(2, &#39;0&#39;);
+  const found = new Set();
+  for (const m of text.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/g)) {
+    found.add(`${m[1]}-${m[2]}-${m[3]}`);
+  }
+  for (const m of text.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g)) {
+    found.add(`${m[3]}-${pad(+m[1])}-${pad(+m[2])}`);
+  }
+  for (const m of text.matchAll(/\b([A-Za-z]+)\.?\s+(\d{1,2}),\s+(\d{4})\b/g)) {
+    const mo = months[m[1].toLowerCase()];
+    if (mo) found.add(`${m[3]}-${pad(mo)}-${pad(+m[2])}`);
+  }
+  return [...found].sort();
+}
+const note = &#39;Initial visit Jan 5, 2024. Follow-up 02/10/2024. MRI on 2024-01-05 confirmed. Discharged March 3, 2024.&#39;;
+console.log(extractDates(note).join(&#39;\n&#39;));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-eve-citation-extract","title":"Date Normalizer & Extractor","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why store normalized ISO strings in a `Set` rather than pushing to an array?","options":["A Set returns its elements in sorted order, so `.sort()` becomes a no-op","The same calendar date written in two formats ('Jan 5, 2024' and '2024-01-05') normalizes to the same string, and the Set dedupes them automatically","Arrays would push the regex `Match` objects whole; Set unwraps them to strings","Set guarantees `O(1)` `.has()` while array `.includes()` is `O(n)`, so the regex passes run faster"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why does `[...found].sort()` (a plain string sort) produce chronological order?","options":["`Array.prototype.sort` checks for `Date.parse`-able strings and routes through numeric comparison","ISO `YYYY-MM-DD` is fixed-width with the most-significant field (year) first, so lexicographic string order equals chronological order","The hyphen is treated as a digit-zero in lexicographic comparison, so year and month align","Spread iteration over a Set yields entries in insertion order, which here matches chronological order"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why use `text.matchAll(/.../g)` instead of `text.match(/.../g)` here?","options":["`match` advances `lastIndex` between calls, so re-running it on the same text would skip matches","matchAll yields each match WITH its capture groups (m[1], m[2], m[3]); match with /g returns just the full matched strings and discards the groups","`match` requires the regex to be wrapped in `new RegExp(...)`; `matchAll` accepts the literal directly","`matchAll` returns a lazy iterator so we can `break` after the first match if needed"],"answer":1,"answerLetter":"B"},{"n":4,"q":"For the US-slash format, why is the group order `${m[3]}-${pad(+m[1])}-${pad(+m[2])}`?","options":["The matchAll iterator emits groups in regex-right-to-left order, so m[3] is the leftmost capture","The input is MM/DD/YYYY, so group 1 is month, group 2 is day, group 3 is year — reordered and zero-padded to YYYY-MM-DD","Capture group 3 is always the year by convention in JS regex literals","The `+` coercion swaps m[1] and m[3] so the year ends up first"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Dedupe two spellings of the same date by normalizing to ISO and using a Set. Fill the blanks so only one date prints.","answers":["Set","add","add","...","sort"]},{"n":2,"prompt":"Reorder an MM/DD/YYYY match into ISO with zero-padding. Fill the blanks.","answers":["padStart","2","match","3","2"]}],"L3":[{"n":1,"prompt":"Extract every date from a medical note in three formats — `2024-01-05`, `01/05/2024` (MM/DD/YYYY), and `Jan 5, 2024` / `January 5, 2024` — normalize each to ISO `YYYY-MM-DD`, dedupe, and return sorted ascending.","expectedOutput":"2024-01-05\n2024-02-10\n2024-03-03"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-eve-citation-extract">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

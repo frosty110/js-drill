@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Floating-point precision (0.1 + 0.2) — JS Drill</title>
+<meta name="description" content="JS numbers are IEEE 754 doubles, so 0.1 + 0.2 !== 0.3 and most decimal fractions can&#39;t be represented exactly in binary — compare with an epsilon, round with toFixed, or scale to integers for money math.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/t-floating-precision">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Floating-point precision (0.1 + 0.2) — JS Drill">
+<meta property="og:description" content="JS numbers are IEEE 754 doubles, so 0.1 + 0.2 !== 0.3 and most decimal fractions can&#39;t be represented exactly in binary — compare with an epsilon, round with toFixed, or scale to integers for money math.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/t-floating-precision">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › JS Traps</p>
+    <h1>Floating-point precision (0.1 + 0.2)</h1>
+    <p class="sharepage__lede">JS numbers are IEEE 754 doubles, so 0.1 + 0.2 !== 0.3 and most decimal fractions can&#39;t be represented exactly in binary — compare with an epsilon, round with toFixed, or scale to integers for money math.</p>
+    <p class="sharepage__meta"><span class="ds-chip">syntax</span> <span class="ds-chip">JS Traps</span> <span class="ds-chip">5 concept · 3 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>nearlyEqual(a, b, eps)</code> that returns true when |a - b| &lt;= eps. Then log: the raw value of <code>0.1 + 0.2</code>, whether <code>0.1 + 0.2 === 0.3</code>, whether <code>nearlyEqual(0.1 + 0.2, 0.3, 1e-9)</code>, and whether <code>nearlyEqual(0.1 + 0.2, 0.4, 1e-9)</code> — one result per line.</p>
+    <p class="sharepage__note">Expected output: <code>0.30000000000000004
+false
+true
+false</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// The classic surprise — 0.1 + 0.2 is NOT 0.3 in binary floating point.
+console.log(0.1 + 0.2);            // 0.30000000000000004
+console.log(0.1 + 0.2 === 0.3);    // false
+
+// Why: 0.1 and 0.2 are infinite repeating fractions in binary,
+// just like 1/3 is 0.333... in decimal. Doubles get 52 bits of
+// mantissa, so the stored value is the nearest representable double.
+
+// Fix 1 — epsilon comparison. Number.EPSILON ~ 2.22e-16 is the
+// smallest gap near 1.0; for friendlier real-world tolerance use 1e-9.
+const a = 0.1 + 0.2;
+const b = 0.3;
+console.log(Math.abs(a - b) &lt; Number.EPSILON); // true (diff is ~5.5e-17)
+console.log(Math.abs(a - b) &lt; 1e-9);           // true (friendlier threshold)
+
+// Fix 2 — toFixed then string-compare. toFixed RETURNS A STRING.
+console.log(a.toFixed(2));                     // &quot;0.30&quot;
+console.log(a.toFixed(2) === b.toFixed(2));    // true
+
+// Fix 3 — scale to integers. Best for money: store cents, not dollars.
+// Naive  0.1 * 100 + 0.2 * 100  can STILL be 30.000000000000004,
+// so wrap each scaled term in Math.round before adding.
+const cents = Math.round(0.1 * 100) + Math.round(0.2 * 100);
+console.log(cents / 100);                      // 0.3
+
+// Money example — summing a receipt without losing pennies.
+const prices = [0.1, 0.2, 0.3];
+let totalCents = 0;
+for (const p of prices) totalCents += Math.round(p * 100);
+console.log(totalCents / 100);                 // 0.6</code></pre>
+    <ul class="sharepage__notes"><li>Why it happens: 0.1 and 0.2 are infinite repeating fractions in binary, so the stored IEEE 754 double is the nearest representable value — the rounding error surfaces on add.</li><li><code>Number.EPSILON</code> (~2.22e-16) is the gap between 1 and the next representable double; for values away from 1 you usually want a friendlier tolerance like 1e-9.</li><li><code>===</code> between two floats is almost always wrong unless one side is an integer literal you control end-to-end.</li><li><code>toFixed(n)</code> returns a STRING, not a number. Useful for display or string-compare, never for further arithmetic without re-parsing.</li><li>For money, store integer cents (or use a library like decimal.js / big.js). Round each scaled term — <code>0.1 * 100</code> can already be 10.000000000000002.</li><li>The trap appears in many languages — it&#39;s not a JS bug, it&#39;s IEEE 754. Python&#39;s <code>0.1 + 0.2</code> prints <code>0.30000000000000004</code> too.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">5</span></h2>
+    <p class="sharepage__note">Positions 1–5 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What does <code>console.log(0.1 + 0.2)</code> print?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 0.3</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> 0.30000000000000004 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> 0.30000000000000001</li>
+        <li><span class="sharepage__key">D</span> NaN</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> IEEE 754 can&#39;t represent 0.1 or 0.2 exactly in binary — the sum lands at the nearest representable double, which prints with the trailing <code>...004</code>.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What is <code>0.1 + 0.2 === 0.3</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> true</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> false <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> throws TypeError</li>
+        <li><span class="sharepage__key">D</span> NaN</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The left side is 0.30000000000000004, not 0.3 — strict equality on floats almost always loses to rounding error.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Which is the safest way to check that two floats are &#39;equal&#39; within tolerance?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> a === b</li>
+        <li><span class="sharepage__key">B</span> a == b</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Math.abs(a - b) &lt; 1e-9 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Object.is(a, b)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Compare the absolute difference against an epsilon. <code>Object.is</code> is even stricter than <code>===</code> for numbers and doesn&#39;t help with rounding error.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What type does <code>(0.1 + 0.2).toFixed(2)</code> return?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> number</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> string <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> boolean</li>
+        <li><span class="sharepage__key">D</span> BigInt</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>toFixed</code> returns a string. Useful for display or string-compare, but you&#39;ll need <code>Number(...)</code> or <code>+...</code> to do further math.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> Why store money as integer cents instead of dollar floats?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Integers are faster on modern CPUs</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Floats can lose pennies because 0.1, 0.2, etc. aren&#39;t exactly representable <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> JavaScript numbers don&#39;t support decimals</li>
+        <li><span class="sharepage__key">D</span> JSON can&#39;t serialize float values</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Summing 0.1 + 0.2 + 0.3 as floats can drift away from 0.6. Scaling to integer cents (and rounding each scaled term) sidesteps the rounding error entirely.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">3</span></h2>
+    <p class="sharepage__note">Positions 1–3 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Show the rounding error directly: print the sum, then the strict-equality check against 0.3.</p>
+      <pre class="sharepage__code"><code class="language-js">const sum = 0.1 ___ ___;
+console.log(sum);
+console.log(sum ___ ___);</code></pre>
+      <p><strong>Answers:</strong> <code>+</code>, <code>0.2</code>, <code>===</code>, <code>0.3</code></p>
+      <p class="sharepage__note">Expected output: <code>0.30000000000000004
+false</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Fix the comparison with an epsilon tolerance. Use the absolute difference and a friendly 1e-9 threshold.</p>
+      <pre class="sharepage__code"><code class="language-js">const a = 0.1 ___ 0.2;
+const b = 0.3;
+console.log(Math.___(a ___ b) ___ 1e-9);</code></pre>
+      <p><strong>Answers:</strong> <code>+</code>, <code>abs</code>, <code>-</code>, <code>&lt;</code></p>
+      <p class="sharepage__note">Expected output: <code>true</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-3">
+      <h3><a href="#l2-3" class="sharepage__anchor">Exercise 3</a></h3>
+      <p>Money math: sum two prices via scale-and-integer to avoid pennies drift. Round each scaled term before adding.</p>
+      <pre class="sharepage__code"><code class="language-js">const cents = Math.___(0.1 ___ 100) ___ Math.___(0.2 * 100);
+console.log(cents ___ 100);</code></pre>
+      <p><strong>Answers:</strong> <code>round</code>, <code>*</code>, <code>+</code>, <code>round</code>, <code>/</code></p>
+      <p class="sharepage__note">Expected output: <code>0.3</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>nearlyEqual(a, b, eps)</code> that returns true when |a - b| &lt;= eps. Then log: the raw value of <code>0.1 + 0.2</code>, whether <code>0.1 + 0.2 === 0.3</code>, whether <code>nearlyEqual(0.1 + 0.2, 0.3, 1e-9)</code>, and whether <code>nearlyEqual(0.1 + 0.2, 0.4, 1e-9)</code> — one result per line.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li><code>Math.abs(a - b)</code> collapses both signs of the gap into one nonnegative number.</li><li><code>&lt;=</code> (not <code>&lt;</code>) is the conventional comparison so exact-equal values also pass.</li><li>1e-9 is a friendlier tolerance than <code>Number.EPSILON</code> (~2.22e-16) when the values aren&#39;t right at 1.0.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function nearlyEqual(a, b, eps) {
+  return Math.abs(a - b) &lt;= eps;
+}
+
+console.log(0.1 + 0.2);
+console.log(0.1 + 0.2 === 0.3);
+console.log(nearlyEqual(0.1 + 0.2, 0.3, 1e-9));
+console.log(nearlyEqual(0.1 + 0.2, 0.4, 1e-9));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"t-floating-precision","title":"Floating-point precision (0.1 + 0.2)","section":"JS Traps","track":"syntax","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does `console.log(0.1 + 0.2)` print?","options":["0.3","0.30000000000000004","0.30000000000000001","NaN"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What is `0.1 + 0.2 === 0.3`?","options":["true","false","throws TypeError","NaN"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Which is the safest way to check that two floats are 'equal' within tolerance?","options":["a === b","a == b","Math.abs(a - b) \u003c 1e-9","Object.is(a, b)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"What type does `(0.1 + 0.2).toFixed(2)` return?","options":["number","string","boolean","BigInt"],"answer":1,"answerLetter":"B"},{"n":5,"q":"Why store money as integer cents instead of dollar floats?","options":["Integers are faster on modern CPUs","Floats can lose pennies because 0.1, 0.2, etc. aren't exactly representable","JavaScript numbers don't support decimals","JSON can't serialize float values"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Show the rounding error directly: print the sum, then the strict-equality check against 0.3.","answers":["+","0.2","===","0.3"]},{"n":2,"prompt":"Fix the comparison with an epsilon tolerance. Use the absolute difference and a friendly 1e-9 threshold.","answers":["+","abs","-","\u003c"]},{"n":3,"prompt":"Money math: sum two prices via scale-and-integer to avoid pennies drift. Round each scaled term before adding.","answers":["round","*","+","round","/"]}],"L3":[{"n":1,"prompt":"Write `nearlyEqual(a, b, eps)` that returns true when |a - b| \u003c= eps. Then log: the raw value of `0.1 + 0.2`, whether `0.1 + 0.2 === 0.3`, whether `nearlyEqual(0.1 + 0.2, 0.3, 1e-9)`, and whether `nearlyEqual(0.1 + 0.2, 0.4, 1e-9)` — one result per line.","expectedOutput":"0.30000000000000004\nfalse\ntrue\nfalse"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/t-floating-precision">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

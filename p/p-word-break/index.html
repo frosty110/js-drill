@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Word Break (DP) — JS Drill</title>
+<meta name="description" content="Bottom-up DP: dp[i] is true iff s[0..i] can be segmented into dictionary words. Transition: dp[i] = ∃ j &lt; i with dp[j] true AND s[j..i] in the dict.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-word-break">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Word Break (DP) — JS Drill">
+<meta property="og:description" content="Bottom-up DP: dp[i] is true iff s[0..i] can be segmented into dictionary words. Transition: dp[i] = ∃ j &lt; i with dp[j] true AND s[j..i] in the dict.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-word-break">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Dynamic Programming</p>
+    <h1>Word Break (DP)</h1>
+    <p class="sharepage__lede">Bottom-up DP: dp[i] is true iff s[0..i] can be segmented into dictionary words. Transition: dp[i] = ∃ j &lt; i with dp[j] true AND s[j..i] in the dict.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Dynamic Programming</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>wordBreak(s, wordDict)</code> using bottom-up DP. Log <code>wordBreak(&quot;applepenapple&quot;, [&quot;apple&quot;,&quot;pen&quot;])</code> then <code>wordBreak(&quot;catsandog&quot;, [&quot;cats&quot;,&quot;dog&quot;,&quot;sand&quot;,&quot;and&quot;,&quot;cat&quot;])</code>.</p>
+    <p class="sharepage__note">Expected output: <code>true
+false</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Bottom-up DP (tabulation)</strong> · <code>O(n²·k) / O(n)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">function wordBreak(s, wordDict) {
+  // Set for O(1) word membership checks (vs O(d) array.includes).
+  const set = new Set(wordDict);
+  // dp[i] = can s[0..i) be segmented? Length n+1 to index past the end.
+  const dp = new Array(s.length + 1).fill(false);
+  dp[0] = true;                                  // empty prefix is segmentable
+  for (let i = 1; i &lt;= s.length; i++) {
+    // j is the split point: prior segment ends at j, candidate word is s[j..i).
+    for (let j = 0; j &lt; i; j++) {
+      if (dp[j] &amp;&amp; set.has(s.slice(j, i))) {
+        dp[i] = true;
+        break;                                   // one valid split is enough
+      }
+    }
+  }
+  return dp[s.length];
+}</code></pre>
+    <ul class="sharepage__notes"><li>dp[0] = true is the base case — the empty prefix is trivially segmentable.</li><li>Inner loop j scans 0..i-1: j marks the END of the previous word and the START of the candidate s[j..i].</li><li>Break as soon as you set dp[i] = true — one valid split suffices.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Top-down memoization (recursive) <code>O(n²·k) / O(n)</code></h3>
+      <p>Reach for this if the interviewer says &#39;can you do it recursively?&#39; or you find recursion easier to reason about than tabulation. Same asymptotic complexity as the bottom-up DP — the recursion mirrors the &#39;where does the next word start?&#39; decision tree, which some find more natural than threading the same idea through a dp[] array. Lazy: a lucky early split can skip whole regions of the table the iterative version still fills.</p>
+      <pre class="sharepage__code"><code class="language-js">function wordBreak(s, wordDict) {
+  const set = new Set(wordDict);
+  // memo[start] = can the suffix s[start..] be segmented?
+  const memo = new Map();
+  function canBreak(start) {
+    if (start === s.length) return true;        // consumed the whole string ✓
+    if (memo.has(start)) return memo.get(start);
+    for (let end = start + 1; end &lt;= s.length; end++) {
+      // Try every word that could start at `start`, then recurse on the rest.
+      if (set.has(s.slice(start, end)) &amp;&amp; canBreak(end)) {
+        memo.set(start, true);
+        return true;
+      }
+    }
+    memo.set(start, false);
+    return false;
+  }
+  return canBreak(0);
+}
+console.log(wordBreak(&quot;applepenapple&quot;, [&quot;apple&quot;, &quot;pen&quot;]));
+console.log(wordBreak(&quot;catsandog&quot;, [&quot;cats&quot;, &quot;dog&quot;, &quot;sand&quot;, &quot;and&quot;, &quot;cat&quot;]));</code></pre>
+      <ul class="sharepage__notes"><li>Memo keys on <code>start</code> (the suffix&#39;s first index), not the dp[] table index — semantically equivalent but lets the recursion read forward (&quot;can the rest be broken?&quot;) instead of backward.</li><li>Without the memo, the recursion fans out to O(d^n) — every overlapping split path re-derives the same suffixes. The memo collapses it back to O(n²·k).</li><li>The base case <code>start === s.length</code> is the recursive analog of bottom-up&#39;s <code>dp[0] = true</code> seed — it&#39;s the terminal that lets any earlier call ever return true.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What does dp[i] represent?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Shortest word ending at i</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Whether s[0..i] can be segmented into dictionary words <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Number of segmentations of s[0..i]</li>
+        <li><span class="sharepage__key">D</span> Longest dict word at index i</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why initialize dp[0] = true?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To bias the recurrence toward earlier splits, since shorter prefixes are more likely to be in the dictionary</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Empty prefix is segmentable, letting dp[i] turn on when s[0..i] is itself a word <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It marks the dp[0] slot as the &#39;sentinel start&#39; so the inner loop&#39;s bounds check <code>j &lt; i</code> doesn&#39;t read undefined</li>
+        <li><span class="sharepage__key">D</span> It encodes the convention that single-character strings are always segmentable into themselves</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Time complexity, ignoring substring cost?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li><span class="sharepage__key">B</span> O(n log n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(n^2) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(2^n)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why use a Set for wordDict instead of an array?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Sets are iterable in insertion order, which makes the inner-loop split-point scan deterministic</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(1) average membership check vs O(d) for array.includes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Sets hash by reference, so duplicate dictionary entries from the caller are silently collapsed</li>
+        <li><span class="sharepage__key">D</span> Set.has uses Boyer-Moore for substring matching, which is faster than == on long words</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the bottom-up DP. dp[i] is true if some split point j makes dp[j] true AND s.slice(j, i) is in the dict.</p>
+      <pre class="sharepage__code"><code class="language-js">function wordBreak(s, wordDict) {
+  const set = new ___(wordDict);
+  const dp = new Array(s.length + 1).fill(false);
+  dp[0] = ___;
+  for (let i = 1; i &lt;= s.length; i++) {
+    for (let j = 0; j &lt; i; j++) {
+      if (dp[j] &amp;&amp; set.has(s.slice(j, ___))) {
+        dp[i] = true;
+        ___;
+      }
+    }
+  }
+  return dp[s.length];
+}
+console.log(wordBreak(&quot;leetcode&quot;, [&quot;leet&quot;, &quot;code&quot;]));</code></pre>
+      <p><strong>Answers:</strong> <code>Set</code>, <code>true</code>, <code>i</code>, <code>break</code></p>
+      <p class="sharepage__note">Expected output: <code>true</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>wordBreak(s, wordDict)</code> using bottom-up DP. Log <code>wordBreak(&quot;applepenapple&quot;, [&quot;apple&quot;,&quot;pen&quot;])</code> then <code>wordBreak(&quot;catsandog&quot;, [&quot;cats&quot;,&quot;dog&quot;,&quot;sand&quot;,&quot;and&quot;,&quot;cat&quot;])</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>dp length is s.length + 1; dp[0] = true.</li><li>Outer i: end of the prefix. Inner j: split point — check dp[j] AND s.slice(j, i) is a dict word.</li><li>&quot;catsandog&quot; fails: no split of the suffix &quot;og&quot; is in the dict.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function wordBreak(s, wordDict) {
+  // Set for O(1) word membership checks (vs O(d) array.includes).
+  const set = new Set(wordDict);
+  // dp[i] = can s[0..i) be segmented? Length n+1 to index past the end.
+  const dp = new Array(s.length + 1).fill(false);
+  dp[0] = true;                                  // empty prefix is segmentable
+  for (let i = 1; i &lt;= s.length; i++) {
+    // j is the split point: prior segment ends at j, candidate word is s[j..i).
+    for (let j = 0; j &lt; i; j++) {
+      if (dp[j] &amp;&amp; set.has(s.slice(j, i))) {
+        dp[i] = true;
+        break;                                   // one valid split is enough
+      }
+    }
+  }
+  return dp[s.length];
+}
+console.log(wordBreak(&quot;applepenapple&quot;, [&quot;apple&quot;, &quot;pen&quot;]));
+console.log(wordBreak(&quot;catsandog&quot;, [&quot;cats&quot;, &quot;dog&quot;, &quot;sand&quot;, &quot;and&quot;, &quot;cat&quot;]));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-word-break","title":"Word Break (DP)","section":"Dynamic Programming","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does dp[i] represent?","options":["Shortest word ending at i","Whether s[0..i] can be segmented into dictionary words","Number of segmentations of s[0..i]","Longest dict word at index i"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why initialize dp[0] = true?","options":["To bias the recurrence toward earlier splits, since shorter prefixes are more likely to be in the dictionary","Empty prefix is segmentable, letting dp[i] turn on when s[0..i] is itself a word","It marks the dp[0] slot as the 'sentinel start' so the inner loop's bounds check `j \u003c i` doesn't read undefined","It encodes the convention that single-character strings are always segmentable into themselves"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Time complexity, ignoring substring cost?","options":["O(n)","O(n log n)","O(n^2)","O(2^n)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Why use a Set for wordDict instead of an array?","options":["Sets are iterable in insertion order, which makes the inner-loop split-point scan deterministic","O(1) average membership check vs O(d) for array.includes","Sets hash by reference, so duplicate dictionary entries from the caller are silently collapsed","Set.has uses Boyer-Moore for substring matching, which is faster than == on long words"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the bottom-up DP. dp[i] is true if some split point j makes dp[j] true AND s.slice(j, i) is in the dict.","answers":["Set","true","i","break"]}],"L3":[{"n":1,"prompt":"Write `wordBreak(s, wordDict)` using bottom-up DP. Log `wordBreak(\"applepenapple\", [\"apple\",\"pen\"])` then `wordBreak(\"catsandog\", [\"cats\",\"dog\",\"sand\",\"and\",\"cat\"])`.","expectedOutput":"true\nfalse"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-word-break">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

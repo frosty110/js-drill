@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snake Game Logic — JS Drill</title>
+<meta name="description" content="Snake on a w x h grid. Maintain the body as a queue of cells plus a Set for O(1) self-collision lookup. Each move: compute the new head, drop the tail UNLESS the new cell eats food, then check walls and self-overlap.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-snake-game">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Snake Game Logic — JS Drill">
+<meta property="og:description" content="Snake on a w x h grid. Maintain the body as a queue of cells plus a Set for O(1) self-collision lookup. Each move: compute the new head, drop the tail UNLESS the new cell eats food, then check walls and self-overlap.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-snake-game">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Snake Game Logic</h1>
+    <p class="sharepage__lede">Snake on a w x h grid. Maintain the body as a queue of cells plus a Set for O(1) self-collision lookup. Each move: compute the new head, drop the tail UNLESS the new cell eats food, then check walls and self-overlap.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Build Snake(width, height, food) with move(dir) returning new score or -1 on crash. On a 3x3 grid with one food at [0,1], run R, R, U. Logs: 1, 1, -1.</p>
+    <p class="sharepage__note">Expected output: <code>1
+1
+-1</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">class Snake {
+  constructor(width, height, food) {
+    this.w = width; this.h = height;
+    // Food is a FIFO queue — only food[0] is eligible to eat.
+    this.food = food.slice();
+    this.snake = [[0, 0]];              // head is last; tail is first
+    // Set keyed &#39;r,c&#39; — O(1) self-collision lookup; array gives ordering.
+    this.set = new Set([&quot;0,0&quot;]);
+    this.score = 0;
+  }
+  move(dir) {
+    const [r, c] = this.snake[this.snake.length - 1];
+    let nr = r, nc = c;
+    if (dir === &quot;U&quot;) nr--; else if (dir === &quot;D&quot;) nr++;
+    else if (dir === &quot;L&quot;) nc--; else if (dir === &quot;R&quot;) nc++;
+    if (nr &lt; 0 || nr &gt;= this.h || nc &lt; 0 || nc &gt;= this.w) return -1;
+    const ate = this.food.length &amp;&amp; this.food[0][0] === nr &amp;&amp; this.food[0][1] === nc;
+    // Drop tail BEFORE self-check so moving into the old tail cell isn&#39;t a false collision.
+    if (!ate) {
+      const t = this.snake.shift();
+      this.set.delete(t[0] + &quot;,&quot; + t[1]);
+    }
+    const key = nr + &quot;,&quot; + nc;
+    if (this.set.has(key)) return -1;   // self-collision
+    this.snake.push([nr, nc]); this.set.add(key);
+    if (ate) { this.food.shift(); this.score++; }
+    return this.score;
+  }
+}
+// Time O(1) per move, Space O(snake length)</code></pre>
+    <ul class="sharepage__notes"><li>Drop the tail BEFORE checking self-overlap — otherwise legal moves that occupy the old tail cell falsely register as collisions.</li><li>Track body cells in a Set keyed by &#39;r,c&#39; for O(1) collision lookup; the array gives ordered queue semantics.</li><li>Food is a queue (FIFO) — only the FRONT food piece is eligible. Compare head&#39;s new cell against food[0] only.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Array-only scan — no Set (O(snake length) per move) <code>O(n) move / O(n) space</code></h3>
+      <p>Reach for this when the interviewer wants the simplest possible implementation and the snake is known to stay short. For competitive-programming toy grids it&#39;s fine; for long games it degrades to O(snake²) total work.</p>
+      <pre class="sharepage__code"><code class="language-js">class Snake {
+  constructor(width, height, food) {
+    this.w = width; this.h = height;
+    this.food = food.slice();
+    this.snake = [[0, 0]];  // head is last; tail is first
+    this.score = 0;
+  }
+  move(dir) {
+    const [r, c] = this.snake[this.snake.length - 1];
+    let nr = r, nc = c;
+    if (dir === &quot;U&quot;) nr--; else if (dir === &quot;D&quot;) nr++;
+    else if (dir === &quot;L&quot;) nc--; else if (dir === &quot;R&quot;) nc++;
+    if (nr &lt; 0 || nr &gt;= this.h || nc &lt; 0 || nc &gt;= this.w) return -1;
+    const ate = this.food.length &amp;&amp; this.food[0][0] === nr &amp;&amp; this.food[0][1] === nc;
+    // Drop tail before self-check — same ordering invariant as the Set version.
+    if (!ate) this.snake.shift();
+    // O(snake_length) linear scan instead of O(1) Set lookup.
+    if (this.snake.some(([br, bc]) =&gt; br === nr &amp;&amp; bc === nc)) return -1;
+    this.snake.push([nr, nc]);
+    if (ate) { this.food.shift(); this.score++; }
+    return this.score;
+  }
+}
+const g = new Snake(3, 3, [[0, 1]]);
+console.log(g.move(&quot;R&quot;));
+console.log(g.move(&quot;R&quot;));
+console.log(g.move(&quot;U&quot;));</code></pre>
+      <ul class="sharepage__notes"><li><code>Array.some</code> scans every body cell looking for a match — O(snake_length) per move vs O(1) with a Set.</li><li>The tail-drop-before-collision-check ordering is identical — the Set version doesn&#39;t change that invariant.</li><li>Simpler to write under time pressure; upgrade to Set+array when the snake can grow long.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why store the body in a Set in addition to an array?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Faster head lookup — the Set&#39;s <code>last</code> accessor returns the most recently added cell in O(1)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(1) self-collision check; the array preserves order for tail removal <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The Set persists across <code>move</code> calls while the array is rebuilt each frame, so it caches the previous tail</li>
+        <li><span class="sharepage__key">D</span> JavaScript arrays can&#39;t store <code>[r, c]</code> tuples because nested arrays lose identity across calls</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> When the snake eats food, what changes vs a regular move?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The head doubles in position — <code>nr += 2</code> rather than <code>+= 1</code> to account for the energy boost</li>
+        <li><span class="sharepage__key">B</span> The head advances but the snake also rewinds one step the next move to digest, leaving net-zero growth</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> The tail is NOT removed, so the snake grows by one <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The food queue rotates so the next food spawns adjacent to the new head</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why remove the tail before the self-collision check?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Set.delete is O(n) when called after a Set.has on the same key, so removing the tail first avoids re-hashing</li>
+        <li><span class="sharepage__key">B</span> Order does not matter — but <code>array.shift()</code> would mutate during iteration if called inside the collision check loop</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Otherwise moving into the old tail cell would falsely flag as a collision <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The tail must be removed first to free up its slot in the food queue for the next eat</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What does move return on a wall or self crash?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 0 — the score resets to zero on crash and the game restarts implicitly</li>
+        <li><span class="sharepage__key">B</span> undefined — the function exits without an explicit return after the crash branch fires</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> -1 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Throws <code>GameOverError</code> — the caller is expected to wrap <code>move</code> in a try/catch</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in Snake.move so a 3x3 grid with food at [0,1] yields score 1 after eating, then -1 on the wall.</p>
+      <pre class="sharepage__code"><code class="language-js">class Snake {
+  constructor(w, h, food) {
+    this.w = w; this.h = h; this.food = food.slice();
+    this.snake = [[0, 0]]; this.set = new ___([&quot;0,0&quot;]); this.score = 0;
+  }
+  move(dir) {
+    const [r, c] = this.snake[this.snake.___ - 1];
+    let nr = r, nc = c;
+    if (dir === &quot;U&quot;) nr--; else if (dir === &quot;D&quot;) nr++;
+    else if (dir === &quot;L&quot;) nc--; else if (dir === &quot;R&quot;) nc++;
+    if (nr &lt; 0 || nr &gt;= this.h || nc &lt; 0 || nc &gt;= this.w) return ___;
+    const ate = this.food.length &amp;&amp; this.food[0][0] === nr &amp;&amp; this.food[0][1] === nc;
+    if (!ate) {
+      const t = this.snake.___();
+      this.set.___(t[0] + &quot;,&quot; + t[1]);
+    }
+    const key = nr + &quot;,&quot; + nc;
+    if (this.set.___(key)) return -1;
+    this.snake.push([nr, nc]); this.set.add(key);
+    if (ate) { this.food.shift(); this.score___; }
+    return this.score;
+  }
+}
+const g = new Snake(3, 3, [[0, 1]]);
+console.log(g.move(&quot;R&quot;));
+console.log(g.move(&quot;R&quot;));
+console.log(g.move(&quot;U&quot;));</code></pre>
+      <p><strong>Answers:</strong> <code>Set</code>, <code>length</code>, <code>-1</code>, <code>shift</code>, <code>delete</code>, <code>has</code>, <code>++</code></p>
+      <p class="sharepage__note">Expected output: <code>1
+1
+-1</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Build Snake(width, height, food) with move(dir) returning new score or -1 on crash. On a 3x3 grid with one food at [0,1], run R, R, U. Logs: 1, 1, -1.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Body array&#39;s last element is the head; the first element is the tail.</li><li>Drop the tail BEFORE the self-collision check unless the new cell ate food.</li><li>Track body cells in a Set keyed by &#39;r,c&#39; for O(1) collision lookup.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">class Snake {
+  constructor(width, height, food) {
+    this.w = width; this.h = height;
+    // Food is a FIFO queue — only food[0] is eligible to eat.
+    this.food = food.slice();
+    this.snake = [[0, 0]];                  // head is last; tail is first
+    // Set keyed &#39;r,c&#39; — O(1) self-collision lookup; array gives ordering.
+    this.set = new Set([&quot;0,0&quot;]);
+    this.score = 0;
+  }
+  move(dir) {
+    const [r, c] = this.snake[this.snake.length - 1];
+    let nr = r, nc = c;
+    if (dir === &quot;U&quot;) nr--; else if (dir === &quot;D&quot;) nr++;
+    else if (dir === &quot;L&quot;) nc--; else if (dir === &quot;R&quot;) nc++;
+    if (nr &lt; 0 || nr &gt;= this.h || nc &lt; 0 || nc &gt;= this.w) return -1;
+    const ate = this.food.length &amp;&amp; this.food[0][0] === nr &amp;&amp; this.food[0][1] === nc;
+    // Drop tail BEFORE self-check so moving into the old tail cell isn&#39;t a false collision.
+    if (!ate) {
+      const t = this.snake.shift();
+      this.set.delete(t[0] + &quot;,&quot; + t[1]);
+    }
+    const key = nr + &quot;,&quot; + nc;
+    if (this.set.has(key)) return -1;
+    this.snake.push([nr, nc]);
+    this.set.add(key);
+    if (ate) { this.food.shift(); this.score++; }
+    return this.score;
+  }
+}
+const g = new Snake(3, 3, [[0, 1]]);
+console.log(g.move(&quot;R&quot;));
+console.log(g.move(&quot;R&quot;));
+console.log(g.move(&quot;U&quot;));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-snake-game","title":"Snake Game Logic","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why store the body in a Set in addition to an array?","options":["Faster head lookup — the Set's `last` accessor returns the most recently added cell in O(1)","O(1) self-collision check; the array preserves order for tail removal","The Set persists across `move` calls while the array is rebuilt each frame, so it caches the previous tail","JavaScript arrays can't store `[r, c]` tuples because nested arrays lose identity across calls"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When the snake eats food, what changes vs a regular move?","options":["The head doubles in position — `nr += 2` rather than `+= 1` to account for the energy boost","The head advances but the snake also rewinds one step the next move to digest, leaving net-zero growth","The tail is NOT removed, so the snake grows by one","The food queue rotates so the next food spawns adjacent to the new head"],"answer":2,"answerLetter":"C"},{"n":3,"q":"Why remove the tail before the self-collision check?","options":["Set.delete is O(n) when called after a Set.has on the same key, so removing the tail first avoids re-hashing","Order does not matter — but `array.shift()` would mutate during iteration if called inside the collision check loop","Otherwise moving into the old tail cell would falsely flag as a collision","The tail must be removed first to free up its slot in the food queue for the next eat"],"answer":2,"answerLetter":"C"},{"n":4,"q":"What does move return on a wall or self crash?","options":["0 — the score resets to zero on crash and the game restarts implicitly","undefined — the function exits without an explicit return after the crash branch fires","-1","Throws `GameOverError` — the caller is expected to wrap `move` in a try/catch"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in Snake.move so a 3x3 grid with food at [0,1] yields score 1 after eating, then -1 on the wall.","answers":["Set","length","-1","shift","delete","has","++"]}],"L3":[{"n":1,"prompt":"Build Snake(width, height, food) with move(dir) returning new score or -1 on crash. On a 3x3 grid with one food at [0,1], run R, R, U. Logs: 1, 1, -1.","expectedOutput":"1\n1\n-1"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-snake-game">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

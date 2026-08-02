@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Minesweeper Reveal — JS Drill</title>
+<meta name="description" content="Reveal logic for a Minesweeper click. Hitting a mine (&#39;M&#39;) turns to &#39;X&#39;. Hitting an empty cell (&#39;E&#39;) reveals its mine-neighbor count; if zero, flood-fill out to adjacent zero cells, stopping at numbered borders. Use a stack DFS to avoid recursion depth blow-ups on big boards.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-minesweeper">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Minesweeper Reveal — JS Drill">
+<meta property="og:description" content="Reveal logic for a Minesweeper click. Hitting a mine (&#39;M&#39;) turns to &#39;X&#39;. Hitting an empty cell (&#39;E&#39;) reveals its mine-neighbor count; if zero, flood-fill out to adjacent zero cells, stopping at numbered borders. Use a stack DFS to avoid recursion depth blow-ups on big boards.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-minesweeper">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Minesweeper Reveal</h1>
+    <p class="sharepage__lede">Reveal logic for a Minesweeper click. Hitting a mine (&#39;M&#39;) turns to &#39;X&#39;. Hitting an empty cell (&#39;E&#39;) reveals its mine-neighbor count; if zero, flood-fill out to adjacent zero cells, stopping at numbered borders. Use a stack DFS to avoid recursion depth blow-ups on big boards.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement reveal(board, click) and log JSON.stringify of the final board after clicking [3,0] on a 4x5 board with a single mine at [1,2].</p>
+    <p class="sharepage__note">Expected output: <code>[[&quot;B&quot;,&quot;1&quot;,&quot;E&quot;,&quot;1&quot;,&quot;B&quot;],[&quot;B&quot;,&quot;1&quot;,&quot;M&quot;,&quot;1&quot;,&quot;B&quot;],[&quot;B&quot;,&quot;1&quot;,&quot;1&quot;,&quot;1&quot;,&quot;B&quot;],[&quot;B&quot;,&quot;B&quot;,&quot;B&quot;,&quot;B&quot;,&quot;B&quot;]]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function reveal(board, click) {
+  const [r, c] = click;
+  const h = board.length, w = board[0].length;
+  // Clicked a mine: flip to &#39;X&#39; and short-circuit before entering the flood loop.
+  if (board[r][c] === &quot;M&quot;) { board[r][c] = &quot;X&quot;; return board; }
+  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  // Stack DFS instead of recursion — avoids depth blow-up on large boards.
+  const stack = [[r, c]];
+  while (stack.length) {
+    const [cr, cc] = stack.pop();
+    // Already revealed (B or digit) — skip; prevents double-counting.
+    if (board[cr][cc] !== &quot;E&quot;) continue;
+    let n = 0;
+    for (const [dr, dc] of dirs) {
+      const nr = cr + dr, nc = cc + dc;
+      if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w &amp;&amp; board[nr][nc] === &quot;M&quot;) n++;
+    }
+    // Numbered cell — flood-fill stops here; do NOT push neighbors.
+    if (n &gt; 0) { board[cr][cc] = String(n); }
+    else {
+      // Mark BEFORE pushing neighbors — same cell could be reached via many paths.
+      board[cr][cc] = &quot;B&quot;;
+      for (const [dr, dc] of dirs) {
+        const nr = cr + dr, nc = cc + dc;
+        if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w &amp;&amp; board[nr][nc] === &quot;E&quot;) stack.push([nr, nc]);
+      }
+    }
+  }
+  return board;
+}
+// Time O(h*w), Space O(h*w) worst case</code></pre>
+    <ul class="sharepage__notes"><li>Set the cell BEFORE pushing neighbors, otherwise the same cell gets enqueued many times and you re-count its mines.</li><li>Numbered cells are flood-fill stoppers — never push their neighbors. Only zero-mine (&#39;B&#39;) cells propagate.</li><li>Mines under the click become &#39;X&#39;, not &#39;B&#39;. Short-circuit before entering the flood loop.</li><li>Time O(h*w) worst case; each cell pushed at most once. Space O(h*w) for the stack.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Recursive DFS <code>O(h*w) / O(h*w)</code></h3>
+      <p>Use when the board is guaranteed small (e.g. ≤100×100) and you want the most concise code. On large boards (1000×1000 all zeros), the call stack overflows around ~10k frames in V8 — the iterative version avoids this entirely.</p>
+      <pre class="sharepage__code"><code class="language-js">function reveal(board, click) {
+  const [r, c] = click;
+  const h = board.length, w = board[0].length;
+  if (board[r][c] === &#39;M&#39;) { board[r][c] = &#39;X&#39;; return board; }
+  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  function dfs(cr, cc) {
+    // Out-of-bounds or already revealed — stop.
+    if (cr &lt; 0 || cr &gt;= h || cc &lt; 0 || cc &gt;= w) return;
+    if (board[cr][cc] !== &#39;E&#39;) return;
+    let n = 0;
+    for (const [dr, dc] of dirs) {
+      const nr = cr + dr, nc = cc + dc;
+      if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w &amp;&amp; board[nr][nc] === &#39;M&#39;) n++;
+    }
+    if (n &gt; 0) { board[cr][cc] = String(n); return; }
+    // Mark BEFORE recursing so the same cell is not re-entered via a diagonal path.
+    board[cr][cc] = &#39;B&#39;;
+    for (const [dr, dc] of dirs) dfs(cr + dr, cc + dc);
+  }
+  dfs(r, c);
+  return board;
+}
+const board = [
+  [&#39;E&#39;,&#39;E&#39;,&#39;E&#39;,&#39;E&#39;,&#39;E&#39;],
+  [&#39;E&#39;,&#39;E&#39;,&#39;M&#39;,&#39;E&#39;,&#39;E&#39;],
+  [&#39;E&#39;,&#39;E&#39;,&#39;E&#39;,&#39;E&#39;,&#39;E&#39;],
+  [&#39;E&#39;,&#39;E&#39;,&#39;E&#39;,&#39;E&#39;,&#39;E&#39;]
+];
+console.log(JSON.stringify(reveal(board, [3, 0])));</code></pre>
+      <ul class="sharepage__notes"><li>Same algorithm as the iterative version — only the call mechanism differs (call stack vs explicit array stack).</li><li>Mark the cell &#39;B&#39; BEFORE recursing on neighbors, otherwise the same cell is revisited via a diagonal path.</li><li>JS call stack is ~10k frames in V8; an all-zero 1000x1000 board would overflow — prefer the iterative version for large inputs.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What does the flood fill stop at?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The board edge only — interior numbered cells still propagate the flood</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Cells with at least one neighboring mine (numbered) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Cells where the mine count exceeds the 4-direction (cardinal) neighbor count, ignoring diagonals</li>
+        <li><span class="sharepage__key">D</span> Cells with exactly 1 neighboring mine — &#39;2&#39; through &#39;8&#39; cells continue the flood</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why mark the cell BEFORE pushing its neighbors in DFS?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>stack.push</code> evaluates its argument lazily, so the mark must already exist or the push reads back stale state</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Avoids re-processing and double-counting when the same cell is reached via multiple paths <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Marking after the push would mutate the array during iteration of the neighbor loop, throwing a &#39;cannot modify&#39; error</li>
+        <li><span class="sharepage__key">D</span> The <code>&#39;B&#39;</code> sentinel is what makes neighbors recognize this cell as a valid push source</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Clicking a numbered cell (n&gt;0 mine-neighbors) — does the flood-fill propagate past it?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Yes — the propagation continues one cell deep past every numbered border, then stops</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> No — numbered cells are flood-fill stoppers; only zero-mine cells propagate <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Yes — all reachable &#39;E&#39; cells get revealed because the numbered cell&#39;s count is added to the stack as a bias</li>
+        <li><span class="sharepage__key">D</span> No — and the cell itself stays &#39;E&#39; as a side-effect of the early-return at n&gt;0</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Numbered cells reveal themselves (the digit) but don&#39;t push neighbors. Only &#39;B&#39; (zero-mine) cells continue the flood.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> If you initialized <code>let n = 1</code> instead of <code>let n = 0</code> before the mine-count loop, what&#39;s the bug?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Nothing — the count is reset to 0 by the first <code>n++</code> so the initialization value is irrelevant</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Every &#39;E&#39; cell becomes a numbered cell (incl. zero-mine), so the flood NEVER propagates <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The flood propagates correctly but every revealed digit is mis-labeled by 1 (e.g. a true-1 cell shows &#39;2&#39;)</li>
+        <li><span class="sharepage__key">D</span> Infinite loop — <code>n &gt; 0</code> always holds, so the same cells keep getting re-pushed and re-counted forever</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The <code>if (n &gt; 0)</code> branch fires for every cell, so no cell ever takes the <code>else</code> branch that marks &#39;B&#39; and pushes neighbors.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in reveal so a click on a mine flips it to &#39;X&#39;.</p>
+      <pre class="sharepage__code"><code class="language-js">function reveal(board, click) {
+  const [r, c] = ___;
+  if (board[r][c] ___ &quot;M&quot;) { board[r][c] = ___; ___ board; }
+  ___ board;
+}
+const b = [[&quot;E&quot;,&quot;M&quot;],[&quot;E&quot;,&quot;E&quot;]];
+console.log(JSON.stringify(reveal(b, [0, 1])));</code></pre>
+      <p><strong>Answers:</strong> <code>click</code>, <code>===</code>, <code>&quot;X&quot;</code>, <code>return</code>, <code>return</code></p>
+      <p class="sharepage__note">Expected output: <code>[[&quot;E&quot;,&quot;X&quot;],[&quot;E&quot;,&quot;E&quot;]]</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Fill in the flood-fill core: the numbered-stop branch condition, and the mark-before-push sentinel.</p>
+      <pre class="sharepage__code"><code class="language-js">function reveal(board, click) {
+  const [r, c] = click;
+  const h = board.length, w = board[0].length;
+  if (board[r][c] === &quot;M&quot;) { board[r][c] = &quot;X&quot;; return board; }
+  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  const stack = [[r, c]];
+  while (stack.length) {
+    const [cr, cc] = stack.___();
+    if (board[cr][cc] ___ &quot;E&quot;) continue;
+    let n = 0;
+    for (const [dr, dc] ___ dirs) {
+      const nr = cr + dr, nc = cc + dc;
+      if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w &amp;&amp; board[nr][nc] === &quot;M&quot;) n++;
+    }
+    if (n ___ 0) { board[cr][cc] = String(n); }
+    else {
+      board[cr][cc] = ___;
+      for (const [dr, dc] of dirs) {
+        const nr = cr + dr, nc = cc + dc;
+        if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w &amp;&amp; board[nr][nc] === &quot;E&quot;) stack.___([nr, nc]);
+      }
+    }
+  }
+  return board;
+}
+const board = [
+  [&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;],
+  [&quot;E&quot;,&quot;E&quot;,&quot;M&quot;,&quot;E&quot;,&quot;E&quot;],
+  [&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;],
+  [&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;]
+];
+console.log(JSON.stringify(reveal(board, [3, 0])));</code></pre>
+      <p><strong>Answers:</strong> <code>pop</code>, <code>!==</code>, <code>of</code>, <code>&gt;</code>, <code>&quot;B&quot;</code>, <code>push</code></p>
+      <p class="sharepage__note">Expected output: <code>[[&quot;B&quot;,&quot;1&quot;,&quot;E&quot;,&quot;1&quot;,&quot;B&quot;],[&quot;B&quot;,&quot;1&quot;,&quot;M&quot;,&quot;1&quot;,&quot;B&quot;],[&quot;B&quot;,&quot;1&quot;,&quot;1&quot;,&quot;1&quot;,&quot;B&quot;],[&quot;B&quot;,&quot;B&quot;,&quot;B&quot;,&quot;B&quot;,&quot;B&quot;]]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement reveal(board, click) and log JSON.stringify of the final board after clicking [3,0] on a 4x5 board with a single mine at [1,2].</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Short-circuit when the click hits a mine; everything else goes through the flood loop.</li><li>Count mines in the 8 neighbors; if &gt; 0, write the digit and DO NOT recurse.</li><li>Mark blanks as &#39;B&#39; BEFORE pushing their &#39;E&#39; neighbors onto the stack.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function reveal(board, click) {
+  const [r, c] = click;
+  const h = board.length, w = board[0].length;
+  // Clicked a mine: flip to &#39;X&#39; and short-circuit before entering the flood loop.
+  if (board[r][c] === &quot;M&quot;) { board[r][c] = &quot;X&quot;; return board; }
+  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  // Stack DFS instead of recursion — avoids depth blow-up on large boards.
+  const stack = [[r, c]];
+  while (stack.length) {
+    const [cr, cc] = stack.pop();
+    // Already revealed (B or digit) — skip; prevents double-counting.
+    if (board[cr][cc] !== &quot;E&quot;) continue;
+    let n = 0;
+    for (const [dr, dc] of dirs) {
+      const nr = cr + dr, nc = cc + dc;
+      if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w &amp;&amp; board[nr][nc] === &quot;M&quot;) n++;
+    }
+    // Numbered cell — flood-fill stops here; do NOT push neighbors.
+    if (n &gt; 0) { board[cr][cc] = String(n); }
+    else {
+      // Mark BEFORE pushing neighbors — same cell could be reached via many paths.
+      board[cr][cc] = &quot;B&quot;;
+      for (const [dr, dc] of dirs) {
+        const nr = cr + dr, nc = cc + dc;
+        if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w &amp;&amp; board[nr][nc] === &quot;E&quot;) stack.push([nr, nc]);
+      }
+    }
+  }
+  return board;
+}
+const board = [
+  [&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;],
+  [&quot;E&quot;,&quot;E&quot;,&quot;M&quot;,&quot;E&quot;,&quot;E&quot;],
+  [&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;],
+  [&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;,&quot;E&quot;]
+];
+console.log(JSON.stringify(reveal(board, [3, 0])));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-minesweeper","title":"Minesweeper Reveal","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does the flood fill stop at?","options":["The board edge only — interior numbered cells still propagate the flood","Cells with at least one neighboring mine (numbered)","Cells where the mine count exceeds the 4-direction (cardinal) neighbor count, ignoring diagonals","Cells with exactly 1 neighboring mine — '2' through '8' cells continue the flood"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why mark the cell BEFORE pushing its neighbors in DFS?","options":["`stack.push` evaluates its argument lazily, so the mark must already exist or the push reads back stale state","Avoids re-processing and double-counting when the same cell is reached via multiple paths","Marking after the push would mutate the array during iteration of the neighbor loop, throwing a 'cannot modify' error","The `'B'` sentinel is what makes neighbors recognize this cell as a valid push source"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Clicking a numbered cell (n>0 mine-neighbors) — does the flood-fill propagate past it?","options":["Yes — the propagation continues one cell deep past every numbered border, then stops","No — numbered cells are flood-fill stoppers; only zero-mine cells propagate","Yes — all reachable 'E' cells get revealed because the numbered cell's count is added to the stack as a bias","No — and the cell itself stays 'E' as a side-effect of the early-return at n>0"],"answer":1,"answerLetter":"B"},{"n":4,"q":"If you initialized `let n = 1` instead of `let n = 0` before the mine-count loop, what's the bug?","options":["Nothing — the count is reset to 0 by the first `n++` so the initialization value is irrelevant","Every 'E' cell becomes a numbered cell (incl. zero-mine), so the flood NEVER propagates","The flood propagates correctly but every revealed digit is mis-labeled by 1 (e.g. a true-1 cell shows '2')","Infinite loop — `n > 0` always holds, so the same cells keep getting re-pushed and re-counted forever"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in reveal so a click on a mine flips it to 'X'.","answers":["click","===","\"X\"","return","return"]},{"n":2,"prompt":"Fill in the flood-fill core: the numbered-stop branch condition, and the mark-before-push sentinel.","answers":["pop","!==","of",">","\"B\"","push"]}],"L3":[{"n":1,"prompt":"Implement reveal(board, click) and log JSON.stringify of the final board after clicking [3,0] on a 4x5 board with a single mine at [1,2].","expectedOutput":"[[\"B\",\"1\",\"E\",\"1\",\"B\"],[\"B\",\"1\",\"M\",\"1\",\"B\"],[\"B\",\"1\",\"1\",\"1\",\"B\"],[\"B\",\"B\",\"B\",\"B\",\"B\"]]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-minesweeper">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

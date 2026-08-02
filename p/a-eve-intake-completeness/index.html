@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Intake Completeness Validator — JS Drill</title>
+<meta name="description" content="Recursive tree walk — a nested required-field schema (true = required leaf, object = required subtree); recurse to collect every missing required leaf as a dotted path, recursing into {} when a whole parent subtree is missing so its leaves still surface.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-eve-intake-completeness">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Intake Completeness Validator — JS Drill">
+<meta property="og:description" content="Recursive tree walk — a nested required-field schema (true = required leaf, object = required subtree); recurse to collect every missing required leaf as a dotted path, recursing into {} when a whole parent subtree is missing so its leaves still surface.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-eve-intake-completeness">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Intake Completeness Validator</h1>
+    <p class="sharepage__lede">Recursive tree walk — a nested required-field schema (true = required leaf, object = required subtree); recurse to collect every missing required leaf as a dotted path, recursing into {} when a whole parent subtree is missing so its leaves still surface.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Given a nested required-field schema (true = required leaf, nested object = required subtree) and a submitted intake object, return the dotted paths of every missing required field. A field is missing if it&#39;s undefined, null, or &#39;&#39;. If a whole subtree&#39;s parent is missing, report each of its leaves. Print a header then each missing path as &#39;- path&#39;.</p>
+    <p class="sharepage__note">Expected output: <code>Missing fields:
+- dob
+- incident.location
+- insurance.carrier
+- insurance.policyNumber</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// required: true = a required leaf; object = a required subtree.
+// Return dotted paths of every missing required field.
+// Missing = undefined, null, or &#39;&#39; (a blank form field is not filled).
+function findMissing(required, data, prefix = &#39;&#39;) {
+  const missing = [];
+  for (const key of Object.keys(required)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const spec = required[key];
+    const val = data == null ? undefined : data[key];
+    if (spec === true) {
+      // Leaf: required and empty -&gt; report this path.
+      if (val === undefined || val === null || val === &#39;&#39;) missing.push(path);
+    } else if (typeof spec === &#39;object&#39;) {
+      // Subtree: if the whole parent is missing, recurse into {} so every
+      // required leaf underneath still gets reported (not just the parent).
+      if (val === undefined || val === null) {
+        missing.push(...findMissing(spec, {}, path));
+      } else {
+        missing.push(...findMissing(spec, val, path));
+      }
+    }
+  }
+  return missing;
+}</code></pre>
+    <ul class="sharepage__notes"><li>Recursion is what handles arbitrary nesting depth: the schema can nest subtrees inside subtrees, and the same function walks any depth without hardcoding levels.</li><li>When a parent subtree is missing entirely (<code>insurance: null</code>), recurse into <code>{}</code> rather than skipping — so every required leaf beneath it (carrier, policyNumber) is reported individually, not just the parent.</li><li>Empty string counts as missing alongside null/undefined — a blank text field on the form is not a filled field. Use <code>=== &#39;&#39;</code> explicitly; a truthiness check would also reject <code>0</code> or <code>false</code>, which are valid values for other field types.</li><li>Time O(n), Space O(d + m) — n = total schema nodes visited once; d = recursion depth (stack); m = missing fields returned.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why is recursion the right tool for validating this schema?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> An iterative loop can&#39;t preserve the dotted prefix across nested levels</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The schema nests subtrees to arbitrary depth, and one recursive function walks any depth without hardcoding the levels <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>Object.keys</code> returns values in random order, so a recursive call is the only way to enforce a deterministic walk</li>
+        <li><span class="sharepage__key">D</span> A loop would have to mutate <code>required</code> in place to descend, which would corrupt the schema for the next call</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A subtree can contain subtrees; recursion descends each level uniformly instead of writing a fixed number of nested loops.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> When <code>insurance: null</code> (a whole required subtree is missing), why recurse into <code>{}</code> instead of just reporting <code>insurance</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because the spec object isn&#39;t <code>true</code>, the leaf branch can&#39;t fire — pushing <code>insurance</code> directly would mis-tag a subtree as a leaf</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> So every required leaf under it (carrier, policyNumber) is reported individually, telling the user exactly which fields to fill <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Recursing into <code>null</code> would corrupt the path prefix with a literal &#39;null&#39; segment</li>
+        <li><span class="sharepage__key">D</span> <code>{}</code> resets <code>data == null</code> to false so the guard stops firing on subsequent siblings</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Recursing into {} makes each child read as missing, so the report names every concrete field the user must supply, not just the group.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why does the validator treat an empty string <code>&#39;&#39;</code> as missing?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>&#39;&#39;</code> is coerced to <code>null</code> by <code>JSON.stringify</code>, so it would round-trip as missing anyway</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A blank form field is not a filled field, so a required field left empty must be flagged <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> All falsy values must be rejected — <code>&#39;&#39;</code>, <code>0</code>, <code>false</code>, and <code>NaN</code> all signal an unfilled field</li>
+        <li><span class="sharepage__key">D</span> <code>Object.keys</code> would skip a property whose value is <code>&#39;&#39;</code>, so the schema would never reach it</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The user typed nothing into a required box. Note it checks <code>=== &#39;&#39;</code> explicitly rather than truthiness, so valid <code>0</code>/<code>false</code> values on other field types are not wrongly flagged.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why does the code read <code>data == null ? undefined : data[key]</code> instead of just <code>data[key]</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>data[key]</code> returns the prototype value on missing own-keys; the guard suppresses inherited properties</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> When recursing into a missing subtree, <code>data</code> is <code>{}</code> (safe) — but the guard also prevents a TypeError if a null/undefined ever reaches the read <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>data == null</code> only fires for <code>undefined</code>, so the branch lets <code>null</code> pass through as a falsy leaf value</li>
+        <li><span class="sharepage__key">D</span> Optional chaining <code>data?.[key]</code> was added in ES2020 and isn&#39;t backward compatible</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Reading a property off null/undefined throws. The guard short-circuits to undefined so the leaf is reported as missing rather than crashing.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Build a dotted path from a prefix and a key — top-level keys have no dot. Fill the template literal and the falsy-or-empty check so the empty value is reported.</p>
+      <pre class="sharepage__code"><code class="language-js">const prefix = &#39;incident&#39;;
+const key = &#39;location&#39;;
+const path = prefix ? `${prefix}.${___}` : key;
+const val = &#39;&#39;;
+const missing = [];
+if (val ___ undefined ___ val === null || val === ___) missing.___(path);
+console.log(missing.join(&#39;,&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>key</code>, <code>===</code>, <code>||</code>, <code>&#39;&#39;</code>, <code>push</code></p>
+      <p class="sharepage__note">Expected output: <code>incident.location</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>A required subtree is missing (val is null) — recurse into <code>{}</code> so its leaves still report. Fill the recursive call&#39;s data argument and the spread that flattens the returned paths.</p>
+      <pre class="sharepage__code"><code class="language-js">function findMissing(required, data, prefix = &#39;&#39;) {
+  const missing = [];
+  for (const key ___ Object.___(required)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const spec = required[key];
+    const val = data ___ null ? undefined : data[key];
+    if (spec === true) {
+      if (val === undefined || val === null || val === &#39;&#39;) missing.push(path);
+    } else {
+      const next = val == null ? ___ : val;
+      missing.___(___findMissing(spec, next, path));
+    }
+  }
+  return missing;
+}
+const req = { insurance: { carrier: true, policy: true } };
+console.log(findMissing(req, { insurance: null }).join(&#39;,&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>of</code>, <code>keys</code>, <code>==</code>, <code>{}</code>, <code>push</code>, <code>...</code></p>
+      <p class="sharepage__note">Expected output: <code>insurance.carrier,insurance.policy</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Given a nested required-field schema (true = required leaf, nested object = required subtree) and a submitted intake object, return the dotted paths of every missing required field. A field is missing if it&#39;s undefined, null, or &#39;&#39;. If a whole subtree&#39;s parent is missing, report each of its leaves. Print a header then each missing path as &#39;- path&#39;.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Walk the schema keys. If the spec is <code>true</code>, it&#39;s a leaf — push the dotted path when the value is undefined/null/&#39;&#39;.</li><li>If the spec is an object, it&#39;s a subtree — recurse with the value as the new data and the path as the new prefix.</li><li>When the subtree&#39;s value is null/undefined, recurse into <code>{}</code> instead, so every leaf beneath reports as missing rather than just the parent.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function findMissing(required, data, prefix = &#39;&#39;) {
+  const missing = [];
+  for (const key of Object.keys(required)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const spec = required[key];
+    const val = data == null ? undefined : data[key];
+    if (spec === true) {
+      if (val === undefined || val === null || val === &#39;&#39;) missing.push(path);
+    } else if (typeof spec === &#39;object&#39;) {
+      if (val === undefined || val === null) {
+        missing.push(...findMissing(spec, {}, path));
+      } else {
+        missing.push(...findMissing(spec, val, path));
+      }
+    }
+  }
+  return missing;
+}
+const required = {
+  name: true,
+  dob: true,
+  incident: { date: true, location: true },
+  insurance: { carrier: true, policyNumber: true },
+};
+const intake = {
+  name: &#39;Jane Doe&#39;,
+  dob: &#39;&#39;,
+  incident: { date: &#39;2024-03-01&#39; },
+  insurance: null,
+};
+console.log(&#39;Missing fields:&#39;);
+findMissing(required, intake).forEach(m =&gt; console.log(&#39;- &#39; + m));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-eve-intake-completeness","title":"Intake Completeness Validator","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why is recursion the right tool for validating this schema?","options":["An iterative loop can't preserve the dotted prefix across nested levels","The schema nests subtrees to arbitrary depth, and one recursive function walks any depth without hardcoding the levels","`Object.keys` returns values in random order, so a recursive call is the only way to enforce a deterministic walk","A loop would have to mutate `required` in place to descend, which would corrupt the schema for the next call"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When `insurance: null` (a whole required subtree is missing), why recurse into `{}` instead of just reporting `insurance`?","options":["Because the spec object isn't `true`, the leaf branch can't fire — pushing `insurance` directly would mis-tag a subtree as a leaf","So every required leaf under it (carrier, policyNumber) is reported individually, telling the user exactly which fields to fill","Recursing into `null` would corrupt the path prefix with a literal 'null' segment","`{}` resets `data == null` to false so the guard stops firing on subsequent siblings"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why does the validator treat an empty string `''` as missing?","options":["`''` is coerced to `null` by `JSON.stringify`, so it would round-trip as missing anyway","A blank form field is not a filled field, so a required field left empty must be flagged","All falsy values must be rejected — `''`, `0`, `false`, and `NaN` all signal an unfilled field","`Object.keys` would skip a property whose value is `''`, so the schema would never reach it"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why does the code read `data == null ? undefined : data[key]` instead of just `data[key]`?","options":["`data[key]` returns the prototype value on missing own-keys; the guard suppresses inherited properties","When recursing into a missing subtree, `data` is `{}` (safe) — but the guard also prevents a TypeError if a null/undefined ever reaches the read","`data == null` only fires for `undefined`, so the branch lets `null` pass through as a falsy leaf value","Optional chaining `data?.[key]` was added in ES2020 and isn't backward compatible"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Build a dotted path from a prefix and a key — top-level keys have no dot. Fill the template literal and the falsy-or-empty check so the empty value is reported.","answers":["key","===","||","''","push"]},{"n":2,"prompt":"A required subtree is missing (val is null) — recurse into `{}` so its leaves still report. Fill the recursive call's data argument and the spread that flattens the returned paths.","answers":["of","keys","==","{}","push","..."]}],"L3":[{"n":1,"prompt":"Given a nested required-field schema (true = required leaf, nested object = required subtree) and a submitted intake object, return the dotted paths of every missing required field. A field is missing if it's undefined, null, or ''. If a whole subtree's parent is missing, report each of its leaves. Print a header then each missing path as '- path'.","expectedOutput":"Missing fields:\n- dob\n- incident.location\n- insurance.carrier\n- insurance.policyNumber"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-eve-intake-completeness">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Big-O intuition (read complexity off code shapes) — JS Drill</title>
+<meta name="description" content="Read time complexity off the code shape — what loop and recursion structures map to O(1), O(log n), O(n), O(n log n), and O(n²). Meta-lesson: the canonical is a recognition checklist, not one algorithm.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/s-bigo-intuition">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Big-O intuition (read complexity off code shapes) — JS Drill">
+<meta property="og:description" content="Read time complexity off the code shape — what loop and recursion structures map to O(1), O(log n), O(n), O(n log n), and O(n²). Meta-lesson: the canonical is a recognition checklist, not one algorithm.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/s-bigo-intuition">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Algorithms</p>
+    <h1>Big-O intuition (read complexity off code shapes)</h1>
+    <p class="sharepage__lede">Read time complexity off the code shape — what loop and recursion structures map to O(1), O(log n), O(n), O(n log n), and O(n²). Meta-lesson: the canonical is a recognition checklist, not one algorithm.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Algorithms</span> <span class="ds-chip">8 concept · 3 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>countHalvings(n)</code> that returns how many times the loop body runs in <code>while (n &gt; 0) { n = Math.floor(n / 2); }</code>. Log <code>countHalvings(64)</code>.</p>
+    <p class="sharepage__note">Expected output: <code>7</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// ────────────────────────────────────────────────────────────
+// 1. O(1) — CONSTANT TIME
+// ────────────────────────────────────────────────────────────
+//
+//   The tell: no loop. No recursion. Direct lookups, arithmetic,
+//   hash-table read/write — work that doesn&#39;t depend on input size.
+//
+const first = arr =&gt; arr[0];                  // bracket access
+const last  = arr =&gt; arr[arr.length - 1];     // .length is O(1) too
+const has   = (set, key) =&gt; set.has(key);     // Map/Set ops O(1) avg
+//
+//   n=10 → 1 step.  n=10,000,000 → 1 step.  Input size doesn&#39;t matter.
+
+
+// ────────────────────────────────────────────────────────────
+// 2. O(log n) — LOGARITHMIC: HALVE EACH STEP
+// ────────────────────────────────────────────────────────────
+//
+//   The tell: each iteration discards HALF the remaining problem.
+//   Binary search, balanced-tree descent, heap sift, repeated halving.
+//
+function binarySearch(arr, target) {
+  let l = 0, r = arr.length - 1;
+  while (l &lt;= r) {
+    const m = (l + r) &gt;&gt; 1;
+    if (arr[m] === target) return m;
+    if (arr[m] &lt; target) l = m + 1;          // discard LEFT half
+    else                 r = m - 1;          // discard RIGHT half
+  }
+  return -1;
+}
+//
+//   Why &quot;log&quot;?  After k halvings the size is n / 2^k.
+//   Loop ends when size ≤ 1, i.e. 2^k ≥ n, i.e. k ≥ log₂(n).
+//
+//   n=1,024            → ~10 steps
+//   n=1,000,000        → ~20 steps
+//   n=1,000,000,000    → ~30 steps
+//
+//   Logs grow GLACIALLY. Doubling n adds ONE step, not double the steps.
+//   This is why binary search feels like cheating: 10 billion elements
+//   take ~33 comparisons.
+
+
+// ────────────────────────────────────────────────────────────
+// 3. O(n) — LINEAR: ONE PASS
+// ────────────────────────────────────────────────────────────
+//
+//   The tell: one loop over the input doing O(1) work per element.
+//   Sum, count, max, single-pass two-pointer, hash-map first pass.
+//
+function maxOf(arr) {
+  let best = -Infinity;
+  for (const x of arr) {                     // ← one pass
+    if (x &gt; best) best = x;                  // ← O(1) per element
+  }
+  return best;
+}
+//
+//   Doubling n doubles the time. Often optimal — you can&#39;t beat O(n)
+//   for anything that has to LOOK AT every input element.
+
+
+// ────────────────────────────────────────────────────────────
+// 4. O(n log n) — LINEAR × LOG: SORT, MERGE, DIVIDE-AND-CONQUER
+// ────────────────────────────────────────────────────────────
+//
+//   The tell: a sort step, or recursion that halves the input AND
+//   does O(n) work at each level. Merge sort, heap sort, JS .sort().
+//
+function distinctCount(arr) {
+  arr.sort((a, b) =&gt; a - b);                 // ← O(n log n) — dominates
+  let runs = 1;
+  for (let i = 1; i &lt; arr.length; i++) {     // ← O(n) — dominated
+    if (arr[i] !== arr[i - 1]) runs++;
+  }
+  return runs;
+}
+//
+//   Big-O addition rule: O(n log n) + O(n) = O(n log n).
+//   Keep the biggest term, drop the rest.
+//
+//   This is the floor for any comparison-based sort.
+
+
+// ────────────────────────────────────────────────────────────
+// 5. O(n²) — QUADRATIC: NESTED LOOPS OVER THE SAME INPUT
+// ────────────────────────────────────────────────────────────
+//
+//   The tell: two nested loops, BOTH bounded by input size.
+//   Pair brute force, naive substring search, distance matrix build.
+//
+function hasPairSum(arr, target) {
+  for (let i = 0; i &lt; arr.length; i++) {
+    for (let j = i + 1; j &lt; arr.length; j++) {   // ← inner ALSO ∝ n
+      if (arr[i] + arr[j] === target) return true;
+    }
+  }
+  return false;
+}
+//
+//   Even though the inner only runs n-i times, the SUM
+//   1 + 2 + ... + (n-1) = n(n-1)/2 ≈ n²/2 — still O(n²).
+//
+//   Doubling n QUADRUPLES the time.
+//   The canonical interview move is replacing an O(n²) brute force
+//   with an O(n) single pass + hash map. Two Sum is the textbook case.
+
+
+// ────────────────────────────────────────────────────────────
+// THE RECOGNITION CHECKLIST
+// ────────────────────────────────────────────────────────────
+//
+//   No loop at all? ............................. O(1)
+//   Single loop, halving each step? ............. O(log n)
+//   Single loop, one pass over n? ............... O(n)
+//   Sort + single pass? ......................... O(n log n)
+//   Two nested loops over the same input? ....... O(n²)</code></pre>
+    <ul class="sharepage__notes"><li>Halving each step → log. After k halvings, size is n / 2^k; loop ends when 2^k ≥ n, so k ≈ log₂(n). Doubling n adds ONE step, not double the steps — that&#39;s the logarithmic signature.</li><li>Drop constants and lower-order terms when reporting Big-O: O(2n + 3) = O(n), O(n log n + n) = O(n log n). The largest term dominates as n grows.</li><li>Nested loops aren&#39;t always O(n²) IF the inner bound is independent of n — but if the inner bound shrinks predictably (j = i+1…n), the sum is still ~n²/2 → still O(n²). What matters is whether the inner work is proportional to n.</li><li>Hash-map operations (<code>Map.get</code>, <code>Map.set</code>, <code>Set.has</code>) are O(1) AVERAGE — assume O(1) for interview analysis. The pathological O(n) only happens on adversarial inputs designed to collide.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">8</span></h2>
+    <p class="sharepage__note">Positions 1–8 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> A loop runs while <code>n &gt; 0</code> and does <code>n = Math.floor(n / 2)</code> each iteration. What&#39;s the complexity in terms of input n?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(1)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(log n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n)</li>
+        <li><span class="sharepage__key">D</span> O(n log n)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Halving each step → log. After k halvings, size is n/2^k; loop ends when 2^k ≥ n, so iterations ≈ log₂(n).</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> An algorithm runs in 100 steps when n=1,000 and 200 steps when n=2,000. Most likely complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(log n)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n log n)</li>
+        <li><span class="sharepage__key">D</span> O(n²)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Doubling n doubled the step count — linear&#39;s signature. O(log n) would add ~1 step; O(n²) would quadruple to ~400.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> An algorithm runs in 100 steps when n=1,000 and ~110 steps when n=2,000. Most likely complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(1)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(log n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n)</li>
+        <li><span class="sharepage__key">D</span> O(n log n)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Doubling n added only ~1 step — the unmistakable logarithmic signature. Each doubling of n bumps log₂(n) by exactly 1.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Outer <code>for i in 0..n</code>, inner <code>for j in i+1..n</code>, constant work in the body. What&#39;s the complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li><span class="sharepage__key">B</span> O(n log n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(n²) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(2ⁿ)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Inner runs n-i times per outer i. Sum is (n-1) + (n-2) + … + 1 = n(n-1)/2 ≈ n²/2 — still O(n²) after dropping constants.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <code>arr.sort()</code> followed by one linear scan of <code>arr</code>. Total complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n log n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n²)</li>
+        <li><span class="sharepage__key">D</span> O(log n)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sort is O(n log n), scan is O(n). Sum is O(n log n) + O(n) = O(n log n) by the largest-term rule — the sort dominates.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> Two loops one after another (not nested): first <code>for i in 0..n</code>, THEN a separate <code>for j in 0..n</code>. Total time?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n²) — there are two loops over n</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n) — sequential loops add (2n), and constants drop <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n log n)</li>
+        <li><span class="sharepage__key">D</span> O(2ⁿ)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sequential (not nested) loops ADD: n + n = 2n = O(n). Nesting multiplies; sequencing adds. Only nested-over-the-same-input loops give O(n²).</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> An algorithm builds an n×n distance matrix it must keep around. Its SPACE complexity is:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(1)</li>
+        <li><span class="sharepage__key">B</span> O(n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(n²) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(log n)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Time and space are tracked separately — storing n² values means O(n²) extra space regardless of how fast the time is.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> Pushing n items onto a dynamic array is O(n) total even though an occasional push triggers an O(n) resize. What is this called?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Probabilistic O(1) — assumes uniform hash distribution across capacity</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Amortized O(1) per push — rare costly resizes spread out over many cheap pushes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Asymptotic O(log n) — the resize threshold doubles each time, so resizes are log n total</li>
+        <li><span class="sharepage__key">D</span> Aggregate O(n²) — n pushes can each trigger O(n) work, so the total is O(n²)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Doubling-on-resize makes the expensive operations rare enough that the AVERAGE cost per push is O(1) — that averaged-over-a-sequence cost is the amortized cost.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">3</span></h2>
+    <p class="sharepage__note">Positions 1–3 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Halving loop: how many iterations until n hits 0? Fill in the termination check.</p>
+      <pre class="sharepage__code"><code class="language-js">let n = 16, steps = 0;
+while (n ___ ___) {
+  n = Math.___(n / ___);
+  steps___;
+}
+console.log(steps);</code></pre>
+      <p><strong>Answers:</strong> <code>&gt;</code>, <code>0</code>, <code>floor</code>, <code>2</code>, <code>++</code></p>
+      <p class="sharepage__note">Expected output: <code>5</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Nested pair count (the O(n²) shape). Fill in the inner start so each pair is counted once.</p>
+      <pre class="sharepage__code"><code class="language-js">const arr = [1, 2, 3, 4];
+let count = 0;
+for (let i = 0; i ___ arr.___; i___) {
+  for (let j = i + ___; j &lt; arr.length; j++) {
+    count___;
+  }
+}
+console.log(count);</code></pre>
+      <p><strong>Answers:</strong> <code>&lt;</code>, <code>length</code>, <code>++</code>, <code>1</code>, <code>++</code></p>
+      <p class="sharepage__note">Expected output: <code>6</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-3">
+      <h3><a href="#l2-3" class="sharepage__anchor">Exercise 3</a></h3>
+      <p>Sort-then-scan (the O(n log n) shape). Fill in the comparator for ascending sort.</p>
+      <pre class="sharepage__code"><code class="language-js">const arr = [3, 1, 4, 1, 5, 9, 2, 6, 5];
+arr.___((a, b) =&gt; a - ___);
+let distinct = 1;
+for (let i = 1; i &lt; arr.length; i++) {
+  if (arr[i] ___ arr[i ___ 1]) distinct___;
+}
+console.log(distinct);</code></pre>
+      <p><strong>Answers:</strong> <code>sort</code>, <code>b</code>, <code>!==</code>, <code>-</code>, <code>++</code></p>
+      <p class="sharepage__note">Expected output: <code>7</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>countHalvings(n)</code> that returns how many times the loop body runs in <code>while (n &gt; 0) { n = Math.floor(n / 2); }</code>. Log <code>countHalvings(64)</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Initialize a counter at 0 and increment after each halving.</li><li>On n=64 you&#39;ll see 7 — that&#39;s ⌈log₂(64)⌉ + 1 = 6 + 1, because the final halving takes 1 down to 0.</li><li>This is the empirical proof of why binary search is O(log n): the step count grows by exactly 1 each time you double n.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function countHalvings(n) {
+  let steps = 0;
+  while (n &gt; 0) {
+    n = Math.floor(n / 2);
+    steps++;
+  }
+  return steps;
+}
+console.log(countHalvings(64));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"s-bigo-intuition","title":"Big-O intuition (read complexity off code shapes)","section":"Algorithms","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"A loop runs while `n > 0` and does `n = Math.floor(n / 2)` each iteration. What's the complexity in terms of input n?","options":["O(1)","O(log n)","O(n)","O(n log n)"],"answer":1,"answerLetter":"B"},{"n":2,"q":"An algorithm runs in 100 steps when n=1,000 and 200 steps when n=2,000. Most likely complexity?","options":["O(log n)","O(n)","O(n log n)","O(n²)"],"answer":1,"answerLetter":"B"},{"n":3,"q":"An algorithm runs in 100 steps when n=1,000 and ~110 steps when n=2,000. Most likely complexity?","options":["O(1)","O(log n)","O(n)","O(n log n)"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Outer `for i in 0..n`, inner `for j in i+1..n`, constant work in the body. What's the complexity?","options":["O(n)","O(n log n)","O(n²)","O(2ⁿ)"],"answer":2,"answerLetter":"C"},{"n":5,"q":"`arr.sort()` followed by one linear scan of `arr`. Total complexity?","options":["O(n)","O(n log n)","O(n²)","O(log n)"],"answer":1,"answerLetter":"B"},{"n":6,"q":"Two loops one after another (not nested): first `for i in 0..n`, THEN a separate `for j in 0..n`. Total time?","options":["O(n²) — there are two loops over n","O(n) — sequential loops add (2n), and constants drop","O(n log n)","O(2ⁿ)"],"answer":1,"answerLetter":"B"},{"n":7,"q":"An algorithm builds an n×n distance matrix it must keep around. Its SPACE complexity is:","options":["O(1)","O(n)","O(n²)","O(log n)"],"answer":2,"answerLetter":"C"},{"n":8,"q":"Pushing n items onto a dynamic array is O(n) total even though an occasional push triggers an O(n) resize. What is this called?","options":["Probabilistic O(1) — assumes uniform hash distribution across capacity","Amortized O(1) per push — rare costly resizes spread out over many cheap pushes","Asymptotic O(log n) — the resize threshold doubles each time, so resizes are log n total","Aggregate O(n²) — n pushes can each trigger O(n) work, so the total is O(n²)"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Halving loop: how many iterations until n hits 0? Fill in the termination check.","answers":[">","0","floor","2","++"]},{"n":2,"prompt":"Nested pair count (the O(n²) shape). Fill in the inner start so each pair is counted once.","answers":["\u003c","length","++","1","++"]},{"n":3,"prompt":"Sort-then-scan (the O(n log n) shape). Fill in the comparator for ascending sort.","answers":["sort","b","!==","-","++"]}],"L3":[{"n":1,"prompt":"Write `countHalvings(n)` that returns how many times the loop body runs in `while (n > 0) { n = Math.floor(n / 2); }`. Log `countHalvings(64)`.","expectedOutput":"7"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/s-bigo-intuition">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

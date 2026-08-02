@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fast/slow pointers — JS Drill</title>
+<meta name="description" content="Two pointers from head — slow advances by 1, fast by 2. The boilerplate behind cycle detection, midpoint, and Nth-from-end.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/s-ll-fast-slow">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Fast/slow pointers — JS Drill">
+<meta property="og:description" content="Two pointers from head — slow advances by 1, fast by 2. The boilerplate behind cycle detection, midpoint, and Nth-from-end.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/s-ll-fast-slow">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Algorithms</p>
+    <h1>Fast/slow pointers</h1>
+    <p class="sharepage__lede">Two pointers from head — slow advances by 1, fast by 2. The boilerplate behind cycle detection, midpoint, and Nth-from-end.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Algorithms</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>middleValue(head)</code> that returns the value at the midpoint using fast/slow pointers. For the even-length list 1→2→3→4, slow lands on the SECOND middle (value 3). Log the result.</p>
+    <p class="sharepage__note">Expected output: <code>3</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Two-pointer (tortoise &amp; hare) walk</strong> · <code>O(n) / O(1)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">// CANONICAL SKELETON
+let slow = head, fast = head;
+while (fast &amp;&amp; fast.next) {
+  slow = slow.next;        // +1
+  fast = fast.next.next;   // +2
+  // optional: if (slow === fast) ...   ← cycle meeting point
+}
+
+// THREE CLASSIC USES
+// 1) CYCLE DETECTION
+//    inside the loop: if (slow === fast) return true;
+//    fall-through:    return false;
+//
+// 2) MIDDLE NODE
+//    when fast reaches end, slow is at the midpoint.
+//    For even length n, slow lands on the SECOND of the two middles
+//    (index n/2). For odd length, slow is at the true center (index (n-1)/2).
+//
+// 3) NTH FROM END
+//    advance fast by N first, THEN move both together until fast is null.
+//    slow now points at the node N from the end.</code></pre>
+    <ul class="sharepage__notes"><li>The loop condition <code>fast &amp;&amp; fast.next</code> is non-negotiable: fast.next must be non-null before you can dereference fast.next.next, or you&#39;ll throw.</li><li>If slow === fast inside the loop, a cycle exists (fast lapped slow). If the loop exits cleanly, no cycle.</li><li>For even-length lists, slow lands on the SECOND of the two middle nodes — predict this in interviews instead of guessing.</li><li>Compare nodes with === (reference equality), never by .val — two distinct nodes can share a value.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Cycle detection (Floyd) variant <code>O(n) / O(1)</code></h3>
+      <p>Same scaffold, different termination condition. Reach for this when the problem asks whether the list is circular (LeetCode 141 Linked List Cycle), or when &#39;O(1) extra space + linked list&#39; appears in the constraints. The trick is the meeting argument: once both pointers are inside the cycle, the gap closes by exactly 1 per iteration, so they collide within C iterations where C is the cycle length. Beats the hash-set version (O(n) space → O(1) space) for the same O(n) time.</p>
+      <pre class="sharepage__code"><code class="language-js">function hasCycle(head) {
+  let slow = head, fast = head;
+  while (fast &amp;&amp; fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+    if (slow === fast) return true;        // meeting point inside the cycle
+  }
+  return false;                            // fast hit null first — acyclic
+}
+// Same template body, different exit conditions — re-use it for the midpoint.
+function middleValue(head) {
+  let slow = head, fast = head;
+  while (fast &amp;&amp; fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+  }
+  return slow.val;
+}
+function toList(arr) { let d = { next: null }, c = d; for (const v of arr) { c.next = { val: v, next: null }; c = c.next; } return d.next; }
+// Smoke: a known-acyclic list — hasCycle returns false, midpoint of [1,2,3,4] is 3.
+console.log(hasCycle(toList([1, 2, 3, 4])) === false ? middleValue(toList([1, 2, 3, 4])) : &#39;cycle!&#39;);</code></pre>
+      <ul class="sharepage__notes"><li>Only ONE line changes vs the midpoint variant: <code>if (slow === fast) return true;</code> inside the loop, plus <code>return false</code> on fall-through. The skeleton is otherwise identical — that&#39;s what makes this a TEMPLATE, not three separate algorithms.</li><li>The meeting-argument proof: once both pointers are inside the cycle, every iteration shrinks the gap by exactly 1 (fast gains 2, slow gains 1, net +1). So they collide within at most C iterations, where C = cycle length ≤ n.</li><li>Use <code>===</code> (reference equality), NOT <code>slow.val === fast.val</code>. Two distinct nodes can hold the same value — a value-only check would give false positives on lists like 1→2→1→3 (no cycle, but two 1-valued nodes).</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why must the loop condition be <code>while (fast &amp;&amp; fast.next)</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Equivalent to <code>while (fast)</code> — JS short-circuits both <code>fast.next</code> and <code>fast.next.next</code> to undefined on a missing chain</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> fast moves two .next hops; both must be legal or <code>fast.next.next</code> throws <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> To ensure slow and fast meet on the same node when the cycle length is even (without it, they pass through each other)</li>
+        <li><span class="sharepage__key">D</span> Without it, even-length lists return the first middle instead of the second</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Without the fast.next guard, dereferencing fast.next.next when fast.next is null throws a TypeError.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> If <code>slow === fast</code> becomes true inside the loop, what does that prove?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The two pointers are on nodes that hold the same value (which may or may not indicate a cycle)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A cycle exists — fast lapped slow <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Slow has reached the cycle&#39;s entry node (the start of the loop, not the meeting point)</li>
+        <li><span class="sharepage__key">D</span> The remaining nodes form a palindrome around the current position</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> In a cyclic list the fast pointer eventually catches the slow pointer from behind. In an acyclic list fast hits null first.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> For an even-length list (e.g., 1→2→3→4), where does slow end up when the loop exits cleanly (no cycle)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> On the first of the two middle nodes (node 2)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> On the second of the two middle nodes (node 3) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Halfway between nodes 2 and 3 — there&#39;s no integer midpoint, so slow.next is null and slow.val is undefined</li>
+        <li><span class="sharepage__key">D</span> On the last node (node 4) — fast hits null one iteration after slow finishes the list</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> After two iterations: slow goes head→2→3, fast goes head→3→null. slow ends at the second middle (node 3).</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> To find the Nth node from the end with fast/slow pointers, you:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Advance both together until fast hits null</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Advance fast by N first, then advance both together until fast is null <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Advance slow by N first, then move fast alone</li>
+        <li><span class="sharepage__key">D</span> Walk the list twice — once to count, once to index</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The N-step head start on fast is exactly the gap you want to preserve as both walk together.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the tortoise-and-hare loop that detects a cycle. (The list a→b→c→a is built for you.)</p>
+      <pre class="sharepage__code"><code class="language-js">function hasCycle(head) {
+  let slow = head, fast = head;
+  while (fast ___ fast.___) {
+    slow = slow.___;
+    fast = fast.next.___;
+    if (slow ___ fast) return ___;
+  }
+  return false;
+}
+const a = { val: 1, next: null };
+const b = { val: 2, next: null };
+const c = { val: 3, next: null };
+a.next = b; b.next = c; c.next = a;
+console.log(hasCycle(a));</code></pre>
+      <p><strong>Answers:</strong> <code>&amp;&amp;</code>, <code>next</code>, <code>next</code>, <code>next</code>, <code>===</code>, <code>true</code></p>
+      <p class="sharepage__note">Expected output: <code>true</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Fill in the midpoint finder. When the loop exits, slow is at the middle node.</p>
+      <pre class="sharepage__code"><code class="language-js">function middle(head) {
+  let slow = head, fast = head;
+  while (fast ___ fast.next) {
+    slow = slow.___;
+    fast = fast.next.___;
+  }
+  return slow.___;
+}
+const h = { val: 1, next: { val: 2, next: { val: 3, next: { val: 4, next: { val: 5, next: null } } } } };
+console.log(middle(h));</code></pre>
+      <p><strong>Answers:</strong> <code>&amp;&amp;</code>, <code>next</code>, <code>next</code>, <code>val</code></p>
+      <p class="sharepage__note">Expected output: <code>3</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>middleValue(head)</code> that returns the value at the midpoint using fast/slow pointers. For the even-length list 1→2→3→4, slow lands on the SECOND middle (value 3). Log the result.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>slow advances by 1, fast by 2. Loop while fast AND fast.next are truthy.</li><li>When fast reaches the end, slow is at the midpoint. For even length, slow lands on the second of the two middles.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function middleValue(head) {
+  let slow = head, fast = head;
+  while (fast &amp;&amp; fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+  }
+  return slow.val;
+}
+function toList(arr) { let d = { next: null }, c = d; for (const v of arr) { c.next = { val: v, next: null }; c = c.next; } return d.next; }
+console.log(middleValue(toList([1, 2, 3, 4])));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"s-ll-fast-slow","title":"Fast/slow pointers","section":"Algorithms","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why must the loop condition be `while (fast && fast.next)`?","options":["Equivalent to `while (fast)` — JS short-circuits both `fast.next` and `fast.next.next` to undefined on a missing chain","fast moves two .next hops; both must be legal or `fast.next.next` throws","To ensure slow and fast meet on the same node when the cycle length is even (without it, they pass through each other)","Without it, even-length lists return the first middle instead of the second"],"answer":1,"answerLetter":"B"},{"n":2,"q":"If `slow === fast` becomes true inside the loop, what does that prove?","options":["The two pointers are on nodes that hold the same value (which may or may not indicate a cycle)","A cycle exists — fast lapped slow","Slow has reached the cycle's entry node (the start of the loop, not the meeting point)","The remaining nodes form a palindrome around the current position"],"answer":1,"answerLetter":"B"},{"n":3,"q":"For an even-length list (e.g., 1→2→3→4), where does slow end up when the loop exits cleanly (no cycle)?","options":["On the first of the two middle nodes (node 2)","On the second of the two middle nodes (node 3)","Halfway between nodes 2 and 3 — there's no integer midpoint, so slow.next is null and slow.val is undefined","On the last node (node 4) — fast hits null one iteration after slow finishes the list"],"answer":1,"answerLetter":"B"},{"n":4,"q":"To find the Nth node from the end with fast/slow pointers, you:","options":["Advance both together until fast hits null","Advance fast by N first, then advance both together until fast is null","Advance slow by N first, then move fast alone","Walk the list twice — once to count, once to index"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the tortoise-and-hare loop that detects a cycle. (The list a→b→c→a is built for you.)","answers":["&&","next","next","next","===","true"]},{"n":2,"prompt":"Fill in the midpoint finder. When the loop exits, slow is at the middle node.","answers":["&&","next","next","val"]}],"L3":[{"n":1,"prompt":"Write `middleValue(head)` that returns the value at the midpoint using fast/slow pointers. For the even-length list 1→2→3→4, slow lands on the SECOND middle (value 3). Log the result.","expectedOutput":"3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/s-ll-fast-slow">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

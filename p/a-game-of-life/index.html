@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conway&#39;s Game of Life — JS Drill</title>
+<meta name="description" content="Compute the next generation of a 2D grid. Each cell&#39;s fate depends on its 8 neighbors: a live cell with 2 or 3 live neighbors survives; a dead cell with exactly 3 becomes alive. Write to a fresh grid — never mutate while iterating, or later cells will read updated state.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-game-of-life">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Conway&#39;s Game of Life — JS Drill">
+<meta property="og:description" content="Compute the next generation of a 2D grid. Each cell&#39;s fate depends on its 8 neighbors: a live cell with 2 or 3 live neighbors survives; a dead cell with exactly 3 becomes alive. Write to a fresh grid — never mutate while iterating, or later cells will read updated state.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-game-of-life">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Conway&#39;s Game of Life</h1>
+    <p class="sharepage__lede">Compute the next generation of a 2D grid. Each cell&#39;s fate depends on its 8 neighbors: a live cell with 2 or 3 live neighbors survives; a dead cell with exactly 3 becomes alive. Write to a fresh grid — never mutate while iterating, or later cells will read updated state.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement nextGen(grid) and log JSON for: gen1 and gen2 of a 4x4 block (still life), then gen1 and gen2 of a 3x3 blinker.</p>
+    <p class="sharepage__note">Expected output: <code>[[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]]
+[[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]]
+[[0,1,0],[0,1,0],[0,1,0]]
+[[0,0,0],[1,1,1],[0,0,0]]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function nextGen(grid) {
+  const h = grid.length, w = grid[0].length;
+  // Write to a fresh grid — in-place would corrupt neighbor counts of unvisited cells.
+  const out = Array.from({ length: h }, () =&gt; Array(w).fill(0));
+  for (let r = 0; r &lt; h; r++) {
+    for (let c = 0; c &lt; w; c++) {
+      let n = 0;
+      for (let dr = -1; dr &lt;= 1; dr++) {
+        for (let dc = -1; dc &lt;= 1; dc++) {
+          // Skip the cell itself when summing the 8 neighbors.
+          if (dr === 0 &amp;&amp; dc === 0) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w) n += grid[nr][nc];
+        }
+      }
+      // Live survives on 2 or 3; dead births on EXACTLY 3. Anything else dies.
+      if (grid[r][c] === 1) out[r][c] = (n === 2 || n === 3) ? 1 : 0;
+      else                  out[r][c] = (n === 3) ? 1 : 0;
+    }
+  }
+  return out;
+}
+// Time O(h*w), Space O(h*w) for the new grid</code></pre>
+    <ul class="sharepage__notes"><li>Always write to a separate output grid. In-place mutation corrupts the neighbor counts of cells you have not visited yet.</li><li>Live survives on 2 or 3 neighbors; dead births on EXACTLY 3. Anything else is death (under/overpopulation).</li><li>Skip dr=dc=0 (the cell itself) when summing the 8 neighbors, and bounds-check every (nr, nc).</li><li>Time O(h*w), Space O(h*w) for the new grid.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>In-place encoding (O(1) extra space) <code>O(h*w) / O(1)</code></h3>
+      <p>Use when the interviewer specifically asks for O(1) extra space. Encodes transitions as intermediate values so neighbor reads still see the original state during the first pass.</p>
+      <pre class="sharepage__code"><code class="language-js">function nextGen(grid) {
+  const h = grid.length, w = grid[0].length;
+  // First pass: encode transitions in-place.
+  // 1 (live, stays live) = 1; 1-&gt;0 (live, dies) = -1; 0-&gt;1 (dead, births) = 2; 0 (dead, stays dead) = 0.
+  for (let r = 0; r &lt; h; r++) {
+    for (let c = 0; c &lt; w; c++) {
+      let n = 0;
+      for (let dr = -1; dr &lt;= 1; dr++) {
+        for (let dc = -1; dc &lt;= 1; dc++) {
+          if (dr === 0 &amp;&amp; dc === 0) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w) {
+            // Count cells that WERE alive: original 1, or -1 (was 1, will die).
+            const v = grid[nr][nc];
+            if (v === 1 || v === -1) n++;
+          }
+        }
+      }
+      const self = grid[r][c];
+      const wasAlive = self === 1 || self === -1;
+      if (wasAlive) {
+        if (n !== 2 &amp;&amp; n !== 3) grid[r][c] = -1; // live -&gt; dies
+      } else {
+        if (n === 3) grid[r][c] = 2;             // dead -&gt; births
+      }
+    }
+  }
+  // Second pass: normalize back to 0/1.
+  for (let r = 0; r &lt; h; r++) {
+    for (let c = 0; c &lt; w; c++) {
+      if (grid[r][c] === 2) grid[r][c] = 1;
+      else if (grid[r][c] === -1) grid[r][c] = 0;
+    }
+  }
+  return grid;
+}
+// In-place version mutates the input; caller must copy first if the original matters.
+const block1 = [[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]];
+const block2 = block1.map(r =&gt; r.slice());
+console.log(JSON.stringify(nextGen(block1)));
+console.log(JSON.stringify(nextGen(block2)));
+const blinker1 = [[0,0,0],[1,1,1],[0,0,0]];
+const blinker2 = blinker1.map(r =&gt; r.slice());
+nextGen(blinker1);
+console.log(JSON.stringify(blinker1));
+nextGen(blinker2); nextGen(blinker2);
+console.log(JSON.stringify(blinker2));</code></pre>
+      <ul class="sharepage__notes"><li>Encode live-dying as -1 and dead-birthing as 2 so the first pass can still read original state from any cell.</li><li>The neighbor-count predicate must check <code>v === 1 || v === -1</code> (was-alive), NOT just <code>v === 1</code>.</li><li>Two-pass is still O(h*w) time; the win is eliminating the O(h*w) output-grid allocation.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why use a separate output grid instead of updating in place?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Allocating a new grid lets V8 SIMD-vectorize the neighbor sum, which an in-place loop can&#39;t do</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Updates would change neighbor counts read by later cells <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Row-major iteration only reads cells from earlier rows, so writes to the same row in a later cell are safe</li>
+        <li><span class="sharepage__key">D</span> In-place updates are correct, but copy-on-write semantics make the new-grid version use less memory in practice</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> A dead cell becomes alive when its live-neighbor count is...</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 2 or 3 — births and survives share the same threshold range</li>
+        <li><span class="sharepage__key">B</span> exactly 2 — matching the lower bound of the survive rule</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> exactly 3 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> 3 or more — overcrowding still births a cell on a dead site</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> A live cell with 4 live neighbors...</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Survives — 4 is the upper survive threshold by the symmetric birth rule</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Dies from overpopulation <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Becomes a still life — the cell freezes and is exempt from future ticks</li>
+        <li><span class="sharepage__key">D</span> Triggers a birth in an adjacent dead cell</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> How many neighbors does an interior cell have?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 4 — only orthogonal (up/down/left/right) neighbors count in Conway</li>
+        <li><span class="sharepage__key">B</span> 6 — diagonals count half, summed as a single fractional neighbor each</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> 8 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> 9 — the cell itself counts as one of its own neighbors</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in nextGen so the blinker [[0,0,0],[1,1,1],[0,0,0]] becomes a vertical bar.</p>
+      <pre class="sharepage__code"><code class="language-js">function nextGen(g) {
+  const h = g.___, w = g[0].length;
+  const out = Array.___({ length: h }, () =&gt; Array(w).___(0));
+  for (let r = 0; r &lt; h; r++) {
+    for (let c = 0; c &lt; w; c++) {
+      let n = 0;
+      for (let dr = -1; dr &lt;= 1; dr++) {
+        for (let dc = -1; dc &lt;= 1; dc++) {
+          if (dr === 0 &amp;&amp; dc === 0) ___;
+          const nr = r + dr, nc = c + dc;
+          if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w) n += g[nr][nc];
+        }
+      }
+      if (g[r][c] === 1) out[r][c] = (n === 2 || n === ___) ? 1 : 0;
+      else               out[r][c] = (n === 3) ? 1 : 0;
+    }
+  }
+  return out;
+}
+const blinker = [[0,0,0],[1,1,1],[0,0,0]];
+console.log(JSON.stringify(nextGen(blinker)));</code></pre>
+      <p><strong>Answers:</strong> <code>length</code>, <code>from</code>, <code>fill</code>, <code>continue</code>, <code>3</code></p>
+      <p class="sharepage__note">Expected output: <code>[[0,1,0],[0,1,0],[0,1,0]]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement nextGen(grid) and log JSON for: gen1 and gen2 of a 4x4 block (still life), then gen1 and gen2 of a 3x3 blinker.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Sum the 8 neighbors with bounds checks; skip (0,0).</li><li>Branch on the current cell&#39;s state — alive uses {2,3}, dead uses {3}.</li><li>Write into a fresh grid so in-flight updates do not contaminate neighbor counts.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function nextGen(grid) {
+  const h = grid.length, w = grid[0].length;
+  // Write to a fresh grid — in-place would corrupt neighbor counts of unvisited cells.
+  const out = Array.from({ length: h }, () =&gt; Array(w).fill(0));
+  for (let r = 0; r &lt; h; r++) {
+    for (let c = 0; c &lt; w; c++) {
+      let n = 0;
+      for (let dr = -1; dr &lt;= 1; dr++) {
+        for (let dc = -1; dc &lt;= 1; dc++) {
+          // Skip the cell itself when summing the 8 neighbors.
+          if (dr === 0 &amp;&amp; dc === 0) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr &gt;= 0 &amp;&amp; nr &lt; h &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; w) n += grid[nr][nc];
+        }
+      }
+      // Live survives on 2 or 3; dead births on EXACTLY 3. Anything else dies.
+      if (grid[r][c] === 1) out[r][c] = (n === 2 || n === 3) ? 1 : 0;
+      else                  out[r][c] = (n === 3) ? 1 : 0;
+    }
+  }
+  return out;
+}
+const block = [[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]];
+console.log(JSON.stringify(nextGen(block)));
+console.log(JSON.stringify(nextGen(nextGen(block))));
+const blinker = [[0,0,0],[1,1,1],[0,0,0]];
+console.log(JSON.stringify(nextGen(blinker)));
+console.log(JSON.stringify(nextGen(nextGen(blinker))));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-game-of-life","title":"Conway's Game of Life","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why use a separate output grid instead of updating in place?","options":["Allocating a new grid lets V8 SIMD-vectorize the neighbor sum, which an in-place loop can't do","Updates would change neighbor counts read by later cells","Row-major iteration only reads cells from earlier rows, so writes to the same row in a later cell are safe","In-place updates are correct, but copy-on-write semantics make the new-grid version use less memory in practice"],"answer":1,"answerLetter":"B"},{"n":2,"q":"A dead cell becomes alive when its live-neighbor count is...","options":["2 or 3 — births and survives share the same threshold range","exactly 2 — matching the lower bound of the survive rule","exactly 3","3 or more — overcrowding still births a cell on a dead site"],"answer":2,"answerLetter":"C"},{"n":3,"q":"A live cell with 4 live neighbors...","options":["Survives — 4 is the upper survive threshold by the symmetric birth rule","Dies from overpopulation","Becomes a still life — the cell freezes and is exempt from future ticks","Triggers a birth in an adjacent dead cell"],"answer":1,"answerLetter":"B"},{"n":4,"q":"How many neighbors does an interior cell have?","options":["4 — only orthogonal (up/down/left/right) neighbors count in Conway","6 — diagonals count half, summed as a single fractional neighbor each","8","9 — the cell itself counts as one of its own neighbors"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in nextGen so the blinker [[0,0,0],[1,1,1],[0,0,0]] becomes a vertical bar.","answers":["length","from","fill","continue","3"]}],"L3":[{"n":1,"prompt":"Implement nextGen(grid) and log JSON for: gen1 and gen2 of a 4x4 block (still life), then gen1 and gen2 of a 3x3 blinker.","expectedOutput":"[[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]]\n[[0,0,0,0],[0,1,1,0],[0,1,1,0],[0,0,0,0]]\n[[0,1,0],[0,1,0],[0,1,0]]\n[[0,0,0],[1,1,1],[0,0,0]]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-game-of-life">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Future of Data Systems — Designing Data-Intensive Applications</title>
+<meta name="description" content="Kleppmann&#39;s synthesis: no single tool fits all needs, so applications should be built by composing specialized systems around dataflows — funneling writes through ordered logs to keep derived data consistent — while aiming for end-to-end correctness, auditing rather than blind trust, and ethical responsibility for the data we collect.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ddia/ch12">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The Future of Data Systems — Designing Data-Intensive Applications">
+<meta property="og:description" content="Kleppmann&#39;s synthesis: no single tool fits all needs, so applications should be built by composing specialized systems around dataflows — funneling writes through ordered logs to keep derived data consistent — while aiming for end-to-end correctness, auditing rather than blind trust, and ethical responsibility for the data we collect.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ddia/ch12">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ddia/">Designing Data-Intensive Applications</a></p>
+    <h1>The Future of Data Systems</h1>
+    <p class="sharepage__lede">Kleppmann&#39;s synthesis: no single tool fits all needs, so applications should be built by composing specialized systems around dataflows — funneling writes through ordered logs to keep derived data consistent — while aiming for end-to-end correctness, auditing rather than blind trust, and ethical responsibility for the data we collect.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Data-Intensive Applications</span> <span class="ds-chip">16 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>No one system does everything, so real applications integrate multiple tools; distinguishing the system of record (source of truth) from derived data is the key to reasoning about it.</li><li>Funneling all writes through a single ordered log gives derived systems a deterministic order to follow, keeping search indexes, caches, and warehouses consistent.</li><li>The lambda architecture (batch + speed/stream + serving layers) is criticized for duplicated logic; the trend is to unify by reprocessing streams (Kafka + reprocessing).</li><li>Unbundling the database means treating indexes and materialized views as stream-maintained components — the &#39;database inside-out&#39; — and designing applications around dataflow and subscribing to changes.</li><li>Correctness needs the end-to-end argument: exactly-once/dedup ultimately requires end-to-end identifiers (e.g. request IDs); TCP or a DB transaction alone is not enough.</li><li>Integrity (no corruption or contradiction) usually matters more than timeliness (recency); trust but verify with auditing, and take ethical responsibility for bias, privacy, consent, and surveillance.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">16</span></h2>
+    <p class="sharepage__note">Positions 1–16 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is DDIA&#39;s central argument about data integration in this chapter?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Because no single tool satisfies all requirements, applications must combine several specialized systems, and the key discipline is distinguishing the system of record from derived data <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> One database technology can and should handle every access pattern in an application</li>
+        <li><span class="sharepage__key">C</span> Derived data should always be treated as authoritative alongside the source of truth</li>
+        <li><span class="sharepage__key">D</span> You should avoid derived data entirely and read everything from one store</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Kleppmann argues real systems compose multiple tools, and clarity comes from knowing which store is the source of truth (system of record) versus which are derived (reconstructable) from it. Derived data is not authoritative — it can always be rebuilt from the system of record.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does funneling all writes through a single totally-ordered log help keep multiple derived systems consistent?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It makes writes faster by skipping durability</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It gives every derived consumer the same deterministic order of events to apply, so search indexes, caches, and warehouses converge to the same state instead of diverging from concurrent dual writes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It encrypts the writes end to end</li>
+        <li><span class="sharepage__key">D</span> It removes the need for any derived systems at all</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A single ordered log means all derived systems process the same events in the same order, so they stay mutually consistent — the fix for the dual-write divergence problem. The benefit is deterministic ordering, not speed or encryption.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the lambda architecture, and what is DDIA&#39;s main criticism of it?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A single stream layer only; criticized for losing historical data</li>
+        <li><span class="sharepage__key">B</span> A purely batch design; criticized for being too slow to ever use</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A batch layer plus a fast stream (speed) layer feeding a serving layer; criticized because you must implement and maintain the same logic twice in two different frameworks <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> A leaderless replication scheme; criticized for weak consistency</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Lambda runs a batch layer (accurate, high-latency) alongside a stream/speed layer (fast, approximate) and merges them in a serving layer, but this forces maintaining duplicate logic in two systems. The trend Kleppmann favors is unifying them — reprocessing the same event log via a stream processor to get both speed and correctness.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does &#39;unbundling the database&#39; (the &#39;database inside-out&#39;) mean?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Splitting one database into many shards of the same engine</li>
+        <li><span class="sharepage__key">B</span> Removing all indexes to speed up writes</li>
+        <li><span class="sharepage__key">C</span> Storing the database schema outside the database</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Viewing the whole data system as a set of indexes and materialized views maintained by streams — composing separate specialized tools to do what one monolithic database&#39;s internals do, coordinated via logs <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Unbundling treats a database&#39;s internal pieces — the log, indexes, materialized views — as separately composable systems kept in sync by event streams, so you assemble the equivalent of a database from best-of-breed tools. This &#39;inside-out&#39; view is about synchronizing derived state via logs, not about sharding one engine.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does DDIA contrast federation with unbundling as approaches to combining data systems?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Federation provides a unified read interface over disparate stores (a federated query), while unbundling focuses on a unified write path that keeps the separate systems in sync via logs <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Federation unifies writes; unbundling unifies reads</li>
+        <li><span class="sharepage__key">C</span> They are two names for the same technique</li>
+        <li><span class="sharepage__key">D</span> Federation is only for batch and unbundling only for streams</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Federation (unified query) presents one read interface over heterogeneous underlying stores; unbundling instead concentrates on the write path, using logs to keep independently-specialized systems consistent. The chapter emphasizes the unbundled write-synchronization model as the harder, more valuable problem.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does it mean to &#39;design applications around dataflow,&#39; per DDIA&#39;s spreadsheet analogy?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Store all application data in a spreadsheet file</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Treat derived state as automatically maintained from its inputs — when a value changes, dependent views (all the way to the UI) recompute and update, like cells recalculating in a spreadsheet <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Require users to manually refresh every screen</li>
+        <li><span class="sharepage__key">D</span> Compute all state on the server and never cache anything</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Like a spreadsheet where changing one cell cascades updates to dependent cells, dataflow design has derived state (including the UI) subscribe to changes in its inputs and update automatically. This extends the write path end-to-end so clients observe fresh derived data reactively.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>According to the end-to-end argument, why is a database transaction or TCP alone insufficient to guarantee exactly-once processing?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because transactions are too slow to be practical</li>
+        <li><span class="sharepage__key">B</span> Because TCP already guarantees exactly-once at the application level</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because deduplication must happen at each individual layer with its own retry semantics, and only an end-to-end identifier (such as a client-generated request ID carried through the whole path) can suppress duplicates caused by retries above those layers <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because databases cannot detect duplicate rows at all</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A retry at a higher layer (e.g. a user resubmitting, or an app retrying after a timeout) produces a duplicate that TCP&#39;s or a single transaction&#39;s local guarantees can&#39;t catch. Only an end-to-end unique identifier threaded through the whole request path lets the system recognize and suppress that duplicate.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does DDIA suggest enforcing a uniqueness constraint (e.g. a unique username) in a log-based / partitioned system?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> By locking the entire database on every write</li>
+        <li><span class="sharepage__key">B</span> By relying on eventually-consistent replicas to converge</li>
+        <li><span class="sharepage__key">C</span> By using last-write-wins to pick a winner</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> By routing all requests for the constrained value through a single partition of a totally-ordered log (partitioned by that value), so a deterministic consumer can accept the first claim and reject conflicts <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Partitioning the log by the value that must be unique funnels all competing claims into one ordered stream, where a deterministic processor grants the first and rejects the rest. Eventual convergence or LWW would silently allow or drop conflicting claims rather than enforce uniqueness.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does DDIA distinguish &#39;timeliness&#39; from &#39;integrity,&#39; and which does it argue usually matters more?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Timeliness means users see up-to-date (recent, consistent) data; integrity means the data has no corruption, loss, or contradiction — and integrity usually matters more because many apps tolerate temporary staleness but not permanent data loss <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Timeliness (recency of data) matters more, since users never tolerate any staleness</li>
+        <li><span class="sharepage__key">C</span> They are the same property under different names</li>
+        <li><span class="sharepage__key">D</span> Integrity means low latency and timeliness means durability</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Timeliness is about recency/consistency (seeing current data), while integrity is about the absence of corruption or contradiction; a brief violation of timeliness is usually recoverable, but an integrity violation (lost or corrupted data) may be permanent. ACID conflates the two, but they are separable and integrity generally deserves higher priority.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the &#39;trust, but verify&#39; stance DDIA advocates for data systems?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Assume hardware and software are fault-free because modern systems are reliable</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Don&#39;t blindly assume the layers beneath you are correct; build auditing and self-validating checks (like end-to-end integrity checks / checksums at the application level) to detect corruption rather than silently trusting it <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Encrypt all data so it never needs checking</li>
+        <li><span class="sharepage__key">D</span> Trust only the database and never the application code</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Because bugs, hardware faults, and misconfiguration do corrupt data in practice, Kleppmann urges building systems that continuously audit and verify their own integrity end-to-end rather than assuming the lower layers are perfect. This mirrors HDFS block checksums, but applied at the application data level.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does immutability of the event log make auditing easier?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It compresses the audit trail automatically</li>
+        <li><span class="sharepage__key">B</span> Because immutable logs cannot be read by unauthorized users</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because the append-only log preserves the full history of what happened, you can reconstruct and independently re-derive any state to check whether the current derived data is correct <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because it removes the need to store derived data</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An immutable, append-only event log retains the complete sequence of facts, so an auditor can replay it to verify that derived state was computed correctly and detect discrepancies. Mutable state that overwrites history would erase the very evidence auditing depends on.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In the chapter&#39;s ethics discussion, what is a &#39;feedback loop&#39; risk in predictive analytics?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The model runs too slowly and falls behind real time</li>
+        <li><span class="sharepage__key">B</span> The database replicates predictions to too many followers</li>
+        <li><span class="sharepage__key">C</span> Users can see the model&#39;s internal weights</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> A biased model&#39;s decisions shape future data (e.g. denying opportunities to a group), which then reinforces and amplifies the original bias in later model training — a self-perpetuating cycle of discrimination <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> When algorithmic decisions influence the world (who gets a loan, a job, policing attention), the resulting data feeds back into training and entrenches the initial bias, creating a discriminatory feedback loop. Kleppmann highlights this as an ethical failure mode, not merely a performance issue.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What broad ethical framing about personal data does DDIA emphasize?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Amassed personal data is not only an asset but also a liability and a form of surveillance — raising duties around consent, privacy, and legislation like GDPR — so collection should be weighed against its harms <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Data is purely an asset with no downside, so collect as much as possible</li>
+        <li><span class="sharepage__key">C</span> Ethics is outside the scope of engineering and should be ignored</li>
+        <li><span class="sharepage__key">D</span> Only governments, not companies, bear responsibility for collected data</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Kleppmann reframes hoarded personal data as a liability and a surveillance apparatus, not just a competitive asset, and stresses engineers&#39; responsibility around consent, privacy, bias, and regulation such as GDPR. The point is that data collection carries real ethical and legal costs that must be weighed, not ignored.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>For a payments ledger, an interviewer asks whether you&#39;d prioritize integrity or timeliness, and why. Define both, make the call, and explain what it means for your design under a failure.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Timeliness = users see up-to-date, recent/consistent data; integrity = the data is free of corruption, loss, or contradiction.</li><li>A timeliness violation (brief staleness) is usually temporary and self-correcting; an integrity violation (lost or corrupted money) can be permanent.</li><li>For a ledger, prioritize integrity: it&#39;s acceptable for a balance to be a few seconds stale, but never acceptable to lose or double-count a transaction.</li><li>Design implication: build the ledger as an append-only, ordered event log so no committed fact is lost or overwritten, and derive balances from it.</li><li>Under a failure you favor correctness over immediacy — you&#39;d rather delay showing the newest balance than risk a corrupt one.</li><li>Note ACID conflates the two, but they&#39;re separable, and here integrity clearly deserves the higher priority.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Timeliness is about recency — users seeing current, consistent data — while integrity is about the absence of corruption, loss, or contradiction. For a payments ledger I prioritize integrity without hesitation: a balance being a few seconds stale is recoverable, but losing or double-counting a transaction is a permanent harm. Concretely I&#39;d model the ledger as an append-only, totally-ordered event log so no committed fact is ever lost or overwritten, and derive balances from it. Under a failure I&#39;d rather delay showing the very latest balance than ever serve a corrupt one — ACID bundles these two together, but they&#39;re separable and integrity wins here.</div>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>A user double-clicks &#39;Pay&#39; and gets charged twice, even though every layer (TCP, the DB transaction) is &#39;reliable.&#39; Using the end-to-end argument, explain why per-layer guarantees didn&#39;t prevent this and how you&#39;d fix it.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Per-layer reliability only dedups within that layer: TCP guarantees delivery on one connection, a DB transaction is atomic for one execution — neither sees a retry that originates above them.</li><li>The double-click / app retry is a new request from a higher layer, so the lower layers legitimately process it as a distinct operation.</li><li>The end-to-end argument: correctness that spans the whole path (dedup across retries) must be enforced at the endpoints, not delegated to intermediate layers.</li><li>Fix: attach a client-generated unique request ID to the operation and thread it through the entire path.</li><li>The system records processed request IDs and suppresses (or makes idempotent) any repeat, so the second click with the same ID is recognized as a duplicate and ignored.</li><li>This makes the write idempotent end-to-end, which is the only place the duplicate is visible.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> TCP and the DB transaction each only guarantee correctness within their own layer — TCP dedups packets on one connection, the transaction is atomic for one execution — but the double-click is a brand-new request coming from above them, so both layers correctly treat it as a separate, legitimate operation. The end-to-end argument says a guarantee that spans the whole path, like suppressing duplicate submits, has to live at the endpoints, not in the middle. So I&#39;d have the client generate a unique request ID, carry it through the entire request path, and have the server record processed IDs and make the charge idempotent — the second click arrives with the same ID, is recognized as a duplicate, and is ignored. That end-to-end identifier is the only place the retry is actually visible.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Explain how you&#39;d enforce a unique-username constraint in an unbundled, log-based data system, and why eventual consistency or last-write-wins would be wrong here.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Partition a totally-ordered log by the value that must be unique (the username), so all competing claims for a given name land in the same partition.</li><li>Within that single partition, messages have a definite total order.</li><li>A deterministic consumer reads the claims in order, grants the first claim for a name, and rejects every later conflicting one.</li><li>This gives a linearizable compare-and-set on the name — the primitive a uniqueness constraint actually needs.</li><li>Eventual consistency is wrong: concurrent claims on different replicas would both succeed and only later &#39;converge,&#39; violating uniqueness in the meantime.</li><li>Last-write-wins is wrong: it silently picks one and discards the other rather than rejecting the conflict, so a user thinks they registered a name they don&#39;t own.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I&#39;d partition a totally-ordered log by the username itself, so every competing claim for a given name is routed into the same partition where it has a definite order. A deterministic consumer then reads claims in that order, grants the first one for each name, and rejects the rest — that&#39;s effectively a linearizable compare-and-set on the username, which is exactly the primitive a uniqueness constraint requires. Eventual consistency would let two concurrent claims on different replicas both succeed and only &#39;converge&#39; afterward, breaking uniqueness in the window between. Last-write-wins is just as wrong: it silently keeps one write and discards the other instead of rejecting the conflict, so a user believes they registered a name they actually don&#39;t own.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ddia","unit":"ch12","title":"The Future of Data Systems","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"What is DDIA's central argument about data integration in this chapter?","options":["Because no single tool satisfies all requirements, applications must combine several specialized systems, and the key discipline is distinguishing the system of record from derived data","One database technology can and should handle every access pattern in an application","Derived data should always be treated as authoritative alongside the source of truth","You should avoid derived data entirely and read everything from one store"],"answer":0,"answerLetter":"A"},{"n":2,"type":"mc","prompt":"Why does funneling all writes through a single totally-ordered log help keep multiple derived systems consistent?","options":["It makes writes faster by skipping durability","It gives every derived consumer the same deterministic order of events to apply, so search indexes, caches, and warehouses converge to the same state instead of diverging from concurrent dual writes","It encrypts the writes end to end","It removes the need for any derived systems at all"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"What is the lambda architecture, and what is DDIA's main criticism of it?","options":["A single stream layer only; criticized for losing historical data","A purely batch design; criticized for being too slow to ever use","A batch layer plus a fast stream (speed) layer feeding a serving layer; criticized because you must implement and maintain the same logic twice in two different frameworks","A leaderless replication scheme; criticized for weak consistency"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"What does 'unbundling the database' (the 'database inside-out') mean?","options":["Splitting one database into many shards of the same engine","Removing all indexes to speed up writes","Storing the database schema outside the database","Viewing the whole data system as a set of indexes and materialized views maintained by streams — composing separate specialized tools to do what one monolithic database's internals do, coordinated via logs"],"answer":3,"answerLetter":"D"},{"n":5,"type":"mc","prompt":"How does DDIA contrast federation with unbundling as approaches to combining data systems?","options":["Federation provides a unified read interface over disparate stores (a federated query), while unbundling focuses on a unified write path that keeps the separate systems in sync via logs","Federation unifies writes; unbundling unifies reads","They are two names for the same technique","Federation is only for batch and unbundling only for streams"],"answer":0,"answerLetter":"A"},{"n":6,"type":"mc","prompt":"What does it mean to 'design applications around dataflow,' per DDIA's spreadsheet analogy?","options":["Store all application data in a spreadsheet file","Treat derived state as automatically maintained from its inputs — when a value changes, dependent views (all the way to the UI) recompute and update, like cells recalculating in a spreadsheet","Require users to manually refresh every screen","Compute all state on the server and never cache anything"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"According to the end-to-end argument, why is a database transaction or TCP alone insufficient to guarantee exactly-once processing?","options":["Because transactions are too slow to be practical","Because TCP already guarantees exactly-once at the application level","Because deduplication must happen at each individual layer with its own retry semantics, and only an end-to-end identifier (such as a client-generated request ID carried through the whole path) can suppress duplicates caused by retries above those layers","Because databases cannot detect duplicate rows at all"],"answer":2,"answerLetter":"C"},{"n":8,"type":"mc","prompt":"How does DDIA suggest enforcing a uniqueness constraint (e.g. a unique username) in a log-based / partitioned system?","options":["By locking the entire database on every write","By relying on eventually-consistent replicas to converge","By using last-write-wins to pick a winner","By routing all requests for the constrained value through a single partition of a totally-ordered log (partitioned by that value), so a deterministic consumer can accept the first claim and reject conflicts"],"answer":3,"answerLetter":"D"},{"n":9,"type":"mc","prompt":"How does DDIA distinguish 'timeliness' from 'integrity,' and which does it argue usually matters more?","options":["Timeliness means users see up-to-date (recent, consistent) data; integrity means the data has no corruption, loss, or contradiction — and integrity usually matters more because many apps tolerate temporary staleness but not permanent data loss","Timeliness (recency of data) matters more, since users never tolerate any staleness","They are the same property under different names","Integrity means low latency and timeliness means durability"],"answer":0,"answerLetter":"A"},{"n":10,"type":"mc","prompt":"What is the 'trust, but verify' stance DDIA advocates for data systems?","options":["Assume hardware and software are fault-free because modern systems are reliable","Don't blindly assume the layers beneath you are correct; build auditing and self-validating checks (like end-to-end integrity checks / checksums at the application level) to detect corruption rather than silently trusting it","Encrypt all data so it never needs checking","Trust only the database and never the application code"],"answer":1,"answerLetter":"B"},{"n":11,"type":"mc","prompt":"Why does immutability of the event log make auditing easier?","options":["It compresses the audit trail automatically","Because immutable logs cannot be read by unauthorized users","Because the append-only log preserves the full history of what happened, you can reconstruct and independently re-derive any state to check whether the current derived data is correct","Because it removes the need to store derived data"],"answer":2,"answerLetter":"C"},{"n":12,"type":"mc","prompt":"In the chapter's ethics discussion, what is a 'feedback loop' risk in predictive analytics?","options":["The model runs too slowly and falls behind real time","The database replicates predictions to too many followers","Users can see the model's internal weights","A biased model's decisions shape future data (e.g. denying opportunities to a group), which then reinforces and amplifies the original bias in later model training — a self-perpetuating cycle of discrimination"],"answer":3,"answerLetter":"D"},{"n":13,"type":"mc","prompt":"What broad ethical framing about personal data does DDIA emphasize?","options":["Amassed personal data is not only an asset but also a liability and a form of surveillance — raising duties around consent, privacy, and legislation like GDPR — so collection should be weighed against its harms","Data is purely an asset with no downside, so collect as much as possible","Ethics is outside the scope of engineering and should be ignored","Only governments, not companies, bear responsibility for collected data"],"answer":0,"answerLetter":"A"},{"n":14,"type":"open","prompt":"For a payments ledger, an interviewer asks whether you'd prioritize integrity or timeliness, and why. Define both, make the call, and explain what it means for your design under a failure.","points":["Timeliness = users see up-to-date, recent/consistent data; integrity = the data is free of corruption, loss, or contradiction.","A timeliness violation (brief staleness) is usually temporary and self-correcting; an integrity violation (lost or corrupted money) can be permanent.","For a ledger, prioritize integrity: it's acceptable for a balance to be a few seconds stale, but never acceptable to lose or double-count a transaction.","Design implication: build the ledger as an append-only, ordered event log so no committed fact is lost or overwritten, and derive balances from it.","Under a failure you favor correctness over immediacy — you'd rather delay showing the newest balance than risk a corrupt one.","Note ACID conflates the two, but they're separable, and here integrity clearly deserves the higher priority."]},{"n":15,"type":"open","prompt":"A user double-clicks 'Pay' and gets charged twice, even though every layer (TCP, the DB transaction) is 'reliable.' Using the end-to-end argument, explain why per-layer guarantees didn't prevent this and how you'd fix it.","points":["Per-layer reliability only dedups within that layer: TCP guarantees delivery on one connection, a DB transaction is atomic for one execution — neither sees a retry that originates above them.","The double-click / app retry is a new request from a higher layer, so the lower layers legitimately process it as a distinct operation.","The end-to-end argument: correctness that spans the whole path (dedup across retries) must be enforced at the endpoints, not delegated to intermediate layers.","Fix: attach a client-generated unique request ID to the operation and thread it through the entire path.","The system records processed request IDs and suppresses (or makes idempotent) any repeat, so the second click with the same ID is recognized as a duplicate and ignored.","This makes the write idempotent end-to-end, which is the only place the duplicate is visible."]},{"n":16,"type":"open","prompt":"Explain how you'd enforce a unique-username constraint in an unbundled, log-based data system, and why eventual consistency or last-write-wins would be wrong here.","points":["Partition a totally-ordered log by the value that must be unique (the username), so all competing claims for a given name land in the same partition.","Within that single partition, messages have a definite total order.","A deterministic consumer reads the claims in order, grants the first claim for a name, and rejects every later conflicting one.","This gives a linearizable compare-and-set on the name — the primitive a uniqueness constraint actually needs.","Eventual consistency is wrong: concurrent claims on different replicas would both succeed and only later 'converge,' violating uniqueness in the meantime.","Last-write-wins is wrong: it silently picks one and discards the other rather than rejecting the conflict, so a user thinks they registered a name they don't own."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ddia/ch12">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

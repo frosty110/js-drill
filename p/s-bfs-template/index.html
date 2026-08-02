@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BFS queue scaffold — JS Drill</title>
+<meta name="description" content="The canonical breadth-first search shell — queue + seen set, plus the level-snapshot variant for level-order traversal.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/s-bfs-template">
+<meta property="og:type" content="article">
+<meta property="og:title" content="BFS queue scaffold — JS Drill">
+<meta property="og:description" content="The canonical breadth-first search shell — queue + seen set, plus the level-snapshot variant for level-order traversal.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/s-bfs-template">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Algorithms</p>
+    <h1>BFS queue scaffold</h1>
+    <p class="sharepage__lede">The canonical breadth-first search shell — queue + seen set, plus the level-snapshot variant for level-order traversal.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Algorithms</span> <span class="ds-chip">7 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>bfsOrder(graph, start)</code> that returns an array of node ids in BFS visit order. Use a queue + a seen set. Log <code>JSON.stringify(bfsOrder({A:[&quot;B&quot;,&quot;C&quot;], B:[&quot;D&quot;], C:[&quot;D&quot;], D:[]}, &quot;A&quot;))</code>.</p>
+    <p class="sharepage__note">Expected output: <code>[&quot;A&quot;,&quot;B&quot;,&quot;C&quot;,&quot;D&quot;]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Queue + seen-set BFS (visit-all + level-order variants)</strong> · <code>O(V + E) / O(V)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">// ---------- Variant A: visit-all-reachable BFS ----------
+// Use when you just need to walk every node reachable from start.
+function bfs(start, graph) {
+  const q = [start];
+  const seen = new Set([start]);
+  const order = [];
+  while (q.length) {
+    const cur = q.shift();              // dequeue front (FIFO)
+    order.push(cur);
+    for (const n of graph[cur] || []) {
+      if (!seen.has(n)) {               // gate enqueue on seen
+        seen.add(n);                    // mark BEFORE enqueue — not when you pop
+        q.push(n);
+      }
+    }
+  }
+  return order;
+}
+
+// ---------- Variant B: level-order BFS ----------
+// Use when you need per-level groups, shortest path in unweighted graphs, etc.
+function bfsLevels(start, graph) {
+  const q = [start];
+  const seen = new Set([start]);
+  const levels = [];
+  while (q.length) {
+    const n = q.length;                 // SNAPSHOT — children pushed below are next level
+    const level = [];
+    for (let i = 0; i &lt; n; i++) {
+      const cur = q.shift();
+      level.push(cur);
+      for (const nb of graph[cur] || []) {
+        if (!seen.has(nb)) { seen.add(nb); q.push(nb); }
+      }
+    }
+    levels.push(level);
+  }
+  return levels;
+}</code></pre>
+    <ul class="sharepage__notes"><li>Mark <code>seen</code> BEFORE enqueue, not after dequeue — otherwise a node can be enqueued multiple times before its first visit.</li><li>Array.shift is O(n); fine for interview-scale, but for huge queues use a head pointer or a real deque.</li><li>Level-order needs <code>const n = q.length</code> snapshotted BEFORE the inner loop — children pushed inside belong to the NEXT level.</li><li>Queue gives FIFO ⇒ BFS. Swap shift→pop and you&#39;ve accidentally written DFS.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Multi-source BFS <code>O(V + E) / O(V)</code></h3>
+      <p>Reach for this when the problem has MULTIPLE simultaneous starting points and asks for the minimum distance (or time) to reach every other node — Rotting Oranges, Walls and Gates, 01-Matrix. The trick: seed the queue with ALL sources at once, marked seen up-front. They expand in lock-step, so the first time any source reaches a node IS the shortest distance from the NEAREST source. Running single-source BFS from each start separately would be O(S·(V+E)); the multi-source version is one pass at O(V+E) regardless of how many sources you have.</p>
+      <pre class="sharepage__code"><code class="language-js">function multiSourceBFS(starts, graph) {
+  // Seed the queue with EVERY start at distance 0, all marked seen.
+  const q = starts.map(s =&gt; [s, 0]);
+  const seen = new Set(starts);
+  const dist = {};
+  for (const s of starts) dist[s] = 0;
+  while (q.length) {
+    const [cur, d] = q.shift();
+    for (const n of graph[cur] || []) {
+      if (!seen.has(n)) {
+        seen.add(n);                    // mark BEFORE enqueue — same rule as single-source
+        dist[n] = d + 1;                // first arrival = shortest distance from the NEAREST source
+        q.push([n, d + 1]);
+      }
+    }
+  }
+  return dist;
+}
+// Smoke test: diamond with A as the only source — same visit set as Variant A.
+const order = Object.keys(multiSourceBFS([&quot;A&quot;], { A: [&quot;B&quot;, &quot;C&quot;], B: [&quot;D&quot;], C: [&quot;D&quot;], D: [] }));
+console.log(JSON.stringify(bfsOrder({ A: [&quot;B&quot;, &quot;C&quot;], B: [&quot;D&quot;], C: [&quot;D&quot;], D: [] }, &quot;A&quot;)));
+function bfsOrder(graph, start) {
+  const q = [start];
+  const seen = new Set([start]);
+  const order = [];
+  while (q.length) {
+    const cur = q.shift();
+    order.push(cur);
+    for (const n of graph[cur] || []) {
+      if (!seen.has(n)) { seen.add(n); q.push(n); }
+    }
+  }
+  return order;
+}</code></pre>
+      <ul class="sharepage__notes"><li>Seeding ALL sources at distance 0 up-front is the whole trick — they expand in lock-step, so the first arrival at any node comes from the NEAREST source. Running BFS from each source separately would be S× more work.</li><li>Same mark-before-enqueue discipline applies — without it a node mid-way between two sources gets enqueued twice and the distances may overwrite each other.</li><li>Returning a <code>dist</code> map gives you the shortest-distance-from-nearest-source for free in the same pass — no separate level-counting needed.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">7</span></h2>
+    <p class="sharepage__note">Positions 1–7 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What ordering does a BFS queue produce, and what data-structure operation gives it?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> LIFO — push + pop</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> FIFO — push + shift <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Sorted — push + sort</li>
+        <li><span class="sharepage__key">D</span> Random — push + splice</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> BFS visits nodes in arrival order: enqueue at the back (push), dequeue from the front (shift).</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why mark a node in <code>seen</code> BEFORE enqueueing it (instead of when you dequeue)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> So the BFS depth-counter increments only on the dequeue side, keeping levels aligned</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Otherwise multiple neighbors can each enqueue the same node before any of them gets visited <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It&#39;s faster to call seen.add during enqueue than during dequeue on V8</li>
+        <li><span class="sharepage__key">D</span> Otherwise the <code>seen</code> set grows past the graph&#39;s node count and breaks O(V) space</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If you wait until pop to mark seen, a high-degree node can be pushed many times — blowing up the queue and re-doing work.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> In the level-order BFS, why snapshot <code>const n = q.length</code> BEFORE the inner for-loop?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> So <code>seen.size</code> matches <code>q.length</code> at the level boundary</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because children pushed during the inner loop belong to the NEXT level, not the current one <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> To handle the case where <code>q.shift()</code> returns undefined on an empty queue</li>
+        <li><span class="sharepage__key">D</span> Because reading <code>.length</code> inside the loop creates a new iterator and breaks <code>for...of</code></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Reading q.length live would grow as you push children, mixing the current level with the next.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What&#39;s the actual cost of <code>queue.shift()</code> on a JS array of length n, and why is it acceptable here?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(1) — same as pop</li>
+        <li><span class="sharepage__key">B</span> O(log n) — the array is a tree internally</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(n) — every remaining element re-indexes; fine for interview-scale, swap to a head pointer if huge <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(n^2) — both shift and rebuild are linear</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> shift re-indexes every remaining element. At interview scale (≤10^4) it&#39;s fine; at production scale, use a head index or deque.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> You change <code>q.shift()</code> to <code>q.pop()</code> but leave everything else. What traversal do you get?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> BFS but with each level visited right-to-left</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> DFS — popping the back makes the queue a LIFO stack <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Reverse-BFS — the same node set in reverse arrival order</li>
+        <li><span class="sharepage__key">D</span> Topological order, since pop drains the most-recently-discovered branch first</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> pop() takes the most-recently-pushed node (LIFO), which dives deep before broad — that&#39;s depth-first search, not breadth-first.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> For finding the shortest path in an UNWEIGHTED graph, why is BFS the right tool over DFS?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> DFS can revisit ancestors via recursion, inflating the path length</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> BFS reaches nodes in non-decreasing distance order, so the first time you reach the target is via a shortest path <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> DFS finds A path but never the shortest because its recursion stack drops backtracking info</li>
+        <li><span class="sharepage__key">D</span> BFS sorts neighbors by distance before visiting, which DFS skips</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> BFS expands by levels (distance from start), so a node&#39;s first discovery is along a minimum-edge path; DFS may find the target via a long path first.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> You drop the <code>seen</code> set entirely from BFS on a graph with cycles. What happens?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Each node is still visited once because the FIFO queue can&#39;t hold duplicates</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Nodes get enqueued repeatedly, causing redundant work or an effectively infinite/exploding queue on cyclic graphs <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The traversal silently terminates early when a back-edge is reached, missing nodes</li>
+        <li><span class="sharepage__key">D</span> Output order stays correct but time complexity degrades from O(V+E) to O(V·E)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Without a visited check, every path back to a node re-enqueues it; on a cycle the queue never drains and work blows up. The seen set is what makes graph BFS terminate.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the queue init, the while-loop condition, and the seen-set update for visit-all BFS.</p>
+      <pre class="sharepage__code"><code class="language-js">function bfs(start, graph) {
+  const q = [___];
+  const seen = new ___([start]);
+  const order = [];
+  while (q.___) {
+    const cur = q.___();
+    order.push(cur);
+    for (const n of graph[cur] || []) {
+      if (!seen.___(n)) {
+        seen.___(n);
+        q.push(n);
+      }
+    }
+  }
+  return order;
+}
+const g = { a: [&quot;b&quot;, &quot;c&quot;], b: [&quot;d&quot;], c: [&quot;d&quot;], d: [] };
+console.log(JSON.stringify(bfs(&quot;a&quot;, g)));</code></pre>
+      <p><strong>Answers:</strong> <code>start</code>, <code>Set</code>, <code>length</code>, <code>shift</code>, <code>has</code>, <code>add</code></p>
+      <p class="sharepage__note">Expected output: <code>[&quot;a&quot;,&quot;b&quot;,&quot;c&quot;,&quot;d&quot;]</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Use the BFS scaffold with a level-snapshot to return the count of nodes at each level.</p>
+      <pre class="sharepage__code"><code class="language-js">function levelSizes(start, graph) {
+  const q = [start];
+  const seen = new Set([start]);
+  const sizes = [];
+  while (q.___) {
+    const n = q.___;
+    sizes.push(n);
+    for (let i = 0; i &lt; n; i++) {
+      const cur = q.___();
+      for (const nb of graph[cur] || []) {
+        if (!seen.___(nb)) { seen.___(nb); q.push(nb); }
+      }
+    }
+  }
+  return sizes;
+}
+const g = { a: [&quot;b&quot;, &quot;c&quot;], b: [&quot;d&quot;, &quot;e&quot;], c: [&quot;f&quot;], d: [], e: [], f: [] };
+console.log(JSON.stringify(levelSizes(&quot;a&quot;, g)));</code></pre>
+      <p><strong>Answers:</strong> <code>length</code>, <code>length</code>, <code>shift</code>, <code>has</code>, <code>add</code></p>
+      <p class="sharepage__note">Expected output: <code>[1,2,3]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>bfsOrder(graph, start)</code> that returns an array of node ids in BFS visit order. Use a queue + a seen set. Log <code>JSON.stringify(bfsOrder({A:[&quot;B&quot;,&quot;C&quot;], B:[&quot;D&quot;], C:[&quot;D&quot;], D:[]}, &quot;A&quot;))</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Seed q with [start] and seen with new Set([start]).</li><li>While q.length, shift the front, push every unseen neighbor (mark seen first).</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function bfsOrder(graph, start) {
+  const q = [start];
+  const seen = new Set([start]);
+  const order = [];
+  while (q.length) {
+    const cur = q.shift();
+    order.push(cur);
+    for (const n of graph[cur] || []) {
+      if (!seen.has(n)) {
+        seen.add(n);
+        q.push(n);
+      }
+    }
+  }
+  return order;
+}
+console.log(JSON.stringify(bfsOrder({ A: [&quot;B&quot;, &quot;C&quot;], B: [&quot;D&quot;], C: [&quot;D&quot;], D: [] }, &quot;A&quot;)));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"s-bfs-template","title":"BFS queue scaffold","section":"Algorithms","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What ordering does a BFS queue produce, and what data-structure operation gives it?","options":["LIFO — push + pop","FIFO — push + shift","Sorted — push + sort","Random — push + splice"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why mark a node in `seen` BEFORE enqueueing it (instead of when you dequeue)?","options":["So the BFS depth-counter increments only on the dequeue side, keeping levels aligned","Otherwise multiple neighbors can each enqueue the same node before any of them gets visited","It's faster to call seen.add during enqueue than during dequeue on V8","Otherwise the `seen` set grows past the graph's node count and breaks O(V) space"],"answer":1,"answerLetter":"B"},{"n":3,"q":"In the level-order BFS, why snapshot `const n = q.length` BEFORE the inner for-loop?","options":["So `seen.size` matches `q.length` at the level boundary","Because children pushed during the inner loop belong to the NEXT level, not the current one","To handle the case where `q.shift()` returns undefined on an empty queue","Because reading `.length` inside the loop creates a new iterator and breaks `for...of`"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What's the actual cost of `queue.shift()` on a JS array of length n, and why is it acceptable here?","options":["O(1) — same as pop","O(log n) — the array is a tree internally","O(n) — every remaining element re-indexes; fine for interview-scale, swap to a head pointer if huge","O(n^2) — both shift and rebuild are linear"],"answer":2,"answerLetter":"C"},{"n":5,"q":"You change `q.shift()` to `q.pop()` but leave everything else. What traversal do you get?","options":["BFS but with each level visited right-to-left","DFS — popping the back makes the queue a LIFO stack","Reverse-BFS — the same node set in reverse arrival order","Topological order, since pop drains the most-recently-discovered branch first"],"answer":1,"answerLetter":"B"},{"n":6,"q":"For finding the shortest path in an UNWEIGHTED graph, why is BFS the right tool over DFS?","options":["DFS can revisit ancestors via recursion, inflating the path length","BFS reaches nodes in non-decreasing distance order, so the first time you reach the target is via a shortest path","DFS finds A path but never the shortest because its recursion stack drops backtracking info","BFS sorts neighbors by distance before visiting, which DFS skips"],"answer":1,"answerLetter":"B"},{"n":7,"q":"You drop the `seen` set entirely from BFS on a graph with cycles. What happens?","options":["Each node is still visited once because the FIFO queue can't hold duplicates","Nodes get enqueued repeatedly, causing redundant work or an effectively infinite/exploding queue on cyclic graphs","The traversal silently terminates early when a back-edge is reached, missing nodes","Output order stays correct but time complexity degrades from O(V+E) to O(V·E)"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the queue init, the while-loop condition, and the seen-set update for visit-all BFS.","answers":["start","Set","length","shift","has","add"]},{"n":2,"prompt":"Use the BFS scaffold with a level-snapshot to return the count of nodes at each level.","answers":["length","length","shift","has","add"]}],"L3":[{"n":1,"prompt":"Write `bfsOrder(graph, start)` that returns an array of node ids in BFS visit order. Use a queue + a seen set. Log `JSON.stringify(bfsOrder({A:[\"B\",\"C\"], B:[\"D\"], C:[\"D\"], D:[]}, \"A\"))`.","expectedOutput":"[\"A\",\"B\",\"C\",\"D\"]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/s-bfs-template">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

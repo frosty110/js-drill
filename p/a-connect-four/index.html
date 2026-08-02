@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connect Four — JS Drill</title>
+<meta name="description" content="Two-color gravity grid. `drop(col, color)` settles into the lowest empty row; `winner()` scans the 6×7 board for any 4-in-a-row in the four directions (→, ↑, ↗, ↘).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-connect-four">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Connect Four — JS Drill">
+<meta property="og:description" content="Two-color gravity grid. `drop(col, color)` settles into the lowest empty row; `winner()` scans the 6×7 board for any 4-in-a-row in the four directions (→, ↑, ↗, ↘).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-connect-four">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Connect Four</h1>
+    <p class="sharepage__lede">Two-color gravity grid. `drop(col, color)` settles into the lowest empty row; `winner()` scans the 6×7 board for any 4-in-a-row in the four directions (→, ↑, ↗, ↘).</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement ConnectFour with drop(col, color) and winner(). Play a sequence that ends with Red completing a ↗ diagonal at (0,0)-(1,1)-(2,2)-(3,3); log winner() before and after the final move.</p>
+    <p class="sharepage__note">Expected output: <code>
+R</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>4-direction mirror scan</strong> · <code>O(rows·cols) / O(rows·cols)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">class ConnectFour {
+  constructor() {
+    this.rows = 6;
+    this.cols = 7;
+    // Row 0 = bottom of board so drop scans upward to the first empty slot.
+    this.board = Array.from({ length: 6 }, () =&gt; new Array(7).fill(&#39;&#39;));
+  }
+  drop(col, color) {
+    for (let r = 0; r &lt; this.rows; r++) {
+      if (this.board[r][col] === &#39;&#39;) { this.board[r][col] = color; return r; }
+    }
+    return -1;                                  // column full — sentinel
+  }
+  winner() {
+    // Only 4 directions — reverses would re-detect the same line from its other end.
+    const dirs = [[0,1],[1,0],[1,1],[1,-1]];    // →, ↑, ↗, ↘
+    for (let r = 0; r &lt; this.rows; r++) {
+      for (let c = 0; c &lt; this.cols; c++) {
+        const v = this.board[r][c];
+        if (!v) continue;
+        for (const [dr, dc] of dirs) {
+          let k = 1;
+          // Count consecutive matches in this direction, capped at 4.
+          while (k &lt; 4) {
+            const nr = r + dr*k, nc = c + dc*k;
+            if (nr &lt; 0 || nr &gt;= this.rows || nc &lt; 0 || nc &gt;= this.cols) break;
+            if (this.board[nr][nc] !== v) break;
+            k++;
+          }
+          if (k === 4) return v;
+        }
+      }
+    }
+    return &#39;&#39;;
+  }
+}</code></pre>
+    <ul class="sharepage__notes"><li>Pick a row convention and stick with it. Here row 0 = bottom; drop scans 0 → rows-1 finding the first empty slot.</li><li>Only 4 direction vectors are needed (→, ↑, ↗, ↘) — checking the reverse directions would double-count every line.</li><li>After the move you can scan the whole board, OR check only the 4 lines through the just-dropped cell. The full scan keeps the API decoupled.</li><li>Time O(rows) per drop, O(rows × cols) per full-board winner(). Space O(rows × cols).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>8-direction local check from the dropped piece <code>O(1) / O(rows·cols)</code></h3>
+      <p>Reach for this if you haven&#39;t memorized the 4-mirror optimization, or if <code>winner()</code> is called immediately after every <code>drop</code> so you can pass in the just-dropped cell. Couples <code>drop</code> and <code>winner</code> (the win-check needs the landing row), but cuts per-move work from O(rows·cols) to O(1) — only the 4 lines through the new piece can possibly have just completed a 4-in-a-row.</p>
+      <pre class="sharepage__code"><code class="language-js">class ConnectFour {
+  constructor() {
+    this.rows = 6;
+    this.cols = 7;
+    this.board = Array.from({ length: 6 }, () =&gt; new Array(7).fill(&#39;&#39;));
+    this.won = &#39;&#39;;                              // cached winner from last drop
+  }
+  drop(col, color) {
+    for (let r = 0; r &lt; this.rows; r++) {
+      if (this.board[r][col] === &#39;&#39;) {
+        this.board[r][col] = color;
+        // All 8 direction vectors — one-way walk from the just-dropped cell.
+        const dirs = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,-1],[1,-1],[-1,1]];
+        // Pair each direction with its opposite to count a full line through (r, col).
+        for (let d = 0; d &lt; 8; d += 2) {
+          const [dr1, dc1] = dirs[d], [dr2, dc2] = dirs[d + 1];
+          let count = 1;                        // the piece we just placed
+          // Walk forward along dir1 while still the same color.
+          let nr = r + dr1, nc = col + dc1;
+          while (nr &gt;= 0 &amp;&amp; nr &lt; this.rows &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; this.cols &amp;&amp; this.board[nr][nc] === color) {
+            count++; nr += dr1; nc += dc1;
+          }
+          // Walk backward along dir2 (the opposite) to extend the same line.
+          nr = r + dr2; nc = col + dc2;
+          while (nr &gt;= 0 &amp;&amp; nr &lt; this.rows &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; this.cols &amp;&amp; this.board[nr][nc] === color) {
+            count++; nr += dr2; nc += dc2;
+          }
+          if (count &gt;= 4) { this.won = color; break; }
+        }
+        return r;
+      }
+    }
+    return -1;
+  }
+  winner() { return this.won; }
+}
+const g = new ConnectFour();
+g.drop(0, &#39;R&#39;);
+g.drop(1, &#39;Y&#39;);
+g.drop(1, &#39;R&#39;);
+g.drop(2, &#39;Y&#39;);
+g.drop(6, &#39;R&#39;);
+g.drop(2, &#39;Y&#39;);
+g.drop(2, &#39;R&#39;);
+g.drop(3, &#39;Y&#39;);
+g.drop(6, &#39;R&#39;);
+g.drop(3, &#39;Y&#39;);
+g.drop(5, &#39;R&#39;);
+g.drop(3, &#39;Y&#39;);
+console.log(g.winner());
+g.drop(3, &#39;R&#39;);
+console.log(g.winner());</code></pre>
+      <ul class="sharepage__notes"><li>8 explicit direction vectors paired into 4 line-axes — <code>(0,1)+(0,-1)</code> is the horizontal line, <code>(1,1)+(-1,-1)</code> is the ↘↖ diagonal, etc. Conceptually simpler than &#39;only 4 because reverses are redundant&#39;.</li><li>Walks outward from the dropped cell in both directions, summing matches; <code>count &gt;= 4</code> (not <code>=== 4</code>) handles the 5-in-a-row edge cleanly.</li><li>Caches <code>this.won</code> on the dropped cell so <code>winner()</code> becomes O(1) — but the trade is that <code>drop</code> and <code>winner</code> are no longer independent (the check must run at drop time).</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why only check 4 direction vectors (→, ↑, ↗, ↘) instead of all 8?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Gravity makes the ↙ and ↘ diagonals impossible to form</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The reverse direction of any 4-in-a-row would re-detect the same line from its other end <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Only the 4 directions where dr+dc is non-negative produce valid grid moves</li>
+        <li><span class="sharepage__key">D</span> Counting in both directions from each cell would double the cap from 4 to 8</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Where does a dropped piece land?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The topmost cell of the column</li>
+        <li><span class="sharepage__key">B</span> The same row as the last opponent piece dropped</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> The lowest empty row of that column <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The next column over if the chosen column is full</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> What does the inner <code>while (k &lt; 4)</code> loop count?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Total pieces of color <code>v</code> anywhere on the board</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> How many consecutive cells in this direction match the starting color, capped at 4 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Cells of color <code>v</code> in the entire row, capped at 4</li>
+        <li><span class="sharepage__key">D</span> Steps until the next opponent piece appears in this direction</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why does <code>drop</code> return -1?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It signals the piece settled below row 0 — the overflow row</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Sentinel for &#39;column full — drop refused&#39; <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Row index after subtracting 1 for 0-based correction</li>
+        <li><span class="sharepage__key">D</span> It&#39;s the index returned when the column index is out of bounds</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in drop() — find the lowest empty row in the column and place the piece.</p>
+      <pre class="sharepage__code"><code class="language-js">class ConnectFour {
+  constructor() {
+    this.rows = 6;
+    this.cols = 7;
+    this.board = Array.___({ length: 6 }, () =&gt; new Array(7).___(&#39;&#39;));
+  }
+  drop(col, color) {
+    for (let r = 0; r &lt; this.___; r++) {
+      if (this.board[r][col] ___ ___) {
+        this.board[r][col] = color;
+        return r;
+      }
+    }
+    return ___;
+  }
+}
+const g = new ConnectFour();
+console.log(g.drop(0, &#39;R&#39;));
+console.log(g.drop(0, &#39;Y&#39;));
+console.log(g.drop(0, &#39;R&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>from</code>, <code>fill</code>, <code>rows</code>, <code>===</code>, <code>&#39;&#39;</code>, <code>-1</code></p>
+      <p class="sharepage__note">Expected output: <code>0
+1
+2</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement ConnectFour with drop(col, color) and winner(). Play a sequence that ends with Red completing a ↗ diagonal at (0,0)-(1,1)-(2,2)-(3,3); log winner() before and after the final move.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>drop() walks r = 0 upward, settling on the first empty row in the column.</li><li>winner() scans every cell; from each non-empty cell try 4 direction vectors (→, ↑, ↗, ↘) and count up to 4 matches.</li><li>Return value&#39;s truthy color string (&#39;R&#39; or &#39;Y&#39;) when a 4-line is found, &#39;&#39; otherwise.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">class ConnectFour {
+  constructor() {
+    this.rows = 6;
+    this.cols = 7;
+    // Row 0 = bottom of board so drop scans upward to the first empty slot.
+    this.board = Array.from({ length: 6 }, () =&gt; new Array(7).fill(&#39;&#39;));
+  }
+  drop(col, color) {
+    for (let r = 0; r &lt; this.rows; r++) {
+      if (this.board[r][col] === &#39;&#39;) { this.board[r][col] = color; return r; }
+    }
+    return -1;                                  // column full — sentinel
+  }
+  winner() {
+    // Only 4 directions — reverses would re-detect the same line from its other end.
+    const dirs = [[0,1],[1,0],[1,1],[1,-1]];    // →, ↑, ↗, ↘
+    for (let r = 0; r &lt; this.rows; r++) {
+      for (let c = 0; c &lt; this.cols; c++) {
+        const v = this.board[r][c];
+        if (!v) continue;
+        for (const [dr, dc] of dirs) {
+          let k = 1;
+          // Count consecutive matches in this direction, capped at 4.
+          while (k &lt; 4) {
+            const nr = r + dr*k, nc = c + dc*k;
+            if (nr &lt; 0 || nr &gt;= this.rows || nc &lt; 0 || nc &gt;= this.cols) break;
+            if (this.board[nr][nc] !== v) break;
+            k++;
+          }
+          if (k === 4) return v;
+        }
+      }
+    }
+    return &#39;&#39;;
+  }
+}
+const g = new ConnectFour();
+g.drop(0, &#39;R&#39;);             // (0,0) R
+g.drop(1, &#39;Y&#39;);             // (0,1) Y
+g.drop(1, &#39;R&#39;);             // (1,1) R
+g.drop(2, &#39;Y&#39;);             // (0,2) Y
+g.drop(6, &#39;R&#39;);             // (0,6) R filler
+g.drop(2, &#39;Y&#39;);             // (1,2) Y
+g.drop(2, &#39;R&#39;);             // (2,2) R
+g.drop(3, &#39;Y&#39;);             // (0,3) Y
+g.drop(6, &#39;R&#39;);             // (1,6) R filler
+g.drop(3, &#39;Y&#39;);             // (1,3) Y
+g.drop(5, &#39;R&#39;);             // (0,5) R filler
+g.drop(3, &#39;Y&#39;);             // (2,3) Y
+console.log(g.winner());    // no winner yet
+g.drop(3, &#39;R&#39;);             // (3,3) R -&gt; diagonal complete
+console.log(g.winner());</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-connect-four","title":"Connect Four","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why only check 4 direction vectors (→, ↑, ↗, ↘) instead of all 8?","options":["Gravity makes the ↙ and ↘ diagonals impossible to form","The reverse direction of any 4-in-a-row would re-detect the same line from its other end","Only the 4 directions where dr+dc is non-negative produce valid grid moves","Counting in both directions from each cell would double the cap from 4 to 8"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Where does a dropped piece land?","options":["The topmost cell of the column","The same row as the last opponent piece dropped","The lowest empty row of that column","The next column over if the chosen column is full"],"answer":2,"answerLetter":"C"},{"n":3,"q":"What does the inner `while (k \u003c 4)` loop count?","options":["Total pieces of color `v` anywhere on the board","How many consecutive cells in this direction match the starting color, capped at 4","Cells of color `v` in the entire row, capped at 4","Steps until the next opponent piece appears in this direction"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why does `drop` return -1?","options":["It signals the piece settled below row 0 — the overflow row","Sentinel for 'column full — drop refused'","Row index after subtracting 1 for 0-based correction","It's the index returned when the column index is out of bounds"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in drop() — find the lowest empty row in the column and place the piece.","answers":["from","fill","rows","===","''","-1"]}],"L3":[{"n":1,"prompt":"Implement ConnectFour with drop(col, color) and winner(). Play a sequence that ends with Red completing a ↗ diagonal at (0,0)-(1,1)-(2,2)-(3,3); log winner() before and after the final move.","expectedOutput":"\nR"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-connect-four">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

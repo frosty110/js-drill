@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Longest substring — JS Drill</title>
+<meta name="description" content="Sliding window with a Set: expand the right edge, shrink the left while a duplicate sits in the window. O(n) time.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-longest-sub">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Longest substring — JS Drill">
+<meta property="og:description" content="Sliding window with a Set: expand the right edge, shrink the left while a duplicate sits in the window. O(n) time.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-longest-sub">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Sliding Window</p>
+    <h1>Longest substring</h1>
+    <p class="sharepage__lede">Sliding window with a Set: expand the right edge, shrink the left while a duplicate sits in the window. O(n) time.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Sliding Window</span> <span class="ds-chip">8 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>lengthOfLongestSubstring(s)</code> returning the length of the longest substring without repeating chars. Log <code>lengthOfLongestSubstring(&quot;pwwkew&quot;)</code>.</p>
+    <p class="sharepage__note">Expected output: <code>3</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function lengthOfLongestSubstring(s) {
+  const seen = new Set();              // chars currently in the window
+  let l = 0, best = 0;
+  // Expand right edge; shrink left while the new char duplicates one already in the window.
+  for (let r = 0; r &lt; s.length; r++) {
+    while (seen.has(s[r])) {
+      seen.delete(s[l]);   // shrink from the left
+      l++;
+    }
+    seen.add(s[r]);
+    // Window length is r - l + 1 (inclusive on both ends).
+    best = Math.max(best, r - l + 1);
+  }
+  return best;
+}
+// Time O(n) — each char is added and removed at most once
+// Space O(min(n, |alphabet|))</code></pre>
+    <ul class="sharepage__notes"><li>Window is the substring s[l..r] inclusive — its length is r - l + 1.</li><li>Shrink with a while loop so the template generalizes to count-based windows.</li><li>Delete s[l] BEFORE incrementing l — otherwise you delete the wrong char.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Index map (jump l directly) <code>O(n) / O(min(n,|α|))</code></h3>
+      <p>Reach for this when you want l to jump straight past the duplicate in one step instead of shrinking one character at a time. Slightly harder to reason about (the max guard is easy to forget), but avoids the inner while loop and is often the variant interviewers expect if they say &#39;can you do it without a nested loop?&#39;</p>
+      <pre class="sharepage__code"><code class="language-js">function lengthOfLongestSubstring(s) {
+  const lastSeen = new Map();  // char → most recent index
+  let l = 0, best = 0;
+  for (let r = 0; r &lt; s.length; r++) {
+    const c = s[r];
+    // If c was seen inside the current window, jump l past it.
+    // max(l, ...) prevents l from moving backward when lastSeen is stale (left of l).
+    if (lastSeen.has(c) &amp;&amp; lastSeen.get(c) &gt;= l) {
+      l = lastSeen.get(c) + 1;
+    }
+    lastSeen.set(c, r);
+    best = Math.max(best, r - l + 1);
+  }
+  return best;
+}
+console.log(lengthOfLongestSubstring(&quot;pwwkew&quot;));</code></pre>
+      <ul class="sharepage__notes"><li>Map stores index, not a boolean — that&#39;s what enables the O(1) jump.</li><li>max(l, lastSeen.get(c) + 1) is load-bearing: without it, a stale entry (char last seen before l) would pull l backward and re-admit characters already outside the window.</li><li>Same O(n) / O(min(n,|alphabet|)) as the Set version; the constant factor differs but the class is identical.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">8</span></h2>
+    <p class="sharepage__note">Positions 1–8 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Window length expression for indices l..r inclusive?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> r - l</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> r - l + 1 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> r - l - 1</li>
+        <li><span class="sharepage__key">D</span> r + l</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why a Set rather than a count Map?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Set.has is O(1) while Map.get is O(log n) due to internal tree storage</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> We only need membership (in the window) — uniqueness is implicit <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Maps can&#39;t be iterated in O(1), and the algorithm iterates the window each step</li>
+        <li><span class="sharepage__key">D</span> Sets handle the shrink step automatically — deleting from a Map would require checking count first</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Overall time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n^2)</li>
+        <li><span class="sharepage__key">B</span> O(n log n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(n) — each char enters and leaves the window once <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(1)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> When the right pointer sees a duplicate, you should:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Reset l to r</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Shrink from the left until the duplicate is removed <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Skip the right pointer forward</li>
+        <li><span class="sharepage__key">D</span> Return immediately</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> In the Set-based version, why shrink with a <code>while</code> loop (deleting s[l] and l++) rather than a single l++?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A single l++ is faster</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> You must keep deleting from the left until the duplicate of s[r] is actually gone from the window, which can take more than one step <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The while loop sorts the characters</li>
+        <li><span class="sharepage__key">D</span> A single l++ would use more memory</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The duplicate of s[r] can sit several positions inside the window, so you must delete and advance l repeatedly until it&#39;s removed before adding s[r].</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> The index-map variant stores each char&#39;s LAST seen index. On a duplicate it jumps <code>l = max(l, lastSeen[c] + 1)</code>. Why the <code>max</code> with the current l?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To handle empty strings</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A stale last-seen index could be left of l (already outside the window); max prevents l from moving backward <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> To make the code shorter</li>
+        <li><span class="sharepage__key">D</span> Because Math.max is required for indices</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If the duplicate&#39;s last-seen index is behind the current l, moving l there would re-expand the window and re-admit chars already removed — max(l, ...) keeps l monotonically forward.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> What is the space complexity of the window?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(1) always</li>
+        <li><span class="sharepage__key">B</span> O(n^2)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(min(n, |charset|)) — bounded by the alphabet size or the string length <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(n log n)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The Set/map can hold at most one entry per distinct character, so it&#39;s capped by the alphabet (e.g. 128 for ASCII) or by n, whichever is smaller.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> Why is the overall time O(n) even though there&#39;s an inner while loop?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The while loop runs at most a constant number of times per outer step</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Each character is added to the window once and removed once, so total left+right pointer moves are bounded by 2n <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because the string is short</li>
+        <li><span class="sharepage__key">D</span> The while loop never actually executes</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> l only ever advances (never resets backward) and r advances once per step, so across the whole run each pointer moves at most n times — amortized O(n), not O(n^2).</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the sliding-window with a Set.</p>
+      <pre class="sharepage__code"><code class="language-js">function lengthOfLongestSubstring(s) {
+  const seen = new ___();
+  let l = 0, best = 0;
+  for (let r = 0; r &lt; s.length; r++) {
+    while (seen.___(s[r])) {
+      seen.___(s[l]);
+      l++;
+    }
+    seen.add(s[r]);
+    best = Math.max(best, r - l + ___);
+  }
+  return best;
+}
+console.log(lengthOfLongestSubstring(&quot;abcabcbb&quot;));</code></pre>
+      <p><strong>Answers:</strong> <code>Set</code>, <code>has</code>, <code>delete</code>, <code>1</code></p>
+      <p class="sharepage__note">Expected output: <code>3</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>lengthOfLongestSubstring(s)</code> returning the length of the longest substring without repeating chars. Log <code>lengthOfLongestSubstring(&quot;pwwkew&quot;)</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Slide a window [l, r] across the string.</li><li>While the new char is already in the Set, delete s[l] and l++.</li><li>Track best = r - l + 1 after each step.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function lengthOfLongestSubstring(s) {
+  const seen = new Set();              // chars currently in the window
+  let l = 0, best = 0;
+  // Expand right edge; shrink left while the new char duplicates one already in the window.
+  for (let r = 0; r &lt; s.length; r++) {
+    while (seen.has(s[r])) {
+      seen.delete(s[l]);   // shrink from the left
+      l++;
+    }
+    seen.add(s[r]);
+    // Window length is r - l + 1 (inclusive on both ends).
+    best = Math.max(best, r - l + 1);
+  }
+  return best;
+}
+console.log(lengthOfLongestSubstring(&quot;pwwkew&quot;));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-longest-sub","title":"Longest substring","section":"Sliding Window","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Window length expression for indices l..r inclusive?","options":["r - l","r - l + 1","r - l - 1","r + l"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why a Set rather than a count Map?","options":["Set.has is O(1) while Map.get is O(log n) due to internal tree storage","We only need membership (in the window) — uniqueness is implicit","Maps can't be iterated in O(1), and the algorithm iterates the window each step","Sets handle the shrink step automatically — deleting from a Map would require checking count first"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Overall time complexity?","options":["O(n^2)","O(n log n)","O(n) — each char enters and leaves the window once","O(1)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"When the right pointer sees a duplicate, you should:","options":["Reset l to r","Shrink from the left until the duplicate is removed","Skip the right pointer forward","Return immediately"],"answer":1,"answerLetter":"B"},{"n":5,"q":"In the Set-based version, why shrink with a `while` loop (deleting s[l] and l++) rather than a single l++?","options":["A single l++ is faster","You must keep deleting from the left until the duplicate of s[r] is actually gone from the window, which can take more than one step","The while loop sorts the characters","A single l++ would use more memory"],"answer":1,"answerLetter":"B"},{"n":6,"q":"The index-map variant stores each char's LAST seen index. On a duplicate it jumps `l = max(l, lastSeen[c] + 1)`. Why the `max` with the current l?","options":["To handle empty strings","A stale last-seen index could be left of l (already outside the window); max prevents l from moving backward","To make the code shorter","Because Math.max is required for indices"],"answer":1,"answerLetter":"B"},{"n":7,"q":"What is the space complexity of the window?","options":["O(1) always","O(n^2)","O(min(n, |charset|)) — bounded by the alphabet size or the string length","O(n log n)"],"answer":2,"answerLetter":"C"},{"n":8,"q":"Why is the overall time O(n) even though there's an inner while loop?","options":["The while loop runs at most a constant number of times per outer step","Each character is added to the window once and removed once, so total left+right pointer moves are bounded by 2n","Because the string is short","The while loop never actually executes"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the sliding-window with a Set.","answers":["Set","has","delete","1"]}],"L3":[{"n":1,"prompt":"Write `lengthOfLongestSubstring(s)` returning the length of the longest substring without repeating chars. Log `lengthOfLongestSubstring(\"pwwkew\")`.","expectedOutput":"3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-longest-sub">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

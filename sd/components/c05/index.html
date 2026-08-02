@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rate Limiting — Building Blocks</title>
+<meta name="description" content="Rate limiting protects a service from overload and abuse by capping how many requests a client may make in a window. This section covers the four canonical algorithms (token bucket, leaky bucket, fixed-window counter, and the two sliding-window variants), where in the stack to enforce limits, how to do it accurately across a distributed fleet, and how the server signals a throttled client.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c05">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Rate Limiting — Building Blocks">
+<meta property="og:description" content="Rate limiting protects a service from overload and abuse by capping how many requests a client may make in a window. This section covers the four canonical algorithms (token bucket, leaky bucket, fixed-window counter, and the two sliding-window variants), where in the stack to enforce limits, how to do it accurately across a distributed fleet, and how the server signals a throttled client.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c05">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/components/">Building Blocks</a></p>
+    <h1>Rate Limiting</h1>
+    <p class="sharepage__lede">Rate limiting protects a service from overload and abuse by capping how many requests a client may make in a window. This section covers the four canonical algorithms (token bucket, leaky bucket, fixed-window counter, and the two sliding-window variants), where in the stack to enforce limits, how to do it accurately across a distributed fleet, and how the server signals a throttled client.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Building Blocks</span> <span class="ds-chip">15 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Token bucket refills tokens at a fixed rate up to a cap; each request spends a token, so it ALLOWS short bursts up to the bucket capacity.</li><li>Leaky bucket processes a queue at a fixed rate, SMOOTHING output to a steady stream and dropping requests when the queue overflows — no bursts.</li><li>Fixed-window counters are simple but suffer the boundary-burst flaw: up to 2x the limit can pass across the edge of two adjacent windows.</li><li>Sliding-window log stores every request timestamp for an exact count but is memory-heavy; sliding-window counter approximates it cheaply by weighting the previous window.</li><li>Enforce limits at the edge/API gateway, keyed per user, per IP, or per API key.</li><li>Distributed rate limiting needs a shared counter (e.g. Redis INCR / Lua scripts) and must handle races, trading accuracy against latency and coordination cost.</li><li>Return HTTP 429 Too Many Requests with a Retry-After header; throttling (delay/queue) and load shedding (drop) are distinct responses to overload.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">15</span></h2>
+    <p class="sharepage__note">Positions 1–15 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does the token bucket algorithm work, and what traffic shape does it permit?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It processes a fixed-size FIFO queue at a constant rate, so output is perfectly smooth with no bursts</li>
+        <li><span class="sharepage__key">B</span> It counts requests in a fixed clock window and resets the count when the window rolls over</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Tokens are added at a fixed rate up to a bucket capacity; each request consumes a token, so bursts up to the bucket size are allowed while the long-run average stays capped <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It stores a timestamp per request and counts how many fall inside the trailing window</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Token bucket refills tokens at a steady rate but lets them accumulate up to the bucket&#39;s capacity, so a client that has been idle can spend a burst of saved-up tokens at once — bursts up to the cap are allowed while the average is bounded. Smoothing to a constant output rate is the leaky bucket&#39;s behavior, not the token bucket&#39;s.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What distinguishes the leaky bucket algorithm&#39;s output?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Requests leave the bucket at a fixed, constant rate (like water leaking from a hole), smoothing bursty input into a steady stream and dropping overflow when the bucket is full <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It permits large bursts as long as saved-up tokens remain in the bucket</li>
+        <li><span class="sharepage__key">C</span> It allows exactly the limit in each fixed calendar window, then resets</li>
+        <li><span class="sharepage__key">D</span> It weights the previous window&#39;s count to approximate a sliding window</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The leaky bucket drains at a constant rate regardless of how bursty the arrivals are, producing a smooth output and shedding requests that arrive when the queue is already full. Permitting bursts from accumulated tokens is the token bucket; the two are frequently offered as each other&#39;s distractors precisely because they invert this burst-vs-smooth tradeoff.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which statement correctly contrasts token bucket with leaky bucket?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Both smooth traffic to a constant rate and neither allows bursts</li>
+        <li><span class="sharepage__key">B</span> Token bucket drops overflow immediately; leaky bucket never drops anything</li>
+        <li><span class="sharepage__key">C</span> Leaky bucket allows bursts; token bucket forces a constant output rate</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Token bucket allows bursts up to its capacity; leaky bucket smooths output to a fixed rate and does not allow bursts <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The core distinction: token bucket tolerates bursts (spend accumulated tokens), while leaky bucket enforces a steady drain rate and thus no bursts. Reversing that — claiming leaky bucket allows bursts and token bucket is constant-rate — is the classic trap answer.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the well-known flaw of the fixed-window counter algorithm?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It requires storing a timestamp for every request, so memory grows without bound</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Boundary burst: a client can send the full limit at the end of one window and again at the start of the next, pushing up to 2x the limit through a short span straddling the edge <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It smooths traffic so aggressively that legitimate bursts are always rejected</li>
+        <li><span class="sharepage__key">D</span> It cannot be implemented without a distributed consensus protocol</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Because the counter resets sharply at each window boundary, a burst clustered just before the reset plus a burst just after can deliver nearly twice the intended limit within a rolling interval shorter than the window. Unbounded per-request memory is the sliding-window LOG&#39;s weakness, not the fixed-window counter&#39;s.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does the sliding-window log algorithm achieve exactness, and at what cost?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It keeps a single integer counter per window, so it is exact and O(1) memory</li>
+        <li><span class="sharepage__key">B</span> It refills tokens continuously, making it exact without storing history</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It stores the timestamp of every request and counts those within the trailing window, giving an exact rate at the cost of memory proportional to request volume <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It weights two adjacent fixed-window counters to estimate the current rate</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The sliding-window log records each request&#39;s timestamp and, on every new request, counts how many timestamps fall inside the trailing window — perfectly accurate with no boundary artifact. The price is memory (and cleanup work) that scales with the number of requests, which is why the cheaper sliding-window counter approximation exists.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does the sliding-window counter approximate a true sliding window cheaply?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It combines the current fixed window&#39;s count with a weighted fraction of the previous window&#39;s count based on how far into the current window the request falls <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It stores every request timestamp but compresses them with run-length encoding</li>
+        <li><span class="sharepage__key">C</span> It runs a full leaky bucket per client and reads the queue depth</li>
+        <li><span class="sharepage__key">D</span> It doubles the limit near window boundaries to compensate for bursts</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The sliding-window counter blends counts from the current and previous fixed windows, weighting the previous one by the portion of the sliding window it still overlaps. This smooths away most of the fixed-window boundary burst using only two counters — far cheaper than storing a timestamp per request like the log.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Where is rate limiting typically enforced, and on what key?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Deep inside each microservice&#39;s database layer, keyed by table name</li>
+        <li><span class="sharepage__key">B</span> Only on the client device, keyed by the app version</li>
+        <li><span class="sharepage__key">C</span> In the compiler at build time, keyed by function</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> At the edge / API gateway (before requests hit backend services), keyed per user, per IP address, or per API key <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Putting the limiter at the API gateway or edge rejects abusive traffic early — before it consumes backend resources — and it keys on an identity dimension like user id, client IP, or API key. Enforcing only client-side is trivially bypassed, and burying it in the database defeats the point of shedding load before it arrives.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the central challenge of rate limiting across a distributed fleet of servers?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> TCP cannot carry the counter between servers, so UDP is required</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Each server sees only its own traffic, so counts must be shared (e.g. a Redis counter via INCR or an atomic Lua script) while handling race conditions and the accuracy-vs-latency tradeoff <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Distributed limiting is impossible, so every fleet must run on a single node</li>
+        <li><span class="sharepage__key">D</span> The only correct approach is to disable limiting entirely under high load</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With many gateway nodes, a per-node counter under-counts the global rate, so implementations centralize the counter in a store like Redis using atomic INCR or Lua scripts to avoid read-modify-write races. That coordination adds latency, so designs trade some accuracy (e.g. approximate or sticky-routed counts) for speed. Sticky-routing a client to one node is a common alternative that avoids the shared counter.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>When a client exceeds its limit, what should the HTTP response be?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 403 Forbidden with no additional headers</li>
+        <li><span class="sharepage__key">B</span> 503 Service Unavailable, because the whole service is down</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> 429 Too Many Requests, ideally with a Retry-After header telling the client when to try again <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> 200 OK with an empty body so the client silently backs off</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 429 Too Many Requests is the standard rate-limit status, and a Retry-After header (seconds or a date) lets well-behaved clients back off precisely instead of hammering. 403 signals authorization failure, and 503 signals the service itself is unavailable rather than the client being throttled.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the difference between throttling and load shedding as responses to overload?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Throttling delays or queues excess requests to slow the client down, while load shedding outright drops (rejects) requests to protect the system — they are distinct strategies <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> They are two names for the same action: dropping every request over the limit</li>
+        <li><span class="sharepage__key">C</span> Throttling drops requests instantly; load shedding always queues them for later</li>
+        <li><span class="sharepage__key">D</span> Load shedding speeds requests up, while throttling caches their responses</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Throttling slows a client by delaying or queuing its excess requests (the request eventually gets served), whereas load shedding sacrifices requests by dropping them to keep the system healthy under overload. Conflating the two, or reversing which one drops versus queues, is the trap.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A client has been idle for a while under a token-bucket limiter with capacity 10 and refill of 1 token/sec. What happens if it suddenly sends 10 requests at once?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> All 10 are rejected because the per-second rate is only 1</li>
+        <li><span class="sharepage__key">B</span> Only 1 is allowed and the other 9 are queued and released one per second</li>
+        <li><span class="sharepage__key">C</span> The requests are smoothed to exactly 1 per second with no bursting</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> All 10 are allowed immediately because the bucket has accumulated up to its capacity of 10 tokens during the idle period <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> During the idle period the bucket refilled up to its capacity (10 tokens), so a burst of 10 requests each spends one token and all pass at once — that accumulated-burst allowance is the whole point of token bucket. A leaky bucket, by contrast, would release them at the fixed drain rate.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In a leaky-bucket limiter, what happens to a request that arrives when the bucket (queue) is already full?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It is served immediately, temporarily exceeding the drain rate</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It is dropped (or rejected), because the fixed-size queue has no room and the leak rate is constant <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The bucket capacity automatically doubles to absorb it</li>
+        <li><span class="sharepage__key">D</span> It replaces the oldest queued request, which is discarded instead</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The leaky bucket has a fixed queue size draining at a constant rate; once the queue is full, arriving requests overflow and are dropped, which is how it enforces the cap while smoothing output. It never bursts above the drain rate, and it doesn&#39;t grow the queue to fit the load.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>You want to eliminate the fixed-window boundary-burst problem without storing a timestamp per request. Which algorithm best fits?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Fixed-window counter, run with a larger window</li>
+        <li><span class="sharepage__key">B</span> Sliding-window log, since exactness is the only goal</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Sliding-window counter, which weights the previous and current windows to smooth the boundary using just two counters <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Token bucket with the capacity set to zero</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The sliding-window counter is the cheap middle ground: it removes almost all of the fixed-window boundary burst by blending the previous and current window counts, using O(1) memory rather than a per-request log. The sliding-window log also fixes the burst but pays the memory cost you&#39;re trying to avoid.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Sticky routing (hashing each client to a fixed gateway node) is sometimes used for distributed rate limiting because it…</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> …lets each node count that client&#39;s requests locally, avoiding a shared counter and its coordination latency, at the cost of uneven load and weaker fault tolerance <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> …guarantees perfectly even load across all nodes automatically</li>
+        <li><span class="sharepage__key">C</span> …makes exactly-once counting trivial across the whole fleet</li>
+        <li><span class="sharepage__key">D</span> …removes the need to return 429 responses</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If a given client always lands on the same node, that node sees all of the client&#39;s traffic and can enforce the limit with a purely local counter — no Redis round-trip. The tradeoff is that hot clients can imbalance nodes and a node failure disrupts its clients&#39; limiting, which is why it&#39;s an alternative to, not a strict improvement over, a shared counter.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You&#39;re running rate limiting across a fleet of 20 API gateway nodes and need per-user limits. Walk through how you&#39;d implement it and the tradeoffs you&#39;d weigh.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Per-node counters under-count the true global rate, so you need shared state — a centralized store like Redis keyed by user id.</li><li>Use atomic operations (INCR with an expiring key, or a Lua script) to avoid read-modify-write race conditions across concurrent nodes.</li><li>Pick an algorithm: token bucket or sliding-window counter are common; sliding-window counter avoids the fixed-window boundary burst cheaply.</li><li>Acknowledge the accuracy vs latency tradeoff — every check adds a Redis round-trip; you can batch/approximate or use sticky routing to trade exactness for speed.</li><li>Signal rejected clients with HTTP 429 + Retry-After, and decide between throttling (delay) and load shedding (drop) under overload.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Because each of the 20 nodes only sees a slice of a user&#39;s traffic, a local counter would let the user exceed the global limit, so I centralize the counter in Redis keyed by user id. I use atomic INCR with a TTL (or a Lua script) so concurrent nodes don&#39;t race on read-modify-write, and I&#39;d typically use a token bucket or sliding-window counter — the latter kills the fixed-window boundary burst with just two counters. The main tradeoff is accuracy versus latency: every request now pays a Redis round-trip, so if that&#39;s too costly I can approximate, batch updates, or sticky-route each user to one node and count locally. Rejected requests get a 429 with Retry-After, and I decide up front whether to throttle (queue/delay) or shed (drop) when the system is saturated.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"components","unit":"c05","title":"Rate Limiting","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"How does the token bucket algorithm work, and what traffic shape does it permit?","options":["It processes a fixed-size FIFO queue at a constant rate, so output is perfectly smooth with no bursts","It counts requests in a fixed clock window and resets the count when the window rolls over","Tokens are added at a fixed rate up to a bucket capacity; each request consumes a token, so bursts up to the bucket size are allowed while the long-run average stays capped","It stores a timestamp per request and counts how many fall inside the trailing window"],"answer":2,"answerLetter":"C"},{"n":2,"type":"mc","prompt":"What distinguishes the leaky bucket algorithm's output?","options":["Requests leave the bucket at a fixed, constant rate (like water leaking from a hole), smoothing bursty input into a steady stream and dropping overflow when the bucket is full","It permits large bursts as long as saved-up tokens remain in the bucket","It allows exactly the limit in each fixed calendar window, then resets","It weights the previous window's count to approximate a sliding window"],"answer":0,"answerLetter":"A"},{"n":3,"type":"mc","prompt":"Which statement correctly contrasts token bucket with leaky bucket?","options":["Both smooth traffic to a constant rate and neither allows bursts","Token bucket drops overflow immediately; leaky bucket never drops anything","Leaky bucket allows bursts; token bucket forces a constant output rate","Token bucket allows bursts up to its capacity; leaky bucket smooths output to a fixed rate and does not allow bursts"],"answer":3,"answerLetter":"D"},{"n":4,"type":"mc","prompt":"What is the well-known flaw of the fixed-window counter algorithm?","options":["It requires storing a timestamp for every request, so memory grows without bound","Boundary burst: a client can send the full limit at the end of one window and again at the start of the next, pushing up to 2x the limit through a short span straddling the edge","It smooths traffic so aggressively that legitimate bursts are always rejected","It cannot be implemented without a distributed consensus protocol"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"How does the sliding-window log algorithm achieve exactness, and at what cost?","options":["It keeps a single integer counter per window, so it is exact and O(1) memory","It refills tokens continuously, making it exact without storing history","It stores the timestamp of every request and counts those within the trailing window, giving an exact rate at the cost of memory proportional to request volume","It weights two adjacent fixed-window counters to estimate the current rate"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"How does the sliding-window counter approximate a true sliding window cheaply?","options":["It combines the current fixed window's count with a weighted fraction of the previous window's count based on how far into the current window the request falls","It stores every request timestamp but compresses them with run-length encoding","It runs a full leaky bucket per client and reads the queue depth","It doubles the limit near window boundaries to compensate for bursts"],"answer":0,"answerLetter":"A"},{"n":7,"type":"mc","prompt":"Where is rate limiting typically enforced, and on what key?","options":["Deep inside each microservice's database layer, keyed by table name","Only on the client device, keyed by the app version","In the compiler at build time, keyed by function","At the edge / API gateway (before requests hit backend services), keyed per user, per IP address, or per API key"],"answer":3,"answerLetter":"D"},{"n":8,"type":"mc","prompt":"What is the central challenge of rate limiting across a distributed fleet of servers?","options":["TCP cannot carry the counter between servers, so UDP is required","Each server sees only its own traffic, so counts must be shared (e.g. a Redis counter via INCR or an atomic Lua script) while handling race conditions and the accuracy-vs-latency tradeoff","Distributed limiting is impossible, so every fleet must run on a single node","The only correct approach is to disable limiting entirely under high load"],"answer":1,"answerLetter":"B"},{"n":9,"type":"mc","prompt":"When a client exceeds its limit, what should the HTTP response be?","options":["403 Forbidden with no additional headers","503 Service Unavailable, because the whole service is down","429 Too Many Requests, ideally with a Retry-After header telling the client when to try again","200 OK with an empty body so the client silently backs off"],"answer":2,"answerLetter":"C"},{"n":10,"type":"mc","prompt":"What is the difference between throttling and load shedding as responses to overload?","options":["Throttling delays or queues excess requests to slow the client down, while load shedding outright drops (rejects) requests to protect the system — they are distinct strategies","They are two names for the same action: dropping every request over the limit","Throttling drops requests instantly; load shedding always queues them for later","Load shedding speeds requests up, while throttling caches their responses"],"answer":0,"answerLetter":"A"},{"n":11,"type":"mc","prompt":"A client has been idle for a while under a token-bucket limiter with capacity 10 and refill of 1 token/sec. What happens if it suddenly sends 10 requests at once?","options":["All 10 are rejected because the per-second rate is only 1","Only 1 is allowed and the other 9 are queued and released one per second","The requests are smoothed to exactly 1 per second with no bursting","All 10 are allowed immediately because the bucket has accumulated up to its capacity of 10 tokens during the idle period"],"answer":3,"answerLetter":"D"},{"n":12,"type":"mc","prompt":"In a leaky-bucket limiter, what happens to a request that arrives when the bucket (queue) is already full?","options":["It is served immediately, temporarily exceeding the drain rate","It is dropped (or rejected), because the fixed-size queue has no room and the leak rate is constant","The bucket capacity automatically doubles to absorb it","It replaces the oldest queued request, which is discarded instead"],"answer":1,"answerLetter":"B"},{"n":13,"type":"mc","prompt":"You want to eliminate the fixed-window boundary-burst problem without storing a timestamp per request. Which algorithm best fits?","options":["Fixed-window counter, run with a larger window","Sliding-window log, since exactness is the only goal","Sliding-window counter, which weights the previous and current windows to smooth the boundary using just two counters","Token bucket with the capacity set to zero"],"answer":2,"answerLetter":"C"},{"n":14,"type":"mc","prompt":"Sticky routing (hashing each client to a fixed gateway node) is sometimes used for distributed rate limiting because it…","options":["…lets each node count that client's requests locally, avoiding a shared counter and its coordination latency, at the cost of uneven load and weaker fault tolerance","…guarantees perfectly even load across all nodes automatically","…makes exactly-once counting trivial across the whole fleet","…removes the need to return 429 responses"],"answer":0,"answerLetter":"A"},{"n":15,"type":"open","prompt":"You're running rate limiting across a fleet of 20 API gateway nodes and need per-user limits. Walk through how you'd implement it and the tradeoffs you'd weigh.","points":["Per-node counters under-count the true global rate, so you need shared state — a centralized store like Redis keyed by user id.","Use atomic operations (INCR with an expiring key, or a Lua script) to avoid read-modify-write race conditions across concurrent nodes.","Pick an algorithm: token bucket or sliding-window counter are common; sliding-window counter avoids the fixed-window boundary burst cheaply.","Acknowledge the accuracy vs latency tradeoff — every check adds a Redis round-trip; you can batch/approximate or use sticky routing to trade exactness for speed.","Signal rejected clients with HTTP 429 + Retry-After, and decide between throttling (delay) and load shedding (drop) under overload."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c05">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

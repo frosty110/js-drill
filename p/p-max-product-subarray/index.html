@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maximum Product Subarray — JS Drill</title>
+<meta name="description" content="Like Kadane&#39;s, but a negative number can flip the smallest (most-negative) product into the new maximum — so you must track BOTH the max and min ending at the current index.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-max-product-subarray">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Maximum Product Subarray — JS Drill">
+<meta property="og:description" content="Like Kadane&#39;s, but a negative number can flip the smallest (most-negative) product into the new maximum — so you must track BOTH the max and min ending at the current index.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-max-product-subarray">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Dynamic Programming</p>
+    <h1>Maximum Product Subarray</h1>
+    <p class="sharepage__lede">Like Kadane&#39;s, but a negative number can flip the smallest (most-negative) product into the new maximum — so you must track BOTH the max and min ending at the current index.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Dynamic Programming</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>maxProduct(nums)</code> returning the maximum product of any contiguous non-empty subarray. Log results for [2,3,-2,4], [-2,0,-1], and [-2,3,-4].</p>
+    <p class="sharepage__note">Expected output: <code>6
+0
+24</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Two-track rolling Kadane (max &amp; min scalars)</strong> · <code>O(n) / O(1)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">function maxProduct(nums) {
+  // Track BOTH max and min ending here — a min × negative flips into the new max.
+  let maxHere = nums[0];
+  let minHere = nums[0];
+  let best   = nums[0];
+  for (let i = 1; i &lt; nums.length; i++) {
+    const x = nums[i];
+    // Multiplying by a negative swaps max and min — capture both candidates.
+    const candMax = Math.max(x, maxHere * x, minHere * x);
+    const candMin = Math.min(x, maxHere * x, minHere * x);
+    maxHere = candMax;
+    minHere = candMin;
+    best = Math.max(best, maxHere);
+  }
+  return best;
+}
+// Time O(n), Space O(1)</code></pre>
+    <ul class="sharepage__notes"><li>A negative element flips min ↔ max, so a Kadane-style single-track DP fails here — you need both rails.</li><li>Compute new max and min from the SAME (old) maxHere/minHere — don&#39;t overwrite maxHere before computing minHere.</li><li>Including <code>x</code> alone in the max/min handles the reset case (e.g. when the previous product was zero or the wrong sign).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Explicit DP arrays (maxArr[] + minArr[]) <code>O(n) / O(n)</code></h3>
+      <p>Reach for this when the interviewer asks &#39;walk me through the DP recurrence&#39; or wants to see the full table for didactic clarity. Same O(n) time but O(n) space — the two scalars become two arrays indexed by i, making each step&#39;s dependency on i-1 explicit at the cost of memory. Useful as a stepping stone: write this first, then optimize to the rolling-scalar version by noting only <code>i-1</code> is ever read. Some interviewers prefer it because the same-source-before-assign trap disappears (each cell reads only from the prior cell).</p>
+      <pre class="sharepage__code"><code class="language-js">function maxProduct(nums) {
+  const n = nums.length;
+  // maxArr[i] = best product of any subarray ending exactly at i.
+  // minArr[i] = worst product of any subarray ending exactly at i.
+  const maxArr = new Array(n);
+  const minArr = new Array(n);
+  maxArr[0] = minArr[0] = nums[0];
+  let best = nums[0];
+  for (let i = 1; i &lt; n; i++) {
+    const x = nums[i];
+    // Each cell reads only from i-1 — no same-source-before-assign trap.
+    maxArr[i] = Math.max(x, maxArr[i-1] * x, minArr[i-1] * x);
+    minArr[i] = Math.min(x, maxArr[i-1] * x, minArr[i-1] * x);
+    best = Math.max(best, maxArr[i]);
+  }
+  return best;
+}
+console.log(maxProduct([2, 3, -2, 4]));
+console.log(maxProduct([-2, 0, -1]));
+console.log(maxProduct([-2, 3, -4]));</code></pre>
+      <ul class="sharepage__notes"><li>Each row depends only on row i-1, which is the textbook signal that the array can be collapsed to two rolling scalars — that&#39;s the optimization back to the canonical.</li><li>No same-source-before-assign hazard here: maxArr[i] reads maxArr[i-1] (untouched), so the order of the max/min assignments doesn&#39;t matter.</li><li>Best teaching version of the recurrence: write this on the whiteboard first, then point at &#39;we only ever read i-1&#39; to motivate the space-optimized scalars.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why does Kadane&#39;s single-track DP (max only) fail for product subarray?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Kadane&#39;s reset-to-zero condition (drop the running sum when it goes negative) doesn&#39;t have a product equivalent</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A negative element can flip the running min into the new max <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Zeros in the array break the running max in a way that&#39;s irrecoverable without backtracking</li>
+        <li><span class="sharepage__key">D</span> Multiplication is not associative on floats, so the running product order matters and Kadane assumes associativity</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why include <code>x</code> itself in the max/min of the three candidates?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It seeds Math.max so the three-arg form doesn&#39;t fall back to -Infinity on the first iteration</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Handles the reset case — when the previous product is zero or the wrong sign, start fresh at x <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It guarantees the answer is at least one element, satisfying the non-empty subarray constraint</li>
+        <li><span class="sharepage__key">D</span> It anchors the index — without <code>x</code>, the recurrence loses track of which position the running max ends at</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> What is the space complexity of the optimal solution?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li><span class="sharepage__key">B</span> O(log n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(1) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(n^2)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why must you compute candMax and candMin from the SAME maxHere/minHere before assigning?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Otherwise Math.max and Math.min would each get called twice on the same arg, doubling the comparator cost</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> If you overwrite maxHere first, candMin sees the new value and computes the wrong product <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because const re-binding inside the loop body would throw in strict mode if the order is swapped</li>
+        <li><span class="sharepage__key">D</span> Because the cand variables are hoisted into the outer scope, so a swap captures stale references</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Both new candidates depend on the OLD pair. Overwriting one early corrupts the other.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the two-track (max &amp; min) Kadane variant.</p>
+      <pre class="sharepage__code"><code class="language-js">function maxProduct(nums) {
+  let maxHere = nums[0];
+  let minHere = nums[0];
+  let best = nums[0];
+  for (let i = 1; i &lt; nums.length; i++) {
+    const x = nums[i];
+    const candMax = Math.___(x, maxHere * x, ___ * x);
+    const candMin = Math.___(x, maxHere * x, ___ * x);
+    maxHere = candMax;
+    minHere = candMin;
+    best = Math.max(best, ___);
+  }
+  return best;
+}
+console.log(maxProduct([2, 3, -2, 4]));
+console.log(maxProduct([-2, 0, -1]));
+console.log(maxProduct([-2, 3, -4]));</code></pre>
+      <p><strong>Answers:</strong> <code>max</code>, <code>minHere</code>, <code>min</code>, <code>minHere</code>, <code>maxHere</code></p>
+      <p class="sharepage__note">Expected output: <code>6
+0
+24</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>maxProduct(nums)</code> returning the maximum product of any contiguous non-empty subarray. Log results for [2,3,-2,4], [-2,0,-1], and [-2,3,-4].</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Track max AND min ending at i — a negative number swaps their roles.</li><li>Capture candMax and candMin from the same old pair before assigning either back.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function maxProduct(nums) {
+  // Track BOTH max and min ending here — a min × negative flips into the new max.
+  let maxHere = nums[0];
+  let minHere = nums[0];
+  let best   = nums[0];
+  for (let i = 1; i &lt; nums.length; i++) {
+    const x = nums[i];
+    // Multiplying by a negative swaps max and min — capture both candidates.
+    const candMax = Math.max(x, maxHere * x, minHere * x);
+    const candMin = Math.min(x, maxHere * x, minHere * x);
+    maxHere = candMax;
+    minHere = candMin;
+    best = Math.max(best, maxHere);
+  }
+  return best;
+}
+console.log(maxProduct([2, 3, -2, 4]));
+console.log(maxProduct([-2, 0, -1]));
+console.log(maxProduct([-2, 3, -4]));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-max-product-subarray","title":"Maximum Product Subarray","section":"Dynamic Programming","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why does Kadane's single-track DP (max only) fail for product subarray?","options":["Kadane's reset-to-zero condition (drop the running sum when it goes negative) doesn't have a product equivalent","A negative element can flip the running min into the new max","Zeros in the array break the running max in a way that's irrecoverable without backtracking","Multiplication is not associative on floats, so the running product order matters and Kadane assumes associativity"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why include `x` itself in the max/min of the three candidates?","options":["It seeds Math.max so the three-arg form doesn't fall back to -Infinity on the first iteration","Handles the reset case — when the previous product is zero or the wrong sign, start fresh at x","It guarantees the answer is at least one element, satisfying the non-empty subarray constraint","It anchors the index — without `x`, the recurrence loses track of which position the running max ends at"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What is the space complexity of the optimal solution?","options":["O(n)","O(log n)","O(1)","O(n^2)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Why must you compute candMax and candMin from the SAME maxHere/minHere before assigning?","options":["Otherwise Math.max and Math.min would each get called twice on the same arg, doubling the comparator cost","If you overwrite maxHere first, candMin sees the new value and computes the wrong product","Because const re-binding inside the loop body would throw in strict mode if the order is swapped","Because the cand variables are hoisted into the outer scope, so a swap captures stale references"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the two-track (max & min) Kadane variant.","answers":["max","minHere","min","minHere","maxHere"]}],"L3":[{"n":1,"prompt":"Write `maxProduct(nums)` returning the maximum product of any contiguous non-empty subarray. Log results for [2,3,-2,4], [-2,0,-1], and [-2,3,-4].","expectedOutput":"6\n0\n24"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-max-product-subarray">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

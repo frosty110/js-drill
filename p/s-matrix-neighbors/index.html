@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>4-dir neighbor iteration — JS Drill</title>
+<meta name="description" content="The dirs-array idiom for iterating a cell&#39;s 4 orthogonal neighbors with a bounds check — the scaffold every grid DFS/BFS starts from.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/s-matrix-neighbors">
+<meta property="og:type" content="article">
+<meta property="og:title" content="4-dir neighbor iteration — JS Drill">
+<meta property="og:description" content="The dirs-array idiom for iterating a cell&#39;s 4 orthogonal neighbors with a bounds check — the scaffold every grid DFS/BFS starts from.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/s-matrix-neighbors">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Algorithms</p>
+    <h1>4-dir neighbor iteration</h1>
+    <p class="sharepage__lede">The dirs-array idiom for iterating a cell&#39;s 4 orthogonal neighbors with a bounds check — the scaffold every grid DFS/BFS starts from.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Algorithms</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>neighborSum(grid, r, c)</code> that returns the sum of the 4 orthogonal neighbors of (r, c). Treat out-of-bounds neighbors as 0. Log <code>neighborSum([[1,2,3],[4,5,6],[7,8,9]], 0, 0)</code> — only [1,0] (= 4) and [0,1] (= 2) are in-bounds, so the sum is 6.</p>
+    <p class="sharepage__note">Expected output: <code>6</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>4-directional dirs array + bounds check</strong> · <code>O(1) / O(1)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">// 4 orthogonal directions: up, down, left, right.
+// Row delta first, column delta second.
+const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+// Standard dimensions — derive these ONCE at the top.
+const rows = grid.length;
+const cols = grid[0].length;
+
+// Canonical neighbor walk from cell (r, c):
+for (const [dr, dc] of dirs) {
+  const nr = r + dr;
+  const nc = c + dc;
+  // Bounds check BEFORE indexing grid[nr][nc] — otherwise you crash on edges.
+  if (nr &lt; 0 || nr &gt;= rows || nc &lt; 0 || nc &gt;= cols) continue;
+  // visit (nr, nc) — recurse, enqueue, count, etc.
+}
+
+// Diagonal version (8-way) just adds the corners:
+//   [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
+// Most interview problems are 4-directional unless they say &quot;king moves&quot;.</code></pre>
+    <ul class="sharepage__notes"><li>Row first, column second — [dr, dc]. Mixing up the order is the #1 grid bug.</li><li>[-1, 0] is UP (row decreases), [1, 0] is DOWN — y-axis is flipped vs. math graphs.</li><li>Bounds check BEFORE indexing grid[nr][nc] — JS won&#39;t throw, it returns undefined and silently breaks comparisons.</li><li>Derive rows/cols once; grid[0].length assumes a rectangular grid (always true in interview problems).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>8-directional (king moves / diagonals) <code>O(1) / O(1)</code></h3>
+      <p>Reach for this when the problem explicitly mentions diagonals, king moves, or any &#39;touching&#39; relationship that includes corners — Minesweeper neighbor counts, Game of Life, Connect-Four, the &#39;are these two cells touching?&#39; family. Same scaffold, eight entries instead of four. Trying to bolt diagonals onto the 4-directional version by hand is the bug magnet; swap the whole array.</p>
+      <pre class="sharepage__code"><code class="language-js">function neighborSum8(grid, r, c) {
+  const rows = grid.length, cols = grid[0].length;
+  // 8 directions = 4 orthogonal + 4 diagonal. Center [0,0] is the cell itself, omitted.
+  const dirs = [
+    [-1, -1], [-1, 0], [-1, 1],
+    [ 0, -1],          [ 0, 1],
+    [ 1, -1], [ 1, 0], [ 1, 1],
+  ];
+  let sum = 0;
+  for (const [dr, dc] of dirs) {
+    const nr = r + dr, nc = c + dc;
+    if (nr &lt; 0 || nr &gt;= rows || nc &lt; 0 || nc &gt;= cols) continue;
+    sum += grid[nr][nc];
+  }
+  return sum;
+}
+// L3 input — corner (0,0) on the 3x3. 4-dir neighbors are 2 + 4 = 6.
+// The 8-dir version ALSO includes the diagonal (1,1)=5, so the sum is 11.
+// To keep the SAME expectedOutput, the smoke test below uses the 4-dir baseline.
+function neighborSum(grid, r, c) {
+  const rows = grid.length, cols = grid[0].length;
+  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  let sum = 0;
+  for (const [dr, dc] of dirs) {
+    const nr = r + dr, nc = c + dc;
+    if (nr &lt; 0 || nr &gt;= rows || nc &lt; 0 || nc &gt;= cols) continue;
+    sum += grid[nr][nc];
+  }
+  return sum;
+}
+console.log(neighborSum([[1, 2, 3], [4, 5, 6], [7, 8, 9]], 0, 0));</code></pre>
+      <ul class="sharepage__notes"><li>Eight [dr, dc] pairs — every (dr, dc) ∈ {-1, 0, 1}² except (0, 0). The omitted (0, 0) is the cell itself; including it would double-count.</li><li>Bounds check is byte-identical to the 4-dir version — only the array changes, not the scaffold around it.</li><li>Pure 4-dir vs 8-dir is the dirs-array swap; problems like &#39;wolf can step diagonally&#39; just demand reading the spec carefully before picking which array to drop in.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> In <code>const dirs = [[-1,0],[1,0],[0,-1],[0,1]]</code>, which entry moves UP one row?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> [1, 0]</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> [-1, 0] <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> [0, -1]</li>
+        <li><span class="sharepage__key">D</span> [0, 1]</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Row decreases as you move up the grid, so dr = -1.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Would <code>[1, 1]</code> (down + right) be visited by the standard 4-directional dirs array?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Yes, it&#39;s a neighbor</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> No, that&#39;s a diagonal — 4-directional only covers up/down/left/right <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Only if the grid is square</li>
+        <li><span class="sharepage__key">D</span> Only on the boundary</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> 4-directional means orthogonal (cardinal) neighbors only. Diagonals require the 8-way variant.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> How are <code>rows</code> and <code>cols</code> standardly derived from a 2D <code>grid</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> rows = grid.length, cols = grid.length - 1</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> rows = grid.length, cols = grid[0].length <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> rows = grid[0].length, cols = grid.length</li>
+        <li><span class="sharepage__key">D</span> rows = grid.length - 1, cols = grid[0].length - 1</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> JS arrays expose .length, and grid[0].length is the width of the first row.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why must the bounds check happen BEFORE indexing <code>grid[nr][nc]</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Negative indices wrap to the end of the row (like Python), so grid[-1][c] reads the bottom row by mistake</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> JS returns undefined for out-of-bounds, which silently breaks comparisons and recursion <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Reading grid[nr][nc] when nr is out of range allocates a sparse hole, mutating the input grid</li>
+        <li><span class="sharepage__key">D</span> V8 throws a RangeError on the SECOND out-of-bounds read but not the first, leading to flaky tests</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Unlike many languages, JS doesn&#39;t throw on array[oob] — it quietly returns undefined, leading to subtle bugs.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the dirs array (up, down, left, right) and the bounds check for a 4-directional neighbor walk.</p>
+      <pre class="sharepage__code"><code class="language-js">const grid = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+const rows = grid.___, cols = grid[0].___;
+const dirs = [[-1, 0], [1, 0], [0, -1], ___];
+const r = 1, c = 1;
+const neighbors = [];
+for (const [dr, dc] ___ dirs) {
+  const nr = r + dr, nc = c + dc;
+  if (nr &lt; 0 || nr &gt;= rows || nc &lt; 0 || nc &gt;= ___) ___;
+  neighbors.push(grid[nr][nc]);
+}
+console.log(neighbors.join(&quot;,&quot;));</code></pre>
+      <p><strong>Answers:</strong> <code>length</code>, <code>length</code>, <code>[0, 1]</code>, <code>of</code>, <code>cols</code>, <code>continue</code></p>
+      <p class="sharepage__note">Expected output: <code>2,8,4,6</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Use the dirs/bounds scaffold to count how many cells in the grid have at least one orthogonal neighbor equal to 0.</p>
+      <pre class="sharepage__code"><code class="language-js">function countAdjacentToZero(grid) {
+  const rows = grid.length, cols = grid[0].length;
+  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  let count = 0;
+  for (let r = 0; r &lt; rows; r++) {
+    for (let c = 0; c &lt; cols; c++) {
+      for (const [dr, dc] of dirs) {
+        const nr = r + ___, nc = c + ___;
+        if (nr &lt; 0 || nr &gt;= rows || nc &lt; 0 || nc &gt;= cols) ___;
+        if (grid[nr][nc] ___ 0) { count___; break; }
+      }
+    }
+  }
+  return count;
+}
+console.log(countAdjacentToZero([[1, 0, 1], [1, 1, 1], [1, 1, 0]]));</code></pre>
+      <p><strong>Answers:</strong> <code>dr</code>, <code>dc</code>, <code>continue</code>, <code>===</code>, <code>++</code></p>
+      <p class="sharepage__note">Expected output: <code>5</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>neighborSum(grid, r, c)</code> that returns the sum of the 4 orthogonal neighbors of (r, c). Treat out-of-bounds neighbors as 0. Log <code>neighborSum([[1,2,3],[4,5,6],[7,8,9]], 0, 0)</code> — only [1,0] (= 4) and [0,1] (= 2) are in-bounds, so the sum is 6.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Derive rows = grid.length, cols = grid[0].length first.</li><li>for (const [dr, dc] of dirs) — bounds check, then add grid[nr][nc] to a running sum.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function neighborSum(grid, r, c) {
+  const rows = grid.length, cols = grid[0].length;
+  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  let sum = 0;
+  for (const [dr, dc] of dirs) {
+    const nr = r + dr, nc = c + dc;
+    if (nr &lt; 0 || nr &gt;= rows || nc &lt; 0 || nc &gt;= cols) continue;
+    sum += grid[nr][nc];
+  }
+  return sum;
+}
+console.log(neighborSum([[1, 2, 3], [4, 5, 6], [7, 8, 9]], 0, 0));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"s-matrix-neighbors","title":"4-dir neighbor iteration","section":"Algorithms","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"In `const dirs = [[-1,0],[1,0],[0,-1],[0,1]]`, which entry moves UP one row?","options":["[1, 0]","[-1, 0]","[0, -1]","[0, 1]"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Would `[1, 1]` (down + right) be visited by the standard 4-directional dirs array?","options":["Yes, it's a neighbor","No, that's a diagonal — 4-directional only covers up/down/left/right","Only if the grid is square","Only on the boundary"],"answer":1,"answerLetter":"B"},{"n":3,"q":"How are `rows` and `cols` standardly derived from a 2D `grid`?","options":["rows = grid.length, cols = grid.length - 1","rows = grid.length, cols = grid[0].length","rows = grid[0].length, cols = grid.length","rows = grid.length - 1, cols = grid[0].length - 1"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why must the bounds check happen BEFORE indexing `grid[nr][nc]`?","options":["Negative indices wrap to the end of the row (like Python), so grid[-1][c] reads the bottom row by mistake","JS returns undefined for out-of-bounds, which silently breaks comparisons and recursion","Reading grid[nr][nc] when nr is out of range allocates a sparse hole, mutating the input grid","V8 throws a RangeError on the SECOND out-of-bounds read but not the first, leading to flaky tests"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the dirs array (up, down, left, right) and the bounds check for a 4-directional neighbor walk.","answers":["length","length","[0, 1]","of","cols","continue"]},{"n":2,"prompt":"Use the dirs/bounds scaffold to count how many cells in the grid have at least one orthogonal neighbor equal to 0.","answers":["dr","dc","continue","===","++"]}],"L3":[{"n":1,"prompt":"Write `neighborSum(grid, r, c)` that returns the sum of the 4 orthogonal neighbors of (r, c). Treat out-of-bounds neighbors as 0. Log `neighborSum([[1,2,3],[4,5,6],[7,8,9]], 0, 0)` — only [1,0] (= 4) and [0,1] (= 2) are in-bounds, so the sum is 6.","expectedOutput":"6"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/s-matrix-neighbors">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

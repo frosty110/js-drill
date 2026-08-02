@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Top K Frequent — JS Drill</title>
+<meta name="description" content="Count frequencies in a Map, then keep the K most frequent. Sort + slice is the readable baseline; a size-K min-heap is the O(n log k) upgrade.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-top-k-frequent">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Top K Frequent — JS Drill">
+<meta property="og:description" content="Count frequencies in a Map, then keep the K most frequent. Sort + slice is the readable baseline; a size-K min-heap is the O(n log k) upgrade.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-top-k-frequent">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Heap</p>
+    <h1>Top K Frequent</h1>
+    <p class="sharepage__lede">Count frequencies in a Map, then keep the K most frequent. Sort + slice is the readable baseline; a size-K min-heap is the O(n log k) upgrade.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Heap</span> <span class="ds-chip">9 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>topKFrequent(nums, k)</code> returning the K most-frequent values. Log <code>JSON.stringify(topKFrequent([1, 1, 1, 2, 2, 3], 2))</code>.</p>
+    <p class="sharepage__note">Expected output: <code>[1,2]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function topKFrequent(nums, k) {
+  // Map preserves numeric keys without string coercion + iterates in insertion order.
+  const count = new Map();
+  // Single O(n) pass: bump existing count or seed with 1 via the `|| 0` fallback.
+  for (const n of nums) count.set(n, (count.get(n) || 0) + 1);
+  return [...count.entries()]
+    // Descending by count — b[1] - a[1]; reverse operands for ascending.
+    .sort((a, b) =&gt; b[1] - a[1])
+    .slice(0, k)
+    .map(([num]) =&gt; num);
+}
+// Time O(n log n) via sort, Space O(n)
+// Optimal: O(n log k) with a size-K MIN-heap keyed by frequency.</code></pre>
+    <ul class="sharepage__notes"><li>Step 1 is always the same: build a frequency Map in one O(n) pass.</li><li>Sort DESCENDING by count: (a, b) =&gt; b[1] - a[1]. Reversing the operands gives ascending.</li><li>For O(n log k), push each entry into a min-heap of size K and pop when it overflows — keeps only the top K alive.</li><li>Bucket sort by frequency is the third option: O(n) overall, but uses O(n) extra buckets.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Size-k min-heap by frequency <code>O(n log k) / O(n+k)</code></h3>
+      <p>Reach for this when k &lt;&lt; d (number of distinct values) and you want O(n log k) instead of O(n log n). Also the right answer for streaming input where n isn&#39;t known in advance — you can&#39;t pre-size a bucket array but you can always maintain a bounded heap.</p>
+      <pre class="sharepage__code"><code class="language-js">function topKFrequent(nums, k) {
+  const count = new Map();
+  for (const n of nums) count.set(n, (count.get(n) || 0) + 1);
+  // Min-heap keyed by frequency — root = entry with LOWEST count among keepers.
+  const heap = [];  // [ [freq, num], ... ]
+  const heapPush = (entry) =&gt; {
+    heap.push(entry);
+    let i = heap.length - 1;
+    while (i &gt; 0) {
+      const p = (i - 1) &gt;&gt; 1;
+      if (heap[p][0] &lt;= heap[i][0]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+  const heapPop = () =&gt; {
+    const top = heap[0];
+    const last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      while (true) {
+        const l = 2 * i + 1, r = 2 * i + 2;
+        let s = i;
+        if (l &lt; heap.length &amp;&amp; heap[l][0] &lt; heap[s][0]) s = l;
+        if (r &lt; heap.length &amp;&amp; heap[r][0] &lt; heap[s][0]) s = r;
+        if (s === i) break;
+        [heap[s], heap[i]] = [heap[i], heap[s]];
+        i = s;
+      }
+    }
+    return top;
+  };
+  for (const entry of count.entries()) {
+    heapPush(entry);
+    if (heap.length &gt; k) heapPop(); // evict the least-frequent keeper
+  }
+  // Pop all k entries (ascending freq), reverse for descending, project to nums.
+  const result = [];
+  while (heap.length) result.push(heapPop()[1]);
+  return result.reverse();
+}
+console.log(JSON.stringify(topKFrequent([1, 1, 1, 2, 2, 3], 2)));</code></pre>
+      <ul class="sharepage__notes"><li>Heap is keyed by frequency (entry[0]); the root is always the entry with the LOWEST count among the k kept — anything with a lower count gets evicted.</li><li>After processing all entries, the heap holds exactly k entries and their order is arbitrary — the result array may differ from the sort-based approach for tied frequencies.</li><li>Memory stays O(k) for the heap itself (plus O(d) for the count Map); much better than bucket sort&#39;s O(n) when k is tiny.</li></ul>
+    </article>
+    <article class="sharepage__alt" id="alt2">
+      <h3>Bucket sort by frequency <code>O(n) / O(n)</code></h3>
+      <p>Reach for this when the interviewer pushes past O(n log n) and asks for the asymptotic best — frequencies are bounded by n, so we can index buckets by count and skip comparison sorting entirely. Not viable for streaming input (no bound on n) but optimal when the full array is in hand.</p>
+      <pre class="sharepage__code"><code class="language-js">function topKFrequent(nums, k) {
+  // Step 1 is identical to every other approach — O(n) frequency Map.
+  const count = new Map();
+  for (const n of nums) count.set(n, (count.get(n) || 0) + 1);
+  // buckets[f] = values that appeared exactly f times. Max frequency is nums.length.
+  const buckets = Array.from({ length: nums.length + 1 }, () =&gt; []);
+  for (const [num, freq] of count.entries()) buckets[freq].push(num);
+  // Walk highest frequency down, collecting until we have k.
+  const result = [];
+  for (let f = buckets.length - 1; f &gt;= 1 &amp;&amp; result.length &lt; k; f--) {
+    for (const v of buckets[f]) {
+      if (result.length === k) break;
+      result.push(v);
+    }
+  }
+  return result;
+}
+console.log(JSON.stringify(topKFrequent([1, 1, 1, 2, 2, 3], 2)));</code></pre>
+      <ul class="sharepage__notes"><li>Why linear: each value pays O(1) into the count Map and O(1) into one bucket; the descending walk visits each bucket once and stops at k.</li><li>Bucket length is <code>nums.length + 1</code> because the maximum possible frequency is n (every element identical) and we need index n to exist.</li><li>Ties at the cutoff resolve by Map insertion order — values that hashed earlier appear earlier in their shared bucket; specify a tiebreaker if the contract demands one.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why a Map for frequencies instead of a plain object?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Maps allow numeric keys without string coercion and iterate in insertion order <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Map.get is O(1) while obj[key] is O(log n) because it traverses the prototype chain</li>
+        <li><span class="sharepage__key">C</span> Objects skip inherited keys like <code>constructor</code> only when used as a Map</li>
+        <li><span class="sharepage__key">D</span> Maps automatically deduplicate the input array as a side effect of <code>.set</code></li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Which comparator sorts entries by count DESCENDING?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> (a, b) =&gt; a[1] - b[1]</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> (a, b) =&gt; b[1] - a[1] <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> (a, b) =&gt; a[0] - b[0]</li>
+        <li><span class="sharepage__key">D</span> (a, b) =&gt; b[0] - a[0]</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Time complexity of the sort-then-slice approach?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li><span class="sharepage__key">B</span> O(n log k)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(n log n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(n^2)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> How does a min-heap of size K give O(n log k)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It sorts the array faster</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> For each of n entries we push and possibly pop (both O(log k)), keeping only the top K alive <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Min-heaps are inherently O(1)</li>
+        <li><span class="sharepage__key">D</span> It does not — it is also O(n log n)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> Bucket sort solves Top K Frequent in O(n). What makes that linear time possible here?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Bucket sort is always O(n) for any input</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A frequency can be at most n, so we can index buckets by count 0..n — a bounded key range, no comparison sort needed <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It skips the counting pass</li>
+        <li><span class="sharepage__key">D</span> It uses a heap internally</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Bucket sort is linear only when keys fall in a small known range; here a count cannot exceed n, so buckets[0..n] cover every possible frequency — no O(log) comparison sort required.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> In the bucket-sort approach, what does buckets[f] hold?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The value f</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The list of values that each appear exactly f times <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The fth most frequent value</li>
+        <li><span class="sharepage__key">D</span> A count of how many buckets are used</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Index = frequency: buckets[f] collects every distinct value whose count equals f, so walking from high f down gathers the most frequent first.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> To collect the answer from the buckets, you walk:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> From buckets[0] upward until you have k values</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> From buckets[n] down toward buckets[1], collecting values until you have k <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Only buckets[k]</li>
+        <li><span class="sharepage__key">D</span> In random order</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The most frequent values sit in the highest-index buckets, so you descend from buckets[n] and stop once k values are gathered.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> When does the size-k min-heap beat bucket sort in practice?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Never — bucket sort always wins</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> In a stream of unbounded length where you cannot pre-size an n+1 bucket array, the heap maintains the top k online <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> When k equals the number of distinct values</li>
+        <li><span class="sharepage__key">D</span> When all counts are equal</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Bucket sort needs a bounded, known n to size the array; for an unbounded stream the size-k heap keeps the top k alive in O(log k) per element without that bound.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> The first step is identical across all three approaches (sort, heap, bucket). What is it?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Sort nums ascending</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Build a frequency map in one O(n) pass <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Allocate a heap</li>
+        <li><span class="sharepage__key">D</span> Remove duplicates</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> All three need value-to-count first; the count map is the shared O(n) preprocessing step, and only the ranking step after it differs.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the count-and-sort Top K. The comparator direction is the trick.</p>
+      <pre class="sharepage__code"><code class="language-js">function topKFrequent(nums, k) {
+  const count = new ___();
+  for (const n of nums) count.___(n, (count.get(n) ___ 0) + 1);
+  return [...count.entries()]
+    .sort((a, b) =&gt; ___[1] - ___[1])
+    .slice(0, k)
+    .map(([num]) =&gt; num);
+}
+console.log(JSON.stringify(topKFrequent([1, 1, 1, 2, 2, 3], 2)));</code></pre>
+      <p><strong>Answers:</strong> <code>Map</code>, <code>set</code>, <code>||</code>, <code>b</code>, <code>a</code></p>
+      <p class="sharepage__note">Expected output: <code>[1,2]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>topKFrequent(nums, k)</code> returning the K most-frequent values. Log <code>JSON.stringify(topKFrequent([1, 1, 1, 2, 2, 3], 2))</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Count first, sort second, slice third.</li><li>Descending comparator: (a, b) =&gt; b[1] - a[1].</li><li>For O(n log k), swap the sort for a size-K min-heap keyed by frequency.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function topKFrequent(nums, k) {
+  // Map preserves numeric keys without string coercion + iterates in insertion order.
+  const count = new Map();
+  // Single O(n) pass: bump existing count or seed with 1 via the `|| 0` fallback.
+  for (const n of nums) count.set(n, (count.get(n) || 0) + 1);
+  return [...count.entries()]
+    // Descending by count — b[1] - a[1]; reverse operands for ascending.
+    .sort((a, b) =&gt; b[1] - a[1])
+    .slice(0, k)
+    .map(([num]) =&gt; num);
+}
+console.log(JSON.stringify(topKFrequent([1, 1, 1, 2, 2, 3], 2)));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-top-k-frequent","title":"Top K Frequent","section":"Heap","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why a Map for frequencies instead of a plain object?","options":["Maps allow numeric keys without string coercion and iterate in insertion order","Map.get is O(1) while obj[key] is O(log n) because it traverses the prototype chain","Objects skip inherited keys like `constructor` only when used as a Map","Maps automatically deduplicate the input array as a side effect of `.set`"],"answer":0,"answerLetter":"A"},{"n":2,"q":"Which comparator sorts entries by count DESCENDING?","options":["(a, b) => a[1] - b[1]","(a, b) => b[1] - a[1]","(a, b) => a[0] - b[0]","(a, b) => b[0] - a[0]"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Time complexity of the sort-then-slice approach?","options":["O(n)","O(n log k)","O(n log n)","O(n^2)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"How does a min-heap of size K give O(n log k)?","options":["It sorts the array faster","For each of n entries we push and possibly pop (both O(log k)), keeping only the top K alive","Min-heaps are inherently O(1)","It does not — it is also O(n log n)"],"answer":1,"answerLetter":"B"},{"n":5,"q":"Bucket sort solves Top K Frequent in O(n). What makes that linear time possible here?","options":["Bucket sort is always O(n) for any input","A frequency can be at most n, so we can index buckets by count 0..n — a bounded key range, no comparison sort needed","It skips the counting pass","It uses a heap internally"],"answer":1,"answerLetter":"B"},{"n":6,"q":"In the bucket-sort approach, what does buckets[f] hold?","options":["The value f","The list of values that each appear exactly f times","The fth most frequent value","A count of how many buckets are used"],"answer":1,"answerLetter":"B"},{"n":7,"q":"To collect the answer from the buckets, you walk:","options":["From buckets[0] upward until you have k values","From buckets[n] down toward buckets[1], collecting values until you have k","Only buckets[k]","In random order"],"answer":1,"answerLetter":"B"},{"n":8,"q":"When does the size-k min-heap beat bucket sort in practice?","options":["Never — bucket sort always wins","In a stream of unbounded length where you cannot pre-size an n+1 bucket array, the heap maintains the top k online","When k equals the number of distinct values","When all counts are equal"],"answer":1,"answerLetter":"B"},{"n":9,"q":"The first step is identical across all three approaches (sort, heap, bucket). What is it?","options":["Sort nums ascending","Build a frequency map in one O(n) pass","Allocate a heap","Remove duplicates"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the count-and-sort Top K. The comparator direction is the trick.","answers":["Map","set","||","b","a"]}],"L3":[{"n":1,"prompt":"Write `topKFrequent(nums, k)` returning the K most-frequent values. Log `JSON.stringify(topKFrequent([1, 1, 1, 2, 2, 3], 2))`.","expectedOutput":"[1,2]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-top-k-frequent">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

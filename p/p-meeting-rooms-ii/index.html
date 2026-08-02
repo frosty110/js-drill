@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meeting Rooms II — JS Drill</title>
+<meta name="description" content="Minimum rooms = max simultaneous meetings. Sort starts and ends separately, then sweep with two pointers — a meeting reuses a room iff its start is at or after the next ending. O(n log n).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-meeting-rooms-ii">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Meeting Rooms II — JS Drill">
+<meta property="og:description" content="Minimum rooms = max simultaneous meetings. Sort starts and ends separately, then sweep with two pointers — a meeting reuses a room iff its start is at or after the next ending. O(n log n).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-meeting-rooms-ii">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Intervals</p>
+    <h1>Meeting Rooms II</h1>
+    <p class="sharepage__lede">Minimum rooms = max simultaneous meetings. Sort starts and ends separately, then sweep with two pointers — a meeting reuses a room iff its start is at or after the next ending. O(n log n).</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Intervals</span> <span class="ds-chip">9 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement <code>minMeetingRooms(intervals)</code> returning the minimum number of rooms. Log it for <code>[[0,30],[5,10],[15,20]]</code> then <code>[[7,10],[2,4]]</code>.</p>
+    <p class="sharepage__note">Expected output: <code>2
+1</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function minMeetingRooms(intervals) {
+  const n = intervals.length;
+  if (n === 0) return 0;
+  // Decouple starts and ends — only the event timeline matters, not which start pairs with which end.
+  const starts = intervals.map(x =&gt; x[0]).sort((a, b) =&gt; a - b);
+  const ends   = intervals.map(x =&gt; x[1]).sort((a, b) =&gt; a - b);
+  let rooms = 0, used = 0, e = 0;
+  for (let s = 0; s &lt; n; s++) {
+    // Strict &lt; — a start equal to an end can reuse the freed room.
+    if (starts[s] &lt; ends[e]) {
+      used++;
+      rooms = Math.max(rooms, used);
+    } else {
+      e++;
+    }
+  }
+  return rooms;
+}
+// Time O(n log n), Space O(n)</code></pre>
+    <ul class="sharepage__notes"><li>The starts/ends arrays are decoupled — pairing is irrelevant; only the timeline of events matters.</li><li>Strict <code>&lt;</code>: a meeting starting exactly when another ends can reuse the room.</li><li>Equivalent min-heap solution: push end times, pop when the next start is ≥ heap top — same O(n log n).</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Min-heap of end times <code>O(n log n) / O(n)</code></h3>
+      <p>Reach for this when the interviewer asks which room each meeting goes in, or when the greedy decoupled-sort feels unintuitive. Each heap entry represents one occupied room; the heap root is the soonest-to-free room. Generalizes cleanly to &#39;assign meeting → room ID&#39; variants.</p>
+      <pre class="sharepage__code"><code class="language-js">function minMeetingRooms(intervals) {
+  if (intervals.length === 0) return 0;
+  // Sort by start time so we process meetings in chronological order.
+  const sorted = intervals.slice().sort((a, b) =&gt; a[0] - b[0]);
+  // Min-heap of end times (smallest end = soonest freed room at the top).
+  // JS has no built-in heap; simulate with a sorted array for correctness.
+  const heap = [];
+  const heapPush = (v) =&gt; { heap.push(v); heap.sort((a, b) =&gt; a - b); };
+  const heapPop  = ()  =&gt; heap.shift();
+  for (const [start, end] of sorted) {
+    if (heap.length &gt; 0 &amp;&amp; start &gt;= heap[0]) {
+      // Earliest-ending meeting has freed its room — reuse it.
+      heapPop();
+    }
+    heapPush(end);
+  }
+  return heap.length;
+}
+console.log(minMeetingRooms([[0,30],[5,10],[15,20]]));
+console.log(minMeetingRooms([[7,10],[2,4]]));</code></pre>
+      <ul class="sharepage__notes"><li>Heap size at any point = rooms currently occupied; final size = peak rooms needed.</li><li>Pop before push when reusing: if the new start is &gt;= the earliest end, one room has freed up.</li><li>In production JS use a proper MinHeap class — the sorted-array simulation is O(n log n) amortized but with high constants.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why can starts and ends be sorted independently?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Sorting each separately is twice as fast as one combined sort by pair (since each sub-array is half the comparison work)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> We only need the timeline of events, not which start pairs with which end <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Independent sorts allow the two pointers to advance simultaneously instead of sequentially, halving wall-clock time</li>
+        <li><span class="sharepage__key">D</span> Because pairing intervals at sort time would require an O(n log n) stable sort, but two unstable sorts suffice</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> When <code>starts[s] &lt; ends[e]</code>, what happens?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A meeting ends and we decrement <code>used</code> — a freed room becomes available</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A new meeting begins before any current one ends — we need an additional room <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> We skip the current start because no end has yet been reached on the timeline</li>
+        <li><span class="sharepage__key">D</span> We pair <code>starts[s]</code> with <code>ends[e]</code> and remove both pointers&#39; entries from consideration</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why is the comparison <code>&lt;</code> and not <code>&lt;=</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>&lt;=</code> would skip starts that exactly match an end, missing them from the sweep entirely</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> If a meeting starts exactly when one ends, the room can be reused — no new room needed <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>&lt;=</code> would make <code>e</code> advance past <code>s</code> and cause <code>ends[e]</code> to read out of bounds</li>
+        <li><span class="sharepage__key">D</span> Because integer endpoints in floating-point JS Numbers can compare unreliably at <code>===</code>, <code>&lt;</code> is the safer test</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Overall time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(n log n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n^2)</li>
+        <li><span class="sharepage__key">D</span> O(n + max-endpoint-value)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sorting dominates; the sweep is linear.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> The minimum number of rooms equals:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The total number of meetings</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The maximum number of meetings overlapping at any single moment (peak concurrency) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The number of distinct start times</li>
+        <li><span class="sharepage__key">D</span> The longest meeting&#39;s duration</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> You only need as many rooms as the busiest instant requires; reframing &#39;min rooms&#39; as &#39;peak concurrency&#39; is the core unlock.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> In the min-heap approach, what do you store in the heap and what does its size represent?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Start times; size = number of meetings seen</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> End times of in-progress meetings; the heap size at any point = rooms currently in use <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Meeting durations; size = total rooms ever opened</li>
+        <li><span class="sharepage__key">D</span> Room IDs; size = number of distinct starts</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Each live meeting contributes its end time to the heap; the heap&#39;s size is exactly the count of rooms occupied right now, and its peak is the answer.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> For the min-heap approach, why sort the meetings by start first?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To make the heap smaller</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> So you process meetings in time order — when a new one starts you can compare its start to the earliest end (heap root) to decide reuse vs new room <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Sorting by start is optional</li>
+        <li><span class="sharepage__key">D</span> To break ties by duration</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Processing in start order lets each new meeting check the smallest end time (heap root): if start &gt;= that end, pop and reuse; otherwise push a new room.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> In the heap approach, when a new meeting&#39;s start is &gt;= the smallest end on the heap, you:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Push the new end and open another room</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Pop the finished meeting&#39;s end and push the new one — the room is reused, heap size unchanged <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Do nothing</li>
+        <li><span class="sharepage__key">D</span> Clear the whole heap</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The earliest-ending meeting has freed its room, so you pop it and push the new end — reuse keeps the room count flat instead of growing it.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> In the two-pointer version, why can starts and ends be sorted as separate arrays (pairing discarded)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It is a coincidence that works only on the examples</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Concurrency only depends on how many starts precede the next end on the timeline, not on which start pairs with which end <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> JavaScript requires decoupled arrays</li>
+        <li><span class="sharepage__key">D</span> To save memory</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Peak concurrency is a property of the event timeline; we only need to know that *some* meeting ended to free a room, never which specific one — so pairing is irrelevant.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in two-pointer min meeting rooms.</p>
+      <pre class="sharepage__code"><code class="language-js">function minMeetingRooms(intervals) {
+  const n = intervals.length;
+  if (n === 0) return 0;
+  const starts = intervals.map(x =&gt; x[0]).sort((a, b) =&gt; a - b);
+  const ends   = intervals.map(x =&gt; x[1]).sort((a, b) =&gt; a - b);
+  let rooms = 0, used = 0, e = 0;
+  for (let s = 0; s &lt; n; s++) {
+    if (starts[s] ___ ends[e]) {
+      used___;
+      rooms = Math.___(rooms, used);
+    } else {
+      e___;
+    }
+  }
+  return rooms;
+}
+console.log(minMeetingRooms([[0,30],[5,10],[15,20]]));</code></pre>
+      <p><strong>Answers:</strong> <code>&lt;</code>, <code>++</code>, <code>max</code>, <code>++</code></p>
+      <p class="sharepage__note">Expected output: <code>2</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement <code>minMeetingRooms(intervals)</code> returning the minimum number of rooms. Log it for <code>[[0,30],[5,10],[15,20]]</code> then <code>[[7,10],[2,4]]</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Decouple starts and ends, sort both ascending.</li><li>Walk starts with pointer s; for each, advance the ends pointer e when the next end ≤ current start.</li><li>Track peak concurrency with Math.max.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function minMeetingRooms(intervals) {
+  const n = intervals.length;
+  if (n === 0) return 0;
+  // Decouple starts and ends — only the event timeline matters, not which start pairs with which end.
+  const starts = intervals.map(x =&gt; x[0]).sort((a, b) =&gt; a - b);
+  const ends   = intervals.map(x =&gt; x[1]).sort((a, b) =&gt; a - b);
+  let rooms = 0, used = 0, e = 0;
+  for (let s = 0; s &lt; n; s++) {
+    // Strict &lt; — a start equal to an end can reuse the freed room.
+    if (starts[s] &lt; ends[e]) {
+      used++;
+      rooms = Math.max(rooms, used);
+    } else {
+      e++;
+    }
+  }
+  return rooms;
+}
+console.log(minMeetingRooms([[0,30],[5,10],[15,20]]));
+console.log(minMeetingRooms([[7,10],[2,4]]));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-meeting-rooms-ii","title":"Meeting Rooms II","section":"Intervals","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why can starts and ends be sorted independently?","options":["Sorting each separately is twice as fast as one combined sort by pair (since each sub-array is half the comparison work)","We only need the timeline of events, not which start pairs with which end","Independent sorts allow the two pointers to advance simultaneously instead of sequentially, halving wall-clock time","Because pairing intervals at sort time would require an O(n log n) stable sort, but two unstable sorts suffice"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When `starts[s] \u003c ends[e]`, what happens?","options":["A meeting ends and we decrement `used` — a freed room becomes available","A new meeting begins before any current one ends — we need an additional room","We skip the current start because no end has yet been reached on the timeline","We pair `starts[s]` with `ends[e]` and remove both pointers' entries from consideration"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why is the comparison `\u003c` and not `\u003c=`?","options":["`\u003c=` would skip starts that exactly match an end, missing them from the sweep entirely","If a meeting starts exactly when one ends, the room can be reused — no new room needed","`\u003c=` would make `e` advance past `s` and cause `ends[e]` to read out of bounds","Because integer endpoints in floating-point JS Numbers can compare unreliably at `===`, `\u003c` is the safer test"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Overall time complexity?","options":["O(n)","O(n log n)","O(n^2)","O(n + max-endpoint-value)"],"answer":1,"answerLetter":"B"},{"n":5,"q":"The minimum number of rooms equals:","options":["The total number of meetings","The maximum number of meetings overlapping at any single moment (peak concurrency)","The number of distinct start times","The longest meeting's duration"],"answer":1,"answerLetter":"B"},{"n":6,"q":"In the min-heap approach, what do you store in the heap and what does its size represent?","options":["Start times; size = number of meetings seen","End times of in-progress meetings; the heap size at any point = rooms currently in use","Meeting durations; size = total rooms ever opened","Room IDs; size = number of distinct starts"],"answer":1,"answerLetter":"B"},{"n":7,"q":"For the min-heap approach, why sort the meetings by start first?","options":["To make the heap smaller","So you process meetings in time order — when a new one starts you can compare its start to the earliest end (heap root) to decide reuse vs new room","Sorting by start is optional","To break ties by duration"],"answer":1,"answerLetter":"B"},{"n":8,"q":"In the heap approach, when a new meeting's start is >= the smallest end on the heap, you:","options":["Push the new end and open another room","Pop the finished meeting's end and push the new one — the room is reused, heap size unchanged","Do nothing","Clear the whole heap"],"answer":1,"answerLetter":"B"},{"n":9,"q":"In the two-pointer version, why can starts and ends be sorted as separate arrays (pairing discarded)?","options":["It is a coincidence that works only on the examples","Concurrency only depends on how many starts precede the next end on the timeline, not on which start pairs with which end","JavaScript requires decoupled arrays","To save memory"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in two-pointer min meeting rooms.","answers":["\u003c","++","max","++"]}],"L3":[{"n":1,"prompt":"Implement `minMeetingRooms(intervals)` returning the minimum number of rooms. Log it for `[[0,30],[5,10],[15,20]]` then `[[7,10],[2,4]]`.","expectedOutput":"2\n1"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-meeting-rooms-ii">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Event Emitter — JS Drill</title>
+<meta name="description" content="Pub/sub primitive — multiple listeners per event, remove a specific handler with off(), invoke all in registration order on emit().">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-event-emitter">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Event Emitter — JS Drill">
+<meta property="og:description" content="Pub/sub primitive — multiple listeners per event, remove a specific handler with off(), invoke all in registration order on emit().">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-event-emitter">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Event Emitter</h1>
+    <p class="sharepage__lede">Pub/sub primitive — multiple listeners per event, remove a specific handler with off(), invoke all in registration order on emit().</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement EventEmitter with on/off/emit. Subscribe two listeners to &#39;tick&#39;, emit twice, off the first, emit again. Listeners should log identifying strings.</p>
+    <p class="sharepage__note">Expected output: <code>one:1
+two:1
+one:2
+two:2
+two:3</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">class EventEmitter {
+  constructor() {
+    this.handlers = {};                          // event -&gt; array of fns
+  }
+  on(event, fn) {
+    (this.handlers[event] ||= []).push(fn);      // lazy-create the bucket
+  }
+  off(event, fn) {
+    const arr = this.handlers[event];
+    if (!arr) return;
+    const i = arr.indexOf(fn);                   // identity match — exact same fn reference
+    if (i !== -1) arr.splice(i, 1);
+  }
+  emit(event, ...args) {
+    const arr = this.handlers[event];
+    if (!arr) return;
+    for (const fn of arr.slice()) fn(...args);   // copy so off-during-emit is safe
+  }
+}</code></pre>
+    <ul class="sharepage__notes"><li>off() removes by reference — passing an equivalent-looking anonymous fn won&#39;t match. Store the fn if you plan to off it.</li><li>Iterate a copy in emit() so a listener that calls off() inside doesn&#39;t skip the next handler.</li><li><code>(this.handlers[event] ||= [])</code> lazily creates the bucket on first on() — common interview shorthand.</li><li>Time: on O(1), off O(k) where k = listeners on that event, emit O(k). Space O(total listeners).</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What does off(event, fn) use to find the listener?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Structural equality of the function&#39;s <code>.toString()</code> source — equivalent-looking arrows match</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Identity comparison — the exact same function reference <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Match by the <code>name</code> property of the function (anonymous functions share name &#39;&#39; so they all match)</li>
+        <li><span class="sharepage__key">D</span> Position in the bucket — <code>off(event, n)</code> removes the nth registered listener</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why does emit() iterate a copy of the handler array?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>.slice()</code> freezes the function references so listeners can&#39;t be reassigned mid-dispatch</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> To allow listeners that call off() or on() during dispatch without breaking iteration <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>for...of</code> over a live array throws TypeError if its length changes during iteration</li>
+        <li><span class="sharepage__key">D</span> Iterating a copy lets the engine inline the handler calls, which is faster than indexed access</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> What happens when you emit an event with no registered listeners?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It throws TypeError — <code>arr.slice()</code> is called on undefined</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Nothing — emit is a no-op for unknown events <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It auto-creates an empty bucket for the event and returns false</li>
+        <li><span class="sharepage__key">D</span> It fires every listener subscribed to &#39;*&#39; as a wildcard fallback</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> If on(&#39;x&#39;, fn) is called twice with the same fn, how many times will emit(&#39;x&#39;) invoke fn?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> 0 — the second on() overwrites the first registration</li>
+        <li><span class="sharepage__key">B</span> 1 — <code>Array.prototype.push</code> is a Set-like operation that ignores existing entries</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> 2 — duplicates are stored separately <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> 1 the first time, 2 on subsequent emits as duplicates accrete</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Complete on/off/emit so the sequence logs A and B once, then only B after off.</p>
+      <pre class="sharepage__code"><code class="language-js">class EE {
+  constructor() { this.h = {}; }
+  on(e, fn) { (this.h[e] ___= []).___(fn); }
+  off(e, fn) { const a = this.h[e]; if (!a) return; const i = a.___(fn); if (i ___ -1) a.___(i, 1); }
+  emit(e, ...args) { const a = this.h[e]; if (!a) return; for (const fn ___ a.slice()) fn(___args); }
+}
+const ee = new EE();
+const a = (x) =&gt; console.log(&#39;A:&#39; + x);
+const b = (x) =&gt; console.log(&#39;B:&#39; + x);
+ee.on(&#39;msg&#39;, a);
+ee.on(&#39;msg&#39;, b);
+ee.emit(&#39;msg&#39;, 1);
+ee.off(&#39;msg&#39;, a);
+ee.emit(&#39;msg&#39;, 2);</code></pre>
+      <p><strong>Answers:</strong> <code>||</code>, <code>push</code>, <code>indexOf</code>, <code>!==</code>, <code>splice</code>, <code>of</code>, <code>...</code></p>
+      <p class="sharepage__note">Expected output: <code>A:1
+B:1
+B:2</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement EventEmitter with on/off/emit. Subscribe two listeners to &#39;tick&#39;, emit twice, off the first, emit again. Listeners should log identifying strings.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Store handlers as a plain object keyed by event name, value is an array of fns.</li><li>off() must match by function reference — Array.indexOf works because === compares fn refs.</li><li>Iterate a slice() copy in emit so concurrent off() calls don&#39;t skip handlers.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">class EventEmitter {
+  constructor() { this.handlers = {}; }
+  // ||= lazily creates the bucket on first on() for this event.
+  on(event, fn) { (this.handlers[event] ||= []).push(fn); }
+  off(event, fn) {
+    const arr = this.handlers[event];
+    if (!arr) return;
+    // Identity match — equivalent-looking anon fns won&#39;t match. Store the ref.
+    const i = arr.indexOf(fn);
+    if (i !== -1) arr.splice(i, 1);
+  }
+  emit(event, ...args) {
+    const arr = this.handlers[event];
+    if (!arr) return;
+    // Iterate a copy so an off() inside a listener doesn&#39;t skip the next handler.
+    for (const fn of arr.slice()) fn(...args);
+  }
+}
+const ee = new EventEmitter();
+const one = (n) =&gt; console.log(&#39;one:&#39; + n);
+const two = (n) =&gt; console.log(&#39;two:&#39; + n);
+ee.on(&#39;tick&#39;, one);
+ee.on(&#39;tick&#39;, two);
+ee.emit(&#39;tick&#39;, 1);
+ee.emit(&#39;tick&#39;, 2);
+ee.off(&#39;tick&#39;, one);
+ee.emit(&#39;tick&#39;, 3);</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-event-emitter","title":"Event Emitter","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does off(event, fn) use to find the listener?","options":["Structural equality of the function's `.toString()` source — equivalent-looking arrows match","Identity comparison — the exact same function reference","Match by the `name` property of the function (anonymous functions share name '' so they all match)","Position in the bucket — `off(event, n)` removes the nth registered listener"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why does emit() iterate a copy of the handler array?","options":["`.slice()` freezes the function references so listeners can't be reassigned mid-dispatch","To allow listeners that call off() or on() during dispatch without breaking iteration","`for...of` over a live array throws TypeError if its length changes during iteration","Iterating a copy lets the engine inline the handler calls, which is faster than indexed access"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What happens when you emit an event with no registered listeners?","options":["It throws TypeError — `arr.slice()` is called on undefined","Nothing — emit is a no-op for unknown events","It auto-creates an empty bucket for the event and returns false","It fires every listener subscribed to '*' as a wildcard fallback"],"answer":1,"answerLetter":"B"},{"n":4,"q":"If on('x', fn) is called twice with the same fn, how many times will emit('x') invoke fn?","options":["0 — the second on() overwrites the first registration","1 — `Array.prototype.push` is a Set-like operation that ignores existing entries","2 — duplicates are stored separately","1 the first time, 2 on subsequent emits as duplicates accrete"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete on/off/emit so the sequence logs A and B once, then only B after off.","answers":["||","push","indexOf","!==","splice","of","..."]}],"L3":[{"n":1,"prompt":"Implement EventEmitter with on/off/emit. Subscribe two listeners to 'tick', emit twice, off the first, emit again. Listeners should log identifying strings.","expectedOutput":"one:1\ntwo:1\none:2\ntwo:2\ntwo:3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-event-emitter">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

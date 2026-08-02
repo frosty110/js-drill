@@ -14,7 +14,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v36-home-nav-2026-08-01';
+const CACHE_VERSION = 'jsdrill-v37-share-urls-2026-08-02';
 const APP_SHELL = [
   './',
   './index.html',
@@ -44,6 +44,7 @@ const APP_SHELL = [
   './js/app/21-settings.js',
   './js/app/22-home.js',
   './js/app/23-review.js',
+  './js/app/24-share.js',
   './css/01-base.css',
   './css/02-sidebar.css',
   './css/03-tabs.css',
@@ -55,10 +56,15 @@ const APP_SHELL = [
   './css/09-ds-settings.css',
   './css/10-ds-lesson.css',
   './css/11-ds-home.css',
+  './css/12-ds-share.css',
   './ds/tokens.css',
   './ds/components.css',
   './ds/icons.js',
   './js/storage.js',
+  // Share codes + the surface registry. index.html loads these NON-deferred,
+  // before the app slices, so an offline boot without them is a broken boot.
+  './js/sharecode.js',
+  './js/routes.js',
   './js/sync.js',
   './js/supabase-config.js',
   './js/supabase-client.js',

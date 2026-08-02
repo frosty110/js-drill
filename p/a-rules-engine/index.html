@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Keyword Rules Engine — JS Drill</title>
+<meta name="description" content="Route free text to a team by matching keywords against a declarative, typed rule table — a `for...of` scan with an early return, because array order IS the priority and the first rule that hits wins, which a `.find`-style fold would hide.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-rules-engine">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Keyword Rules Engine — JS Drill">
+<meta property="og:description" content="Route free text to a team by matching keywords against a declarative, typed rule table — a `for...of` scan with an early return, because array order IS the priority and the first rule that hits wins, which a `.find`-style fold would hide.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-rules-engine">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Keyword Rules Engine</h1>
+    <p class="sharepage__lede">Route free text to a team by matching keywords against a declarative, typed rule table — a `for...of` scan with an early return, because array order IS the priority and the first rule that hits wins, which a `.find`-style fold would hide.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">5 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>In TypeScript: build a keyword rules engine. Given a declarative table of <code>{ team, keywords }</code> rules, route each ticket to the FIRST team whose keywords appear as whole words in the text, reporting which keywords matched, and falling back to <code>Triage</code> when nothing hits. Type the rule table so a mistyped field is a compile error.</p>
+    <p class="sharepage__note">Expected output: <code>Billing &lt;- invoice, refund
+Security &lt;- phishing, password
+Platform &lt;- outage, latency, deploy
+Billing &lt;- refund
+Triage &lt;- no keyword hit</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Typed rule table + first-match-wins scan over a whole-word token Set</strong> · <code>O(n + r*k) / O(n)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-ts">// ── A TypeScript primer, inline ──────────────────────────────────────────
+// TypeScript is JavaScript plus type annotations. They&#39;re checked while you
+// write and ERASED before anything runs, so none of them costs a runtime
+// operation — the shipped JavaScript is this code with the types deleted.
+
+// `interface` names an object shape. (`type Rule = { ... }` would work the
+// same here; interfaces are the conventional choice for a contract like this.)
+interface Rule {
+  team: string;
+  // `readonly string[]` = an array of strings this code promises not to
+  // mutate. Compile-time only — the array isn&#39;t frozen at runtime.
+  keywords: readonly string[];
+}
+
+// The annotation `: readonly Rule[]` makes the table&#39;s shape explicit, so a
+// typo like `{ team: &#39;X&#39;, keyword: [...] }` is caught here rather than
+// silently producing a rule that can never match.
+//
+// Rules are DATA, not control flow. Array order IS the priority, and adding
+// a team means appending an entry — route() never changes.
+const RULES: readonly Rule[] = [
+  { team: &#39;Security&#39;, keywords: [&#39;breach&#39;, &#39;phishing&#39;, &#39;password&#39;] },
+  { team: &#39;Billing&#39;, keywords: [&#39;invoice&#39;, &#39;refund&#39;, &#39;charge&#39;] },
+  { team: &#39;Platform&#39;, keywords: [&#39;outage&#39;, &#39;latency&#39;, &#39;deploy&#39;] },
+];
+const FALLBACK = &#39;Triage&#39;;
+
+// `Set&lt;string&gt;` — the angle brackets say what the Set holds, so `.has()` is
+// known to take a string. Whole-word tokens: &#39;recharge&#39; must NOT match the
+// keyword &#39;charge&#39;.
+function tokenize(text: string): Set&lt;string&gt; {
+  return new Set(text.toLowerCase().match(/[a-z0-9&#39;]+/g) ?? []);
+}
+
+// The return type is written inline: this hands back a team plus the keywords
+// that matched it. Naming the shape in the signature is what stops a caller
+// from quietly depending on a field we never meant to expose.
+//
+// `rules: readonly Rule[] = RULES` is a typed parameter WITH a default —
+// callers can inject their own table, which is how you&#39;d test this.
+function route(text: string, rules: readonly Rule[] = RULES): { team: string; matched: string[] } {
+  const words = tokenize(text);
+  for (const rule of rules) {
+    // filter, not some — keeping the hits makes the decision explainable.
+    const matched = rule.keywords.filter(k =&gt; words.has(k));
+    if (matched.length &gt; 0) return { team: rule.team, matched };
+  }
+  return { team: FALLBACK, matched: [] };
+}</code></pre>
+    <ul class="sharepage__notes"><li>TypeScript types are ERASED before the code runs — they cost nothing at runtime and change no behavior. The algorithm below is the same JavaScript either way.</li><li>Rules are an ARRAY OF DATA typed <code>readonly Rule[]</code>, so adding a team is appending an entry and reprioritizing is reordering — <code>route()</code> itself never changes, and the table can move to JSON or a DB untouched. The annotation catches a mistyped field (<code>keyword</code> vs <code>keywords</code>) that would otherwise produce a rule which silently never matches.</li><li>Array order IS the priority: the first rule with any hit returns immediately, so a later rule that would also match is never consulted. That early exit is the semantics, which is why this is a <code>for...of</code> and not a chained fold.</li><li>Tokenize into a <code>Set&lt;string&gt;</code> and test with <code>has</code> — <code>text.includes(&#39;charge&#39;)</code> would misroute &#39;Recharge the battery&#39; to Billing. Whole-word matching kills that class of false positive, and the Set makes each keyword test O(1).</li><li><code>filter</code> rather than <code>some</code>: returning WHICH keywords matched makes the routing decision explainable after the fact, which is what you need the first time someone disputes it. The inline return type <code>{ team: string; matched: string[] }</code> is what pins that contract.</li><li><code>readonly string[]</code> documents that the engine never mutates a rule&#39;s keyword list. It&#39;s a compile-time promise only — nothing is frozen at runtime.</li><li><code>String.match</code> returns <code>null</code> (not <code>[]</code>) when nothing matches, so <code>?? []</code> normalizes before the Set is built. TypeScript surfaces this: the match result is typed <code>RegExpMatchArray | null</code>, so it won&#39;t let you skip the check.</li><li>Keyword matching cannot handle negation — &#39;this is NOT a refund request&#39; still routes to Billing. That&#39;s a limit of the technique, not a bug to patch, and no amount of typing fixes it.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">5</span></h2>
+    <p class="sharepage__note">Positions 1–5 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why tokenize into a <code>Set</code> and test <code>words.has(&#39;charge&#39;)</code> instead of the simpler <code>text.includes(&#39;charge&#39;)</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>String.includes</code> is case-sensitive and cannot be made case-insensitive without a regex</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> <code>includes</code> matches substrings, so &#39;Recharge the battery&#39; would falsely fire the &#39;charge&#39; keyword; Set membership tests whole words <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>includes</code> performs a full scan per call, and Set lookup is the only way to avoid re-reading the string</li>
+        <li><span class="sharepage__key">D</span> A <code>Set</code> automatically strips punctuation from the keywords, which <code>includes</code> cannot do</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The substring false positive is the real bug: &#39;recharge&#39;, &#39;discharge&#39; and &#39;surcharge&#39; all contain &#39;charge&#39;. Tokenizing makes them distinct words. The O(1) lookup is a bonus, not the reason.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> The rules live in an array of <code>{ team, keywords }</code> objects rather than a chain of if/else statements. What is the primary benefit?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Array iteration is faster than sequential conditionals because the engine can vectorize the comparisons</li>
+        <li><span class="sharepage__key">B</span> Objects in an array are garbage-collected together, reducing memory churn on repeated routing calls</li>
+        <li><span class="sharepage__key">C</span> It avoids the banned labeled-break needed to exit an if/else chain early</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Rules become data: adding a team is appending an entry and reprioritizing is reordering, so the table can be edited, tested, or loaded from config without touching the routing code <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The if/else version buries the priority order in the physical layout of the code and turns every rule change into a code change. A table makes both the rules and their order explicit, testable, and externally editable.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Each rule collects hits with <code>rule.keywords.filter(k =&gt; words.has(k))</code> rather than <code>rule.keywords.some(k =&gt; words.has(k))</code>. Why keep the full list?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>some</code> stops at the first match, so it would miss rules whose later keywords are the higher-priority ones</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> <code>filter</code> returns the matched keywords as evidence, so the engine can explain WHY a text routed where it did — <code>some</code> returns only a boolean and throws that away <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>some</code> returns undefined rather than false when the keywords array is empty, breaking the length check</li>
+        <li><span class="sharepage__key">D</span> <code>filter</code> is required because the result is later spread into the fallback rule&#39;s keyword list</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Both work for the routing decision itself. <code>filter</code> additionally answers &#39;why did this ticket go to Billing?&#39; — which is the first question anyone asks of a routing system in production.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> A ticket reading &#39;Refund the customer after the outage&#39; contains keywords from both the Billing rule and the Platform rule. What decides the outcome, and what would change if the requirement became best-match-wins (most keyword hits)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The rule with more total keywords defined wins; best-match-wins would instead require sorting the rules by keyword count up front</li>
+        <li><span class="sharepage__key">B</span> Both rules fire and the result is an array of teams; best-match-wins would just take the first element of that array</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Position in the rules array decides — the earlier rule returns immediately. Best-match-wins would remove the early return, since no rule can be declared the winner until every rule has been scored <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The rule whose keyword appears earliest in the text wins; best-match-wins would compare hit counts at that same point in the scan</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> First-match-wins means array order IS the priority and the loop can exit as soon as anything hits. Best-match-wins forces a full pass to score every rule, with rule order surviving only as a tie-break.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <code>tokenize</code> is written <code>text.toLowerCase().match(/[a-z0-9&#39;]+/g) ?? []</code>. What does TypeScript add here that plain JavaScript doesn&#39;t?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It converts the regex match into a typed tuple, so the <code>?? []</code> fallback becomes unnecessary</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It types the match result as <code>RegExpMatchArray | null</code>, so omitting the null check is a compile error rather than a crash the first time nothing matches <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It makes <code>.match()</code> return an empty array instead of null, which is why the <code>??</code> is only defensive style</li>
+        <li><span class="sharepage__key">D</span> It narrows the regex literal to the exact set of strings it can match, letting the Set be typed more precisely</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>String.prototype.match</code> is typed to return <code>RegExpMatchArray | null</code>. Feeding that straight into <code>new Set(...)</code> — or into any array method — is rejected until you handle the null, so the bug &#39;text with no word characters at all&#39; gets caught in the editor instead of in production. The runtime behavior is identical to the JavaScript version; the difference is when you find out.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Tokenize text into whole words for membership testing. Fill the blanks so the substring trap prints false.</p>
+      <pre class="sharepage__code"><code class="language-ts">function tokenize(text: ___): Set&lt;string&gt; {
+  return new ___(text.___().match(/[a-z0-9&#39;]+/g) ___ []);
+}
+const words = tokenize(&#39;Recharge the battery&#39;);
+console.log(words.___(&#39;charge&#39;), words.has(&#39;recharge&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>string</code>, <code>Set</code>, <code>toLowerCase</code>, <code>??</code>, <code>has</code></p>
+      <p class="sharepage__note">Expected output: <code>false true</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Type the rule table, then scan it and return on the first rule that hits. Fill the blanks so the earlier rule wins.</p>
+      <pre class="sharepage__code"><code class="language-ts">interface Rule {
+  team: ___;
+  keywords: readonly string[];
+}
+const RULES: ___ Rule[] = [
+  { team: &#39;Billing&#39;, keywords: [&#39;invoice&#39;, &#39;refund&#39;] },
+  { team: &#39;Platform&#39;, keywords: [&#39;outage&#39;, &#39;latency&#39;] },
+];
+function route(words: Set&lt;string&gt;): string {
+  for (const rule ___ RULES) {
+    const matched = rule.keywords.___(k =&gt; words.has(k));
+    if (matched.___ &gt; 0) return `${rule.team} &lt;- ${matched.join(&#39;, &#39;)}`;
+  }
+  return &#39;Triage&#39;;
+}
+console.log(route(new Set([&#39;refund&#39;, &#39;outage&#39;])));</code></pre>
+      <p><strong>Answers:</strong> <code>string</code>, <code>readonly</code>, <code>of</code>, <code>filter</code>, <code>length</code></p>
+      <p class="sharepage__note">Expected output: <code>Billing &lt;- refund</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>In TypeScript: build a keyword rules engine. Given a declarative table of <code>{ team, keywords }</code> rules, route each ticket to the FIRST team whose keywords appear as whole words in the text, reporting which keywords matched, and falling back to <code>Triage</code> when nothing hits. Type the rule table so a mistyped field is a compile error.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Declare the shape first: <code>interface Rule { team: string; keywords: readonly string[] }</code>, then annotate the table <code>const RULES: readonly Rule[] = [...]</code>.</li><li>Tokenize once into a <code>Set&lt;string&gt;</code>: <code>new Set(text.toLowerCase().match(/[a-z0-9&#39;]+/g) ?? [])</code> — the <code>??</code> is required because <code>.match</code> is typed <code>RegExpMatchArray | null</code>.</li><li>Scan with <code>for...of</code> and return on the first hit — array order is the priority, and a later rule that would also match must never be consulted.</li><li>Collect hits with <code>filter</code> (not <code>some</code>) and declare the return type inline: <code>{ team: string; matched: string[] }</code>.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-ts">// ── A TypeScript primer, inline ──────────────────────────────────────────
+// TypeScript is JavaScript plus type annotations. They&#39;re checked while you
+// write and ERASED before anything runs, so none of them costs a runtime
+// operation — the shipped JavaScript is this code with the types deleted.
+
+// `interface` names an object shape. (`type Rule = { ... }` would work the
+// same here; interfaces are the conventional choice for a contract like this.)
+interface Rule {
+  team: string;
+  // `readonly string[]` = an array of strings this code promises not to
+  // mutate. Compile-time only — the array isn&#39;t frozen at runtime.
+  keywords: readonly string[];
+}
+
+// The annotation `: readonly Rule[]` makes the table&#39;s shape explicit, so a
+// typo like `{ team: &#39;X&#39;, keyword: [...] }` is caught here rather than
+// silently producing a rule that can never match.
+//
+// Rules are DATA, not control flow. Array order IS the priority, and adding
+// a team means appending an entry — route() never changes.
+const RULES: readonly Rule[] = [
+  { team: &#39;Security&#39;, keywords: [&#39;breach&#39;, &#39;phishing&#39;, &#39;password&#39;] },
+  { team: &#39;Billing&#39;, keywords: [&#39;invoice&#39;, &#39;refund&#39;, &#39;charge&#39;] },
+  { team: &#39;Platform&#39;, keywords: [&#39;outage&#39;, &#39;latency&#39;, &#39;deploy&#39;] },
+];
+const FALLBACK = &#39;Triage&#39;;
+
+// `Set&lt;string&gt;` — the angle brackets say what the Set holds, so `.has()` is
+// known to take a string. Whole-word tokens: &#39;recharge&#39; must NOT match the
+// keyword &#39;charge&#39;.
+function tokenize(text: string): Set&lt;string&gt; {
+  return new Set(text.toLowerCase().match(/[a-z0-9&#39;]+/g) ?? []);
+}
+
+// The return type is written inline: this hands back a team plus the keywords
+// that matched it. Naming the shape in the signature is what stops a caller
+// from quietly depending on a field we never meant to expose.
+//
+// `rules: readonly Rule[] = RULES` is a typed parameter WITH a default —
+// callers can inject their own table, which is how you&#39;d test this.
+function route(text: string, rules: readonly Rule[] = RULES): { team: string; matched: string[] } {
+  const words = tokenize(text);
+  for (const rule of rules) {
+    // filter, not some — keeping the hits makes the decision explainable.
+    const matched = rule.keywords.filter(k =&gt; words.has(k));
+    if (matched.length &gt; 0) return { team: rule.team, matched };
+  }
+  return { team: FALLBACK, matched: [] };
+}
+
+const tickets: string[] = [
+  &#39;Customer disputes an invoice and wants a refund&#39;,
+  &#39;User reports a phishing email asking for their password&#39;,
+  &#39;Deploy caused an outage with high latency&#39;,
+  &#39;Refund the customer after the outage&#39;,
+  &#39;Recharge the battery before the offsite&#39;,
+];
+
+for (const t of tickets) {
+  const { team, matched } = route(t);
+  console.log(`${team} &lt;- ${matched.join(&#39;, &#39;) || &#39;no keyword hit&#39;}`);
+}</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-rules-engine","title":"Keyword Rules Engine","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why tokenize into a `Set` and test `words.has('charge')` instead of the simpler `text.includes('charge')`?","options":["`String.includes` is case-sensitive and cannot be made case-insensitive without a regex","`includes` matches substrings, so 'Recharge the battery' would falsely fire the 'charge' keyword; Set membership tests whole words","`includes` performs a full scan per call, and Set lookup is the only way to avoid re-reading the string","A `Set` automatically strips punctuation from the keywords, which `includes` cannot do"],"answer":1,"answerLetter":"B"},{"n":2,"q":"The rules live in an array of `{ team, keywords }` objects rather than a chain of if/else statements. What is the primary benefit?","options":["Array iteration is faster than sequential conditionals because the engine can vectorize the comparisons","Objects in an array are garbage-collected together, reducing memory churn on repeated routing calls","It avoids the banned labeled-break needed to exit an if/else chain early","Rules become data: adding a team is appending an entry and reprioritizing is reordering, so the table can be edited, tested, or loaded from config without touching the routing code"],"answer":3,"answerLetter":"D"},{"n":3,"q":"Each rule collects hits with `rule.keywords.filter(k => words.has(k))` rather than `rule.keywords.some(k => words.has(k))`. Why keep the full list?","options":["`some` stops at the first match, so it would miss rules whose later keywords are the higher-priority ones","`filter` returns the matched keywords as evidence, so the engine can explain WHY a text routed where it did — `some` returns only a boolean and throws that away","`some` returns undefined rather than false when the keywords array is empty, breaking the length check","`filter` is required because the result is later spread into the fallback rule's keyword list"],"answer":1,"answerLetter":"B"},{"n":4,"q":"A ticket reading 'Refund the customer after the outage' contains keywords from both the Billing rule and the Platform rule. What decides the outcome, and what would change if the requirement became best-match-wins (most keyword hits)?","options":["The rule with more total keywords defined wins; best-match-wins would instead require sorting the rules by keyword count up front","Both rules fire and the result is an array of teams; best-match-wins would just take the first element of that array","Position in the rules array decides — the earlier rule returns immediately. Best-match-wins would remove the early return, since no rule can be declared the winner until every rule has been scored","The rule whose keyword appears earliest in the text wins; best-match-wins would compare hit counts at that same point in the scan"],"answer":2,"answerLetter":"C"},{"n":5,"q":"`tokenize` is written `text.toLowerCase().match(/[a-z0-9']+/g) ?? []`. What does TypeScript add here that plain JavaScript doesn't?","options":["It converts the regex match into a typed tuple, so the `?? []` fallback becomes unnecessary","It types the match result as `RegExpMatchArray | null`, so omitting the null check is a compile error rather than a crash the first time nothing matches","It makes `.match()` return an empty array instead of null, which is why the `??` is only defensive style","It narrows the regex literal to the exact set of strings it can match, letting the Set be typed more precisely"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Tokenize text into whole words for membership testing. Fill the blanks so the substring trap prints false.","answers":["string","Set","toLowerCase","??","has"]},{"n":2,"prompt":"Type the rule table, then scan it and return on the first rule that hits. Fill the blanks so the earlier rule wins.","answers":["string","readonly","of","filter","length"]}],"L3":[{"n":1,"prompt":"In TypeScript: build a keyword rules engine. Given a declarative table of `{ team, keywords }` rules, route each ticket to the FIRST team whose keywords appear as whole words in the text, reporting which keywords matched, and falling back to `Triage` when nothing hits. Type the rule table so a mistyped field is a compile error.","expectedOutput":"Billing \u003c- invoice, refund\nSecurity \u003c- phishing, password\nPlatform \u003c- outage, latency, deploy\nBilling \u003c- refund\nTriage \u003c- no keyword hit"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-rules-engine">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

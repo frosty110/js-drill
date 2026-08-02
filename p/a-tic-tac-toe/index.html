@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tic-Tac-Toe — JS Drill</title>
+<meta name="description" content="Online game-state class. After each `play`, check only the four lines that pass through that cell — row, column, and (if on a diagonal) the two diagonals. O(n) per move instead of scanning the whole board.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-tic-tac-toe">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tic-Tac-Toe — JS Drill">
+<meta property="og:description" content="Online game-state class. After each `play`, check only the four lines that pass through that cell — row, column, and (if on a diagonal) the two diagonals. O(n) per move instead of scanning the whole board.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-tic-tac-toe">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Tic-Tac-Toe</h1>
+    <p class="sharepage__lede">Online game-state class. After each `play`, check only the four lines that pass through that cell — row, column, and (if on a diagonal) the two diagonals. O(n) per move instead of scanning the whole board.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement TicTacToe(n) with play(player, row, col). Play 5 moves where X wins the main diagonal; log &#39;no&#39; for non-wins and the winner string for the final move.</p>
+    <p class="sharepage__note">Expected output: <code>no
+no
+no
+no
+X</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">class TicTacToe {
+  constructor(n) {
+    this.n = n;
+    // Per-line tallies (+1 for X, -1 for O). |tally| === n means that line wins.
+    this.rows = new Array(n).fill(0);
+    this.cols = new Array(n).fill(0);
+    this.diag = 0;
+    this.anti = 0;
+  }
+  play(player, row, col) {
+    const v = player === &#39;X&#39; ? 1 : -1;
+    this.rows[row] += v;
+    this.cols[col] += v;
+    // Main diagonal: row === col. Touches at most 4 lines per move — O(1).
+    if (row === col)              this.diag += v;
+    // Anti-diagonal: row + col === n - 1.
+    if (row + col === this.n - 1) this.anti += v;
+    // abs() because X reaches +n, O reaches -n — sign tells which player won.
+    if (Math.abs(this.rows[row]) === this.n) return player;
+    if (Math.abs(this.cols[col]) === this.n) return player;
+    if (Math.abs(this.diag)        === this.n) return player;
+    if (Math.abs(this.anti)        === this.n) return player;
+    return &#39;&#39;;
+  }
+}</code></pre>
+    <ul class="sharepage__notes"><li>Tally per line (+1 for X, -1 for O). |tally| === n is a win — sign tells you which player.</li><li>Diagonals: main has <code>row === col</code>; anti-diagonal has <code>row + col === n - 1</code>.</li><li>O(1) per move with O(n) space — beats the naive &#39;scan the whole board&#39; check on every move.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Board-scan after each move (O(n) per move) <code>O(n) move / O(n²) space</code></h3>
+      <p>Reach for this when n is small and fixed (classic 3×3), or when you want the simplest possible code before optimizing. The board representation is more readable; the tally trick is the optimization you add once correctness is proven.</p>
+      <pre class="sharepage__code"><code class="language-js">class TicTacToe {
+  constructor(n) {
+    this.n = n;
+    // O(n²) board — simpler to reason about, but O(n) scan per move.
+    this.board = Array.from({ length: n }, () =&gt; new Array(n).fill(null));
+  }
+  play(player, row, col) {
+    this.board[row][col] = player;
+    const n = this.n;
+    const b = this.board;
+    // Scan the four lines that pass through (row, col) — O(n) each.
+    if (b[row].every(cell =&gt; cell === player)) return player;
+    if (b.every(r =&gt; r[col] === player)) return player;
+    if (row === col &amp;&amp; b.every((r, i) =&gt; r[i] === player)) return player;
+    if (row + col === n - 1 &amp;&amp; b.every((r, i) =&gt; r[n - 1 - i] === player)) return player;
+    return &quot;&quot;;
+  }
+}
+const g = new TicTacToe(3);
+const show = r =&gt; console.log(r || &quot;no&quot;);
+show(g.play(&quot;X&quot;, 0, 0));
+show(g.play(&quot;O&quot;, 0, 1));
+show(g.play(&quot;X&quot;, 1, 1));
+show(g.play(&quot;O&quot;, 0, 2));
+show(g.play(&quot;X&quot;, 2, 2));</code></pre>
+      <ul class="sharepage__notes"><li>Board is an n×n array; each play() scans up to 4 lines of n cells — O(n) vs O(1) for tallies.</li><li>Short-circuit the diagonal scans with the same <code>row === col</code> / <code>row + col === n - 1</code> guards — otherwise you&#39;d scan the full main diag on every non-diagonal move.</li><li>Uses O(n²) space instead of O(n); upgrade to tallies once correctness is confirmed.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why use +1 / -1 tallies instead of scanning the board after each move?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Tallies can be packed into a single 32-bit integer, while a 2D board requires <code>n²</code> allocations</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Each move only touches up to 4 lines — O(1) per move vs O(n²) for a scan <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The board scan can&#39;t detect diagonal wins because adjacent diagonal cells aren&#39;t contiguous in memory</li>
+        <li><span class="sharepage__key">D</span> Tallies generalize to k &gt; 2 players via additional sentinel values, which a board scan cannot</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What condition signals that <code>(row, col)</code> lies on the anti-diagonal of an n×n board?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> row === col — the anti-diagonal mirrors the main diagonal so the same identity holds</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> row + col === n - 1 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> row === n - col — the diagonal passes through (1, n-1) and (n-1, 1)</li>
+        <li><span class="sharepage__key">D</span> (row + 1) * (col + 1) === n — derived from the corner product invariant</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why check <code>Math.abs(tally) === n</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>Math.abs</code> normalizes the tally back to a non-negative range so it can be safely used as an array index in the next move</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> X is +n on a win, O is -n — absolute value detects either <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Negative tallies would otherwise satisfy the <code>=== n</code> check via sign coercion in <code>===</code></li>
+        <li><span class="sharepage__key">D</span> Tallies can wrap past <code>Number.MAX_SAFE_INTEGER</code> on long games; abs collapses the overflow</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What does <code>play</code> return when the move does NOT end the game?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> null — the absence of a winner is signaled by the absence of a value</li>
+        <li><span class="sharepage__key">B</span> false — <code>play</code> returns a boolean indicating whether the game continues</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> An empty string &#39;&#39; <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The current player&#39;s token — so the caller knows whose move it was, but without a win flag</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in TicTacToe so X wins down the diagonal; non-wins log &#39;no&#39;.</p>
+      <pre class="sharepage__code"><code class="language-js">class TicTacToe {
+  constructor(n) {
+    this.n = n;
+    this.rows = new Array(n).___(0);
+    this.cols = new Array(n).fill(0);
+    this.diag = 0;
+    this.anti = 0;
+  }
+  play(player, row, col) {
+    const v = player ___ &#39;X&#39; ? 1 : -1;
+    this.rows[row] += v;
+    this.cols[col] += v;
+    if (row === col) this.___ += v;
+    if (row + col === this.n ___ 1) this.anti += v;
+    if (Math.___(this.rows[row]) === this.n) return player;
+    if (Math.abs(this.cols[col]) === this.n) return player;
+    if (Math.abs(this.diag) === this.n) return player;
+    if (Math.abs(this.anti) === this.n) return player;
+    return ___;
+  }
+}
+const g = new TicTacToe(3);
+const show = r =&gt; console.log(r || &#39;no&#39;);
+show(g.play(&#39;X&#39;, 0, 0));
+show(g.play(&#39;O&#39;, 0, 1));
+show(g.play(&#39;X&#39;, 1, 1));
+show(g.play(&#39;O&#39;, 0, 2));
+show(g.play(&#39;X&#39;, 2, 2));</code></pre>
+      <p><strong>Answers:</strong> <code>fill</code>, <code>===</code>, <code>diag</code>, <code>-</code>, <code>abs</code>, <code>&#39;&#39;</code></p>
+      <p class="sharepage__note">Expected output: <code>no
+no
+no
+no
+X</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement TicTacToe(n) with play(player, row, col). Play 5 moves where X wins the main diagonal; log &#39;no&#39; for non-wins and the winner string for the final move.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Track per-row, per-col, and the two diagonal tallies — add +1 for X, -1 for O.</li><li>Main diagonal cells satisfy <code>row === col</code>; anti-diagonal <code>row + col === n - 1</code>.</li><li>Return <code>player</code> when any tally hits ±n, else &#39;&#39;.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">class TicTacToe {
+  constructor(n) {
+    this.n = n;
+    // Per-line tallies (+1 for X, -1 for O). |tally| === n means that line wins.
+    this.rows = new Array(n).fill(0);
+    this.cols = new Array(n).fill(0);
+    this.diag = 0;
+    this.anti = 0;
+  }
+  play(player, row, col) {
+    const v = player === &#39;X&#39; ? 1 : -1;
+    this.rows[row] += v;
+    this.cols[col] += v;
+    // Main diagonal: row === col. Touches at most 4 lines per move — O(1).
+    if (row === col) this.diag += v;
+    // Anti-diagonal: row + col === n - 1.
+    if (row + col === this.n - 1) this.anti += v;
+    // abs() because X reaches +n, O reaches -n — sign tells which player won.
+    if (Math.abs(this.rows[row]) === this.n) return player;
+    if (Math.abs(this.cols[col]) === this.n) return player;
+    if (Math.abs(this.diag) === this.n) return player;
+    if (Math.abs(this.anti) === this.n) return player;
+    return &#39;&#39;;
+  }
+}
+const g = new TicTacToe(3);
+const show = r =&gt; console.log(r || &#39;no&#39;);
+show(g.play(&#39;X&#39;, 0, 0));
+show(g.play(&#39;O&#39;, 0, 1));
+show(g.play(&#39;X&#39;, 1, 1));
+show(g.play(&#39;O&#39;, 0, 2));
+show(g.play(&#39;X&#39;, 2, 2));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-tic-tac-toe","title":"Tic-Tac-Toe","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why use +1 / -1 tallies instead of scanning the board after each move?","options":["Tallies can be packed into a single 32-bit integer, while a 2D board requires `n²` allocations","Each move only touches up to 4 lines — O(1) per move vs O(n²) for a scan","The board scan can't detect diagonal wins because adjacent diagonal cells aren't contiguous in memory","Tallies generalize to k > 2 players via additional sentinel values, which a board scan cannot"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What condition signals that `(row, col)` lies on the anti-diagonal of an n×n board?","options":["row === col — the anti-diagonal mirrors the main diagonal so the same identity holds","row + col === n - 1","row === n - col — the diagonal passes through (1, n-1) and (n-1, 1)","(row + 1) * (col + 1) === n — derived from the corner product invariant"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why check `Math.abs(tally) === n`?","options":["`Math.abs` normalizes the tally back to a non-negative range so it can be safely used as an array index in the next move","X is +n on a win, O is -n — absolute value detects either","Negative tallies would otherwise satisfy the `=== n` check via sign coercion in `===`","Tallies can wrap past `Number.MAX_SAFE_INTEGER` on long games; abs collapses the overflow"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What does `play` return when the move does NOT end the game?","options":["null — the absence of a winner is signaled by the absence of a value","false — `play` returns a boolean indicating whether the game continues","An empty string ''","The current player's token — so the caller knows whose move it was, but without a win flag"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in TicTacToe so X wins down the diagonal; non-wins log 'no'.","answers":["fill","===","diag","-","abs","''"]}],"L3":[{"n":1,"prompt":"Implement TicTacToe(n) with play(player, row, col). Play 5 moves where X wins the main diagonal; log 'no' for non-wins and the winner string for the final move.","expectedOutput":"no\nno\nno\nno\nX"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-tic-tac-toe">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

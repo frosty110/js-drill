@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>3Sum — JS Drill</title>
+<meta name="description" content="Sort, then for each anchor i, two pointers converge on the remaining pair. Skip duplicates at every level to keep results unique.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-3sum">
+<meta property="og:type" content="article">
+<meta property="og:title" content="3Sum — JS Drill">
+<meta property="og:description" content="Sort, then for each anchor i, two pointers converge on the remaining pair. Skip duplicates at every level to keep results unique.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-3sum">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Two Pointers</p>
+    <h1>3Sum</h1>
+    <p class="sharepage__lede">Sort, then for each anchor i, two pointers converge on the remaining pair. Skip duplicates at every level to keep results unique.</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Two Pointers</span> <span class="ds-chip">9 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>threeSum(nums)</code> returning every unique triplet summing to 0. Log <code>JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4]))</code>.</p>
+    <p class="sharepage__note">Expected output: <code>[[-1,-1,2],[-1,0,1]]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function threeSum(nums) {
+  const res = [];
+  // Sort unlocks two-pointer convergence — and groups duplicates for skipping.
+  nums.sort((a, b) =&gt; a - b);
+  // length - 2 leaves room for l = i+1 and r.
+  for (let i = 0; i &lt; nums.length - 2; i++) {
+    // Skip duplicate anchors so we don&#39;t re-emit the same triplet.
+    if (i &gt; 0 &amp;&amp; nums[i] === nums[i - 1]) continue;
+    let l = i + 1, r = nums.length - 1;
+    while (l &lt; r) {
+      const sum = nums[i] + nums[l] + nums[r];
+      if (sum === 0) {
+        res.push([nums[i], nums[l], nums[r]]);
+        // After a hit, skip duplicate l and r values before advancing.
+        while (l &lt; r &amp;&amp; nums[l] === nums[l + 1]) l++;
+        while (l &lt; r &amp;&amp; nums[r] === nums[r - 1]) r--;
+        l++; r--;
+      } else if (sum &lt; 0) l++;  // need bigger — left side has smaller values
+      else r--;                 // need smaller — right side has bigger values
+    }
+  }
+  return res;
+}
+// Time O(n^2), Space O(1) extra (ignoring sort + output)</code></pre>
+    <ul class="sharepage__notes"><li>Sorting is what unlocks the two-pointer step — without it you cannot decide which pointer to move.</li><li>Three layers of dedup: skip equal i, skip equal l after a hit, skip equal r after a hit.</li><li>Outer loop stops at length - 2 so l = i + 1 and r still leave room for a pair.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Sort + hash-set inner scan <code>O(n²) / O(n)</code></h3>
+      <p>A natural first step when you think &#39;fix anchor, Two-Sum the rest with a hash set.&#39; Still O(n²) time but requires an extra O(n) set per anchor and an output-sort pass to guarantee deterministic order. Use when you&#39;d rather not derive the two-pointer direction rule in an interview.</p>
+      <pre class="sharepage__code"><code class="language-js">function threeSum(nums) {
+  nums.sort((a, b) =&gt; a - b);
+  const res = [];
+  for (let i = 0; i &lt; nums.length - 2; i++) {
+    if (i &gt; 0 &amp;&amp; nums[i] === nums[i - 1]) continue;
+    const seen = new Set();
+    let j = i + 1;
+    while (j &lt; nums.length) {
+      const complement = -nums[i] - nums[j];
+      if (seen.has(complement)) {
+        res.push([nums[i], complement, nums[j]]);
+        while (j + 1 &lt; nums.length &amp;&amp; nums[j] === nums[j + 1]) j++;
+      }
+      seen.add(nums[j]);
+      j++;
+    }
+  }
+  res.sort((a, b) =&gt; a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+  return res;
+}
+console.log(JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4])));</code></pre>
+      <ul class="sharepage__notes"><li>The hash set finds the complement that was seen earlier in the scan — because the array is sorted, <code>complement ≤ nums[j]</code>, so each pushed triplet is already internally sorted.</li><li>An output sort is needed because hits for different anchors can arrive out of order; the two-pointer approach avoids this cost.</li><li>Same O(n²) time as the two-pointer variant but O(n) extra space per anchor for the set vs. O(1) with two pointers.</li></ul>
+    </article>
+    <article class="sharepage__alt" id="alt2">
+      <h3>Brute force O(n³) <code>O(n³) / O(n)</code></h3>
+      <p>Only when you need to confirm understanding before deriving the faster solution. Three nested loops are correct but O(n³) — too slow for n &gt; ~300. Name it out loud, then discard it.</p>
+      <pre class="sharepage__code"><code class="language-js">function threeSum(nums) {
+  nums.sort((a, b) =&gt; a - b);
+  const resSet = new Set();
+  const res = [];
+  for (let i = 0; i &lt; nums.length - 2; i++) {
+    for (let j = i + 1; j &lt; nums.length - 1; j++) {
+      for (let k = j + 1; k &lt; nums.length; k++) {
+        if (nums[i] + nums[j] + nums[k] === 0) {
+          const key = nums[i] + &#39;,&#39; + nums[j] + &#39;,&#39; + nums[k];
+          if (!resSet.has(key)) {
+            resSet.add(key);
+            res.push([nums[i], nums[j], nums[k]]);
+          }
+        }
+      }
+    }
+  }
+  return res;
+}
+console.log(JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4])));</code></pre>
+      <ul class="sharepage__notes"><li>Sorting first means each triplet is already in ascending order, so the string key <code>i+&#39;,&#39;+j+&#39;,&#39;+k</code> is unique per distinct value-triple — a cheap dedup without sorting each candidate.</li><li>O(n³) time: each of the three loops visits up to n positions; even with early exits on anchors &gt; 0 the worst case is cubic.</li><li>The Set grows up to O(n³) entries in the worst case (all unique pairs), though in practice it&#39;s bounded by the output size.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why sort the array first?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To collapse equal values into a single representative — the two-pointer scan then runs over uniques only</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> So two-pointer convergence can decide which side to move <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> So the inner loop can binary-search for the complement in O(log n)</li>
+        <li><span class="sharepage__key">D</span> To shift all negative numbers to the front, allowing a single-direction scan</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(n)</li>
+        <li><span class="sharepage__key">B</span> O(n log n)</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> O(n^2) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> O(n^3)</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sort is O(n log n); the nested two-pointer loop dominates at O(n^2).</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> When sum &lt; 0, which pointer moves?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> l moves right (bigger value) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> r moves left (smaller value)</li>
+        <li><span class="sharepage__key">C</span> Both move</li>
+        <li><span class="sharepage__key">D</span> i moves forward</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> Purpose of <code>if (i &gt; 0 &amp;&amp; nums[i] === nums[i - 1]) continue;</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Skip anchors whose value cannot reach zero with any later pair (already known to be too large after sorting)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Skip duplicate triplets at the anchor <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Reset the inner pointers l and r when the anchor&#39;s value didn&#39;t change</li>
+        <li><span class="sharepage__key">D</span> Avoid re-processing the anchor&#39;s mirror position from the previous iteration</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> There are THREE dedup checks in the canonical solution. Where do they sit?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> All three are at the anchor i, run before the inner loop</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Skip duplicate anchors (i), then after a hit skip duplicate l values and duplicate r values <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> One at i, one at sum &lt; 0, one at sum &gt; 0</li>
+        <li><span class="sharepage__key">D</span> All three are inside the while-loop condition</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Anchor dedup (nums[i] === nums[i-1]) runs in the outer loop; the l and r dedup-skip loops run only after recording a hit, before advancing the pointers.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> Besides enabling two-pointer convergence, what second benefit does sorting provide for 3Sum?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It removes all duplicate elements automatically as a side effect of the in-place sort</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It clusters equal values adjacently, so duplicates can be skipped by comparing neighbors <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It guarantees the resulting triplets emerge in lexicographic order, which the problem statement requires</li>
+        <li><span class="sharepage__key">D</span> It guarantees the inner two-pointer loop converges in O(log n) by enabling binary halving</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sorting groups identical values next to each other, which is exactly what lets the dedup checks work by comparing nums[i] to nums[i-1] (or nums[l] to nums[l+1]).</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> Why is a hash-set approach messier for 3Sum than for Two Sum?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The inner Two-Sum&#39;s hash map must be rebuilt for every anchor, blowing the time bound to O(n³)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> You still fix one element and Two-Sum the rest, but deduplicating the resulting triplets requires sorting/stringifying each one — work the sorted two-pointer avoids in place <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Hash collisions are more frequent with three numbers because the implicit sum-key clashes with the pair-key</li>
+        <li><span class="sharepage__key">D</span> Hashing requires the input to be non-negative, so an extra pass to shift the range is needed</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A hash approach finds the pairs but produces duplicate triplets, forcing you to canonicalize (sort + stringify) each triplet into a set; the sorted two-pointer dedups in place with simple neighbor skips.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> After recording a hit, why do the dedup-skip loops include the <code>l &lt; r</code> guard (e.g. <code>while (l &lt; r &amp;&amp; nums[l] === nums[l + 1])</code>)?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To stop advancing once the remaining window is too small to form a valid pair complement to the anchor</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Without it, on input like [0,0,0,0] the skip could advance l past r and read out of bounds <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because nums[l + 1] would coerce to NaN at the array boundary, breaking the equality check</li>
+        <li><span class="sharepage__key">D</span> To prevent the inner loop from recording the same triplet from the right pointer&#39;s perspective</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> On all-equal inputs the skip loop would keep advancing; the <code>l &lt; r</code> guard stops it before the pointers cross and prevents reading nums[l+1] out of range.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> Why does the outer loop stop at <code>i &lt; nums.length - 2</code> rather than <code>i &lt; nums.length</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The last two anchors can never sum to zero with any pair to their right, so they are safe to skip</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because l = i + 1 and r need to point at two more distinct positions, so i must leave room for a pair after it <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The dedup check <code>nums[i] === nums[i - 1]</code> would index past the end at the last two positions</li>
+        <li><span class="sharepage__key">D</span> Sorted arrays in V8 are stored with two trailing sentinel slots that should not be read as data</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A triplet needs i plus two later indices (l = i+1 and r); once fewer than two elements remain after i, no triplet can form, so the loop ends at length - 2.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the canonical 3Sum solution.</p>
+      <pre class="sharepage__code"><code class="language-js">function threeSum(nums) {
+  const res = [];
+  nums.___((a, b) =&gt; a - b);
+  for (let i = 0; i &lt; nums.length - 2; i++) {
+    if (i &gt; 0 &amp;&amp; nums[i] === nums[i - 1]) continue;
+    let l = i + 1, r = nums.length - 1;
+    while (l ___ r) {
+      const sum = nums[i] + nums[l] + nums[r];
+      if (sum === 0) {
+        res.push([nums[i], nums[l], nums[r]]);
+        while (l &lt; r &amp;&amp; nums[l] === nums[l + 1]) l++;
+        while (l &lt; r &amp;&amp; nums[r] === nums[r - 1]) r--;
+        l___;
+        r___;
+      } else if (sum ___ 0) l++;
+      else r--;
+    }
+  }
+  return res;
+}
+console.log(JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4])));</code></pre>
+      <p><strong>Answers:</strong> <code>sort</code>, <code>&lt;</code>, <code>++</code>, <code>--</code>, <code>&lt;</code></p>
+      <p class="sharepage__note">Expected output: <code>[[-1,-1,2],[-1,0,1]]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>threeSum(nums)</code> returning every unique triplet summing to 0. Log <code>JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4]))</code>.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Sort, then fix i and two-pointer the rest.</li><li>Skip duplicates on i, l, and r to keep triplets unique.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function threeSum(nums) {
+  const res = [];
+  // Sort unlocks two-pointer convergence — and groups duplicates for skipping.
+  nums.sort((a, b) =&gt; a - b);
+  // length - 2 leaves room for l = i+1 and r.
+  for (let i = 0; i &lt; nums.length - 2; i++) {
+    // Skip duplicate anchors so we don&#39;t re-emit the same triplet.
+    if (i &gt; 0 &amp;&amp; nums[i] === nums[i - 1]) continue;
+    let l = i + 1, r = nums.length - 1;
+    while (l &lt; r) {
+      const sum = nums[i] + nums[l] + nums[r];
+      if (sum === 0) {
+        res.push([nums[i], nums[l], nums[r]]);
+        // After a hit, skip duplicate l and r values before advancing.
+        while (l &lt; r &amp;&amp; nums[l] === nums[l + 1]) l++;
+        while (l &lt; r &amp;&amp; nums[r] === nums[r - 1]) r--;
+        l++; r--;
+      } else if (sum &lt; 0) l++;  // need bigger — left side has smaller values
+      else r--;                 // need smaller — right side has bigger values
+    }
+  }
+  return res;
+}
+console.log(JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4])));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-3sum","title":"3Sum","section":"Two Pointers","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why sort the array first?","options":["To collapse equal values into a single representative — the two-pointer scan then runs over uniques only","So two-pointer convergence can decide which side to move","So the inner loop can binary-search for the complement in O(log n)","To shift all negative numbers to the front, allowing a single-direction scan"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Time complexity?","options":["O(n)","O(n log n)","O(n^2)","O(n^3)"],"answer":2,"answerLetter":"C"},{"n":3,"q":"When sum \u003c 0, which pointer moves?","options":["l moves right (bigger value)","r moves left (smaller value)","Both move","i moves forward"],"answer":0,"answerLetter":"A"},{"n":4,"q":"Purpose of `if (i > 0 && nums[i] === nums[i - 1]) continue;`?","options":["Skip anchors whose value cannot reach zero with any later pair (already known to be too large after sorting)","Skip duplicate triplets at the anchor","Reset the inner pointers l and r when the anchor's value didn't change","Avoid re-processing the anchor's mirror position from the previous iteration"],"answer":1,"answerLetter":"B"},{"n":5,"q":"There are THREE dedup checks in the canonical solution. Where do they sit?","options":["All three are at the anchor i, run before the inner loop","Skip duplicate anchors (i), then after a hit skip duplicate l values and duplicate r values","One at i, one at sum \u003c 0, one at sum > 0","All three are inside the while-loop condition"],"answer":1,"answerLetter":"B"},{"n":6,"q":"Besides enabling two-pointer convergence, what second benefit does sorting provide for 3Sum?","options":["It removes all duplicate elements automatically as a side effect of the in-place sort","It clusters equal values adjacently, so duplicates can be skipped by comparing neighbors","It guarantees the resulting triplets emerge in lexicographic order, which the problem statement requires","It guarantees the inner two-pointer loop converges in O(log n) by enabling binary halving"],"answer":1,"answerLetter":"B"},{"n":7,"q":"Why is a hash-set approach messier for 3Sum than for Two Sum?","options":["The inner Two-Sum's hash map must be rebuilt for every anchor, blowing the time bound to O(n³)","You still fix one element and Two-Sum the rest, but deduplicating the resulting triplets requires sorting/stringifying each one — work the sorted two-pointer avoids in place","Hash collisions are more frequent with three numbers because the implicit sum-key clashes with the pair-key","Hashing requires the input to be non-negative, so an extra pass to shift the range is needed"],"answer":1,"answerLetter":"B"},{"n":8,"q":"After recording a hit, why do the dedup-skip loops include the `l \u003c r` guard (e.g. `while (l \u003c r && nums[l] === nums[l + 1])`)?","options":["To stop advancing once the remaining window is too small to form a valid pair complement to the anchor","Without it, on input like [0,0,0,0] the skip could advance l past r and read out of bounds","Because nums[l + 1] would coerce to NaN at the array boundary, breaking the equality check","To prevent the inner loop from recording the same triplet from the right pointer's perspective"],"answer":1,"answerLetter":"B"},{"n":9,"q":"Why does the outer loop stop at `i \u003c nums.length - 2` rather than `i \u003c nums.length`?","options":["The last two anchors can never sum to zero with any pair to their right, so they are safe to skip","Because l = i + 1 and r need to point at two more distinct positions, so i must leave room for a pair after it","The dedup check `nums[i] === nums[i - 1]` would index past the end at the last two positions","Sorted arrays in V8 are stored with two trailing sentinel slots that should not be read as data"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in the canonical 3Sum solution.","answers":["sort","\u003c","++","--","\u003c"]}],"L3":[{"n":1,"prompt":"Write `threeSum(nums)` returning every unique triplet summing to 0. Log `JSON.stringify(threeSum([-1, 0, 1, 2, -1, -4]))`.","expectedOutput":"[[-1,-1,2],[-1,0,1]]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-3sum">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

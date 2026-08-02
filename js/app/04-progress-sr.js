@@ -301,6 +301,10 @@ function loadProgress() {
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
     state.misses = parsed.misses && typeof parsed.misses === 'object' ? parsed.misses : {};
+    // Per-question answer record (share codes). Legacy users get {} — their
+    // level-grained progress is untouched, they simply can't share a result
+    // set until they drill something again.
+    state.answers = parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {};
     // Subscribed study plan. Legacy users (no field) default to 'starter'.
     // Trust any non-empty stored string — getSubscribedPath() already falls
     // back to PATHS[0] at read time when the id is unknown, and we don't want
@@ -439,6 +443,7 @@ function saveProgress() {
     constraintShift: state.constraintShift,
     commandUsage: state.commandUsage,
     misses: state.misses,
+    answers: state.answers,
     subscribedPathId: state.subscribedPathId,
     cramTaskChecks: state.cramTaskChecks,
     cramView: state.cramView,

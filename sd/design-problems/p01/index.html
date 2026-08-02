@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Design a URL Shortener — Canonical Design Problems</title>
+<meta name="description" content="A service (like TinyURL / bit.ly) that maps a long URL to a short unique code and redirects on lookup. The signature challenge is generating short, unique, collision-free codes at write scale while serving an extremely read-heavy redirect workload cheaply.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/design-problems/p01">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Design a URL Shortener — Canonical Design Problems">
+<meta property="og:description" content="A service (like TinyURL / bit.ly) that maps a long URL to a short unique code and redirects on lookup. The signature challenge is generating short, unique, collision-free codes at write scale while serving an extremely read-heavy redirect workload cheaply.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/design-problems/p01">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/design-problems/">Canonical Design Problems</a></p>
+    <h1>Design a URL Shortener</h1>
+    <p class="sharepage__lede">A service (like TinyURL / bit.ly) that maps a long URL to a short unique code and redirects on lookup. The signature challenge is generating short, unique, collision-free codes at write scale while serving an extremely read-heavy redirect workload cheaply.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Canonical Design Problems</span> <span class="ds-chip">10 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Encode a globally-unique auto-increment ID in base62 to get short, guaranteed-collision-free codes without retry loops.</li><li>A hash-and-truncate scheme is simple but needs collision-detect-and-retry; a Key-Generation-Service pre-generates codes offline to remove that from the write path.</li><li>The workload is ~100:1 read:write, so the redirect path must be served from cache + CDN, not the DB.</li><li>Use 301 (permanent) redirects for cacheability, 302 (temporary) if you must count every click for analytics.</li><li>The mapping is a simple KV lookup by short code — a partitioned KV store or sharded SQL keyed on the code fits better than a relational join model.</li><li>Custom aliases, expiry/TTL, and click analytics are additive features layered on the core mapping.</li><li>6-char base62 gives ~56.8B codes; 7 chars gives ~3.5T — size the code length to your projected total URLs.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">10</span></h2>
+    <p class="sharepage__note">Positions 1–10 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Kick off the interview: state the functional and non-functional requirements for a URL shortener, and the assumptions you&#39;d confirm with the interviewer.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Functional: create a short URL from a long one; redirect short → long; optional custom alias; optional expiry; optional click analytics.</li><li>Non-functional: very high availability (a dead redirect breaks every embedded link), low redirect latency (&lt;10ms from edge).</li><li>Explicitly name the read:write skew — reads (redirects) dominate writes (creates) by ~100:1 or more.</li><li>Short codes must be unique, short, and hard to enumerate/guess (optional).</li><li>Scope out of MVP: user accounts, editing, rich dashboards — confirm with interviewer.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Core is two operations: shorten a long URL into a unique short code, and redirect that code back to the original. Around that I&#39;d add optional custom aliases, expiry, and click analytics. Non-functionally this is a read-heavy, availability-critical system — redirects outnumber creates roughly 100:1, links live forever once shared, so I&#39;d target very high availability and single-digit-millisecond redirect latency, with uniqueness and un-guessability on the codes. I&#39;d confirm with the interviewer whether analytics and accounts are in scope for v1.</div>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Do the capacity estimation. Assume 100M new URLs created per day and a 100:1 read:write ratio. Derive write QPS, read QPS, 5-year storage, and pick a code length.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Writes: 100M/day ÷ 86,400s ≈ 1,160 writes/s average; peak ~2–3× ≈ 2,500–3,500/s.</li><li>Reads: 100:1 → 10B redirects/day ÷ 86,400 ≈ 116K/s average; peak ≈ 230K–350K/s.</li><li>Storage: ~500 bytes/record (code, long URL, metadata) × 100M/day × 365 × 5 ≈ 182B records ≈ ~90 TB over 5 years.</li><li>Total URLs over 5y ≈ 182B → need &gt; 182B distinct codes.</li><li>base62: 62^6 ≈ 56.8B (too few), 62^7 ≈ 3.5T (comfortable) → choose 7-char codes.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> At 100M creates/day that&#39;s ~1,160 writes/s average, call it ~3,000/s at peak. With 100:1 read skew we get 10B redirects/day, ~116K reads/s average and ~230K+/s at peak — the read path is the one to engineer hard. At ~500 bytes per record and 5 years that&#39;s about 182 billion URLs, roughly 90 TB of mapping data. Since I need over 182B distinct codes, 6-char base62 (56.8B) is too small, so I&#39;d use 7-char base62 codes, which give ~3.5 trillion possibilities.</div>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Sketch the core API. Give the endpoints and their key parameters and responses.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>POST /urls (or /shorten) with body {longUrl, customAlias?, expiresAt?} → returns {shortUrl/code}.</li><li>GET /{code} → 301/302 redirect to the long URL (the hot path).</li><li>Optional GET /urls/{code}/stats → click analytics.</li><li>Optional DELETE /urls/{code} to remove a mapping.</li><li>Note auth/rate-limiting on create to prevent abuse; the redirect GET is public and unauthenticated.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Two core calls: <code>POST /shorten</code> taking <code>{longUrl, customAlias?, expiresAt?}</code> and returning the short code/URL, and <code>GET /{code}</code> which issues an HTTP redirect to the original — that GET is the hot, public, unauthenticated path. I&#39;d add <code>GET /urls/{code}/stats</code> for analytics and <code>DELETE /urls/{code}</code> for removal. Create is authenticated and rate-limited to curb abuse; the redirect is anonymous and cached aggressively.</div>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Describe the high-level architecture and the data model. What components sit between the client and the store, and what does the mapping row look like?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Path: client → CDN/edge → load balancer → stateless app tier → cache (Redis) → KV/DB store.</li><li>Data model is a single mapping: {code (PK), longUrl, createdAt, expiresAt?, ownerId?, clickCount?}.</li><li>Redirect reads go cache-first; on miss, read DB and backfill cache.</li><li>Writes go to the DB (source of truth) and populate the cache.</li><li>No joins needed — it&#39;s a KV lookup by primary key (the code).</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Client requests hit a CDN/edge, then a load balancer fronting a stateless app tier. The app reads cache-first (Redis) and falls back to a KV/DB store that is the source of truth; the data model is one row keyed by the short code: <code>{code, longUrl, createdAt, expiresAt?, ownerId?, clickCount?}</code>. Redirects are a single primary-key lookup — no joins — so a partitioned KV store shines. Writes persist to the DB and warm the cache. Because it&#39;s a pure key lookup, this scales horizontally by sharding on the code.</div>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span> <span class="ds-chip">crux</span></h3>
+      <p>For generating the short code, which approach gives short, guaranteed-unique codes with NO collision-retry on the write path?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> MD5-hash the long URL and take the first 7 characters</li>
+        <li><span class="sharepage__key">B</span> Generate a random 7-char base62 string and INSERT, retrying on a uniqueness violation</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Take a globally-unique auto-increment ID from a distributed counter and encode it in base62 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Use a version-4 UUID as the code</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Encoding a monotonically-increasing unique ID in base62 is a bijection: every ID maps to a distinct code, so there is never a collision and never a retry. Hash-truncate and random-string both require a uniqueness check with retry-on-collision. A UUID is unique but far too long (36 chars) to be a &#39;short&#39; URL.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>Deep dive: compare the three real short-code strategies — base62 of a counter ID, hash+collision-retry, and a Key-Generation-Service (KGS). What are the tradeoffs, and how do you get unique counter IDs across many app servers?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>base62(counter): shortest codes, zero collisions, but codes are sequential/enumerable and you need a distributed unique-ID source.</li><li>Distributed IDs: a Snowflake-style generator, or hand each app server a pre-allocated ID RANGE (e.g. a Redis/ZooKeeper counter block) so they don&#39;t coordinate per write.</li><li>Hash+retry: stateless and dedupes identical URLs, but truncation causes collisions → an extra read/retry per write, worse at scale.</li><li>KGS: a separate service pre-generates random unused codes offline into a &#39;available codes&#39; table; app servers claim a batch — removes generation AND collision-check from the write path.</li><li>KGS tradeoff: adds a component and a single-point-of-truth for keys; must mark keys used atomically and survive restarts (used vs available partitions).</li><li>Sequential-code enumerability can be mitigated by encoding a shuffled/offset ID or a KGS random pool if guessing is a concern.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> base62 of a unique counter ID is the cleanest: shortest codes and zero collisions, at the cost of needing a distributed unique-ID source and accepting that codes are enumerable — I&#39;d get IDs by handing each app server a pre-allocated range from a central counter (Redis/ZooKeeper) or a Snowflake-style generator, so no per-write coordination. Hash-and-truncate is stateless and dedupes identical URLs but forces a collision-check-and-retry on every write, which degrades at scale. A Key-Generation-Service sidesteps both: it pre-generates random unused codes offline into an &#39;available&#39; table, and app servers atomically claim a batch — moving generation and collision-handling entirely off the write path, at the cost of an extra stateful component whose used/available keys must be tracked reliably. If un-guessability matters, the KGS random pool or an offset/shuffled ID beats plain sequential codes.</div>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span> <span class="ds-chip">crux</span></h3>
+      <p>You return an HTTP redirect on <code>GET /{code}</code>. What&#39;s the tradeoff between 301 and 302 for this service?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> 301 (permanent) lets browsers/CDNs cache the redirect, cutting load — but then you can&#39;t count every click; 302 (temporary/found) forces each click to hit your server so you can log analytics <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> 302 is permanent and cacheable; 301 is temporary and always re-requested</li>
+        <li><span class="sharepage__key">C</span> 301 and 302 are identical to clients; the only difference is the response body</li>
+        <li><span class="sharepage__key">D</span> You should use 307 because 301 changes the HTTP method to GET</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A 301 Permanent redirect is cacheable, so browsers and CDNs remember the mapping and future clicks may never reach your servers — great for offloading the hot path, bad for click analytics. A 302 keeps every click coming back to your service so you can count it, at the cost of load. The choice is a cache-vs-analytics tradeoff; many services default to 302 (or 301 with a tracking pixel/async logging) precisely to preserve counts.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>The mapping is a simple lookup by short code. Which storage choice best fits the access pattern and scale?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A single relational instance with the long URL as the primary key and a B-tree index on the code</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A partitioned/sharded key-value store (or sharded SQL) keyed on the short code, fronted by a cache <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A graph database, since URLs form a link graph</li>
+        <li><span class="sharepage__key">D</span> A single-node in-memory cache as the source of truth with no durable store</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Every read is a point lookup by the short code and there are no joins, so a horizontally-partitioned KV store (or SQL sharded on the code) with a cache in front matches the pattern and the ~90 TB / 230K QPS scale. A single relational node can&#39;t hold the volume or QPS; a graph DB solves a problem this system doesn&#39;t have; and a pure in-memory cache with no durable backing loses the mapping on restart — links must survive.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Cover the read-heavy scaling story: how do you serve ~230K redirect QPS cheaply, and what&#39;s your cache strategy including hit-rate and eviction?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Front the redirect with a CDN/edge cache plus a distributed cache (Redis) tier before the DB.</li><li>Access follows a power law — a small hot set of links drives most traffic, so a modest cache gets a very high hit rate (&gt;90%).</li><li>Cache the code→longUrl mapping with an LRU eviction and a TTL aligned to expiry.</li><li>301 responses let the CDN/browser absorb repeat clicks entirely; 302 keeps them countable but hits Redis, not the DB.</li><li>Cache miss → single DB point-read → backfill cache; DB only sees the long tail + misses.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The redirect path is served almost entirely from cache: a CDN/edge layer plus a Redis tier in front of the DB. Link popularity follows a power law, so a small hot set carries most of the 230K QPS and even a modestly-sized LRU cache lands a &gt;90% hit rate. I cache <code>code → longUrl</code> with a TTL tied to expiry; on a miss it&#39;s one DB point-read plus a cache backfill, so the durable store only sees misses and the long tail. If I use 301s the CDN and browsers absorb repeat clicks outright; with 302s I keep clicks countable but still off the DB by hitting Redis.</div>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Staff-level: what breaks at scale, and how would you handle custom aliases, expiry, analytics hot-spots, and multi-region? Name the key tradeoffs.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Custom aliases: a separate uniqueness namespace — check-and-reserve atomically; reject collisions with the generated space.</li><li>Expiry: store expiresAt, lazily treat expired on read (404) and reap with a background job / TTL; don&#39;t rely on synchronous deletes.</li><li>Analytics hot-spot: incrementing a per-code click counter on every redirect is a write-amplification hot key — instead log click events async (queue → stream) and aggregate offline, or use approximate/count-min counters.</li><li>Multi-region: replicate the read-only mapping to every region for local low-latency redirects; creates can be routed to a primary or use region-scoped ID ranges to avoid ID collisions.</li><li>Availability: mapping is immutable once created, so it&#39;s easy to replicate and cache; favor availability (stale-but-present links) over strong consistency on reads.</li><li>Abuse/security: rate-limit creates, scan for malware/phishing targets, and avoid trivially enumerable sequential codes if that&#39;s a threat.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Custom aliases live in the same code namespace, so I reserve them atomically and reject clashes with generated codes. Expiry is a stored <code>expiresAt</code> enforced lazily on read (404 if past) plus a background reaper — never a synchronous delete. The real hot-spot is analytics: incrementing a counter per redirect turns every click into a write on a hot key, so I emit click events asynchronously to a queue/stream and aggregate offline (or use approximate counters). For geography I replicate the immutable, read-only mapping to every region for local redirects and route creates to a primary or give regions disjoint ID ranges to avoid collisions. Because a mapping never changes once written, I lean toward availability over strict consistency — a present-but-slightly-stale link beats a failed redirect — while rate-limiting creates and screening targets for abuse.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"design-problems","unit":"p01","title":"Design a URL Shortener","codeShape":["Q"],"questions":[{"n":1,"type":"open","prompt":"Kick off the interview: state the functional and non-functional requirements for a URL shortener, and the assumptions you'd confirm with the interviewer.","points":["Functional: create a short URL from a long one; redirect short → long; optional custom alias; optional expiry; optional click analytics.","Non-functional: very high availability (a dead redirect breaks every embedded link), low redirect latency (\u003c10ms from edge).","Explicitly name the read:write skew — reads (redirects) dominate writes (creates) by ~100:1 or more.","Short codes must be unique, short, and hard to enumerate/guess (optional).","Scope out of MVP: user accounts, editing, rich dashboards — confirm with interviewer."]},{"n":2,"type":"open","prompt":"Do the capacity estimation. Assume 100M new URLs created per day and a 100:1 read:write ratio. Derive write QPS, read QPS, 5-year storage, and pick a code length.","points":["Writes: 100M/day ÷ 86,400s ≈ 1,160 writes/s average; peak ~2–3× ≈ 2,500–3,500/s.","Reads: 100:1 → 10B redirects/day ÷ 86,400 ≈ 116K/s average; peak ≈ 230K–350K/s.","Storage: ~500 bytes/record (code, long URL, metadata) × 100M/day × 365 × 5 ≈ 182B records ≈ ~90 TB over 5 years.","Total URLs over 5y ≈ 182B → need > 182B distinct codes.","base62: 62^6 ≈ 56.8B (too few), 62^7 ≈ 3.5T (comfortable) → choose 7-char codes."]},{"n":3,"type":"open","prompt":"Sketch the core API. Give the endpoints and their key parameters and responses.","points":["POST /urls (or /shorten) with body {longUrl, customAlias?, expiresAt?} → returns {shortUrl/code}.","GET /{code} → 301/302 redirect to the long URL (the hot path).","Optional GET /urls/{code}/stats → click analytics.","Optional DELETE /urls/{code} to remove a mapping.","Note auth/rate-limiting on create to prevent abuse; the redirect GET is public and unauthenticated."]},{"n":4,"type":"open","prompt":"Describe the high-level architecture and the data model. What components sit between the client and the store, and what does the mapping row look like?","points":["Path: client → CDN/edge → load balancer → stateless app tier → cache (Redis) → KV/DB store.","Data model is a single mapping: {code (PK), longUrl, createdAt, expiresAt?, ownerId?, clickCount?}.","Redirect reads go cache-first; on miss, read DB and backfill cache.","Writes go to the DB (source of truth) and populate the cache.","No joins needed — it's a KV lookup by primary key (the code)."]},{"n":5,"type":"mc","prompt":"For generating the short code, which approach gives short, guaranteed-unique codes with NO collision-retry on the write path?","options":["MD5-hash the long URL and take the first 7 characters","Generate a random 7-char base62 string and INSERT, retrying on a uniqueness violation","Take a globally-unique auto-increment ID from a distributed counter and encode it in base62","Use a version-4 UUID as the code"],"answer":2,"answerLetter":"C"},{"n":6,"type":"open","prompt":"Deep dive: compare the three real short-code strategies — base62 of a counter ID, hash+collision-retry, and a Key-Generation-Service (KGS). What are the tradeoffs, and how do you get unique counter IDs across many app servers?","points":["base62(counter): shortest codes, zero collisions, but codes are sequential/enumerable and you need a distributed unique-ID source.","Distributed IDs: a Snowflake-style generator, or hand each app server a pre-allocated ID RANGE (e.g. a Redis/ZooKeeper counter block) so they don't coordinate per write.","Hash+retry: stateless and dedupes identical URLs, but truncation causes collisions → an extra read/retry per write, worse at scale.","KGS: a separate service pre-generates random unused codes offline into a 'available codes' table; app servers claim a batch — removes generation AND collision-check from the write path.","KGS tradeoff: adds a component and a single-point-of-truth for keys; must mark keys used atomically and survive restarts (used vs available partitions).","Sequential-code enumerability can be mitigated by encoding a shuffled/offset ID or a KGS random pool if guessing is a concern."]},{"n":7,"type":"mc","prompt":"You return an HTTP redirect on `GET /{code}`. What's the tradeoff between 301 and 302 for this service?","options":["301 (permanent) lets browsers/CDNs cache the redirect, cutting load — but then you can't count every click; 302 (temporary/found) forces each click to hit your server so you can log analytics","302 is permanent and cacheable; 301 is temporary and always re-requested","301 and 302 are identical to clients; the only difference is the response body","You should use 307 because 301 changes the HTTP method to GET"],"answer":0,"answerLetter":"A"},{"n":8,"type":"mc","prompt":"The mapping is a simple lookup by short code. Which storage choice best fits the access pattern and scale?","options":["A single relational instance with the long URL as the primary key and a B-tree index on the code","A partitioned/sharded key-value store (or sharded SQL) keyed on the short code, fronted by a cache","A graph database, since URLs form a link graph","A single-node in-memory cache as the source of truth with no durable store"],"answer":1,"answerLetter":"B"},{"n":9,"type":"open","prompt":"Cover the read-heavy scaling story: how do you serve ~230K redirect QPS cheaply, and what's your cache strategy including hit-rate and eviction?","points":["Front the redirect with a CDN/edge cache plus a distributed cache (Redis) tier before the DB.","Access follows a power law — a small hot set of links drives most traffic, so a modest cache gets a very high hit rate (>90%).","Cache the code→longUrl mapping with an LRU eviction and a TTL aligned to expiry.","301 responses let the CDN/browser absorb repeat clicks entirely; 302 keeps them countable but hits Redis, not the DB.","Cache miss → single DB point-read → backfill cache; DB only sees the long tail + misses."]},{"n":10,"type":"open","prompt":"Staff-level: what breaks at scale, and how would you handle custom aliases, expiry, analytics hot-spots, and multi-region? Name the key tradeoffs.","points":["Custom aliases: a separate uniqueness namespace — check-and-reserve atomically; reject collisions with the generated space.","Expiry: store expiresAt, lazily treat expired on read (404) and reap with a background job / TTL; don't rely on synchronous deletes.","Analytics hot-spot: incrementing a per-code click counter on every redirect is a write-amplification hot key — instead log click events async (queue → stream) and aggregate offline, or use approximate/count-min counters.","Multi-region: replicate the read-only mapping to every region for local low-latency redirects; creates can be routed to a primary or use region-scoped ID ranges to avoid ID collisions.","Availability: mapping is immutable once created, so it's easy to replicate and cache; favor availability (stale-but-present links) over strong consistency on reads.","Abuse/security: rate-limit creates, scan for malware/phishing targets, and avoid trivially enumerable sequential codes if that's a threat."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/design-problems/p01">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

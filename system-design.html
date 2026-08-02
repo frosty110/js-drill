@@ -9,8 +9,12 @@
      (the legacy --bg/--panel/--accent names resolve as aliases inside ds/tokens.css). -->
 <link rel="stylesheet" href="ds/tokens.css">
 <link rel="stylesheet" href="ds/components.css">
+<link rel="stylesheet" href="css/12-ds-share.css">
 <script src="ds/icons.js"></script>
 <script src="js/storage.js"></script>
+<!-- Share URLs — see docs/share-urls.md -->
+<script src="js/sharecode.js"></script>
+<script src="js/routes.js"></script>
 <script src="js/infographic-viewer.js"></script>
 <!-- Optional cross-device sync (Supabase). Skipped at runtime if config missing. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -269,9 +273,15 @@ function persist() { if (window.DrillStorage) DrillStorage.saveSystemDesign(prog
 function boxOf(key) { return progress.boxes[key] || { box: 0, seen: 0, good: 0, again: 0, due: 0, last: 0 }; }
 function isMastered(key) { return boxOf(key).box >= MASTER_BOX; }
 function isDue(key) { const b = boxOf(key); return b.box === 0 || b.due <= Date.now(); }
-function grade(key, outcome) {   // 'good' | 'partial' | 'again'
+function grade(key, outcome, pick) {   // 'good' | 'partial' | 'again'
   const b = progress.boxes[key] || { box: 0, seen: 0, good: 0, again: 0, due: 0, last: 0 };
   b.seen++; b.last = Date.now();
+  // Share capture: the Leitner counters say how OFTEN this was missed, never
+  // how the LAST attempt went — which is what a share code encodes. `lastPick`
+  // is the authored option index on a multiple-choice question, so a share
+  // link can say which distractor pulled the user, not merely that they missed.
+  b.lastOutcome = outcome;
+  if (typeof pick === 'number') b.lastPick = pick;
   if (outcome === 'good') { b.good++; b.box = Math.min(b.box + 1, MAX_BOX); }
   else if (outcome === 'partial') { b.box = Math.max(b.box, 1); }   // hold position, resurface soon
   else { b.again++; b.box = 1; }
@@ -586,10 +596,12 @@ async function renderChapterDetail(t, chId) {
       <div class="cta-row">
         <button class="cta ds-btn ds-btn--primary" id="drill-all">▶ Drill all <span class="due-pill" style="background:rgba(23,24,28,.25);color:inherit">${items.length}</span></button>
         ${cruxCount ? `<button class="cta ds-btn ds-btn--ghost" id="drill-crux">⚡ Crux only <span class="due-pill" style="background:var(--ds-accent-soft);color:var(--ds-accent-hi)">${cruxCount}</span></button>` : ''}
+        <button class="cta ds-btn ds-btn--ghost" id="share-unit" title="Share a link carrying your results, for an AI to drill you from">Share</button>
       </div>
     </div>`;
   document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
   document.getElementById('drill-all').addEventListener('click', () => startChapter(t, chId));
+  document.getElementById('share-unit').addEventListener('click', () => openShareSheet(t, ch));
   const cx = document.getElementById('drill-crux'); if (cx) cx.addEventListener('click', () => startCrux(t, chId));
   if (INFOGRAPHIC_TOPICS.has(t)) renderLessonInfographics(document.getElementById('unit-infographic'), t, ch, infographicSet);
   if (diagrams.length && t !== 'design-problems') {
@@ -734,7 +746,7 @@ function selectAnswer(choice) {
   const q = it.q;
   const diagrams = diagramsForItem(it);
   const correct = choice === q.answer;
-  grade(it.key, correct ? 'good' : 'again');
+  grade(it.key, correct ? 'good' : 'again', choice);
   applyOutcome(correct);
 
   document.querySelectorAll('.ds-opt').forEach((el, i) => {
@@ -791,6 +803,116 @@ function showNext() {
 function nextQuestion() { session.pos++; renderQuestion(); }
 
 // ============================================================================
+// SHARE — a URL carrying this unit's result set, for an AI to tutor from
+// ============================================================================
+// Built on demand from the Leitner boxes; no share records, no cache. The
+// path resolves to a static page (tools/build-share-pages.js) that carries
+// the questions, the model answers and the legend for the code — so an agent
+// handed the URL can decode the result set with nothing but what it fetches.
+// Topic-dependent mix: DDIA / interview-method / components are mostly MC (so
+// their codes read as letters, carrying the distractor), while the canonical
+// design problems are ~78% open self-graded (Y/p/n). See docs/share-urls.md.
+
+function unitShareCode(t, ch) {
+  if (!window.DrillShare) return '';
+  return DrillShare.encodeUnit(chapterItems(t, ch).map(it => {
+    const b = progress.boxes[it.key];
+    if (!b || !b.lastOutcome) return null;                    // never attempted → '-'
+    if (it.type === 'mc' && typeof b.lastPick === 'number') {
+      return { picked: b.lastPick, correct: it.q.answer };
+    }
+    return b.lastOutcome;
+  }));
+}
+
+function unitShareUrl(t, ch) {
+  if (!window.DrillRoutes) return '';
+  return DrillRoutes.shareUrl('sdUnit', { topic: t, unit: ch.id }, unitShareCode(t, ch));
+}
+
+function buildUnitAiPayload(t, ch) {
+  const url = unitShareUrl(t, ch);
+  const code = unitShareCode(t, ch);
+  const s = DrillShare.summarize(DrillShare.decodeUnit(code));
+  return [
+    `I'm preparing for a system design interview and just drilled "${ch.title}" (${META[t].title}). Here's the page, with my results encoded in the URL:`,
+    '',
+    url,
+    '',
+    'Open it — it has every question, the model answer and the rubric points, plus a legend for the `s=` code. That code is my result set, one character per question in the order they appear on the page.',
+    '',
+    `I self-graded ${s.full} solid, ${s.partial} partial, ${s.missed} missed${s.unattempted ? `, ${s.unattempted} unattempted` : ''} out of ${s.total}.`,
+    '',
+    'These are spoken-answer questions, so you only have my self-grade, not my words. Start with the ones I marked partial or missed: ask me to answer them out loud to you now, one at a time, then hold me to the rubric points on the page and tell me what a strong answer adds.'
+  ].join('\n');
+}
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch (_) {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-9999px';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+  } catch (_) { return false; }
+}
+
+function openShareSheet(t, ch) {
+  if (!window.DrillShare) return;
+  const url = unitShareUrl(t, ch);
+  const code = unitShareCode(t, ch);
+  const s = DrillShare.summarize(DrillShare.decodeUnit(code));
+  const hasCode = /[A-Ha-hYpn]/.test(code);
+
+  document.getElementById('share-sheet')?.remove();
+  const scrim = document.createElement('div');
+  scrim.className = 'ds-root ds-scrim is-open';
+  scrim.id = 'share-sheet';
+  scrim.innerHTML = `
+    <div class="ds-sheet ds-sheet--scroll" role="dialog" aria-modal="true" aria-label="Share this unit">
+      <div class="share-head">
+        <h2 class="ds-h2">Share</h2>
+        <button class="ds-iconbtn" data-share-close aria-label="Close share">✕</button>
+      </div>
+      <p class="share-lede">A link to <strong>${esc(ch.title)}</strong>${hasCode ? ` carrying your results — ${s.full} solid, ${s.partial} partial, ${s.missed} missed` : ''}. Paste it to an AI to be drilled on exactly what you're shaky on.</p>
+      <input class="ds-field share-url" data-share-url readonly value="${esc(url)}" aria-label="Share URL" spellcheck="false">
+      <p class="share-code">${hasCode
+        ? `Your results: <code>${esc(code)}</code> — <code>Y</code> got it, <code>p</code> partial, <code>n</code> missed, <code>-</code> not attempted.`
+        : `You haven't drilled this unit yet, so the link carries the questions only.`}</p>
+      <div class="share-actions">
+        <button class="ds-btn ds-btn--primary ds-btn--block" data-share-copy>Copy link</button>
+        <button class="ds-btn ds-btn--block" data-share-ai>Copy for AI</button>
+      </div>
+      <p class="share-foot">Opens a plain page with every question, the model answers and a legend for the code — no sign-in, nothing stored anywhere.</p>
+    </div>`;
+  document.body.appendChild(scrim);
+
+  const close = () => scrim.remove();
+  scrim.addEventListener('click', e => { if (e.target === scrim) close(); });
+  scrim.querySelector('[data-share-close]').addEventListener('click', close);
+  const field = scrim.querySelector('[data-share-url]');
+  field.addEventListener('focus', () => field.select());
+
+  const flash = (btn, msg) => {
+    const original = btn.textContent;
+    btn.textContent = msg; btn.disabled = true;
+    setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1600);
+  };
+  scrim.querySelector('[data-share-copy]').addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      try { await navigator.share({ title: ch.title, url }); return; } catch (_) {}
+    }
+    flash(btn, await copyText(url) ? '✓ Copied' : '✗ Copy failed');
+  });
+  scrim.querySelector('[data-share-ai]').addEventListener('click', async e => {
+    flash(e.currentTarget, await copyText(buildUnitAiPayload(t, ch)) ? '✓ Copied' : '✗ Copy failed');
+  });
+}
+
+// ============================================================================
 // SUMMARY
 // ============================================================================
 function renderSummary() {
@@ -807,10 +929,16 @@ function renderSummary() {
       <div class="cta-row" style="justify-content:center;margin-top:22px">
         <button class="cta ds-btn ds-btn--primary" id="again-btn">${session.mixed ? '⚡ Another mixed set' : (session.mode === 'crux' ? '⚡ Crux again' : '↻ Drill again')}</button>
         <button class="cta ds-btn ds-btn--ghost" id="back-btn">${session.mixed ? '← All chapters' : '← Back'}</button>
+        ${session.mixed ? '' : `<button class="cta ds-btn ds-btn--ghost" id="share-session" title="Share a link carrying your results, for an AI to drill you from">Share</button>`}
       </div>
     </div>`;
   const chId = session.chId;
   const mode = session.mode;
+  // Right after a session is the moment the result set is worth handing to an
+  // AI — the misses are fresh and unexplained. Mixed reviews span chapters, so
+  // they have no single unit URL to point at.
+  const shareBtn = document.getElementById('share-session');
+  if (shareBtn) shareBtn.addEventListener('click', () => openShareSheet(t, CH[t][chId]));
   document.getElementById('back-btn').addEventListener('click', () => session.mixed ? renderTopicHome(t) : renderChapterDetail(t, chId));
   document.getElementById('again-btn').addEventListener('click', () =>
     session.mixed ? startMixed(t) : (mode === 'crux' ? startCrux(t, chId) : startChapter(t, chId)));

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Async iterators (for await…of) — JS Drill</title>
+<meta name="description" content="Async iterables expose `[Symbol.asyncIterator]` and let `for await...of` consume values that arrive over time.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/s-async-iter">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Async iterators (for await…of) — JS Drill">
+<meta property="og:description" content="Async iterables expose `[Symbol.asyncIterator]` and let `for await...of` consume values that arrive over time.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/s-async-iter">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Iterators &amp; Generators</p>
+    <h1>Async iterators (for await…of)</h1>
+    <p class="sharepage__lede">Async iterables expose `[Symbol.asyncIterator]` and let `for await...of` consume values that arrive over time.</p>
+    <p class="sharepage__meta"><span class="ds-chip">syntax</span> <span class="ds-chip">Iterators &amp; Generators</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Build an async iterable that yields <code>Promise.resolve(n)</code> for n = 1, 2, 3. Consume with <code>for await...of</code> and log each value.</p>
+    <p class="sharepage__note">Expected output: <code>1
+2
+3</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// Sync iterator vs async iterator:
+//   sync:  next() -&gt; { value, done }
+//   async: next() -&gt; Promise&lt;{ value, done }&gt;
+
+const asyncIterable = {
+  [Symbol.asyncIterator]() {
+    let i = 1;
+    return {
+      next() {
+        if (i &lt;= 3) {
+          return Promise.resolve({ value: i++, done: false });
+        }
+        return Promise.resolve({ value: undefined, done: true });
+      }
+    };
+  }
+};
+
+(async () =&gt; {
+  for await (const n of asyncIterable) {
+    // n is the resolved value (1, then 2, then 3)
+  }
+})();</code></pre>
+    <ul class="sharepage__notes"><li><code>for await...of</code> is ONLY valid inside an <code>async</code> function (or top-level module).</li><li><code>[Symbol.asyncIterator]</code> is a DIFFERENT well-known symbol from <code>[Symbol.iterator]</code> — don&#39;t mix them up.</li><li><code>next()</code> returns a Promise that resolves to <code>{ value, done }</code> — the wrapper, not the value, is async.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> What does an async iterator&#39;s <code>next()</code> return?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> { value, done }</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Promise&lt;{ value, done }&gt; <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Promise&lt;value&gt;</li>
+        <li><span class="sharepage__key">D</span> AsyncGenerator&lt;value&gt;</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Where is <code>for await...of</code> legal?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Anywhere</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Only inside an async function or top-level module <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Only inside a generator</li>
+        <li><span class="sharepage__key">D</span> Only inside try/catch</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Which well-known symbol does <code>for await...of</code> look up FIRST when iterating an object?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Symbol.iterator — async iteration just awaits each sync value</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Symbol.asyncIterator <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Symbol.for(&#39;asyncIterator&#39;) — the cross-realm registered version</li>
+        <li><span class="sharepage__key">D</span> Symbol.asyncIterator on the returned iterator, not the iterable itself</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> What happens if you use <code>for...of</code> (no await) on an object with only <code>[Symbol.asyncIterator]</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It works, JS auto-awaits each value</li>
+        <li><span class="sharepage__key">B</span> It logs Promises instead of values</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> TypeError: not iterable <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It throws after the first iteration</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sync <code>for...of</code> looks up <code>[Symbol.iterator]</code>, which isn&#39;t defined here.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the async iterable that yields 1 then 2.</p>
+      <pre class="sharepage__code"><code class="language-js">const it = {
+  [Symbol.___]() {
+    let i = 1;
+    return {
+      ___() {
+        return i &lt;= 2
+          ? Promise.resolve({ value: i___, done: ___ })
+          : Promise.resolve({ value: undefined, done: true });
+      }
+    };
+  }
+};
+(async () =&gt; {
+  for ___ (const n of it) {
+    console.log(n);
+  }
+})();</code></pre>
+      <p><strong>Answers:</strong> <code>asyncIterator</code>, <code>next</code>, <code>++</code>, <code>false</code>, <code>await</code></p>
+      <p class="sharepage__note">Expected output: <code>1
+2</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Different range, same protocol — fill the Promise wrapper used by next() and the <code>for await...of</code> keyword between <code>const n</code> and <code>it</code>.</p>
+      <pre class="sharepage__code"><code class="language-js">const it = {
+  [Symbol.___]() {
+    let i = 10;
+    return {
+      next() {
+        return ___.resolve(
+          i &lt;= 12
+            ? { value: i++, done: ___ }
+            : { value: undefined, done: true }
+        );
+      }
+    };
+  }
+};
+(async () =&gt; {
+  for ___ (const n ___ it) {
+    console.log(n);
+  }
+})();</code></pre>
+      <p><strong>Answers:</strong> <code>asyncIterator</code>, <code>Promise</code>, <code>false</code>, <code>await</code>, <code>of</code></p>
+      <p class="sharepage__note">Expected output: <code>10
+11
+12</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Build an async iterable that yields <code>Promise.resolve(n)</code> for n = 1, 2, 3. Consume with <code>for await...of</code> and log each value.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Define <code>[Symbol.asyncIterator]()</code> returning an object with <code>next()</code>.</li><li><code>next()</code> should return <code>Promise.resolve({ value, done })</code>.</li><li>Wrap your <code>for await</code> in an <code>(async () =&gt; { ... })()</code> IIFE.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">const asyncIterable = {
+  [Symbol.asyncIterator]() {
+    let i = 1;
+    return {
+      next() {
+        if (i &lt;= 3) {
+          return Promise.resolve({ value: i++, done: false });
+        }
+        return Promise.resolve({ value: undefined, done: true });
+      }
+    };
+  }
+};
+(async () =&gt; {
+  for await (const n of asyncIterable) {
+    console.log(n);
+  }
+})();</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"s-async-iter","title":"Async iterators (for await…of)","section":"Iterators & Generators","track":"syntax","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does an async iterator's `next()` return?","options":["{ value, done }","Promise\u003c{ value, done }>","Promise\u003cvalue>","AsyncGenerator\u003cvalue>"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Where is `for await...of` legal?","options":["Anywhere","Only inside an async function or top-level module","Only inside a generator","Only inside try/catch"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Which well-known symbol does `for await...of` look up FIRST when iterating an object?","options":["Symbol.iterator — async iteration just awaits each sync value","Symbol.asyncIterator","Symbol.for('asyncIterator') — the cross-realm registered version","Symbol.asyncIterator on the returned iterator, not the iterable itself"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What happens if you use `for...of` (no await) on an object with only `[Symbol.asyncIterator]`?","options":["It works, JS auto-awaits each value","It logs Promises instead of values","TypeError: not iterable","It throws after the first iteration"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in the async iterable that yields 1 then 2.","answers":["asyncIterator","next","++","false","await"]},{"n":2,"prompt":"Different range, same protocol — fill the Promise wrapper used by next() and the `for await...of` keyword between `const n` and `it`.","answers":["asyncIterator","Promise","false","await","of"]}],"L3":[{"n":1,"prompt":"Build an async iterable that yields `Promise.resolve(n)` for n = 1, 2, 3. Consume with `for await...of` and log each value.","expectedOutput":"1\n2\n3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/s-async-iter">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

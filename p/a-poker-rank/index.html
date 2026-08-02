@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poker Hand Rank — JS Drill</title>
+<meta name="description" content="Classify a 5-card poker hand into its category. Parse `rank+suit` strings, build a rank histogram, check straight + flush flags, then walk the ranking ladder from royal-flush downward.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-poker-rank">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Poker Hand Rank — JS Drill">
+<meta property="og:description" content="Classify a 5-card poker hand into its category. Parse `rank+suit` strings, build a rank histogram, check straight + flush flags, then walk the ranking ladder from royal-flush downward.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-poker-rank">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Poker Hand Rank</h1>
+    <p class="sharepage__lede">Classify a 5-card poker hand into its category. Parse `rank+suit` strings, build a rank histogram, check straight + flush flags, then walk the ranking ladder from royal-flush downward.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement rankHand(cards). Log ranks for: royal flush (TS-AS spades), four kings, full house (KKK + 22), wheel straight (A-5 mixed), pair of nines.</p>
+    <p class="sharepage__note">Expected output: <code>royal-flush
+four-of-a-kind
+full-house
+straight
+pair</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>Feature extraction + top-down ladder</strong> · <code>O(1) / O(1)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-js">function rankHand(cards) {
+  const order = &#39;23456789TJQKA&#39;;
+  // Normalize &#39;10&#39; to &#39;T&#39; so every rank is a single char (indexable + sortable).
+  const ranks = cards.map(c =&gt; c.slice(0, -1) === &#39;10&#39; ? &#39;T&#39; : c.slice(0, -1));
+  const suits = cards.map(c =&gt; c.slice(-1));
+  const idx = ranks.map(r =&gt; order.indexOf(r)).sort((a, b) =&gt; a - b);
+  const counts = {};
+  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;
+  // Sort counts desc: [4,1]=four, [3,2]=full-house, [2,2,1]=two-pair.
+  const groups = Object.values(counts).sort((a, b) =&gt; b - a);
+  const flush = suits.every(s =&gt; s === suits[0]);
+  let straight = idx.every((v, i) =&gt; i === 0 || v === idx[i-1] + 1);
+  // Wheel straight (A-2-3-4-5): ace is low — indices aren&#39;t consecutive otherwise.
+  if (!straight &amp;&amp; ranks.includes(&#39;A&#39;) &amp;&amp; ranks.includes(&#39;2&#39;) &amp;&amp; ranks.includes(&#39;3&#39;) &amp;&amp; ranks.includes(&#39;4&#39;) &amp;&amp; ranks.includes(&#39;5&#39;)) straight = true;
+  // Ladder checked top-down — first match wins; stronger categories sit above weaker.
+  if (straight &amp;&amp; flush &amp;&amp; idx[0] === order.indexOf(&#39;T&#39;)) return &#39;royal-flush&#39;;
+  if (straight &amp;&amp; flush)                                   return &#39;straight-flush&#39;;
+  if (groups[0] === 4)                                     return &#39;four-of-a-kind&#39;;
+  if (groups[0] === 3 &amp;&amp; groups[1] === 2)                  return &#39;full-house&#39;;
+  if (flush)                                               return &#39;flush&#39;;
+  if (straight)                                            return &#39;straight&#39;;
+  if (groups[0] === 3)                                     return &#39;three-of-a-kind&#39;;
+  if (groups[0] === 2 &amp;&amp; groups[1] === 2)                  return &#39;two-pair&#39;;
+  if (groups[0] === 2)                                     return &#39;pair&#39;;
+  return &#39;high-card&#39;;
+}</code></pre>
+    <ul class="sharepage__notes"><li>Normalize &#39;10&#39; to a single character (&#39;T&#39;) so rank ordering uses a simple string index.</li><li>The rank ladder must be checked TOP-DOWN: a full-house also matches three-of-a-kind, but we return the stronger category first.</li><li>Wheel straight (A-2-3-4-5) is the special case where the ace is low — handle it explicitly because indices wouldn&#39;t be consecutive otherwise.</li><li>Time O(1), Space O(1) — hand is always 5 cards; all loops and arrays are bounded by a constant.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Groups-signature dispatch table <code>O(1) / O(1)</code></h3>
+      <p>Reach for this when an interviewer says &#39;can you make the ladder more declarative?&#39; or you want to collapse the group-based categories into a single Map lookup. The same feature extraction (groups + flush + straight) feeds a string key like &#39;4,1&#39; or &#39;3,2&#39; that looks up the category in a table. Reads more like a config than control flow — easier to extend (add a new variant just by adding a row), harder to re-order accidentally. Flush + straight + royal still need explicit if-checks since they don&#39;t reduce to a pure group signature.</p>
+      <pre class="sharepage__code"><code class="language-js">function rankHand(cards) {
+  const order = &#39;23456789TJQKA&#39;;
+  const ranks = cards.map(c =&gt; c.slice(0, -1) === &#39;10&#39; ? &#39;T&#39; : c.slice(0, -1));
+  const suits = cards.map(c =&gt; c.slice(-1));
+  const idx = ranks.map(r =&gt; order.indexOf(r)).sort((a, b) =&gt; a - b);
+  const counts = {};
+  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;
+  const groups = Object.values(counts).sort((a, b) =&gt; b - a);
+  const flush = suits.every(s =&gt; s === suits[0]);
+  let straight = idx.every((v, i) =&gt; i === 0 || v === idx[i-1] + 1);
+  if (!straight &amp;&amp; ranks.includes(&#39;A&#39;) &amp;&amp; ranks.includes(&#39;2&#39;) &amp;&amp; ranks.includes(&#39;3&#39;) &amp;&amp; ranks.includes(&#39;4&#39;) &amp;&amp; ranks.includes(&#39;5&#39;)) straight = true;
+  // Flush/straight/royal first — they don&#39;t reduce to a pure group signature.
+  if (straight &amp;&amp; flush &amp;&amp; idx[0] === order.indexOf(&#39;T&#39;)) return &#39;royal-flush&#39;;
+  if (straight &amp;&amp; flush) return &#39;straight-flush&#39;;
+  if (flush) return &#39;flush&#39;;
+  if (straight) return &#39;straight&#39;;
+  // Now dispatch on the sorted-groups signature.
+  const table = {
+    &#39;4,1&#39;:     &#39;four-of-a-kind&#39;,
+    &#39;3,2&#39;:     &#39;full-house&#39;,
+    &#39;3,1,1&#39;:   &#39;three-of-a-kind&#39;,
+    &#39;2,2,1&#39;:   &#39;two-pair&#39;,
+    &#39;2,1,1,1&#39;: &#39;pair&#39;
+  };
+  return table[groups.join(&#39;,&#39;)] || &#39;high-card&#39;;
+}
+console.log(rankHand([&#39;10S&#39;,&#39;JS&#39;,&#39;QS&#39;,&#39;KS&#39;,&#39;AS&#39;]));
+console.log(rankHand([&#39;KH&#39;,&#39;KD&#39;,&#39;KS&#39;,&#39;KC&#39;,&#39;3D&#39;]));
+console.log(rankHand([&#39;KH&#39;,&#39;KD&#39;,&#39;KS&#39;,&#39;2H&#39;,&#39;2D&#39;]));
+console.log(rankHand([&#39;AH&#39;,&#39;2D&#39;,&#39;3S&#39;,&#39;4C&#39;,&#39;5H&#39;]));
+console.log(rankHand([&#39;9H&#39;,&#39;9D&#39;,&#39;5S&#39;,&#39;3C&#39;,&#39;2H&#39;]));</code></pre>
+      <ul class="sharepage__notes"><li>The key insight: every group-based category has a unique sorted-counts signature, so <code>groups.join(&#39;,&#39;)</code> is a perfect-hash dispatch key — no need to compare element-by-element.</li><li>Flush, straight, straight-flush, and royal-flush can&#39;t go in the table because they don&#39;t depend on the groups signature alone — they cross over with [1,1,1,1,1]. Handle them explicitly above the dispatch.</li><li>Default branch (<code>|| &#39;high-card&#39;</code>) handles the [1,1,1,1,1] non-flush, non-straight case — no signature, no flush, no straight means nothing matches.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why check <code>royal-flush</code> and <code>straight-flush</code> BEFORE <code>four-of-a-kind</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Checking flush-based hands first lets the function skip computing the rank histogram entirely on those branches</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The categories are ordered by strength — the first matching category wins, and royal/straight-flush are stronger than four-of-a-kind <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A four-of-a-kind whose four cards share a suit must be reclassified as a straight-flush by Hoyle&#39;s rules</li>
+        <li><span class="sharepage__key">D</span> Four-of-a-kind shares the <code>groups[0]===4</code> shape with a straight-flush, so the more specific predicate must run first</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> What is <code>groups</code> if the hand is a full house?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> [2, 2, 1] — the pair + pair + odd-rank-out is the structural fingerprint</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> [3, 2] <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> [5] — all five cards share a single bucket because the full house collapses the histogram</li>
+        <li><span class="sharepage__key">D</span> [3, 1, 1] — the trips dominate; the pair is recorded as two singletons</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why rewrite &#39;10&#39; to &#39;T&#39; before indexing into &#39;23456789TJQKA&#39;?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>&#39;10&#39;.indexOf</code> in a single-char rank string returns -1, which would mis-sort the ten below the deuce</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> So every rank is a single character — index lookup and sorting stay simple <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> <code>String.prototype.slice(0, -1)</code> returns the full string when the slice length is 2, so &#39;10H&#39; would parse as &#39;10H&#39; instead of &#39;10&#39;</li>
+        <li><span class="sharepage__key">D</span> The order string <code>&#39;23456789TJQKA&#39;</code> uses &#39;T&#39; specifically because &#39;10&#39; would collide with the &#39;1&#39; suit-prefix used in some decks</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> How is a flush detected from the parsed <code>suits</code> array?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> All 5 suits identical <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Three or more matching suits — the standard &#39;majority-suit&#39; flush rule</li>
+        <li><span class="sharepage__key">C</span> At least one suit appears twice — a single pair of same-suit cards establishes the flush flag</li>
+        <li><span class="sharepage__key">D</span> The set of unique suits has size 1 OR 2 — same-color (red/black) qualifies as a flush</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the flush + four-of-a-kind detection.</p>
+      <pre class="sharepage__code"><code class="language-js">function check(cards) {
+  const ranks = cards.___(c =&gt; c.slice(0, -1));
+  const suits = cards.map(c =&gt; c.slice(-1));
+  const counts = {};
+  for (const r ___ ranks) counts[r] = (counts[r] ___ 0) + 1;
+  const groups = Object.___(counts).sort((a, b) =&gt; b - a);
+  const flush = suits.___(s =&gt; s === suits[___]);
+  if (groups[0] === ___) return &#39;four-of-a-kind&#39;;
+  if (flush) return &#39;flush&#39;;
+  return &#39;other&#39;;
+}
+console.log(check([&#39;9H&#39;,&#39;9D&#39;,&#39;9S&#39;,&#39;9C&#39;,&#39;2H&#39;]));
+console.log(check([&#39;2H&#39;,&#39;5H&#39;,&#39;9H&#39;,&#39;JH&#39;,&#39;KH&#39;]));</code></pre>
+      <p><strong>Answers:</strong> <code>map</code>, <code>of</code>, <code>||</code>, <code>values</code>, <code>every</code>, <code>0</code>, <code>4</code></p>
+      <p class="sharepage__note">Expected output: <code>four-of-a-kind
+flush</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement rankHand(cards). Log ranks for: royal flush (TS-AS spades), four kings, full house (KKK + 22), wheel straight (A-5 mixed), pair of nines.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Normalize &#39;10&#39; to a single character first — indexing into a rank string then becomes trivial.</li><li>Build a rank histogram and sort counts descending. <code>[4,1]</code> = four-of-a-kind, <code>[3,2]</code> = full-house, <code>[2,2,1]</code> = two-pair.</li><li>Check the categories TOP-DOWN: a full house also matches three-of-a-kind, but royal/straight-flush beat everything.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function rankHand(cards) {
+  const order = &#39;23456789TJQKA&#39;;
+  // Normalize &#39;10&#39; to &#39;T&#39; so every rank is a single char (indexable + sortable).
+  const ranks = cards.map(c =&gt; c.slice(0, -1) === &#39;10&#39; ? &#39;T&#39; : c.slice(0, -1));
+  const suits = cards.map(c =&gt; c.slice(-1));
+  const idx = ranks.map(r =&gt; order.indexOf(r)).sort((a, b) =&gt; a - b);
+  const counts = {};
+  for (const r of ranks) counts[r] = (counts[r] || 0) + 1;
+  // Sort counts desc: [4,1]=four, [3,2]=full-house, [2,2,1]=two-pair.
+  const groups = Object.values(counts).sort((a, b) =&gt; b - a);
+  const flush = suits.every(s =&gt; s === suits[0]);
+  let straight = idx.every((v, i) =&gt; i === 0 || v === idx[i-1] + 1);
+  // Wheel straight (A-2-3-4-5): ace is low — indices aren&#39;t consecutive otherwise.
+  if (!straight &amp;&amp; ranks.includes(&#39;A&#39;) &amp;&amp; ranks.includes(&#39;2&#39;) &amp;&amp; ranks.includes(&#39;3&#39;) &amp;&amp; ranks.includes(&#39;4&#39;) &amp;&amp; ranks.includes(&#39;5&#39;)) straight = true;
+  // Ladder checked top-down — first match wins; stronger categories sit above weaker.
+  if (straight &amp;&amp; flush &amp;&amp; idx[0] === order.indexOf(&#39;T&#39;)) return &#39;royal-flush&#39;;
+  if (straight &amp;&amp; flush) return &#39;straight-flush&#39;;
+  if (groups[0] === 4) return &#39;four-of-a-kind&#39;;
+  if (groups[0] === 3 &amp;&amp; groups[1] === 2) return &#39;full-house&#39;;
+  if (flush) return &#39;flush&#39;;
+  if (straight) return &#39;straight&#39;;
+  if (groups[0] === 3) return &#39;three-of-a-kind&#39;;
+  if (groups[0] === 2 &amp;&amp; groups[1] === 2) return &#39;two-pair&#39;;
+  if (groups[0] === 2) return &#39;pair&#39;;
+  return &#39;high-card&#39;;
+}
+console.log(rankHand([&#39;10S&#39;,&#39;JS&#39;,&#39;QS&#39;,&#39;KS&#39;,&#39;AS&#39;]));
+console.log(rankHand([&#39;KH&#39;,&#39;KD&#39;,&#39;KS&#39;,&#39;KC&#39;,&#39;3D&#39;]));
+console.log(rankHand([&#39;KH&#39;,&#39;KD&#39;,&#39;KS&#39;,&#39;2H&#39;,&#39;2D&#39;]));
+console.log(rankHand([&#39;AH&#39;,&#39;2D&#39;,&#39;3S&#39;,&#39;4C&#39;,&#39;5H&#39;]));
+console.log(rankHand([&#39;9H&#39;,&#39;9D&#39;,&#39;5S&#39;,&#39;3C&#39;,&#39;2H&#39;]));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-poker-rank","title":"Poker Hand Rank","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why check `royal-flush` and `straight-flush` BEFORE `four-of-a-kind`?","options":["Checking flush-based hands first lets the function skip computing the rank histogram entirely on those branches","The categories are ordered by strength — the first matching category wins, and royal/straight-flush are stronger than four-of-a-kind","A four-of-a-kind whose four cards share a suit must be reclassified as a straight-flush by Hoyle's rules","Four-of-a-kind shares the `groups[0]===4` shape with a straight-flush, so the more specific predicate must run first"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What is `groups` if the hand is a full house?","options":["[2, 2, 1] — the pair + pair + odd-rank-out is the structural fingerprint","[3, 2]","[5] — all five cards share a single bucket because the full house collapses the histogram","[3, 1, 1] — the trips dominate; the pair is recorded as two singletons"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why rewrite '10' to 'T' before indexing into '23456789TJQKA'?","options":["`'10'.indexOf` in a single-char rank string returns -1, which would mis-sort the ten below the deuce","So every rank is a single character — index lookup and sorting stay simple","`String.prototype.slice(0, -1)` returns the full string when the slice length is 2, so '10H' would parse as '10H' instead of '10'","The order string `'23456789TJQKA'` uses 'T' specifically because '10' would collide with the '1' suit-prefix used in some decks"],"answer":1,"answerLetter":"B"},{"n":4,"q":"How is a flush detected from the parsed `suits` array?","options":["All 5 suits identical","Three or more matching suits — the standard 'majority-suit' flush rule","At least one suit appears twice — a single pair of same-suit cards establishes the flush flag","The set of unique suits has size 1 OR 2 — same-color (red/black) qualifies as a flush"],"answer":0,"answerLetter":"A"}],"L2":[{"n":1,"prompt":"Fill in the flush + four-of-a-kind detection.","answers":["map","of","||","values","every","0","4"]}],"L3":[{"n":1,"prompt":"Implement rankHand(cards). Log ranks for: royal flush (TS-AS spades), four kings, full house (KKK + 22), wheel straight (A-5 mixed), pair of nines.","expectedOutput":"royal-flush\nfour-of-a-kind\nfull-house\nstraight\npair"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-poker-rank">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -569,7 +569,12 @@ function renderL3(body, lesson, content) {
     } else {
       debugPanel.classList.add('hidden');
     }
-    if (result.ok && outputsMatch(result.output, drill.expectedOutput)) {
+    // Share capture: record the verdict AND the source. The typed code is the
+    // highest-value artifact the user produces here — too big for a URL, so it
+    // rides in state and in the Copy-for-AI payload (js/app/24-share.js).
+    const l3Passed = result.ok && outputsMatch(result.output, drill.expectedOutput);
+    recordL3Result(lesson.id, l3Passed, code);
+    if (l3Passed) {
       const wasMock = state.mock.active && state.mock.lessonId === lesson.id;
       markPassed(lesson.id, 'L3');
       // iter 46: the L3-pass closed the current attempt; refresh hint trend

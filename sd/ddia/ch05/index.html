@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Replication — Designing Data-Intensive Applications</title>
+<meta name="description" content="How to keep copies of the same data on multiple machines connected by a network — for lower latency, higher availability, and read scalability — and the consistency problems that arise when those copies diverge.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ddia/ch05">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Replication — Designing Data-Intensive Applications">
+<meta property="og:description" content="How to keep copies of the same data on multiple machines connected by a network — for lower latency, higher availability, and read scalability — and the consistency problems that arise when those copies diverge.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ddia/ch05">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ddia/">Designing Data-Intensive Applications</a></p>
+    <h1>Replication</h1>
+    <p class="sharepage__lede">How to keep copies of the same data on multiple machines connected by a network — for lower latency, higher availability, and read scalability — and the consistency problems that arise when those copies diverge.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Data-Intensive Applications</span> <span class="ds-chip">17 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Replication buys lower latency (data close to users), fault-tolerant availability, and read-throughput scale-out; the hard part is handling changes.</li><li>Single-leader replication routes all writes through one leader that streams a replication log to followers; reads can hit any replica.</li><li>Synchronous replication guarantees an up-to-date follower but can block on a slow node; async is fast but can lose writes if the leader fails.</li><li>Replication lag breaks read-after-write, monotonic reads, and consistent prefix reads — each has a specific technique to restore its guarantee.</li><li>Multi-leader and leaderless replication accept concurrent writes, so they must detect and resolve conflicts (LWW, version vectors, CRDTs).</li><li>Leaderless (Dynamo-style) systems use quorums w + r &gt; n plus read repair and anti-entropy, but quorums still permit stale reads in edge cases.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">17</span></h2>
+    <p class="sharepage__note">Positions 1–17 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In DDIA&#39;s terms, what is the defining characteristic of single-leader (master–slave) replication?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> All writes go to one designated leader, which propagates a change log to followers; reads can be served by any replica <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Every replica accepts writes and they are merged asynchronously in the background</li>
+        <li><span class="sharepage__key">C</span> A quorum of replicas must acknowledge each write before it is considered committed</li>
+        <li><span class="sharepage__key">D</span> Writes are partitioned across leaders by key range so each key has its own leader</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Single-leader means exactly one node accepts writes and ships a replication log to read-only followers. Accepting writes on every replica is multi-leader/leaderless; quorum acknowledgement describes leaderless replication.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the primary risk of fully asynchronous replication in a single-leader system?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Followers can never catch up to the leader once they fall behind</li>
+        <li><span class="sharepage__key">B</span> Reads always return stale data because followers are never updated</li>
+        <li><span class="sharepage__key">C</span> The leader cannot process writes until every follower has acknowledged</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> If the leader fails before its writes reach any follower, those recently confirmed writes are lost <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Async replication confirms a write to the client before followers have it, so a leader crash can durably lose those writes. Blocking on follower acknowledgement is the synchronous case, which async specifically avoids.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>When setting up a brand-new follower without downtime, what is the standard procedure?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Lock the leader for writes, copy its files, then unlock — accepting the write outage</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Take a consistent snapshot of the leader, copy it to the follower, then have the follower request all changes since the snapshot&#39;s log position <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Replay the entire write-ahead log from the beginning of time onto the new follower</li>
+        <li><span class="sharepage__key">D</span> Have the new follower serve reads immediately and lazily fetch missing rows on cache miss</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> You snapshot the leader (ideally without a full lock), load it, then the follower connects and catches up from the snapshot&#39;s exact log position. Locking the leader for writes defeats the point of zero-downtime setup.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which of these is a genuine danger during automatic leader failover?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The new leader immediately reformats all follower disks</li>
+        <li><span class="sharepage__key">B</span> Followers permanently stop accepting reads until the old leader returns</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Split brain, where two nodes both believe they are leader and accept conflicting writes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The replication log is rewritten in reverse chronological order</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Failover can produce split brain (two leaders) plus lost async writes and mis-tuned timeouts that trigger unnecessary failovers. The other options are not real failover failure modes DDIA describes.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why is statement-based replication (shipping each SQL statement) problematic?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Nondeterministic constructs like <code>NOW()</code>, <code>RAND()</code>, or triggers can execute differently on each replica, causing divergence <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It produces logs far larger than the actual data changes</li>
+        <li><span class="sharepage__key">C</span> It cannot replicate DELETE statements, only INSERTs and UPDATEs</li>
+        <li><span class="sharepage__key">D</span> It requires all replicas to run identical storage-engine versions</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Replaying a statement like <code>NOW()</code> or <code>RAND()</code> yields different results per replica, and side-effecting triggers/stored procs compound this. Storage-engine version coupling is a downside of WAL shipping, not statement-based replication.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the main drawback of write-ahead-log (WAL) shipping as the replication method?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It cannot capture updates, only inserts</li>
+        <li><span class="sharepage__key">B</span> It is nondeterministic and diverges across replicas</li>
+        <li><span class="sharepage__key">C</span> It only works for in-memory databases</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> The log is tied to the storage engine&#39;s low-level format, so leader and followers usually can&#39;t run different database versions — preventing zero-downtime upgrades <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> WAL describes changes at the byte/disk-page level, coupling replicas to the exact storage format and blocking mixed-version rolling upgrades. Nondeterminism is the statement-based problem; logical (row-based) logs decouple from the storage engine to solve this.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A user posts a comment, reloads the page, and doesn&#39;t see their own comment because the read hit a lagging follower. Which guarantee restores correct behavior?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Monotonic reads</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Read-your-writes (read-after-write) consistency <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Consistent prefix reads</li>
+        <li><span class="sharepage__key">D</span> Linearizability across all replicas</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Read-your-writes ensures a user always sees data they themselves submitted — e.g., by reading their own recently-modified data from the leader. Monotonic reads prevents going backward in time across reads; consistent prefix concerns causal ordering of different users&#39; writes.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What anomaly does the &#39;monotonic reads&#39; guarantee prevent?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Two users writing conflicting values to the same key</li>
+        <li><span class="sharepage__key">B</span> A read that observes an effect before its cause</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Seeing data move backward in time — a later read returning older data than an earlier read did <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Not seeing your own writes after submitting them</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Monotonic reads means once you&#39;ve seen a value, subsequent reads never return an older state — typically achieved by routing a user&#39;s reads to the same replica. Cause-before-effect ordering is consistent prefix reads; the own-writes case is read-your-writes.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Consistent prefix reads is primarily concerned with which anomaly?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A follower falling permanently behind the leader</li>
+        <li><span class="sharepage__key">B</span> A user failing to read data they just wrote</li>
+        <li><span class="sharepage__key">C</span> Two leaders accepting conflicting writes simultaneously</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> An observer seeing writes in an order that violates their causal (happens-before) sequence — e.g., an answer appearing before its question <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Consistent prefix reads guarantees that if a sequence of writes has a causal order, anyone reading them sees them in that order — preventing an answer showing up before its question (common when writes are spread across partitions). The own-writes case is read-your-writes.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which is a canonical, appropriate use case for multi-leader replication?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Maximizing read throughput within a single datacenter</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A database spanning multiple datacenters (or offline-capable clients like a calendar app), where each location accepts writes locally <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Guaranteeing linearizable single-object reads</li>
+        <li><span class="sharepage__key">D</span> Eliminating the need to ever resolve write conflicts</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Multi-leader shines across datacenters, offline clients, and collaborative editing — each replica takes local writes and syncs async. It does not eliminate conflicts; on the contrary, allowing concurrent writes is exactly what creates conflicts to resolve.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does &#39;last write wins&#39; (LWW) conflict resolution risk data loss?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It silently discards all but one of a set of concurrent writes based on a timestamp, dropping the others&#39; data <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It merges concurrent writes field by field, corrupting the record</li>
+        <li><span class="sharepage__key">C</span> It requires a synchronous quorum and blocks on slow nodes</li>
+        <li><span class="sharepage__key">D</span> It can only be used with single-leader replication</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> LWW picks one concurrent write (by timestamp) and throws the rest away, so genuinely concurrent updates are lost. Version vectors and CRDTs instead preserve/merge concurrent writes; LWW&#39;s appeal is simplicity, not correctness.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In leaderless (Dynamo-style) replication with n replicas, what does the quorum condition w + r &gt; n ensure?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Every write is replicated to all n nodes before being acknowledged</li>
+        <li><span class="sharepage__key">B</span> Reads and writes never touch the same node, distributing load evenly</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> The set of nodes written to and the set read from overlap in at least one node, so a read is likely to see the latest write <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The system behaves linearizably under all failure conditions</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Overlapping read and write quorums guarantee at least one node in a read set has the newest value. It does not require writing to all n, and quorums still permit stale reads in edge cases (sloppy quorums, concurrent writes, failed writes), so it is not true linearizability.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In leaderless replication, how do &#39;read repair&#39; and &#39;anti-entropy&#39; differ?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Read repair runs in the background; anti-entropy runs only during client reads</li>
+        <li><span class="sharepage__key">B</span> Both run only during leader failover</li>
+        <li><span class="sharepage__key">C</span> Read repair resolves conflicts; anti-entropy prevents them from ever occurring</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Read repair fixes stale replicas opportunistically when a client read detects a divergence; anti-entropy is a background process that continuously compares and syncs replicas <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Read repair piggybacks on client reads to write back the newest value to lagging replicas, while anti-entropy is a separate background sync that catches data no one reads. Without anti-entropy, rarely-read values could stay stale indefinitely.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What do &#39;sloppy quorums&#39; with &#39;hinted handoff&#39; provide in a leaderless system?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Stronger consistency by requiring more than n acknowledgements</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Higher write availability during network partitions by accepting writes on other reachable nodes, which later hand the data off to the intended &#39;home&#39; nodes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A guarantee that reads always see the latest write</li>
+        <li><span class="sharepage__key">D</span> Automatic conflict resolution using version vectors</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A sloppy quorum lets writes land on any reachable nodes (not the designated home nodes) to stay available during partitions; hinted handoff later delivers them home. This boosts availability but weakens the read-your-write guarantee, since a later read of the home nodes may miss it.</p>
+    </article>
+    <article class="sharepage__q" id="q15">
+      <h3><a href="#q15" class="sharepage__anchor">Q15</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Your app scales reads by serving them from asynchronous followers, but users complain that right after they save a change, a reload sometimes shows the old value. Diagnose the guarantee that&#39;s broken and give concrete ways to restore it without abandoning follower reads.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Identify the anomaly: async replication lag means a user&#39;s own recent write hasn&#39;t reached the follower they read from — a read-your-writes (read-after-write) violation.</li><li>Technique 1: read anything the user may have modified from the leader (e.g., their own profile), other data from followers.</li><li>Technique 2: for a short window after a write, route that user&#39;s reads to the leader (or track last-write timestamp / log position and only read a replica caught up past it).</li><li>Technique 3: client remembers the timestamp/version of its last write and the system ensures the serving replica is at least that current.</li><li>Distinguish it from monotonic reads (going backward across reads) and consistent prefix (causal ordering) — this is specifically the own-writes case.</li><li>Preserve the read-scaling benefit — apply the stronger routing only to the user&#39;s own recently-written data, not all reads.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> That&#39;s a read-your-writes violation: async replication lag means the follower serving the reload hasn&#39;t yet received the user&#39;s own just-saved write. I&#39;d keep scaling reads on followers but special-case the writer — for data a user may have modified (like their own posts/profile), read from the leader, or for a short window after their write pin their reads to the leader. A cleaner version records the log position/timestamp of the user&#39;s last write and only serves them from a replica that has caught up past it. This is specifically the own-writes guarantee, distinct from monotonic reads or consistent-prefix, and I only tighten it for the writer&#39;s own data so the rest of the read traffic still fans out to followers.</div>
+    </article>
+    <article class="sharepage__q" id="q16">
+      <h3><a href="#q16" class="sharepage__anchor">Q16</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You&#39;re running a database across three datacenters on different continents and want each region to accept writes locally with low latency. What replication topology fits, what new problem does it force on you, and how do you handle it?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Multi-leader replication fits multi-datacenter: each DC has a leader that takes local writes and replicates asynchronously to the others, so writes are low-latency and a DC can keep working during inter-DC network problems.</li><li>The new problem is write conflicts — two regions can concurrently modify the same record, since there&#39;s no single serialization point.</li><li>Conflict resolution options: last-write-wins (simple but silently drops data), version vectors to detect concurrency, CRDTs / application-defined merge to preserve both.</li><li>Avoid conflicts where possible: route all writes for a given record to one &#39;home&#39; DC so the same key isn&#39;t concurrently edited.</li><li>Contrast with single-leader (all writes cross an ocean to one leader — high latency) and note multi-leader trades that latency for conflict-handling complexity.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Multi-leader replication is the fit: give each datacenter its own leader that accepts local writes at low latency and replicates asynchronously to the other regions, so a cross-continent link hiccup doesn&#39;t stop local writes. The price is write conflicts — two regions can edit the same record concurrently with no single serialization point. I&#39;d first try to avoid them by homing each record&#39;s writes to one datacenter, and where conflicts are unavoidable resolve them deliberately: version vectors to detect concurrency plus a merge (or a CRDT) rather than last-write-wins, which silently discards data. Single-leader would dodge conflicts but force every write across an ocean, so multi-leader is trading that latency for conflict handling.</div>
+    </article>
+    <article class="sharepage__q" id="q17">
+      <h3><a href="#q17" class="sharepage__anchor">Q17</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>In a leaderless (Dynamo-style) store with n=3, explain how you&#39;d tune w and r for a read-heavy workload that still wants a good chance of fresh reads, and why a quorum here still isn&#39;t linearizable.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>The quorum condition is w + r &gt; n so the write set and read set overlap in at least one node, so a read is likely to see the latest write.</li><li>For read-heavy load, favor a smaller r to keep reads fast/cheap and a larger w — e.g., w=3, r=1 (or w=2, r=2) — as long as w + r &gt; n holds.</li><li>Note the availability/consistency tradeoff of that choice (large w hurts write availability if a node is down).</li><li>Read repair and anti-entropy converge stale replicas so rarely-read data doesn&#39;t stay stale forever.</li><li>Still not linearizable: sloppy quorums, concurrent writes, and writes that partially fail mean a fresh read isn&#39;t guaranteed — quorums give &#39;likely&#39; fresh, not a strict recency guarantee.</li><li>Concurrent writes still need conflict resolution (version vectors), which linearizability would preclude.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Quorum reads/writes work because w + r &gt; n forces the read set and write set to overlap on at least one node, so a read usually sees the newest write. For a read-heavy workload I&#39;d bias toward cheap reads — say w=2, r=2 with n=3, or even w=3, r=1 if I can tolerate a write blocking when a node is down — as long as w + r &gt; n. Read repair and background anti-entropy pull lagging replicas forward so unread data doesn&#39;t rot. But this still isn&#39;t linearizable: sloppy quorums, concurrent writes needing version-vector resolution, and partially-failed writes mean a quorum gives you a high probability of freshness, not a strict recency guarantee.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ddia","unit":"ch05","title":"Replication","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"In DDIA's terms, what is the defining characteristic of single-leader (master–slave) replication?","options":["All writes go to one designated leader, which propagates a change log to followers; reads can be served by any replica","Every replica accepts writes and they are merged asynchronously in the background","A quorum of replicas must acknowledge each write before it is considered committed","Writes are partitioned across leaders by key range so each key has its own leader"],"answer":0,"answerLetter":"A"},{"n":2,"type":"mc","prompt":"What is the primary risk of fully asynchronous replication in a single-leader system?","options":["Followers can never catch up to the leader once they fall behind","Reads always return stale data because followers are never updated","The leader cannot process writes until every follower has acknowledged","If the leader fails before its writes reach any follower, those recently confirmed writes are lost"],"answer":3,"answerLetter":"D"},{"n":3,"type":"mc","prompt":"When setting up a brand-new follower without downtime, what is the standard procedure?","options":["Lock the leader for writes, copy its files, then unlock — accepting the write outage","Take a consistent snapshot of the leader, copy it to the follower, then have the follower request all changes since the snapshot's log position","Replay the entire write-ahead log from the beginning of time onto the new follower","Have the new follower serve reads immediately and lazily fetch missing rows on cache miss"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"Which of these is a genuine danger during automatic leader failover?","options":["The new leader immediately reformats all follower disks","Followers permanently stop accepting reads until the old leader returns","Split brain, where two nodes both believe they are leader and accept conflicting writes","The replication log is rewritten in reverse chronological order"],"answer":2,"answerLetter":"C"},{"n":5,"type":"mc","prompt":"Why is statement-based replication (shipping each SQL statement) problematic?","options":["Nondeterministic constructs like `NOW()`, `RAND()`, or triggers can execute differently on each replica, causing divergence","It produces logs far larger than the actual data changes","It cannot replicate DELETE statements, only INSERTs and UPDATEs","It requires all replicas to run identical storage-engine versions"],"answer":0,"answerLetter":"A"},{"n":6,"type":"mc","prompt":"What is the main drawback of write-ahead-log (WAL) shipping as the replication method?","options":["It cannot capture updates, only inserts","It is nondeterministic and diverges across replicas","It only works for in-memory databases","The log is tied to the storage engine's low-level format, so leader and followers usually can't run different database versions — preventing zero-downtime upgrades"],"answer":3,"answerLetter":"D"},{"n":7,"type":"mc","prompt":"A user posts a comment, reloads the page, and doesn't see their own comment because the read hit a lagging follower. Which guarantee restores correct behavior?","options":["Monotonic reads","Read-your-writes (read-after-write) consistency","Consistent prefix reads","Linearizability across all replicas"],"answer":1,"answerLetter":"B"},{"n":8,"type":"mc","prompt":"What anomaly does the 'monotonic reads' guarantee prevent?","options":["Two users writing conflicting values to the same key","A read that observes an effect before its cause","Seeing data move backward in time — a later read returning older data than an earlier read did","Not seeing your own writes after submitting them"],"answer":2,"answerLetter":"C"},{"n":9,"type":"mc","prompt":"Consistent prefix reads is primarily concerned with which anomaly?","options":["A follower falling permanently behind the leader","A user failing to read data they just wrote","Two leaders accepting conflicting writes simultaneously","An observer seeing writes in an order that violates their causal (happens-before) sequence — e.g., an answer appearing before its question"],"answer":3,"answerLetter":"D"},{"n":10,"type":"mc","prompt":"Which is a canonical, appropriate use case for multi-leader replication?","options":["Maximizing read throughput within a single datacenter","A database spanning multiple datacenters (or offline-capable clients like a calendar app), where each location accepts writes locally","Guaranteeing linearizable single-object reads","Eliminating the need to ever resolve write conflicts"],"answer":1,"answerLetter":"B"},{"n":11,"type":"mc","prompt":"Why does 'last write wins' (LWW) conflict resolution risk data loss?","options":["It silently discards all but one of a set of concurrent writes based on a timestamp, dropping the others' data","It merges concurrent writes field by field, corrupting the record","It requires a synchronous quorum and blocks on slow nodes","It can only be used with single-leader replication"],"answer":0,"answerLetter":"A"},{"n":12,"type":"mc","prompt":"In leaderless (Dynamo-style) replication with n replicas, what does the quorum condition w + r > n ensure?","options":["Every write is replicated to all n nodes before being acknowledged","Reads and writes never touch the same node, distributing load evenly","The set of nodes written to and the set read from overlap in at least one node, so a read is likely to see the latest write","The system behaves linearizably under all failure conditions"],"answer":2,"answerLetter":"C"},{"n":13,"type":"mc","prompt":"In leaderless replication, how do 'read repair' and 'anti-entropy' differ?","options":["Read repair runs in the background; anti-entropy runs only during client reads","Both run only during leader failover","Read repair resolves conflicts; anti-entropy prevents them from ever occurring","Read repair fixes stale replicas opportunistically when a client read detects a divergence; anti-entropy is a background process that continuously compares and syncs replicas"],"answer":3,"answerLetter":"D"},{"n":14,"type":"mc","prompt":"What do 'sloppy quorums' with 'hinted handoff' provide in a leaderless system?","options":["Stronger consistency by requiring more than n acknowledgements","Higher write availability during network partitions by accepting writes on other reachable nodes, which later hand the data off to the intended 'home' nodes","A guarantee that reads always see the latest write","Automatic conflict resolution using version vectors"],"answer":1,"answerLetter":"B"},{"n":15,"type":"open","prompt":"Your app scales reads by serving them from asynchronous followers, but users complain that right after they save a change, a reload sometimes shows the old value. Diagnose the guarantee that's broken and give concrete ways to restore it without abandoning follower reads.","points":["Identify the anomaly: async replication lag means a user's own recent write hasn't reached the follower they read from — a read-your-writes (read-after-write) violation.","Technique 1: read anything the user may have modified from the leader (e.g., their own profile), other data from followers.","Technique 2: for a short window after a write, route that user's reads to the leader (or track last-write timestamp / log position and only read a replica caught up past it).","Technique 3: client remembers the timestamp/version of its last write and the system ensures the serving replica is at least that current.","Distinguish it from monotonic reads (going backward across reads) and consistent prefix (causal ordering) — this is specifically the own-writes case.","Preserve the read-scaling benefit — apply the stronger routing only to the user's own recently-written data, not all reads."]},{"n":16,"type":"open","prompt":"You're running a database across three datacenters on different continents and want each region to accept writes locally with low latency. What replication topology fits, what new problem does it force on you, and how do you handle it?","points":["Multi-leader replication fits multi-datacenter: each DC has a leader that takes local writes and replicates asynchronously to the others, so writes are low-latency and a DC can keep working during inter-DC network problems.","The new problem is write conflicts — two regions can concurrently modify the same record, since there's no single serialization point.","Conflict resolution options: last-write-wins (simple but silently drops data), version vectors to detect concurrency, CRDTs / application-defined merge to preserve both.","Avoid conflicts where possible: route all writes for a given record to one 'home' DC so the same key isn't concurrently edited.","Contrast with single-leader (all writes cross an ocean to one leader — high latency) and note multi-leader trades that latency for conflict-handling complexity."]},{"n":17,"type":"open","prompt":"In a leaderless (Dynamo-style) store with n=3, explain how you'd tune w and r for a read-heavy workload that still wants a good chance of fresh reads, and why a quorum here still isn't linearizable.","points":["The quorum condition is w + r > n so the write set and read set overlap in at least one node, so a read is likely to see the latest write.","For read-heavy load, favor a smaller r to keep reads fast/cheap and a larger w — e.g., w=3, r=1 (or w=2, r=2) — as long as w + r > n holds.","Note the availability/consistency tradeoff of that choice (large w hurts write availability if a node is down).","Read repair and anti-entropy converge stale replicas so rarely-read data doesn't stay stale forever.","Still not linearizable: sloppy quorums, concurrent writes, and writes that partially fail mean a fresh read isn't guaranteed — quorums give 'likely' fresh, not a strict recency guarantee.","Concurrent writes still need conflict resolution (version vectors), which linearizability would preclude."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ddia/ch05">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

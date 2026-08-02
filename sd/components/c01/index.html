@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Load Balancing &amp; Routing — Building Blocks</title>
+<meta name="description" content="How incoming traffic is spread across a fleet: the layer a load balancer operates at (L4 vs L7), the algorithms it uses to pick a backend, how it detects dead servers, and how DNS/anycast steer users to the nearest healthy region.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c01">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Load Balancing &amp; Routing — Building Blocks">
+<meta property="og:description" content="How incoming traffic is spread across a fleet: the layer a load balancer operates at (L4 vs L7), the algorithms it uses to pick a backend, how it detects dead servers, and how DNS/anycast steer users to the nearest healthy region.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c01">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/components/">Building Blocks</a></p>
+    <h1>Load Balancing &amp; Routing</h1>
+    <p class="sharepage__lede">How incoming traffic is spread across a fleet: the layer a load balancer operates at (L4 vs L7), the algorithms it uses to pick a backend, how it detects dead servers, and how DNS/anycast steer users to the nearest healthy region.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Building Blocks</span> <span class="ds-chip">14 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>L4 load balancers route on transport info (IP/port) and connections/NAT; L7 load balancers understand HTTP and can route on path, header, or cookie and terminate TLS.</li><li>Common algorithms: round-robin, weighted round-robin, least-connections, least-response-time, IP-hash, and consistent hashing (which minimizes remapping when the pool changes).</li><li>Active health checks probe backends proactively; passive health checks infer health from live traffic errors.</li><li>Sticky sessions (session affinity) pin a client to one backend, but undermine even distribution and complicate scale-in/failover.</li><li>A reverse proxy, a load balancer, and an API gateway overlap; the gateway adds cross-cutting concerns like auth, rate limiting, and response aggregation.</li><li>DNS-based routing, GeoDNS, and anycast steer users toward a nearby or healthy endpoint before a connection is even made.</li><li>Redundancy runs active-active (all nodes serve, capacity shared) or active-passive (a standby takes over on failure).</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">14</span></h2>
+    <p class="sharepage__note">Positions 1–14 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What primarily distinguishes an L4 load balancer from an L7 load balancer?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> L4 operates on transport-layer info (IP/port) and forwards connections without reading the payload; L7 understands the application protocol and can route on path, header, or cookie <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> L4 always terminates TLS while L7 passes encrypted traffic straight through</li>
+        <li><span class="sharepage__key">C</span> L4 runs in the cloud provider while L7 must run on your own hardware</li>
+        <li><span class="sharepage__key">D</span> L4 can inspect and route on the HTTP path and headers; L7 only sees IP addresses</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An L4 (transport-layer) balancer makes decisions from the TCP/UDP connection (source/dest IP and port) and typically NATs or forwards the packet stream without parsing content. An L7 (application-layer) balancer parses HTTP, so it can route on URL path, headers, or cookies and can terminate TLS.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Because an L7 load balancer parses the HTTP request, which capability does it have that a pure L4 balancer does not?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Lower per-request CPU cost since it does less work</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The ability to route /api/* to one pool and /images/* to another based on the URL path <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The ability to balance UDP as well as TCP traffic</li>
+        <li><span class="sharepage__key">D</span> Immunity to backend failures because it never opens a connection</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Content-based (path/header/cookie) routing requires reading the application-layer request, which only an L7 balancer does. L4 is actually cheaper per request precisely because it does not parse the payload, and UDP balancing is an L4 strength.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which load-balancing algorithm sends each new request to the backend currently handling the fewest active connections?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Round-robin</li>
+        <li><span class="sharepage__key">B</span> IP-hash</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Least-connections <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Weighted round-robin</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Least-connections tracks live connection counts and favors the least-loaded backend, which adapts well when request durations vary. Round-robin ignores load entirely, and IP-hash routes by a hash of the client IP for stickiness, not by current load.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the main advantage of consistent hashing over plain modulo (hash(key) % N) for choosing a backend?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It removes the need for any health checking</li>
+        <li><span class="sharepage__key">B</span> It distributes load perfectly evenly with no hot spots</li>
+        <li><span class="sharepage__key">C</span> It lets you route on HTTP headers instead of on the key</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> When a server is added or removed, only a small fraction of keys are remapped instead of nearly all of them <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With hash % N, changing N reshuffles almost every key; consistent hashing places nodes on a ring so adding/removing one node only remaps the keys in its arc. It does not guarantee perfectly even distribution (virtual nodes are used to smooth that out) and is unrelated to health checks.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does an active health check differ from a passive health check?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Active checks send periodic probe requests to each backend; passive checks infer health by observing errors/timeouts in real client traffic <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Active checks watch live traffic; passive checks send synthetic probes</li>
+        <li><span class="sharepage__key">C</span> Active checks run on the backend; passive checks run on the client</li>
+        <li><span class="sharepage__key">D</span> They are two names for the same TCP handshake test</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Active health checking proactively sends probes (e.g. an HTTP GET to /health) on a schedule and marks a node down if it fails; passive health checking watches real responses and ejects a backend after it produces enough errors or timeouts. Many systems combine both.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why do sticky sessions (session affinity) work against even load distribution?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They force every request through the API gateway first</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> They pin each client to one specific backend, so a few heavy or long-lived clients can overload their pinned server while others sit idle <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> They require TLS termination at L4, which is slower</li>
+        <li><span class="sharepage__key">D</span> They rewrite the client IP, defeating IP-hash</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Affinity keeps a client bound to the backend that holds its session state, so the balancer can no longer freely spread that client&#39;s load; skewed or long-lived sessions concentrate on some nodes. Storing session state externally (e.g. in a shared cache) lets you drop stickiness and rebalance freely.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In the classic reverse proxy vs load balancer vs API gateway distinction, what does the API gateway add on top of routing?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It is the only one of the three that can terminate TLS</li>
+        <li><span class="sharepage__key">B</span> It removes the need for backend servers entirely</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Cross-cutting concerns such as authentication, rate limiting, and request/response aggregation across services <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It can only forward traffic to a single origin server</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The roles overlap heavily, but a gateway layers application concerns — auth, rate limiting, quota, request shaping, and aggregating several backend calls into one response — on top of proxying. TLS termination is common to reverse proxies and L7 balancers too, so it is not the distinguishing feature.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does anycast routing do?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Assigns every server a unique IP and rotates through them in DNS</li>
+        <li><span class="sharepage__key">B</span> Broadcasts each packet to all servers and keeps the first reply</li>
+        <li><span class="sharepage__key">C</span> Encrypts the DNS query so the client&#39;s location is hidden</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Advertises the same IP address from many locations so the network routes each client to the topologically nearest one <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Anycast announces one IP prefix from multiple PoPs; BGP then delivers a client&#39;s packets to the nearest advertising location, cutting latency and providing implicit failover if a site withdraws its route. That is different from unicast-per-server or from broadcasting to all nodes.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does GeoDNS steer users to a nearby region?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> By returning different A/AAAA records based on the resolver&#39;s (approximate) geographic location <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> By hashing the URL path to a region</li>
+        <li><span class="sharepage__key">C</span> By rewriting the HTTP Host header at the edge</li>
+        <li><span class="sharepage__key">D</span> By terminating the user&#39;s TCP connection and forwarding at L4</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> GeoDNS answers the same hostname with location-dependent IP records, so a user in Europe is handed a European endpoint and a user in Asia an Asian one. It works at DNS resolution time — before any TCP/HTTP connection — so it cannot see the URL path or Host header.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>In an active-active redundancy setup, how is traffic handled compared to active-passive?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Active-active keeps a hot standby idle until failover; active-passive splits load across all nodes</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Active-active has all nodes serving traffic simultaneously and sharing capacity; active-passive keeps a standby that takes over only when the primary fails <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Both keep exactly one node serving at a time</li>
+        <li><span class="sharepage__key">D</span> Active-active requires sticky sessions while active-passive forbids them</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Active-active runs every node live, so total capacity is the sum and failover just means the survivors absorb the load; active-passive reserves a standby that is normally idle and is promoted on failure. Active-active uses hardware more efficiently but requires the nodes to tolerate concurrent operation.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does horizontal scaling behind a load balancer generally scale further than vertical scaling of one machine?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because horizontal scaling requires no state coordination of any kind</li>
+        <li><span class="sharepage__key">B</span> Because a single machine can be made arbitrarily large at constant cost</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because adding more commodity nodes behind the balancer sidesteps the ceiling and single-point-of-failure of one ever-bigger box <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because the load balancer eliminates the need for health checks</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Horizontal scaling adds independent nodes the balancer can spread load over, so you are not capped by the largest single machine and you gain redundancy. It does introduce coordination and shared-state challenges — the tradeoff, not a free lunch.</p>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A backend needs per-user session state but you want to avoid sticky sessions. What is the standard fix?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Enable IP-hash so the same user always lands on the same node</li>
+        <li><span class="sharepage__key">B</span> Turn off health checks to keep nodes from being ejected mid-session</li>
+        <li><span class="sharepage__key">C</span> Switch the load balancer from L7 to L4</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Externalize session state into a shared store (e.g. Redis) so any backend can serve any request <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If session state lives in a shared external store, backends become stateless and interchangeable, so the balancer can route freely and scale-in/failover no longer drops sessions. IP-hash is just another form of stickiness, and dropping to L4 or disabling health checks does not solve the state problem.</p>
+    </article>
+    <article class="sharepage__q" id="q13">
+      <h3><a href="#q13" class="sharepage__anchor">Q13</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is a genuine risk of relying on DNS-based routing for failover?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Cached DNS records (TTL) mean clients may keep hitting a failed endpoint until the record expires <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> DNS routing always terminates TLS, exposing keys</li>
+        <li><span class="sharepage__key">C</span> DNS can only route within a single data center</li>
+        <li><span class="sharepage__key">D</span> DNS cannot return more than one IP per hostname</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Resolvers and clients cache DNS answers for the record&#39;s TTL, so after a failover the old IP can linger in caches and keep sending users to a dead endpoint until the TTL lapses. That caching lag is why anycast or health-aware balancers are often layered in for fast failover.</p>
+    </article>
+    <article class="sharepage__q" id="q14">
+      <h3><a href="#q14" class="sharepage__anchor">Q14</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>An interviewer asks: &#39;When would you choose an L7 load balancer over an L4 one, and what does it cost you?&#39; Walk through your reasoning.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>L7 parses HTTP, so pick it when you need content-based routing (path/header/cookie), TLS termination, or per-request features like sticky-by-cookie.</li><li>L4 forwards connections on IP/port without reading payload, so it is cheaper, lower-latency, and protocol-agnostic (handles non-HTTP/UDP).</li><li>Cost of L7: more CPU per request to parse HTTP, it must terminate TLS to see content, and it becomes a more complex stateful hop.</li><li>Real systems often layer both: L4 for raw distribution/DDoS absorption, L7 behind it for smart routing.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I&#39;d reach for L7 when routing decisions depend on the request itself — send /api to one pool and /static to another, route by cookie, or terminate TLS and add auth/rate limiting. That costs more CPU per request and makes the balancer a heavier, TLS-terminating hop. If I just need to spread raw connections cheaply across a stateless fleet, or handle non-HTTP traffic, L4 is faster and simpler — and it&#39;s common to run L4 at the edge with L7 behind it.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"components","unit":"c01","title":"Load Balancing & Routing","codeShape":["Q"],"questions":[{"n":1,"type":"mc","prompt":"What primarily distinguishes an L4 load balancer from an L7 load balancer?","options":["L4 operates on transport-layer info (IP/port) and forwards connections without reading the payload; L7 understands the application protocol and can route on path, header, or cookie","L4 always terminates TLS while L7 passes encrypted traffic straight through","L4 runs in the cloud provider while L7 must run on your own hardware","L4 can inspect and route on the HTTP path and headers; L7 only sees IP addresses"],"answer":0,"answerLetter":"A"},{"n":2,"type":"mc","prompt":"Because an L7 load balancer parses the HTTP request, which capability does it have that a pure L4 balancer does not?","options":["Lower per-request CPU cost since it does less work","The ability to route /api/* to one pool and /images/* to another based on the URL path","The ability to balance UDP as well as TCP traffic","Immunity to backend failures because it never opens a connection"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"Which load-balancing algorithm sends each new request to the backend currently handling the fewest active connections?","options":["Round-robin","IP-hash","Least-connections","Weighted round-robin"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"What is the main advantage of consistent hashing over plain modulo (hash(key) % N) for choosing a backend?","options":["It removes the need for any health checking","It distributes load perfectly evenly with no hot spots","It lets you route on HTTP headers instead of on the key","When a server is added or removed, only a small fraction of keys are remapped instead of nearly all of them"],"answer":3,"answerLetter":"D"},{"n":5,"type":"mc","prompt":"How does an active health check differ from a passive health check?","options":["Active checks send periodic probe requests to each backend; passive checks infer health by observing errors/timeouts in real client traffic","Active checks watch live traffic; passive checks send synthetic probes","Active checks run on the backend; passive checks run on the client","They are two names for the same TCP handshake test"],"answer":0,"answerLetter":"A"},{"n":6,"type":"mc","prompt":"Why do sticky sessions (session affinity) work against even load distribution?","options":["They force every request through the API gateway first","They pin each client to one specific backend, so a few heavy or long-lived clients can overload their pinned server while others sit idle","They require TLS termination at L4, which is slower","They rewrite the client IP, defeating IP-hash"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"In the classic reverse proxy vs load balancer vs API gateway distinction, what does the API gateway add on top of routing?","options":["It is the only one of the three that can terminate TLS","It removes the need for backend servers entirely","Cross-cutting concerns such as authentication, rate limiting, and request/response aggregation across services","It can only forward traffic to a single origin server"],"answer":2,"answerLetter":"C"},{"n":8,"type":"mc","prompt":"What does anycast routing do?","options":["Assigns every server a unique IP and rotates through them in DNS","Broadcasts each packet to all servers and keeps the first reply","Encrypts the DNS query so the client's location is hidden","Advertises the same IP address from many locations so the network routes each client to the topologically nearest one"],"answer":3,"answerLetter":"D"},{"n":9,"type":"mc","prompt":"How does GeoDNS steer users to a nearby region?","options":["By returning different A/AAAA records based on the resolver's (approximate) geographic location","By hashing the URL path to a region","By rewriting the HTTP Host header at the edge","By terminating the user's TCP connection and forwarding at L4"],"answer":0,"answerLetter":"A"},{"n":10,"type":"mc","prompt":"In an active-active redundancy setup, how is traffic handled compared to active-passive?","options":["Active-active keeps a hot standby idle until failover; active-passive splits load across all nodes","Active-active has all nodes serving traffic simultaneously and sharing capacity; active-passive keeps a standby that takes over only when the primary fails","Both keep exactly one node serving at a time","Active-active requires sticky sessions while active-passive forbids them"],"answer":1,"answerLetter":"B"},{"n":11,"type":"mc","prompt":"Why does horizontal scaling behind a load balancer generally scale further than vertical scaling of one machine?","options":["Because horizontal scaling requires no state coordination of any kind","Because a single machine can be made arbitrarily large at constant cost","Because adding more commodity nodes behind the balancer sidesteps the ceiling and single-point-of-failure of one ever-bigger box","Because the load balancer eliminates the need for health checks"],"answer":2,"answerLetter":"C"},{"n":12,"type":"mc","prompt":"A backend needs per-user session state but you want to avoid sticky sessions. What is the standard fix?","options":["Enable IP-hash so the same user always lands on the same node","Turn off health checks to keep nodes from being ejected mid-session","Switch the load balancer from L7 to L4","Externalize session state into a shared store (e.g. Redis) so any backend can serve any request"],"answer":3,"answerLetter":"D"},{"n":13,"type":"mc","prompt":"What is a genuine risk of relying on DNS-based routing for failover?","options":["Cached DNS records (TTL) mean clients may keep hitting a failed endpoint until the record expires","DNS routing always terminates TLS, exposing keys","DNS can only route within a single data center","DNS cannot return more than one IP per hostname"],"answer":0,"answerLetter":"A"},{"n":14,"type":"open","prompt":"An interviewer asks: 'When would you choose an L7 load balancer over an L4 one, and what does it cost you?' Walk through your reasoning.","points":["L7 parses HTTP, so pick it when you need content-based routing (path/header/cookie), TLS termination, or per-request features like sticky-by-cookie.","L4 forwards connections on IP/port without reading payload, so it is cheaper, lower-latency, and protocol-agnostic (handles non-HTTP/UDP).","Cost of L7: more CPU per request to parse HTTP, it must terminate TLS to see content, and it becomes a more complex stateful hop.","Real systems often layer both: L4 for raw distribution/DDoS absorption, L7 behind it for smart routing."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c01">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

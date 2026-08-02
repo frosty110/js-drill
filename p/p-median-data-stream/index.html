@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Find Median from Data Stream — JS Drill</title>
+<meta name="description" content="Two heaps: a max-heap for the lower half and a min-heap for the upper half, kept balanced. addNum O(log n), findMedian O(1).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-median-data-stream">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Find Median from Data Stream — JS Drill">
+<meta property="og:description" content="Two heaps: a max-heap for the lower half and a min-heap for the upper half, kept balanced. addNum O(log n), findMedian O(1).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-median-data-stream">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Heap</p>
+    <h1>Find Median from Data Stream</h1>
+    <p class="sharepage__lede">Two heaps: a max-heap for the lower half and a min-heap for the upper half, kept balanced. addNum O(log n), findMedian O(1).</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Heap</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Implement <code>MedianFinder</code> with <code>addNum(n)</code> and <code>findMedian()</code>. Use two inline heaps (max-heap for the lower half, min-heap for the upper half). After adding 1,2,3,4 with a findMedian after each pair, log the running medians.</p>
+    <p class="sharepage__note">Expected output: <code>1.5
+2
+2.5</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">// Two heaps split the stream so the median is always at one of the roots.
+// MaxHeap: lower half, root = largest of the smalls
+// MinHeap: upper half, root = smallest of the bigs
+class MedianFinder {
+  constructor() {
+    this.lo = new MaxHeap();
+    this.hi = new MinHeap();
+  }
+  addNum(n) {
+    // Route to lower half if it fits there; otherwise to upper.
+    if (this.lo.size() === 0 || n &lt;= this.lo.peek()) this.lo.push(n);
+    else this.hi.push(n);
+    // Rebalance: lo may exceed hi by 1 (odd count); never by 2, and hi never exceeds lo.
+    if (this.lo.size() &gt; this.hi.size() + 1) this.hi.push(this.lo.pop());
+    else if (this.hi.size() &gt; this.lo.size()) this.lo.push(this.hi.pop());
+  }
+  findMedian() {
+    // Odd total → lo holds the middle; even → average the two roots.
+    if (this.lo.size() &gt; this.hi.size()) return this.lo.peek();
+    return (this.lo.peek() + this.hi.peek()) / 2;
+  }
+}
+// Time addNum O(log n), findMedian O(1); Space O(n)</code></pre>
+    <ul class="sharepage__notes"><li>Invariant: every value in <code>lo</code> is &lt;= every value in <code>hi</code>, and <code>lo.size() - hi.size()</code> is 0 or 1.</li><li>Route incoming n by comparing to <code>lo.peek()</code>; then rebalance by transferring at most one element.</li><li>If total count is odd, <code>lo</code> holds the extra and <code>lo.peek()</code> is the median. If even, average the two roots.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>Sorted array (binary-search insert) <code>O(n) add / O(1) median / O(n) space</code></h3>
+      <p>Use when addNum is called rarely but findMedian is called constantly — the sorted invariant gives O(1) median reads. The O(n) splice cost is only paid on insert, not on every findMedian call. Also a good starting point in an interview before presenting the heap optimization.</p>
+      <pre class="sharepage__code"><code class="language-js">class MedianFinder {
+  constructor() { this.sorted = []; }
+  addNum(n) {
+    // Binary search for the insert position, then splice in.
+    let lo = 0, hi = this.sorted.length;
+    while (lo &lt; hi) {
+      const mid = (lo + hi) &gt;&gt; 1;
+      if (this.sorted[mid] &lt; n) lo = mid + 1;
+      else hi = mid;
+    }
+    this.sorted.splice(lo, 0, n); // O(n) shift
+  }
+  findMedian() {
+    const n = this.sorted.length;
+    const mid = n &gt;&gt; 1;
+    if (n % 2 === 1) return this.sorted[mid];
+    return (this.sorted[mid - 1] + this.sorted[mid]) / 2;
+  }
+}
+const mf = new MedianFinder();
+mf.addNum(1);
+mf.addNum(2);
+console.log(mf.findMedian());
+mf.addNum(3);
+console.log(mf.findMedian());
+mf.addNum(4);
+console.log(mf.findMedian());</code></pre>
+      <ul class="sharepage__notes"><li>Binary search finds the index in O(log n) but splice must shift all subsequent elements — the insert is O(n) even with the fast lookup.</li><li>findMedian is O(1): just index into the middle of the sorted array (two reads for even count).</li><li>This is the natural &#39;step 2&#39; answer — start here to show you understand the problem, then motivate two-heaps as the O(log n) add upgrade.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why use a MAX-heap for the lower half and a MIN-heap for the upper half?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> So both heaps share the same comparator, allowing the rebalance step to swap roots without a sign flip</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> So the two heap roots are the median candidates <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A max-heap on the upper half would route incoming values incorrectly because hi.peek() would be the maximum, not the minimum</li>
+        <li><span class="sharepage__key">D</span> Inverting the types lets <code>lo.size - hi.size</code> stay non-negative without an explicit rebalance</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> addNum time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> O(1)</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> O(log n) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> O(n)</li>
+        <li><span class="sharepage__key">D</span> O(n log n)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> findMedian time complexity?</h3>
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> O(1) <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> O(log n)</li>
+        <li><span class="sharepage__key">C</span> O(n)</li>
+        <li><span class="sharepage__key">D</span> O(n log n)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> When the two heaps have equal size, the median is:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> lo.peek() — by the convention that lo holds the lower-or-equal half</li>
+        <li><span class="sharepage__key">B</span> hi.peek() — the smaller of the two valid medians for an even count</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Average of lo.peek() and hi.peek() <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Either peek — they are equal whenever the heaps are balanced</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the routing and median formula. Heaps are provided.</p>
+      <pre class="sharepage__code"><code class="language-js">class MinHeap {
+  constructor() { this.h = []; }
+  size() { return this.h.length; }
+  peek() { return this.h[0]; }
+  push(v) {
+    this.h.push(v);
+    let i = this.h.length - 1;
+    while (i &gt; 0) {
+      const p = (i - 1) &gt;&gt; 1;
+      if (this.h[p] &lt;= this.h[i]) break;
+      [this.h[p], this.h[i]] = [this.h[i], this.h[p]];
+      i = p;
+    }
+  }
+  pop() {
+    const top = this.h[0];
+    const last = this.h.pop();
+    if (this.h.length) {
+      this.h[0] = last;
+      let i = 0, n = this.h.length;
+      while (true) {
+        const l = 2*i+1, r = 2*i+2;
+        let s = i;
+        if (l &lt; n &amp;&amp; this.h[l] &lt; this.h[s]) s = l;
+        if (r &lt; n &amp;&amp; this.h[r] &lt; this.h[s]) s = r;
+        if (s === i) break;
+        [this.h[s], this.h[i]] = [this.h[i], this.h[s]];
+        i = s;
+      }
+    }
+    return top;
+  }
+}
+class MaxHeap {
+  constructor() { this.h = []; }
+  size() { return this.h.length; }
+  peek() { return this.h[0]; }
+  push(v) {
+    this.h.push(v);
+    let i = this.h.length - 1;
+    while (i &gt; 0) {
+      const p = (i - 1) &gt;&gt; 1;
+      if (this.h[p] &gt;= this.h[i]) break;
+      [this.h[p], this.h[i]] = [this.h[i], this.h[p]];
+      i = p;
+    }
+  }
+  pop() {
+    const top = this.h[0];
+    const last = this.h.pop();
+    if (this.h.length) {
+      this.h[0] = last;
+      let i = 0, n = this.h.length;
+      while (true) {
+        const l = 2*i+1, r = 2*i+2;
+        let s = i;
+        if (l &lt; n &amp;&amp; this.h[l] &gt; this.h[s]) s = l;
+        if (r &lt; n &amp;&amp; this.h[r] &gt; this.h[s]) s = r;
+        if (s === i) break;
+        [this.h[s], this.h[i]] = [this.h[i], this.h[s]];
+        i = s;
+      }
+    }
+    return top;
+  }
+}
+class MedianFinder {
+  constructor() {
+    this.lo = new MaxHeap();
+    this.hi = new MinHeap();
+  }
+  addNum(n) {
+    if (this.lo.size() === 0 || n ___ this.lo.peek()) this.___.push(n);
+    else this.___.push(n);
+    if (this.lo.size() &gt; this.hi.size() + ___) this.hi.push(this.lo.pop());
+    else if (this.hi.size() &gt; this.lo.size()) this.lo.push(this.hi.pop());
+  }
+  findMedian() {
+    if (this.lo.size() &gt; this.hi.size()) return this.lo.peek();
+    return (this.lo.peek() + this.hi.peek()) / ___;
+  }
+}
+const mf = new MedianFinder();
+mf.addNum(1);
+mf.addNum(2);
+console.log(mf.findMedian());
+mf.addNum(3);
+console.log(mf.findMedian());</code></pre>
+      <p><strong>Answers:</strong> <code>&lt;=</code>, <code>lo</code>, <code>hi</code>, <code>1</code>, <code>2</code></p>
+      <p class="sharepage__note">Expected output: <code>1.5
+2</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Implement <code>MedianFinder</code> with <code>addNum(n)</code> and <code>findMedian()</code>. Use two inline heaps (max-heap for the lower half, min-heap for the upper half). After adding 1,2,3,4 with a findMedian after each pair, log the running medians.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Implement MinHeap and MaxHeap with push (sift-up) and pop (sift-down) operations using an array.</li><li>Route n into <code>lo</code> if n &lt;= lo.peek(), else into <code>hi</code>, then rebalance so |lo.size - hi.size| &lt;= 1 with lo never smaller.</li><li>Median: if lo larger, return lo.peek(); else average the two roots.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">class MinHeap {
+  constructor() { this.h = []; }
+  size() { return this.h.length; }
+  peek() { return this.h[0]; }
+  push(v) {
+    this.h.push(v);
+    let i = this.h.length - 1;
+    while (i &gt; 0) {
+      const p = (i - 1) &gt;&gt; 1;
+      if (this.h[p] &lt;= this.h[i]) break;
+      [this.h[p], this.h[i]] = [this.h[i], this.h[p]];
+      i = p;
+    }
+  }
+  pop() {
+    const top = this.h[0];
+    const last = this.h.pop();
+    if (this.h.length) {
+      this.h[0] = last;
+      let i = 0, n = this.h.length;
+      while (true) {
+        const l = 2*i+1, r = 2*i+2;
+        let s = i;
+        if (l &lt; n &amp;&amp; this.h[l] &lt; this.h[s]) s = l;
+        if (r &lt; n &amp;&amp; this.h[r] &lt; this.h[s]) s = r;
+        if (s === i) break;
+        [this.h[s], this.h[i]] = [this.h[i], this.h[s]];
+        i = s;
+      }
+    }
+    return top;
+  }
+}
+class MaxHeap {
+  constructor() { this.h = []; }
+  size() { return this.h.length; }
+  peek() { return this.h[0]; }
+  push(v) {
+    this.h.push(v);
+    let i = this.h.length - 1;
+    while (i &gt; 0) {
+      const p = (i - 1) &gt;&gt; 1;
+      if (this.h[p] &gt;= this.h[i]) break;
+      [this.h[p], this.h[i]] = [this.h[i], this.h[p]];
+      i = p;
+    }
+  }
+  pop() {
+    const top = this.h[0];
+    const last = this.h.pop();
+    if (this.h.length) {
+      this.h[0] = last;
+      let i = 0, n = this.h.length;
+      while (true) {
+        const l = 2*i+1, r = 2*i+2;
+        let s = i;
+        if (l &lt; n &amp;&amp; this.h[l] &gt; this.h[s]) s = l;
+        if (r &lt; n &amp;&amp; this.h[r] &gt; this.h[s]) s = r;
+        if (s === i) break;
+        [this.h[s], this.h[i]] = [this.h[i], this.h[s]];
+        i = s;
+      }
+    }
+    return top;
+  }
+}
+// Two heaps split the stream so the median is always at one of the roots.
+// MaxHeap: lower half, root = largest of the smalls
+// MinHeap: upper half, root = smallest of the bigs
+class MedianFinder {
+  constructor() {
+    this.lo = new MaxHeap();
+    this.hi = new MinHeap();
+  }
+  addNum(n) {
+    // Route to lower half if it fits there; otherwise to upper.
+    if (this.lo.size() === 0 || n &lt;= this.lo.peek()) this.lo.push(n);
+    else this.hi.push(n);
+    // Rebalance: lo may exceed hi by 1 (odd count); never by 2, and hi never exceeds lo.
+    if (this.lo.size() &gt; this.hi.size() + 1) this.hi.push(this.lo.pop());
+    else if (this.hi.size() &gt; this.lo.size()) this.lo.push(this.hi.pop());
+  }
+  findMedian() {
+    // Odd total → lo holds the middle; even → average the two roots.
+    if (this.lo.size() &gt; this.hi.size()) return this.lo.peek();
+    return (this.lo.peek() + this.hi.peek()) / 2;
+  }
+}
+const mf = new MedianFinder();
+mf.addNum(1);
+mf.addNum(2);
+console.log(mf.findMedian());
+mf.addNum(3);
+console.log(mf.findMedian());
+mf.addNum(4);
+console.log(mf.findMedian());</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-median-data-stream","title":"Find Median from Data Stream","section":"Heap","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why use a MAX-heap for the lower half and a MIN-heap for the upper half?","options":["So both heaps share the same comparator, allowing the rebalance step to swap roots without a sign flip","So the two heap roots are the median candidates","A max-heap on the upper half would route incoming values incorrectly because hi.peek() would be the maximum, not the minimum","Inverting the types lets `lo.size - hi.size` stay non-negative without an explicit rebalance"],"answer":1,"answerLetter":"B"},{"n":2,"q":"addNum time complexity?","options":["O(1)","O(log n)","O(n)","O(n log n)"],"answer":1,"answerLetter":"B"},{"n":3,"q":"findMedian time complexity?","options":["O(1)","O(log n)","O(n)","O(n log n)"],"answer":0,"answerLetter":"A"},{"n":4,"q":"When the two heaps have equal size, the median is:","options":["lo.peek() — by the convention that lo holds the lower-or-equal half","hi.peek() — the smaller of the two valid medians for an even count","Average of lo.peek() and hi.peek()","Either peek — they are equal whenever the heaps are balanced"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in the routing and median formula. Heaps are provided.","answers":["\u003c=","lo","hi","1","2"]}],"L3":[{"n":1,"prompt":"Implement `MedianFinder` with `addNum(n)` and `findMedian()`. Use two inline heaps (max-heap for the lower half, min-heap for the upper half). After adding 1,2,3,4 with a findMedian after each pair, log the running medians.","expectedOutput":"1.5\n2\n2.5"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-median-data-stream">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pacific Atlantic Water Flow — JS Drill</title>
+<meta name="description" content="Reverse-flood DFS from each ocean&#39;s edges; intersect the two reach-sets to find cells that drain to both oceans. O(R*C).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/p-pacific-atlantic">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Pacific Atlantic Water Flow — JS Drill">
+<meta property="og:description" content="Reverse-flood DFS from each ocean&#39;s edges; intersect the two reach-sets to find cells that drain to both oceans. O(R*C).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/p-pacific-atlantic">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Graphs</p>
+    <h1>Pacific Atlantic Water Flow</h1>
+    <p class="sharepage__lede">Reverse-flood DFS from each ocean&#39;s edges; intersect the two reach-sets to find cells that drain to both oceans. O(R*C).</p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Graphs</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>Write <code>pacificAtlantic(heights)</code> — return all cells whose water can drain to BOTH oceans (Pacific = top + left edge, Atlantic = bottom + right). Use reverse DFS from each ocean. Log <code>JSON.stringify(result)</code> on the classic 5x5 example.</p>
+    <p class="sharepage__note">Expected output: <code>[[0,4],[1,3],[1,4],[2,2],[3,0],[3,1],[4,0]]</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    
+    <pre class="sharepage__code"><code class="language-js">function pacificAtlantic(heights) {
+  const R = heights.length, C = heights[0].length;
+  // Two visited grids — same cell may be reachable from one ocean but not both.
+  const pac = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  const atl = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  function dfs(r, c, seen, prev) {
+    if (r &lt; 0 || r &gt;= R || c &lt; 0 || c &gt;= C) return;
+    if (seen[r][c]) return;
+    if (heights[r][c] &lt; prev) return;          // reverse flow: must be &gt;= neighbor
+    seen[r][c] = true;
+    const h = heights[r][c];
+    dfs(r + 1, c, seen, h);
+    dfs(r - 1, c, seen, h);
+    dfs(r, c + 1, seen, h);
+    dfs(r, c - 1, seen, h);
+  }
+  // Pacific = top + left edges; Atlantic = bottom + right. -Infinity seeds let edge cells in.
+  for (let c = 0; c &lt; C; c++) { dfs(0, c, pac, -Infinity); dfs(R - 1, c, atl, -Infinity); }
+  for (let r = 0; r &lt; R; r++) { dfs(r, 0, pac, -Infinity); dfs(r, C - 1, atl, -Infinity); }
+  const out = [];
+  // Answer = intersection — drains to BOTH oceans. Row-major order = sorted output.
+  for (let r = 0; r &lt; R; r++) for (let c = 0; c &lt; C; c++) if (pac[r][c] &amp;&amp; atl[r][c]) out.push([r, c]);
+  return out;
+}
+// Time O(R*C), Space O(R*C)</code></pre>
+    <ul class="sharepage__notes"><li>Flood is REVERSED: start at ocean edges and climb to cells with height &gt;= current — that mirrors water flowing FROM a cell TO the ocean.</li><li>Two separate visited grids (one per ocean) so the same cell can be explored once per ocean — intersect at the end.</li><li>Top + left edges touch the Pacific; bottom + right edges touch the Atlantic — corners belong to both.</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternates">
+    <h2>Alternate approaches</h2>
+    
+    <article class="sharepage__alt" id="alt1">
+      <h3>BFS multi-source (iterative queue) <code>O(R*C) / O(R*C)</code></h3>
+      <p>Use BFS when you want to avoid recursion-stack overflow on large grids — a 200x200 grid with a tall mountain ridge can produce O(R*C) DFS depth. BFS uses an explicit queue and is otherwise structurally identical: same two visited grids, same reverse-climb rule, same intersection step.</p>
+      <pre class="sharepage__code"><code class="language-js">function pacificAtlantic(heights) {
+  const R = heights.length, C = heights[0].length;
+  const pac = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  const atl = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  function bfs(seeds, seen) {
+    const queue = [];
+    for (const [r, c] of seeds) {
+      seen[r][c] = true;
+      queue.push([r, c]);
+    }
+    while (queue.length) {
+      const [r, c] = queue.shift();
+      for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nr = r + dr, nc = c + dc;
+        if (nr &gt;= 0 &amp;&amp; nr &lt; R &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; C &amp;&amp; !seen[nr][nc] &amp;&amp; heights[nr][nc] &gt;= heights[r][c]) {
+          seen[nr][nc] = true;
+          queue.push([nr, nc]);
+        }
+      }
+    }
+  }
+  const pacSeeds = [], atlSeeds = [];
+  for (let c = 0; c &lt; C; c++) { pacSeeds.push([0, c]); atlSeeds.push([R - 1, c]); }
+  for (let r = 0; r &lt; R; r++) { pacSeeds.push([r, 0]); atlSeeds.push([r, C - 1]); }
+  bfs(pacSeeds, pac);
+  bfs(atlSeeds, atl);
+  const out = [];
+  for (let r = 0; r &lt; R; r++) for (let c = 0; c &lt; C; c++) if (pac[r][c] &amp;&amp; atl[r][c]) out.push([r, c]);
+  return out;
+}
+const heights = [[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]];
+console.log(JSON.stringify(pacificAtlantic(heights)));</code></pre>
+      <ul class="sharepage__notes"><li>Mark each seed cell visited BEFORE pushing to the queue — prevents re-enqueuing edge cells when they appear in both the row and column seed loops (e.g., corners).</li><li>The BFS helper is a reusable function called twice — cleaner than duplicating the seeding logic for each ocean.</li><li>BFS explores level-by-level (by distance from edge) vs DFS depth-first; the reachability sets and output are identical.</li></ul>
+    </article>
+    <article class="sharepage__alt" id="alt2">
+      <h3>Direction-array DFS (one neighbor loop) <code>O(R·C) / O(R·C)</code></h3>
+      <p>Same reverse-flow DFS as the canonical, but the four explicit recursive calls become a for…of over a deltas array — one neighbor-walk to reuse or extend to diagonals. The four-dir-neighbors idiom (Algorithms › 4-directional neighbor iteration).</p>
+      <pre class="sharepage__code"><code class="language-js">const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+function pacificAtlantic(heights) {
+  const R = heights.length, C = heights[0].length;
+  const pac = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  const atl = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  function dfs(r, c, seen, prev) {
+    if (r &lt; 0 || r &gt;= R || c &lt; 0 || c &gt;= C) return;
+    if (seen[r][c]) return;
+    if (heights[r][c] &lt; prev) return;
+    seen[r][c] = true;
+    const h = heights[r][c];
+    for (const [dr, dc] of DIRS) dfs(r + dr, c + dc, seen, h);
+  }
+  for (let c = 0; c &lt; C; c++) { dfs(0, c, pac, -Infinity); dfs(R - 1, c, atl, -Infinity); }
+  for (let r = 0; r &lt; R; r++) { dfs(r, 0, pac, -Infinity); dfs(r, C - 1, atl, -Infinity); }
+  const out = [];
+  for (let r = 0; r &lt; R; r++) for (let c = 0; c &lt; C; c++) if (pac[r][c] &amp;&amp; atl[r][c]) out.push([r, c]);
+  return out;
+}
+const heights = [[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]];
+console.log(JSON.stringify(pacificAtlantic(heights)));</code></pre>
+      <ul class="sharepage__notes"><li>The per-call <code>prev</code>/<code>h</code> flow guard is unchanged — only the four calls fold into the loop.</li><li>DIRS at module scope avoids re-allocating the deltas array on every recursive call.</li><li>Row delta first, column delta second — matches the s-matrix-neighbors convention.</li></ul>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">4</span></h2>
+    <p class="sharepage__note">Positions 1–4 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> Why do we DFS from the ocean edges INWARD instead of from every cell outward?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Outward DFS produces wrong answers on plateaus because equal-height cells get visited twice</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It is O(R*C) instead of O((R*C)^2) — each cell is visited at most twice total <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Inward DFS lets a single visited grid serve both oceans, halving memory</li>
+        <li><span class="sharepage__key">D</span> Outward DFS cannot distinguish Pacific reachability from Atlantic reachability without a separate ocean ID per cell</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Reverse-flow rule from a neighbor with height <code>prev</code> into current cell with height <code>h</code>:</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> h &lt;= prev</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> h &gt;= prev <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> h &gt; prev (strict — equal heights block reverse climb just as plateaus block natural flow)</li>
+        <li><span class="sharepage__key">D</span> abs(h - prev) &lt;= 1 (water climbs only one elevation step at a time)</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> Which edges seed the Pacific flood?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Top row + right column</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Top row + left column <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Bottom row + right column</li>
+        <li><span class="sharepage__key">D</span> Only the top-left corner — the DFS propagates to the rest of the Pacific edge</li>
+      </ol>
+      
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> How is the final answer built?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Union of pac and atl</li>
+        <li><span class="sharepage__key">B</span> Symmetric difference: cells reachable in exactly one of the two grids</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Intersection: cells reachable in BOTH grids <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Cells whose pac[r][c] index is greater than their atl[r][c] index</li>
+      </ol>
+      
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
+    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Fill in the reverse-flood Pacific/Atlantic DFS.</p>
+      <pre class="sharepage__code"><code class="language-js">function pacificAtlantic(heights) {
+  const R = heights.length, C = heights[0].length;
+  const pac = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  const atl = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  function dfs(r, c, seen, prev) {
+    if (r &lt; 0 || r &gt;= R || c &lt; 0 || c &gt;= C) return;
+    if (seen[r][c]) return;
+    if (heights[r][c] ___ prev) return;
+    seen[r][c] = ___;
+    const h = heights[r][c];
+    dfs(r + 1, c, seen, h);
+    dfs(r ___ 1, c, seen, h);
+    dfs(r, c + 1, seen, h);
+    dfs(r, c - 1, seen, h);
+  }
+  for (let c = 0; c &lt; C; c++) { dfs(0, c, pac, -Infinity); dfs(R - 1, c, atl, -Infinity); }
+  for (let r = 0; r &lt; R; r++) { dfs(r, 0, pac, -Infinity); dfs(r, C - 1, atl, -Infinity); }
+  const out = [];
+  for (let r = 0; r &lt; R; r++) for (let c = 0; c &lt; C; c++) if (pac[r][c] ___ atl[r][c]) out.___([r, c]);
+  return out;
+}
+const heights = [[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]];
+console.log(JSON.stringify(pacificAtlantic(heights)));</code></pre>
+      <p><strong>Answers:</strong> <code>&lt;</code>, <code>true</code>, <code>-</code>, <code>&amp;&amp;</code>, <code>push</code></p>
+      <p class="sharepage__note">Expected output: <code>[[0,4],[1,3],[1,4],[2,2],[3,0],[3,1],[4,0]]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>Write <code>pacificAtlantic(heights)</code> — return all cells whose water can drain to BOTH oceans (Pacific = top + left edge, Atlantic = bottom + right). Use reverse DFS from each ocean. Log <code>JSON.stringify(result)</code> on the classic 5x5 example.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Seed two DFS frontiers — one per ocean — at the edge cells.</li><li>Inside DFS, only continue when heights[neighbor] &gt;= heights[current] (reverse flow).</li><li>Answer is the intersection of the two visited grids; iterate row-major to keep output sorted.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-js">function pacificAtlantic(heights) {
+  const R = heights.length, C = heights[0].length;
+  // Two visited grids — same cell may be reachable from one ocean but not both.
+  const pac = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  const atl = Array.from({length: R}, () =&gt; new Array(C).fill(false));
+  function dfs(r, c, seen, prev) {
+    if (r &lt; 0 || r &gt;= R || c &lt; 0 || c &gt;= C) return;
+    if (seen[r][c]) return;
+    if (heights[r][c] &lt; prev) return;          // reverse flow: must be &gt;= neighbor
+    seen[r][c] = true;
+    const h = heights[r][c];
+    dfs(r + 1, c, seen, h);
+    dfs(r - 1, c, seen, h);
+    dfs(r, c + 1, seen, h);
+    dfs(r, c - 1, seen, h);
+  }
+  // Pacific = top + left edges; Atlantic = bottom + right. -Infinity seeds let edge cells in.
+  for (let c = 0; c &lt; C; c++) { dfs(0, c, pac, -Infinity); dfs(R - 1, c, atl, -Infinity); }
+  for (let r = 0; r &lt; R; r++) { dfs(r, 0, pac, -Infinity); dfs(r, C - 1, atl, -Infinity); }
+  const out = [];
+  // Answer = intersection — drains to BOTH oceans. Row-major order = sorted output.
+  for (let r = 0; r &lt; R; r++) for (let c = 0; c &lt; C; c++) if (pac[r][c] &amp;&amp; atl[r][c]) out.push([r, c]);
+  return out;
+}
+const heights = [[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]];
+console.log(JSON.stringify(pacificAtlantic(heights)));</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"p-pacific-atlantic","title":"Pacific Atlantic Water Flow","section":"Graphs","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why do we DFS from the ocean edges INWARD instead of from every cell outward?","options":["Outward DFS produces wrong answers on plateaus because equal-height cells get visited twice","It is O(R*C) instead of O((R*C)^2) — each cell is visited at most twice total","Inward DFS lets a single visited grid serve both oceans, halving memory","Outward DFS cannot distinguish Pacific reachability from Atlantic reachability without a separate ocean ID per cell"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Reverse-flow rule from a neighbor with height `prev` into current cell with height `h`:","options":["h \u003c= prev","h >= prev","h > prev (strict — equal heights block reverse climb just as plateaus block natural flow)","abs(h - prev) \u003c= 1 (water climbs only one elevation step at a time)"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Which edges seed the Pacific flood?","options":["Top row + right column","Top row + left column","Bottom row + right column","Only the top-left corner — the DFS propagates to the rest of the Pacific edge"],"answer":1,"answerLetter":"B"},{"n":4,"q":"How is the final answer built?","options":["Union of pac and atl","Symmetric difference: cells reachable in exactly one of the two grids","Intersection: cells reachable in BOTH grids","Cells whose pac[r][c] index is greater than their atl[r][c] index"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in the reverse-flood Pacific/Atlantic DFS.","answers":["\u003c","true","-","&&","push"]}],"L3":[{"n":1,"prompt":"Write `pacificAtlantic(heights)` — return all cells whose water can drain to BOTH oceans (Pacific = top + left edge, Atlantic = bottom + right). Use reverse DFS from each ocean. Log `JSON.stringify(result)` on the classic 5x5 example.","expectedOutput":"[[0,4],[1,3],[1,4],[2,2],[3,0],[3,1],[4,0]]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/p-pacific-atlantic">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

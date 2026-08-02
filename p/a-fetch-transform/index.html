@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fetch &amp; Reshape an API Response — JS Drill</title>
+<meta name="description" content="Call an endpoint, guard the status, then reshape the payload into the shape your app actually wants — the two awaits and the `res.ok` check are sequential algorithm steps, while the reshape itself is collection-transform, so it&#39;s a `.filter().map().sort()` chain. Typed so the wire shape and the app shape can never be confused.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/p/a-fetch-transform">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Fetch &amp; Reshape an API Response — JS Drill">
+<meta property="og:description" content="Call an endpoint, guard the status, then reshape the payload into the shape your app actually wants — the two awaits and the `res.ok` check are sequential algorithm steps, while the reshape itself is collection-transform, so it&#39;s a `.filter().map().sort()` chain. Typed so the wire shape and the app shape can never be confused.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/p/a-fetch-transform">
+<link rel="stylesheet" href="../../ds/tokens.css">
+<link rel="stylesheet" href="../../ds/components.css">
+<link rel="stylesheet" href="../../css/13-share-page.css">
+<script src="../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
+    <h1>Fetch &amp; Reshape an API Response</h1>
+    <p class="sharepage__lede">Call an endpoint, guard the status, then reshape the payload into the shape your app actually wants — the two awaits and the `res.ok` check are sequential algorithm steps, while the reshape itself is collection-transform, so it&#39;s a `.filter().map().sort()` chain. Typed so the wire shape and the app shape can never be confused.</p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">5 concept · 2 fill-in · 1 drill</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="problem">
+    <h2>Problem</h2>
+    <p>In TypeScript: write <code>loadActiveUsers(fetchImpl, url)</code> that fetches a payload, throws <code>HTTP &lt;status&gt;</code> on a non-ok response, and reshapes <code>results</code> into <code>{id, fullName, city, tagCount}</code> — active users only, missing <code>location</code>/<code>tags</code> defaulted to <code>&#39;unknown&#39;</code>/<code>0</code>, sorted by tagCount descending. Declare the wire shape and the app shape as separate interfaces, and type the transport as a parameter.</p>
+    <p class="sharepage__note">Expected output: <code>3 Grace Hopper - New York (3 tags)
+1 Ada Lovelace - London (2 tags)
+4 Linus Torvalds - unknown (0 tags)
+caught: HTTP 503</code></p>
+  </section>
+
+  <section class="ds-section" id="canonical">
+    <h2>Canonical solution</h2>
+    <p><strong>await fetch → res.ok guard → await res.json() → typed filter/map/sort reshape</strong> · <code>O(n log n) / O(n)</code> (time / space)</p>
+    <pre class="sharepage__code"><code class="language-ts">// ── A TypeScript primer, inline ──────────────────────────────────────────
+// TypeScript is JavaScript plus type annotations. They&#39;re checked while you
+// write and ERASED before anything runs. Below, they do one specific job:
+// keep the API&#39;s shape and OUR shape from being confused for each other.
+
+// The shape that comes off the wire.
+interface ApiUser {
+  id: number;
+  active: boolean;
+  name: { first: string; last: string };
+  // The `?` marks the field OPTIONAL — it may be absent entirely, so its type
+  // is really `{ city: string } | undefined` and TypeScript will refuse to let
+  // you write `u.location.city` without handling the missing case.
+  location?: { city: string };
+  tags?: string[];
+}
+
+interface ApiPayload {
+  results: ApiUser[];
+}
+
+// The shape WE want. Keeping this separate from ApiUser is the entire point:
+// nothing downstream should ever see the wire format.
+interface UserRow {
+  id: number;
+  fullName: string;
+  city: string;
+  tagCount: number;
+}
+
+// A function type: `FetchLike` is anything callable with a url that resolves
+// to a response we can read. Typing the transport as a PARAMETER — rather
+// than calling the global `fetch` — is what lets a test inject a fake one,
+// and the type is what stops that fake drifting from the real signature.
+type FetchLike = (url: string) =&gt; Promise&lt;{
+  ok: boolean;
+  status: number;
+  json: () =&gt; Promise&lt;ApiPayload&gt;;
+}&gt;;
+
+// An async function&#39;s return type is ALWAYS a Promise, so it&#39;s written
+// `Promise&lt;UserRow[]&gt;` — a promise of an array of UserRow.
+async function loadActiveUsers(fetchImpl: FetchLike, url: string): Promise&lt;UserRow[]&gt; {
+  const res = await fetchImpl(url);
+  // fetch does NOT reject on 404/500 — only on network failure. Guard it.
+  // No type can catch this one: a failed response is a perfectly well-typed
+  // response. It&#39;s a runtime fact about the protocol, not a shape.
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // Reading the body is a SECOND await: the first resolved on headers alone.
+  const body = await res.json();
+  return body.results
+    .filter(u =&gt; u.active)
+    // `(u): UserRow =&gt; ({ ... })` annotates the ARROW&#39;s return type. That&#39;s
+    // what makes the mapper checked against UserRow — forget a field, or
+    // misspell one, and the error lands here instead of at some call site
+    // three files away.
+    .map((u): UserRow =&gt; ({
+      id: u.id,
+      fullName: `${u.name.first} ${u.name.last}`,
+      // `?.` short-circuits to undefined when `location` is missing; `??`
+      // then supplies the default. The `?` in the interface above is what
+      // forces you to write both.
+      city: u.location?.city ?? &#39;unknown&#39;,
+      tagCount: u.tags?.length ?? 0,
+    }))
+    .sort((a, b) =&gt; b.tagCount - a.tagCount);
+}</code></pre>
+    <ul class="sharepage__notes"><li>TypeScript types are ERASED before the code runs — they cost nothing at runtime and change no behavior.</li><li><code>fetch</code> rejects ONLY on network-level failure (DNS, refused, CORS). A 404 or 500 resolves normally with <code>ok: false</code>, so without the explicit <code>res.ok</code> check you parse the error page and crash later somewhere unrelated. NO type catches this — a failed response is a perfectly well-typed response.</li><li>Two awaits, two moments: <code>await fetch(...)</code> resolves on the response HEADERS; <code>await res.json()</code> resolves once the body has streamed and parsed. Putting the guard between them means a bad status bails before downloading a body it would discard.</li><li>Two interfaces, on purpose: <code>ApiUser</code> is the wire shape and <code>UserRow</code> is ours. This function is the only code that knows both, so an API rename touches exactly one file — that separation is the whole reason to write the second interface down.</li><li><code>location?: { city: string }</code> — the <code>?</code> makes the field optional, which is what forces <code>u.location?.city ?? &#39;unknown&#39;</code> at the use site. Declaring the API&#39;s optional fields honestly is what makes the compiler demand the defensive code.</li><li><code>.map((u): UserRow =&gt; ({ ... }))</code> annotates the arrow&#39;s return type, so a missing or misspelled field fails right there instead of at a distant call site.</li><li><code>?.</code> prevents the TypeError when <code>location</code> is absent; <code>??</code> supplies the default for null/undefined only. <code>||</code> would also clobber a legitimately falsy value like an empty-string city.</li><li>The transport is a PARAMETER typed <code>FetchLike</code>, not a global <code>fetch</code> call — the same injectable-dependency trick the debounce lesson uses for its clock, and the type is what keeps a test fake honest.</li></ul>
+  </section>
+
+  <section class="ds-section" id="L1">
+    <h2>L1 — Concept questions <span class="sharepage__count">5</span></h2>
+    <p class="sharepage__note">Positions 1–5 of the code's first segment. The correct option is marked; in the app the options are shuffled, but the lettering here is the authored order the code refers to.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> The response type says <code>ok: boolean; status: number</code>. Why does TypeScript not save you from forgetting the <code>if (!res.ok) throw</code> guard?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It would, if <code>ok</code> were typed as a literal <code>true</code> instead of <code>boolean</code> — the widened type is what loses the guarantee</li>
+        <li><span class="sharepage__key">B</span> Because <code>await</code> erases the response&#39;s type, leaving <code>any</code> for everything downstream</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A failed response is a perfectly well-typed response: <code>ok: false</code> satisfies <code>boolean</code>, so the shape is valid and only a runtime check can distinguish success from failure <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because <code>res.ok</code> is optional in the DOM lib&#39;s Response type, so the compiler treats reading it as unsafe either way</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Types describe shape, not protocol outcome. A 500 comes back with every field present and correctly typed — it simply has <code>ok: false</code>. <code>fetch</code> rejects only on network-level failure, so the status check is a runtime obligation the type system has no way to express or enforce.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why are there two separate awaits (<code>await fetchImpl(url)</code> then <code>await res.json()</code>) rather than one?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>res.json()</code> is synchronous; the second await is a defensive habit that has no runtime effect</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The first await resolves once the response HEADERS arrive, so the status is known before any body bytes are read; parsing the streamed body is a second asynchronous step <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The first await resolves the DNS lookup and the second performs the actual request</li>
+        <li><span class="sharepage__key">D</span> Combining them would lose the response status, since <code>res.json()</code> discards everything but the parsed body</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Headers first, body second. That split is exactly why the <code>res.ok</code> guard can sit between them and bail before downloading a body it would throw away.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> The map writes <code>city: u.location?.city ?? &#39;unknown&#39;</code>. What would break if it were <code>u.location.city || &#39;unknown&#39;</code>?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Nothing at runtime — <code>||</code> and <code>??</code> behave identically once optional chaining has already returned undefined</li>
+        <li><span class="sharepage__key">B</span> <code>||</code> cannot appear inside an object literal without parentheses, so it would be a syntax error</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Two things: <code>u.location.city</code> throws a TypeError when <code>location</code> is absent, and <code>||</code> would additionally replace a legitimately falsy city (an empty string) with &#39;unknown&#39; <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> <code>||</code> evaluates its right side eagerly, so &#39;unknown&#39; would overwrite every city regardless of the left side</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>?.</code> is what prevents the crash on a missing <code>location</code>; <code>??</code> narrows the default to null/undefined so real-but-falsy values survive. They solve two different problems and both are needed.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> After this call you must fetch a detail page for each of the N returned users. Why prefer <code>Promise.all(ids.map(fetchDetail))</code> over awaiting inside a <code>for...of</code> loop?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>Promise.all</code> retries failed requests automatically, while a sequential loop aborts on the first rejection</li>
+        <li><span class="sharepage__key">B</span> A <code>for...of</code> loop cannot contain <code>await</code>, so the requests would fire without being awaited at all</li>
+        <li><span class="sharepage__key">C</span> <code>Promise.all</code> guarantees results come back in completion order, which a sequential loop cannot provide</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Awaiting in a loop serializes the round trips, so total latency is the SUM of N requests; <code>Promise.all</code> starts them concurrently so it finishes in roughly the slowest single request <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sequential awaits are the classic accidental-serialization bug. <code>Promise.all</code> overlaps independent requests — and it preserves input order in its result array, unlike the completion-order claim.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> Why declare a separate <code>UserRow</code> interface instead of letting TypeScript infer the mapped object&#39;s type?</h3>
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Inference fails on object literals inside <code>.map</code>, so the annotation is required for the code to compile</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It names the app&#39;s shape as a contract independent of the wire format, so an API change breaks in this one function rather than silently propagating a new shape to every consumer <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Declared interfaces are erased while inferred types are emitted as runtime metadata, so declaring it is measurably lighter</li>
+        <li><span class="sharepage__key">D</span> <code>.sort</code> requires an explicitly declared element type to compare its operands</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> With inference, the mapper&#39;s output type is derived FROM the API shape — so if the API renames a field and you update the mapper, the inferred type quietly changes and every consumer silently adopts it. Declaring <code>UserRow</code> (and annotating the arrow <code>(u): UserRow =&gt;</code>) pins the contract, so the mismatch surfaces here, at the boundary, which is the only place that knows both shapes.</p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L2">
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
+    
+    <article class="sharepage__q" id="l2-1">
+      <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
+      <p>Guard the response status before reading the body. Fill the blanks so the 404 surfaces as a clear error.</p>
+      <pre class="sharepage__code"><code class="language-ts">interface Payload { results: string[] }
+const res = { ok: false, status: 404, json: async (): ___&lt;Payload&gt; =&gt; ({ results: [] }) };
+async function load(r: typeof res): Promise&lt;Payload&gt; {
+  if (!r.___) throw new ___(`HTTP ${r.___}`);
+  return ___ r.json();
+}
+(async () =&gt; {
+  try { await load(res); } catch (e) { console.log((e as Error).message); }
+})();</code></pre>
+      <p><strong>Answers:</strong> <code>Promise</code>, <code>ok</code>, <code>Error</code>, <code>status</code>, <code>await</code></p>
+      <p class="sharepage__note">Expected output: <code>HTTP 404</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Reshape the raw records into the app&#39;s shape, defending the record that omits <code>tags</code>. Fill the blanks.</p>
+      <pre class="sharepage__code"><code class="language-ts">interface ApiUser {
+  id: number;
+  active: boolean;
+  name: { first: string; last: string };
+  tags___: string[];
+}
+interface Row { name: string; tagCount: ___ }
+const raw: ApiUser[] = [
+  { id: 1, active: true, name: { first: &#39;Ada&#39;, last: &#39;Lovelace&#39; }, tags: [&#39;math&#39;, &#39;logic&#39;] },
+  { id: 2, active: false, name: { first: &#39;Alan&#39;, last: &#39;Turing&#39; }, tags: [&#39;crypto&#39;] },
+  { id: 3, active: true, name: { first: &#39;Linus&#39;, last: &#39;Torvalds&#39; } },
+];
+const rows = raw
+  .___(u =&gt; u.active)
+  .map((u): Row =&gt; ({ name: `${u.name.first} ${u.name.last}`, tagCount: u.tags___length ___ 0 }));
+console.log(JSON.stringify(rows));</code></pre>
+      <p><strong>Answers:</strong> <code>?</code>, <code>number</code>, <code>filter</code>, <code>?.</code>, <code>??</code></p>
+      <p class="sharepage__note">Expected output: <code>[{&quot;name&quot;:&quot;Ada Lovelace&quot;,&quot;tagCount&quot;:2},{&quot;name&quot;:&quot;Linus Torvalds&quot;,&quot;tagCount&quot;:0}]</code></p>
+    </article>
+  </section>
+
+  <section class="ds-section" id="L3">
+    <h2>L3 — Write it from memory</h2>
+    <p class="sharepage__note">One position, the code's third segment.</p>
+    <p>In TypeScript: write <code>loadActiveUsers(fetchImpl, url)</code> that fetches a payload, throws <code>HTTP &lt;status&gt;</code> on a non-ok response, and reshapes <code>results</code> into <code>{id, fullName, city, tagCount}</code> — active users only, missing <code>location</code>/<code>tags</code> defaulted to <code>&#39;unknown&#39;</code>/<code>0</code>, sorted by tagCount descending. Declare the wire shape and the app shape as separate interfaces, and type the transport as a parameter.</p>
+    <details><summary>Hints</summary><ul class="sharepage__notes"><li>Declare two interfaces — <code>ApiUser</code> (wire) and <code>UserRow</code> (ours) — plus a <code>FetchLike</code> function type for the injected transport.</li><li>Mark the API&#39;s optional fields with <code>?</code> (<code>location?: { city: string }</code>); that&#39;s what forces <code>u.location?.city ?? &#39;unknown&#39;</code> at the use site.</li><li><code>fetch</code> does not reject on 404/500, and no type can catch that — guard with <code>if (!res.ok) throw new Error(...)</code> after the first await, before parsing the body.</li><li>Annotate the mapper&#39;s return type — <code>.map((u): UserRow =&gt; ({ ... }))</code> — so a missing field fails inside the reshape rather than at a distant caller.</li></ul></details>
+    <pre class="sharepage__code"><code class="language-ts">// ── A TypeScript primer, inline ──────────────────────────────────────────
+// TypeScript is JavaScript plus type annotations. They&#39;re checked while you
+// write and ERASED before anything runs. Below, they do one specific job:
+// keep the API&#39;s shape and OUR shape from being confused for each other.
+
+// The shape that comes off the wire.
+interface ApiUser {
+  id: number;
+  active: boolean;
+  name: { first: string; last: string };
+  // The `?` marks the field OPTIONAL — it may be absent entirely, so its type
+  // is really `{ city: string } | undefined` and TypeScript will refuse to let
+  // you write `u.location.city` without handling the missing case.
+  location?: { city: string };
+  tags?: string[];
+}
+
+interface ApiPayload {
+  results: ApiUser[];
+}
+
+// The shape WE want. Keeping this separate from ApiUser is the entire point:
+// nothing downstream should ever see the wire format.
+interface UserRow {
+  id: number;
+  fullName: string;
+  city: string;
+  tagCount: number;
+}
+
+// A function type: `FetchLike` is anything callable with a url that resolves
+// to a response we can read. Typing the transport as a PARAMETER — rather
+// than calling the global `fetch` — is what lets a test inject a fake one,
+// and the type is what stops that fake drifting from the real signature.
+type FetchLike = (url: string) =&gt; Promise&lt;{
+  ok: boolean;
+  status: number;
+  json: () =&gt; Promise&lt;ApiPayload&gt;;
+}&gt;;
+
+// An async function&#39;s return type is ALWAYS a Promise, so it&#39;s written
+// `Promise&lt;UserRow[]&gt;` — a promise of an array of UserRow.
+async function loadActiveUsers(fetchImpl: FetchLike, url: string): Promise&lt;UserRow[]&gt; {
+  const res = await fetchImpl(url);
+  // fetch does NOT reject on 404/500 — only on network failure. Guard it.
+  // No type can catch this one: a failed response is a perfectly well-typed
+  // response. It&#39;s a runtime fact about the protocol, not a shape.
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // Reading the body is a SECOND await: the first resolved on headers alone.
+  const body = await res.json();
+  return body.results
+    .filter(u =&gt; u.active)
+    // `(u): UserRow =&gt; ({ ... })` annotates the ARROW&#39;s return type. That&#39;s
+    // what makes the mapper checked against UserRow — forget a field, or
+    // misspell one, and the error lands here instead of at some call site
+    // three files away.
+    .map((u): UserRow =&gt; ({
+      id: u.id,
+      fullName: `${u.name.first} ${u.name.last}`,
+      // `?.` short-circuits to undefined when `location` is missing; `??`
+      // then supplies the default. The `?` in the interface above is what
+      // forces you to write both.
+      city: u.location?.city ?? &#39;unknown&#39;,
+      tagCount: u.tags?.length ?? 0,
+    }))
+    .sort((a, b) =&gt; b.tagCount - a.tagCount);
+}
+
+// Stubbed transports — the same injected-dependency trick the debounce
+// lesson uses for its clock, so the drill runs without a network. Both are
+// annotated `FetchLike`, so a fake that drifts from the real shape fails to
+// compile rather than failing mysteriously at runtime.
+const PAYLOAD: ApiPayload = {
+  results: [
+    { id: 1, active: true, name: { first: &#39;Ada&#39;, last: &#39;Lovelace&#39; }, location: { city: &#39;London&#39; }, tags: [&#39;math&#39;, &#39;logic&#39;] },
+    { id: 2, active: false, name: { first: &#39;Alan&#39;, last: &#39;Turing&#39; }, location: { city: &#39;Wilmslow&#39; }, tags: [&#39;crypto&#39;] },
+    { id: 3, active: true, name: { first: &#39;Grace&#39;, last: &#39;Hopper&#39; }, location: { city: &#39;New York&#39; }, tags: [&#39;compilers&#39;, &#39;navy&#39;, &#39;cobol&#39;] },
+    { id: 4, active: true, name: { first: &#39;Linus&#39;, last: &#39;Torvalds&#39; } },
+  ],
+};
+const okFetch: FetchLike = async () =&gt; ({ ok: true, status: 200, json: async () =&gt; PAYLOAD });
+const downFetch: FetchLike = async () =&gt; ({ ok: false, status: 503, json: async () =&gt; PAYLOAD });
+
+(async () =&gt; {
+  const rows = await loadActiveUsers(okFetch, &#39;/api/users&#39;);
+  for (const r of rows) {
+    console.log(`${r.id} ${r.fullName} - ${r.city} (${r.tagCount} tags)`);
+  }
+  try {
+    await loadActiveUsers(downFetch, &#39;/api/users&#39;);
+  } catch (err) {
+    console.log(`caught: ${(err as Error).message}`);
+  }
+})();</code></pre>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>Three segments separated by <code>.</code> — always <code>L1.L2.L3</code>, in that order. An empty segment means the lesson has no questions at that level.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"id":"a-fetch-transform","title":"Fetch & Reshape an API Response","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"The response type says `ok: boolean; status: number`. Why does TypeScript not save you from forgetting the `if (!res.ok) throw` guard?","options":["It would, if `ok` were typed as a literal `true` instead of `boolean` — the widened type is what loses the guarantee","Because `await` erases the response's type, leaving `any` for everything downstream","A failed response is a perfectly well-typed response: `ok: false` satisfies `boolean`, so the shape is valid and only a runtime check can distinguish success from failure","Because `res.ok` is optional in the DOM lib's Response type, so the compiler treats reading it as unsafe either way"],"answer":2,"answerLetter":"C"},{"n":2,"q":"Why are there two separate awaits (`await fetchImpl(url)` then `await res.json()`) rather than one?","options":["`res.json()` is synchronous; the second await is a defensive habit that has no runtime effect","The first await resolves once the response HEADERS arrive, so the status is known before any body bytes are read; parsing the streamed body is a second asynchronous step","The first await resolves the DNS lookup and the second performs the actual request","Combining them would lose the response status, since `res.json()` discards everything but the parsed body"],"answer":1,"answerLetter":"B"},{"n":3,"q":"The map writes `city: u.location?.city ?? 'unknown'`. What would break if it were `u.location.city || 'unknown'`?","options":["Nothing at runtime — `||` and `??` behave identically once optional chaining has already returned undefined","`||` cannot appear inside an object literal without parentheses, so it would be a syntax error","Two things: `u.location.city` throws a TypeError when `location` is absent, and `||` would additionally replace a legitimately falsy city (an empty string) with 'unknown'","`||` evaluates its right side eagerly, so 'unknown' would overwrite every city regardless of the left side"],"answer":2,"answerLetter":"C"},{"n":4,"q":"After this call you must fetch a detail page for each of the N returned users. Why prefer `Promise.all(ids.map(fetchDetail))` over awaiting inside a `for...of` loop?","options":["`Promise.all` retries failed requests automatically, while a sequential loop aborts on the first rejection","A `for...of` loop cannot contain `await`, so the requests would fire without being awaited at all","`Promise.all` guarantees results come back in completion order, which a sequential loop cannot provide","Awaiting in a loop serializes the round trips, so total latency is the SUM of N requests; `Promise.all` starts them concurrently so it finishes in roughly the slowest single request"],"answer":3,"answerLetter":"D"},{"n":5,"q":"Why declare a separate `UserRow` interface instead of letting TypeScript infer the mapped object's type?","options":["Inference fails on object literals inside `.map`, so the annotation is required for the code to compile","It names the app's shape as a contract independent of the wire format, so an API change breaks in this one function rather than silently propagating a new shape to every consumer","Declared interfaces are erased while inferred types are emitted as runtime metadata, so declaring it is measurably lighter","`.sort` requires an explicitly declared element type to compare its operands"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Guard the response status before reading the body. Fill the blanks so the 404 surfaces as a clear error.","answers":["Promise","ok","Error","status","await"]},{"n":2,"prompt":"Reshape the raw records into the app's shape, defending the record that omits `tags`. Fill the blanks.","answers":["?","number","filter","?.","??"]}],"L3":[{"n":1,"prompt":"In TypeScript: write `loadActiveUsers(fetchImpl, url)` that fetches a payload, throws `HTTP \u003cstatus>` on a non-ok response, and reshapes `results` into `{id, fullName, city, tagCount}` — active users only, missing `location`/`tags` defaulted to `'unknown'`/`0`, sorted by tagCount descending. Declare the wire shape and the app shape as separate interfaces, and type the transport as a parameter.","expectedOutput":"3 Grace Hopper - New York (3 tags)\n1 Ada Lovelace - London (2 tags)\n4 Linus Torvalds - unknown (0 tags)\ncaught: HTTP 503"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/index.html#/a-fetch-transform">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../sd/">System design</a>
+</footer>
+<script src="../../js/share-page.js"></script>
+</body>
+</html>

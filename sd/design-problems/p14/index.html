@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Design a Typeahead / Autocomplete Service — Canonical Design Problems</title>
+<meta name="description" content="Search-box suggestions that appear as the user types, in under ~100ms. The signature structure is a trie of prefixes where each node caches its precomputed top-K completions, so a lookup is O(prefix length) rather than a ranking query at request time.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/design-problems/p14">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Design a Typeahead / Autocomplete Service — Canonical Design Problems">
+<meta property="og:description" content="Search-box suggestions that appear as the user types, in under ~100ms. The signature structure is a trie of prefixes where each node caches its precomputed top-K completions, so a lookup is O(prefix length) rather than a ranking query at request time.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/design-problems/p14">
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/design-problems/">Canonical Design Problems</a></p>
+    <h1>Design a Typeahead / Autocomplete Service</h1>
+    <p class="sharepage__lede">Search-box suggestions that appear as the user types, in under ~100ms. The signature structure is a trie of prefixes where each node caches its precomputed top-K completions, so a lookup is O(prefix length) rather than a ranking query at request time.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Canonical Design Problems</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Store prefixes in a trie; cache the precomputed top-K completions ON each node so a lookup is O(prefix length), not a scan/sort at query time.</li><li>Rank suggestions by historical frequency (and recency/personalization); precompute the ranking offline, don&#39;t sort per-request.</li><li>Update the trie via periodic batch/offline rebuild from aggregated query logs — real-time per-keystroke writes are too write-heavy and would thrash the top-K caches.</li><li>Meet the sub-100ms budget with in-memory tries, edge caching, and client-side debouncing (~50–100ms) so not every keystroke hits the server.</li><li>Shard the trie by first characters/prefix ranges; route a request to the shard owning its prefix.</li><li>Querying a DB with <code>LIKE &#39;prefix%&#39;</code> doesn&#39;t scale to autocomplete latency/QPS; the precomputed-top-K trie does.</li><li>Personalization and freshness are layered on top of the global frequency-ranked base.</li></ul>
+  </section>
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Scope a typeahead/autocomplete service. What are the functional requirements, and which non-functional constraint dominates?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Functional: given a prefix, return the top ~5–10 completions ranked by relevance/popularity; results update as the user types.</li><li>Latency dominates — suggestions must feel instant, budget ~50–100ms end to end.</li><li>Read-heavy: enormous query QPS, comparatively rare updates to the suggestion corpus.</li><li>Freshness: how fast must a newly-trending query appear (minutes/hours, usually not seconds)?</li><li>Clarify: is ranking global popularity, personalized, or context-aware? Multilingual? Prefix-only or fuzzy/typo-tolerant?</li><li>Availability &gt; perfect freshness — stale suggestions are fine, a slow box is not.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Functionally, given a prefix return the ~top-10 completions ranked by popularity, refreshing on each keystroke. The dominant constraint is latency — it must feel instant, so a ~50–100ms budget end to end. It&#39;s extremely read-heavy with rare corpus updates, and availability beats freshness: showing slightly stale suggestions is fine, a laggy box is not. I&#39;d clarify whether ranking is global vs personalized, how quickly trending queries must surface (usually minutes/hours, not seconds), and whether we need typo tolerance or just prefix matching.</div>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Estimate the scale: query QPS, trie size, and update volume for a large search engine&#39;s autocomplete.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Assume ~5B searches/day; each search generates several prefix requests as the user types (say ~6) ≈ 30B typeahead requests/day.</li><li>30B/day ≈ ~350k requests/sec average, ~1M/sec at peak — client debounce cuts this materially.</li><li>Corpus: keep top ~100M–1B distinct queries; a trie over them is on the order of tens of GB in memory — shardable.</li><li>Storage per node is small (top-K strings + scores); dominated by node count.</li><li>Updates: rebuild from aggregated logs periodically (hourly/daily), not per query — write volume is batch, not real-time.</li><li>Debouncing at the client (~50–100ms idle) is the single biggest QPS reducer.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> If there are ~5B searches/day and each typed query fires ~6 prefix lookups, that&#39;s ~30B typeahead requests/day ≈ 350k/sec average and ~1M/sec peak — though client debouncing (only query after ~50–100ms of idle) knocks that down a lot. We&#39;d index the top ~100M–1B distinct queries; a trie with per-node top-K caches over that is on the order of tens of GB, which we shard across machines and keep in memory. Updates aren&#39;t per-request: we aggregate query logs and rebuild/patch the trie hourly or daily, so writes are batch, not a hot path.</div>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Sketch the API and the offline data pipeline that feeds it.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li><code>GET /suggest?q={prefix}&amp;lang=&amp;user=</code> → ordered list of ~10 completions (+ optional scores).</li><li>Response must be tiny and cacheable at the edge for popular prefixes.</li><li>Offline pipeline: collect query logs → aggregate counts (map-reduce/stream) over a rolling window → compute per-query frequency scores.</li><li>Build/patch the trie with each node&#39;s top-K precomputed from the aggregated scores.</li><li>Distribute the built trie/shards to serving nodes (blue-green swap or incremental patch).</li><li>Optional: separate personalization service layered at query time.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The serving API is essentially one endpoint: <code>GET /suggest?q=prefix</code> returning ~10 ranked completions, tiny and edge-cacheable for hot prefixes. Behind it is an offline pipeline: query logs are aggregated (map-reduce or a streaming job) over a rolling window into per-query frequency scores, then a build job constructs the trie and precomputes each node&#39;s top-K completions from those scores. The built trie/shards are pushed to the in-memory serving fleet via a blue-green swap or incremental patch. Personalization, if any, is a thin layer applied at query time on top of the global ranked base.</div>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>Describe the core data structure. How is the trie laid out and what exactly is stored per node?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>A trie (prefix tree): each edge is a character, each path from root spells a prefix.</li><li>Each node caches its precomputed top-K completions (the K most-popular full queries under that prefix) + their scores.</li><li>A lookup walks the trie by the prefix&#39;s characters — O(prefix length) — and returns that node&#39;s cached list directly, no scan or sort.</li><li>Top-K is computed bottom-up at build time: a node&#39;s list merges its children&#39;s lists.</li><li>Trades memory (duplicating top-K up the tree) for query speed.</li><li>Optionally compress with a radix/Patricia trie to collapse single-child chains.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> It&#39;s a trie where each root-to-node path spells a prefix, and crucially each node stores a precomputed cache of its top-K most-popular completions with scores. A request walks the trie character by character — O(prefix length), independent of corpus size — and returns the node&#39;s cached list directly, with no per-request scanning or sorting. Those top-K lists are computed bottom-up at build time by merging children&#39;s lists up to the root. It deliberately trades memory (the popular completions are duplicated up the tree) for a lookup that&#39;s essentially a pointer walk. A radix/Patricia trie collapses single-child chains to save space.</div>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span> <span class="ds-chip">crux</span></h3>
+      <p>Why use a trie with precomputed per-node top-K instead of querying a database with <code>SELECT ... WHERE query LIKE &#39;prefix%&#39; ORDER BY freq LIMIT 10</code>?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> <code>LIKE &#39;prefix%&#39;</code> returns wrong results because SQL can&#39;t match string prefixes.</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A leading-wildcard-free <code>LIKE &#39;prefix%&#39;</code> can use an index, but it still scans/sorts all matches per request; the trie precomputes the ranked top-K so each lookup is O(prefix) with no per-request sort, meeting the sub-100ms budget at massive QPS. <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Databases cannot be sharded, whereas tries can.</li>
+        <li><span class="sharepage__key">D</span> The trie guarantees strong consistency of suggestion freshness, which the database cannot provide.</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> <code>LIKE &#39;prefix%&#39;</code> (no leading wildcard) can use a B-tree index to find the matching range, but for a hot prefix like &#39;a&#39; that range is enormous and the DB must still gather and sort by frequency on every keystroke — impossible at hundreds of thousands of QPS within 100ms. The trie moves that ranking work offline: each node already holds its top-K, so serving a request is just walking the prefix and returning a cached list. The tradeoff is memory and staleness (the trie is rebuilt periodically), which is exactly the right trade for autocomplete.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>Deep dive: how do you keep suggestions fresh? Compare batch/offline rebuild against real-time per-keystroke updates, and explain why real-time is hard.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Batch: aggregate logs and rebuild/patch the trie every hour/day — simple, but new trends lag by the rebuild interval.</li><li>Real-time per-keystroke writes are enormous write volume (every search would mutate the trie) — write-heavy on a read-optimized structure.</li><li>Updating a frequency also invalidates every ancestor node&#39;s top-K cache up to the root — a single update can ripple far.</li><li>Concurrency: mutating shared in-memory tries under 1M QPS reads needs careful locking / copy-on-write.</li><li>Practical middle ground: batch-rebuild the base + a fast streaming layer for trending terms, merged at query time.</li><li>Freshness requirement usually allows minutes/hours, so batch is acceptable for most of the corpus.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The default is a batch/offline rebuild: aggregate query logs and rebuild or patch the trie hourly or daily. Real-time per-keystroke updates are hard for three reasons — the write volume is astronomical (every search would mutate the structure), a single frequency bump invalidates the precomputed top-K of every ancestor node up to the root, and mutating a shared in-memory trie while it serves ~1M reads/sec demands careful copy-on-write or locking. Since freshness usually only needs to be minutes-to-hours, batch is fine for the bulk of the corpus, with an optional lightweight streaming layer for genuinely trending terms merged in at query time.</div>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>How do you shard the trie and hit the sub-100ms latency budget across the request path?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Shard the trie by prefix ranges (e.g. by first 1–2 characters), each shard owned by a serving node; route requests by prefix.</li><li>Very hot prefixes (single letters) are hot shards — replicate them; cache their responses at the edge/CDN.</li><li>Serve entirely from memory — no disk on the request path.</li><li>Client-side debouncing (~50–100ms idle) so not every keystroke fires a request; cancel in-flight requests when the user types more.</li><li>Edge/CDN cache the response for popular prefixes with a short TTL.</li><li>Keep responses tiny (~10 short strings) to minimize network time.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Shard by prefix — e.g. route on the first one or two characters — with each shard owning part of the trie in memory, and replicate the hottest single-letter prefixes since they&#39;re disproportionately queried. Everything on the request path is in-memory, no disk. On the client, debounce ~50–100ms so we only query after the user pauses and cancel superseded in-flight requests. Popular prefixes are cached at the edge/CDN with a short TTL, and responses are kept to ~10 short strings so network time is negligible. That combination — in-memory sharded trie + edge cache + debounce — is what fits inside the 100ms budget.</div>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>A user typing &#39;newy&#39; should quickly get &#39;new york&#39;. What primarily makes this lookup fast, and where does personalization fit?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> The &#39;newy&#39; trie node already holds its precomputed top-K globally-popular completions, so serving is an O(prefix) walk + cache read; personalization is a lighter re-rank applied on top of that base list. <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> The server sorts all queries starting with &#39;newy&#39; by popularity on each request; personalization replaces that sort.</li>
+        <li><span class="sharepage__key">C</span> A bloom filter stores the completion for each prefix, so no ranking is ever needed.</li>
+        <li><span class="sharepage__key">D</span> The database index guarantees the first row returned is always the personalized best match.</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The speed comes from the precomputation: the node for &#39;newy&#39; already stores its top globally-popular completions, so at request time the server just walks four characters and returns a cached list — no sorting. Personalization is layered afterward: take the small precomputed global candidate set (and optionally the user&#39;s own history) and re-rank those ~10–20 items cheaply, rather than re-ranking the whole corpus. Keeping personalization as a thin re-rank on a precomputed base is what preserves the latency budget.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Staff-level: what breaks at scale, and what are the main failure modes and tradeoffs?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Hot shards: single-character prefixes get orders of magnitude more traffic — replicate + edge-cache them, or the shard melts.</li><li>Memory footprint: precomputed top-K duplicated up the trie is memory-hungry — tune K, use radix compression, cap corpus size.</li><li>Freshness vs cost: shorter rebuild interval = fresher but more expensive pipeline and cache churn.</li><li>Abuse/spam and offensive suggestions: filter the corpus, apply blocklists — a real production concern.</li><li>Multilingual / Unicode / non-Latin scripts complicate the trie and sharding.</li><li>Typo tolerance (fuzzy matching) is a separate, harder feature (edit-distance / n-gram index), not free from a plain trie.</li><li>Personalization increases per-user state and cache cardinality (can&#39;t fully edge-cache personalized responses).</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The first failure mode is hot shards — single-letter prefixes carry a huge share of traffic, so they must be replicated and edge-cached or they melt. Memory is the next pressure: duplicating top-K up the trie is expensive, so we tune K, apply radix compression, and cap the corpus. There&#39;s a core freshness-vs-cost tradeoff in the rebuild interval, and real production concerns around filtering spam/offensive suggestions and handling multilingual scripts. Two things people underestimate: typo tolerance is a genuinely separate, harder problem (edit-distance or n-gram matching, not a plain prefix trie), and personalization defeats simple edge caching because responses become per-user, so it must stay a cheap re-rank on a cacheable global base.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"design-problems","unit":"p14","title":"Design a Typeahead / Autocomplete Service","codeShape":["Q"],"questions":[{"n":1,"type":"open","prompt":"Scope a typeahead/autocomplete service. What are the functional requirements, and which non-functional constraint dominates?","points":["Functional: given a prefix, return the top ~5–10 completions ranked by relevance/popularity; results update as the user types.","Latency dominates — suggestions must feel instant, budget ~50–100ms end to end.","Read-heavy: enormous query QPS, comparatively rare updates to the suggestion corpus.","Freshness: how fast must a newly-trending query appear (minutes/hours, usually not seconds)?","Clarify: is ranking global popularity, personalized, or context-aware? Multilingual? Prefix-only or fuzzy/typo-tolerant?","Availability > perfect freshness — stale suggestions are fine, a slow box is not."]},{"n":2,"type":"open","prompt":"Estimate the scale: query QPS, trie size, and update volume for a large search engine's autocomplete.","points":["Assume ~5B searches/day; each search generates several prefix requests as the user types (say ~6) ≈ 30B typeahead requests/day.","30B/day ≈ ~350k requests/sec average, ~1M/sec at peak — client debounce cuts this materially.","Corpus: keep top ~100M–1B distinct queries; a trie over them is on the order of tens of GB in memory — shardable.","Storage per node is small (top-K strings + scores); dominated by node count.","Updates: rebuild from aggregated logs periodically (hourly/daily), not per query — write volume is batch, not real-time.","Debouncing at the client (~50–100ms idle) is the single biggest QPS reducer."]},{"n":3,"type":"open","prompt":"Sketch the API and the offline data pipeline that feeds it.","points":["`GET /suggest?q={prefix}&lang=&user=` → ordered list of ~10 completions (+ optional scores).","Response must be tiny and cacheable at the edge for popular prefixes.","Offline pipeline: collect query logs → aggregate counts (map-reduce/stream) over a rolling window → compute per-query frequency scores.","Build/patch the trie with each node's top-K precomputed from the aggregated scores.","Distribute the built trie/shards to serving nodes (blue-green swap or incremental patch).","Optional: separate personalization service layered at query time."]},{"n":4,"type":"open","prompt":"Describe the core data structure. How is the trie laid out and what exactly is stored per node?","points":["A trie (prefix tree): each edge is a character, each path from root spells a prefix.","Each node caches its precomputed top-K completions (the K most-popular full queries under that prefix) + their scores.","A lookup walks the trie by the prefix's characters — O(prefix length) — and returns that node's cached list directly, no scan or sort.","Top-K is computed bottom-up at build time: a node's list merges its children's lists.","Trades memory (duplicating top-K up the tree) for query speed.","Optionally compress with a radix/Patricia trie to collapse single-child chains."]},{"n":5,"type":"mc","prompt":"Why use a trie with precomputed per-node top-K instead of querying a database with `SELECT ... WHERE query LIKE 'prefix%' ORDER BY freq LIMIT 10`?","options":["`LIKE 'prefix%'` returns wrong results because SQL can't match string prefixes.","A leading-wildcard-free `LIKE 'prefix%'` can use an index, but it still scans/sorts all matches per request; the trie precomputes the ranked top-K so each lookup is O(prefix) with no per-request sort, meeting the sub-100ms budget at massive QPS.","Databases cannot be sharded, whereas tries can.","The trie guarantees strong consistency of suggestion freshness, which the database cannot provide."],"answer":1,"answerLetter":"B"},{"n":6,"type":"open","prompt":"Deep dive: how do you keep suggestions fresh? Compare batch/offline rebuild against real-time per-keystroke updates, and explain why real-time is hard.","points":["Batch: aggregate logs and rebuild/patch the trie every hour/day — simple, but new trends lag by the rebuild interval.","Real-time per-keystroke writes are enormous write volume (every search would mutate the trie) — write-heavy on a read-optimized structure.","Updating a frequency also invalidates every ancestor node's top-K cache up to the root — a single update can ripple far.","Concurrency: mutating shared in-memory tries under 1M QPS reads needs careful locking / copy-on-write.","Practical middle ground: batch-rebuild the base + a fast streaming layer for trending terms, merged at query time.","Freshness requirement usually allows minutes/hours, so batch is acceptable for most of the corpus."]},{"n":7,"type":"open","prompt":"How do you shard the trie and hit the sub-100ms latency budget across the request path?","points":["Shard the trie by prefix ranges (e.g. by first 1–2 characters), each shard owned by a serving node; route requests by prefix.","Very hot prefixes (single letters) are hot shards — replicate them; cache their responses at the edge/CDN.","Serve entirely from memory — no disk on the request path.","Client-side debouncing (~50–100ms idle) so not every keystroke fires a request; cancel in-flight requests when the user types more.","Edge/CDN cache the response for popular prefixes with a short TTL.","Keep responses tiny (~10 short strings) to minimize network time."]},{"n":8,"type":"mc","prompt":"A user typing 'newy' should quickly get 'new york'. What primarily makes this lookup fast, and where does personalization fit?","options":["The 'newy' trie node already holds its precomputed top-K globally-popular completions, so serving is an O(prefix) walk + cache read; personalization is a lighter re-rank applied on top of that base list.","The server sorts all queries starting with 'newy' by popularity on each request; personalization replaces that sort.","A bloom filter stores the completion for each prefix, so no ranking is ever needed.","The database index guarantees the first row returned is always the personalized best match."],"answer":0,"answerLetter":"A"},{"n":9,"type":"open","prompt":"Staff-level: what breaks at scale, and what are the main failure modes and tradeoffs?","points":["Hot shards: single-character prefixes get orders of magnitude more traffic — replicate + edge-cache them, or the shard melts.","Memory footprint: precomputed top-K duplicated up the trie is memory-hungry — tune K, use radix compression, cap corpus size.","Freshness vs cost: shorter rebuild interval = fresher but more expensive pipeline and cache churn.","Abuse/spam and offensive suggestions: filter the corpus, apply blocklists — a real production concern.","Multilingual / Unicode / non-Latin scripts complicate the trie and sharding.","Typo tolerance (fuzzy matching) is a separate, harder feature (edit-distance / n-gram index), not free from a plain trie.","Personalization increases per-user state and cache cardinality (can't fully edge-cache personalized responses)."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/design-problems/p14">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

@@ -10,21 +10,39 @@
 //                                  bullets, non-empty `answer`; NO options.
 //
 // Checks: topics↔manifests↔disk parity, part/chapter coverage, per-question
-// shape, MC answer-index variety, and diagram schema/safe syntax. Canonical
-// design problems additionally require four architecture diagrams, each tied
-// to a valid reveal position. Exits non-zero on failure.
+// shape, MC answer-index variety, diagram schema/safe syntax, the complete
+// lesson infographic plan, and every registered single- or multi-image asset.
+// Canonical design problems additionally
+// require four architecture diagrams, each tied to a valid reveal position.
+// Exits non-zero on failure.
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const SD = path.join(ROOT, 'data', 'system-design');
+const INFOGRAPHICS = path.join(ROOT, 'assets', 'system-design', 'infographics');
+const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
+const INFOGRAPHIC_SPECS = readJson(path.join(SD, 'infographic-specs.json')) || {};
+const INFOGRAPHIC_SETS = (readJson(path.join(SD, 'infographic-sets.json')) || {}).sets || {};
+const INFOGRAPHIC_PLAN = (readJson(path.join(SD, 'infographic-plan.json')) || {}).lessons || {};
+const expectedInfographics = new Set();
+const registeredLessons = new Set();
+
+const INFOGRAPHIC_VISUAL_TYPES = new Set([
+  'routing-map', 'cache-layers', 'edge-globe', 'queue-conveyor',
+  'token-bucket', 'primitive-toolkit', 'protocol-branches',
+  'three-pillars', 'data-models', 'storage-cutaway',
+  'compatibility-bridge', 'replication-topologies', 'partition-map',
+  'transaction-timeline', 'partial-failure', 'consensus-overlap',
+  'batch-pipeline', 'stream-windows', 'derived-ecosystem'
+]);
 
 const MIN_QUESTIONS = 8;      // MC + open combined, per chapter
 const MIN_TAKEAWAYS = 3;
 const MIN_OPEN_POINTS = 3;
 
-let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0;
+let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0, totalInfographics = 0;
 const fail = (where, msg) => { errors++; console.error(`  ✗ [${where}] ${msg}`); };
 
 const DIAGRAM_ROLES = new Set(['overview', 'request-flow', 'mechanism', 'comparison', 'failure', 'lifecycle']);
@@ -66,6 +84,84 @@ function validateDiagrams(owner, where) {
   }
 }
 
+function validateInfographicFile(relative, widthExpected, heightExpected, where) {
+  expectedInfographics.add(relative);
+  const file = path.join(INFOGRAPHICS, relative);
+  if (!fs.existsSync(file)) { fail(where, `missing downloadable infographic assets/system-design/infographics/${relative}`); return; }
+  const png = fs.readFileSync(file);
+  if (png.length < 24 || png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+    fail(where, 'infographic is not a valid PNG'); return;
+  }
+  const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+  if (width !== widthExpected || height !== heightExpected) fail(where, `infographic must be ${widthExpected}×${heightExpected}, got ${width}×${height}`);
+  totalInfographics++;
+}
+
+function validateInfographic(topic, id, where) {
+  const key = `${topic}/${id}`;
+  const set = INFOGRAPHIC_SETS[key];
+  const plan = INFOGRAPHIC_PLAN[key];
+  if (!plan) fail(where, 'missing lesson entry in infographic-plan.json');
+  else {
+    if (!Number.isInteger(plan.count) || plan.count < 1) fail(where, 'infographic plan count must be a positive integer');
+    if (!Array.isArray(plan.graphics) || plan.graphics.length !== plan.count) fail(where, 'infographic plan graphics must match count');
+    else if (new Set(plan.graphics).size !== plan.graphics.length) fail(where, 'infographic plan graphic ids must be unique');
+  }
+  if (!set) { fail(where, 'every infographic lesson needs an authored multi-image set'); return; }
+  if (!set.title || !set.summary) fail(where, 'infographic set needs title and summary');
+  if (!Array.isArray(set.items) || set.items.length < 2) {
+    fail(where, 'authored infographic set needs at least two focused graphics');
+    return;
+  }
+  if (plan && set.items.length !== plan.count) fail(where, `authored set has ${set.items.length} graphics but plan calls for ${plan.count}`);
+  const ids = new Set();
+  set.items.forEach((item, index) => {
+    const at = `${where} infographic ${index + 1}`;
+    if (!item || typeof item !== 'object') { fail(at, 'item must be an object'); return; }
+    if (!item.id || !/^[a-z0-9-]+$/.test(item.id)) fail(at, 'item needs a kebab-case id');
+    else if (ids.has(item.id)) fail(at, `duplicate id ${item.id}`);
+    else ids.add(item.id);
+    for (const field of ['kind', 'title', 'purpose', 'description']) if (!item[field] || typeof item[field] !== 'string') fail(at, `missing ${field}`);
+    if (item.renderer != null && item.renderer !== 'diagram-v1') fail(at, `unknown renderer ${JSON.stringify(item.renderer)}`);
+    if (!Array.isArray(item.flow) || item.flow.length < 3) fail(at, 'flow needs at least three numbered steps');
+    else item.flow.forEach((step, stepIndex) => {
+      if (step.step !== stepIndex + 1 || !step.title || !step.detail) fail(at, `flow step ${stepIndex + 1} needs sequential number, title, and detail`);
+    });
+    if (!Array.isArray(item.numbers) || !item.numbers.length) fail(at, 'numbers needs at least one scale or operating assumption');
+    else item.numbers.forEach((number, numberIndex) => {
+      if (!number.label || !number.value || !number.detail) fail(at, `number ${numberIndex + 1} needs label, value, and detail`);
+    });
+    if (!Array.isArray(item.priorities) || item.priorities.length < 2) fail(at, 'priorities needs at least two entries');
+    else if (new Set(item.priorities.map(value => value.toLowerCase())).size !== item.priorities.length) fail(at, 'priorities must be distinct');
+    if (!Array.isArray(item.tradeoffs) || item.tradeoffs.length < 2) fail(at, 'tradeoffs needs at least two entries');
+    else if (new Set(item.tradeoffs.map(value => value.toLowerCase())).size !== item.tradeoffs.length) fail(at, 'tradeoffs must be distinct');
+    if (!Number.isInteger(item.width) || !Number.isInteger(item.height) || item.width < 1200 || item.height < 1600 || item.height <= item.width) {
+      fail(at, 'image dimensions must describe a high-resolution portrait asset');
+    } else if (item.id) {
+      validateInfographicFile(`${topic}/${id}/${item.id}.png`, item.width, item.height, at);
+    }
+  });
+  if (plan && Array.isArray(plan.graphics) && set.items.map(item => item.id).join('|') !== plan.graphics.join('|')) {
+    fail(where, 'authored infographic ids/order must match infographic-plan.json');
+  }
+}
+
+function validateInfographicSpec(topic, id, where) {
+  if (topic === 'design-problems') return;
+  const spec = INFOGRAPHIC_SPECS[`${topic}/${id}`];
+  if (!spec) { fail(where, 'missing authored entry in infographic-specs.json'); return; }
+  if (!INFOGRAPHIC_VISUAL_TYPES.has(spec.visualType)) {
+    fail(where, `infographic spec needs a registered visualType, got ${JSON.stringify(spec.visualType)}`);
+  }
+  if (!spec.coreIdea || !spec.tradeoff) fail(where, 'infographic spec needs coreIdea and tradeoff');
+  if (!Array.isArray(spec.flow) || spec.flow.length < 3 || spec.flow.length > 5) fail(where, 'infographic flow needs 3–5 nodes');
+  if (!Array.isArray(spec.flowLabels) || spec.flowLabels.length !== spec.flow.length - 1) fail(where, 'infographic flowLabels must connect every adjacent node');
+  if (!Array.isArray(spec.cards) || spec.cards.length !== 4) fail(where, 'infographic spec needs exactly four study cards');
+  else spec.cards.forEach((card, index) => {
+    if (!card.title || !card.body) fail(where, `infographic card ${index + 1} needs title and body`);
+  });
+}
+
 function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (e) { fail(path.relative(SD, file), `not valid JSON: ${e.message}`); return null; }
@@ -102,6 +198,7 @@ for (const topic of registry.topics) {
     const ch = readJson(file);
     if (!ch) continue;
     const at = `${t}/${id}`;
+    registeredLessons.add(at);
 
     if (ch.id !== id) fail(at, `id "${ch.id}" != manifest "${id}"`);
     const num = ch.num != null ? ch.num : ch.chapter;
@@ -113,6 +210,10 @@ for (const topic of registry.topics) {
     if (!Array.isArray(ch.keyTakeaways) || ch.keyTakeaways.length < MIN_TAKEAWAYS) fail(at, `keyTakeaways needs >= ${MIN_TAKEAWAYS} entries`);
     else if (!ch.keyTakeaways.every(x => typeof x === 'string' && x.trim())) fail(at, 'empty keyTakeaway');
     validateDiagrams(ch, at);
+    if (INFOGRAPHIC_TOPICS.has(t)) {
+      validateInfographic(t, id, at);
+      validateInfographicSpec(t, id, at);
+    }
 
     if (!Array.isArray(ch.questions) || ch.questions.length < MIN_QUESTIONS) {
       fail(at, `expected >= ${MIN_QUESTIONS} questions, got ${ch.questions ? ch.questions.length : 0}`); continue;
@@ -171,9 +272,34 @@ for (const topic of registry.topics) {
   }
 }
 
+function collectPngs(dir, prefix = '') {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    return entry.isDirectory() ? collectPngs(path.join(dir, entry.name), relative) : (/\.png$/i.test(entry.name) ? [relative] : []);
+  });
+}
+
+const actualInfographics = collectPngs(INFOGRAPHICS);
+for (const relative of actualInfographics) {
+  if (!expectedInfographics.has(relative)) fail('infographics', `unregistered or stale PNG ${relative}`);
+}
+if (actualInfographics.length !== expectedInfographics.size) {
+  fail('infographics', `expected exactly ${expectedInfographics.size} PNGs, found ${actualInfographics.length}`);
+}
+for (const key of Object.keys(INFOGRAPHIC_SPECS)) {
+  if (!registeredLessons.has(key)) fail('infographic-specs.json', `orphan spec ${key}`);
+}
+for (const key of Object.keys(INFOGRAPHIC_PLAN)) if (!registeredLessons.has(key)) fail('infographic-plan.json', `orphan lesson ${key}`);
+for (const key of Object.keys(INFOGRAPHIC_SETS)) if (!registeredLessons.has(key)) fail('infographic-sets.json', `orphan set ${key}`);
+for (const key of registeredLessons) {
+  const [topic] = key.split('/');
+  if (INFOGRAPHIC_TOPICS.has(topic) && !INFOGRAPHIC_PLAN[key]) fail('infographic-plan.json', `missing lesson ${key}`);
+}
+
 console.log('');
 if (errors === 0) {
-  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, 0 errors.`);
+  console.log(`System Design validation OK — ${registry.topics.length} topics, ${totalQ} questions (${totalMC} MC, ${totalOpen} open), ${totalDiagrams} diagrams, ${totalInfographics} infographics, 0 errors.`);
   process.exit(0);
 } else {
   console.error(`\nSystem Design validation FAILED — ${errors} error(s), ${totalQ} questions scanned.`);

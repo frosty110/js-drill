@@ -178,8 +178,9 @@
       });
     }
 
-    open({ src, title, alt, downloadName, opener }) {
+    open({ src, title, alt, downloadName, opener, sheetId }) {
       this.opener = opener || document.activeElement;
+      this.sheetId = sheetId || null;
       this.titleNode.textContent = title;
       this.image.alt = alt;
       this.download.href = src;
@@ -191,6 +192,11 @@
       this.image.src = src;
       if (this.image.complete && this.image.naturalWidth) this.fit();
       this.closeButton.focus();
+      // Announce so a host page can put the open sheet in the URL. The viewer
+      // stays route-agnostic; system-design.html owns the hash.
+      document.dispatchEvent(new CustomEvent('drill-infographic-open', {
+        detail: { sheetId: this.sheetId, src, title }
+      }));
     }
 
     close() {
@@ -199,6 +205,9 @@
       document.body.style.overflow = this.previousOverflow;
       this.pointers.clear();
       if (this.opener && typeof this.opener.focus === 'function') this.opener.focus();
+      const sheetId = this.sheetId;
+      this.sheetId = null;
+      document.dispatchEvent(new CustomEvent('drill-infographic-close', { detail: { sheetId } }));
     }
 
     fit() {
@@ -317,6 +326,7 @@
       const width = Number(this.getAttribute('image-width')) || 1600;
       const height = Number(this.getAttribute('image-height')) || 2000;
       const compact = this.hasAttribute('compact');
+      const sheetId = this.getAttribute('sheet-id') || null;
       this.innerHTML = `
         <article class="infographic-card${compact ? ' infographic-card--compact' : ''}">
           ${compact ? '' : `<div class="infographic-card__head">
@@ -335,7 +345,7 @@
             <a class="ds-btn ds-btn--primary" href="${this.escape(src)}" download="${this.escape(downloadName)}">Download PNG</a>
           </div>
         </article>`;
-      const open = event => sharedWorkspace().open({ src, title, alt, downloadName, opener: event.currentTarget });
+      const open = event => sharedWorkspace().open({ src, title, alt, downloadName, sheetId, opener: event.currentTarget });
       this.querySelector('.infographic-card__preview').addEventListener('click', open);
       this.querySelector('.infographic-card__open').addEventListener('click', open);
     }
@@ -386,7 +396,7 @@
                 <h5 style="margin-top:14px">Trade-offs</h5>${this.renderBullets(item.tradeoffs, 'infographic-bullets--tradeoffs')}
               </aside>
             </div>
-            <drill-infographic compact src="${escapeHtml(item.src)}" title="${escapeHtml(item.title)}" alt="${escapeHtml(item.alt)}" download-name="${escapeHtml(item.downloadName)}" image-width="${Number(item.width) || 1600}" image-height="${Number(item.height) || 2000}"></drill-infographic>
+            <drill-infographic compact sheet-id="${escapeHtml(item.id)}" src="${escapeHtml(item.src)}" title="${escapeHtml(item.title)}" alt="${escapeHtml(item.alt)}" download-name="${escapeHtml(item.downloadName)}" image-width="${Number(item.width) || 1600}" image-height="${Number(item.height) || 2000}"></drill-infographic>
           </article>`;
         }).join('')}</div>
       </section>`;

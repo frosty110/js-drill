@@ -1040,7 +1040,7 @@ async function renderTopicHome(t) {
 // UNIT DETAIL — key ideas + choose a drill mode
 // ============================================================================
 async function renderChapterDetail(t, chId) {
-  session = null; curTopic = t;
+  session = null; curTopic = t; curUnitForGraphic = chId;
   progress.lastTopic = t; progress.lastChapter = chId; persist();
   setRoute(`#/${t}/${chId}`);
   document.getElementById('stats-btn').hidden = false;
@@ -1694,6 +1694,12 @@ function parseRoute() {
       value: decodeURIComponent(parts[3]).replace(/[^a-z0-9-]/gi, '')
     };
   }
+  // #/<topic>/<unit>/graphic/<sheetId> — a specific study sheet, open in the
+  // full-screen workspace. Without this the viewer had no address at all, so
+  // opening a PNG left the URL on the unit and the image could not be linked.
+  if (parts[2] === 'graphic' && parts[3]) {
+    return { view: 'graphic', topic, unit, graphic: decodeURIComponent(parts[3]).replace(/[^a-z0-9-]/gi, '') };
+  }
   return { view: 'unit', topic, unit };
 }
 
@@ -1725,6 +1731,12 @@ async function applyRoute() {
       }
       return await renderTopicHome(r.topic);
     }
+    if (r.view === 'graphic' && known(r.topic)) {
+      const m = await loadMeta(r.topic);
+      if (!m.chapters.some(c => c.id === r.unit)) return await renderTopicHome(r.topic);
+      await renderChapterDetail(r.topic, r.unit);
+      return openSheetById(r.topic, r.unit, r.graphic);
+    }
     if (r.view === 'unit' && known(r.topic)) {
       const m = await loadMeta(r.topic);
       if (m.chapters.some(c => c.id === r.unit)) return await renderChapterDetail(r.topic, r.unit);
@@ -1733,6 +1745,40 @@ async function applyRoute() {
   } catch (_) { /* fall through to the landing */ }
   return renderTopics();
 }
+
+// The unit whose detail screen is on screen — the other half of a graphic
+// route. Set by renderChapterDetail, read when a sheet opens.
+let curUnitForGraphic = null;
+
+// Open one study sheet full-screen by its authored id (used by a deep link).
+async function openSheetById(topic, unitId, sheetId) {
+  if (!INFOGRAPHIC_TOPICS.has(topic) || !window.DrillInfographicViewer) return;
+  const sets = await loadInfographicSets();
+  const set = sets[`${topic}/${unitId}`];
+  const item = set && Array.isArray(set.items) ? set.items.find(i => i.id === sheetId) : null;
+  if (!item) return;
+  const ch = await loadChapter(topic, unitId);
+  window.DrillInfographicViewer.open({
+    src: `assets/system-design/infographics/${topic}/${unitId}/${item.id}.png`,
+    title: item.title,
+    alt: `${ch.title}: ${item.title} system design infographic`,
+    downloadName: infographicDownloadName(ch, item),
+    sheetId: item.id
+  });
+}
+
+// Keep the URL honest about what is on screen: opening a sheet addresses it,
+// closing returns to the unit. setRoute uses replaceState, so this never
+// stacks history entries the back button has to chew through.
+document.addEventListener('drill-infographic-open', e => {
+  const id = e.detail && e.detail.sheetId;
+  if (!id || !curTopic || !curUnitForGraphic) return;
+  setRoute(`#/${curTopic}/${curUnitForGraphic}/graphic/${id}`);
+});
+document.addEventListener('drill-infographic-close', () => {
+  if (!curTopic || !curUnitForGraphic) return;
+  setRoute(`#/${curTopic}/${curUnitForGraphic}`);
+});
 
 window.addEventListener('hashchange', () => {
   if (_routeSuppress) { _routeSuppress = false; return; }

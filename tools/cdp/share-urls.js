@@ -81,7 +81,7 @@ const base = URL.replace(/\/$/, '') + '/';
   await app.snap('share-sheet-mobile');
 
   const sheetUrl = await app.eval(`document.querySelector('#share-sheet [data-share-url]').value`);
-  app.assert(/\/p\/two-sum\?s=/.test(sheetUrl), `share URL points at the static page with a code: ${sheetUrl}`);
+  app.assert(/\/p\/two-sum\/\?s=/.test(sheetUrl), `share URL points at the static page with a code: ${sheetUrl}`);
   app.assert(sheetUrl.includes(code), 'the sheet URL carries the code built from live state');
   app.assert(!/#/.test(sheetUrl.split('?')[0]), 'the share URL is a path, not an app hash route');
 
@@ -219,7 +219,10 @@ const base = URL.replace(/\/$/, '') + '/';
   sd.assert(S.isValidCode(sdCode), `sd code passes validation: "${sdCode}"`);
 
   const sdUrl = await sd.eval(`unitShareUrl('ddia', CH.ddia.ch01)`);
-  sd.assert(/\/sd\/ddia\/ch01\?s=/.test(sdUrl), `sd share URL points at the static unit page: ${sdUrl}`);
+  // The trailing slash is load-bearing: the unit is written to disk as
+  // sd/ddia/ch01/index.html, so the slashless form only 301-redirects there —
+  // and a redirect can drop the ?s=, silently losing the result set.
+  sd.assert(/\/sd\/ddia\/ch01\/\?s=/.test(sdUrl), `sd share URL points at the static unit page: ${sdUrl}`);
 
   await sd.eval(`openShareSheet('ddia', CH.ddia.ch01)`);
   await sd.waitFor(`!!document.querySelector('#share-sheet [data-share-url]')`, { timeoutMs: 4000 });

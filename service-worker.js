@@ -60,6 +60,7 @@ const APP_SHELL = [
   './ds/tokens.css',
   './ds/components.css',
   './ds/icons.js',
+  './ds/dragscroll.js',
   './js/storage.js',
   // Share codes + the surface registry. index.html loads these NON-deferred,
   // before the app slices, so an offline boot without them is a broken boot.

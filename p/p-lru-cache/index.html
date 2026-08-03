@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › System Design</p>
     <h1>LRU Cache</h1>
     <p class="sharepage__lede">Least Recently Used cache with O(1) get and put. JS Map preserves INSERTION order — delete+re-set on every hit promotes to most-recent end; the first key is the LRU evict target.</p>
-    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">System Design</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">System Design</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -42,7 +42,7 @@
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Insertion-ordered Map as hash + recency list</strong> · <code>O(1) / O(capacity)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">class LRUCache {
   constructor(capacity) {
     this.capacity = capacity;
@@ -149,7 +149,7 @@ console.log(c.get(4));</code></pre>
         <li><span class="sharepage__key">C</span> Object key order is undefined, so eviction would be non-deterministic</li>
         <li><span class="sharepage__key">D</span> Map.delete is O(1) but object property deletion is O(n) due to deoptimization</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> Eviction reads <code>this.map.keys().next().value</code>, which only means &#39;least recently used&#39; because <code>delete</code> + <code>set</code> re-inserts a touched key at the end. An object&#39;s key order isn&#39;t undefined — it&#39;s worse for this: integer-like keys iterate in ascending numeric order regardless of insertion, so numeric cache keys would evict by value.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> On a cache HIT, what must <code>get</code> do?</h3>
@@ -159,7 +159,7 @@ console.log(c.get(4));</code></pre>
         <li><span class="sharepage__key">C</span> Increment a per-key access counter and compare on eviction</li>
         <li><span class="sharepage__key">D</span> Swap the hit key with the back key, an O(1) reorder</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>this.map.delete(key)</code> then <code>this.map.set(key, v)</code> is what moves the key to the back of the iteration order. Drop those two lines and reads stop counting as uses — the cache silently becomes FIFO and evicts a key you just read.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> When the cache is at capacity, which key do we evict?</h3>
@@ -169,7 +169,7 @@ console.log(c.get(4));</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> The least recently used (front of the map) <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> The smallest key</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> Every hit and every write re-inserts its key at the back, so whatever is still at the front was touched longest ago — <code>this.map.keys().next().value</code> reads it without iterating the rest.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> Time complexity of get and put?</h3>
@@ -179,13 +179,13 @@ console.log(c.get(4));</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> O(1) amortized <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> O(1) for get, O(n) for put because eviction must scan for the oldest</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> Each op is a fixed number of <code>has</code> / <code>get</code> / <code>delete</code> / <code>set</code> calls plus at most one <code>keys().next()</code> — nothing walks the cache, so eviction never costs O(n). &#39;Amortized&#39; is the honest qualifier because hash tables occasionally rehash on growth.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -220,6 +220,37 @@ console.log(c.get(2));</code></pre>
       <p><strong>Answers:</strong> <code>Map</code>, <code>has</code>, <code>delete</code>, <code>&gt;=</code>, <code>next</code></p>
       <p class="sharepage__note">Expected output: <code>1
 -1</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>BOTH a put on an existing key and a get bump recency: put(1,9) promotes key 1, then get(2) promotes key 2 past it — so put(3,3) evicts key 1. Fill the miss return, the re-insert that does the promoting, the size check, and the iterator source.</p>
+      <pre class="sharepage__code"><code class="language-js">class LRUCache {
+  constructor(capacity) { this.capacity = capacity; this.map = new Map(); }
+  get(key) {
+    if (!this.map.has(key)) return ___;
+    const v = this.map.get(key);
+    this.map.delete(key);
+    this.map.___(key, v);
+    return v;
+  }
+  put(key, value) {
+    if (this.map.has(key)) this.map.delete(key);
+    else if (this.map.___ &gt;= this.capacity) {
+      const oldest = this.map.___().next().value;
+      this.map.delete(oldest);
+    }
+    this.map.set(key, value);
+  }
+}
+const c = new LRUCache(2);
+c.put(1, 1); c.put(2, 2);
+c.put(1, 9);
+console.log(c.get(2));
+c.put(3, 3);
+console.log(c.get(1), c.get(3));</code></pre>
+      <p><strong>Answers:</strong> <code>-1</code>, <code>set</code>, <code>size</code>, <code>keys</code></p>
+      <p class="sharepage__note">Expected output: <code>2
+-1 3</code></p>
     </article>
   </section>
 
@@ -282,7 +313,7 @@ console.log(c.get(4));</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"p-lru-cache","title":"LRU Cache","section":"System Design","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why use a Map instead of a plain object for the LRU store?","options":["Maps allow non-string keys, which the LRU spec requires","Maps preserve insertion order — recency tracking for free","Object key order is undefined, so eviction would be non-deterministic","Map.delete is O(1) but object property deletion is O(n) due to deoptimization"],"answer":1,"answerLetter":"B"},{"n":2,"q":"On a cache HIT, what must `get` do?","options":["Return the value — recency is only updated by `put`","Return the value AND delete+re-set the key to mark it most recent","Increment a per-key access counter and compare on eviction","Swap the hit key with the back key, an O(1) reorder"],"answer":1,"answerLetter":"B"},{"n":3,"q":"When the cache is at capacity, which key do we evict?","options":["A random key","The most recently used (back of the map)","The least recently used (front of the map)","The smallest key"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Time complexity of get and put?","options":["O(log n) — eviction needs a balanced tree by access time","O(n) — finding the LRU requires scanning all entries","O(1) amortized","O(1) for get, O(n) for put because eviction must scan for the oldest"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in the LRUCache so capacity 2 evicts key 2 after a get(1) and put(3, 3).","answers":["Map","has","delete",">=","next"]}],"L3":[{"n":1,"prompt":"Implement LRUCache(capacity) with O(1) get (returns value or -1) and put. Run capacity-2: put(1,1), put(2,2), get(1), put(3,3), get(2), put(4,4), get(1), get(3), get(4). Logs: 1, -1, -1, 3, 4.","expectedOutput":"1\n-1\n-1\n3\n4"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"p-lru-cache","title":"LRU Cache","section":"System Design","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why use a Map instead of a plain object for the LRU store?","options":["Maps allow non-string keys, which the LRU spec requires","Maps preserve insertion order — recency tracking for free","Object key order is undefined, so eviction would be non-deterministic","Map.delete is O(1) but object property deletion is O(n) due to deoptimization"],"answer":1,"answerLetter":"B"},{"n":2,"q":"On a cache HIT, what must `get` do?","options":["Return the value — recency is only updated by `put`","Return the value AND delete+re-set the key to mark it most recent","Increment a per-key access counter and compare on eviction","Swap the hit key with the back key, an O(1) reorder"],"answer":1,"answerLetter":"B"},{"n":3,"q":"When the cache is at capacity, which key do we evict?","options":["A random key","The most recently used (back of the map)","The least recently used (front of the map)","The smallest key"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Time complexity of get and put?","options":["O(log n) — eviction needs a balanced tree by access time","O(n) — finding the LRU requires scanning all entries","O(1) amortized","O(1) for get, O(n) for put because eviction must scan for the oldest"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in the LRUCache so capacity 2 evicts key 2 after a get(1) and put(3, 3).","answers":["Map","has","delete",">=","next"]},{"n":2,"prompt":"BOTH a put on an existing key and a get bump recency: put(1,9) promotes key 1, then get(2) promotes key 2 past it — so put(3,3) evicts key 1. Fill the miss return, the re-insert that does the promoting, the size check, and the iterator source.","answers":["-1","set","size","keys"]}],"L3":[{"n":1,"prompt":"Implement LRUCache(capacity) with O(1) get (returns value or -1) and put. Run capacity-2: put(1,1), put(2,2), get(1), put(3,3), get(2), put(4,4), get(1), get(3), get(4). Logs: 1, -1, -1, 3, 4.","expectedOutput":"1\n-1\n-1\n3\n4"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

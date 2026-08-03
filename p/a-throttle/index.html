@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Throttle</h1>
     <p class="sharepage__lede">Throttle caps invocations to one per `ms` window — extra calls during the cool-down are dropped (leading-edge variant). Built with an injectable clock so tests advance time deterministically.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -112,7 +112,7 @@ console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> 1 — the first one <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> 1 — the last one (trailing-edge default)</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>t(&#39;a&#39;)</code> clears the gate because <code>_now - (-Infinity)</code> is <code>Infinity</code>, and it sets <code>lastFired = 0</code>; <code>t(&#39;b&#39;)</code> and <code>t(&#39;c&#39;)</code> at the same <code>_now</code> compute <code>0 - 0 &gt;= 100</code> → false and are dropped with no queue. Firing the last one instead would be trailing-edge throttle.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> What is the key difference between debounce and throttle?</h3>
@@ -122,7 +122,7 @@ console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);</code></pre>
         <li><span class="sharepage__key">C</span> Throttle queues calls in a buffer and replays them after the window; debounce discards everything but the first</li>
         <li><span class="sharepage__key">D</span> Throttle requires a real timer; debounce works purely off comparisons of call timestamps</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> Throttle&#39;s gate is <code>_now - lastFired &gt;= ms</code> — a rate limit measured from the last FIRE. Debounce restarts its timer from the last CALL, so a caller who never pauses gets zero invocations out of a debounce and a steady one-per-window out of this.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why initialize lastFired to -Infinity?</h3>
@@ -132,7 +132,7 @@ console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);</code></pre>
         <li><span class="sharepage__key">C</span> Initializing to 0 would cause the first call at _now=0 to silently coerce ms to a negative value via the subtraction</li>
         <li><span class="sharepage__key">D</span> It prevents the closure variable from being collapsed by V8&#39;s constant-folding optimization</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>0 - (-Infinity)</code> is <code>Infinity</code>, which clears any <code>ms</code>. Initialize to <code>0</code> instead and the first call at <code>_now = 0</code> computes <code>0 - 0 &gt;= 100</code> → false, so the very first call is silently swallowed.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> If the underlying fn is called inside the cool-down window, what happens to its args?</h3>
@@ -142,13 +142,13 @@ console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> Dropped — leading-edge throttle does not buffer <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> Merged into the previous fire&#39;s args via <code>Object.assign</code> so the most recent args win</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The gate is a bare <code>if</code> with no <code>else</code> — a call that fails it falls off the end of the function and its <code>args</code> are never stored anywhere. That is the deliberate split from debounce, which keeps <code>lastArgs</code> so the deferred fire uses the most recent ones.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -178,6 +178,30 @@ console.log(calls);</code></pre>
       <p class="sharepage__note">Expected output: <code>fire:1
 fire:4
 2</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Now the bookkeeping: build the elapsed measurement, stamp the window at FIRE time (a dropped call must not slide it), and seed the fake clock. Note which args survive — throttle keeps the first of the window, debounce keeps the last.</p>
+      <pre class="sharepage__code"><code class="language-js">function throttle(fn, ms) {
+  let lastFired = -Infinity;
+  const api = function (...args) {
+    if (api._now ___ lastFired &gt;= ___) {
+      ___ = api._now;
+      fn(...args);
+    }
+  };
+  api.___ = 0;
+  api.tick = (d) =&gt; { api._now += d; };
+  return api;
+}
+const seen = [];
+const t = throttle((x) =&gt; seen.push(x), 100);
+t(&#39;a&#39;); t(&#39;b&#39;);
+t.tick(100);
+t(&#39;c&#39;); t(&#39;d&#39;);
+console.log(seen.join(&#39;,&#39;));</code></pre>
+      <p><strong>Answers:</strong> <code>-</code>, <code>ms</code>, <code>lastFired</code>, <code>_now</code></p>
+      <p class="sharepage__note">Expected output: <code>a,c</code></p>
     </article>
   </section>
 
@@ -232,7 +256,7 @@ console.log(&#39;calls=&#39; + calls + &#39; last=&#39; + last);</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-throttle","title":"Throttle","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Three calls within one ms window to a leading-edge throttled fn invoke the underlying fn how many times?","options":["3 — throttle records the calls but defers their firing to a single batched flush","0 — the gate is closed on the first call until one full window has elapsed","1 — the first one","1 — the last one (trailing-edge default)"],"answer":2,"answerLetter":"C"},{"n":2,"q":"What is the key difference between debounce and throttle?","options":["Throttle resolves a Promise per window; debounce returns the underlying fn's value synchronously","Debounce delays until quiet; throttle caps the rate (at most one per window)","Throttle queues calls in a buffer and replays them after the window; debounce discards everything but the first","Throttle requires a real timer; debounce works purely off comparisons of call timestamps"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why initialize lastFired to -Infinity?","options":["To make `_now - lastFired >= ms` true on the very first call","`-Infinity` is the only numeric value JavaScript treats as 'unset' in arithmetic comparisons against integers","Initializing to 0 would cause the first call at _now=0 to silently coerce ms to a negative value via the subtraction","It prevents the closure variable from being collapsed by V8's constant-folding optimization"],"answer":0,"answerLetter":"A"},{"n":4,"q":"If the underlying fn is called inside the cool-down window, what happens to its args?","options":["Queued and applied in order once the window elapses, the same behavior as `Promise.allSettled` with a delay","Stored as `lastArgs` and fired automatically when the next call passes the gate","Dropped — leading-edge throttle does not buffer","Merged into the previous fire's args via `Object.assign` so the most recent args win"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete the throttle: fire on the first call, drop calls within ms, fire again once the window passes.","answers":["-Infinity","...",">=","...","+="]}],"L3":[{"n":1,"prompt":"Implement throttle(fn, ms) leading-edge with injectable clock. Show: first call fires, two more within window drop, advance past window, next call fires.","expectedOutput":"calls=1 last=a\ncalls=1 last=a\ncalls=2 last=d"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-throttle","title":"Throttle","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Three calls within one ms window to a leading-edge throttled fn invoke the underlying fn how many times?","options":["3 — throttle records the calls but defers their firing to a single batched flush","0 — the gate is closed on the first call until one full window has elapsed","1 — the first one","1 — the last one (trailing-edge default)"],"answer":2,"answerLetter":"C"},{"n":2,"q":"What is the key difference between debounce and throttle?","options":["Throttle resolves a Promise per window; debounce returns the underlying fn's value synchronously","Debounce delays until quiet; throttle caps the rate (at most one per window)","Throttle queues calls in a buffer and replays them after the window; debounce discards everything but the first","Throttle requires a real timer; debounce works purely off comparisons of call timestamps"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why initialize lastFired to -Infinity?","options":["To make `_now - lastFired >= ms` true on the very first call","`-Infinity` is the only numeric value JavaScript treats as 'unset' in arithmetic comparisons against integers","Initializing to 0 would cause the first call at _now=0 to silently coerce ms to a negative value via the subtraction","It prevents the closure variable from being collapsed by V8's constant-folding optimization"],"answer":0,"answerLetter":"A"},{"n":4,"q":"If the underlying fn is called inside the cool-down window, what happens to its args?","options":["Queued and applied in order once the window elapses, the same behavior as `Promise.allSettled` with a delay","Stored as `lastArgs` and fired automatically when the next call passes the gate","Dropped — leading-edge throttle does not buffer","Merged into the previous fire's args via `Object.assign` so the most recent args win"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete the throttle: fire on the first call, drop calls within ms, fire again once the window passes.","answers":["-Infinity","...",">=","...","+="]},{"n":2,"prompt":"Now the bookkeeping: build the elapsed measurement, stamp the window at FIRE time (a dropped call must not slide it), and seed the fake clock. Note which args survive — throttle keeps the first of the window, debounce keeps the last.","answers":["-","ms","lastFired","_now"]}],"L3":[{"n":1,"prompt":"Implement throttle(fn, ms) leading-edge with injectable clock. Show: first call fires, two more within window drop, advance past window, next call fires.","expectedOutput":"calls=1 last=a\ncalls=1 last=a\ncalls=2 last=d"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

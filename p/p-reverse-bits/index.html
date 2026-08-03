@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Bit Manipulation</p>
     <h1>Reverse Bits</h1>
     <p class="sharepage__lede">Walk all 32 bits: shift result left, OR in the lowest bit of n, then shift n right. Coerce with `&gt;&gt;&gt; 0` for unsigned result.</p>
-    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Bit Manipulation</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Bit Manipulation</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -39,7 +39,7 @@
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>32-pass shift-left, OR in the lowest bit, then &gt;&gt;&gt; 0</strong> · <code>O(1) (32 bits) / O(1)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">function reverseBits(n) {
   let result = 0;
   // Exactly 32 iterations — each moves n&#39;s current lowest bit into result&#39;s next slot.
@@ -67,7 +67,7 @@
         <li><span class="sharepage__key">C</span> It truncates the result to exactly 32 bits in case <code>result &lt;&lt; 1</code> overflowed into a 33rd bit</li>
         <li><span class="sharepage__key">D</span> It coerces the result from a BigInt back to a regular Number</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>&lt;&lt;</code> and <code>|</code> both yield a SIGNED int32, so a result with bit 31 set reads back negative: <code>reverseBits(4294967293)</code> computes <code>-1073741825</code> and <code>&gt;&gt;&gt; 0</code> reinterprets those same 32 bits as <code>3221225471</code>. Nothing overflows past 32 bits — JS bitwise ops truncate there by definition.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why use <code>&gt;&gt;&gt;</code> instead of <code>&gt;&gt;</code> on n during the loop?</h3>
@@ -77,7 +77,7 @@
         <li><span class="sharepage__key">C</span> <code>&gt;&gt;</code> returns a BigInt for large n; <code>&gt;&gt;&gt;</code> keeps the result as a regular Number</li>
         <li><span class="sharepage__key">D</span> <code>&gt;&gt;&gt;</code> rounds toward zero while <code>&gt;&gt;</code> rounds toward negative infinity — only the former preserves the bit pattern</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>&gt;&gt;</code> copies the sign bit down, so once the top bit is 1 the value sticks: <code>-1 &gt;&gt; 1</code> is still <code>-1</code>, and every later <code>n &amp; 1</code> would read a 1 that isn&#39;t really there. <code>&gt;&gt;&gt;</code> shifts a 0 in at the top, so 32 shifts genuinely drain <code>n</code>.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> Order of the two operations inside the loop?</h3>
@@ -87,7 +87,7 @@
         <li><span class="sharepage__key">C</span> OR n&#39;s lowest bit into result FIRST, THEN shift result left so the bit moves to the next slot</li>
         <li><span class="sharepage__key">D</span> Read n&#39;s HIGHEST bit (via <code>n &gt;&gt;&gt; 31</code>), OR into result, then shift n left</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>result = (result &lt;&lt; 1) | (n &amp; 1)</code> then <code>n &gt;&gt;&gt;= 1</code> — make room in <code>result</code>, drop in <code>n</code>&#39;s current lowest bit, and only then discard it. OR-ing before the shift would push every captured bit one slot too far, dropping the last one off the top and leaving bit 0 permanently 0.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> Loop count?</h3>
@@ -97,13 +97,13 @@
         <li class="is-correct"><span class="sharepage__key">C</span> 32 <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> Math.ceil(log2(n)) + 1 to cover the high bit</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The width is fixed, so all 32 bit positions have to be placed including a small input&#39;s leading zeros — stopping early at <code>n === 0</code> would leave the captured bits stranded at the bottom of <code>result</code>. <code>reverseBits(1)</code> has to come out as 2147483648, which only happens after the full 32 shifts.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -121,6 +121,27 @@ console.log(reverseBits(4294967293));</code></pre>
       <p><strong>Answers:</strong> <code>32</code>, <code>&lt;&lt;</code>, <code>&amp;</code>, <code>&gt;&gt;&gt;</code></p>
       <p class="sharepage__note">Expected output: <code>964176192
 3221225471</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>The signed/unsigned half — how the bit gets merged in, and why the return needs a coercion.</p>
+      <pre class="sharepage__code"><code class="language-js">function reverseBits(n) {
+  let result = 0;
+  for (let i = 0; i &lt; 32; i++) {
+    result = (result &lt;&lt; 1) ___ (n &amp; 1);
+    n &gt;&gt;&gt;= 1;
+  }
+  // bitwise ops hand back a SIGNED int32 — this coerces it to unsigned
+  return result ___ 0;
+}
+console.log(reverseBits(1));
+console.log(reverseBits(2147483648));
+// the sign-extension trap: one of these keeps the sign bit, one does not
+console.log(-8 ___ 1, -8 &gt;&gt;&gt; 1);</code></pre>
+      <p><strong>Answers:</strong> <code>|</code>, <code>&gt;&gt;&gt;</code>, <code>&gt;&gt;</code></p>
+      <p class="sharepage__note">Expected output: <code>2147483648
+1
+-4 2147483644</code></p>
     </article>
   </section>
 
@@ -162,7 +183,7 @@ console.log(reverseBits(4294967293));</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"p-reverse-bits","title":"Reverse Bits","section":"Bit Manipulation","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why `>>> 0` at the end?","options":["It clears any high-bit garbage left over from intermediate shifts","JS bitwise ops return signed 32-bit; >>> 0 reinterprets as unsigned","It truncates the result to exactly 32 bits in case `result \u003c\u003c 1` overflowed into a 33rd bit","It coerces the result from a BigInt back to a regular Number"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why use `>>>` instead of `>>` on n during the loop?","options":["`>>>` is one CPU cycle whereas `>>` is two, making the 32-iteration loop measurably faster","Unsigned shift avoids sign-bit extension so the high bit clears properly","`>>` returns a BigInt for large n; `>>>` keeps the result as a regular Number","`>>>` rounds toward zero while `>>` rounds toward negative infinity — only the former preserves the bit pattern"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Order of the two operations inside the loop?","options":["Shift n right first, then OR its (now-shifted) lowest bit into result","Shift result left and OR n's lowest bit, THEN shift n right","OR n's lowest bit into result FIRST, THEN shift result left so the bit moves to the next slot","Read n's HIGHEST bit (via `n >>> 31`), OR into result, then shift n left"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Loop count?","options":["log2(n) — one iteration per bit position of the input","popcount(n) — one iteration per set bit","32","Math.ceil(log2(n)) + 1 to cover the high bit"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in the 32-bit reverse-bits loop.","answers":["32","\u003c\u003c","&",">>>"]}],"L3":[{"n":1,"prompt":"Write `reverseBits(n)` that reverses the 32 bits of an unsigned integer. Shift result left, OR in `n & 1`, then `n >>>= 1`. Return `result >>> 0`. Log it for 43261596 and 4294967293.","expectedOutput":"964176192\n3221225471"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"p-reverse-bits","title":"Reverse Bits","section":"Bit Manipulation","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why `>>> 0` at the end?","options":["It clears any high-bit garbage left over from intermediate shifts","JS bitwise ops return signed 32-bit; >>> 0 reinterprets as unsigned","It truncates the result to exactly 32 bits in case `result \u003c\u003c 1` overflowed into a 33rd bit","It coerces the result from a BigInt back to a regular Number"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why use `>>>` instead of `>>` on n during the loop?","options":["`>>>` is one CPU cycle whereas `>>` is two, making the 32-iteration loop measurably faster","Unsigned shift avoids sign-bit extension so the high bit clears properly","`>>` returns a BigInt for large n; `>>>` keeps the result as a regular Number","`>>>` rounds toward zero while `>>` rounds toward negative infinity — only the former preserves the bit pattern"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Order of the two operations inside the loop?","options":["Shift n right first, then OR its (now-shifted) lowest bit into result","Shift result left and OR n's lowest bit, THEN shift n right","OR n's lowest bit into result FIRST, THEN shift result left so the bit moves to the next slot","Read n's HIGHEST bit (via `n >>> 31`), OR into result, then shift n left"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Loop count?","options":["log2(n) — one iteration per bit position of the input","popcount(n) — one iteration per set bit","32","Math.ceil(log2(n)) + 1 to cover the high bit"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in the 32-bit reverse-bits loop.","answers":["32","\u003c\u003c","&",">>>"]},{"n":2,"prompt":"The signed/unsigned half — how the bit gets merged in, and why the return needs a coercion.","answers":["|",">>>",">>"]}],"L3":[{"n":1,"prompt":"Write `reverseBits(n)` that reverses the 32 bits of an unsigned integer. Shift result left, OR in `n & 1`, then `n >>>= 1`. Return `result >>> 0`. Log it for 43261596 and 4294967293.","expectedOutput":"964176192\n3221225471"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

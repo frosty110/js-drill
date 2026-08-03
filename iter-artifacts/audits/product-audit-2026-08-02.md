@@ -389,3 +389,63 @@ they aren't re-reported:
 
 Everything reported above was measured at least twice, and every quantitative claim is reproducible
 from the probe scripts and the corpus sweep.
+
+---
+
+## Addendum — two findings the remediation itself surfaced (2026-08-03)
+
+Neither was visible from the outside. Both were found by the adversarial verify
+phase while closing F4, and both are **pre-existing**, not introduced by this work.
+
+### F26. An L2 exercise passes on output match alone, so a non-discriminating blank grants a free pass
+
+`js/app/12b-l2.js:199` — when the filled template produces the expected output but a
+blank doesn't match the authored answer, the app shows an amber
+"Output matches, but one or more blanks doesn't match the canonical answer" **and sets
+`passed = true` anyway**.
+
+That leniency is defensible on its own terms: JavaScript has genuinely equivalent
+spellings (`!==` vs `!=`, `const` vs `let`, `indexOf` vs `search`), and failing a user
+whose working answer differs from the canonical would be hostile. So this is **not a bug
+to tighten**.
+
+The real consequence is on the authoring side: if an exercise's driver input can't
+distinguish the right fill from a wrong one, the exercise silently grades everyone as
+correct and teaches nothing. `tools/validate-data.js` cannot catch this — it only ever
+runs the *canonical* answer, so it confirms the right answer works and never asks whether
+a wrong one also does.
+
+The verify phase caught several such exercises by mutation-testing every blank, e.g.:
+- `p-word-search` ran the DFS-bounds blanks on a **2×2 board**, where `rows === cols`, so
+  swapping the two blanks produced a byte-identical program.
+- `a-poker-rank` fed an already-ascending hand, making the sort comparator blank inert.
+- `a-memoize` asserted `hits === 1` after two same-id calls — a `keyFn` returning a
+  constant passed identically.
+- `p-num-provinces` blanked a `while` continuation condition where the plausible wrong
+  fill (`===` for `!==`) produces an **infinite loop**, not a throw — and L2 grading calls
+  plain `runCode`, not `runCodeBudgeted`, so there is no loop guard on that path.
+
+**Recommendation.** Add a mutation check to the authoring gate: for each blank, substitute
+a plausible wrong token and assert the output *changes*. That converts a reviewer-enforced
+property into a mechanical one. The `p-num-provinces` case additionally argues for routing
+L2 through `runCodeBudgeted` so a user's wrong fill can't hang the tab.
+
+### F27. `outputsMatch` is a subsequence match, not equality
+
+`tools/validate-data.js:78` walks the actual output lines and advances a pointer through
+the expected ones, returning true once all expected lines have been seen **in order**.
+Extra actual lines are tolerated anywhere — before, between, or after.
+
+So "938 passed" (and now "1029 passed") means *the expected lines appear in order*, not
+*the output equals the expectation*. A canonical that logs more than it should still
+passes. This is weaker than the contract CLAUDE.md describes ("produces the
+`expectedOutput` exactly") and weaker than the runtime comparison the user actually faces.
+
+Every commit message on this branch that claimed exercises "match `expectedOutput`
+exactly" is overstated in exactly this way; the claim that holds is that they match as a
+subsequence, plus the verify phase's independent character-for-character re-runs, which
+did use strict equality.
+
+**Recommendation.** Decide deliberately: either tighten `outputsMatch` to equality (and
+fix whatever that surfaces), or document the subsequence semantics where the contract is
+stated. Do not leave the doc and the gate disagreeing.

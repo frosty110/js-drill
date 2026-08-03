@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Queue Using Two Stacks</h1>
     <p class="sharepage__lede">FIFO queue built from two LIFO stacks (just JS arrays). push goes to `in`. pop/peek read from `out`; when `out` is empty, drain ALL of `in` into `out` by popping — which reverses the order, putting the oldest element on top. Each element migrates at most once, so the work is amortized O(1) per op.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -44,7 +44,7 @@
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Two stacks, drain only when out is empty</strong> · <code>O(1) amortized / O(n)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">class Queue {
   constructor() { this.in = []; this.out = []; }
   // Pushes always go to `in` — cheap, no reorder.
@@ -117,7 +117,7 @@ console.log(q.size);</code></pre>
         <li><span class="sharepage__key">C</span> Each stack is bounded to half the queue capacity, so two stacks double the available headroom before resizing</li>
         <li><span class="sharepage__key">D</span> Stacks must alternate writers and readers; one stack at a time would block pop while push is in progress</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>while (this.in.length) this.out.push(this.in.pop())</code> takes the newest first and buries it, leaving the oldest element on top of <code>out</code> where <code>pop()</code> can reach it. A single stack only ever exposes the element you pushed last.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> When should the in-stack be drained into the out-stack?</h3>
@@ -127,7 +127,7 @@ console.log(q.size);</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> Only when out is empty and a pop/peek is requested <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> When in.length exceeds out.length — keeping the two stacks balanced minimizes peak memory</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>_shift</code> is guarded by <code>if (!this.out.length)</code>. Draining while <code>out</code> still holds elements re-buries them under the newer arrivals: after <code>push(1,2,3)</code>, <code>pop()</code>, <code>push(4)</code>, an unconditional drain makes <code>out</code> end <code>[3,2,4]</code> and the next <code>pop()</code> returns 4 instead of 2.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> What is the amortized cost of pop?</h3>
@@ -137,7 +137,7 @@ console.log(q.size);</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> O(1) — each element moves between stacks at most once <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> O(n) amortized — the drain cost spreads evenly across pops, leaving each one O(n)</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> Each element is pushed to <code>in</code> once, popped once, pushed to <code>out</code> once and popped once — four constant-time steps over its entire lifetime, no matter how many drains happen. A single drain is O(n), but it pays for the n pops that follow it.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> After push(1), push(2), push(3), what does pop return?</h3>
@@ -147,13 +147,13 @@ console.log(q.size);</code></pre>
         <li><span class="sharepage__key">C</span> 2 — the middle element of the in-stack is taken first, then the ends alternate</li>
         <li><span class="sharepage__key">D</span> undefined — pop only works after an explicit <code>_shift()</code> call by the caller</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The first <code>pop()</code> finds <code>out</code> empty, drains <code>in = [1,2,3]</code> into <code>out = [3,2,1]</code>, and <code>out.pop()</code> takes the top — which is now the 1 that was pushed first. That reversal is the whole reason for the second stack.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -175,6 +175,32 @@ console.log(q.pop());
 console.log(q.pop());</code></pre>
       <p><strong>Answers:</strong> <code>push</code>, <code>length</code>, <code>push</code>, <code>pop</code>, <code>_shift</code>, <code>pop</code></p>
       <p class="sharepage__note">Expected output: <code>1
+2
+3</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Now the read-only pair: peek must trigger the same lazy refill pop does, read the TOP of out, and size has to count both halves.</p>
+      <pre class="sharepage__code"><code class="language-js">class Queue {
+  constructor() { this.in = []; this.out = []; }
+  push(v) { this.in.push(v); }
+  _shift() {
+    if (!this.out.length) { while (this.in.length) this.out.push(this.in.pop()); }
+  }
+  pop() { this._shift(); return this.out.pop(); }
+  peek() { this.___(); return this.out[this.out.length ___ 1]; }
+  get size() { return this.in.length ___ this.out.length; }
+}
+const q = new Queue();
+q.push(1); q.push(2); q.push(3);
+console.log(q.peek());
+console.log(q.pop());
+q.push(4);
+console.log(q.peek());
+console.log(q.size);</code></pre>
+      <p><strong>Answers:</strong> <code>_shift</code>, <code>-</code>, <code>+</code></p>
+      <p class="sharepage__note">Expected output: <code>1
+1
 2
 3</code></p>
     </article>
@@ -231,7 +257,7 @@ console.log(q.size);</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-queue-from-stacks","title":"Queue Using Two Stacks","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why two stacks instead of one?","options":["One stack for values, one for sizes — the size stack mirrors the value stack to make `size` an O(1) read","A single stack cannot give FIFO order; reversing one stack into another flips LIFO to FIFO","Each stack is bounded to half the queue capacity, so two stacks double the available headroom before resizing","Stacks must alternate writers and readers; one stack at a time would block pop while push is in progress"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When should the in-stack be drained into the out-stack?","options":["On every push — newer values must immediately propagate to out so peek can read them","On every pop, regardless of whether out has elements waiting","Only when out is empty and a pop/peek is requested","When in.length exceeds out.length — keeping the two stacks balanced minimizes peak memory"],"answer":2,"answerLetter":"C"},{"n":3,"q":"What is the amortized cost of pop?","options":["O(n) worst case applies to every pop because each pop may force a fresh drain of the in-stack","O(log n) — the drain halves the work each pop via repeated bisection of the in-stack","O(1) — each element moves between stacks at most once","O(n) amortized — the drain cost spreads evenly across pops, leaving each one O(n)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"After push(1), push(2), push(3), what does pop return?","options":["3 — pop reads from the top of the in-stack directly without draining","1 — FIFO","2 — the middle element of the in-stack is taken first, then the ends alternate","undefined — pop only works after an explicit `_shift()` call by the caller"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in _shift and pop so the queue returns FIFO order.","answers":["push","length","push","pop","_shift","pop"]}],"L3":[{"n":1,"prompt":"Build Queue with push, pop, peek, size. push 1,2,3; log peek, pop; push 4; log pop, peek, pop, pop, size.","expectedOutput":"1\n1\n2\n3\n3\n4\n0"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-queue-from-stacks","title":"Queue Using Two Stacks","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why two stacks instead of one?","options":["One stack for values, one for sizes — the size stack mirrors the value stack to make `size` an O(1) read","A single stack cannot give FIFO order; reversing one stack into another flips LIFO to FIFO","Each stack is bounded to half the queue capacity, so two stacks double the available headroom before resizing","Stacks must alternate writers and readers; one stack at a time would block pop while push is in progress"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When should the in-stack be drained into the out-stack?","options":["On every push — newer values must immediately propagate to out so peek can read them","On every pop, regardless of whether out has elements waiting","Only when out is empty and a pop/peek is requested","When in.length exceeds out.length — keeping the two stacks balanced minimizes peak memory"],"answer":2,"answerLetter":"C"},{"n":3,"q":"What is the amortized cost of pop?","options":["O(n) worst case applies to every pop because each pop may force a fresh drain of the in-stack","O(log n) — the drain halves the work each pop via repeated bisection of the in-stack","O(1) — each element moves between stacks at most once","O(n) amortized — the drain cost spreads evenly across pops, leaving each one O(n)"],"answer":2,"answerLetter":"C"},{"n":4,"q":"After push(1), push(2), push(3), what does pop return?","options":["3 — pop reads from the top of the in-stack directly without draining","1 — FIFO","2 — the middle element of the in-stack is taken first, then the ends alternate","undefined — pop only works after an explicit `_shift()` call by the caller"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in _shift and pop so the queue returns FIFO order.","answers":["push","length","push","pop","_shift","pop"]},{"n":2,"prompt":"Now the read-only pair: peek must trigger the same lazy refill pop does, read the TOP of out, and size has to count both halves.","answers":["_shift","-","+"]}],"L3":[{"n":1,"prompt":"Build Queue with push, pop, peek, size. push 1,2,3; log peek, pop; push 4; log pop, peek, pop, pop, size.","expectedOutput":"1\n1\n2\n3\n3\n4\n0"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

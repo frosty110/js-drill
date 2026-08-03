@@ -200,6 +200,17 @@
           { "answer": "...", "hint": "spread args to the listener" }
         ],
         "expectedOutput": "A:1\nB:1\nB:2"
+      },
+      {
+        "prompt": "Fill in the registry init, the missing-bucket guards, and the copy that makes emit reentrancy-safe.",
+        "template": "class EE {\n  constructor() { this.h = ___; }\n  on(e, fn) { (this.h[e] ||= []).push(fn); }\n  off(e, fn) { const a = this.h[e]; if (___) return; const i = a.indexOf(fn); if (i !== -1) a.splice(i, ___); }\n  // Copy the bucket first — a listener that off()s itself must not shift the next one out.\n  emit(e, ...args) { const a = this.h[e]; if (!a) return; for (const fn of a.___()) fn(...args); }\n}\nconst ee = new EE();\nconst second = (n) => console.log('second:' + n);\nconst once = (n) => { console.log('once:' + n); ee.off('go', once); };\nee.on('go', once);\nee.on('go', second);\nee.off('quiet', second);   // no bucket — the guard must no-op\nee.emit('go', 1);          // once() removes itself mid-emit\nee.emit('go', 2);",
+        "blanks": [
+          { "answer": "{}", "hint": "empty registry keyed by event name" },
+          { "answer": "!a", "hint": "no bucket for this event — silent no-op" },
+          { "answer": "1", "hint": "splice deleteCount — remove exactly one entry" },
+          { "answer": "slice", "hint": "snapshot the handler list before dispatching" }
+        ],
+        "expectedOutput": "once:1\nsecond:1\nsecond:2"
       }
     ]
   },

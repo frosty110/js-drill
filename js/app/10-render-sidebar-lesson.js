@@ -1,6 +1,14 @@
 //  SIDEBAR RENDER
 // ──────────────────────────────────────────────────────────────────────────
 
+// audit F9: true when this page load arrived on an explicit lesson deep link
+// (a shared `#/two-sum/L1`), which suppresses the first-run plan-picker modal
+// so the link resolves to the drill it names. Declared HERE rather than beside
+// the other boot flags in slice 14 because that slice loads after this one —
+// a `let` there would be in its TDZ during this file's first render pass.
+// Assigned once, by initBootstrap().
+let _bootedOnLessonDeepLink = false;
+
 // Re-renders the vertical binder tab strip. Counts reflect the *full*
 // curriculum per track — they don't react to search / focus / starter-path
 // filters, so a user can always see how many lessons each binder holds.
@@ -690,7 +698,22 @@ function renderLesson() {
   // First-time welcome — the path picker modal becomes the welcome surface
   // (auto-opened once, exposes Starter / Cram / Diagnostic / Browse-on-own).
   // The picker drives `state.welcomed` so the next renderLesson won't reopen it.
-  if (!state.welcomed && Object.keys(state.progress).length === 0) {
+  //
+  // audit F9: NOT when the visitor arrived on an explicit lesson deep link. A
+  // shared `#/two-sum/L1` has to resolve to the drill — that is the whole point
+  // of the share-URL work — and PROFILE.md is explicit that any decision placed
+  // before the user can start drilling has to justify itself loudly. A
+  // five-option plan chooser is the most expensive possible first screen. The
+  // picker is still one tap away (Browse's filter panel / the plan chip), and
+  // the Starter Plan is already the default, so nobody is left without a plan.
+  //
+  // Measured, so the next reader doesn't have to: this guard is a no-op for a
+  // bare URL (the flag is false there, leaving the condition exactly as it
+  // was). A bare URL doesn't raise the picker either, but that predates this
+  // change — it followed from Home becoming the front door, which renders
+  // instead of a lesson. Whether Home should carry its own first-run plan
+  // prompt is a separate product question, not something this guard decided.
+  if (!state.welcomed && Object.keys(state.progress).length === 0 && !_bootedOnLessonDeepLink) {
     setTimeout(() => { if (!state.welcomed) openPathModal({ welcome: true }); }, 0);
   }
 

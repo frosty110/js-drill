@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Implement a HashMap</h1>
     <p class="sharepage__lede">Hash table with separate chaining. Each bucket is an array of [key, value] entries. Hashing: Knuth&#39;s multiplicative hash for ints, djb2-style for strings, both modulo capacity. put updates in place if the key exists; otherwise appends. get/has/remove walk the bucket linearly — O(1) average with a decent hash.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -46,7 +46,7 @@ false
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Separate chaining (bucket arrays)</strong> · <code>O(1) avg / O(n + cap)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">class HashMap {
   constructor(capacity = 16) {
     this.capacity = capacity;
@@ -169,7 +169,7 @@ console.log(m.size);</code></pre>
         <li><span class="sharepage__key">C</span> On collision, scan forward to the next empty slot and place the entry there (open addressing)</li>
         <li><span class="sharepage__key">D</span> Each key is hashed twice with two separate functions; the second hash is the &#39;chain&#39; offset into a parallel table</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>this.buckets</code> is an array of arrays, so two keys hashing to the same index just sit side by side in that bucket and every op walks it linearly. The alternative family is open addressing (probe forward to the next free slot) — same problem, entirely different deletion story.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why must put walk the bucket before appending?</h3>
@@ -179,7 +179,7 @@ console.log(m.size);</code></pre>
         <li><span class="sharepage__key">C</span> <code>Array.prototype.push</code> returns the new length, not the new entry — the walk reads back the appended pair</li>
         <li><span class="sharepage__key">D</span> To detect a full bucket and trigger a resize before the new entry overflows</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>put(2, &#39;B&#39;)</code> after <code>put(2, &#39;b&#39;)</code> has to land on the existing pair, which the walk does with <code>e[1] = v; return</code>. Going straight to <code>push</code> would leave two <code>[2, …]</code> entries in the bucket — <code>get</code> returns the stale first one and <code>size</code> reports 4 for 3 keys.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> Purpose of <code>&gt;&gt;&gt; 0</code> in the hash function?</h3>
@@ -189,7 +189,7 @@ console.log(m.size);</code></pre>
         <li><span class="sharepage__key">C</span> Casts the float result of the multiply to an integer, since <code>%</code> rejects non-integer operands in strict mode</li>
         <li><span class="sharepage__key">D</span> Bitwise OR with zero — needed because <code>&gt;&gt;</code> (signed) would corrupt the high bit</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>h | 0</code> leaves a SIGNED 32-bit int, and JS <code>%</code> keeps the dividend&#39;s sign — <code>&#39;user_id&#39;</code> hashes to -147132913, so <code>% 16</code> is -1 and <code>this.buckets[-1]</code> is <code>undefined</code>, which the next <code>for...of</code> throws on. <code>&gt;&gt;&gt; 0</code> reinterprets the same bits as unsigned so the index always lands in 0..capacity-1.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> Average-case time complexity of get?</h3>
@@ -199,13 +199,13 @@ console.log(m.size);</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> O(1) <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> O(capacity) — every get must touch every bucket until it finds the key, regardless of load factor</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> Hashing is O(1) and, with keys spread evenly, each bucket holds about n/capacity entries — constant while the load factor is bounded. The O(n) worst case is real (every key colliding into one bucket) but this fixed-capacity version has no resize policy to hold the load factor down.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -235,6 +235,34 @@ console.log(m.get(1));
 console.log(m.size);</code></pre>
       <p><strong>Answers:</strong> <code>from</code>, <code>%</code>, <code>of</code>, <code>===</code>, <code>return</code>, <code>push</code>, <code>1</code></p>
       <p class="sharepage__note">Expected output: <code>A
+1</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Fill in the unsigned-hash coercion and remove() — key 17 shares this bucket and must survive the splice.</p>
+      <pre class="sharepage__code"><code class="language-js">class HashMap {
+  constructor(cap = 16) { this.cap = cap; this.buckets = Array.from({ length: cap }, () =&gt; []); this.size = 0; }
+  // Reinterpret the product as unsigned — a signed value would give a negative bucket.
+  _hash(k) { return ((k * 2654435761) ___ 0) % this.cap; }
+  put(k, v) {
+    const b = this.buckets[this._hash(k)];
+    for (const e of b) if (e[0] === k) { e[1] = v; return; }
+    b.push([k, v]); this.size++;
+  }
+  remove(k) {
+    const b = this.buckets[this._hash(k)];
+    for (let i = 0; i &lt; b.length; i++) if (b[i][___] === k) { b.___(i, 1); this.size___; return true; }
+    return ___;
+  }
+}
+const m = new HashMap();
+m.put(1, &#39;a&#39;); m.put(17, &#39;c&#39;);
+console.log(m.remove(1));
+console.log(m.remove(1));
+console.log(m.size);</code></pre>
+      <p><strong>Answers:</strong> <code>&gt;&gt;&gt;</code>, <code>0</code>, <code>splice</code>, <code>--</code>, <code>false</code></p>
+      <p class="sharepage__note">Expected output: <code>true
+false
 1</code></p>
     </article>
   </section>
@@ -314,7 +342,7 @@ console.log(m.size);</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-hashmap","title":"Implement a HashMap","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does separate chaining mean?","options":["One global linked list of all entries that uses the hash only to pick a starting node for traversal","Each bucket holds a list of colliding entries","On collision, scan forward to the next empty slot and place the entry there (open addressing)","Each key is hashed twice with two separate functions; the second hash is the 'chain' offset into a parallel table"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why must put walk the bucket before appending?","options":["To compute the running hash of existing entries so the new entry can be placed in sorted order","To update the value in place when the key already exists — otherwise duplicates leak","`Array.prototype.push` returns the new length, not the new entry — the walk reads back the appended pair","To detect a full bucket and trigger a resize before the new entry overflows"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Purpose of `>>> 0` in the hash function?","options":["Right-shifts the value zero places, a no-op used as a hint to the JIT to specialize the call site","Coerces to an unsigned 32-bit int so modulo yields a non-negative bucket","Casts the float result of the multiply to an integer, since `%` rejects non-integer operands in strict mode","Bitwise OR with zero — needed because `>>` (signed) would corrupt the high bit"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Average-case time complexity of get?","options":["O(log n) — the bucket walk uses binary search after the hash narrows the range","O(n) — every get must scan all entries to confirm the key isn't a hash collision elsewhere","O(1)","O(capacity) — every get must touch every bucket until it finds the key, regardless of load factor"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in put and get so an existing key is updated in place rather than duplicated.","answers":["from","%","of","===","return","push","1"]}],"L3":[{"n":1,"prompt":"Build HashMap with put/get/has/remove/size. Insert (1,'a'), (2,'b'), (17,'c'); log get(1), get(2), get(17), get(99), has(2); put(2,'B') then log get(2), size; remove(1), log has(1), size.","expectedOutput":"a\nb\nc\n-1\ntrue\nB\n3\nfalse\n2"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-hashmap","title":"Implement a HashMap","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does separate chaining mean?","options":["One global linked list of all entries that uses the hash only to pick a starting node for traversal","Each bucket holds a list of colliding entries","On collision, scan forward to the next empty slot and place the entry there (open addressing)","Each key is hashed twice with two separate functions; the second hash is the 'chain' offset into a parallel table"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why must put walk the bucket before appending?","options":["To compute the running hash of existing entries so the new entry can be placed in sorted order","To update the value in place when the key already exists — otherwise duplicates leak","`Array.prototype.push` returns the new length, not the new entry — the walk reads back the appended pair","To detect a full bucket and trigger a resize before the new entry overflows"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Purpose of `>>> 0` in the hash function?","options":["Right-shifts the value zero places, a no-op used as a hint to the JIT to specialize the call site","Coerces to an unsigned 32-bit int so modulo yields a non-negative bucket","Casts the float result of the multiply to an integer, since `%` rejects non-integer operands in strict mode","Bitwise OR with zero — needed because `>>` (signed) would corrupt the high bit"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Average-case time complexity of get?","options":["O(log n) — the bucket walk uses binary search after the hash narrows the range","O(n) — every get must scan all entries to confirm the key isn't a hash collision elsewhere","O(1)","O(capacity) — every get must touch every bucket until it finds the key, regardless of load factor"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in put and get so an existing key is updated in place rather than duplicated.","answers":["from","%","of","===","return","push","1"]},{"n":2,"prompt":"Fill in the unsigned-hash coercion and remove() — key 17 shares this bucket and must survive the splice.","answers":[">>>","0","splice","--","false"]}],"L3":[{"n":1,"prompt":"Build HashMap with put/get/has/remove/size. Insert (1,'a'), (2,'b'), (17,'c'); log get(1), get(2), get(17), get(99), has(2); put(2,'B') then log get(2), size; remove(1), log has(1), size.","expectedOutput":"a\nb\nc\n-1\ntrue\nB\n3\nfalse\n2"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

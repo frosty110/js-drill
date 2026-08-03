@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Event Emitter</h1>
     <p class="sharepage__lede">Pub/sub primitive — multiple listeners per event, remove a specific handler with off(), invoke all in registration order on emit().</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -42,7 +42,7 @@ two:3</code></p>
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Pub/sub registry: event → array of handlers</strong> · <code>O(k) emit / O(n) total</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">class EventEmitter {
   constructor() {
     this.handlers = {};                          // event -&gt; array of fns
@@ -77,7 +77,7 @@ two:3</code></p>
         <li><span class="sharepage__key">C</span> Match by the <code>name</code> property of the function (anonymous functions share name &#39;&#39; so they all match)</li>
         <li><span class="sharepage__key">D</span> Position in the bucket — <code>off(event, n)</code> removes the nth registered listener</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>arr.indexOf(fn)</code> compares references, so the fn you pass to <code>off</code> must be the very object you passed to <code>on</code>. <code>ee.on(&#39;tick&#39;, x =&gt; f(x))</code> followed by <code>ee.off(&#39;tick&#39;, x =&gt; f(x))</code> silently removes nothing — the two arrows are distinct objects.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why does emit() iterate a copy of the handler array?</h3>
@@ -87,7 +87,7 @@ two:3</code></p>
         <li><span class="sharepage__key">C</span> <code>for...of</code> over a live array throws TypeError if its length changes during iteration</li>
         <li><span class="sharepage__key">D</span> Iterating a copy lets the engine inline the handler calls, which is faster than indexed access</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> A handler that unsubscribes itself makes <code>off</code> splice the live array, shifting every later handler down one index — the iterator then skips the next one entirely (handlers [a,b,c] where a removes itself dispatch as a, c). Iterating <code>arr.slice()</code> freezes the dispatch list, so a mid-emit <code>on</code>/<code>off</code> takes effect from the NEXT emit.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> What happens when you emit an event with no registered listeners?</h3>
@@ -97,7 +97,7 @@ two:3</code></p>
         <li><span class="sharepage__key">C</span> It auto-creates an empty bucket for the event and returns false</li>
         <li><span class="sharepage__key">D</span> It fires every listener subscribed to &#39;*&#39; as a wildcard fallback</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>this.handlers[event]</code> is <code>undefined</code> for an event nobody subscribed to, and the <code>if (!arr) return</code> guard bails before <code>.slice()</code> is reached. Drop that guard and the throw in the first distractor is exactly what you get.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> If on(&#39;x&#39;, fn) is called twice with the same fn, how many times will emit(&#39;x&#39;) invoke fn?</h3>
@@ -107,13 +107,13 @@ two:3</code></p>
         <li class="is-correct"><span class="sharepage__key">C</span> 2 — duplicates are stored separately <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> 1 the first time, 2 on subsequent emits as duplicates accrete</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>on</code> is a bare <code>push</code> with no dedupe, so the bucket holds the same reference twice and <code>emit</code> walks both slots. Note the asymmetry with <code>off</code>: <code>indexOf</code> finds only the first, so one <code>off</code> leaves the duplicate still subscribed.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -136,6 +136,29 @@ ee.emit(&#39;msg&#39;, 2);</code></pre>
       <p class="sharepage__note">Expected output: <code>A:1
 B:1
 B:2</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Fill in the registry init, the missing-bucket guards, and the copy that makes emit reentrancy-safe.</p>
+      <pre class="sharepage__code"><code class="language-js">class EE {
+  constructor() { this.h = ___; }
+  on(e, fn) { (this.h[e] ||= []).push(fn); }
+  off(e, fn) { const a = this.h[e]; if (___) return; const i = a.indexOf(fn); if (i !== -1) a.splice(i, ___); }
+  // Copy the bucket first — a listener that off()s itself must not shift the next one out.
+  emit(e, ...args) { const a = this.h[e]; if (!a) return; for (const fn of a.___()) fn(...args); }
+}
+const ee = new EE();
+const second = (n) =&gt; console.log(&#39;second:&#39; + n);
+const once = (n) =&gt; { console.log(&#39;once:&#39; + n); ee.off(&#39;go&#39;, once); };
+ee.on(&#39;go&#39;, once);
+ee.on(&#39;go&#39;, second);
+ee.off(&#39;quiet&#39;, second);   // no bucket — the guard must no-op
+ee.emit(&#39;go&#39;, 1);          // once() removes itself mid-emit
+ee.emit(&#39;go&#39;, 2);</code></pre>
+      <p><strong>Answers:</strong> <code>{}</code>, <code>!a</code>, <code>1</code>, <code>slice</code></p>
+      <p class="sharepage__note">Expected output: <code>once:1
+second:1
+second:2</code></p>
     </article>
   </section>
 
@@ -191,7 +214,7 @@ ee.emit(&#39;tick&#39;, 3);</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-event-emitter","title":"Event Emitter","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does off(event, fn) use to find the listener?","options":["Structural equality of the function's `.toString()` source — equivalent-looking arrows match","Identity comparison — the exact same function reference","Match by the `name` property of the function (anonymous functions share name '' so they all match)","Position in the bucket — `off(event, n)` removes the nth registered listener"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why does emit() iterate a copy of the handler array?","options":["`.slice()` freezes the function references so listeners can't be reassigned mid-dispatch","To allow listeners that call off() or on() during dispatch without breaking iteration","`for...of` over a live array throws TypeError if its length changes during iteration","Iterating a copy lets the engine inline the handler calls, which is faster than indexed access"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What happens when you emit an event with no registered listeners?","options":["It throws TypeError — `arr.slice()` is called on undefined","Nothing — emit is a no-op for unknown events","It auto-creates an empty bucket for the event and returns false","It fires every listener subscribed to '*' as a wildcard fallback"],"answer":1,"answerLetter":"B"},{"n":4,"q":"If on('x', fn) is called twice with the same fn, how many times will emit('x') invoke fn?","options":["0 — the second on() overwrites the first registration","1 — `Array.prototype.push` is a Set-like operation that ignores existing entries","2 — duplicates are stored separately","1 the first time, 2 on subsequent emits as duplicates accrete"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete on/off/emit so the sequence logs A and B once, then only B after off.","answers":["||","push","indexOf","!==","splice","of","..."]}],"L3":[{"n":1,"prompt":"Implement EventEmitter with on/off/emit. Subscribe two listeners to 'tick', emit twice, off the first, emit again. Listeners should log identifying strings.","expectedOutput":"one:1\ntwo:1\none:2\ntwo:2\ntwo:3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-event-emitter","title":"Event Emitter","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"What does off(event, fn) use to find the listener?","options":["Structural equality of the function's `.toString()` source — equivalent-looking arrows match","Identity comparison — the exact same function reference","Match by the `name` property of the function (anonymous functions share name '' so they all match)","Position in the bucket — `off(event, n)` removes the nth registered listener"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why does emit() iterate a copy of the handler array?","options":["`.slice()` freezes the function references so listeners can't be reassigned mid-dispatch","To allow listeners that call off() or on() during dispatch without breaking iteration","`for...of` over a live array throws TypeError if its length changes during iteration","Iterating a copy lets the engine inline the handler calls, which is faster than indexed access"],"answer":1,"answerLetter":"B"},{"n":3,"q":"What happens when you emit an event with no registered listeners?","options":["It throws TypeError — `arr.slice()` is called on undefined","Nothing — emit is a no-op for unknown events","It auto-creates an empty bucket for the event and returns false","It fires every listener subscribed to '*' as a wildcard fallback"],"answer":1,"answerLetter":"B"},{"n":4,"q":"If on('x', fn) is called twice with the same fn, how many times will emit('x') invoke fn?","options":["0 — the second on() overwrites the first registration","1 — `Array.prototype.push` is a Set-like operation that ignores existing entries","2 — duplicates are stored separately","1 the first time, 2 on subsequent emits as duplicates accrete"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete on/off/emit so the sequence logs A and B once, then only B after off.","answers":["||","push","indexOf","!==","splice","of","..."]},{"n":2,"prompt":"Fill in the registry init, the missing-bucket guards, and the copy that makes emit reentrancy-safe.","answers":["{}","!a","1","slice"]}],"L3":[{"n":1,"prompt":"Implement EventEmitter with on/off/emit. Subscribe two listeners to 'tick', emit twice, off the first, emit again. Listeners should log identifying strings.","expectedOutput":"one:1\ntwo:1\none:2\ntwo:2\ntwo:3"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

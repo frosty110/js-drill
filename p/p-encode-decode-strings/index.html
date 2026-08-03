@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Arrays &amp; Hashing</p>
     <h1>Encode/Decode Strings</h1>
     <p class="sharepage__lede">Serialize a list of arbitrary strings into one string and round-trip it back. Length-prefix scheme `len#payload` avoids any delimiter collision.</p>
-    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Arrays &amp; Hashing</span> <span class="ds-chip">8 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Arrays &amp; Hashing</span> <span class="ds-chip">8 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -39,7 +39,7 @@
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Length-prefix framing (len#payload), scan-and-slice decode</strong> · <code>O(N) / O(N)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">function encode(strs) {
   let out = &quot;&quot;;
   // Length-prefix is delimiter-safe — payload may contain &#39;#&#39; itself.
@@ -76,7 +76,7 @@ function decode(str) {
         <li><span class="sharepage__key">C</span> Array.prototype.join inserts the separator between every char, not between strings — the wrong shape entirely</li>
         <li><span class="sharepage__key">D</span> String.prototype.split has a 65535-element output limit that join+split would silently hit</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>decode</code> reads the length, then consumes exactly that many chars, so a <code>#</code> inside a payload is never read as a boundary: <code>[&quot;a&quot;,&quot;#b&quot;]</code> encodes to <code>1#a2##b</code> and round-trips. A pure-separator scheme needs a character the payload is guaranteed never to contain, and arbitrary strings offer none.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> When decoding, why scan for &#39;#&#39; instead of using <code>split(&#39;#&#39;)</code>?</h3>
@@ -86,7 +86,7 @@ function decode(str) {
         <li><span class="sharepage__key">C</span> split returns a string when called with one argument and an array when called with two — too inconsistent here</li>
         <li><span class="sharepage__key">D</span> We need to keep the &#39;#&#39; character in the output, which split discards</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>&quot;1#a2##b&quot;.split(&quot;#&quot;)</code> yields four pieces for two strings. Scanning to the FIRST <code>#</code> after each header ends the search there, and the length it read decides how much of what follows is payload — including any <code>#</code> in it.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> How is the empty string <code>&quot;&quot;</code> encoded?</h3>
@@ -96,7 +96,7 @@ function decode(str) {
         <li class="is-correct"><span class="sharepage__key">C</span> As <code>&quot;0#&quot;</code> <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> As <code>&quot;#0&quot;</code> — the delimiter must come before the length</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>out += s.length + &quot;#&quot; + s</code> with <code>s = &quot;&quot;</code> concatenates <code>&quot;0&quot;</code>, <code>&quot;#&quot;</code> and nothing. The header is never skipped, and that is what keeps <code>[&quot;&quot;]</code> (encodes to <code>&quot;0#&quot;</code>) distinguishable from <code>[]</code> (encodes to <code>&quot;&quot;</code>).</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> After reading length L from a header ending at index j, where does the next header begin?</h3>
@@ -151,8 +151,8 @@ function decode(str) {
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -180,6 +180,25 @@ console.log(JSON.stringify(___(enc)));</code></pre>
       <p><strong>Answers:</strong> <code>length</code>, <code>&quot;#&quot;</code>, <code>!==</code>, <code>len</code>, <code>decode</code></p>
       <p class="sharepage__note">Expected output: <code>5#hello5#world
 [&quot;hello&quot;,&quot;world&quot;]</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Decode only — fill the loop guard, the header parse, and the pointer arithmetic that steps over the &#39;#&#39;. This input has a &#39;#&#39; inside a payload and an empty string.</p>
+      <pre class="sharepage__code"><code class="language-js">function decode(str) {
+  const res = [];
+  let i = 0;
+  while (i ___ str.length) {
+    let j = i;
+    while (str[j] !== &quot;#&quot;) j++;
+    const len = ___(str.slice(i, ___));
+    res.push(str.slice(j + 1, j + 1 + len));
+    i = j + ___ + len;
+  }
+  return res;
+}
+console.log(JSON.stringify(decode(&quot;1#a3#b#c0#&quot;)));</code></pre>
+      <p><strong>Answers:</strong> <code>&lt;</code>, <code>Number</code>, <code>j</code>, <code>1</code></p>
+      <p class="sharepage__note">Expected output: <code>[&quot;a&quot;,&quot;b#c&quot;,&quot;&quot;]</code></p>
     </article>
   </section>
 
@@ -231,7 +250,7 @@ console.log(JSON.stringify(decode(enc)));</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"p-encode-decode-strings","title":"Encode/Decode Strings","section":"Arrays & Hashing","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why prefix with `length + '#'` instead of just joining on a separator?","options":["Length-prefixed strings can be parsed in parallel because each header is fixed-width","Any separator could collide with a payload character — length prefix is collision-proof","Array.prototype.join inserts the separator between every char, not between strings — the wrong shape entirely","String.prototype.split has a 65535-element output limit that join+split would silently hit"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When decoding, why scan for '#' instead of using `split('#')`?","options":["split builds the whole array up front, defeating the streaming, length-bounded read we want","Payloads themselves can contain '#', so a global split would over-split","split returns a string when called with one argument and an array when called with two — too inconsistent here","We need to keep the '#' character in the output, which split discards"],"answer":1,"answerLetter":"B"},{"n":3,"q":"How is the empty string `\"\"` encoded?","options":["As an empty string","As `\"#\"` — header is omitted when length is zero","As `\"0#\"`","As `\"#0\"` — the delimiter must come before the length"],"answer":2,"answerLetter":"C"},{"n":4,"q":"After reading length L from a header ending at index j, where does the next header begin?","options":["j + L","j + 1 + L","j + L + 2","i + L"],"answer":1,"answerLetter":"B"},{"n":5,"q":"Why can the digit characters of the length header never be confused with the payload that follows?","options":["The header is escaped as `\\d` so the decoder can distinguish header digits from payload digits","The first '#' marks the boundary — everything before it is the header, everything after (for `len` chars) is payload","The encoder validates that no payload begins with a digit and rejects inputs that do","Payload positions are tracked in a parallel index array passed alongside the encoded string"],"answer":1,"answerLetter":"B"},{"n":6,"q":"Why does the naive `strs.join('#')` then `split('#')` round trip break?","options":["join drops trailing empty strings, so `['a','']` would lose the empty element after the round trip","If a payload itself contains '#', split produces extra pieces and the count no longer matches","split with a single-char delimiter coerces the result elements to numbers, breaking string payloads","join collapses consecutive separators in its output, so back-to-back empty strings get merged"],"answer":1,"answerLetter":"B"},{"n":7,"q":"How does the empty array [] round-trip?","options":["Encodes to '0#' and decodes to [''] — encode must emit a zero-length header","Encodes to '' and decodes back to [] because the while loop never enters","Encodes to '' but decode throws because the inner scan can't find a '#' to break on","Encodes to '0' — the count of elements becomes the entire encoded form"],"answer":1,"answerLetter":"B"},{"n":8,"q":"Length-prefix framing is robust precisely when:","options":["Payload sizes are known up front, so the encoder can pre-allocate the output buffer","The payload alphabet can overlap any candidate delimiter, so no separator char is reserved-safe","The decoder is allowed to scan the entire string twice — once for headers, once for payloads","All payloads share a common prefix the encoder can factor out"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in encode/decode and round-trip the input.","answers":["length","\"#\"","!==","len","decode"]}],"L3":[{"n":1,"prompt":"Implement `encode(strs)` and `decode(str)` using a length-prefix scheme. Log `encode([\"hello\",\"world\"])` then `JSON.stringify(decode(encode([\"hello\",\"world\"])))`.","expectedOutput":"5#hello5#world\n[\"hello\",\"world\"]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"p-encode-decode-strings","title":"Encode/Decode Strings","section":"Arrays & Hashing","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why prefix with `length + '#'` instead of just joining on a separator?","options":["Length-prefixed strings can be parsed in parallel because each header is fixed-width","Any separator could collide with a payload character — length prefix is collision-proof","Array.prototype.join inserts the separator between every char, not between strings — the wrong shape entirely","String.prototype.split has a 65535-element output limit that join+split would silently hit"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When decoding, why scan for '#' instead of using `split('#')`?","options":["split builds the whole array up front, defeating the streaming, length-bounded read we want","Payloads themselves can contain '#', so a global split would over-split","split returns a string when called with one argument and an array when called with two — too inconsistent here","We need to keep the '#' character in the output, which split discards"],"answer":1,"answerLetter":"B"},{"n":3,"q":"How is the empty string `\"\"` encoded?","options":["As an empty string","As `\"#\"` — header is omitted when length is zero","As `\"0#\"`","As `\"#0\"` — the delimiter must come before the length"],"answer":2,"answerLetter":"C"},{"n":4,"q":"After reading length L from a header ending at index j, where does the next header begin?","options":["j + L","j + 1 + L","j + L + 2","i + L"],"answer":1,"answerLetter":"B"},{"n":5,"q":"Why can the digit characters of the length header never be confused with the payload that follows?","options":["The header is escaped as `\\d` so the decoder can distinguish header digits from payload digits","The first '#' marks the boundary — everything before it is the header, everything after (for `len` chars) is payload","The encoder validates that no payload begins with a digit and rejects inputs that do","Payload positions are tracked in a parallel index array passed alongside the encoded string"],"answer":1,"answerLetter":"B"},{"n":6,"q":"Why does the naive `strs.join('#')` then `split('#')` round trip break?","options":["join drops trailing empty strings, so `['a','']` would lose the empty element after the round trip","If a payload itself contains '#', split produces extra pieces and the count no longer matches","split with a single-char delimiter coerces the result elements to numbers, breaking string payloads","join collapses consecutive separators in its output, so back-to-back empty strings get merged"],"answer":1,"answerLetter":"B"},{"n":7,"q":"How does the empty array [] round-trip?","options":["Encodes to '0#' and decodes to [''] — encode must emit a zero-length header","Encodes to '' and decodes back to [] because the while loop never enters","Encodes to '' but decode throws because the inner scan can't find a '#' to break on","Encodes to '0' — the count of elements becomes the entire encoded form"],"answer":1,"answerLetter":"B"},{"n":8,"q":"Length-prefix framing is robust precisely when:","options":["Payload sizes are known up front, so the encoder can pre-allocate the output buffer","The payload alphabet can overlap any candidate delimiter, so no separator char is reserved-safe","The decoder is allowed to scan the entire string twice — once for headers, once for payloads","All payloads share a common prefix the encoder can factor out"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Fill in encode/decode and round-trip the input.","answers":["length","\"#\"","!==","len","decode"]},{"n":2,"prompt":"Decode only — fill the loop guard, the header parse, and the pointer arithmetic that steps over the '#'. This input has a '#' inside a payload and an empty string.","answers":["\u003c","Number","j","1"]}],"L3":[{"n":1,"prompt":"Implement `encode(strs)` and `decode(str)` using a length-prefix scheme. Log `encode([\"hello\",\"world\"])` then `JSON.stringify(decode(encode([\"hello\",\"world\"])))`.","expectedOutput":"5#hello5#world\n[\"hello\",\"world\"]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

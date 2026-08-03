@@ -356,6 +356,15 @@ for (const topic of registry.topics) {
     const entryNum = entry.num != null ? entry.num : entry.chapter;
     if (num !== entryNum) fail(at, `num ${num} != manifest ${entryNum}`);
     if (!ch.title) fail(at, 'missing title');
+    // The manifest's copy of the title is denormalized the same way its
+    // `questions` count is, and for the same reason: consumers that must not
+    // fetch 32 unit files read the manifest instead — the crawlable topic index
+    // links units by it (so the link text disagreed with the <h1> it points at),
+    // and the main app's Home loads it into `_sdIndex` already. A drift here is
+    // invisible in the drill and wrong everywhere else.
+    else if (entry.title && entry.title !== ch.title) {
+      fail(at, `manifest title "${entry.title}" != unit title "${ch.title}"`);
+    }
     if (!ch.summary) fail(at, 'missing summary');
     if (ch.part && validParts.size && !validParts.has(ch.part)) fail(at, `part "${ch.part}" not a manifest part`);
     validateChapterTags(t, entry, at);

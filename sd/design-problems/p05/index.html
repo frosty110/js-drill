@@ -33,6 +33,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>From seed URLs: fetch a page, extract links, enqueue new URLs, store content for indexing — continuously, not one-shot.</li><li>Purpose is a search-index crawler, which sets the freshness and coverage goals.</li><li>Obey robots.txt and per-domain politeness; dedup both URLs and content; schedule re-crawls.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>~10B pages refreshed roughly monthly → ~4,000 pages/s sustained</li><li>~100 KB of HTML each → ~1 PB raw corpus</li><li>The frontier is billions of pending URLs — far too big for RAM, so disk-backed with a hot working set</li><li>I/O-bound: parallelism comes from crawling many domains at once, never from hammering few</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>The URL frontier is the heart: a BFS queue enforcing per-domain politeness (rate limits so one host isn&#39;t hammered) plus priority (importance/freshness).</li><li>Dedup twice: URL-seen (normalize + hash into a large set / Bloom filter) AND content-seen (fingerprint the page body to catch the same content at different URLs).</li><li>DNS resolution is a hidden bottleneck — cache aggressively; a naive design blocks workers on DNS.</li><li>Politeness is non-negotiable: obey robots.txt, add crawl delays, and partition the frontier by host so each domain is fetched by one worker at a controlled rate.</li><li>Crawler traps (infinite calendars, session-id URLs, deep dynamic paths) require depth limits, URL-pattern heuristics, and per-domain page caps.</li><li>Freshness is a re-crawl policy problem: recrawl frequency scales with a page&#39;s change rate and importance, not uniformly.</li></ul>

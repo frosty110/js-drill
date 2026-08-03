@@ -121,6 +121,34 @@ function validateTagRegistry() {
 // Authored tags on one manifest chapter entry. Mechanism is required (>=2) because
 // it is the cross-family transfer index — a problem with one mechanism can't answer
 // "what else solves it this way?".
+// A unit's `brief` — the scoped requirements + scale constants a drill session
+// can't reconstruct from a shuffled question. Required on design problems (the
+// topic whose prompts lean hardest on session context), optional elsewhere but
+// schema-checked wherever it appears.
+const BRIEF_REQUIRED_TOPICS = new Set(['design-problems']);
+function validateBrief(topic, ch, where) {
+  const b = ch.brief;
+  if (b === undefined) {
+    if (BRIEF_REQUIRED_TOPICS.has(topic)) fail(where, 'missing "brief" (functional + scale)');
+    return;
+  }
+  if (!b || typeof b !== 'object' || Array.isArray(b)) return fail(where, '"brief" must be an object');
+  for (const k of ['functional', 'scale']) {
+    if (!Array.isArray(b[k]) || b[k].length < 2) fail(where, `brief.${k} needs >= 2 entries`);
+    else if (!b[k].every(x => typeof x === 'string' && x.trim())) fail(where, `empty brief.${k} entry`);
+  }
+  if (b.gate !== undefined) {
+    const n = Array.isArray(ch.questions) ? ch.questions.length : 0;
+    if (!Array.isArray(b.gate)) fail(where, 'brief.gate must be an array of question indices');
+    else b.gate.forEach(i => {
+      if (!Number.isInteger(i) || i < 0 || i >= n) fail(where, `brief.gate index ${i} out of range (0..${n - 1})`);
+    });
+  }
+  for (const k of Object.keys(b)) {
+    if (!['functional', 'scale', 'gate'].includes(k)) fail(where, `unknown brief field "${k}"`);
+  }
+}
+
 function validateChapterTags(topic, entry, where) {
   if (!TAG_TOPICS.has(topic)) return;
   const tags = entry.tags;
@@ -348,6 +376,15 @@ for (const topic of registry.topics) {
     const entryNum = entry.num != null ? entry.num : entry.chapter;
     if (num !== entryNum) fail(at, `num ${num} != manifest ${entryNum}`);
     if (!ch.title) fail(at, 'missing title');
+    // The manifest's copy of the title is denormalized the same way its
+    // `questions` count is, and for the same reason: consumers that must not
+    // fetch 32 unit files read the manifest instead — the crawlable topic index
+    // links units by it (so the link text disagreed with the <h1> it points at),
+    // and the main app's Home loads it into `_sdIndex` already. A drift here is
+    // invisible in the drill and wrong everywhere else.
+    else if (entry.title && entry.title !== ch.title) {
+      fail(at, `manifest title "${entry.title}" != unit title "${ch.title}"`);
+    }
     if (!ch.summary) fail(at, 'missing summary');
     if (ch.part && validParts.size && !validParts.has(ch.part)) fail(at, `part "${ch.part}" not a manifest part`);
     validateChapterTags(t, entry, at);
@@ -372,6 +409,15 @@ for (const topic of registry.topics) {
     } else if (entry.questions !== ch.questions.length) {
       fail(at, `manifest "questions": ${entry.questions} != actual ${ch.questions.length}`);
     }
+    // The `brief` is the whiteboard state an interleaved session can't rebuild
+    // for itself — the scoped requirements and the scale constants. Every
+    // canonical design problem must carry one, because a mixed set can serve
+    // any question of any unit cold. `gate` names the question indices whose
+    // own answer IS the brief (scope, estimate), where it stays hidden until
+    // the reveal; indices are positional, which the append-only content rule
+    // keeps stable. See the § brief note in CLAUDE.md.
+    validateBrief(t, ch, at);
+
     if (t === 'design-problems') {
       if (!Array.isArray(ch.diagrams) || ch.diagrams.length !== 4) {
         fail(at, `design problem needs exactly 4 architecture diagrams, got ${ch.diagrams ? ch.diagrams.length : 0}`);

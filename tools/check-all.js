@@ -53,10 +53,12 @@ const GATES = [
 const PROBE_SUITE = [
   { name: 'app boot smoke',      cmd: ['tools/cdp/appsplit-smoke.js'] },
   { name: 'ds page frame',       cmd: ['tools/cdp/ds-page-frame.js'] },
+  { name: 'ds drag-scroll',      cmd: ['tools/cdp/ds-dragscroll.js'] },
   { name: 'home + review nav',   cmd: ['tools/cdp/home-nav.js'] },
   { name: 'share URLs',          cmd: ['tools/cdp/share-urls.js'] },
   { name: 'sd study plans',      cmd: ['tools/cdp/sd-plans.js'] },
   { name: 'sd tags + nav',       cmd: ['tools/cdp/sd-tags-nav.js'] },
+  { name: 'sd mixed context',    cmd: ['tools/cdp/sd-mixed-context.js'] },
   { name: 'agent bridge',        cmd: ['tools/cdp/agent-bridge.js'] },
   { name: 'sync merge rules',    cmd: ['tools/cdp/sync-merge.js'] }
 ];

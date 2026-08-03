@@ -33,6 +33,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Index documents; serve keyword queries with boolean and phrase support; rank by relevance; paginate; filters and facets.</li><li>The corpus is large but bounded (say 1B documents), not the open web — no crawling or spam adversaries.</li><li>Query availability matters more than indexing availability: indexing can lag, search cannot go down.</li><li>Relevance is the product and needs a metric (NDCG, click-through). Out of scope: crawling, personalization, deep query understanding.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>1B documents at ~1 KB of text ≈ 1 TB raw; the inverted index lands at ~200–300 GB compressed</li><li>At ~50 GB per shard that&#39;s 5–10 primary shards, replicated a few times</li><li>Two independent scaling axes: more documents needs more shards, more queries needs more replicas</li><li>Every query fans out to every shard, so p99 is the SLOWEST shard: with 10 shards, a 1-in-100 slow response makes ~1 in 10 queries slow</li><li>p99 query latency under ~200ms</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>The inverted index maps each term to a posting list of document ids; a query becomes an intersection of posting lists rather than a scan of documents.</li><li>Shard by document, not by term: term-sharding makes every multi-term query a cross-node join and creates hot shards on common words.</li><li>Document sharding means every query fans out to every shard, so the scatter-gather latency is the p99 of the slowest shard, not the average.</li><li>Retrieval and ranking are separate stages — cheap BM25 to get candidates, expensive learned ranking on the top few hundred.</li><li>Indexes are immutable segments merged in the background; a document update is a delete-marker plus a reinsert, exactly like an LSM tree.</li><li>Near-real-time search comes from a small in-memory segment searched alongside the on-disk ones, not from mutating the main index.</li><li>Skip lists and early termination are what make intersection sublinear — without them a common term&#39;s posting list dominates every query it appears in.</li></ul>

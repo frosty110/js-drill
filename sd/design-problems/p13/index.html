@@ -33,6 +33,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Upload/download files; sync across a user&#39;s devices; share files and folders; view and restore prior versions.</li><li>Sync must transfer only changed bytes, never re-upload a whole file on a small edit.</li><li>Metadata is strongly consistent (a device must see the latest version list); blob content is immutable.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>500M registered · 100M DAU · ~2 devices each · ~50 GB stored per user → ~25 EB raw, before dedup and tiering</li><li>~10 saves per DAU/day → ~1B writes/day, ~12K/s average, ~60K/s peak</li><li>With chunk-level dedup the average uploaded delta is ~1 MB → ~1 PB/day, roughly 12 GB/s</li><li>Durability is paramount (11 nines); downloads exceed uploads and are served from CDN/blob store</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>Split each file into content-defined chunks (~4 MB); hash each chunk (e.g. SHA-256) and store it once — the hash IS the key (content-addressed dedup).</li><li>Separate the metadata service (file → ordered chunk-hash list, versions, ACLs) from the chunk/blob store (immutable content-addressed blobs).</li><li>Sync = compare the local and server chunk-hash lists; upload/download only the missing chunk hashes (the delta), not the whole file.</li><li>Resolve concurrent edits with per-file versions + last-writer-wins or explicit conflicted-copy files; the metadata service is the source of truth for ordering.</li><li>Serve downloads through a CDN and blob store (S3); keep the metadata DB small and strongly consistent while blobs live in cheap object storage.</li><li>Versioning falls out for free — a new version is just a new chunk-list pointing mostly at existing chunks.</li><li>Notify other devices of changes via a long-poll/websocket notification service rather than clients polling metadata.</li></ul>

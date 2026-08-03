@@ -33,6 +33,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Charge a customer (card → merchant), maintain wallet balances, payouts/withdrawals, refunds, transaction history.</li><li>Never double-charge, never lose or create money; exactly-once semantics under retries and network failures.</li><li>Full immutable history, PCI-DSS for card data, regulatory reporting.</li><li>Clarify: currencies/FX, sync vs async settlement, and which flows (P2P, card-present, payouts) are in scope.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>~10M transactions/day → ~115 TPS average, maybe ~1K TPS peak — modest next to a social feed</li><li>But every one is a durable ACID write, not a cache read: correctness is the hard part, not throughput</li><li>Ledger data is a few immutable entries per transaction — tens of GB/day, retained for years for audit</li><li>Integrity beats timeliness: better to delay than to be wrong. Statements and reconciliation read from replicas.</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>Idempotency: the client supplies an idempotency key per payment intent; the server dedupes on it so retries never double-charge (exactly-once effect).</li><li>Record money movement in a double-entry ledger — every transaction has balanced debit and credit entries — for correctness, auditability, and reconciliation.</li><li>Payments need strong consistency / ACID on the ledger; correctness and integrity outrank latency.</li><li>Use auth-then-capture: authorize (hold) funds first, capture later — enabling holds, partial captures, and cancellations.</li><li>Integrate an external payment gateway (Stripe/Adyen) and coordinate multi-step flows with a saga + compensating transactions, since you can&#39;t 2PC across an external provider.</li><li>Reconcile internal ledger against the gateway/bank settlement files daily to catch drift.</li><li>PCI: tokenize card data via the gateway — never store raw PAN/CVV yourself; keep card data out of your systems entirely.</li></ul>

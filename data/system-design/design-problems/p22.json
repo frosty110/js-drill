@@ -13,6 +13,26 @@
     "Prefill and decode interfere — a long prompt entering the batch stalls every streaming user — so separate them, by chunking prefill or by disaggregating onto different GPU pools.",
     "Prefix caching turns a shared system prompt from per-request compute into a cache hit, which is often the cheapest large win in a production deployment."
   ],
+  "brief": {
+    "functional": [
+      "Accept a prompt plus sampling parameters, stream generated tokens back (SSE or WebSocket), support multiple models and versions, cancel in-flight requests.",
+      "Two distinct latency SLOs: time-to-first-token (perceived responsiveness) and time-per-output-token (reading speed). Conflating them is a design error.",
+      "Multi-tenant fair sharing and per-tenant rate limits — one 8K-token request can monopolize a worker.",
+      "Ask about the mix: interactive chat vs offline batch justify different clusters."
+    ],
+    "scale": [
+      "A 70B model in bf16 is 140 GB of weights alone → doesn't fit one 80 GB GPU; tensor parallelism across 2–4 is forced",
+      "On a 4×80 GB node roughly 160 GB is left, and almost all of it goes to KV cache",
+      "Per-token KV is ~2.6 MB with multi-head attention, ~0.3 MB with grouped-query attention",
+      "That's ~15 vs ~130 concurrent 4K-token sequences — GQA is a serving decision, not just a modeling one",
+      "Decode is memory-bandwidth-bound; the objective is tokens/sec/dollar subject to the latency SLOs",
+      "Prompt lengths vary by orders of magnitude and output length isn't known until generation stops"
+    ],
+    "gate": [
+      0,
+      1
+    ]
+  },
   "questions": [
     {
       "type": "open",

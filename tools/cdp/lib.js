@@ -248,7 +248,11 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
       { name: 'any-pointer', value: 'coarse' }
     ]});
   } else if (viewport) {
-    await rawSend('Emulation.setDeviceMetricsOverride', viewport);
+    // setDeviceMetricsOverride requires mobile + deviceScaleFactor; a bare
+    // { width, height } is rejected as "Invalid parameters" from inside
+    // connect(), which reads like a probe bug anywhere but here.
+    await rawSend('Emulation.setDeviceMetricsOverride',
+      { mobile: false, deviceScaleFactor: 1, ...viewport });
   }
 
   await rawSend('Page.navigate', { url });
@@ -298,6 +302,12 @@ async function connect({ url, mobile = false, viewport, outDir, waitForLoadMs = 
     },
 
     async evalAwait(expression) { return session.eval(expression, { awaitPromise: true }); },
+
+    // Raw CDP escape hatch. Needed when the thing under test IS the browser's
+    // own input handling — a synthesized PointerEvent from eval() never
+    // produces the real click-after-drag a mouse does, so a probe built on
+    // dispatchEvent would pass while the feature was broken.
+    async send(method, params = {}) { return rawSend(method, params); },
 
     async click(selector) {
       const ok = await session.eval(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.click(); return true; })()`);

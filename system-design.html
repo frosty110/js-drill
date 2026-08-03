@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="ds/components.css">
 <link rel="stylesheet" href="css/12-ds-share.css">
 <script src="ds/icons.js"></script>
+<script src="ds/dragscroll.js"></script>
 <script src="js/storage.js"></script>
 <!-- Share URLs — see docs/share-urls.md -->
 <script src="js/sharecode.js"></script>
@@ -129,7 +130,11 @@
     font-weight:700;font-size:14px;display:grid;place-items:center}
   .ch-num.done{background:var(--good-soft);color:var(--good-soft-fg)}
   .ch-main{flex:1;min-width:0}
-  .ch-title{font-size:15px;font-weight:600;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* Wraps freely — no clamp, no ellipsis. At 390px most design-problem titles
+     overflow one line, and "Design a Prescription Drug Mark…" is not a label you
+     can browse by. A card growing a line is cheaper than a name you can't read,
+     and it means a new problem's title is never something to design around. */
+  .ch-title{font-size:15px;font-weight:600;color:var(--text-strong)}
   .ch-meta{display:flex;align-items:center;gap:8px;margin-top:6px}
   .bar{flex:1;height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;min-width:60px}
   .bar > i{display:block;height:100%;background:var(--good);width:0;transition:width .3s}
@@ -279,6 +284,25 @@
     border-radius:4px;background:var(--panel-2);color:var(--muted);margin-bottom:12px}
   .q-tag.open{background:var(--ds-accent-soft);color:var(--ds-accent-hi)}
   .q-stem{font-size:18px;line-height:1.5;color:var(--text-strong);margin:0 0 20px;white-space:pre-wrap}
+
+  /* ── Interleaved-session context (which system am I designing?) ─────── */
+  .q-context{margin:0 0 16px;padding:12px 14px;border-radius:10px;
+    background:var(--panel);border-left:3px solid var(--accent)}
+  /* This chip is a heading, not an eyebrow tag — a 35-char title in caps is a wall. */
+  .q-context .q-tag{margin-bottom:0;text-transform:none;letter-spacing:0;font-size:13px;
+    font-weight:600;color:var(--text-strong);background:var(--panel-2)}
+  .q-context__scope{margin:8px 0 0;font-size:13px;line-height:1.5;color:var(--muted)}
+  .q-brief{margin:0 0 20px;border:1px solid var(--panel-2);border-radius:10px;background:var(--panel)}
+  .q-brief>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+    min-height:44px;padding:0 14px;font-size:13px;font-weight:600;color:var(--text)}
+  .q-brief>summary::-webkit-details-marker{display:none}
+  .q-brief>summary::before{content:'▸';color:var(--accent);font-size:11px;transition:transform .15s}
+  .q-brief[open]>summary::before{transform:rotate(90deg)}
+  .q-brief__body{padding:2px 14px 12px}
+  .q-brief h5{margin:8px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .q-brief ul{margin:0;padding-left:18px}
+  .q-brief li{margin:3px 0;font-size:13px;line-height:1.5;color:var(--text)}
+  .model .q-brief{margin:14px 0 0}
   .explain{margin-top:16px;padding:14px 15px;border-radius:10px;border-left:3px solid var(--accent);
     background:var(--panel);font-size:14px;line-height:1.55;color:var(--text)}
   .explain.correct{border-left-color:var(--good)}
@@ -826,6 +850,8 @@ function topicUnitStats(t) {
   });
   return { total, mastered, started, due, unseen, pct: total ? Math.round(mastered / total * 100) : 0 };
 }
+// The singular, capitalized noun — "Problem", "Section", "Chapter".
+function unitNounCap(t) { return (META[t] && META[t].unitLabel) || 'Chapter'; }
 // "Problem" / "Section" / "Chapter" — the manifest's own noun for a unit.
 function unitNoun(t, n) {
   const label = (META[t] && META[t].unitLabel) || 'Chapter';
@@ -1307,6 +1333,34 @@ async function startMixed(t) {
 // ============================================================================
 // QUESTION RENDER
 // ============================================================================
+
+// The unit's `brief` is the whiteboard state a real interviewer hands you up
+// front: the scoped functional requirements and the scale constants. Without it
+// "derive the write QPS" has no derivable answer — the numbers were only ever
+// stated inside an earlier question's model answer, which an interleaved
+// session may never show you.
+//
+// Collapsed by default, always: retrieval first, the numbers on one tap.
+//
+// `brief.gate` lists the question indices whose OWN answer is the brief (the
+// scope and estimate steps of the arc) — there it's withheld entirely until the
+// reveal, then rendered alongside the model answer, where comparing what you
+// said to the real scoping is the point. Indices are positional against
+// authored question order, which the append-only content rule keeps stable.
+function briefHtml(it, ch, revealed) {
+  const b = ch && ch.brief;
+  if (!b) return '';
+  if (!revealed && Array.isArray(b.gate) && b.gate.includes(it.qIndex)) return '';
+  const list = (label, arr) => (arr && arr.length)
+    ? `<h5>${label}</h5><ul>${arr.map(x => `<li>${fmt(x)}</li>`).join('')}</ul>` : '';
+  const body = list('Functional requirements', b.functional) + list('Scale &amp; constraints', b.scale);
+  if (!body) return '';
+  return `<details class="q-brief"${revealed ? ' open' : ''}>
+      <summary>${revealed ? 'The scoped brief' : 'Requirements &amp; scale'}</summary>
+      <div class="q-brief__body">${body}</div>
+    </details>`;
+}
+
 function renderQuestion() {
   const app = document.getElementById('app');
   if (session.pos >= session.items.length) return renderSummary();
@@ -1317,15 +1371,32 @@ function renderQuestion() {
   const pct = Math.round(session.pos / total * 100);
   session._wasMastered = isMastered(it.key);
 
-  const tag = session.mixed
-    ? `${unitAbbrev(it.topic)} ${chNum(ch)} · ${esc(ch.title)}`
-    : `Question ${session.pos + 1} of ${total}`;
+  // The unit label is the retrieval CUE, not a decoration. An interleaved
+  // session that withholds it is asking you to "estimate the scale" of nothing:
+  // 64% of the design-problem prompts never name their own system, because they
+  // were authored for a chapter run where Q1 scoped it. So mixed/due sessions —
+  // which shuffle ACROSS units — lead every card with the unit and its authored
+  // one-line scope. Interleaving should vary the cue, not delete it.
+  // (Chapter and plan sessions already carry it in `session.title`, and the user
+  // arrived from that unit's detail screen.)
+  // Spelled out ("Problem 14 · Design an Observability Platform"), not the "#"
+  // abbreviation used where space is tight — this line's whole job is to be read.
+  const unitLabel = `${unitNounCap(it.topic)} ${chNum(ch, it.topic)} · ${esc(ch.title)}`;
+  const tag = session.mixed ? unitLabel : `Question ${session.pos + 1} of ${total}`;
+  const contextHtml = session.mixed
+    ? `<div class="q-context">
+         <span class="q-tag">${unitLabel}</span>
+         ${ch.summary ? `<p class="q-context__scope">${fmt(ch.summary)}</p>` : ''}
+       </div>`
+    : '';
 
   let bodyHtml, hint;
   if (it.type === 'open') {
     bodyHtml = `
+      ${contextHtml}
       <span class="q-tag open">Explain &amp; apply</span>
       <p class="q-stem">${fmt(q.prompt)}</p>
+      ${briefHtml(it, ch)}
       <p class="open-hint">🗣️ <b>Say your answer out loud</b> as if in the interview — then reveal the model answer and grade yourself honestly.</p>
       <textarea class="open-scratch" placeholder="(optional) jot key points…"></textarea>
       <div id="explain-slot"></div>
@@ -1333,8 +1404,10 @@ function renderQuestion() {
     hint = 'Press <code>Enter</code> or <code>Space</code> to reveal · then <code>1</code> Missed · <code>2</code> Partial · <code>3</code> Got it';
   } else {
     bodyHtml = `
-      <span class="q-tag">${tag}</span>
+      ${contextHtml}
+      ${session.mixed ? '' : `<span class="q-tag">${tag}</span>`}
       <p class="q-stem">${fmt(q.q)}</p>
+      ${briefHtml(it, ch)}
       <div class="ds-options" id="opts">
         ${q.options.map((o, i) => `<button class="ds-opt" data-i="${i}"><span class="ds-opt__key">${'ABCD'[i]}</span><span class="ds-opt__body">${fmt(o)}</span></button>`).join('')}
       </div>
@@ -1408,12 +1481,17 @@ function revealOpen() {
   session.answered = true;
   const it = session.items[session.pos];
   const q = it.q;
+  const ch = CH[it.topic][it.chId];
   const diagrams = diagramsForItem(it);
+  // A gated brief (see briefHtml) surfaces here and only here — after you've
+  // committed to an answer, so it grades you rather than feeding you.
+  const gated = ch && ch.brief && Array.isArray(ch.brief.gate) && ch.brief.gate.includes(it.qIndex);
   document.getElementById('explain-slot').innerHTML = `
     <div class="model">
       <h4>Key points to hit</h4>
       <ul>${(q.points || []).map(p => `<li>${fmt(p)}</li>`).join('')}</ul>
       <div class="ans">${fmt(q.answer || '')}</div>
+      ${gated ? briefHtml(it, ch, true) : ''}
       ${diagrams.length ? `<div id="reveal-diag"></div>` : ''}
     </div>`;
   if (diagrams.length) renderDiagramDeck(document.getElementById('reveal-diag'), diagrams, 'Answer visual');
@@ -1661,7 +1739,7 @@ async function openStats() {
       const ch = byId[cid]; if (!ch) return '';
       const s = chapterStats(t, ch); pm += s.mastered; pt += s.total;
       const p = s.total ? Math.round(s.mastered / s.total * 100) : 0;
-      return `<div class="row"><span class="nm">${unitAbbrev(t)} ${chNum(ch)}. ${esc(ch.title)}</span>
+      return `<div class="row"><span class="nm">${unitAbbrev(t)} ${chNum(ch, t)}. ${esc(ch.title)}</span>
         <span class="bar" style="max-width:90px"><i style="width:${p}%"></i></span>
         <span class="ch-frac">${s.mastered}/${s.total}</span></div>`;
     }).join('');

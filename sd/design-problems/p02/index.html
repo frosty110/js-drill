@@ -33,6 +33,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Post content; follow/unfollow; load a home feed merging followees&#39; posts, ranked, infinite-scroll.</li><li>Out of v1 scope: DMs, ads, notifications.</li><li>Eventual consistency is fine — a post may appear seconds late.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>300M DAU · ~200 followees each · 2 posts/day · 10 feed opens/day</li><li>~7K post writes/s (14K peak) · ~35K feed reads/s (70K peak)</li><li>Pure push fan-out → 120B feed-writes/day (~1.4M/s): a 200× amplification</li><li>Follower distribution is power-law — the celebrity tail drives the hard decision; &lt;200ms feed load</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>Fan-out-on-write (push) precomputes each follower&#39;s feed at post time — fast reads, but write amplification explodes for high-follower accounts.</li><li>Fan-out-on-read (pull) assembles the feed at query time by merging followees&#39; recent posts — cheap writes, but slow, repeated reads.</li><li>The production answer is HYBRID: push for normal users, pull for celebrities, merged at read time.</li><li>Store each user&#39;s feed as a capped, per-user timeline of post IDs in a fast store (e.g. Redis) — hydrate post bodies on read.</li><li>Ranking can be reverse-chronological or a scored model (recency, affinity, engagement); chrono is simpler, scored drives engagement.</li><li>Paginate with a cursor (last-seen post ID / timestamp), not OFFSET, so the feed is stable as new posts arrive.</li><li>A celebrity post is a thundering-herd write event — decouple fan-out via a queue and never push to millions synchronously.</li></ul>

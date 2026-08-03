@@ -33,6 +33,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Given a prefix, return the top ~5–10 completions ranked by relevance/popularity, updating as the user types.</li><li>Clarify: global popularity vs personalized vs context-aware ranking; multilingual; prefix-only or typo-tolerant.</li><li>Availability beats perfect freshness — stale suggestions are fine, a slow box is not.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>~5B searches/day × ~6 prefix lookups → ~30B requests/day, ~350K/s avg, ~1M/s peak (client debounce cuts this a lot)</li><li>Index the top ~100M–1B distinct queries; a trie with per-node top-K caches is tens of GB, sharded and in memory</li><li>Updates are batch, not a hot path: aggregate query logs and rebuild/patch hourly or daily</li><li>Latency dominates: ~50–100ms end to end</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>Store prefixes in a trie; cache the precomputed top-K completions ON each node so a lookup is O(prefix length), not a scan/sort at query time.</li><li>Rank suggestions by historical frequency (and recency/personalization); precompute the ranking offline, don&#39;t sort per-request.</li><li>Update the trie via periodic batch/offline rebuild from aggregated query logs — real-time per-keystroke writes are too write-heavy and would thrash the top-K caches.</li><li>Meet the sub-100ms budget with in-memory tries, edge caching, and client-side debouncing (~50–100ms) so not every keystroke hits the server.</li><li>Shard the trie by first characters/prefix ranges; route a request to the shard owning its prefix.</li><li>Querying a DB with <code>LIKE &#39;prefix%&#39;</code> doesn&#39;t scale to autocomplete latency/QPS; the precomputed-top-K trie does.</li><li>Personalization and freshness are layered on top of the global frequency-ranked base.</li></ul>

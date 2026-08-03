@@ -33,6 +33,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Upload; async transcode into multiple renditions; adaptive-bitrate playback; browse/search metadata; view counts.</li><li>Descoped up front: recommendations, monetization, live streaming, DRM.</li><li>The creator&#39;s master upload must be durably stored; view counts and metadata may lag seconds.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>~1M uploads/day at ~10 min each · ~5 renditions → ~1 GB stored per upload → ~1 PB/day</li><li>~10M concurrent viewers at ~5 Mbps → ~50 Tbps egress — the number that shapes the architecture</li><li>No origin fleet serves that: 99%+ of bytes come from CDN edge caches</li><li>Fast startup, minimal rebuffering, global low-latency playback</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>Upload once, transcode asynchronously via a queue of workers into a ladder of resolutions/bitrates, each chunked into ~2–10s segments (HLS/DASH).</li><li>Adaptive bitrate (ABR) is client-driven: the player measures throughput/buffer and requests the next segment at the bitrate it can sustain, using a manifest (.m3u8/.mpd) that lists all variants.</li><li>The CDN is the core scaling lever — 99%+ of egress bytes are served from edge caches, not origin; video is immutable and cache-friendly.</li><li>Separate the control plane (metadata service, small relational/NoSQL rows) from the data plane (huge immutable segment blobs in object storage + CDN).</li><li>View counts are aggregated approximately and asynchronously (stream → batch/count-min), never a synchronous row increment per view.</li><li>Read:write ratio is extreme (millions of reads per upload); design the whole system around cheap, cacheable, geo-distributed reads.</li></ul>

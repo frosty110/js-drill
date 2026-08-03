@@ -176,6 +176,20 @@ const N_FAMILIES = MANIFEST.parts.length;
   await s.sleep(400);
   const hScroll = await s.eval(`document.documentElement.scrollWidth - document.documentElement.clientWidth`);
   s.assert(hScroll <= 1, `no horizontal scroll on mobile, overflow=${hScroll}px`);
+
+  // Card titles must be READABLE at 390px, not ellipsised at one line — most
+  // design-problem titles overflow, and "Design a Prescription Drug Mark…" is
+  // not a browsable label. They wrap to two lines instead.
+  await s.eval(`document.getElementById('filter-toggle').click()`);
+  await s.sleep(300);
+  const titleFit = await s.eval(`(() => {
+    const els = Array.from(document.querySelectorAll('.ch-card .ch-title'));
+    return { n: els.length,
+      clipped: els.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent.trim()) };
+  })()`);
+  s.assert(titleFit.n === N_PROBLEMS, `measured every card title (${titleFit.n}/${N_PROBLEMS}) — an empty list would pass vacuously`);
+  s.assert(titleFit.clipped.length === 0,
+    `no card title clipped on mobile${titleFit.clipped.length ? ` — ${titleFit.clipped.length} incl. "${titleFit.clipped[0]}"` : ''}`);
   await s.snap('07-mobile-filter-open');
 
   // ── Desktop, same session ────────────────────────────────────────────────

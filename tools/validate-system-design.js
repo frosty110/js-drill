@@ -28,6 +28,14 @@ const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
 // through fail(), so a malformed infographic JSON would otherwise die with
 // "Cannot access 'fail' before initialization" instead of naming the file.
 let errors = 0, totalQ = 0, totalMC = 0, totalOpen = 0, totalDiagrams = 0, totalInfographics = 0;
+// The two auto-derived prose templates that shipped as filler. Kept as an
+// explicit gate so they cannot be reintroduced by a future bulk generator:
+// the failure mode is silent, because filler still renders and still validates.
+const FILLER = {
+  summary: /focused sheets separate the system map/i,
+  purpose: /enough room to trace independently/i
+};
+
 const fail = (where, msg) => { errors++; console.error(`  ✗ [${where}] ${msg}`); };
 
 const INFOGRAPHIC_SPECS = readJson(path.join(SD, 'infographic-specs.json')) || {};
@@ -246,7 +254,16 @@ function validateInfographic(topic, id, where) {
   // Every infographic lesson now has an authored multi-image set — the old
   // single-illustrated-sheet fallback retired when the last lesson converted.
   if (!set) { fail(where, 'every infographic lesson needs an authored multi-image set'); return; }
-  if (!set.title || !set.summary) fail(where, 'infographic set needs title and summary');
+  if (!set.title) fail(where, 'infographic set needs a title');
+  // `summary` and the per-item `purpose` are OPTIONAL, and the rule is inverted
+  // on purpose: they used to be required, which is how 33 summaries and 113
+  // purposes came to be auto-derived filler that restated the title back at the
+  // reader ("Give chat system system map enough room to trace independently").
+  // Requiring a field you cannot fill honestly manufactures noise. Absent is
+  // fine; templated is not.
+  if (set.summary != null && FILLER.summary.test(set.summary)) {
+    fail(where, 'set summary is the auto-derived template — write a real one or omit it');
+  }
   if (!Array.isArray(set.items) || set.items.length < 2) {
     fail(where, 'authored infographic set needs at least two focused graphics');
     return;
@@ -259,7 +276,10 @@ function validateInfographic(topic, id, where) {
     if (!item.id || !/^[a-z0-9-]+$/.test(item.id)) fail(at, 'item needs a kebab-case id');
     else if (ids.has(item.id)) fail(at, `duplicate id ${item.id}`);
     else ids.add(item.id);
-    for (const field of ['kind', 'title', 'purpose', 'description']) if (!item[field] || typeof item[field] !== 'string') fail(at, `missing ${field}`);
+    for (const field of ['kind', 'title', 'description']) if (!item[field] || typeof item[field] !== 'string') fail(at, `missing ${field}`);
+    if (item.purpose != null && FILLER.purpose.test(item.purpose)) {
+      fail(at, 'purpose is the auto-derived template — write a real one or omit it');
+    }
     if (item.renderer != null && item.renderer !== 'diagram-v1') fail(at, `unknown renderer ${JSON.stringify(item.renderer)}`);
     if (!Array.isArray(item.flow) || item.flow.length < 3) fail(at, 'flow needs at least three numbered steps');
     else item.flow.forEach((step, stepIndex) => {

@@ -417,20 +417,24 @@
       return `<ul class="infographic-bullets ${extraClass}">${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
     }
 
+    // `summary` and `purpose` are optional by design — see the FILLER gate in
+    // tools/validate-system-design.js. They were once required, which produced
+    // 146 auto-derived strings that restated the title back at the reader, so
+    // absent now means "nothing worth saying" rather than "render a template".
     render() {
       if (!this.isConnected || !this._data || !Array.isArray(this._data.items)) return;
       const set = this._data;
       const items = set.items;
       this.innerHTML = `<section class="infographic-set" aria-label="${escapeHtml(set.title)}">
         <header class="infographic-set__head">
-          <div><span class="infographic-set__eyebrow">Visual study set</span><h3>${escapeHtml(set.title)}</h3><p>${escapeHtml(set.summary)}</p></div>
+          <div><span class="infographic-set__eyebrow">Visual study set</span><h3>${escapeHtml(set.title)}</h3>${set.summary ? `<p>${escapeHtml(set.summary)}</p>` : ''}</div>
           <span class="infographic-set__count">${items.length} graphic${items.length === 1 ? '' : 's'}</span>
         </header>
         <div class="infographic-set__items">${items.map((item, index) => {
           const flow = (item.flow || []).map(step => `<li><span class="infographic-flow__step">${escapeHtml(step.step)}</span><div><strong>${escapeHtml(step.title)}</strong><p>${escapeHtml(step.detail)}</p></div></li>`).join('');
           const facts = (item.numbers || []).map(fact => `<div class="infographic-fact"><strong>${escapeHtml(fact.value)}</strong><span>${escapeHtml(fact.label)}</span><small>${escapeHtml(fact.detail)}</small></div>`).join('');
           return `<article class="infographic-study">
-            <header class="infographic-study__head"><span class="infographic-study__index">${index + 1}</span><span class="infographic-study__kind">${escapeHtml(item.kind)}</span><h4>${escapeHtml(item.title)}</h4><p class="infographic-study__purpose">${escapeHtml(item.purpose)}</p></header>
+            <header class="infographic-study__head"><span class="infographic-study__index">${index + 1}</span><span class="infographic-study__kind">${escapeHtml(item.kind)}</span><h4>${escapeHtml(item.title)}</h4>${item.purpose ? `<p class="infographic-study__purpose">${escapeHtml(item.purpose)}</p>` : ''}</header>
             <p class="infographic-study__description">${escapeHtml(item.description)}</p>
             <div class="infographic-study__guide">
               <section class="infographic-study__panel"><h5>Trace the flow</h5><ol class="infographic-flow">${flow}</ol></section>

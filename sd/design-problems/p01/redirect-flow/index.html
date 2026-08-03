@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Redirect: cache hit, miss, and not found — Design a URL Shortener</title>
-<meta name="description" content="Redirect: cache hit, miss, and not found: a system-design study sheet for Design a URL Shortener (GET flow).">
+<meta name="description" content="The redirect endpoint is public, read-heavy, and availability-critical. A hit returns immediately; a miss performs one primary-key read and backfills Redis; an absent or expired mapping is negative-cached briefly. Click events are emitted after resolution and never block the response.">
 <link rel="canonical" href="https://frosty110.github.io/js-drill/sd/design-problems/p01/redirect-flow/">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Redirect: cache hit, miss, and not found — Design a URL Shortener">
-<meta property="og:description" content="Redirect: cache hit, miss, and not found: a system-design study sheet for Design a URL Shortener (GET flow).">
+<meta property="og:description" content="The redirect endpoint is public, read-heavy, and availability-critical. A hit returns immediately; a miss performs one primary-key read and backfills Redis; an absent or expired mapping is negative-cached briefly. Click events are emitted after resolution and never block the response.">
 <meta property="og:url" content="https://frosty110.github.io/js-drill/sd/design-problems/p01/redirect-flow/">
 <meta property="og:image" content="https://frosty110.github.io/js-drill/assets/system-design/infographics/design-problems/p01/redirect-flow.png">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"ImageObject","name":"Design a URL Shortener: Redirect: cache hit, miss, and not found","description":"Redirect: cache hit, miss, and not found — a system-design study sheet for Design a URL Shortener.","contentUrl":"https://frosty110.github.io/js-drill/assets/system-design/infographics/design-problems/p01/redirect-flow.png","url":"https://frosty110.github.io/js-drill/sd/design-problems/p01/redirect-flow/","encodingFormat":"image/png","width":1440,"height":3035,"isPartOf":{"@type":"LearningResource","name":"Design a URL Shortener","url":"https://frosty110.github.io/js-drill/sd/design-problems/p01/"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"ImageObject","name":"Design a URL Shortener: Redirect: cache hit, miss, and not found","description":"The redirect endpoint is public, read-heavy, and availability-critical. A hit returns immediately; a miss performs one primary-key read and backfills Redis; an absent or expired mapping is negative-cached briefly. Click events are emitted after resolution and never block the response.","contentUrl":"https://frosty110.github.io/js-drill/assets/system-design/infographics/design-problems/p01/redirect-flow.png","url":"https://frosty110.github.io/js-drill/sd/design-problems/p01/redirect-flow/","encodingFormat":"image/png","width":1440,"height":3035,"isPartOf":{"@type":"LearningResource","name":"Design a URL Shortener","url":"https://frosty110.github.io/js-drill/sd/design-problems/p01/"}}</script>
 <link rel="stylesheet" href="../../../../ds/tokens.css">
 <link rel="stylesheet" href="../../../../ds/components.css">
 <link rel="stylesheet" href="../../../../css/13-share-page.css">
@@ -31,6 +31,23 @@
       <img src="../../../../assets/system-design/infographics/design-problems/p01/redirect-flow.png" alt="Design a URL Shortener: Redirect: cache hit, miss, and not found" width="1440" height="3035">
       <figcaption class="sharepage__note"><code>https://frosty110.github.io/js-drill/assets/system-design/infographics/design-problems/p01/redirect-flow.png</code></figcaption>
     </figure>
+  </section>
+
+  <section class="ds-section" id="what">
+    <h2>What this sheet shows</h2>
+    <p>The redirect endpoint is public, read-heavy, and availability-critical. A hit returns immediately; a miss performs one primary-key read and backfills Redis; an absent or expired mapping is negative-cached briefly. Click events are emitted after resolution and never block the response.</p>
+    <p class="sharepage__note">Keep the serving path and its three outcomes on one sheet so the latency and availability decisions are easy to compare.</p>
+  </section>
+
+  <section class="ds-section" id="flow">
+    <h2>Trace the flow</h2>
+    <ol class="sharepage__notes">
+      <li><strong>Route</strong> — The edge validates the code shape, applies abuse controls, and routes to a nearby stateless redirect service.</li>
+      <li><strong>Cache hit</strong> — Redis returns the long URL; issue 301 or 302 immediately and emit a click event asynchronously.</li>
+      <li><strong>Cache miss</strong> — Point-read the mapping store, check expiry, backfill Redis with TTL jitter, and redirect.</li>
+      <li><strong>Not found</strong> — Negative-cache the miss briefly to absorb repeated scans, then return 404.</li>
+      <li><strong>Degrade deliberately</strong> — If the store is unavailable, continue serving cached mappings; buffer or drop analytics before delaying redirects.</li>
+    </ol>
   </section>
 
   <section class="ds-section" id="context">

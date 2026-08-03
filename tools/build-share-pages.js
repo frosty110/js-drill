@@ -471,14 +471,14 @@ function sdSheetPage(topic, meta, unit, item, siblings) {
 
   out.push(head(4, {
     title: `${item.title} — ${unit.title}`,
-    description: `${item.title}: a system-design study sheet for ${unit.title}${item.kind ? ` (${item.kind})` : ''}.`,
+    description: item.description || `${item.title}: a system-design study sheet for ${unit.title}${item.kind ? ` (${item.kind})` : ''}.`,
     canonical,
     image: `${ORIGIN}/${rel}`,
     jsonLd: {
       '@context': 'https://schema.org',
       '@type': 'ImageObject',
       name: `${unit.title}: ${item.title}`,
-      description: `${item.title} — a system-design study sheet for ${unit.title}.`,
+      description: item.description || `${item.title} — a system-design study sheet for ${unit.title}.`,
       contentUrl: `${ORIGIN}/${rel}`,
       url: canonical,
       encodingFormat: 'image/png',
@@ -500,6 +500,28 @@ function sdSheetPage(topic, meta, unit, item, siblings) {
       <figcaption class="sharepage__note"><code>${esc(ORIGIN)}/${esc(rel)}</code></figcaption>
     </figure>
   </section>`);
+
+  // `description` is the authored sentence about THIS sheet and is the reason
+  // the page is worth indexing at all; `purpose` is optional (the auto-derived
+  // filler was stripped — see the FILLER gate in validate-system-design.js).
+  if (item.description || item.purpose) {
+    out.push(`
+  <section class="ds-section" id="what">
+    <h2>What this sheet shows</h2>
+    ${item.description ? `<p>${md(item.description)}</p>` : ''}
+    ${item.purpose ? `<p class="sharepage__note">${md(item.purpose)}</p>` : ''}
+  </section>`);
+  }
+
+  if (Array.isArray(item.flow) && item.flow.length) {
+    out.push(`
+  <section class="ds-section" id="flow">
+    <h2>Trace the flow</h2>
+    <ol class="sharepage__notes">
+      ${item.flow.map(s => `<li><strong>${esc(s.title)}</strong> — ${md(s.detail)}</li>`).join('\n      ')}
+    </ol>
+  </section>`);
+  }
 
   if (unit.summary) {
     out.push(`
@@ -633,6 +655,9 @@ function sdTopicPage(topic, meta) {
 // browser page, not a module — so the gate cross-checks the two by generating
 // from data and asserting every registered route resolves.
 const LENGTH_OF = q => (q <= 8 ? 'short' : q <= 10 ? 'medium' : 'long');
+// Mirrors familySlug in system-design.html — a part display name is not a URL.
+const familySlug = name => String(name || '').toLowerCase()
+  .replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 function facetLabel(tags, facetId, valueId) {
   const f = (tags.facets || []).find(x => x.id === facetId);
@@ -755,7 +780,7 @@ function tagIndex(meta, tags) {
     (tg.mechanism || []).forEach(v => add('mechanism', v, c.id));
     if (tg.difficulty) add('difficulty', tg.difficulty, c.id);
     (tg.company || []).forEach(v => add('company', v, c.id));
-    if (partOf[c.id]) add('family', partOf[c.id], c.id);
+    if (partOf[c.id]) add('family', familySlug(partOf[c.id]), c.id);
     add('length', LENGTH_OF(c.questions || 0), c.id);
   }
   // Only facets the registry knows about, so a stray key can't mint a page.

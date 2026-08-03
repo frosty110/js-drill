@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>One atomic token-bucket decision — Rate Limiting</title>
-<meta name="description" content="One atomic token-bucket decision: a system-design study sheet for Rate Limiting (Decision flow).">
+<meta name="description" content="The stored state is tokens plus the last refill timestamp. One atomic script computes elapsed refill, caps the bucket at capacity, spends the request cost when possible, and returns the remaining budget and reset estimate.">
 <link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c05/request-decision/">
 <meta property="og:type" content="article">
 <meta property="og:title" content="One atomic token-bucket decision — Rate Limiting">
-<meta property="og:description" content="One atomic token-bucket decision: a system-design study sheet for Rate Limiting (Decision flow).">
+<meta property="og:description" content="The stored state is tokens plus the last refill timestamp. One atomic script computes elapsed refill, caps the bucket at capacity, spends the request cost when possible, and returns the remaining budget and reset estimate.">
 <meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c05/request-decision/">
 <meta property="og:image" content="https://frosty110.github.io/js-drill/assets/system-design/infographics/components/c05/request-decision.png">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"ImageObject","name":"Rate Limiting: One atomic token-bucket decision","description":"One atomic token-bucket decision — a system-design study sheet for Rate Limiting.","contentUrl":"https://frosty110.github.io/js-drill/assets/system-design/infographics/components/c05/request-decision.png","url":"https://frosty110.github.io/js-drill/sd/components/c05/request-decision/","encodingFormat":"image/png","width":1440,"height":3035,"isPartOf":{"@type":"LearningResource","name":"Rate Limiting","url":"https://frosty110.github.io/js-drill/sd/components/c05/"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"ImageObject","name":"Rate Limiting: One atomic token-bucket decision","description":"The stored state is tokens plus the last refill timestamp. One atomic script computes elapsed refill, caps the bucket at capacity, spends the request cost when possible, and returns the remaining budget and reset estimate.","contentUrl":"https://frosty110.github.io/js-drill/assets/system-design/infographics/components/c05/request-decision.png","url":"https://frosty110.github.io/js-drill/sd/components/c05/request-decision/","encodingFormat":"image/png","width":1440,"height":3035,"isPartOf":{"@type":"LearningResource","name":"Rate Limiting","url":"https://frosty110.github.io/js-drill/sd/components/c05/"}}</script>
 <link rel="stylesheet" href="../../../../ds/tokens.css">
 <link rel="stylesheet" href="../../../../ds/components.css">
 <link rel="stylesheet" href="../../../../css/13-share-page.css">
@@ -31,6 +31,23 @@
       <img src="../../../../assets/system-design/infographics/components/c05/request-decision.png" alt="Rate Limiting: One atomic token-bucket decision" width="1440" height="3035">
       <figcaption class="sharepage__note"><code>https://frosty110.github.io/js-drill/assets/system-design/infographics/components/c05/request-decision.png</code></figcaption>
     </figure>
+  </section>
+
+  <section class="ds-section" id="what">
+    <h2>What this sheet shows</h2>
+    <p>The stored state is tokens plus the last refill timestamp. One atomic script computes elapsed refill, caps the bucket at capacity, spends the request cost when possible, and returns the remaining budget and reset estimate.</p>
+    <p class="sharepage__note">Trace refill, spend, allow, and Retry-After calculation as one race-free state transition.</p>
+  </section>
+
+  <section class="ds-section" id="flow">
+    <h2>Trace the flow</h2>
+    <ol class="sharepage__notes">
+      <li><strong>Read inputs</strong> — Use key, capacity B, refill rate r, cost c, and a monotonic server-side time source.</li>
+      <li><strong>Refill</strong> — tokens = min(B, tokens + r × elapsed).</li>
+      <li><strong>Decide</strong> — If tokens ≥ c, subtract c and allow; otherwise preserve state and reject.</li>
+      <li><strong>Explain</strong> — Return remaining tokens and Retry-After = ceil((c − tokens) ÷ r).</li>
+      <li><strong>Expire idle keys</strong> — Set a TTL long enough for a full refill so inactive identities do not consume memory forever.</li>
+    </ol>
   </section>
 
   <section class="ds-section" id="context">

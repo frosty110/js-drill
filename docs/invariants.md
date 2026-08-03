@@ -235,8 +235,12 @@ now *consumes* the registry (`DrillRoutes.parseAppHash`) rather than restating
 it.
 
 Assert against rendered elements, never a whole-file substring search, or a
-check will pass on a page stripped bare (one did). If you touch these, break
-something on purpose and confirm it goes red.
+check will pass on a page stripped bare (one did). The gate also rejects any
+generated path that is not URL-safe — derived tag values were briefly producing
+paths with spaces and ampersands that the app's own sanitiser would have
+stripped, so the two spellings could never have agreed.
+
+If you touch these, break something on purpose and confirm it goes red.
 
 **Adding a surface** — add a row to `SURFACES` in `js/routes.js`, generate its
 page in `tools/build-share-pages.js`, and the gate picks it up with no further

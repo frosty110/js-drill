@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Why one long prompt stalls everyone else — Design an LLM Inference Platform</title>
-<meta name="description" content="Why one long prompt stalls everyone else: a system-design study sheet for Design an LLM Inference Platform (Failure).">
+<meta name="description" content="Prefill is compute-bound and decode is memory-bandwidth-bound. Mixed in one step, a single 8K-token prompt becomes every other user’s visible stutter.">
 <link rel="canonical" href="https://frosty110.github.io/js-drill/sd/design-problems/p22/prefill-decode-interference/">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Why one long prompt stalls everyone else — Design an LLM Inference Platform">
-<meta property="og:description" content="Why one long prompt stalls everyone else: a system-design study sheet for Design an LLM Inference Platform (Failure).">
+<meta property="og:description" content="Prefill is compute-bound and decode is memory-bandwidth-bound. Mixed in one step, a single 8K-token prompt becomes every other user’s visible stutter.">
 <meta property="og:url" content="https://frosty110.github.io/js-drill/sd/design-problems/p22/prefill-decode-interference/">
 <meta property="og:image" content="https://frosty110.github.io/js-drill/assets/system-design/infographics/design-problems/p22/prefill-decode-interference.png">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"ImageObject","name":"Design an LLM Inference Platform: Why one long prompt stalls everyone else","description":"Why one long prompt stalls everyone else — a system-design study sheet for Design an LLM Inference Platform.","contentUrl":"https://frosty110.github.io/js-drill/assets/system-design/infographics/design-problems/p22/prefill-decode-interference.png","url":"https://frosty110.github.io/js-drill/sd/design-problems/p22/prefill-decode-interference/","encodingFormat":"image/png","width":1440,"height":2280,"isPartOf":{"@type":"LearningResource","name":"Design an LLM Inference Platform","url":"https://frosty110.github.io/js-drill/sd/design-problems/p22/"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"ImageObject","name":"Design an LLM Inference Platform: Why one long prompt stalls everyone else","description":"Prefill is compute-bound and decode is memory-bandwidth-bound. Mixed in one step, a single 8K-token prompt becomes every other user’s visible stutter.","contentUrl":"https://frosty110.github.io/js-drill/assets/system-design/infographics/design-problems/p22/prefill-decode-interference.png","url":"https://frosty110.github.io/js-drill/sd/design-problems/p22/prefill-decode-interference/","encodingFormat":"image/png","width":1440,"height":2280,"isPartOf":{"@type":"LearningResource","name":"Design an LLM Inference Platform","url":"https://frosty110.github.io/js-drill/sd/design-problems/p22/"}}</script>
 <link rel="stylesheet" href="../../../../ds/tokens.css">
 <link rel="stylesheet" href="../../../../ds/components.css">
 <link rel="stylesheet" href="../../../../css/13-share-page.css">
@@ -31,6 +31,23 @@
       <img src="../../../../assets/system-design/infographics/design-problems/p22/prefill-decode-interference.png" alt="Design an LLM Inference Platform: Why one long prompt stalls everyone else" width="1440" height="2280">
       <figcaption class="sharepage__note"><code>https://frosty110.github.io/js-drill/assets/system-design/infographics/design-problems/p22/prefill-decode-interference.png</code></figcaption>
     </figure>
+  </section>
+
+  <section class="ds-section" id="what">
+    <h2>What this sheet shows</h2>
+    <p>Prefill is compute-bound and decode is memory-bandwidth-bound. Mixed in one step, a single 8K-token prompt becomes every other user’s visible stutter.</p>
+    <p class="sharepage__note">Make the cross-request interference visible, since it is invisible in fleet dashboards.</p>
+  </section>
+
+  <section class="ds-section" id="flow">
+    <h2>Trace the flow</h2>
+    <ol class="sharepage__notes">
+      <li><strong>A long prompt arrives</strong> — An 8K-token prefill enters the same batch as streaming users.</li>
+      <li><strong>The step goes compute-bound</strong> — Prefill saturates the matrix units for a long step.</li>
+      <li><strong>Decode stalls behind it</strong> — Every streaming user waits, and their TPOT spikes for reasons they did not cause.</li>
+      <li><strong>Chunk the prefill</strong> — Splitting the prompt and interleaving with decode keeps any single step short.</li>
+      <li><strong>Or disaggregate</strong> — Separate GPU pools for prefill and decode, shipping the KV cache between them.</li>
+    </ol>
   </section>
 
   <section class="ds-section" id="context">

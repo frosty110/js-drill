@@ -171,6 +171,12 @@
     font-weight:600;margin-bottom:7px}
   .sd-facet-vals{display:flex;flex-wrap:wrap;gap:6px}
   .sd-chip--btn{min-height:32px;padding:8px 12px;cursor:pointer;font-family:inherit}
+  /* Per-question copy-link. Small on purpose — the drill is a focus surface —
+     but a real touch target (PROFILE.md: the phone is ~80% of use). */
+  .q-link{margin-left:8px;min-width:32px;height:32px;padding:0 6px;border:1px solid var(--panel-2,#343840);
+    border-radius:8px;background:transparent;color:var(--muted,#a7adb7);font:inherit;font-size:13px;
+    cursor:pointer;vertical-align:middle;touch-action:manipulation}
+  .q-link:hover,.q-link:focus-visible{border-color:var(--accent,#f5b62b);color:var(--text-strong,#f4f5f7);outline:none}
   .sd-chip--btn.is-on{background:var(--accent);color:var(--ds-accent-on,#17181c);border-color:var(--accent)}
   .sd-filter-clear{margin-top:14px;min-height:36px;padding:0 12px;background:none;border:1px solid var(--panel-2);
     border-radius:8px;color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
@@ -645,13 +651,20 @@ function facetLabel(fid, vid) {
   return v ? v.label : vid;
 }
 const LENGTH_OF = (q) => (q <= 8 ? 'short' : q <= 10 ? 'medium' : 'long');
+// A family is DERIVED from the part a problem sits in, but its value has to be a
+// stable id rather than the display name: "AI & ML Infrastructure" cannot be a
+// URL segment, and the route sanitiser would strip it to something that matches
+// nothing. Ids are registered in tags.json so the chips still read as prose.
+// Mirrored in tools/build-share-pages.js — same slug, both sides.
+const familySlug = (name) => String(name || '').toLowerCase()
+  .replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 // Every facet value one manifest entry carries — derived and authored together.
 function entryTags(t, entry) {
   const tg = entry.tags || {};
   const part = (META[t] && META[t]._partOf && META[t]._partOf[entry.id]) || null;
   return {
-    family: part ? [part] : [],
+    family: part ? [familySlug(part)] : [],
     mechanism: tg.mechanism || [],
     difficulty: tg.difficulty ? [tg.difficulty] : [],
     company: tg.company || [],
@@ -1335,10 +1348,25 @@ function renderQuestion() {
     <div id="progress-wrap"><div id="progress-bar" style="width:${pct}%"></div></div>
     <div class="sess-meta">
       <span>${esc(session.title)} — ${session.pos + 1}/${total}${session.mixed ? '' : ` · <span class="q-tag" style="margin:0;padding:1px 6px">${tag}</span>`}</span>
-      <span>${session.streak >= 3 ? `<span class="streak">🔥 ${session.streak} streak</span>` : `${session.right} correct`}</span>
+      <span>${session.streak >= 3 ? `<span class="streak">🔥 ${session.streak} streak</span>` : `${session.right} correct`}<button class="q-link" id="q-link" title="Copy a link to this question" aria-label="Copy a link to this question">🔗</button></span>
     </div>
     ${bodyHtml}
     <p class="kbd-hint">${hint}</p>`;
+
+  // Per-question link. The drill shows one question at a time, and until now
+  // "the thing I'm looking at" had no address at that grain — only the unit did.
+  // This copies the STATIC unit page anchored at this question (#qN), which is
+  // deliberately not a new app route: a shared "question 3" link that started a
+  // drill would touch the recipient's spaced-repetition schedule, and the point
+  // here is to hand someone the question, not reschedule their reviews.
+  const qLink = document.getElementById('q-link');
+  if (qLink) qLink.addEventListener('click', async () => {
+    const n = (ch.questions || []).indexOf(q) + 1;
+    if (!n || !window.DrillRoutes) return;
+    const url = DrillRoutes.shareUrl('sdUnit', { topic: it.topic, unit: it.chId }, null, { anchor: `q${n}` });
+    qLink.textContent = (await copyText(url)) ? '✓' : '✕';
+    setTimeout(() => { qLink.textContent = '🔗'; }, 1400);
+  });
 
   session.answered = false;
   if (it.type === 'open') {

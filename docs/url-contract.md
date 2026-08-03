@@ -112,7 +112,7 @@ declared fallback, so *"no page for this"* never becomes *"nowhere to go."*
 | **A study plan** | `#/design-problems/plan/night-before` | `sd/design-problems/plan/night-before/` |
 | **A tag list** | `#/design-problems/tag/mechanism/caching` | `sd/design-problems/tag/mechanism/caching/` |
 | A due/mixed session | `#/design-problems/mixed` | *(action → the topic page)* |
-| A question on a unit page | — | `sd/design-problems/p06/#q4` |
+| A question in a drill | *(🔗 copies the anchor →)* | `sd/design-problems/p06/#q4` |
 | A diagram on a unit page | — | `sd/design-problems/p06/#diagram-socket-routing` |
 | A coding lesson | `index.html#/two-sum` | `p/two-sum/` |
 | A level within a lesson | `index.html#/two-sum/L2` | `p/two-sum/#L2` |
@@ -137,7 +137,9 @@ they cannot paste, so every long-dwell surface needs an explicit affordance:
 
 - the unit screen has **Share** (`#share-unit`), which emits the static URL
   carrying the reader's `?s=` result set;
-- the sheet viewer has **Link**, which copies the sheet's own static page.
+- the sheet viewer has **Link**, which copies the sheet's own static page;
+- the drill has a per-question **🔗**, which copies the unit page anchored at
+  that question.
 
 Both copy the *static* URL, never the app hash, because the recipient is usually
 an AI that has to be able to fetch it.
@@ -193,41 +195,40 @@ The static pages are the indexable product; the shells are not. So:
 
 ## What is still unbuilt
 
-**Position inside a drill.** The system-design drill shows one question at a
-time, and that position is not in the URL — `#/…/q/3` doesn't exist. Adding it
-means deciding what a shared "question 3" link should do to the recipient's
-spaced-repetition schedule, which is a product question rather than a routing
-one, so it is deliberately left open. The static unit page anchors every
-question (`#q4`), so the shareable form exists; only the in-app position is
-missing.
+**Position inside a drill has no app route.** `#/…/q/3` does not exist, and that
+is a decision rather than an omission: a shared "question 3" link that started a
+drill would touch the recipient's spaced-repetition schedule, and the point of
+sharing a question is to hand someone the question, not reschedule their
+reviews. The drill instead offers a per-question **🔗** that copies the static
+unit page anchored at `#qN` — the same grain, without the side effect. If the
+in-app position is ever wanted as a route, the SR semantics have to be decided
+first.
 
-**Anchors from inside the app.** The static pages anchor every question, diagram
-and sheet, but the app neither writes those anchors nor offers a per-question
-copy — so an anchor only helps a reader who is already on the static page.
+**Sheet pages are still lighter than unit pages.** They now carry the authored
+`description`, the numbered flow, and the sibling set, which is enough to stand
+on their own; they are not a substitute for the unit page and link to it
+prominently.
 
-**Thin sheet pages.** The 183 sheet pages carry an image, the unit summary and
-sibling links. They would be substantially better with the sheet's own authored
-context, which is blocked by the content defect below.
+## Authoring note: don't require prose you can't fill honestly
 
-**The `family` facet is not addressable.** Its values are derived from part
-*display names* ("AI & ML Infrastructure"), not ids, so they can't be a path —
-and the app's own route sanitiser strips spaces and ampersands, so the two
-spellings could never agree. The generator skips them and says so; the in-app
-filter is unaffected. Giving families real ids in `tags.json` is what would make
-them addressable, which is a content change. The gate now rejects any non-URL-safe
-generated path, so this can't ship silently again.
+`infographic-sets.json` once **required** a `summary` per set and a `purpose` per
+sheet. The result was 33 summaries and 113 purposes generated from a template
+that restated the title back at the reader — *"Give chat system system map enough
+room to trace independently"* — rendered in the app, baked into the PNGs, and
+served on every static page as if authored.
 
-**Known content defect, not a routing one.** The prose baked into the generated
-PNGs — and rendered in the app's study-set cards as `purpose` / `description` —
-comes from the auto-derived fields in `infographic-sets.json` and reads as
-truncated filler ("Presence is extremely high-churn and low stakes, so the
-standard approach…"). The URLs now point at those sheets precisely, which makes
-the copy more visible, not less. Fixing it is a content pass over
-`infographic-sets.json` plus a re-render.
+That rule is now inverted. Both fields are **optional**, and
+`tools/validate-system-design.js` **rejects the two filler templates** so they
+cannot return: absent is fine, templated is not. The 70 real purposes and 18 real
+summaries were kept; the rest are gone. `description` was never the problem —
+it is sheet-specific and substantive (1 of 183 was unit-scoped), so it is what
+the sheet pages lead with.
 
-## Authoring note
+The general rule: a required field that authors cannot always fill honestly
+manufactures noise, and noise that validates is worse than a gap, because
+nothing ever flags it.
 
-`data/system-design/infographic-sets.json` has auto-derived `description` /
-`purpose` / `summary` prose that is garbled and **must never be rendered**. Only
-its structural fields (`id`, `title`, `kind`, dimensions) are safe. The authored
-voice is the `takeaway` on each diagram and the unit's own copy.
+**Still baked in:** the same filler is rendered inside the committed PNGs. Fixing
+that means re-running `tools/generate-system-design-infographic-sets.js`
+(Inkscape + ImageMagick + the licensed Caveat font) — the data is now clean, so a
+re-render would drop it.

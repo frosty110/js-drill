@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Distributed counters, reservations, and failure policy — Rate Limiting</title>
-<meta name="description" content="Distributed counters, reservations, and failure policy: a system-design study sheet for Rate Limiting (Scale and failure).">
+<meta name="description" content="Twenty independent gateways each enforcing the full quota can admit roughly twenty times the intended traffic. Shared atomic state fixes accuracy but adds a network hop. Local token reservations amortize that hop while accepting bounded overshoot.">
 <link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c05/distributed-enforcement/">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Distributed counters, reservations, and failure policy — Rate Limiting">
-<meta property="og:description" content="Distributed counters, reservations, and failure policy: a system-design study sheet for Rate Limiting (Scale and failure).">
+<meta property="og:description" content="Twenty independent gateways each enforcing the full quota can admit roughly twenty times the intended traffic. Shared atomic state fixes accuracy but adds a network hop. Local token reservations amortize that hop while accepting bounded overshoot.">
 <meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c05/distributed-enforcement/">
 <meta property="og:image" content="https://frosty110.github.io/js-drill/assets/system-design/infographics/components/c05/distributed-enforcement.png">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"ImageObject","name":"Rate Limiting: Distributed counters, reservations, and failure policy","description":"Distributed counters, reservations, and failure policy — a system-design study sheet for Rate Limiting.","contentUrl":"https://frosty110.github.io/js-drill/assets/system-design/infographics/components/c05/distributed-enforcement.png","url":"https://frosty110.github.io/js-drill/sd/components/c05/distributed-enforcement/","encodingFormat":"image/png","width":1440,"height":3035,"isPartOf":{"@type":"LearningResource","name":"Rate Limiting","url":"https://frosty110.github.io/js-drill/sd/components/c05/"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"ImageObject","name":"Rate Limiting: Distributed counters, reservations, and failure policy","description":"Twenty independent gateways each enforcing the full quota can admit roughly twenty times the intended traffic. Shared atomic state fixes accuracy but adds a network hop. Local token reservations amortize that hop while accepting bounded overshoot.","contentUrl":"https://frosty110.github.io/js-drill/assets/system-design/infographics/components/c05/distributed-enforcement.png","url":"https://frosty110.github.io/js-drill/sd/components/c05/distributed-enforcement/","encodingFormat":"image/png","width":1440,"height":3035,"isPartOf":{"@type":"LearningResource","name":"Rate Limiting","url":"https://frosty110.github.io/js-drill/sd/components/c05/"}}</script>
 <link rel="stylesheet" href="../../../../ds/tokens.css">
 <link rel="stylesheet" href="../../../../ds/components.css">
 <link rel="stylesheet" href="../../../../css/13-share-page.css">
@@ -31,6 +31,23 @@
       <img src="../../../../assets/system-design/infographics/components/c05/distributed-enforcement.png" alt="Rate Limiting: Distributed counters, reservations, and failure policy" width="1440" height="3035">
       <figcaption class="sharepage__note"><code>https://frosty110.github.io/js-drill/assets/system-design/infographics/components/c05/distributed-enforcement.png</code></figcaption>
     </figure>
+  </section>
+
+  <section class="ds-section" id="what">
+    <h2>What this sheet shows</h2>
+    <p>Twenty independent gateways each enforcing the full quota can admit roughly twenty times the intended traffic. Shared atomic state fixes accuracy but adds a network hop. Local token reservations amortize that hop while accepting bounded overshoot.</p>
+    <p class="sharepage__note">Show why local counters overshoot a global quota and where accuracy can be traded for latency and availability.</p>
+  </section>
+
+  <section class="ds-section" id="flow">
+    <h2>Trace the flow</h2>
+    <ol class="sharepage__notes">
+      <li><strong>Shard by limit key</strong> — Consistent hashing spreads users while keeping each user&#39;s state on one counter shard.</li>
+      <li><strong>Execute atomically</strong> — A Redis script or transactional primitive owns refill and spend for that key.</li>
+      <li><strong>Reserve locally when needed</strong> — Gateways lease small token batches to remove a shared-store round trip from every request.</li>
+      <li><strong>Bound the error</strong> — Reservation size × active gateways defines the worst-case overshoot.</li>
+      <li><strong>Choose failure semantics</strong> — Fail closed for billing or security; fail open or use an emergency local limit for low-risk availability paths.</li>
+    </ol>
   </section>
 
   <section class="ds-section" id="context">

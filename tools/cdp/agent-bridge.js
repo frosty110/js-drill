@@ -119,6 +119,32 @@ const OUT = process.argv[3] || '/tmp/jsdrill-probe-agent-bridge';
     s.assert(ok, `${rel} should serve a real page`);
   }
 
+  // ── Per-question link, inside a live drill ────────────────────────────────
+  // The drill shows one question at a time; until this, that grain had no
+  // address. Asserts it copies the STATIC unit page anchored at the question.
+  await s.eval(`location.href = '${URL_BASE}system-design.html#/design-problems/p06'`);
+  await s.sleep(2200);
+  const started = await s.eval(`(() => {
+    const b = document.getElementById('drill-all');
+    if (b) { b.click(); return 'drill-all'; }
+    return null;
+  })()`);
+  await s.sleep(1400);
+  const qlink = await s.eval(`(() => {
+    const el = document.getElementById('q-link');
+    if (!el) return { err: 'no per-question link control' };
+    const meta = document.querySelector('.sess-meta');
+    return { ok: true, inMeta: !!(meta && meta.contains(el)), h: el.getBoundingClientRect().height };
+  })()`);
+  s.assert(qlink.ok, `drill should expose a per-question link (started via ${JSON.stringify(started)}; ${qlink.err || 'ok'})`);
+  s.assert(qlink.h >= 30, `link should be a real touch target, got ${qlink.h}px`);
+  const qUrl = await s.eval(`(() => {
+    const R = window.DrillRoutes;
+    return R.shareUrl('sdUnit', { topic: 'design-problems', unit: 'p06' }, null, { anchor: 'q3' });
+  })()`);
+  s.assert(/\/sd\/design-problems\/p06\/#q3$/.test(String(qUrl)),
+    `question link should anchor the static unit page, got ${JSON.stringify(qUrl)}`);
+
   const { failed, errors, networkErrors } = s.report();
   await s.close();
   process.exit(failed + errors + networkErrors > 0 ? 1 : 0);

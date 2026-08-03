@@ -29,7 +29,7 @@
 
 ## Standing constraints (read before changing content or adding assets)
 
-**[docs/invariants.md](docs/invariants.md) is the rules doc.** Six constraints
+**[docs/invariants.md](docs/invariants.md) is the rules doc.** Seven constraints
 whose failure mode is invisible — the app stays green and the meaning quietly
 becomes wrong. Every one has a gate:
 
@@ -40,7 +40,7 @@ node tools/check-all.js --probes # gates, then the durable browser probes (opt-i
 git config core.hooksPath .githooks   # once per clone: run them pre-commit
 ```
 
-The two that bite most often:
+The three that bite most often:
 
 1. **Never reorder or delete a question or an option.** Share codes are
    positional — character N is question N, the letter is the option's authored
@@ -51,6 +51,13 @@ The two that bite most often:
 2. **Regenerate `p/`, `sd/`, `sitemap.xml` after any content change** — the
    output is committed and GitHub Pages serves it from the repo, so stale pages
    ship silently.
+3. **Anything a user can look at needs a URL, and that URL must return real
+   content with no JavaScript** — the three consumers of our URLs (AI agents the
+   user pastes a link into, their own copy-paste, and crawlers) don't run our JS,
+   and a hash fragment never reaches the server. Path = identity, query = view
+   state, fragment = position. Full contract in
+   [docs/url-contract.md](docs/url-contract.md); gated by
+   `tools/check-url-contract.js`.
 
 CI runs the same command on every push (`.github/workflows/checks.yml`).
 
@@ -181,9 +188,9 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `docs/ui-ux-guide.md` | **The UI/UX law** — ten rules, page frame, navigation + launcher contract, state/empty/error patterns, feedback hierarchy, number/chart rules, motion, z-layer ladder, a11y floor, checklists, measured legacy debt. Enforced via `.claude/skills/ui-consistency/`. |
 | `tools/cdp/ds-page-frame.js` | Durable probe: page-frame + nav invariants across Today/Browse/Progress at 390px and 1280px (one `<h1>`, shared column, `.ds-section`, no h-scroll, ≥44px nav, truthful `aria-current`). Append a row to `PAGES` when you add a destination. |
 | `js/sharecode.js` | **The share-code codec** — per-question result set ⇄ compact URL-safe string. One character per question in AUTHORED order; case carries correctness (`A`=picked option 0 and right, `a`=picked option 0 and wrong, `Y`/`p`/`n`=self-graded, `-`=unattempted). Every character is self-describing, so a decoder needs no schema. Runs in the browser and under Node. **The character table lives here and nowhere else.** See [`docs/share-urls.md`](docs/share-urls.md). |
-| `js/routes.js` | **The addressable-surface registry** — one row per surface (static share path, live-app hash, path parser, sitemap flag). Share URLs, backlinks, parsing and `sitemap.xml` all derive from it, so adding a crawlable surface is a one-line change. |
+| `js/routes.js` | **The addressable-surface registry** (governed by [`docs/url-contract.md`](docs/url-contract.md), invariant 7 — if the app can put the user somewhere this registry doesn't name, that place has no URL) — one row per surface (static share path, live-app hash, path parser, sitemap flag). Share URLs, backlinks, parsing and `sitemap.xml` all derive from it, so adding a crawlable surface is a one-line change. |
 | `js/share-page.js` | Progressive enhancement on the generated static pages: decodes `?s=`, marks the picked option inline, renders a results table, and flags rows whose code contradicts the current content ("code out of date") instead of reporting a false verdict. |
-| `tools/build-share-pages.js` | Renders the crawlable pages — `p/<lesson>/` (171), `sd/<topic>/<unit>/` (58), indexes, `sitemap.xml`, `robots.txt`. Output is **committed** (Pages serves from the repo); `--check` fails when it's stale. Run after any content change. |
+| `tools/build-share-pages.js` | Renders the crawlable pages — `p/<lesson>/` (171), `sd/<topic>/<unit>/` (58), `sd/<topic>/<unit>/<sheet>/` (183 study sheets — the JS-free twin of the app's `#/…/graphic/<id>` route), indexes, `sitemap.xml`, `robots.txt`. Also maintains the **agent bridge** inside `index.html` and `system-design.html` between `<!-- agent-bridge:start/end -->` markers — the no-JS fallback telling a fetcher how to turn a `#/…` route into a path. Output is **committed** (Pages serves from the repo); `--check` fails when it's stale. Run after any content change. |
 | `p/`, `sd/`, `sitemap.xml`, `robots.txt` | **Generated — do not hand-edit.** The static, no-JavaScript form of every lesson and system-design unit. This is what an AI agent or a crawler actually fetches. |
 | `js/storage.js` | **Single source of truth** for localStorage I/O across pages. Exposes `window.DrillStorage`. See `.claude/skills/ui-consistency/`. |
 | `js/supabase-config.js` | Supabase project URL + anon key. Anon key is public-by-design; RLS protects data. |

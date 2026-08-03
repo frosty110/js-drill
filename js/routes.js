@@ -107,6 +107,21 @@
       path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/`,
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}`,
       params: segs => (segs.length === 2 ? { topic: segs[0], unit: segs[1] } : null)
+    },
+    {
+      // One study sheet. The app already addresses it (#/…/graphic/<id>, so a
+      // full-screen PNG can be linked); this gives that route the JS-free twin
+      // every other surface has, so a pasted sheet URL is also fetchable by an
+      // agent or a crawler. Registering it here rather than concatenating the
+      // app URL by hand is what keeps the two spellings from drifting.
+      kind: 'sdSheet',
+      dir: 'sd',
+      arity: 3,
+      codeKind: null,
+      sitemap: true,
+      path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/${encodeURIComponent(p.sheet)}/`,
+      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/graphic/${encodeURIComponent(p.sheet)}`,
+      params: segs => (segs.length === 3 ? { topic: segs[0], unit: segs[1], sheet: segs[2] } : null)
     }
   ];
 

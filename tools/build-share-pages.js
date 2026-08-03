@@ -292,8 +292,8 @@ function sdDiagramsSection(topic, meta, unit) {
       <img src="${esc(sheetSrc(topic.id, unit.id, it.id))}" alt="${esc(`${unit.title}: ${it.title}`)}"${it.width ? ` width="${esc(it.width)}"` : ''}${it.height ? ` height="${esc(it.height)}"` : ''} loading="lazy">
       <figcaption>
         <strong>${esc(it.title)}</strong>${it.kind ? ` <span class="ds-chip">${esc(it.kind)}</span>` : ''}
-        ${it.purpose ? `<span class="sharepage__note">${md(it.purpose)}</span>` : ''}
-        <a href="${esc(sheetSrc(topic.id, unit.id, it.id))}">Open the full-size image</a>
+        <a href="${esc(up(3))}${esc(DrillRoutes.sharePath('sdSheet', { topic: topic.id, unit: unit.id, sheet: it.id }))}">Open this sheet on its own page</a>
+        · <a href="${esc(sheetSrc(topic.id, unit.id, it.id))}">the full-size image</a>
       </figcaption>
     </figure>`).join('');
 
@@ -406,6 +406,78 @@ function sdUnitPage(topic, meta, unit) {
   return out.join('\n');
 }
 
+// ── One sheet, one page ─────────────────────────────────────────────────────
+// The JS-free twin of the app's #/…/graphic/<id> route. A full-screen study
+// sheet is the longest-dwell surface in the app, so it is exactly what a user
+// pastes when they ask "explain this diagram" — and until this existed, that
+// paste resolved to a hash no server could read. Deliberately small: the image
+// first, the context on the next line, the way back after that.
+function sdSheetPage(topic, meta, unit, item, siblings) {
+  const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdSheet', { topic: topic.id, unit: unit.id, sheet: item.id })}`;
+  const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdSheet').appHash({ topic: topic.id, unit: unit.id, sheet: item.id })}`;
+  const u = up(4);
+  const rel = `assets/system-design/infographics/${topic.id}/${unit.id}/${item.id}.png`;
+  const out = [];
+
+  out.push(head(4, {
+    title: `${item.title} — ${unit.title}`,
+    description: `${item.title}: a system-design study sheet for ${unit.title}${item.kind ? ` (${item.kind})` : ''}.`,
+    canonical
+  }));
+
+  out.push(`
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="${u}sd/">System design</a> › <a href="${u}sd/${esc(topic.id)}/">${esc(meta.title)}</a> › <a href="${u}${esc(DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id }))}">${esc(unit.title)}</a></p>
+    <h1>${esc(item.title)}</h1>
+    <p class="sharepage__meta">${item.kind ? `<span class="ds-chip">${esc(item.kind)}</span> ` : ''}<span class="ds-chip">study sheet</span></p>
+  </header>
+  <section class="ds-section" id="sheet">
+    <figure class="sharepage__sheet">
+      <img src="${u}${esc(rel)}" alt="${esc(`${unit.title}: ${item.title}`)}"${item.width ? ` width="${esc(item.width)}"` : ''}${item.height ? ` height="${esc(item.height)}"` : ''}>
+      <figcaption class="sharepage__note"><code>${esc(ORIGIN)}/${esc(rel)}</code></figcaption>
+    </figure>
+  </section>`);
+
+  if (unit.summary) {
+    out.push(`
+  <section class="ds-section" id="context">
+    <h2>What this belongs to</h2>
+    <p>${md(unit.summary)}</p>
+    <p><a href="${u}${esc(DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id }))}">All questions, model answers and diagrams for ${esc(unit.title)} →</a></p>
+  </section>`);
+  }
+
+  if (siblings.length > 1) {
+    out.push(`
+  <section class="ds-section" id="siblings">
+    <h2>Other sheets in this set</h2>
+    <ul class="sharepage__list">
+      ${siblings.filter(s => s.id !== item.id).map(s => `<li><a href="${u}${esc(DrillRoutes.sharePath('sdSheet', { topic: topic.id, unit: unit.id, sheet: s.id }))}">${esc(s.title)}</a>${s.kind ? ` <span class="ds-chip">${esc(s.kind)}</span>` : ''}</li>`).join('\n      ')}
+    </ul>
+  </section>`);
+  }
+
+  out.push(`
+  <script type="application/json" id="drill-data">${JSON.stringify({
+    topic: topic.id, unit: unit.id, sheet: item.id,
+    title: item.title, kind: item.kind || undefined,
+    image: `${ORIGIN}/${rel}`,
+    unitPage: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id })}`,
+    appUrl
+  }, null, 0).replace(/</g, '\\u003c')}</script>`);
+
+  out.push(foot(4, appUrl));
+  return out.join('\n');
+}
+
+// The sheets a unit actually has artwork for. A registered sheet may still be
+// awaiting its PNG, and nothing should link a missing image.
+function committedSheets(topic, unit) {
+  const set = INFOGRAPHIC_TOPICS.has(topic.id) ? INFOGRAPHIC_SETS[`${topic.id}/${unit.id}`] : null;
+  return (set && Array.isArray(set.items) ? set.items : []).filter(it =>
+    fs.existsSync(path.join(ROOT, 'assets', 'system-design', 'infographics', topic.id, unit.id, `${it.id}.png`)));
+}
+
 // ── Index pages ─────────────────────────────────────────────────────────────
 
 function lessonIndexPage(sections) {
@@ -485,6 +557,93 @@ function sdTopicPage(topic, meta) {
   return out.join('\n');
 }
 
+// ── The agent bridge ────────────────────────────────────────────────────────
+// The pages above only help someone who already knows they exist, and the URL
+// people actually paste is the app one. A hash fragment never reaches a server,
+// so `system-design.html#/design-problems/p03` and the bare shell are the same
+// bytes: an agent fetching either got "Loading…" and had nowhere to go.
+//
+// So each shell carries its own directions. This markup sits inside the render
+// mount, which every render path overwrites, and an inline script blanks it the
+// moment JS runs — a browser never shows it, a fetcher always does. It states
+// the hash → path rule so a reader gets there in one hop, and links the indexes
+// for one who would rather follow a link than derive one.
+//
+// Generated rather than hand-written so it cannot drift from js/routes.js, and
+// gated by --check like every other output here.
+const BRIDGE_START = '<!-- agent-bridge:start -->';
+const BRIDGE_END = '<!-- agent-bridge:end -->';
+
+function bridgeShell(title, rules, intro, body) {
+  return `${BRIDGE_START}
+  <noscript><p><strong>This page renders with JavaScript.</strong></p></noscript>
+  <div class="agent-bridge">
+    <h1>${title}</h1>
+    <p>You are reading the un-rendered shell of a client-side app. The content is
+       <strong>not</strong> in this file, and the <code>#/…</code> fragment you may have
+       been given never reaches the server, so every hash returns these same bytes.</p>
+    <p><strong>Everything here has a complete, JavaScript-free page. Swap the hash for a path:</strong></p>
+    <pre><code>${rules}</code></pre>
+    <p>${intro}</p>
+${body}
+    <p>Indexes: <a href="sd/">sd/</a> (system design) · <a href="p/">p/</a> (coding lessons) ·
+       machine-readable: <a href="sitemap.xml">sitemap.xml</a>. Every generated page also
+       embeds its content as JSON in <code>&lt;script id="drill-data"&gt;</code>.</p>
+  </div>
+  ${BRIDGE_END}`;
+}
+
+function sdAgentBridge(topics, metas) {
+  const rows = topics.map(t => {
+    const meta = metas[t.id];
+    const unit = (meta.chapters[0] || {}).id;
+    return `      <li><a href="sd/${esc(t.id)}/">${esc(meta.title)}</a> — ${meta.chapters.length} ${esc((meta.unitLabel || 'chapter').toLowerCase())}s, e.g. <code>${esc(DrillRoutes.sharePath('sdUnit', { topic: t.id, unit }))}</code></li>`;
+  }).join('\n');
+  return bridgeShell(
+    'System design — static text version',
+    `system-design.html#/design-problems/p03              →   sd/design-problems/p03/
+system-design.html#/&lt;topic&gt;/&lt;unit&gt;                       →   sd/&lt;topic&gt;/&lt;unit&gt;/
+system-design.html#/&lt;topic&gt;/&lt;unit&gt;/graphic/&lt;sheet&gt;        →   sd/&lt;topic&gt;/&lt;unit&gt;/&lt;sheet&gt;/
+system-design.html#/&lt;topic&gt;                              →   sd/&lt;topic&gt;/`,
+    'Those pages carry the full question list, every model answer and rubric point, the mermaid source of each architecture diagram, and the study-sheet images — and each sheet has a page of its own.',
+    `    <ul>\n${rows}\n    </ul>`
+  );
+}
+
+function lessonAgentBridge(sections) {
+  const total = sections.reduce((n, s) => n + s.lessons.length, 0);
+  const rows = sections.slice(0, 8).map(s =>
+    `      <li>${esc(s.name)} — ${s.lessons.length} lesson${s.lessons.length === 1 ? '' : 's'}, e.g. <code>${esc(DrillRoutes.sharePath('lesson', { id: s.lessons[0].id }))}</code></li>`
+  ).join('\n');
+  return bridgeShell(
+    'JS Drill — static text version',
+    `index.html#/two-sum          →   p/two-sum/
+index.html#/&lt;lesson-id&gt;      →   p/&lt;lesson-id&gt;/
+index.html#/&lt;lesson-id&gt;/L2   →   p/&lt;lesson-id&gt;/  (every level is on the one page)`,
+    `Those pages carry the problem, the canonical solution, every concept question with its answer key, and the fill-in exercises. ${total} lessons across ${sections.length} sections.`,
+    `    <ul>\n${rows}\n      <li>…and the rest: <a href="p/">p/</a></li>\n    </ul>`
+  );
+}
+
+// Marker-delimited replacement, so the app page owns its own markup and this
+// only ever rewrites the region it created.
+function emitBridge(relPath, markup) {
+  const abs = path.join(ROOT, relPath);
+  const current = fs.readFileSync(abs, 'utf8');
+  const a = current.indexOf(BRIDGE_START);
+  const b = current.indexOf(BRIDGE_END);
+  if (a < 0 || b < 0) {
+    throw new Error(`${relPath}: missing ${BRIDGE_START} / ${BRIDGE_END} markers — the agent bridge has nowhere to go`);
+  }
+  const next = current.slice(0, a) + markup + current.slice(b + BRIDGE_END.length);
+  written.push(relPath);
+  if (CHECK) {
+    if (next !== current) { stale++; console.error(`  stale: ${relPath} (agent bridge)`); }
+    return;
+  }
+  if (next !== current) fs.writeFileSync(abs, next);
+}
+
 // ── Write / check ───────────────────────────────────────────────────────────
 
 const written = [];
@@ -533,6 +692,7 @@ function main() {
   const topics = readJson(path.join(SD, 'topics.json')).topics;
   const metas = {};
   let units = 0;
+  let sheets = 0;
   for (const t of topics) {
     const meta = readJson(path.join(SD, t.id, 'manifest.json'));
     metas[t.id] = meta;
@@ -548,12 +708,25 @@ function main() {
       emit(path.join('sd', t.id, c.id, 'index.html'), sdUnitPage(t, meta, unit));
       entries.push({ kind: 'sdUnit', params: { topic: t.id, unit: c.id } });
       units++;
+
+      // …and the JS-free twin of each #/…/graphic/<id> route.
+      const items = committedSheets(t, unit);
+      for (const item of items) {
+        emit(path.join('sd', t.id, c.id, item.id, 'index.html'), sdSheetPage(t, meta, unit, item, items));
+        entries.push({ kind: 'sdSheet', params: { topic: t.id, unit: c.id, sheet: item.id } });
+        sheets++;
+      }
     }
     emit(path.join('sd', t.id, 'index.html'), sdTopicPage(t, meta));
     entries.push({ kind: 'sdTopic', params: { topic: t.id } });
   }
   emit(path.join('sd', 'index.html'), sdIndexPage(topics, metas));
   entries.push({ kind: 'sdIndex', params: {} });
+
+  // Point both app shells at everything above.
+  emitBridge('system-design.html', sdAgentBridge(topics, metas));
+  emitBridge('index.html', lessonAgentBridge(
+    manifest.sections.filter(s => s.lessons.some(l => l.status === 'full'))));
 
   // Crawl metadata.
   emit('sitemap.xml', DrillRoutes.sitemapXml(entries, ORIGIN));
@@ -564,10 +737,10 @@ function main() {
       console.error(`\n✗ ${stale} generated file(s) out of date — run: node tools/build-share-pages.js`);
       process.exit(1);
     }
-    console.log(`✓ share pages up to date (${lessons} lessons, ${units} system-design units, ${written.length} files)`);
+    console.log(`✓ share pages up to date (${lessons} lessons, ${units} units, ${sheets} sheets, ${written.length} files)`);
     return;
   }
-  console.log(`✓ wrote ${written.length} files — ${lessons} lessons, ${units} system-design units, ${topics.length} topics, sitemap, robots`);
+  console.log(`✓ wrote ${written.length} files — ${lessons} lessons, ${units} system-design units, ${sheets} study sheets, ${topics.length} topics, sitemap, robots`);
 }
 
 main();

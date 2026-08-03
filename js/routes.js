@@ -39,11 +39,36 @@
   // from whatever page happens to be running this code.
   const APP_PAGES = ['index.html', 'system-design.html', 'diagnostic.html'];
 
+  // Second path segments under sd/ that name a KIND of route rather than a
+  // unit. Without this list `sd/design-problems/plan/night-before/` and
+  // `sd/design-problems/p06/overview/` are the same shape, and a plan would
+  // parse as a study sheet.
+  const SD_RESERVED = new Set(['plan', 'tag', 'mixed', 'due']);
+
   // ── The registry ──────────────────────────────────────────────────────────
+  // ONE row per place the app can put the user. Not "per crawlable page" —
+  // per PLACE. That distinction is the whole point: a route the registry
+  // doesn't name is a place with no address, and the reconciliation gate
+  // (tools/check-url-contract.js) fails on it rather than letting it pass
+  // unnoticed the way `mixed`/`due`/`plan`/`tag` did for months.
+  //
   // Each surface declares:
+  //   page       which app page owns the hash ('index.html' | 'system-design.html')
   //   dir        first path segment of its static home ('' = the root index)
-  //   arity      how many path segments follow `dir`
+  //   arity      MAX path segments after `dir` (used to climb out in baseUrl)
   //   codeKind   which sharecode grammar its ?s= uses ('lesson' | 'unit' | null)
+  //
+  //   disposition  what the route MEANS, which decides what a fetcher gets:
+  //     'content'  denotes a thing that exists independently of the user —
+  //                a lesson, a unit, a sheet, a plan, a tag list. Has its own
+  //                static page. Crawlable, shareable, quotable.
+  //     'action'   starts a personal, stateful session — "review what's due for
+  //                ME". There is no content to serve, and pretending otherwise
+  //                would mean generating a page that lies. Declares `fallback`:
+  //                the content surface a fetcher or crawler is sent to instead.
+  //                An action route is NOT an exemption from the contract — it
+  //                still has to be here, and still has to resolve to something.
+  //
   //   path()     params  → share path, no leading slash, WITH a trailing
   //              slash. Every surface is written to disk as <dir>/index.html,
   //              so the slash form is the file's real address and resolves in
@@ -51,77 +76,181 @@
   //              301 on GitHub Pages — fetchers that don't follow redirects
   //              failed outright, and some dropped the ?s= across the hop.
   //              parseSharePath() still accepts the slashless form, so links
-  //              shared before this change keep working.
+  //              shared before this change keep working. Absent on 'action'.
+  //   params()   path segments → params, or null when the shape doesn't match
   //   appHash()  params  → the live-app URL that renders the same thing
-  //   params()   segments → params, or null when the shape doesn't match
+  //   appParams()  hash segments → params, or null. The INVERSE of appHash,
+  //              and the reason the app's router no longer has to re-describe
+  //              routes it already declared here. Round-tripped by the gate.
   //   sitemap    include in sitemap.xml
   const SURFACES = [
     {
       kind: 'lessonIndex',
+      page: 'index.html',
       dir: 'p',
       arity: 0,
       codeKind: null,
+      disposition: 'content',
       sitemap: true,
       title: 'All coding lessons',
       path: () => 'p/',
+      params: segs => (segs.length === 0 ? {} : null),
       appHash: () => 'index.html#/m/browse',
-      params: segs => (segs.length === 0 ? {} : null)
+      appParams: segs => (segs.length === 2 && segs[0] === 'm' && segs[1] === 'browse' ? {} : null)
     },
     {
       kind: 'lesson',
+      page: 'index.html',
       dir: 'p',
       arity: 1,
       codeKind: 'lesson',
+      disposition: 'content',
       sitemap: true,
       path: p => `p/${encodeURIComponent(p.id)}/`,
-      appHash: p => `index.html#/${encodeURIComponent(p.id)}${p.tab ? '/' + p.tab : ''}`,
-      params: segs => (segs.length === 1 ? { id: segs[0] } : null)
+      params: segs => (segs.length === 1 ? { id: segs[0] } : null),
+      // The optional tab (#/two-sum/L2) is view state on one lesson, so it
+      // rides the same surface; the static twin carries it as an #L2 anchor.
+      appHash: p => `index.html#/${encodeURIComponent(p.id)}${p.tab ? '/' + encodeURIComponent(p.tab) : ''}`,
+      appParams: segs => (segs.length && segs.length <= 2 && segs[0] !== 'm'
+        ? (segs[1] ? { id: segs[0], tab: segs[1] } : { id: segs[0] })
+        : null)
+    },
+    {
+      // Every launchable mode (#/m/dashboard, #/m/mock, …). An action: it opens
+      // a surface over the user's own state, so there is nothing standalone to
+      // serve. Registered anyway — an unregistered route is an unaddressable
+      // place, and this is how the gate knows the mode links are accounted for.
+      kind: 'appMode',
+      page: 'index.html',
+      dir: null,
+      arity: 0,
+      codeKind: null,
+      disposition: 'action',
+      fallback: 'lessonIndex',
+      sitemap: false,
+      appHash: p => `index.html#/m/${encodeURIComponent(p.mode)}`,
+      appParams: segs => (segs.length >= 2 && segs[0] === 'm' && segs[1] !== 'browse'
+        ? { mode: segs.slice(1).join('/') }
+        : null)
     },
     {
       kind: 'sdIndex',
+      page: 'system-design.html',
       dir: 'sd',
       arity: 0,
       codeKind: null,
+      disposition: 'content',
       sitemap: true,
       title: 'System design topics',
       path: () => 'sd/',
+      params: segs => (segs.length === 0 ? {} : null),
       appHash: () => 'system-design.html#/',
-      params: segs => (segs.length === 0 ? {} : null)
+      appParams: segs => (segs.length === 0 ? {} : null)
     },
     {
       kind: 'sdTopic',
+      page: 'system-design.html',
       dir: 'sd',
       arity: 1,
       codeKind: null,
+      disposition: 'content',
       sitemap: true,
       path: p => `sd/${encodeURIComponent(p.topic)}/`,
+      params: segs => (segs.length === 1 ? { topic: segs[0] } : null),
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}`,
-      params: segs => (segs.length === 1 ? { topic: segs[0] } : null)
+      appParams: segs => (segs.length === 1 ? { topic: segs[0] } : null)
     },
     {
-      kind: 'sdUnit',
-      dir: 'sd',
-      arity: 2,
-      codeKind: 'unit',
-      sitemap: true,
-      path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/`,
-      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}`,
-      params: segs => (segs.length === 2 ? { topic: segs[0], unit: segs[1] } : null)
-    },
-    {
-      // One study sheet. The app already addresses it (#/…/graphic/<id>, so a
-      // full-screen PNG can be linked); this gives that route the JS-free twin
-      // every other surface has, so a pasted sheet URL is also fetchable by an
-      // agent or a crawler. Registering it here rather than concatenating the
-      // app URL by hand is what keeps the two spellings from drifting.
-      kind: 'sdSheet',
+      // An ordered subset of a topic with a time budget — content, not a
+      // session: the same link means the same thing to everyone who opens it.
+      // The plan id may itself contain a slash (company plans are
+      // `plan/company/<name>`), so both parsers take the remaining segments.
+      kind: 'sdPlan',
+      page: 'system-design.html',
       dir: 'sd',
       arity: 3,
       codeKind: null,
+      disposition: 'content',
+      sitemap: true,
+      path: p => `sd/${encodeURIComponent(p.topic)}/plan/${p.plan.split('/').map(encodeURIComponent).join('/')}/`,
+      params: segs => (segs.length >= 3 && segs[1] === 'plan' ? { topic: segs[0], plan: segs.slice(2).join('/') } : null),
+      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/plan/${p.plan.split('/').map(encodeURIComponent).join('/')}`,
+      appParams: segs => (segs.length >= 3 && segs[1] === 'plan' ? { topic: segs[0], plan: segs.slice(2).join('/') } : null)
+    },
+    {
+      // A filtered list — "every problem that uses consistent hashing". Content:
+      // a shared tag link lands everyone on the same list regardless of their
+      // saved filter state.
+      kind: 'sdTag',
+      page: 'system-design.html',
+      dir: 'sd',
+      arity: 4,
+      codeKind: null,
+      disposition: 'content',
+      sitemap: true,
+      path: p => `sd/${encodeURIComponent(p.topic)}/tag/${encodeURIComponent(p.facet)}/${encodeURIComponent(p.value)}/`,
+      params: segs => (segs.length === 4 && segs[1] === 'tag' ? { topic: segs[0], facet: segs[2], value: segs[3] } : null),
+      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/tag/${encodeURIComponent(p.facet)}/${encodeURIComponent(p.value)}`,
+      appParams: segs => (segs.length === 4 && segs[1] === 'tag' ? { topic: segs[0], facet: segs[2], value: segs[3] } : null)
+    },
+    {
+      // "Shuffle this topic for me" — due-first, seeded from the reader's own
+      // Leitner state, so it renders differently for every person. Nothing
+      // standalone to serve; a fetcher gets the topic page.
+      kind: 'sdMixed',
+      page: 'system-design.html',
+      dir: 'sd',
+      arity: 2,
+      codeKind: null,
+      disposition: 'action',
+      fallback: 'sdTopic',
+      sitemap: false,
+      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/mixed`,
+      appParams: segs => (segs.length === 2 && segs[1] === 'mixed' ? { topic: segs[0] } : null)
+    },
+    {
+      // "What's due for me right now" — the same, and even more personal.
+      kind: 'sdDue',
+      page: 'system-design.html',
+      dir: 'sd',
+      arity: 2,
+      codeKind: null,
+      disposition: 'action',
+      fallback: 'sdTopic',
+      sitemap: false,
+      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/due`,
+      appParams: segs => (segs.length === 2 && segs[1] === 'due' ? { topic: segs[0] } : null)
+    },
+    {
+      kind: 'sdUnit',
+      page: 'system-design.html',
+      dir: 'sd',
+      arity: 2,
+      codeKind: 'unit',
+      disposition: 'content',
+      sitemap: true,
+      path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/`,
+      params: segs => (segs.length === 2 && !SD_RESERVED.has(segs[1]) ? { topic: segs[0], unit: segs[1] } : null),
+      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}`,
+      appParams: segs => (segs.length === 2 && !SD_RESERVED.has(segs[1]) ? { topic: segs[0], unit: segs[1] } : null)
+    },
+    {
+      // One study sheet. The app addresses it as #/<topic>/<unit>/graphic/<id>
+      // so a full-screen PNG can be linked; the static twin drops the `graphic`
+      // segment because a path doesn't need the disambiguator a hash does.
+      // Declaring both spellings here is what stops them drifting apart.
+      kind: 'sdSheet',
+      page: 'system-design.html',
+      dir: 'sd',
+      arity: 3,
+      codeKind: null,
+      disposition: 'content',
       sitemap: true,
       path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/${encodeURIComponent(p.sheet)}/`,
+      params: segs => (segs.length === 3 && !SD_RESERVED.has(segs[1]) ? { topic: segs[0], unit: segs[1], sheet: segs[2] } : null),
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/graphic/${encodeURIComponent(p.sheet)}`,
-      params: segs => (segs.length === 3 ? { topic: segs[0], unit: segs[1], sheet: segs[2] } : null)
+      appParams: segs => (segs.length === 4 && segs[2] === 'graphic' && !SD_RESERVED.has(segs[1])
+        ? { topic: segs[0], unit: segs[1], sheet: segs[3] } : null)
     }
   ];
 
@@ -203,11 +332,49 @@
     const dir = segs[at];
     const rest = segs.slice(at + 1);
     for (const s of SURFACES) {
-      if (s.dir !== dir) continue;
+      // An 'action' surface has no static path to parse — it lives only as an
+      // app hash and resolves to its fallback for anyone fetching.
+      if (s.dir !== dir || typeof s.params !== 'function') continue;
       const params = s.params(rest);
       if (params) return { kind: s.kind, params };
     }
     return null;
+  }
+
+  // ── Parsing an APP hash ───────────────────────────────────────────────────
+  // The inverse of appHash(). This is what makes the registry the single
+  // source: an app router calls this instead of re-describing its own routes
+  // in a second parser that nothing keeps in step. Pass the page so two apps
+  // can use overlapping hash shapes without colliding.
+  //
+  //   parseAppHash('#/design-problems/p06/graphic/overview', 'system-design.html')
+  //     → { kind: 'sdSheet', params: { topic, unit, sheet } }
+  //
+  // Returns null for a hash no surface claims — which the caller should treat
+  // as "not a route", not as "render nothing".
+  function parseAppHash(hash, page) {
+    const raw = String(hash == null ? '' : hash).replace(/^#\/?/, '');
+    const segs = raw.split('/').filter(Boolean)
+      .map(s => { try { return decodeURIComponent(s); } catch (_) { return s; } });
+    for (const s of SURFACES) {
+      if (page && s.page !== page) continue;
+      if (typeof s.appParams !== 'function') continue;
+      const params = s.appParams(segs);
+      if (params) return { kind: s.kind, params };
+    }
+    return null;
+  }
+
+  // What a fetcher, crawler or AI should be given for a route. Content routes
+  // answer for themselves; an action route hands back its declared fallback,
+  // so "there is no page for this" never means "there is nowhere to go".
+  function resolveForFetch(kind, params) {
+    const s = surface(kind);
+    if (s.disposition === 'content') return { kind, params: params || {} };
+    const to = surface(s.fallback);
+    // An action's params are a superset of its fallback's by construction
+    // (#/ddia/mixed → sd/ddia/), so the same object resolves the fallback.
+    return { kind: to.kind, params: params || {} };
   }
 
   // Read the score code sitting on the current page's URL, already validated.
@@ -217,13 +384,24 @@
 
   // ── Sitemap ───────────────────────────────────────────────────────────────
   // `entries` is [{kind, params}] — the generator passes everything it wrote.
+  // An entry may carry `images: [{loc, caption}]`, which emits the image
+  // sitemap extension. The 183 study sheets are a real asset and were
+  // previously invisible to image search — a crawler had to find them by
+  // parsing <img> out of the pages.
   function sitemapXml(entries, origin) {
     const base = String(origin || '').replace(/\/$/, '') + '/';
     const urls = entries
       .filter(e => surface(e.kind).sitemap)
-      .map(e => `  <url><loc>${escapeXml(base + sharePath(e.kind, e.params))}</loc></url>`)
+      .map(e => {
+        const loc = `  <url><loc>${escapeXml(base + sharePath(e.kind, e.params))}</loc>`;
+        const imgs = (e.images || []).map(i =>
+          `\n    <image:image><image:loc>${escapeXml(i.loc)}</image:loc>` +
+          (i.caption ? `<image:caption>${escapeXml(i.caption)}</image:caption>` : '') +
+          `</image:image>`).join('');
+        return loc + imgs + (imgs ? '\n  ' : '') + '</url>';
+      })
       .join('\n');
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls}\n</urlset>\n`;
   }
 
   function escapeXml(s) {
@@ -231,10 +409,10 @@
   }
 
   return {
-    SURFACES, APP_PAGES,
+    SURFACES, APP_PAGES, SD_RESERVED,
     surface, baseUrl,
     shareUrl, sharePath, appUrl, codeKind,
-    parseSharePath, currentCode,
+    parseSharePath, parseAppHash, resolveForFetch, currentCode,
     sitemapXml
   };
 });

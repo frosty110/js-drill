@@ -125,6 +125,7 @@
             <button class="infographic-viewer__button" type="button" data-action="actual" title="View at one image pixel per screen pixel">100%</button>
             <button class="infographic-viewer__button" type="button" data-action="out" aria-label="Zoom out">−</button>
             <button class="infographic-viewer__button" type="button" data-action="in" aria-label="Zoom in">+</button>
+            <button class="infographic-viewer__button" type="button" data-action="copy-link" title="Copy a link to this sheet">Link</button>
             <a class="infographic-viewer__button" data-action="download" title="Download PNG">↓ PNG</a>
           </div>
           <button class="infographic-viewer__button infographic-viewer__button--close" type="button" data-action="close" aria-label="Close infographic">×</button>
@@ -148,6 +149,7 @@
       this.root.querySelector('[data-action="in"]').addEventListener('click', () => this.zoomAt(1.25));
       this.root.querySelector('[data-action="out"]').addEventListener('click', () => this.zoomAt(0.8));
       this.closeButton.addEventListener('click', () => this.close());
+      this.root.querySelector('[data-action="copy-link"]').addEventListener('click', e => this.copyLink(e.currentTarget));
       this.stage.addEventListener('dblclick', event => {
         if (Math.abs(this.scale - this.fitScale) < .01) this.zoomAt(1 / this.scale, event.clientX, event.clientY);
         else this.fit();
@@ -197,6 +199,48 @@
       document.dispatchEvent(new CustomEvent('drill-infographic-open', {
         detail: { sheetId: this.sheetId, src, title }
       }));
+    }
+
+    // Why this button exists: the app is installed as a PWA (display:standalone)
+    // and read on a phone ~80% of the time, so for most of its use there is NO
+    // ADDRESS BAR. Routing the sheet into the URL is necessary but useless on
+    // its own — without a way to get the URL back out, the user cannot hand it
+    // to anyone. Copies the STATIC page URL, not the app hash, because the
+    // recipient is usually an AI that has to be able to fetch it.
+    copyLink(button) {
+      const url = this.shareUrl();
+      if (!url) return;
+      const done = ok => {
+        const was = button.textContent;
+        button.textContent = ok ? 'Copied' : 'Copy failed';
+        setTimeout(() => { button.textContent = was; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => done(true), () => done(false));
+      } else {
+        // Clipboard API needs a secure context; older iOS Safari lands here.
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = url; ta.setAttribute('readonly', '');
+          ta.style.cssText = 'position:fixed;top:-1000px';
+          document.body.appendChild(ta); ta.select();
+          done(document.execCommand('copy'));
+          ta.remove();
+        } catch (_) { done(false); }
+      }
+    }
+
+    // Read the sheet straight off the current route. The host page has already
+    // written it there — that is the contract this button depends on — so there
+    // is nothing extra to thread through, and the two can't disagree.
+    shareUrl() {
+      const R = window.DrillRoutes;
+      if (!R) return window.location.href;
+      try {
+        const hit = R.parseAppHash(window.location.hash, 'system-design.html');
+        if (hit && hit.kind === 'sdSheet') return R.shareUrl('sdSheet', hit.params);
+      } catch (_) { /* fall through to the raw URL */ }
+      return window.location.href;
     }
 
     close() {

@@ -73,6 +73,52 @@ const OUT = process.argv[3] || '/tmp/jsdrill-probe-agent-bridge';
     `sheet page should be titled for the sheet, got ${JSON.stringify(sheetPage.h1)}`);
   await s.snap('05-sheet-page');
 
+  // ── The copy-link affordance ─────────────────────────────────────────────
+  // The app is display:standalone and read on a phone ~80% of the time, so for
+  // most of its use there is no address bar to copy from. Routing the sheet
+  // into the URL is only half the feature; this is the other half.
+  await s.eval(`location.href = '${URL_BASE}system-design.html#/design-problems/p06'`);
+  await s.sleep(2500);
+  await s.eval(`document.querySelector('drill-infographic[sheet-id] .infographic-card__open').click()`);
+  await s.sleep(700);
+  const link = await s.eval(`(() => {
+    const b = document.querySelector('[data-action="copy-link"]');
+    if (!b) return { err: 'no copy-link button in the viewer' };
+    const w = window.DrillInfographicViewer;
+    return { url: document.querySelector('.infographic-viewer') ? null : null, has: true };
+  })()`);
+  s.assert(link.has, `viewer should expose a copy-link control (${link.err || 'ok'})`);
+  // Assert the URL it would copy is the STATIC page, not the app hash — the
+  // recipient is usually an AI that has to fetch it.
+  const copied = await s.eval(`(() => {
+    const R = window.DrillRoutes;
+    const hit = R.parseAppHash(location.hash, 'system-design.html');
+    return hit && hit.kind === 'sdSheet' ? R.shareUrl('sdSheet', hit.params) : null;
+  })()`);
+  s.assert(/\/sd\/design-problems\/p06\/[a-z-]+\/$/.test(String(copied)),
+    `copy-link should yield the static sheet page, got ${JSON.stringify(copied)}`);
+  await s.eval(`document.querySelector('.infographic-viewer [data-action="close"]').click()`);
+  await s.sleep(300);
+
+  // ── The routes that had no address until now ──────────────────────────────
+  for (const [hash, kind] of [
+    ['#/design-problems/plan/night-before', 'sdPlan'],
+    ['#/design-problems/tag/mechanism/caching', 'sdTag'],
+    ['#/design-problems/mixed', 'sdMixed']
+  ]) {
+    const parsed = await s.eval(`(() => {
+      const r = window.DrillRoutes.parseAppHash('${hash}', 'system-design.html');
+      return r ? r.kind : null;
+    })()`);
+    s.assert(parsed === kind, `${hash} should parse as ${kind}, got ${JSON.stringify(parsed)}`);
+  }
+
+  // Their static twins must actually serve.
+  for (const rel of ['sd/design-problems/plan/night-before/', 'sd/design-problems/tag/mechanism/caching/']) {
+    const ok = await s.evalAwait(`fetch('${URL_BASE}${rel}').then(r => r.ok)`);
+    s.assert(ok, `${rel} should serve a real page`);
+  }
+
   const { failed, errors, networkErrors } = s.report();
   await s.close();
   process.exit(failed + errors + networkErrors > 0 ? 1 : 0);

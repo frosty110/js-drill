@@ -214,13 +214,29 @@ Path is identity, query is view state, fragment is position within a document
 the server already returned. Full contract, including the parts still unbuilt:
 [`url-contract.md`](url-contract.md).
 
-**Gate** — `tools/check-url-contract.js`: every surface in `js/routes.js`
-resolves to a file (units *and* the per-sheet pages), both hash-routed app pages
-carry an agent bridge that cites a path that exists and is blanked on boot, the
-sitemap is complete, and a unit whose data has diagrams or study sheets actually
-renders them. That last check is the one that catches silent content loss —
-assert it against rendered elements, never a whole-file substring search, or it
-will pass on a page stripped bare (it did, once).
+Every route declares a **disposition**: `content` (denotes something that exists
+independently of the reader — gets a static page) or `action` (a personal,
+stateful session like "what's due for me" — no page, but declares a `fallback`
+so it still resolves). `action` is a declaration, not an exemption.
+
+**Gate** — `tools/check-url-contract.js`. Four checks compare the registry to
+disk: content surfaces resolve to files, both app pages carry an agent bridge
+that cites a real path and is blanked on boot, the sitemap is complete, and a
+unit with diagrams or sheets actually renders them. The fifth **reconciles the
+registry with the app's router** — round-tripping `appHash ⇄ appParams` and
+`path ⇄ params` for every surface, checking each `action`'s fallback is real
+content, and asserting `system-design.html`'s `ROUTE_VIEW` names only registered
+surfaces.
+
+That fifth check is the one that matters. The first four were all green while
+`mixed`, `due`, `plan` and `tag` were live app routes no surface named — because
+nothing compared the two hand-written sources of routing truth. The app's router
+now *consumes* the registry (`DrillRoutes.parseAppHash`) rather than restating
+it.
+
+Assert against rendered elements, never a whole-file substring search, or a
+check will pass on a page stripped bare (one did). If you touch these, break
+something on purpose and confirm it goes red.
 
 **Adding a surface** — add a row to `SURFACES` in `js/routes.js`, generate its
 page in `tools/build-share-pages.js`, and the gate picks it up with no further

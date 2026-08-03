@@ -71,7 +71,12 @@ const sheetSrc = (topic, unit, id) =>
 
 // A page's <head>. `depth` is how far below the deploy root the file sits, so
 // asset links resolve from p/<id>/ and sd/<t>/<u>/ alike.
-function head(depth, { title, description, canonical }) {
+// Structured data. These pages are a Q&A corpus and an image library, and
+// without it a crawler has to infer both from prose. `jsonLd` is per-page:
+// a unit declares itself a LearningResource with its questions, a sheet
+// declares an ImageObject. Emitted as one <script type="application/ld+json">,
+// which is also the shape an AI agent can lift wholesale.
+function head(depth, { title, description, canonical, image, jsonLd }) {
   const u = up(depth);
   return `<!doctype html>
 <html lang="en">
@@ -84,7 +89,10 @@ function head(depth, { title, description, canonical }) {
 <meta property="og:type" content="article">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
-<meta property="og:url" content="${esc(canonical)}">
+<meta property="og:url" content="${esc(canonical)}">${image ? `
+<meta property="og:image" content="${esc(image)}">
+<meta name="twitter:card" content="summary_large_image">` : ''}${jsonLd ? `
+<script type="application/ld+json">${JSON.stringify(jsonLd, null, 0).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="${u}ds/tokens.css">
 <link rel="stylesheet" href="${u}ds/components.css">
 <link rel="stylesheet" href="${u}css/13-share-page.css">
@@ -161,7 +169,24 @@ function lessonPage(lesson, content, sectionName) {
   out.push(head(2, {
     title: `${lesson.title} — JS Drill`,
     description: content.description || `${lesson.title} — ${sectionName} drill: canonical solution, concept questions and answer key.`,
-    canonical
+    canonical,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'LearningResource',
+      name: lesson.title,
+      description: content.description || lesson.title,
+      url: canonical,
+      learningResourceType: 'Coding exercise',
+      programmingLanguage: content.lang === 'ts' ? 'TypeScript' : 'JavaScript',
+      isPartOf: { '@type': 'Collection', name: sectionName, url: `${ORIGIN}/${DrillRoutes.sharePath('lessonIndex', {})}` },
+      hasPart: questions.map((q, i) => ({
+        '@type': 'Question',
+        position: i + 1,
+        name: String(q.q || '').slice(0, 300),
+        url: `${canonical}#q${i + 1}`,
+        acceptedAnswer: { '@type': 'Answer', text: String((q.options || [])[q.answer] || '').slice(0, 800) }
+      }))
+    }
   }));
 
   out.push(`
@@ -319,10 +344,35 @@ function sdUnitPage(topic, meta, unit) {
   const questions = unit.questions || [];
   const out = [];
 
+  const firstSheet = committedSheets(topic, unit)[0];
   out.push(head(3, {
     title: `${unit.title} — ${meta.title}`,
     description: unit.summary || `${unit.title} — system design drill: questions, model answers and rubric points.`,
-    canonical
+    canonical,
+    image: firstSheet ? `${ORIGIN}/assets/system-design/infographics/${topic.id}/${unit.id}/${firstSheet.id}.png` : null,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'LearningResource',
+      name: unit.title,
+      description: unit.summary || unit.title,
+      url: canonical,
+      learningResourceType: 'Practice questions',
+      educationalLevel: 'Professional',
+      isPartOf: { '@type': 'Collection', name: meta.title, url: `${ORIGIN}/${DrillRoutes.sharePath('sdTopic', { topic: topic.id })}` },
+      teaches: (unit.keyTakeaways || []).slice(0, 6),
+      hasPart: questions.map((q, i) => ({
+        '@type': 'Question',
+        position: i + 1,
+        name: (q.q || q.prompt || '').slice(0, 300),
+        url: `${canonical}#q${i + 1}`,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: String((q.type || 'mc') === 'mc'
+            ? ((q.options || [])[q.answer] || '')
+            : (q.answer || '')).slice(0, 800)
+        }
+      }))
+    }
   }));
 
   out.push(`
@@ -422,7 +472,20 @@ function sdSheetPage(topic, meta, unit, item, siblings) {
   out.push(head(4, {
     title: `${item.title} — ${unit.title}`,
     description: `${item.title}: a system-design study sheet for ${unit.title}${item.kind ? ` (${item.kind})` : ''}.`,
-    canonical
+    canonical,
+    image: `${ORIGIN}/${rel}`,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'ImageObject',
+      name: `${unit.title}: ${item.title}`,
+      description: `${item.title} — a system-design study sheet for ${unit.title}.`,
+      contentUrl: `${ORIGIN}/${rel}`,
+      url: canonical,
+      encodingFormat: 'image/png',
+      width: item.width || undefined,
+      height: item.height || undefined,
+      isPartOf: { '@type': 'LearningResource', name: unit.title, url: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id })}` }
+    }
   }));
 
   out.push(`
@@ -557,6 +620,150 @@ function sdTopicPage(topic, meta) {
   return out.join('\n');
 }
 
+// ── Plans and tag lists ─────────────────────────────────────────────────────
+// Both are `content` in js/routes.js: a plan is an ordered subset with a time
+// budget, a tag list is "every problem that uses consistent hashing" — the same
+// link means the same thing to everyone who opens it. Both were reachable in
+// the app for months with no address the registry knew about and no page a
+// fetcher could read, which is the exact drift the reconciliation gate now
+// forbids.
+//
+// The derivations below MIRROR system-design.html (companyPlans / entryTags /
+// planUnits). They are duplicated rather than shared because that file is a
+// browser page, not a module — so the gate cross-checks the two by generating
+// from data and asserting every registered route resolves.
+const LENGTH_OF = q => (q <= 8 ? 'short' : q <= 10 ? 'medium' : 'long');
+
+function facetLabel(tags, facetId, valueId) {
+  const f = (tags.facets || []).find(x => x.id === facetId);
+  const v = f && (f.values || []).find(x => x.id === valueId);
+  return v ? v.label : valueId;
+}
+
+// Position of each unit in curriculum (parts[]) order, not manifest order.
+function unitOrder(meta) {
+  const order = {};
+  let n = 0;
+  for (const part of meta.parts || []) for (const id of part.chapters) order[id] = ++n;
+  meta.chapters.forEach(c => { if (order[c.id] == null) order[c.id] = ++n; });
+  return order;
+}
+
+function companyPlans(plans, meta) {
+  const cfg = plans.companyPlans || {};
+  const min = cfg.minUnits || 4, perUnit = cfg.budgetPerUnit || 12;
+  const order = unitOrder(meta);
+  const byCompany = {};
+  meta.chapters.forEach(c => ((c.tags && c.tags.company) || []).forEach(co => {
+    (byCompany[co] || (byCompany[co] = [])).push(c.id);
+  }));
+  return Object.keys(byCompany)
+    .filter(co => byCompany[co].length >= min)
+    .sort((a, b) => byCompany[b].length - byCompany[a].length || a.localeCompare(b))
+    .map(co => ({
+      id: `company/${co}`, generated: true, mode: 'all', company: co,
+      budget: `~${Math.round(byCompany[co].length * perUnit / 60 * 10) / 10} hrs`,
+      units: byCompany[co].sort((a, b) => (order[a] || 0) - (order[b] || 0))
+    }));
+}
+
+function planUnits(meta, plan) {
+  if (plan.units === '*') return (meta.parts || []).flatMap(p => p.chapters);
+  const order = unitOrder(meta);
+  return (plan.units || []).filter(id => order[id] != null);
+}
+
+function unitLink(depth, topicId, meta, id) {
+  const c = meta.chapters.find(x => x.id === id);
+  if (!c) return '';
+  return `<li><a href="${up(depth)}${esc(DrillRoutes.sharePath('sdUnit', { topic: topicId, unit: id }))}">${esc(c.title)}</a> <span class="ds-chip">${c.questions} question${c.questions === 1 ? '' : 's'}</span></li>`;
+}
+
+function sdPlanPage(topic, meta, plan, tags) {
+  const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdPlan', { topic: topic.id, plan: plan.id })}`;
+  const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdPlan').appHash({ topic: topic.id, plan: plan.id })}`;
+  const depth = 3 + (plan.id.includes('/') ? 1 : 0);
+  const units = planUnits(meta, plan);
+  const title = plan.title || `${facetLabel(tags, 'company', plan.company)} loop`;
+  const blurb = plan.blurb || `${units.length} problems tagged as asked at ${facetLabel(tags, 'company', plan.company)}.`;
+  const out = [];
+
+  out.push(head(depth, {
+    title: `${title} — ${meta.title}`,
+    description: `${blurb} ${units.length} problems${plan.budget ? `, ${plan.budget}` : ''}.`,
+    canonical
+  }));
+  out.push(`
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="${up(depth)}sd/">System design</a> › <a href="${up(depth)}sd/${esc(topic.id)}/">${esc(meta.title)}</a></p>
+    <h1>${esc(title)}</h1>
+    <p class="sharepage__lede">${md(blurb)}</p>
+    <p class="sharepage__meta">${plan.budget ? `<span class="ds-chip">${esc(plan.budget)}</span> ` : ''}<span class="ds-chip">${units.length} problem${units.length === 1 ? '' : 's'}</span>${plan.mode === 'crux' ? ' <span class="ds-chip">crux questions only</span>' : ''}</p>
+  </header>
+  <section class="ds-section" id="units">
+    <h2>The route, in order</h2>
+    <ul class="sharepage__list">
+      ${units.map(id => unitLink(depth, topic.id, meta, id)).filter(Boolean).join('\n      ')}
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">${JSON.stringify({
+    topic: topic.id, plan: plan.id, title, budget: plan.budget,
+    mode: plan.mode || 'all',
+    units: units.map(id => ({ id, url: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: id })}` }))
+  }, null, 0).replace(/</g, '\\u003c')}</script>`);
+  out.push(foot(depth, appUrl));
+  return out.join('\n');
+}
+
+function sdTagPage(topic, meta, facet, value, units) {
+  const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdTag', { topic: topic.id, facet: facet.id, value: value.id })}`;
+  const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdTag').appHash({ topic: topic.id, facet: facet.id, value: value.id })}`;
+  const out = [];
+  out.push(head(4, {
+    title: `${value.label} — ${facet.label} — ${meta.title}`,
+    description: `${units.length} system-design problem${units.length === 1 ? '' : 's'} tagged ${facet.label}: ${value.label}.`,
+    canonical
+  }));
+  out.push(`
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="${up(4)}sd/">System design</a> › <a href="${up(4)}sd/${esc(topic.id)}/">${esc(meta.title)}</a> › ${esc(facet.label)}</p>
+    <h1>${esc(value.label)}</h1>
+    <p class="sharepage__lede">${esc(units.length)} problem${units.length === 1 ? '' : 's'} tagged <strong>${esc(facet.label)}: ${esc(value.label)}</strong>.${facet.note ? ` ${md(facet.note)}` : ''}</p>
+  </header>
+  <section class="ds-section" id="units">
+    <h2>Problems</h2>
+    <ul class="sharepage__list">
+      ${units.map(id => unitLink(4, topic.id, meta, id)).filter(Boolean).join('\n      ')}
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">${JSON.stringify({
+    topic: topic.id, facet: facet.id, value: value.id, label: value.label,
+    units: units.map(id => ({ id, url: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: id })}` }))
+  }, null, 0).replace(/</g, '\\u003c')}</script>`);
+  out.push(foot(4, appUrl));
+  return out.join('\n');
+}
+
+// Every facet value present on a topic, authored and derived alike.
+function tagIndex(meta, tags) {
+  const idx = {};
+  const add = (f, v, id) => { ((idx[f] || (idx[f] = {}))[v] || (idx[f][v] = [])).push(id); };
+  const partOf = {};
+  for (const part of meta.parts || []) for (const id of part.chapters) partOf[id] = part.name || part.title;
+  for (const c of meta.chapters) {
+    const tg = c.tags || {};
+    (tg.mechanism || []).forEach(v => add('mechanism', v, c.id));
+    if (tg.difficulty) add('difficulty', tg.difficulty, c.id);
+    (tg.company || []).forEach(v => add('company', v, c.id));
+    if (partOf[c.id]) add('family', partOf[c.id], c.id);
+    add('length', LENGTH_OF(c.questions || 0), c.id);
+  }
+  // Only facets the registry knows about, so a stray key can't mint a page.
+  const known = new Set((tags.facets || []).map(f => f.id));
+  Object.keys(idx).forEach(f => { if (!known.has(f)) delete idx[f]; });
+  return idx;
+}
+
 // ── The agent bridge ────────────────────────────────────────────────────────
 // The pages above only help someone who already knows they exist, and the URL
 // people actually paste is the app one. A hash fragment never reaches a server,
@@ -604,7 +811,13 @@ function sdAgentBridge(topics, metas) {
     `system-design.html#/design-problems/p03              →   sd/design-problems/p03/
 system-design.html#/&lt;topic&gt;/&lt;unit&gt;                       →   sd/&lt;topic&gt;/&lt;unit&gt;/
 system-design.html#/&lt;topic&gt;/&lt;unit&gt;/graphic/&lt;sheet&gt;        →   sd/&lt;topic&gt;/&lt;unit&gt;/&lt;sheet&gt;/
-system-design.html#/&lt;topic&gt;                              →   sd/&lt;topic&gt;/`,
+system-design.html#/&lt;topic&gt;/plan/&lt;plan&gt;                  →   sd/&lt;topic&gt;/plan/&lt;plan&gt;/
+system-design.html#/&lt;topic&gt;/tag/&lt;facet&gt;/&lt;value&gt;          →   sd/&lt;topic&gt;/tag/&lt;facet&gt;/&lt;value&gt;/
+system-design.html#/&lt;topic&gt;                              →   sd/&lt;topic&gt;/
+
+system-design.html#/&lt;topic&gt;/mixed  and  /due  start a review session over the
+reader's OWN spaced-repetition state. They have no fixed content; use the
+topic page above.`,
     'Those pages carry the full question list, every model answer and rubric point, the mermaid source of each architecture diagram, and the study-sheet images — and each sheet has a page of its own.',
     `    <ul>\n${rows}\n    </ul>`
   );
@@ -690,9 +903,14 @@ function main() {
 
   // System design.
   const topics = readJson(path.join(SD, 'topics.json')).topics;
+  const PLANS = fs.existsSync(path.join(SD, 'plans.json')) ? readJson(path.join(SD, 'plans.json')) : { plans: [] };
+  const TAGS = fs.existsSync(path.join(SD, 'tags.json')) ? readJson(path.join(SD, 'tags.json')) : { facets: [], appliesTo: [] };
   const metas = {};
   let units = 0;
   let sheets = 0;
+  let plans = 0;
+  let tagPages = 0;
+  const skippedTags = [];
   for (const t of topics) {
     const meta = readJson(path.join(SD, t.id, 'manifest.json'));
     metas[t.id] = meta;
@@ -706,19 +924,61 @@ function main() {
         }
       }
       emit(path.join('sd', t.id, c.id, 'index.html'), sdUnitPage(t, meta, unit));
-      entries.push({ kind: 'sdUnit', params: { topic: t.id, unit: c.id } });
+      entries.push({
+        kind: 'sdUnit', params: { topic: t.id, unit: c.id },
+        images: committedSheets(t, unit).map(it => ({
+          loc: `${ORIGIN}/assets/system-design/infographics/${t.id}/${c.id}/${it.id}.png`,
+          caption: `${unit.title}: ${it.title}`
+        }))
+      });
       units++;
 
       // …and the JS-free twin of each #/…/graphic/<id> route.
       const items = committedSheets(t, unit);
       for (const item of items) {
         emit(path.join('sd', t.id, c.id, item.id, 'index.html'), sdSheetPage(t, meta, unit, item, items));
-        entries.push({ kind: 'sdSheet', params: { topic: t.id, unit: c.id, sheet: item.id } });
+        entries.push({
+          kind: 'sdSheet', params: { topic: t.id, unit: c.id, sheet: item.id },
+          images: [{ loc: `${ORIGIN}/assets/system-design/infographics/${t.id}/${c.id}/${item.id}.png`, caption: `${unit.title}: ${item.title}` }]
+        });
         sheets++;
       }
     }
     emit(path.join('sd', t.id, 'index.html'), sdTopicPage(t, meta));
     entries.push({ kind: 'sdTopic', params: { topic: t.id } });
+
+    // Plans and tag lists — content routes the app has always had and the
+    // registry only just learned about.
+    if (PLANS.appliesTo === t.id) {
+      for (const plan of (PLANS.plans || []).concat(companyPlans(PLANS, meta))) {
+        emit(path.join('sd', t.id, 'plan', ...plan.id.split('/'), 'index.html'),
+          sdPlanPage(t, meta, plan, TAGS));
+        entries.push({ kind: 'sdPlan', params: { topic: t.id, plan: plan.id } });
+        plans++;
+      }
+    }
+    if ((TAGS.appliesTo || []).includes(t.id)) {
+      const idx = tagIndex(meta, TAGS);
+      for (const facet of TAGS.facets || []) {
+        for (const value of Object.keys(idx[facet.id] || {})) {
+          // A value has to be a URL-safe id to be an address. `family` is
+          // derived from part DISPLAY NAMES ("AI & ML Infrastructure"), which
+          // would make a path with spaces and an ampersand — and the app's own
+          // route sanitiser strips those, so the two could never agree. Skip
+          // loudly rather than emitting a path nothing can round-trip; giving
+          // families real ids in tags.json is what would make them addressable.
+          if (!/^[a-z0-9][a-z0-9-]*$/i.test(value)) {
+            skippedTags.push(`${facet.id}/${value}`);
+            continue;
+          }
+          const label = { id: value, label: facetLabel(TAGS, facet.id, value) };
+          emit(path.join('sd', t.id, 'tag', facet.id, value, 'index.html'),
+            sdTagPage(t, meta, facet, label, idx[facet.id][value]));
+          entries.push({ kind: 'sdTag', params: { topic: t.id, facet: facet.id, value } });
+          tagPages++;
+        }
+      }
+    }
   }
   emit(path.join('sd', 'index.html'), sdIndexPage(topics, metas));
   entries.push({ kind: 'sdIndex', params: {} });
@@ -737,10 +997,13 @@ function main() {
       console.error(`\n✗ ${stale} generated file(s) out of date — run: node tools/build-share-pages.js`);
       process.exit(1);
     }
-    console.log(`✓ share pages up to date (${lessons} lessons, ${units} units, ${sheets} sheets, ${written.length} files)`);
+    console.log(`✓ share pages up to date (${lessons} lessons, ${units} units, ${sheets} sheets, ${plans} plans, ${tagPages} tag lists, ${written.length} files)`);
     return;
   }
-  console.log(`✓ wrote ${written.length} files — ${lessons} lessons, ${units} system-design units, ${sheets} study sheets, ${topics.length} topics, sitemap, robots`);
+  if (skippedTags.length) {
+    console.log(`  note: ${skippedTags.length} tag value(s) are not URL-safe ids and got no page — ${skippedTags.slice(0, 4).join(', ')}${skippedTags.length > 4 ? ', …' : ''}`);
+  }
+  console.log(`✓ wrote ${written.length} files — ${lessons} lessons, ${units} system-design units, ${sheets} study sheets, ${plans} plans, ${tagPages} tag lists, ${topics.length} topics, sitemap, robots`);
 }
 
 main();

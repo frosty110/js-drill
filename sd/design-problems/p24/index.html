@@ -30,6 +30,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Given a latitude, longitude and radius, return nearby places ranked by distance, with filters (category, open now, rating); add/update/delete places.</li><li>Entities are static businesses, not moving vehicles — updates are rare, so the index is optimized purely for reads.</li><li>Results must be complete within the radius: silently missing a nearby place is worse than being slightly slow.</li><li>Out of scope unless asked: routing/directions, real-time traffic, ranking beyond distance.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>200M places at ~1 KB → 200 GB, which is unremarkable</li><li>The geo index itself — place id plus geohash, ~30 B — is only ~6 GB, small enough to hold in memory, and that realization drives the whole design</li><li>5K searches/s is only ~500 concurrent queries</li><li>The real variance is candidate-set size: a 5 km radius covers ~50,000 places in Manhattan and 3 in rural Montana</li><li>p99 under ~100ms, inside a user-facing map interaction</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>A B-tree can index latitude or longitude but not both usefully — two range scans intersected is a huge candidate set, which is why a spatial encoding exists at all.</li><li>Geohash interleaves latitude and longitude bits into one string, so a shared prefix means spatial proximity and a normal string index does the work.</li><li>Geohash has a boundary problem: two points metres apart can differ from the first character. Always query the cell plus its eight neighbours.</li><li>Precision is a tradeoff, not a constant — pick the geohash length whose cell size is nearest the search radius, then filter exactly.</li><li>Quadtrees adapt to density where geohash cells are uniform, which matters when Manhattan and Montana are in the same index.</li><li>The read path is overwhelmingly dominant for static places: precompute, cache aggressively, and treat the index as near-read-only.</li><li>Always re-filter candidates by true distance — a geohash cell is a rectangle, and the answer needs a circle.</li></ul>

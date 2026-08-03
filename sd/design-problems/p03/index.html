@@ -30,6 +30,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Upload photos with captions; follow users; media-rich home feed and profile grid; likes/comments optional.</li><li>Durability of media is paramount — a user&#39;s photos are irreplaceable.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>100M DAU · 10M uploads/day · ~2 MB stored per photo across all variants · 100:1 view:upload</li><li>~116 uploads/s (~300 peak) · ~12K photo reads/s</li><li>20 TB/day of new media → ~7.3 PB/yr, ~22 PB at 3× replication</li><li>~200 TB/day egress → must be CDN-served, not origin. Metadata (~1 KB/photo) is a rounding error.</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>Store the photo bytes in blob storage (S3) and serve them via CDN; keep only metadata + the media URL in the DB — never blobs in the DB.</li><li>Upload is a two-phase flow: write the original to blob storage, then enqueue async resize/thumbnail/transcode work.</li><li>A queue-driven media pipeline generates multiple sizes (thumbnail, feed, full) so clients fetch the right resolution.</li><li>Metadata (photoId, ownerId, caption, mediaUrls, ts) lives in a sharded DB keyed by photo or user.</li><li>Feed generation reuses fan-out (push/pull hybrid), but the feed carries media URLs, not bytes — hydration is a CDN fetch.</li><li>The workload is overwhelmingly read-heavy and bandwidth-dominated; CDN hit rate is the primary scaling lever.</li><li>Decoupling media from metadata lets each scale independently — blob storage for capacity, DB for query, CDN for delivery.</li></ul>

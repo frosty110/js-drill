@@ -30,6 +30,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>1:1 and group messaging; delivery receipts (sent/delivered/read); presence; message history; offline delivery; push notifications.</li><li>Descoped: media/attachment pipeline, end-to-end encryption details, voice/video calls.</li><li>Per-conversation ordering matters; presence can be eventually consistent.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>500M DAU with ~10% online at peak → ~50M concurrent WebSocket connections (the unusual number — sized by live sockets, not QPS)</li><li>~40 messages/user/day → ~20B/day, ~230K/s avg, 500K+/s peak</li><li>~1 KB per message → ~20 TB/day, several PB/yr before retention limits</li><li>Sub-second delivery; never lose a delivered message</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>Real-time delivery needs persistent bidirectional connections (WebSocket) so the server can push, not just respond — plus a session service mapping user → the chat server holding their live socket.</li><li>Chat is write-heavy and latency-sensitive; every sent message is a durable write plus a real-time push to online recipients.</li><li>Offline recipients get store-and-forward: persist the message, then deliver on reconnect and/or send a mobile push (APNS/FCM).</li><li>Message ordering uses server-assigned sequence numbers / timestamps per conversation; storage is keyed by conversation for fast history reads.</li><li>Presence (online/last-seen) is heartbeat-driven and deliberately eventually consistent — it&#39;s high-churn and low-stakes.</li><li>Group chat is a fan-out problem: 1:1 writes to one inbox, group writes fan out to N members (write-fanout works until groups get huge).</li></ul>

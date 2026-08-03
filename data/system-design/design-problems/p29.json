@@ -13,6 +13,26 @@
     "Signatures with a timestamp are what make a webhook trustworthy — HMAC over the raw body, with the timestamp inside the signed payload to stop replay.",
     "Delivery is at-least-once, so the contract must tell receivers to be idempotent and give them an event id to deduplicate on."
   ],
+  "brief": {
+    "functional": [
+      "Customers register endpoint URLs and subscribe to event types; deliver matching events; expose delivery history and failure replay.",
+      "The receiver is a third party you don't control — it can be slow, down, misconfigured, or return 200 while ignoring the body.",
+      "At-least-once with bounded retries; best-effort ordering plus an event timestamp (strict ordering conflicts with parallel delivery and retries).",
+      "Isolation is the headline requirement: one unhealthy endpoint must not affect other customers' delivery.",
+      "Receivers must be able to verify authenticity, and the system must not be usable to attack internal services (SSRF)."
+    ],
+    "scale": [
+      "10M events/day across 50K endpoints → ~116/s average, maybe ~600/s peak — modest",
+      "Rate isn't the constraint, CONCURRENCY is: 600/s at ~3s average is ~1,800 in-flight requests",
+      "The failing tail is what hurts: an endpoint timing out at 10s holds a worker ten times longer than a healthy one",
+      "Retries add load exactly when things are worst — a downstream outage multiplies attempts across every subscriber at once",
+      "Deliver within seconds for healthy endpoints; producers must never block on delivery"
+    ],
+    "gate": [
+      0,
+      1
+    ]
+  },
   "questions": [
     {
       "type": "open",

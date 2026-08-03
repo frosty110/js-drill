@@ -13,6 +13,26 @@
     "Sessions and tokens are different things — a session is the user's login, a token is a bearer credential derived from it, and revoking a session must invalidate its tokens.",
     "OAuth/OIDC exists for delegated access to third parties; using it internally where a plain signed token would do adds a great deal of machinery for nothing."
   ],
+  "brief": {
+    "functional": [
+      "Register, log in, log out; issue credentials other services can verify; refresh without re-login; revoke a session; MFA; optionally social/SSO login.",
+      "Every other service depends on this one, so availability is the headline requirement — if auth is down the whole product is down.",
+      "That dependency shape argues for verification that does NOT require calling this service on every request.",
+      "Security requirements are functional here: credential storage, brute-force resistance, session fixation, token theft, immediate revocation on compromise.",
+      "State the revocation latency target explicitly — 'immediate' and 'stateless verification' cannot both be fully true."
+    ],
+    "scale": [
+      "100M users, ~20M daily active; logins run a few hundred/s average and a few thousand at peak",
+      "Login is deliberately expensive: a memory-hard hash burns ~100ms of CPU on purpose, so 5K logins/s is roughly 500 cores just for hashing — a CPU planning exercise, not an I/O one",
+      "Verification is the mirror image: with stateless tokens it's a local signature check of ~10µs inside whichever service was called, costing the auth service nothing",
+      "Had verification required a lookup, every request across the fleet — maybe 500K/s — would land here",
+      "Verification must be sub-millisecond because it's on every request to every service; storage is trivial at both ends"
+    ],
+    "gate": [
+      0,
+      1
+    ]
+  },
   "questions": [
     {
       "type": "open",

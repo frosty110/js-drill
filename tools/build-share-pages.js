@@ -335,6 +335,21 @@ function sdUnitPage(topic, meta, unit) {
 
   out.push(resultsMount);
 
+  // The brief before the key ideas: an agent handed this URL needs the scoped
+  // requirements and the scale constants to judge an answer at all — most of
+  // these prompts never name their own system. (No gating here, unlike the app:
+  // this page is the answer key by design.)
+  const brief = unit.brief;
+  if (brief && ((brief.functional || []).length || (brief.scale || []).length)) {
+    const list = (label, arr) => (arr && arr.length)
+      ? `<h3>${label}</h3><ul class="sharepage__notes">${arr.map(x => `<li>${md(x)}</li>`).join('')}</ul>` : '';
+    out.push(`
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    ${list('Functional requirements', brief.functional)}${list('Scale &amp; constraints', brief.scale)}
+  </section>`);
+  }
+
   if (Array.isArray(unit.keyTakeaways) && unit.keyTakeaways.length) {
     out.push(`
   <section class="ds-section" id="key-ideas">

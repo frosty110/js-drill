@@ -13,6 +13,25 @@
     "Return HTTP `429 Too Many Requests` with a `Retry-After` header (and ideally `X-RateLimit-Remaining`/`Reset`) so well-behaved clients back off correctly.",
     "For extreme scale, trade a little accuracy for latency: local per-node token pre-allocation / approximate counting reduces round-trips to the shared store."
   ],
+  "brief": {
+    "functional": [
+      "Limit requests per client per window (e.g. 100 req/min); different rules per endpoint/tier; reject with 429 plus retry guidance.",
+      "Decide the limiting key — user id, API key, IP, or a combination — and whether limits are global or per-endpoint.",
+      "Runs as middleware at the API gateway/edge.",
+      "State the behaviour when the counter store is unreachable: fail open (availability) or fail closed (protection)."
+    ],
+    "scale": [
+      "The gateway fronts 1M req/s at peak → ~1M counter ops/s (one check per request)",
+      "A single Redis node does ~100–200K ops/s → shard by key across a cluster",
+      "State is tiny: a counter plus TTL is tens of bytes, so even 100M active keys is a few GB",
+      "Latency budget is the tight constraint: sub-ms to low-ms, on every request's hot path",
+      "Write-dominated — every check mutates a counter. Hot keys (one abuser, a shared NAT IP) pile onto one shard."
+    ],
+    "gate": [
+      0,
+      1
+    ]
+  },
   "questions": [
     {
       "type": "open",

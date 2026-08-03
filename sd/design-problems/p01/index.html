@@ -30,6 +30,11 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="brief">
+    <h2>The brief</h2>
+    <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Shorten a long URL into a unique short code; <code>GET /{code}</code> redirects to the original.</li><li>Optional: custom alias, expiry, click analytics.</li><li>Out of v1 scope: accounts, editing, rich dashboards.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>100M new URLs/day · ~100:1 read:write skew</li><li>~1.2K writes/s avg (~3K peak) · ~116K reads/s avg (~230K peak)</li><li>5-year retention → ~182B mappings, ~90 TB at ~500 B each</li><li>Availability-critical (a dead redirect breaks every embedded link); &lt;10ms redirect from edge</li></ul>
+  </section>
+
   <section class="ds-section" id="key-ideas">
     <h2>Key ideas</h2>
     <ul class="sharepage__notes"><li>Encode a globally-unique auto-increment ID in base62 to get short, guaranteed-collision-free codes without retry loops.</li><li>A hash-and-truncate scheme is simple but needs collision-detect-and-retry; a Key-Generation-Service pre-generates codes offline to remove that from the write path.</li><li>The workload is ~100:1 read:write, so the redirect path must be served from cache + CDN, not the DB.</li><li>Use 301 (permanent) redirects for cacheability, 302 (temporary) if you must count every click for analytics.</li><li>The mapping is a simple KV lookup by short code — a partitioned KV store or sharded SQL keyed on the code fits better than a relational join model.</li><li>Custom aliases, expiry/TTL, and click analytics are additive features layered on the core mapping.</li><li>6-char base62 gives ~56.8B codes; 7 chars gives ~3.5T — size the code length to your projected total URLs.</li></ul>

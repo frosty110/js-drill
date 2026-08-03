@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Undo/Redo Stack</h1>
     <p class="sharepage__lede">Command-pattern undo/redo — each action is an object with apply/revert. Two stacks: done and undone. Doing a fresh command clears the redo stack.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -43,7 +43,7 @@
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Command pattern over two stacks</strong> · <code>O(1) per op / O(n)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">class History {
   // done = applied stack; undone = redo stack. Two stacks model a linear timeline.
   constructor() {
@@ -134,7 +134,7 @@ console.log(x);</code></pre>
         <li><span class="sharepage__key">C</span> Without it, <code>cmd.apply()</code> would compose with the undone stack&#39;s pending reverts and cancel itself out</li>
         <li><span class="sharepage__key">D</span> Clearing <code>undone</code> is what triggers the <code>done.push(cmd)</code> to fire — otherwise <code>do</code> is a no-op</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> After an <code>undo</code> the timeline forks, and the undone command belongs to the future you just abandoned. <code>this.undone = []</code> discards it — which is why an editor greys out Redo the moment you type something new.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> What pair of operations must each command expose?</h3>
@@ -144,7 +144,7 @@ console.log(x);</code></pre>
         <li><span class="sharepage__key">C</span> forward / backward — both run the same logic but with a direction flag passed in</li>
         <li><span class="sharepage__key">D</span> commit / rollback — borrowed from transaction APIs, mapping <code>commit</code> to do and <code>rollback</code> to undo</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>do</code> and <code>redo</code> both call <code>cmd.apply()</code>; <code>undo</code> calls <code>cmd.revert()</code>. <code>History</code> never inspects the command — <code>add(n)</code> supplies <code>() =&gt; x += n</code> and <code>() =&gt; x -= n</code>, and that inverse pair is the entire contract.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> Where do commands sit after <code>undo()</code>?</h3>
@@ -154,7 +154,7 @@ console.log(x);</code></pre>
         <li><span class="sharepage__key">C</span> Stay in <code>done</code> but flagged with an <code>inverted: true</code> property; redo unsets the flag</li>
         <li><span class="sharepage__key">D</span> Pushed to a third <code>redoQueue</code> that decouples reapplication from the original do/undo stacks</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>undo</code> is <code>const c = this.done.pop(); … this.undone.push(c)</code> — the command object survives, it just changes stacks. <code>redo</code> pops it straight back the other way, which is only possible because nothing discarded it.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> What does <code>redo()</code> do when <code>undone</code> is empty?</h3>
@@ -164,13 +164,13 @@ console.log(x);</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> Returns early — it&#39;s a no-op <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> Returns <code>undefined</code> and silently re-applies the most recently undone command from a prior session</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>const c = this.undone.pop(); if (!c) return;</code> — popping an empty array yields <code>undefined</code> and the guard bails before <code>c.apply()</code> could throw. <code>undo</code> carries the same guard; the UI just leaves the button disabled instead of handling an exception.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -197,6 +197,35 @@ h.undo();
 console.log(x);</code></pre>
       <p><strong>Answers:</strong> <code>apply</code>, <code>push</code>, <code>[]</code>, <code>pop</code>, <code>return</code>, <code>revert</code></p>
       <p class="sharepage__note">Expected output: <code>1</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Now redo — the mirror of undo: pull off the redo stack, re-run the FORWARD half, push it back onto done. The 3rd log proves the redone command really landed back on done (undo can pop it again); the last two lines prove a fresh do() wipes the redo stack.</p>
+      <pre class="sharepage__code"><code class="language-js">class History {
+  constructor() { this.done = []; this.undone = []; }
+  do(cmd) { cmd.apply(); this.done.push(cmd); this.undone = []; }
+  undo() { const c = this.done.pop(); if (!c) return; c.revert(); this.undone.push(c); }
+  redo() {
+    const c = this.___.pop();
+    if (!c) return;
+    c.___();
+    this.___.push(c);
+  }
+}
+let x = 0;
+const h = new History();
+const add = n =&gt; ({ apply: () =&gt; x += n, revert: () =&gt; x ___ n });
+h.do(add(5));
+h.undo(); console.log(x);
+h.redo(); console.log(x);
+h.undo(); console.log(x);
+h.do(add(1));
+h.redo(); console.log(x);</code></pre>
+      <p><strong>Answers:</strong> <code>undone</code>, <code>apply</code>, <code>done</code>, <code>-=</code></p>
+      <p class="sharepage__note">Expected output: <code>0
+5
+0
+1</code></p>
     </article>
   </section>
 
@@ -249,7 +278,7 @@ console.log(x);</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-undo-redo","title":"Undo/Redo Stack","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why does `do(cmd)` clear `this.undone`?","options":["Otherwise the next `redo` would re-apply both the new command and the stale undone commands as a batch","A fresh action creates a new branch; the previously-undone commands are no longer reachable","Without it, `cmd.apply()` would compose with the undone stack's pending reverts and cancel itself out","Clearing `undone` is what triggers the `done.push(cmd)` to fire — otherwise `do` is a no-op"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What pair of operations must each command expose?","options":["execute / cancel — `cancel` aborts an in-flight command but cannot reverse a completed one","apply / revert (inverses of each other)","forward / backward — both run the same logic but with a direction flag passed in","commit / rollback — borrowed from transaction APIs, mapping `commit` to do and `rollback` to undo"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Where do commands sit after `undo()`?","options":["Garbage-collected — once reverted, the command object has no remaining references","Moved from `done` to `undone` so redo can replay them","Stay in `done` but flagged with an `inverted: true` property; redo unsets the flag","Pushed to a third `redoQueue` that decouples reapplication from the original do/undo stacks"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What does `redo()` do when `undone` is empty?","options":["Throws an `EmptyHistoryError` — the caller must check `canRedo()` before calling","Replays the last `done` command as a fallback, treating redo as a `repeat-last-action` shortcut","Returns early — it's a no-op","Returns `undefined` and silently re-applies the most recently undone command from a prior session"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete History.do so that after do(+1), do(+2), undo, the value is 1.","answers":["apply","push","[]","pop","return","revert"]}],"L3":[{"n":1,"prompt":"Build a History class with do/undo/redo over a number variable. Sequence: do(+1), do(+2), undo (now 1), do(+10) — clears redo. Then undo, undo. Log value after each step.","expectedOutput":"1\n3\n1\n11\n1\n0"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-undo-redo","title":"Undo/Redo Stack","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why does `do(cmd)` clear `this.undone`?","options":["Otherwise the next `redo` would re-apply both the new command and the stale undone commands as a batch","A fresh action creates a new branch; the previously-undone commands are no longer reachable","Without it, `cmd.apply()` would compose with the undone stack's pending reverts and cancel itself out","Clearing `undone` is what triggers the `done.push(cmd)` to fire — otherwise `do` is a no-op"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What pair of operations must each command expose?","options":["execute / cancel — `cancel` aborts an in-flight command but cannot reverse a completed one","apply / revert (inverses of each other)","forward / backward — both run the same logic but with a direction flag passed in","commit / rollback — borrowed from transaction APIs, mapping `commit` to do and `rollback` to undo"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Where do commands sit after `undo()`?","options":["Garbage-collected — once reverted, the command object has no remaining references","Moved from `done` to `undone` so redo can replay them","Stay in `done` but flagged with an `inverted: true` property; redo unsets the flag","Pushed to a third `redoQueue` that decouples reapplication from the original do/undo stacks"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What does `redo()` do when `undone` is empty?","options":["Throws an `EmptyHistoryError` — the caller must check `canRedo()` before calling","Replays the last `done` command as a fallback, treating redo as a `repeat-last-action` shortcut","Returns early — it's a no-op","Returns `undefined` and silently re-applies the most recently undone command from a prior session"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Complete History.do so that after do(+1), do(+2), undo, the value is 1.","answers":["apply","push","[]","pop","return","revert"]},{"n":2,"prompt":"Now redo — the mirror of undo: pull off the redo stack, re-run the FORWARD half, push it back onto done. The 3rd log proves the redone command really landed back on done (undo can pop it again); the last two lines prove a fresh do() wipes the redo stack.","answers":["undone","apply","done","-="]}],"L3":[{"n":1,"prompt":"Build a History class with do/undo/redo over a number variable. Sequence: do(+1), do(+2), undo (now 1), do(+10) — clears redo. Then undo, undo. Log value after each step.","expectedOutput":"1\n3\n1\n11\n1\n0"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Implement Promise.all</h1>
     <p class="sharepage__lede">Reimplement Promise.all from scratch — wait for every input to resolve, preserve order, reject fast on the first error. Classic async interview question.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -39,7 +39,7 @@ boom</code></p>
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Preallocated result array + completion counter</strong> · <code>O(n) / O(n)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">function promiseAll(arr) {
   return new Promise((resolve, reject) =&gt; {
     // Preallocate so out-of-order resolves still land at the right index.
@@ -100,7 +100,7 @@ boom</code></p>
         <li><span class="sharepage__key">C</span> <code>.push</code> inside a <code>.then</code> callback executes on a different microtask queue than the constructor, so it skips the outer Promise&#39;s resolve</li>
         <li><span class="sharepage__key">D</span> Preallocating sets <code>out.length</code> upfront, which is what makes the <code>done === out.length</code> completion check valid</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The handler writes <code>out[i] = v</code> with <code>i</code> captured from <code>forEach</code>, so a promise that settles third still lands in its input slot; <code>.push</code> would order the output by completion time. Note the completion check is <code>++done === arr.length</code>, not <code>out.length</code> — preallocation isn&#39;t what makes it valid.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> What happens when one input rejects?</h3>
@@ -110,7 +110,7 @@ boom</code></p>
         <li><span class="sharepage__key">C</span> It waits for all to settle, then collects errors into a <code>.errors</code> array on the rejection reason</li>
         <li><span class="sharepage__key">D</span> It silently resolves with <code>undefined</code> at the rejected index and keeps the other resolutions</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>.catch(reject)</code> is attached to every entry and a Promise settles once, so the first rejection wins and later <code>reject</code> calls are no-ops. Nothing is cancelled — the other promises keep running and their handlers still write <code>out[i]</code>; that array is simply unreachable once the outer promise has rejected. <code>AggregateError</code> belongs to <code>Promise.any</code>; collect-all-errors is <code>Promise.allSettled</code>.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why wrap each item in <code>Promise.resolve(item)</code>?</h3>
@@ -120,7 +120,7 @@ boom</code></p>
         <li><span class="sharepage__key">C</span> It defers the value to a different microtask queue so the outer Promise constructor&#39;s resolve can complete first</li>
         <li><span class="sharepage__key">D</span> <code>Promise.resolve</code> triggers internal reference-counting so the runtime can GC each input once it settles</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>arr</code> may hold bare values — the driver passes <code>[Promise.resolve(1), 2, Promise.resolve(3)]</code>. Calling <code>.then</code> on <code>2</code> throws <code>TypeError: 2.then is not a function</code>; <code>Promise.resolve</code> returns a promise untouched and wraps anything else, so one code path handles both.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> What must <code>promiseAll([])</code> resolve to?</h3>
@@ -130,13 +130,13 @@ boom</code></p>
         <li class="is-correct"><span class="sharepage__key">C</span> [] — an empty array <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> It should reject with a TypeError — an empty iterable is invalid input by the spec</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The explicit <code>if (arr.length === 0) return resolve(out)</code> exists for exactly this case: <code>forEach</code> over an empty array never runs, so without the guard nothing ever calls <code>resolve</code> and the returned promise hangs forever.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -159,6 +159,29 @@ boom</code></p>
 })();</code></pre>
       <p><strong>Answers:</strong> <code>Promise</code>, <code>length</code>, <code>===</code>, <code>resolve</code>, <code>++</code>, <code>reject</code>, <code>await</code></p>
       <p class="sharepage__note">Expected output: <code>[1,2,3]</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Now the ordering half: preallocate the slot array, short-circuit the empty input, and land each value at its own index so a slower entry can&#39;t jump the queue.</p>
+      <pre class="sharepage__code"><code class="language-js">function promiseAll(arr) {
+  return new Promise((resolve, reject) =&gt; {
+    const out = new ___(arr.length);
+    let done = 0;
+    if (arr.length === 0) return ___(out);
+    arr.forEach((item, ___) =&gt; {
+      Promise.resolve(item)
+        .then(v =&gt; { out[___] = v; if (++done === arr.length) resolve(out); })
+        .catch(reject);
+    });
+  });
+}
+(async () =&gt; {
+  console.log(await promiseAll([]));
+  console.log(await promiseAll([Promise.resolve(&#39;a&#39;).then(v =&gt; v + &#39;!&#39;), &#39;b&#39;]));
+})();</code></pre>
+      <p><strong>Answers:</strong> <code>Array</code>, <code>resolve</code>, <code>i</code>, <code>i</code></p>
+      <p class="sharepage__note">Expected output: <code>[]
+[&quot;a!&quot;,&quot;b&quot;]</code></p>
     </article>
   </section>
 
@@ -213,7 +236,7 @@ boom</code></p>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-promise-all","title":"Implement Promise.all","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why preallocate `out = new Array(arr.length)` instead of pushing as each resolves?","options":["`new Array(n)` allocates a contiguous buffer that the engine fills atomically — `.push` would tear under concurrent then-handlers","Promises may resolve out of order — assigning by index preserves input order","`.push` inside a `.then` callback executes on a different microtask queue than the constructor, so it skips the outer Promise's resolve","Preallocating sets `out.length` upfront, which is what makes the `done === out.length` completion check valid"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What happens when one input rejects?","options":["Other inputs are cancelled via `AbortSignal` and the outer promise rejects with an AggregateError","Other inputs keep running, but the outer promise rejects with the first error and ignores later results","It waits for all to settle, then collects errors into a `.errors` array on the rejection reason","It silently resolves with `undefined` at the rejected index and keeps the other resolutions"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why wrap each item in `Promise.resolve(item)`?","options":["`.then` directly on a non-thenable returns `undefined`, silently dropping the value from the output","Items may be plain values; Promise.resolve normalizes them to thenables","It defers the value to a different microtask queue so the outer Promise constructor's resolve can complete first","`Promise.resolve` triggers internal reference-counting so the runtime can GC each input once it settles"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What must `promiseAll([])` resolve to?","options":["`undefined` — there are no results to package into an array","A forever-pending Promise — `done === length` is `0 === 0` which never re-fires","[] — an empty array","It should reject with a TypeError — an empty iterable is invalid input by the spec"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in promiseAll so [Promise.resolve(1), 2, Promise.resolve(3)] logs [1,2,3].","answers":["Promise","length","===","resolve","++","reject","await"]}],"L3":[{"n":1,"prompt":"Implement promiseAll(arr) that resolves to an in-order array of resolved values, or rejects with the first error. Test with a mix of promises and bare values; also test the rejection path.","expectedOutput":"[1,2,3]\nboom"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-promise-all","title":"Implement Promise.all","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why preallocate `out = new Array(arr.length)` instead of pushing as each resolves?","options":["`new Array(n)` allocates a contiguous buffer that the engine fills atomically — `.push` would tear under concurrent then-handlers","Promises may resolve out of order — assigning by index preserves input order","`.push` inside a `.then` callback executes on a different microtask queue than the constructor, so it skips the outer Promise's resolve","Preallocating sets `out.length` upfront, which is what makes the `done === out.length` completion check valid"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What happens when one input rejects?","options":["Other inputs are cancelled via `AbortSignal` and the outer promise rejects with an AggregateError","Other inputs keep running, but the outer promise rejects with the first error and ignores later results","It waits for all to settle, then collects errors into a `.errors` array on the rejection reason","It silently resolves with `undefined` at the rejected index and keeps the other resolutions"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why wrap each item in `Promise.resolve(item)`?","options":["`.then` directly on a non-thenable returns `undefined`, silently dropping the value from the output","Items may be plain values; Promise.resolve normalizes them to thenables","It defers the value to a different microtask queue so the outer Promise constructor's resolve can complete first","`Promise.resolve` triggers internal reference-counting so the runtime can GC each input once it settles"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What must `promiseAll([])` resolve to?","options":["`undefined` — there are no results to package into an array","A forever-pending Promise — `done === length` is `0 === 0` which never re-fires","[] — an empty array","It should reject with a TypeError — an empty iterable is invalid input by the spec"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in promiseAll so [Promise.resolve(1), 2, Promise.resolve(3)] logs [1,2,3].","answers":["Promise","length","===","resolve","++","reject","await"]},{"n":2,"prompt":"Now the ordering half: preallocate the slot array, short-circuit the empty input, and land each value at its own index so a slower entry can't jump the queue.","answers":["Array","resolve","i","i"]}],"L3":[{"n":1,"prompt":"Implement promiseAll(arr) that resolves to an in-order array of resolved values, or rejects with the first error. Test with a mix of promises and bare values; also test the rejection path.","expectedOutput":"[1,2,3]\nboom"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

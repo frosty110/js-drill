@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Tries</p>
     <h1>Word Search II (Trie + Backtrack)</h1>
     <p class="sharepage__lede">Build a trie of the dictionary, DFS each cell stepping into the trie — early-exit when the next char has no trie edge. Far faster than running Word Search I per word.</p>
-    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Tries</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">patterns</span> <span class="ds-chip">Tries</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -38,7 +38,7 @@
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Trie-guided grid DFS with mark-and-restore backtracking</strong> · <code>O(R·C·4^L) / O(W·L)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">function findWords(board, words) {
   const root = {};
   for (const w of words) {
@@ -115,7 +115,7 @@ console.log(JSON.stringify(findWords(board, words).sort()));</code></pre>
         <li><span class="sharepage__key">C</span> Building a trie reorders the words so the longest are checked first, reducing wasted DFS depth</li>
         <li><span class="sharepage__key">D</span> Per-word Word Search I needs a fresh visited matrix each call; the trie version shares it</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> One grid DFS descends the trie in parallel, so words sharing a prefix walk it once instead of once each, and <code>if (!next) return</code> kills an entire subtree the moment no dictionary word continues. The W factor drops out of the bound entirely.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why store the FULL word at the terminal node?</h3>
@@ -125,7 +125,7 @@ console.log(JSON.stringify(findWords(board, words).sort()));</code></pre>
         <li><span class="sharepage__key">C</span> Without it, multiple words sharing a terminal node would collide on the same flag</li>
         <li><span class="sharepage__key">D</span> It encodes the word length so the DFS knows when to stop descending</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>found.push(next.word)</code> reads the finished string straight off the terminal node, so the DFS never has to carry the path characters down the recursion or re-join them on a hit.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why set next.word = null after pushing it to results?</h3>
@@ -135,7 +135,7 @@ console.log(JSON.stringify(findWords(board, words).sort()));</code></pre>
         <li><span class="sharepage__key">C</span> Required to terminate DFS</li>
         <li><span class="sharepage__key">D</span> Releases the trie node&#39;s child pointers so they can be garbage-collected mid-search</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The same terminal is reachable from more than one start cell, and nulling the field makes <code>if (next.word)</code> false on every later hit. It does NOT prune the subtree — the node&#39;s children survive, so a longer word below it is still found.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why mark board[r][c] = &quot;#&quot; during recursion?</h3>
@@ -145,13 +145,13 @@ console.log(JSON.stringify(findWords(board, words).sort()));</code></pre>
         <li><span class="sharepage__key">C</span> Forces neighbor DFS calls to skip this cell because &#39;#&#39; is not a valid trie key</li>
         <li><span class="sharepage__key">D</span> Caches the cell&#39;s original character at a sentinel so backtracking can restore from a single global</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The neighbor guard <code>board[nr][nc] !== &quot;#&quot;</code> is what stops a cell being reused inside one word, so the sentinel replaces a separate visited matrix. <code>board[r][c] = ch</code> on the way out frees the cell again for other paths — drop that line and the board stays permanently marked.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -185,6 +185,38 @@ const words = [&quot;oath&quot;,&quot;pea&quot;,&quot;eat&quot;,&quot;rain&quot;
 console.log(JSON.stringify(findWords(board, words).sort()));</code></pre>
       <p><strong>Answers:</strong> <code>||</code>, <code>w</code>, <code>return</code>, <code>push</code>, <code>next</code></p>
       <p class="sharepage__note">Expected output: <code>[&quot;eat&quot;,&quot;oath&quot;]</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Backtracking ceremony — fill the dedupe write, the visited marker, the guard that skips cells already on the current path, and the restore after recursion.</p>
+      <pre class="sharepage__code"><code class="language-js">function findWords(board, words) {
+  const root = {};
+  for (const w of words) {
+    let n = root;
+    for (const ch of w) n = n[ch] = n[ch] || {};
+    n.word = w;
+  }
+  const found = [];
+  const R = board.length, C = board[0].length;
+  const dfs = (r, c, node) =&gt; {
+    const ch = board[r][c];
+    const next = node[ch];
+    if (!next) return;
+    if (next.word) { found.push(next.word); next.word = ___; }
+    board[r][c] = ___;
+    for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nr = r + dr, nc = c + dc;
+      if (nr &gt;= 0 &amp;&amp; nr &lt; R &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; C &amp;&amp; board[nr][nc] ___ &quot;#&quot;) dfs(nr, nc, next);
+    }
+    board[r][c] = ___;
+  };
+  for (let r = 0; r &lt; R; r++) for (let c = 0; c &lt; C; c++) dfs(r, c, root);
+  return found;
+}
+const board = [[&quot;a&quot;,&quot;b&quot;],[&quot;c&quot;,&quot;d&quot;]];
+console.log(JSON.stringify(findWords(board, [&quot;abdc&quot;, &quot;cd&quot;, &quot;x&quot;]).sort()));</code></pre>
+      <p><strong>Answers:</strong> <code>null</code>, <code>&quot;#&quot;</code>, <code>!==</code>, <code>ch</code></p>
+      <p class="sharepage__note">Expected output: <code>[&quot;abdc&quot;,&quot;cd&quot;]</code></p>
     </article>
   </section>
 
@@ -245,7 +277,7 @@ console.log(JSON.stringify(findWords(board, words).sort()));</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"p-word-search-ii","title":"Word Search II (Trie + Backtrack)","section":"Tries","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why is Trie + DFS better than running Word Search I per word?","options":["Trie lookup is O(1) per character while Word Search I uses O(L) string comparison","The trie lets a single DFS test all dictionary prefixes at once and prune dead branches early","Building a trie reorders the words so the longest are checked first, reducing wasted DFS depth","Per-word Word Search I needs a fresh visited matrix each call; the trie version shares it"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why store the FULL word at the terminal node?","options":["So the trie can re-verify each match against the original dictionary before reporting it","Avoids rebuilding the word from the DFS path","Without it, multiple words sharing a terminal node would collide on the same flag","It encodes the word length so the DFS knows when to stop descending"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why set next.word = null after pushing it to results?","options":["Prunes the entire subtree rooted at this terminal, so the DFS won't explore further suffixes","Dedupes — the same word may be reachable from multiple start cells","Required to terminate DFS","Releases the trie node's child pointers so they can be garbage-collected mid-search"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why mark board[r][c] = \"#\" during recursion?","options":["Marks visited cells without a separate visited set; restored on backtrack","Signals to the trie that this cell's character has been consumed for the current word","Forces neighbor DFS calls to skip this cell because '#' is not a valid trie key","Caches the cell's original character at a sentinel so backtracking can restore from a single global"],"answer":0,"answerLetter":"A"}],"L2":[{"n":1,"prompt":"Fill in the trie build and the prune step.","answers":["||","w","return","push","next"]}],"L3":[{"n":1,"prompt":"Implement findWords(board, words) using a trie + DFS. Run on the standard 4x4 board with words [\"oath\",\"pea\",\"eat\",\"rain\"] and log the sorted result as a JSON array.","expectedOutput":"[\"eat\",\"oath\"]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"p-word-search-ii","title":"Word Search II (Trie + Backtrack)","section":"Tries","track":"patterns","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why is Trie + DFS better than running Word Search I per word?","options":["Trie lookup is O(1) per character while Word Search I uses O(L) string comparison","The trie lets a single DFS test all dictionary prefixes at once and prune dead branches early","Building a trie reorders the words so the longest are checked first, reducing wasted DFS depth","Per-word Word Search I needs a fresh visited matrix each call; the trie version shares it"],"answer":1,"answerLetter":"B"},{"n":2,"q":"Why store the FULL word at the terminal node?","options":["So the trie can re-verify each match against the original dictionary before reporting it","Avoids rebuilding the word from the DFS path","Without it, multiple words sharing a terminal node would collide on the same flag","It encodes the word length so the DFS knows when to stop descending"],"answer":1,"answerLetter":"B"},{"n":3,"q":"Why set next.word = null after pushing it to results?","options":["Prunes the entire subtree rooted at this terminal, so the DFS won't explore further suffixes","Dedupes — the same word may be reachable from multiple start cells","Required to terminate DFS","Releases the trie node's child pointers so they can be garbage-collected mid-search"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why mark board[r][c] = \"#\" during recursion?","options":["Marks visited cells without a separate visited set; restored on backtrack","Signals to the trie that this cell's character has been consumed for the current word","Forces neighbor DFS calls to skip this cell because '#' is not a valid trie key","Caches the cell's original character at a sentinel so backtracking can restore from a single global"],"answer":0,"answerLetter":"A"}],"L2":[{"n":1,"prompt":"Fill in the trie build and the prune step.","answers":["||","w","return","push","next"]},{"n":2,"prompt":"Backtracking ceremony — fill the dedupe write, the visited marker, the guard that skips cells already on the current path, and the restore after recursion.","answers":["null","\"#\"","!==","ch"]}],"L3":[{"n":1,"prompt":"Implement findWords(board, words) using a trie + DFS. Run on the standard 4x4 board with words [\"oath\",\"pea\",\"eat\",\"rain\"] and log the sorted result as a JSON array.","expectedOutput":"[\"eat\",\"oath\"]"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

@@ -6,6 +6,168 @@
   "status": "full",
   "description": "Top-K shape on object input — return the k largest documents in a production by byte size. Sort-and-slice is the brute-force-OK answer; a size-k min-heap is the O(n log k) optimization to name.",
   "mechanics": ["array-chain"],
+  "conversation": {
+    "intro": "How an interview about a top-K query would actually play out. This one looks like a one-liner and is really a scale question — the interviewer is waiting to see whether you name the sort-and-slice answer, then reach for the size-k min-heap when the document production grows from five files to a million. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "The spec is small — so the clarifiers are about scale and ties.",
+        "say": "\"Let me restate: `largestFiles(files, k)` — given a document production where each file is `{ name, bytes }`, return the NAMES of the k largest by byte size, ordered largest first.\"\n\nThen the clarifiers, and the first one is the whole interview:\n• How big is n, and how big is k? Five files and k=3 is a sort-and-slice. Ten million files and k=10 is a size-k min-heap, or a streaming pass if the list doesn't fit in memory.\n• What if `k > files.length`? `.slice(0, k)` just returns everything rather than throwing, which I think is the right behaviour, but I'd confirm it isn't supposed to be an error.\n• `k = 0` or negative k? Zero gives `[]` naturally; negative k makes `.slice(0, -2)` do something surprising (it drops from the END), so I'd guard or clamp if negative is reachable.\n• Ties on `bytes` — two exhibits at exactly 5,000 bytes and only one slot left. Any tie-break rule, or is arbitrary fine? `Array.prototype.sort` has been stable since ES2019, so I'd get input order for free, but I don't want to rely on that silently if the spec cares.\n• Names or whole objects back? The prompt says names, so I project at the end with `.map`.\n• May I reorder the caller's array? `.sort()` mutates, so I'd clone first unless told the input is disposable.",
+        "why": "Asking for n and k FIRST is the move that converts a trivial question into a design conversation — and this problem is only ever asked because of that follow-up. The `k > n` clarifier is cheap and shows you've read the slice semantics rather than assumed them. The negative-k note is the one most candidates miss entirely: `.slice(0, -2)` is valid JavaScript that silently returns a wrong-length answer instead of failing, which is exactly the class of bug that survives code review. And raising ties unprompted signals you know sort stability is a specified guarantee in modern JS, not folklore."
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Name the k-passes version, then the sort, then say why the sort is already good.",
+        "say": "\"The really naive version is k selection passes: scan the whole list for the max, remove it, scan again, k times. That's O(n·k) and it mutates or masks the input as it goes.\n\nThe obvious improvement is a full sort descending and take the first k — O(n log n), three chained array methods, no bookkeeping:\n\n```\n[...files].sort((a, b) => b.bytes - a.bytes).slice(0, k).map(f => f.name)\n```\n\nI want to be explicit that this is not a placeholder I'm apologizing for. For any n that fits comfortably in memory, sort-and-slice is the answer I'd ship: it's four tokens of logic, it's obviously correct, and `Array.prototype.sort` is a tuned native routine. The optimization only matters when k is much smaller than n.\"",
+        "why": "Naming the O(n·k) repeated-scan version first is what makes the sort feel like a step forward rather than the only thing you know. But the load-bearing sentence is the last one: candidates who immediately reach for a heap on a five-element array read as pattern-matchers, not engineers. Explicitly defending sort-and-slice as the correct production choice at ordinary n — and then showing you can go further when the numbers demand it — is the answer with the highest ceiling."
+      },
+      {
+        "title": "3. Spot the pattern — top-K, and why the heap is a MIN-heap",
+        "prompt": "Name the family, then defend the counterintuitive data structure.",
+        "say": "\"This is the top-K family: k-largest-elements, k-closest-points, k-most-frequent, k-th-largest. Three standard answers, and picking between them is the actual skill:\n\n1. **Sort and slice** — O(n log n) time, O(n) space. Simplest. Correct default.\n2. **Size-k min-heap** — O(n log k) time, O(k) space. Push every file; whenever the heap exceeds k, pop. Best when k << n, and the only one of the three that works on a stream you can't hold in memory.\n3. **Quickselect** — O(n) average, O(n²) worst case, and it partitions the array in place. Fastest on average for a one-shot query over an array you already have, but the worst case and the mutation make it a harder sell.\n\nThe part worth saying slowly is why option 2 is a MIN-heap when the question asks for the LARGEST files. The heap holds your current top-k, and the only thing you ever need to ask it is 'what is the WEAKEST member, and should this newcomer displace it?' The weakest member of a top-k set is its smallest — so the smallest must sit at the root where you can compare and evict it in O(1) look, O(log k) pop. A max-heap would put your biggest file at the root, which is the one element you will never need to touch.\n\nThe loop is four lines: `for (const f of files) { heap.push(f); if (heap.size() > k) heap.pop(); }`. Drain and reverse at the end, because a min-heap pops smallest-first and the output wants largest-first.\"",
+        "why": "'Min-heap for k-largest' is genuinely counterintuitive and is the single most-asked follow-up in this family — being able to derive it from the invariant ('the root is the element most likely to get evicted') instead of reciting it is what makes it stick and what convinces an interviewer you'd get it right on k-closest-points too. Listing all three approaches with their trade-offs, rather than jumping to one, is the senior framing: the interviewer's real question is 'do you know when NOT to use the heap'. Mentioning quickselect's O(n²) worst case unprompted keeps you honest — a candidate who calls quickselect 'O(n)' flat has read the headline and not the caveat."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk three inputs through the pipeline before writing it.",
+        "intro": "\"Let me push a few inputs through sort → slice → map.\" These are the same three inputs the Walkthrough tab steps through: the prompt's own production, a k-larger-than-n case, and a tie that lands right on the cut line.",
+        "examples": [
+          {
+            "input": "files = [deposition.pdf 2,400,000; intake.docx 38,000; mri-scan.dcm 9,100,000; photo.jpg 512,000; notes.txt 4,096], k = 3",
+            "output": "[\"mri-scan.dcm\",\"deposition.pdf\",\"photo.jpg\"]",
+            "note": "The L3 prompt's production. Note the input order tells you nothing — the MRI scan is third in the list and first in the answer.",
+            "trace": "copy   = [...files]                       (clone; .sort() mutates)\nsorted = mri-scan.dcm 9,100,000 > deposition.pdf 2,400,000 > photo.jpg 512,000 > intake.docx 38,000 > notes.txt 4,096\nslice(0, 3) keeps ranks 1-3: mri-scan.dcm, deposition.pdf, photo.jpg\n            drops below the cut: intake.docx, notes.txt\nmap(f => f.name) → [\"mri-scan.dcm\",\"deposition.pdf\",\"photo.jpg\"]"
+          },
+          {
+            "input": "files = [cover-letter.txt 10; exhibit-b.pdf 900], k = 5",
+            "output": "[\"exhibit-b.pdf\",\"cover-letter.txt\"]",
+            "note": "k exceeds the file count. `.slice(0, 5)` on a 2-element array does not throw and does not pad — it just returns both. Free graceful degradation.",
+            "trace": "sorted = exhibit-b.pdf 900 > cover-letter.txt 10\nslice(0, 5) on length 2 → clamps to the whole array, no error, no undefined holes\nmap → [\"exhibit-b.pdf\",\"cover-letter.txt\"]"
+          },
+          {
+            "input": "files = [brief.pdf 5000; exhibit.tif 5000; memo.txt 10], k = 1",
+            "output": "[\"brief.pdf\"]",
+            "note": "A tie sitting exactly on the cut line. The comparator returns 5000 - 5000 = 0, and since ES2019 `Array.prototype.sort` is required to be stable, the earlier file keeps its position and wins the slot.",
+            "trace": "comparator on (brief.pdf, exhibit.tif) → 5000 - 5000 = 0 → treated as equal\nstable sort keeps input order for equals → brief.pdf ≥ exhibit.tif ≥ memo.txt\nslice(0, 1) → [brief.pdf]\nmap → [\"brief.pdf\"]\n\n(if the spec needs a deterministic tie-break, add one: (a, b) => b.bytes - a.bytes || a.name.localeCompare(b.name))"
+          }
+        ],
+        "why": "The first example is worth tracing purely because the answer's order has nothing to do with the input's order — that's the reminder that the sort is doing the work, not the slice. The `k > n` case is the one to say out loud, because 'what happens when k is too big' is a question the interviewer will ask if you don't, and 'slice clamps' is a one-word answer that closes it. The tie example earns its slot by pinning a real spec guarantee: sort stability is normative since ES2019, so 'the earlier file wins' is a claim you can defend rather than an observation about your Node version."
+      },
+      {
+        "title": "5. Edge cases to mention",
+        "prompt": "What would trip up a careless implementation?",
+        "say": "\"Edges worth naming before I call it done:\"\n\n• `k = 0` → `.slice(0, 0)` is `[]`. Correct with no special case. ✓\n• `k > files.length` → slice clamps, returns everything sorted. ✓\n• NEGATIVE k → `.slice(0, -2)` counts from the end and returns all-but-the-last-two. That's a silent wrong answer, not an error. If negative k is reachable I'd clamp with `Math.max(0, k)`.\n• Empty input → `[]` regardless of k. ✓\n• Ties → stable sort keeps input order; add `|| a.name.localeCompare(b.name)` if determinism is specified.\n• Forgetting the `[...files]` clone → the caller's array comes back reordered. This is the bug that doesn't fail a unit test of THIS function and breaks something three modules away.\n• Comparator direction — `a.bytes - b.bytes` is ascending and would hand back the k SMALLEST files. Worth re-reading once before you move on; it's the classic silent inversion.\n• `bytes` that is a numeric STRING (`'9100000'` from a JSON blob or a CSV) — `b.bytes - a.bytes` still coerces and works, but a `.sort()` with no comparator at all would sort lexicographically and put `'9100000'` before `'980000'`. Always pass the comparator on numbers.\n• `bytes` missing or `undefined` on some record → the subtraction yields `NaN`, the comparator becomes inconsistent, and the sort result is implementation-defined garbage rather than an exception. I'd filter or default (`?? 0`) at the boundary.\n• Duplicate file NAMES with different sizes — legitimate in a production (same document from two custodians). The output is a name list, so dupes can appear; if the caller needs to distinguish them, return the objects or a stable id instead of the name.",
+        "why": "The `NaN` comparator case is the one that separates people who have debugged a sort from people who have only written one — a comparator returning `NaN` doesn't throw, it violates the ordering contract and the engine is free to produce any permutation, so the failure surfaces as 'the list is subtly wrong sometimes'. Negative k is the same species of bug: valid syntax, silent wrong answer. And the missing-clone bullet is worth stating in exactly those terms — 'this bug does not fail a test of this function' — because that framing shows you think about blast radius, not just correctness of the unit in front of you."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "Defend both bounds, then say when you'd switch.",
+        "say": "\"Sort-and-slice: time O(n log n), dominated entirely by the sort — slice and map are O(k) and O(k). Space O(n) for the clone.\n\nSize-k min-heap: time O(n log k) — n pushes and at most n pops, each O(log k) against a heap that never exceeds k+1 elements. Space O(k). The crossover is about k relative to n: at k = 10 out of n = 1,000,000, log k is ~3.3 against log n ~20, so the heap does roughly six times fewer comparisons. At k ≈ n the two converge and the heap is just a slower sort with extra code.\n\nThe heap also wins a property the sort can't offer at any n: it's STREAMING. It only ever holds k files, so you can run it over a cursor across a million-document production without materializing the list. That's usually the real reason to reach for it in this domain — not the constant factor, the memory ceiling.\n\nQuickselect is the third option: O(n) average to partition around the k-th largest, then sort just that prefix. Fastest expected time for a one-shot query on an in-memory array, but O(n²) worst case without median-of-medians, and it reorders the input.\n\nSame template shows up as k-most-frequent (fold to counts first, then top-K over the entries), k-closest-points (top-K over squared distance, and you skip the square root because it's monotonic), and 'top 10 slowest queries' in any observability system. In production at real scale this is `ORDER BY bytes DESC LIMIT 10` and the database's own top-K operator — which is, unsurprisingly, a bounded heap.\"",
+        "why": "Putting real numbers on the crossover — log 10 versus log 1,000,000 — turns 'the heap is asymptotically better' into an argument someone can check, and it also forces you to admit the crossover exists, which is the honest position. The streaming point is the strongest one in the section and the one most candidates never make: the heap's O(k) SPACE bound is usually what actually decides the design, because the sort simply cannot run at all when the list doesn't fit. Closing on `ORDER BY … LIMIT` connects the algorithm to the system the rusty engineer actually works in, and noting that the database implements it as a bounded heap makes the whole section land as one idea instead of three."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the sort-and-slice pipeline one stage at a time. The state panel shows the cloned array, the descending `sorted` ranking, which files the `.slice(0, k)` keeps versus drops, and the final `.map` down to names. The per-rank steps are where the cut line becomes visible — watch example 3, where two files tie at 5,000 bytes and only one slot is left.",
+    "examples": [
+      {
+        "label": "L3 production: 5 files, k=3 → the three biggest",
+        "input": {
+          "files": [
+            {
+              "name": "deposition.pdf",
+              "bytes": 2400000
+            },
+            {
+              "name": "intake.docx",
+              "bytes": 38000
+            },
+            {
+              "name": "mri-scan.dcm",
+              "bytes": 9100000
+            },
+            {
+              "name": "photo.jpg",
+              "bytes": 512000
+            },
+            {
+              "name": "notes.txt",
+              "bytes": 4096
+            }
+          ],
+          "k": 3
+        },
+        "expected": "[\"mri-scan.dcm\",\"deposition.pdf\",\"photo.jpg\"]"
+      },
+      {
+        "label": "k=5 but only 2 files — .slice clamps instead of throwing",
+        "input": {
+          "files": [
+            {
+              "name": "cover-letter.txt",
+              "bytes": 10
+            },
+            {
+              "name": "exhibit-b.pdf",
+              "bytes": 900
+            }
+          ],
+          "k": 5
+        },
+        "expected": "[\"exhibit-b.pdf\",\"cover-letter.txt\"]"
+      },
+      {
+        "label": "tie at 5000 bytes with k=1 — stable sort keeps the earlier file",
+        "input": {
+          "files": [
+            {
+              "name": "brief.pdf",
+              "bytes": 5000
+            },
+            {
+              "name": "exhibit.tif",
+              "bytes": 5000
+            },
+            {
+              "name": "memo.txt",
+              "bytes": 10
+            }
+          ],
+          "k": 1
+        },
+        "expected": "[\"brief.pdf\"]"
+      }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const { files, k } = input;",
+      "  const show = (f) => `${f.name} (${f.bytes})`;",
+      "  yield { line: 9, label: `enter largestFiles(files, ${k}) — ${files.length} file(s) in the production`, state: { files: files.map(show), k } };",
+      "  const copy = [...files];",
+      "  yield { line: 10, label: 'copy = [...files] — a fresh array, because .sort() reorders IN PLACE and the caller\\'s list has to survive', state: { files: files.map(show), k, copy: copy.map(show) } };",
+      "  const sorted = copy.sort((a, b) => b.bytes - a.bytes);",
+      "  yield { line: 11, label: `.sort((a, b) => b.bytes - a.bytes) → descending: ${sorted.map(f => f.name + ':' + f.bytes).join(' ≥ ')}`, state: { files: files.map(show), k, sorted: sorted.map(show) } };",
+      "  const taken = [];",
+      "  const cut = Math.min(k, sorted.length);",
+      "  if (cut === 0) {",
+      "    yield { line: 12, label: `.slice(0, ${k}) keeps nothing — an empty top-k, no special case needed`, state: { files: files.map(show), k, sorted: sorted.map(show), taken: [] } };",
+      "  }",
+      "  for (let i = 0; i < cut; i++) {",
+      "    taken.push(sorted[i]);",
+      "    yield { line: 12, label: `.slice(0, ${k}) keeps rank #${i + 1}: ${show(sorted[i])}`, state: { files: files.map(show), k, sorted: sorted.map(show), i, taken: taken.map(show) } };",
+      "  }",
+      "  const dropped = sorted.slice(cut);",
+      "  if (dropped.length) {",
+      "    yield { line: 12, label: `below the cut line, dropped: ${dropped.map(show).join(', ')}`, state: { files: files.map(show), k, sorted: sorted.map(show), taken: taken.map(show), dropped: dropped.map(show) } };",
+      "  } else {",
+      "    yield { line: 12, label: `k=${k} covers all ${sorted.length} file(s) — .slice clamps rather than throwing, nothing is dropped`, state: { files: files.map(show), k, sorted: sorted.map(show), taken: taken.map(show), dropped: [] } };",
+      "  }",
+      "  const names = taken.map(f => f.name);",
+      "  yield { line: 13, label: `.map(f => f.name) projects the objects down to names: ${JSON.stringify(names)}`, state: { files: files.map(show), k, sorted: sorted.map(show), taken: taken.map(show), names: [...names] } };",
+      "  yield { line: 16, label: `return ${JSON.stringify(names)} — the ${names.length} largest, biggest first`, state: { files: files.map(show), k, sorted: sorted.map(show), names: [...names], returns: JSON.stringify(names) } };",
+      "}"
+    ]
+  },
   "reference": {
     "approach": "Sort by size descending, take the first k",
     "complexity": "O(n log n) / O(n)",

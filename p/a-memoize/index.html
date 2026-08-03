@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Memoize</h1>
     <p class="sharepage__lede">Cache a pure function&#39;s results by argument key — repeated calls with the same input return the stored value without re-running the body. The optional keyFn lets callers serialize complex args.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -41,7 +41,7 @@ calls=2</code></p>
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Map cache keyed by serialized args</strong> · <code>O(1) hit / O(n) cached</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">function memoize(fn, keyFn) {
   // Map (not plain object) — avoids __proto__ collisions and handles any string key.
   const cache = new Map();
@@ -101,7 +101,7 @@ console.log(&#39;calls=&#39; + calls);</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> 1 <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> 2 — the cache stores at most one value, so every other call has to recompute</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The first call misses <code>cache.has(k)</code>, runs <code>fn</code>, and stores the result; calls 2 and 3 return from <code>cache.get(k)</code> without entering the body at all. That&#39;s why the L3 script&#39;s <code>calls</code> counter reads 2 after three invocations of <code>m</code> — <code>m(3)</code> twice plus <code>m(4)</code>.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> Why is the default key <code>JSON.stringify(args)</code> insufficient for some inputs?</h3>
@@ -111,7 +111,7 @@ console.log(&#39;calls=&#39; + calls);</code></pre>
         <li><span class="sharepage__key">C</span> Each call to <code>JSON.stringify</code> allocates a new string identity, so cache keys never compare equal across calls</li>
         <li><span class="sharepage__key">D</span> <code>JSON.stringify</code> strips numeric precision past 6 digits, so two close-but-distinct numeric args collapse to one cache entry</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> Functions, <code>undefined</code> and Symbols all serialize to <code>null</code> inside an array, so <code>f(undefined)</code> and <code>f(someFn)</code> share a cache slot, and a circular arg throws outright. The subtler failure is identity: <code>{a:1}</code> and a different <code>{a:1}</code> stringify identically, so two distinct objects are treated as the same call.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> When is memoization unsafe?</h3>
@@ -121,7 +121,7 @@ console.log(&#39;calls=&#39; + calls);</code></pre>
         <li><span class="sharepage__key">C</span> When the function returns an object — Map values must be primitives to be cached</li>
         <li><span class="sharepage__key">D</span> When the wrapped function is recursive — the cache breaks the base-case detection</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The key is built from the args alone, so anything the result also depends on — <code>Date.now()</code>, a mutable global, a network read — is invisible to the cache and the first answer is served forever. Side effects are the mirror image: they run once and then silently stop happening on every hit.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> What benefit does an explicit keyFn provide over the default?</h3>
@@ -131,13 +131,13 @@ console.log(&#39;calls=&#39; + calls);</code></pre>
         <li><span class="sharepage__key">C</span> It lets the cache hold non-string keys directly (Map can otherwise only store stringified keys)</li>
         <li><span class="sharepage__key">D</span> It enables async support — the default keyFn does not await Promise-typed arguments</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>toKey = keyFn || (...)</code> lets the caller key on just the field that matters — <code>user =&gt; user.id</code> skips walking the whole object AND makes two different objects with the same id share a cache entry. It also handles the args the default can&#39;t serialize at all, like a circular reference.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -163,6 +163,30 @@ console.log(calls);</code></pre>
       <p class="sharepage__note">Expected output: <code>6
 6
 8
+2</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Now the keyFn half: fall back to the default serializer when none is passed, and key two structurally-different objects onto the same cache slot by id — while a different id still misses.</p>
+      <pre class="sharepage__code"><code class="language-js">function memoize(fn, keyFn) {
+  const cache = new Map();
+  const toKey = keyFn ___ ((...args) =&gt; JSON.stringify(args));
+  return function (...args) {
+    const k = toKey(___args);
+    if (cache.has(k)) return cache.get(k);
+    const v = fn(...args); cache.set(k, v); return v;
+  };
+}
+let hits = 0;
+const m = memoize((u) =&gt; { hits++; return &#39;u&#39; + u.id; }, (u) =&gt; u.___);
+console.log(m({ id: 7, name: &#39;a&#39; }));
+console.log(m({ id: 7, name: &#39;b&#39; }));
+console.log(m({ id: 8, name: &#39;c&#39; }));
+console.log(hits);</code></pre>
+      <p><strong>Answers:</strong> <code>||</code>, <code>...</code>, <code>id</code></p>
+      <p class="sharepage__note">Expected output: <code>u7
+u7
+u8
 2</code></p>
     </article>
   </section>
@@ -213,7 +237,7 @@ console.log(&#39;calls=&#39; + calls);</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-memoize","title":"Memoize","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Calling a memoized fn with the same args three times calls the underlying fn how many times?","options":["3 — memoize records calls but still invokes the body each time","0 — the wrapper short-circuits before reaching the underlying fn even on the first call","1","2 — the cache stores at most one value, so every other call has to recompute"],"answer":2,"answerLetter":"C"},{"n":2,"q":"Why is the default key `JSON.stringify(args)` insufficient for some inputs?","options":["`JSON.stringify` on an args array always returns `'[]'` because rest-parameter arrays aren't iterable in serialization","Functions, undefined, Symbols, and circular refs don't serialize cleanly — also two distinct objects with the same shape collide","Each call to `JSON.stringify` allocates a new string identity, so cache keys never compare equal across calls","`JSON.stringify` strips numeric precision past 6 digits, so two close-but-distinct numeric args collapse to one cache entry"],"answer":1,"answerLetter":"B"},{"n":3,"q":"When is memoization unsafe?","options":["Whenever the function takes more than one argument — the default key only captures the first","When the function isn't pure — same args may legitimately need different outputs","When the function returns an object — Map values must be primitives to be cached","When the wrapped function is recursive — the cache breaks the base-case detection"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What benefit does an explicit keyFn provide over the default?","options":["Avoids the cost of JSON.stringify and lets you collapse equivalent-but-not-identical inputs to one key","It tracks the key insertion order so the cache can be replayed in call order during hot-reload","It lets the cache hold non-string keys directly (Map can otherwise only store stringified keys)","It enables async support — the default keyFn does not await Promise-typed arguments"],"answer":0,"answerLetter":"A"}],"L2":[{"n":1,"prompt":"Fill in the memoize so the call counter only increments once per unique input.","answers":["Map","...","stringify","has","get","...","set"]}],"L3":[{"n":1,"prompt":"Implement memoize(fn, keyFn?). Call a counter-tracking slow fn with two repeated and one unique arg; show results and that the underlying fn ran only twice.","expectedOutput":"9\n9\n16\ncalls=2"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-memoize","title":"Memoize","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Calling a memoized fn with the same args three times calls the underlying fn how many times?","options":["3 — memoize records calls but still invokes the body each time","0 — the wrapper short-circuits before reaching the underlying fn even on the first call","1","2 — the cache stores at most one value, so every other call has to recompute"],"answer":2,"answerLetter":"C"},{"n":2,"q":"Why is the default key `JSON.stringify(args)` insufficient for some inputs?","options":["`JSON.stringify` on an args array always returns `'[]'` because rest-parameter arrays aren't iterable in serialization","Functions, undefined, Symbols, and circular refs don't serialize cleanly — also two distinct objects with the same shape collide","Each call to `JSON.stringify` allocates a new string identity, so cache keys never compare equal across calls","`JSON.stringify` strips numeric precision past 6 digits, so two close-but-distinct numeric args collapse to one cache entry"],"answer":1,"answerLetter":"B"},{"n":3,"q":"When is memoization unsafe?","options":["Whenever the function takes more than one argument — the default key only captures the first","When the function isn't pure — same args may legitimately need different outputs","When the function returns an object — Map values must be primitives to be cached","When the wrapped function is recursive — the cache breaks the base-case detection"],"answer":1,"answerLetter":"B"},{"n":4,"q":"What benefit does an explicit keyFn provide over the default?","options":["Avoids the cost of JSON.stringify and lets you collapse equivalent-but-not-identical inputs to one key","It tracks the key insertion order so the cache can be replayed in call order during hot-reload","It lets the cache hold non-string keys directly (Map can otherwise only store stringified keys)","It enables async support — the default keyFn does not await Promise-typed arguments"],"answer":0,"answerLetter":"A"}],"L2":[{"n":1,"prompt":"Fill in the memoize so the call counter only increments once per unique input.","answers":["Map","...","stringify","has","get","...","set"]},{"n":2,"prompt":"Now the keyFn half: fall back to the default serializer when none is passed, and key two structurally-different objects onto the same cache slot by id — while a different id still misses.","answers":["||","...","id"]}],"L3":[{"n":1,"prompt":"Implement memoize(fn, keyFn?). Call a counter-tracking slow fn with two repeated and one unique arg; show results and that the underlying fn ran only twice.","expectedOutput":"9\n9\n16\ncalls=2"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

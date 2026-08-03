@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Deep Clone</h1>
     <p class="sharepage__lede">Recursively clone plain objects and arrays so mutating the clone never touches the original — the canonical recursion + WeakMap-for-cycles pattern.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -41,7 +41,7 @@ true</code></p>
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Recursive copy + WeakMap cycle guard</strong> · <code>O(n) / O(n), n = nodes</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">function deepClone(value, seen = new WeakMap()) {
   // Primitives (incl. null which is typeof &#39;object&#39;) are immutable — return as-is.
   if (value === null || typeof value !== &#39;object&#39;) return value;
@@ -108,7 +108,7 @@ console.log(b.nested.x === 99);</code></pre>
         <li><span class="sharepage__key">C</span> Setting after the loop overwrites the populated children with the empty <code>out</code></li>
         <li><span class="sharepage__key">D</span> Otherwise <code>seen.has(value)</code> short-circuits the recursion before children are copied</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> For <code>cyc.self = cyc</code>, the recursion into <code>self</code> re-enters with the same object; registering <code>out</code> first means that call hits <code>seen.has</code> and returns the half-built clone instead of recursing forever. Registering after the key loop would blow the stack on any cycle — the loop never gets to finish.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> What does <code>deepClone(42)</code> return?</h3>
@@ -118,7 +118,7 @@ console.log(b.nested.x === 99);</code></pre>
         <li><span class="sharepage__key">C</span> undefined</li>
         <li><span class="sharepage__key">D</span> Throws because 42 is not cloneable</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>typeof 42 !== &#39;object&#39;</code> so the first guard returns it untouched — primitives are immutable, so sharing one is indistinguishable from copying it. That guard also carries <code>null</code>, which has to be tested explicitly because <code>typeof null === &#39;object&#39;</code>.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> After <code>const b = deepClone(a); b.nested.x = 99;</code>, why is <code>a.nested.x</code> unchanged?</h3>
@@ -128,7 +128,7 @@ console.log(b.nested.x === 99);</code></pre>
         <li><span class="sharepage__key">C</span> Because the WeakMap pins the original so writes to <code>b</code> are rerouted to a new sub-object</li>
         <li><span class="sharepage__key">D</span> Because <code>Object.assign</code> copies values, and deepClone is built on top of it</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The recursion hit <code>a.nested</code>, took the <code>Array.isArray ? [] : {}</code> branch and rebuilt it, so <code>b.nested</code> is a fresh object and the write lands only there. <code>{...a}</code> or <code>Object.assign</code> would have copied the <code>nested</code> POINTER, and this exact mutation would show up on the original.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why WeakMap instead of Map for the <code>seen</code> cache?</h3>
@@ -138,13 +138,13 @@ console.log(b.nested.x === 99);</code></pre>
         <li><span class="sharepage__key">C</span> WeakMap&#39;s <code>.has()</code> is O(1); Map&#39;s <code>.has()</code> is O(log n)</li>
         <li><span class="sharepage__key">D</span> Map throws if a key is reassigned, which would fire when registering the clone</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>seen</code> keys every source object it visits, and a plain Map would keep all of them alive for as long as the map lives — the standard leak when a cache is hoisted out of the call. Both keep keys by identity, so identity lookup is NOT the difference between them.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -165,6 +165,29 @@ console.log(b.nested.x);</code></pre>
       <p><strong>Answers:</strong> <code>WeakMap</code>, <code>typeof</code>, <code>has</code>, <code>isArray</code>, <code>set</code>, <code>deepClone</code></p>
       <p class="sharepage__note">Expected output: <code>1
 99</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Fill in the guards that let deepClone survive null and a cyclic reference.</p>
+      <pre class="sharepage__code"><code class="language-js">function deepClone(value, seen = new WeakMap()) {
+  // null is typeof &#39;object&#39;, so it has to be excluded explicitly.
+  if (value === ___ || typeof value !== &#39;object&#39;) return value;
+  if (seen.has(value)) return seen.___(value);
+  const out = Array.isArray(value) ? ___ : ___;
+  seen.set(value, out);                       // register BEFORE recursing
+  for (const k of Object.___(value)) out[k] = deepClone(value[k], seen);
+  return out;
+}
+const cyc = { name: &#39;root&#39;, list: [1, 2] };
+cyc.self = cyc;
+const c = deepClone(cyc);
+console.log(c.self === c);
+console.log(JSON.stringify(deepClone({ n: [1, 2] })));   // array stays array
+console.log(deepClone(null));</code></pre>
+      <p><strong>Answers:</strong> <code>null</code>, <code>get</code>, <code>[]</code>, <code>{}</code>, <code>keys</code></p>
+      <p class="sharepage__note">Expected output: <code>true
+{&quot;n&quot;:[1,2]}
+null</code></p>
     </article>
   </section>
 
@@ -214,7 +237,7 @@ console.log(cycClone.self === cycClone);</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-deep-clone","title":"Deep Clone","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why must you set `seen.set(value, out)` before iterating the object's keys?","options":["Reads in WeakMap return stale values until a write commits, so it primes the cache","To handle cycles: a child that references back to value must find the in-progress clone","Setting after the loop overwrites the populated children with the empty `out`","Otherwise `seen.has(value)` short-circuits the recursion before children are copied"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What does `deepClone(42)` return?","options":["An object wrapping 42","42 — primitives are returned as-is","undefined","Throws because 42 is not cloneable"],"answer":1,"answerLetter":"B"},{"n":3,"q":"After `const b = deepClone(a); b.nested.x = 99;`, why is `a.nested.x` unchanged?","options":["Spread `{...a}` would copy `nested` by reference, but deepClone returns a structuredClone-backed proxy","Because `b.nested` is a new object, distinct from `a.nested`","Because the WeakMap pins the original so writes to `b` are rerouted to a new sub-object","Because `Object.assign` copies values, and deepClone is built on top of it"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why WeakMap instead of Map for the `seen` cache?","options":["Map keys are compared by `==`, so two equal objects would collide; WeakMap uses identity","WeakMap holds keys weakly, so the cache doesn't block GC of cloned graphs","WeakMap's `.has()` is O(1); Map's `.has()` is O(log n)","Map throws if a key is reassigned, which would fire when registering the clone"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Complete deepClone so the clone is independent — mutating clone.nested.x must not change original.nested.x.","answers":["WeakMap","typeof","has","isArray","set","deepClone"]}],"L3":[{"n":1,"prompt":"Implement deepClone(value) with cycle detection. Clone a nested object, mutate the clone, log original.nested.x and clone.nested.x to prove independence, then clone a cyclic object and confirm cycle.self === cycle.","expectedOutput":"1\n99\ntrue\ntrue"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-deep-clone","title":"Deep Clone","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why must you set `seen.set(value, out)` before iterating the object's keys?","options":["Reads in WeakMap return stale values until a write commits, so it primes the cache","To handle cycles: a child that references back to value must find the in-progress clone","Setting after the loop overwrites the populated children with the empty `out`","Otherwise `seen.has(value)` short-circuits the recursion before children are copied"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What does `deepClone(42)` return?","options":["An object wrapping 42","42 — primitives are returned as-is","undefined","Throws because 42 is not cloneable"],"answer":1,"answerLetter":"B"},{"n":3,"q":"After `const b = deepClone(a); b.nested.x = 99;`, why is `a.nested.x` unchanged?","options":["Spread `{...a}` would copy `nested` by reference, but deepClone returns a structuredClone-backed proxy","Because `b.nested` is a new object, distinct from `a.nested`","Because the WeakMap pins the original so writes to `b` are rerouted to a new sub-object","Because `Object.assign` copies values, and deepClone is built on top of it"],"answer":1,"answerLetter":"B"},{"n":4,"q":"Why WeakMap instead of Map for the `seen` cache?","options":["Map keys are compared by `==`, so two equal objects would collide; WeakMap uses identity","WeakMap holds keys weakly, so the cache doesn't block GC of cloned graphs","WeakMap's `.has()` is O(1); Map's `.has()` is O(log n)","Map throws if a key is reassigned, which would fire when registering the clone"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Complete deepClone so the clone is independent — mutating clone.nested.x must not change original.nested.x.","answers":["WeakMap","typeof","has","isArray","set","deepClone"]},{"n":2,"prompt":"Fill in the guards that let deepClone survive null and a cyclic reference.","answers":["null","get","[]","{}","keys"]}],"L3":[{"n":1,"prompt":"Implement deepClone(value) with cycle detection. Clone a nested object, mutate the clone, log original.nested.x and clone.nested.x to prove independence, then clone a cyclic object and confirm cycle.self === cycle.","expectedOutput":"1\n99\ntrue\ntrue"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

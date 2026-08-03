@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Shopping Cart</h1>
     <p class="sharepage__lede">Cart class with add/remove/setQty/total — the canonical Map-keyed-by-name design that every e-commerce interview problem starts from.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -42,7 +42,7 @@
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Map keyed by item.name</strong> · <code>O(1) op, O(n) total / O(n)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">class Cart {
   constructor() {
     // Map keyed by item.name — O(1) add/remove/setQty vs O(n) array.find.
@@ -84,7 +84,7 @@
         <li><span class="sharepage__key">C</span> An array of objects doesn&#39;t survive JSON.stringify when objects share property names with array methods</li>
         <li><span class="sharepage__key">D</span> Map.size invalidates on every mutation, forcing recomputation that an array&#39;s cached length avoids</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>add</code>, <code>remove</code> and <code>setQty</code> all start with <code>this.lines.get(item.name)</code> or <code>.delete(item.name)</code> — constant-time keyed access. The array version would run <code>find(l =&gt; l.item.name === item.name)</code> on every one of those, rescanning the cart each time.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> What should <code>add(apple)</code> do when apple is already in the cart?</h3>
@@ -94,7 +94,7 @@
         <li class="is-correct"><span class="sharepage__key">C</span> Increment the existing line&#39;s qty by the new qty (default 1) <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> Add a second line for the same item, deduping at checkout instead of at add-time</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>if (line) line.qty += qty</code> mutates the record already in the Map; only the <code>else</code> branch creates a new one. Skip the check and the bare <code>set</code> overwrites — <code>add(apple, 2)</code> then <code>add(apple)</code> leaves qty at 1, not 3. Nothing throws and <code>total()</code> still returns a number, so the cart is silently short.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> What should <code>setQty(item, 0)</code> do?</h3>
@@ -104,7 +104,7 @@
         <li class="is-correct"><span class="sharepage__key">C</span> Remove the line entirely <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> Clamp the value to 1 — carts treat 0 as an underflow and round up to the minimum positive qty</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>setQty</code> opens with <code>if (qty &lt;= 0) return this.remove(item)</code>. A zero-qty record would survive into <code>items()</code> and contribute <code>price * 0</code> to <code>total()</code> — a phantom row that costs nothing and reads as a bug.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> Why does <code>total()</code> iterate <code>lines.values()</code> instead of <code>lines.keys()</code>?</h3>
@@ -114,13 +114,13 @@
         <li><span class="sharepage__key">C</span> <code>keys()</code> iterates in hash-bucket order rather than insertion order, breaking the per-line price math</li>
         <li><span class="sharepage__key">D</span> Both work; <code>values()</code> is just a stylistic preference because it reads as &#39;sum the values&#39;</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>this.lines</code> maps name → <code>{ item, qty }</code>, so <code>total()</code> destructures <code>for (const { item, qty } of this.lines.values())</code> to get the price and its multiplier; <code>keys()</code> would hand back only the name strings. Both iterate in insertion order — Maps always do.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -144,6 +144,37 @@ c.add({ name: &#39;bread&#39;, price: 3 });
 console.log(c.total());</code></pre>
       <p><strong>Answers:</strong> <code>Map</code>, <code>get</code>, <code>name</code>, <code>+=</code>, <code>set</code>, <code>of</code>, <code>values</code></p>
       <p class="sharepage__note">Expected output: <code>5</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Now the mutation half: remove by key, treat a non-positive setQty as a removal, and note setQty OVERWRITES the qty where add() bumped it.</p>
+      <pre class="sharepage__code"><code class="language-js">class Cart {
+  constructor() { this.lines = new Map(); }
+  add(item, qty = 1) {
+    const line = this.lines.get(item.name);
+    if (line) line.qty += qty; else this.lines.set(item.name, { item, qty });
+  }
+  remove(item) { this.lines.___(item.name); }
+  setQty(item, qty) {
+    if (qty ___ 0) return this.remove(item);
+    const line = this.lines.get(item.name);
+    if (line) line.qty ___ qty;
+  }
+  items() { return [___this.lines.values()]; }
+}
+const apple = { name: &#39;apple&#39;, price: 1 };
+const bread = { name: &#39;bread&#39;, price: 3 };
+const c = new Cart();
+c.add(apple, 2); c.add(apple, 3); c.add(bread, 1);
+console.log(c.items()[0].qty);
+c.setQty(apple, 2); console.log(c.items()[0].qty);
+c.setQty(apple, 0); console.log(c.items().length);
+c.setQty(bread, -1); console.log(c.items().length);</code></pre>
+      <p><strong>Answers:</strong> <code>delete</code>, <code>&lt;=</code>, <code>=</code>, <code>...</code></p>
+      <p class="sharepage__note">Expected output: <code>5
+2
+1
+0</code></p>
     </article>
   </section>
 
@@ -210,7 +241,7 @@ console.log(c.total());</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-shopping-cart","title":"Shopping Cart","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why key the lines Map by `item.name` instead of pushing items into an array?","options":["Maps coerce numeric strings to numbers, so SKU-shaped names stay sortable for the line-order view","O(1) lookup on add/remove/setQty instead of O(n) array.find","An array of objects doesn't survive JSON.stringify when objects share property names with array methods","Map.size invalidates on every mutation, forcing recomputation that an array's cached length avoids"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What should `add(apple)` do when apple is already in the cart?","options":["Throw a `DuplicateItemError` — apples are already in the cart and re-adding is a UX mistake","Replace the existing line — the most recent `add` overrides the prior quantity (last-write-wins)","Increment the existing line's qty by the new qty (default 1)","Add a second line for the same item, deduping at checkout instead of at add-time"],"answer":2,"answerLetter":"C"},{"n":3,"q":"What should `setQty(item, 0)` do?","options":["Throw a RangeError — qty must be a positive integer per the cart contract","Leave a zero-qty line in the cart so the user can still see the item was once chosen","Remove the line entirely","Clamp the value to 1 — carts treat 0 as an underflow and round up to the minimum positive qty"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Why does `total()` iterate `lines.values()` instead of `lines.keys()`?","options":["`lines.keys()` returns the Map's internal hash buckets, not the item-name keys you'd expect","values() yields the `{item, qty}` records you need to compute price × qty","`keys()` iterates in hash-bucket order rather than insertion order, breaking the per-line price math","Both work; `values()` is just a stylistic preference because it reads as 'sum the values'"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Complete Cart.add and total() so adding 2 apples ($1) and 1 bread ($3) totals 5.","answers":["Map","get","name","+=","set","of","values"]}],"L3":[{"n":1,"prompt":"Build a Cart with add/remove/setQty/total. Sequence: add 2 apple ($1), add 1 bread ($3) → 5. add 1 more apple → 6. setQty(apple, 5) → 8. remove(bread) → 5. setQty(apple, 0) → 0.","expectedOutput":"5\n6\n8\n5\n0"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-shopping-cart","title":"Shopping Cart","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why key the lines Map by `item.name` instead of pushing items into an array?","options":["Maps coerce numeric strings to numbers, so SKU-shaped names stay sortable for the line-order view","O(1) lookup on add/remove/setQty instead of O(n) array.find","An array of objects doesn't survive JSON.stringify when objects share property names with array methods","Map.size invalidates on every mutation, forcing recomputation that an array's cached length avoids"],"answer":1,"answerLetter":"B"},{"n":2,"q":"What should `add(apple)` do when apple is already in the cart?","options":["Throw a `DuplicateItemError` — apples are already in the cart and re-adding is a UX mistake","Replace the existing line — the most recent `add` overrides the prior quantity (last-write-wins)","Increment the existing line's qty by the new qty (default 1)","Add a second line for the same item, deduping at checkout instead of at add-time"],"answer":2,"answerLetter":"C"},{"n":3,"q":"What should `setQty(item, 0)` do?","options":["Throw a RangeError — qty must be a positive integer per the cart contract","Leave a zero-qty line in the cart so the user can still see the item was once chosen","Remove the line entirely","Clamp the value to 1 — carts treat 0 as an underflow and round up to the minimum positive qty"],"answer":2,"answerLetter":"C"},{"n":4,"q":"Why does `total()` iterate `lines.values()` instead of `lines.keys()`?","options":["`lines.keys()` returns the Map's internal hash buckets, not the item-name keys you'd expect","values() yields the `{item, qty}` records you need to compute price × qty","`keys()` iterates in hash-bucket order rather than insertion order, breaking the per-line price math","Both work; `values()` is just a stylistic preference because it reads as 'sum the values'"],"answer":1,"answerLetter":"B"}],"L2":[{"n":1,"prompt":"Complete Cart.add and total() so adding 2 apples ($1) and 1 bread ($3) totals 5.","answers":["Map","get","name","+=","set","of","values"]},{"n":2,"prompt":"Now the mutation half: remove by key, treat a non-positive setQty as a removal, and note setQty OVERWRITES the qty where add() bumped it.","answers":["delete","\u003c=","=","..."]}],"L3":[{"n":1,"prompt":"Build a Cart with add/remove/setQty/total. Sequence: add 2 apple ($1), add 1 bread ($3) → 5. add 1 more apple → 6. setQty(apple, 5) → 8. remove(bread) → 5. setQty(apple, 0) → 0.","expectedOutput":"5\n6\n8\n5\n0"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

@@ -22,7 +22,7 @@
     <p class="sharepage__crumb"><a href="../../p/">Lessons</a> › Applied Problems</p>
     <h1>Snake Game Logic</h1>
     <p class="sharepage__lede">Snake on a w x h grid. Maintain the body as a queue of cells plus a Set for O(1) self-collision lookup. Each move: compute the new head, drop the tail UNLESS the new cell eats food, then check walls and self-overlap.</p>
-    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 1 fill-in · 1 drill</span></p>
+    <p class="sharepage__meta"><span class="ds-chip">applied</span> <span class="ds-chip">Applied Problems</span> <span class="ds-chip">4 concept · 2 fill-in · 1 drill</span></p>
   </header>
 
   <section class="ds-section" id="your-results" hidden>
@@ -40,7 +40,7 @@
 
   <section class="ds-section" id="canonical">
     <h2>Canonical solution</h2>
-    
+    <p><strong>Body queue + cell Set for collisions</strong> · <code>O(1) per move / O(n)</code> (time / space)</p>
     <pre class="sharepage__code"><code class="language-js">class Snake {
   constructor(width, height, food) {
     this.w = width; this.h = height;
@@ -123,7 +123,7 @@ console.log(g.move(&quot;U&quot;));</code></pre>
         <li><span class="sharepage__key">C</span> The Set persists across <code>move</code> calls while the array is rebuilt each frame, so it caches the previous tail</li>
         <li><span class="sharepage__key">D</span> JavaScript arrays can&#39;t store <code>[r, c]</code> tuples because nested arrays lose identity across calls</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> <code>this.set.has(nr + &#39;,&#39; + nc)</code> is the collision test and has to be constant-time on every move, but a Set has no notion of which cell is the tail — that is what <code>this.snake.shift()</code> needs the array for. The two are kept in lockstep: every add and delete touches both.</p>
     </article>
     <article class="sharepage__q" id="q2">
       <h3><a href="#q2" class="sharepage__anchor">Q2</a> When the snake eats food, what changes vs a regular move?</h3>
@@ -133,7 +133,7 @@ console.log(g.move(&quot;U&quot;));</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> The tail is NOT removed, so the snake grows by one <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> The food queue rotates so the next food spawns adjacent to the new head</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The tail <code>shift()</code> is wrapped in <code>if (!ate)</code>. A normal move pushes a head and drops a tail for net-zero length; eating just skips the drop, and <code>this.food.shift(); this.score++</code> runs afterwards once the move is known to be legal.</p>
     </article>
     <article class="sharepage__q" id="q3">
       <h3><a href="#q3" class="sharepage__anchor">Q3</a> Why remove the tail before the self-collision check?</h3>
@@ -143,7 +143,7 @@ console.log(g.move(&quot;U&quot;));</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> Otherwise moving into the old tail cell would falsely flag as a collision <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> The tail must be removed first to free up its slot in the food queue for the next eat</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> The tail vacates its cell on the same tick the head arrives, so a head landing there is legal. Run <code>set.has(key)</code> first and it still sees the stale tail key, so <code>move</code> returns <code>-1</code> on a legal move.</p>
     </article>
     <article class="sharepage__q" id="q4">
       <h3><a href="#q4" class="sharepage__anchor">Q4</a> What does move return on a wall or self crash?</h3>
@@ -153,13 +153,13 @@ console.log(g.move(&quot;U&quot;));</code></pre>
         <li class="is-correct"><span class="sharepage__key">C</span> -1 <span class="sharepage__tick">correct</span></li>
         <li><span class="sharepage__key">D</span> Throws <code>GameOverError</code> — the caller is expected to wrap <code>move</code> in a try/catch</li>
       </ol>
-      
+      <p class="sharepage__why"><strong>Why:</strong> Both failure paths — the wall test <code>nr &lt; 0 || nr &gt;= this.h || nc &lt; 0 || nc &gt;= this.w</code> and <code>this.set.has(key)</code> — <code>return -1</code>. A legal move returns <code>this.score</code>, which starts at <code>0</code>, so the crash sentinel has to be a value a score can never take.</p>
     </article>
   </section>
 
   <section class="ds-section" id="L2">
-    <h2>L2 — Fill in the blanks <span class="sharepage__count">1</span></h2>
-    <p class="sharepage__note">Positions 1–1 of the code's second segment. <code>___</code> marks a blank.</p>
+    <h2>L2 — Fill in the blanks <span class="sharepage__count">2</span></h2>
+    <p class="sharepage__note">Positions 1–2 of the code's second segment. <code>___</code> marks a blank.</p>
     
     <article class="sharepage__q" id="l2-1">
       <h3><a href="#l2-1" class="sharepage__anchor">Exercise 1</a></h3>
@@ -195,6 +195,37 @@ console.log(g.move(&quot;U&quot;));</code></pre>
       <p class="sharepage__note">Expected output: <code>1
 1
 -1</code></p>
+    </article>
+    <article class="sharepage__q" id="l2-2">
+      <h3><a href="#l2-2" class="sharepage__anchor">Exercise 2</a></h3>
+      <p>Now the geometry, on a WIDE 4x2 board (w=4, h=2): which coordinate each direction moves (row 0 is the TOP), and which dimension each wall bound is compared against. Sequence R, D, D, U, R.</p>
+      <pre class="sharepage__code"><code class="language-js">class Snake {
+  constructor(w, h, food) {
+    this.w = w; this.h = h; this.food = food.slice();
+    this.snake = [[0, 0]]; this.set = new Set([&quot;0,0&quot;]); this.score = 0;
+  }
+  move(dir) {
+    const [r, c] = this.snake[this.snake.length - 1];
+    let nr = r, nc = c;
+    if (dir === &quot;U&quot;) nr___; else if (dir === &quot;D&quot;) nr___;
+    else if (dir === &quot;L&quot;) nc--; else if (dir === &quot;R&quot;) nc++;
+    if (nr &lt; 0 || nr ___ this.h || nc &lt; 0 || nc &gt;= this.___) return -1;
+    const ate = this.food.length &amp;&amp; this.food[0][0] === nr &amp;&amp; this.food[0][1] === nc;
+    if (!ate) { const t = this.snake.shift(); this.set.delete(t[0] + &quot;,&quot; + t[1]); }
+    if (this.set.has(nr + &quot;,&quot; + nc)) return -1;
+    this.snake.push([nr, nc]); this.set.add(nr + &quot;,&quot; + nc);
+    if (ate) { this.food.shift(); this.score++; }
+    return this.score;
+  }
+}
+const g = new Snake(4, 2, [[0, 1]]);
+for (const d of [&quot;R&quot;, &quot;D&quot;, &quot;D&quot;, &quot;U&quot;, &quot;R&quot;]) console.log(g.move(d));</code></pre>
+      <p><strong>Answers:</strong> <code>--</code>, <code>++</code>, <code>&gt;=</code>, <code>w</code></p>
+      <p class="sharepage__note">Expected output: <code>1
+1
+-1
+1
+1</code></p>
     </article>
   </section>
 
@@ -257,7 +288,7 @@ console.log(g.move(&quot;U&quot;));</code></pre>
     <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
   </section>
 
-  <script type="application/json" id="drill-data">{"id":"a-snake-game","title":"Snake Game Logic","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why store the body in a Set in addition to an array?","options":["Faster head lookup — the Set's `last` accessor returns the most recently added cell in O(1)","O(1) self-collision check; the array preserves order for tail removal","The Set persists across `move` calls while the array is rebuilt each frame, so it caches the previous tail","JavaScript arrays can't store `[r, c]` tuples because nested arrays lose identity across calls"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When the snake eats food, what changes vs a regular move?","options":["The head doubles in position — `nr += 2` rather than `+= 1` to account for the energy boost","The head advances but the snake also rewinds one step the next move to digest, leaving net-zero growth","The tail is NOT removed, so the snake grows by one","The food queue rotates so the next food spawns adjacent to the new head"],"answer":2,"answerLetter":"C"},{"n":3,"q":"Why remove the tail before the self-collision check?","options":["Set.delete is O(n) when called after a Set.has on the same key, so removing the tail first avoids re-hashing","Order does not matter — but `array.shift()` would mutate during iteration if called inside the collision check loop","Otherwise moving into the old tail cell would falsely flag as a collision","The tail must be removed first to free up its slot in the food queue for the next eat"],"answer":2,"answerLetter":"C"},{"n":4,"q":"What does move return on a wall or self crash?","options":["0 — the score resets to zero on crash and the game restarts implicitly","undefined — the function exits without an explicit return after the crash branch fires","-1","Throws `GameOverError` — the caller is expected to wrap `move` in a try/catch"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in Snake.move so a 3x3 grid with food at [0,1] yields score 1 after eating, then -1 on the wall.","answers":["Set","length","-1","shift","delete","has","++"]}],"L3":[{"n":1,"prompt":"Build Snake(width, height, food) with move(dir) returning new score or -1 on crash. On a 3x3 grid with one food at [0,1], run R, R, U. Logs: 1, 1, -1.","expectedOutput":"1\n1\n-1"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+  <script type="application/json" id="drill-data">{"id":"a-snake-game","title":"Snake Game Logic","section":"Applied Problems","track":"applied","codeShape":["L1","L2","L3"],"L1":[{"n":1,"q":"Why store the body in a Set in addition to an array?","options":["Faster head lookup — the Set's `last` accessor returns the most recently added cell in O(1)","O(1) self-collision check; the array preserves order for tail removal","The Set persists across `move` calls while the array is rebuilt each frame, so it caches the previous tail","JavaScript arrays can't store `[r, c]` tuples because nested arrays lose identity across calls"],"answer":1,"answerLetter":"B"},{"n":2,"q":"When the snake eats food, what changes vs a regular move?","options":["The head doubles in position — `nr += 2` rather than `+= 1` to account for the energy boost","The head advances but the snake also rewinds one step the next move to digest, leaving net-zero growth","The tail is NOT removed, so the snake grows by one","The food queue rotates so the next food spawns adjacent to the new head"],"answer":2,"answerLetter":"C"},{"n":3,"q":"Why remove the tail before the self-collision check?","options":["Set.delete is O(n) when called after a Set.has on the same key, so removing the tail first avoids re-hashing","Order does not matter — but `array.shift()` would mutate during iteration if called inside the collision check loop","Otherwise moving into the old tail cell would falsely flag as a collision","The tail must be removed first to free up its slot in the food queue for the next eat"],"answer":2,"answerLetter":"C"},{"n":4,"q":"What does move return on a wall or self crash?","options":["0 — the score resets to zero on crash and the game restarts implicitly","undefined — the function exits without an explicit return after the crash branch fires","-1","Throws `GameOverError` — the caller is expected to wrap `move` in a try/catch"],"answer":2,"answerLetter":"C"}],"L2":[{"n":1,"prompt":"Fill in Snake.move so a 3x3 grid with food at [0,1] yields score 1 after eating, then -1 on the wall.","answers":["Set","length","-1","shift","delete","has","++"]},{"n":2,"prompt":"Now the geometry, on a WIDE 4x2 board (w=4, h=2): which coordinate each direction moves (row 0 is the TOP), and which dimension each wall bound is compared against. Sequence R, D, D, U, R.","answers":["--","++",">=","w"]}],"L3":[{"n":1,"prompt":"Build Snake(width, height, food) with move(dir) returning new score or -1 on crash. On a 3x3 grid with one food at [0,1], run R, R, U. Logs: 1, 1, -1.","expectedOutput":"1\n1\n-1"}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
 
 </div>
 <footer class="sharepage__foot">

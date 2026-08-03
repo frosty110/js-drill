@@ -6,6 +6,170 @@
   "status": "full",
   "description": "Interval shape on object input — sort depositions by start time, then a single scan comparing each event's start against the furthest end seen so far to surface scheduling conflicts.",
   "mechanics": ["sort-then-sweep"],
+  "conversation": {
+    "intro": "How an interview about a scheduling-conflict check would actually play out. Calendar integrity is bread-and-butter legal-tech work — a double-booked attorney is a missed deposition — so the interviewer will push hard on the overlap predicate and the touching-boundary case. Each section has two parts: what you'd actually say out loud, and why that move matters. Tap a section to expand.",
+    "sections": [
+      {
+        "title": "1. Restate & clarify",
+        "prompt": "Interval problems live or die on the predicate — pin it down before you code.",
+        "say": "\"Let me restate: `findConflicts(events)` — I'm given one attorney's depositions, each `{ caseId, start, end }`, and I return every pair of caseIds whose time ranges overlap, because the attorney can't be in two rooms at once.\"\n\nThen the clarifiers:\n• Time format — zero-padded `'HH:MM'` 24-hour strings, `Date` objects, or minutes-since-midnight? Padded 24-hour strings compare correctly with a plain `<`, which saves me a parse step entirely. Unpadded `'9:00'` would break that, so I'd confirm the padding.\n• Does everything fall on one day, or can a deposition run past midnight? Same-day is the sane assumption; multi-day means I need full timestamps, not clock strings.\n• The boundary: one ends at 11:00 and the next starts at exactly 11:00 — conflict or not? Almost always NOT; back-to-back is legal. That single answer decides `<` versus `<=`.\n• Output shape — every overlapping PAIR, or just the set of double-booked caseIds? Pairs are more useful (you can render 'A-101 collides with B-205'), and that's what the prompt asks for.\n• Is the input already sorted? If it came out of a calendar query with `ORDER BY start` I can skip the sort and drop to O(n).\n• Am I allowed to mutate the caller's array? `.sort()` does, so I'd clone with `[...events]` unless told otherwise.",
+        "why": "The boundary question is the whole problem in miniature: `<` versus `<=` is a one-character difference that turns every back-to-back appointment into a false conflict, and a scheduling tool that cries wolf gets switched off within a week. Asking about the time FORMAT is what earns you the right to write `curr.start < last.end` on raw strings instead of parsing — zero-padded `'HH:MM'` is fixed-width big-endian, so lexicographic order IS chronological order, exactly like ISO dates. Saying that out loud separates 'string comparison happens to work' from 'I know precisely why string comparison works here, and when it stops working.'"
+      },
+      {
+        "title": "2. Brute force first (out loud)",
+        "prompt": "Say the O(n²) version, then say exactly what sorting buys you.",
+        "say": "\"The brute force is all-pairs: two nested loops over every (i, j) with i < j, and for each pair the general two-interval overlap test — `a.start < b.end && b.start < a.end`. That's O(n²) comparisons, but it's correct, it needs no preprocessing, and it takes thirty seconds to write. For one attorney's day n is maybe eight events; I'd honestly ship it.\n\nWhat sorting buys me is the right to STOP comparing. Once events are ordered by start, the earlier one satisfies `a.start <= b.start`, and since `b.start < b.end`, the first clause `a.start < b.end` is true by construction — the sort proved it for me. So the symmetric two-sided test collapses to the one-sided `b.start < a.end`, which in the loop reads `curr.start < last.end`. Half the predicate disappears because the sort discharged it, and that's what takes me from O(n²) to one sort plus one linear sweep.\"",
+        "why": "Being able to write the general two-interval predicate `a.start < b.end && b.start < a.end` from memory is worth points on its own — plenty of candidates fumble the symmetric form. Then the optimization story tells itself: sorting DISCHARGES one half of the conjunction, so the sweep only has to check the other half. That is the actual reason the linear sweep is correct, and 'sorting lets me drop a clause' is a far stronger claim than 'sorting makes it faster'. Volunteering that you'd ship the O(n²) version at n=8 is a maturity signal too — you're optimizing because you were asked, not by reflex."
+      },
+      {
+        "title": "3. Spot the pattern — sort, then sweep against the FURTHEST end",
+        "prompt": "Which earlier event do you compare against, and why isn't it i-1?",
+        "say": "\"Sort by start, then sweep. The trap is deciding what each new event gets compared against. The instinct is `sorted[i - 1]`, the immediately previous event — and that is wrong.\n\nCounterexample: A-101 runs 09:00–13:00, B-205 runs 10:00–10:30, C-309 runs 11:00–11:30. Sorted by start they're already A, B, C. Comparing C to B asks whether `'11:00' < '10:30'` — false, so no conflict gets reported. But C obviously collides with A, which is still running at 11:00. The `i-1` comparison misses it because B is short and nested inside A.\n\nSo I carry `last` pointing at the event with the FURTHEST end seen so far, not the most recent one:\n\n```\nconst sorted = [...events].sort((a, b) =>\n  a.start < b.start ? -1 : a.start > b.start ? 1 : 0\n);\nconst conflicts = [];\nlet last = sorted[0];\nfor (let i = 1; i < sorted.length; i++) {\n  const curr = sorted[i];\n  if (curr.start < last.end) conflicts.push([last.caseId, curr.caseId]);\n  if (curr.end > last.end) last = curr;   // running max on end\n}\n```\n\nThe invariant is one sentence: `last.end` is the maximum end time among everything already scanned. Because the array is sorted by start, if `curr` doesn't reach back past that maximum it can't reach back past any earlier event either — so ONE comparison per event is sufficient. That's the sort-then-sweep template carrying a running max, the same skeleton as merge-intervals, meeting-rooms, and non-overlapping-intervals.\"",
+        "why": "This is the section that decides the interview. 'Sort, then compare adjacent pairs' is the shape people half-remember from merge-intervals, and it silently produces wrong answers on NESTED intervals — a long deposition that swallows several short ones. Having the concrete A/B/C counterexample loaded means you can demonstrate the bug in ten seconds instead of asserting it. And stating the invariant explicitly — `last.end` is the running maximum — is what licenses the claim that a single comparison per event suffices. Without the invariant you're just hoping the sweep is correct; with it, the correctness argument is two lines."
+      },
+      {
+        "title": "4. Trace through examples",
+        "prompt": "Walk three inputs before committing to the loop.",
+        "intro": "\"Let me run three inputs — the prompt's own calendar, the nested case that kills the i-1 version, and an unsorted pair that touches at a boundary.\" These are the same three inputs the Walkthrough tab steps through, so the two tabs tell one story.",
+        "examples": [
+          {
+            "input": "[A-101 09:00–10:30, B-205 10:00–11:00, C-309 11:00–12:00, D-412 11:30–13:00]",
+            "output": "[[\"A-101\",\"B-205\"],[\"C-309\",\"D-412\"]]",
+            "note": "The L3 prompt's calendar. Two real collisions; the 11:00 handoff between B-205 and C-309 is clean because the test is strict.",
+            "trace": "sorted by start = A-101@09:00 → B-205@10:00 → C-309@11:00 → D-412@11:30\nlast = A-101 (ends 10:30)\ni=1 curr=B-205: '10:00' < '10:30' → CONFLICT [A-101, B-205]; '11:00' > '10:30' → last = B-205\ni=2 curr=C-309: '11:00' < '11:00' → false, clean handoff; '12:00' > '11:00' → last = C-309\ni=3 curr=D-412: '11:30' < '12:00' → CONFLICT [C-309, D-412]; '13:00' > '12:00' → last = D-412\nreturn [[\"A-101\",\"B-205\"],[\"C-309\",\"D-412\"]]"
+          },
+          {
+            "input": "[A-101 09:00–13:00, B-205 10:00–10:30, C-309 11:00–11:30]",
+            "output": "[[\"A-101\",\"B-205\"],[\"A-101\",\"C-309\"]]",
+            "note": "The nested case — one all-day deposition swallowing two short ones. This is the example that proves `last` must track the furthest end, not index i-1.",
+            "trace": "sorted by start = A-101@09:00 → B-205@10:00 → C-309@11:00\nlast = A-101 (ends 13:00)\ni=1 curr=B-205: '10:00' < '13:00' → CONFLICT [A-101, B-205]; '10:30' > '13:00' false → last STAYS A-101\ni=2 curr=C-309: '11:00' < '13:00' → CONFLICT [A-101, C-309]; '11:30' > '13:00' false → last STAYS A-101\nreturn [[\"A-101\",\"B-205\"],[\"A-101\",\"C-309\"]]\n\n(with a bare i-1 comparison, step i=2 would ask '11:00' < '10:30' → false and MISS the collision entirely)"
+          },
+          {
+            "input": "[X-900 11:00–12:00, W-800 09:00–11:00]  (unsorted)",
+            "output": "[]",
+            "note": "Two jobs at once: the input arrives out of order, so the sort prep step earns its keep, and the pair touches exactly at 11:00, so the strict `<` reports nothing.",
+            "trace": "sorted by start = W-800@09:00 → X-900@11:00   (input order was reversed)\nlast = W-800 (ends 11:00)\ni=1 curr=X-900: '11:00' < '11:00' → false → no conflict (back-to-back is legal); '12:00' > '11:00' → last = X-900\nreturn []"
+          }
+        ],
+        "why": "The nested example is the one to narrate out loud — it's the difference between an implementation that passes the happy path and one that's actually correct, and an interviewer who knows the problem is waiting to see whether you find it. The third example does double duty on purpose: it proves the clone-and-sort prep step isn't ceremony (without it the very first comparison is against the wrong event) AND it pins the `<` boundary. Reusing the boundary case as the degenerate case keeps the trace short without wasting an example slot."
+      },
+      {
+        "title": "5. Edge cases & failure modes",
+        "prompt": "What would trip up a careless implementation?",
+        "say": "\"Edges I'd walk through before calling it done:\"\n\n• Empty array — `sorted[0]` is `undefined`, but the loop guard `i = 1 < 0` is false immediately, so `last` is never dereferenced and we return `[]`. It works, but only by luck of the loop bound; I'd say that out loud so nobody thinks I missed it.\n• Single deposition — same thing, no pairs, `[]`. ✓\n• Exactly-touching pair (11:00 end, 11:00 start) → NOT a conflict under strict `<`. This is the test I'd write first.\n• One-minute overlap (11:00 end, 10:59 start) → IS a conflict. The pair of tests above and below the boundary is what proves the predicate.\n• Nested intervals — the running-max `last` handles them; a bare `i-1` scan does not.\n• Identical start times — the comparator returns 0, and `Array.prototype.sort` has been stable since ES2019, so equal-start events keep input order. Both orderings still detect the conflict, but the PAIR ordering in the output would flip, so a test that asserts on exact pair order is fragile.\n• Zero-length deposition (start === end) — `curr.start < last.end` still behaves; a zero-length event can be flagged against a container but never contains anything itself.\n• Unpadded times like `'9:00'` — lexicographic comparison breaks (`'9:00' > '10:00'` is true as a string). Normalize to `'09:00'` on the way in, or parse to minutes.\n• Events crossing midnight (`22:00`–`02:00`) — clock strings can't express this at all; end < start silently makes the event look empty. This needs real timestamps, and I'd flag it as out of scope rather than pretend the string version handles it.\n• Reported pairs are only ADJACENT-in-the-sweep pairs. Three mutually overlapping depositions report as two pairs, not three. If the spec wants every colliding pair, that's a different algorithm (and O(output) can be quadratic).",
+        "why": "The last bullet is the honest one, and honesty scores here: this canonical reports a pair per conflicting event, not the full pairwise closure, and a careless candidate will claim 'it finds all conflicts' without noticing the difference. Naming the limit — and naming that full pairwise output can be quadratic no matter how clever you are, because the OUTPUT is quadratic — shows you understand the difference between an algorithm's cost and its contract. The midnight-crossing case is the domain call-out: clock strings are a modelling choice, and knowing where a modelling choice breaks is more valuable than knowing another sorting trick."
+      },
+      {
+        "title": "6. Complexity & wrap-up",
+        "prompt": "Defend the bounds, then generalize the template.",
+        "say": "\"Time is O(n log n), and the sort is the entire cost — the sweep is a single pass with O(1) work per event, so it's O(n) and vanishes into the sort. If the calendar already arrives ordered (a database query with `ORDER BY start`), drop the sort and the whole thing is O(n).\n\nSpace is O(n) for the cloned array plus O(c) for the conflicts output, where c ≤ n-1. The clone is the protect-the-caller cost and I'd keep it; if the interviewer says the input is disposable, `events.sort(...)` in place makes it O(c).\n\nThe template generalizes directly. Sort by start, sweep carrying a running aggregate:\n• carry the running max end and PUSH on overlap → this problem;\n• carry the running max end and MERGE on overlap → merge-intervals;\n• carry a min-heap of end times → meeting-rooms-II, 'how many rooms do I need';\n• sort by END instead and carry the last kept end → non-overlapping-intervals / activity selection, which is the greedy variant.\n\nSame four lines of skeleton every time; what changes is what you carry and what you do on overlap.\n\nAt real scale this is a sweep-line over a timeline, and in production it's usually a database constraint instead — Postgres has an exclusion constraint over a `tstzrange` that refuses to insert an overlapping booking at all. Worth naming: the best version of this algorithm is the one you never have to run, because the write was rejected.\"",
+        "why": "Saying 'the sort is the entire cost' and then immediately giving the condition under which it disappears (pre-sorted input → O(n)) is a tighter complexity answer than the bound alone — it shows you know which term you'd attack. The four-way template table is the transfer move: the rusty engineer's real problem is that merge-intervals, meeting-rooms and activity-selection feel like three unrelated problems, and naming them as one skeleton with different carried state is exactly the handle that makes them recallable together. Ending on the Postgres exclusion constraint is the production-engineer note: an interviewer building a scheduling product will recognize instantly that you've shipped one."
+      }
+    ]
+  },
+  "walkthrough": {
+    "intro": "Step through the sort-then-sweep conflict scan. The state panel shows the `sorted` calendar, the current `curr`, the `last` pointer (the event with the FURTHEST end seen so far — not simply i-1), and the growing `conflicts` list. Watch the second example especially: a long deposition stays as `last` across several iterations, which is exactly the case a bare `sorted[i-1]` comparison would miss.",
+    "examples": [
+      {
+        "label": "L3 calendar: 4 depositions → 2 conflicting pairs",
+        "input": [
+          {
+            "caseId": "A-101",
+            "start": "09:00",
+            "end": "10:30"
+          },
+          {
+            "caseId": "B-205",
+            "start": "10:00",
+            "end": "11:00"
+          },
+          {
+            "caseId": "C-309",
+            "start": "11:00",
+            "end": "12:00"
+          },
+          {
+            "caseId": "D-412",
+            "start": "11:30",
+            "end": "13:00"
+          }
+        ],
+        "expected": "[[\"A-101\",\"B-205\"],[\"C-309\",\"D-412\"]]"
+      },
+      {
+        "label": "nested: one 09:00–13:00 deposition swallows two short ones",
+        "input": [
+          {
+            "caseId": "A-101",
+            "start": "09:00",
+            "end": "13:00"
+          },
+          {
+            "caseId": "B-205",
+            "start": "10:00",
+            "end": "10:30"
+          },
+          {
+            "caseId": "C-309",
+            "start": "11:00",
+            "end": "11:30"
+          }
+        ],
+        "expected": "[[\"A-101\",\"B-205\"],[\"A-101\",\"C-309\"]]"
+      },
+      {
+        "label": "unsorted input, back-to-back at 11:00 → no conflict",
+        "input": [
+          {
+            "caseId": "X-900",
+            "start": "11:00",
+            "end": "12:00"
+          },
+          {
+            "caseId": "W-800",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "expected": "[]"
+      }
+    ],
+    "trace": [
+      "function* trace(input) {",
+      "  const events = input;",
+      "  const show = (e) => `${e.caseId} ${e.start}-${e.end}`;",
+      "  yield { line: 8, label: `enter findConflicts — ${events.length} deposition(s): ${events.map(show).join(' | ')}`, state: { events: events.map(show) } };",
+      "  const sorted = [...events].sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);",
+      "  yield { line: 9, label: `sorted by start = ${sorted.map(e => e.caseId + '@' + e.start).join(' → ')} (clone first — .sort() reorders in place)`, state: { events: events.map(show), sorted: sorted.map(show) } };",
+      "  const conflicts = [];",
+      "  yield { line: 12, label: 'init conflicts = [] — collects [earlier, later] caseId pairs', state: { sorted: sorted.map(show), conflicts: [] } };",
+      "  if (sorted.length === 0) {",
+      "    yield { line: 21, label: 'no depositions — the loop never runs, return []', state: { sorted: [], conflicts: [], returns: JSON.stringify([]) } };",
+      "    return;",
+      "  }",
+      "  let last = sorted[0];",
+      "  yield { line: 13, label: `last = sorted[0] = ${last.caseId} (ends ${last.end}) — the furthest end seen so far, NOT simply i-1`, state: { sorted: sorted.map(show), conflicts: [], last: show(last) } };",
+      "  for (let i = 1; i < sorted.length; i++) {",
+      "    const curr = sorted[i];",
+      "    yield { line: 15, label: `i=${i}: curr = ${show(curr)}, compared against last = ${show(last)}`, state: { sorted: sorted.map(show), conflicts: conflicts.map(p => [...p]), i, curr: show(curr), last: show(last) } };",
+      "    if (curr.start < last.end) {",
+      "      conflicts.push([last.caseId, curr.caseId]);",
+      "      yield { line: 17, label: `'${curr.start}' < '${last.end}' → OVERLAP: push [${last.caseId}, ${curr.caseId}]`, state: { sorted: sorted.map(show), conflicts: conflicts.map(p => [...p]), i, curr: show(curr), last: show(last) } };",
+      "    } else {",
+      "      yield { line: 16, label: `'${curr.start}' < '${last.end}' is false → no overlap; strict < keeps back-to-back events clean`, state: { sorted: sorted.map(show), conflicts: conflicts.map(p => [...p]), i, curr: show(curr), last: show(last) } };",
+      "    }",
+      "    if (curr.end > last.end) {",
+      "      const prevEnd = last.end;",
+      "      last = curr;",
+      "      yield { line: 19, label: `'${curr.end}' > '${prevEnd}' → last = ${curr.caseId}; the running max end moves forward`, state: { sorted: sorted.map(show), conflicts: conflicts.map(p => [...p]), i, curr: show(curr), last: show(last) } };",
+      "    } else {",
+      "      yield { line: 19, label: `'${curr.end}' > '${last.end}' is false → last stays ${last.caseId}; it still reaches furthest`, state: { sorted: sorted.map(show), conflicts: conflicts.map(p => [...p]), i, curr: show(curr), last: show(last) } };",
+      "    }",
+      "  }",
+      "  yield { line: 21, label: `return conflicts — ${conflicts.length} overlapping pair(s): ${JSON.stringify(conflicts)}`, state: { sorted: sorted.map(show), conflicts: conflicts.map(p => [...p]), returns: JSON.stringify(conflicts) } };",
+      "}"
+    ]
+  },
   "reference": {
     "approach": "Sort by start, scan against furthest end",
     "complexity": "O(n log n) / O(n)",

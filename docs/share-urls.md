@@ -22,6 +22,14 @@ it points at.
 | System-design topic | `sd/ddia/` | `system-design.html#/ddia` |
 | System-design index | `sd/` | `system-design.html#/` |
 
+A system-design unit page also carries a **Diagrams** section: every committed
+study sheet as a real `<img>` (so a fetcher gets the picture, not a reference to
+one) plus each authored diagram's source. The `#drill-data` index lists them
+under `sheets[]` and `diagrams[]`, each sheet with a direct `url` and the
+`appUrl` that opens it full-screen in the app. Before this the page carried the
+questions but no visual at all, so an agent could read the rubric and then
+truthfully report it could not see a diagram.
+
 Every URL ends in a **trailing slash**. Each surface is written to disk as
 `<dir>/index.html`, so the slash form is the file's real address and GitHub
 Pages serves it in one hop. The slashless form only 301-redirects there —

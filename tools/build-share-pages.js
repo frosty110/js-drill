@@ -55,6 +55,20 @@ const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
 const letter = i => String.fromCharCode(65 + i);
 const up = depth => '../'.repeat(depth);
 
+// Authored infographic sets, keyed '<topic>/<unit>'. Loaded once; absent file
+// simply means no unit gets a sheet.
+const INFOGRAPHIC_SETS = (() => {
+  const f = path.join(SD, 'infographic-sets.json');
+  if (!fs.existsSync(f)) return {};
+  const doc = readJson(f);
+  return (doc && doc.sets) || {};
+})();
+const INFOGRAPHIC_TOPICS = new Set(['components', 'ddia', 'design-problems']);
+
+// Relative path from sd/<topic>/<unit>/ to a committed sheet PNG.
+const sheetSrc = (topic, unit, id) =>
+  `${up(3)}assets/system-design/infographics/${topic}/${unit}/${id}.png`;
+
 // A page's <head>. `depth` is how far below the deploy root the file sits, so
 // asset links resolve from p/<id>/ and sd/<t>/<u>/ alike.
 function head(depth, { title, description, canonical }) {
@@ -259,6 +273,46 @@ function lessonPage(lesson, content, sectionName) {
 
 // ── System-design pages ─────────────────────────────────────────────────────
 
+// The unit's visuals, rendered so a fetcher can actually get at them: every
+// committed infographic sheet as a real <img> with an absolute-resolvable src,
+// and every authored diagram's source as text. Without this the static page
+// carried the questions but no picture at all, so an agent handed the URL
+// could read the rubric and then truthfully report it could not see a diagram.
+function sdDiagramsSection(topic, meta, unit) {
+  const set = INFOGRAPHIC_TOPICS.has(topic.id) ? INFOGRAPHIC_SETS[`${topic.id}/${unit.id}`] : null;
+  // A registered sheet may still be awaiting artwork — only link what exists.
+  const sheets = (set && Array.isArray(set.items) ? set.items : []).filter(it =>
+    fs.existsSync(path.join(ROOT, 'assets', 'system-design', 'infographics', topic.id, unit.id, `${it.id}.png`)));
+  const diagrams = Array.isArray(unit.diagrams) ? unit.diagrams
+    : (unit.diagram ? [unit.diagram] : []);
+  if (!sheets.length && !diagrams.length) return '';
+
+  const sheetHtml = sheets.map(it => `
+    <figure class="sharepage__sheet" id="sheet-${esc(it.id)}">
+      <img src="${esc(sheetSrc(topic.id, unit.id, it.id))}" alt="${esc(`${unit.title}: ${it.title}`)}"${it.width ? ` width="${esc(it.width)}"` : ''}${it.height ? ` height="${esc(it.height)}"` : ''} loading="lazy">
+      <figcaption>
+        <strong>${esc(it.title)}</strong>${it.kind ? ` <span class="ds-chip">${esc(it.kind)}</span>` : ''}
+        ${it.purpose ? `<span class="sharepage__note">${md(it.purpose)}</span>` : ''}
+        <a href="${esc(sheetSrc(topic.id, unit.id, it.id))}">Open the full-size image</a>
+      </figcaption>
+    </figure>`).join('');
+
+  const diagramHtml = diagrams.map(d => `
+    <article class="sharepage__diagram" id="diagram-${esc(d.id || '')}">
+      <h3>${esc(d.title || 'Diagram')}${d.kind ? ` <span class="ds-chip">${esc(d.kind)}</span>` : ''}${d.role ? ` <span class="ds-chip">${esc(d.role)}</span>` : ''}</h3>
+      ${d.takeaway ? `<p>${md(d.takeaway)}</p>` : ''}
+      ${d.code ? `<pre class="sharepage__code"><code>${esc(d.code)}</code></pre>` : ''}
+    </article>`).join('');
+
+  return `
+  <section class="ds-section" id="diagrams">
+    <h2>Diagrams</h2>
+    <p class="sharepage__note">${sheets.length ? `${sheets.length} study sheet${sheets.length === 1 ? '' : 's'}` : 'No study sheets yet'}${diagrams.length ? ` · ${diagrams.length} authored diagram${diagrams.length === 1 ? '' : 's'} (source below, rendered in the app)` : ''}.</p>
+    ${sheetHtml}
+    ${diagramHtml}
+  </section>`;
+}
+
 function sdUnitPage(topic, meta, unit) {
   const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id })}`;
   const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdUnit').appHash({ topic: topic.id, unit: unit.id })}`;
@@ -288,6 +342,8 @@ function sdUnitPage(topic, meta, unit) {
     <ul class="sharepage__notes">${unit.keyTakeaways.map(k => `<li>${md(k)}</li>`).join('')}</ul>
   </section>`);
   }
+
+  out.push(sdDiagramsSection(topic, meta, unit));
 
   out.push(`
   <section class="ds-section" id="questions">
@@ -319,6 +375,21 @@ function sdUnitPage(topic, meta, unit) {
     unit: unit.id,
     title: unit.title,
     codeShape: ['Q'],
+    // Machine-readable index of the visuals, so an agent can fetch a sheet
+    // directly instead of scraping <img> tags.
+    sheets: (INFOGRAPHIC_TOPICS.has(topic.id) && INFOGRAPHIC_SETS[`${topic.id}/${unit.id}`]
+      ? (INFOGRAPHIC_SETS[`${topic.id}/${unit.id}`].items || [])
+      : [])
+      .filter(it => fs.existsSync(path.join(ROOT, 'assets', 'system-design', 'infographics', topic.id, unit.id, `${it.id}.png`)))
+      .map(it => ({
+        id: it.id,
+        title: it.title,
+        kind: it.kind,
+        url: `${ORIGIN}/assets/system-design/infographics/${topic.id}/${unit.id}/${it.id}.png`,
+        appUrl: `${ORIGIN}/system-design.html#/${topic.id}/${unit.id}/graphic/${it.id}`
+      })),
+    diagrams: (Array.isArray(unit.diagrams) ? unit.diagrams : (unit.diagram ? [unit.diagram] : []))
+      .map(d => ({ id: d.id, title: d.title, kind: d.kind, role: d.role, takeaway: d.takeaway })),
     questions: questions.map((q, i) => ({
       n: i + 1,
       type: q.type || 'mc',

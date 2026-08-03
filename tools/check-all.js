@@ -41,7 +41,8 @@ const GATES = [
   { name: 'content order lock',  cmd: ['tools/check-content-order.js', '--check'], fix: ['tools/check-content-order.js'] },
   { name: 'lesson exercises',    cmd: ['tools/validate-data.js'] },
   { name: 'system design',       cmd: ['tools/validate-system-design.js'] },
-  { name: 'crawlable pages',     cmd: ['tools/build-share-pages.js', '--check'], fix: ['tools/build-share-pages.js'] }
+  { name: 'crawlable pages',     cmd: ['tools/build-share-pages.js', '--check'], fix: ['tools/build-share-pages.js'] },
+  { name: 'URL contract',        cmd: ['tools/check-url-contract.js'] }
 ];
 
 // The durable browser probes — the ones that are the standing regression net
@@ -56,6 +57,7 @@ const PROBE_SUITE = [
   { name: 'share URLs',          cmd: ['tools/cdp/share-urls.js'] },
   { name: 'sd study plans',      cmd: ['tools/cdp/sd-plans.js'] },
   { name: 'sd tags + nav',       cmd: ['tools/cdp/sd-tags-nav.js'] },
+  { name: 'agent bridge',        cmd: ['tools/cdp/agent-bridge.js'] },
   { name: 'sync merge rules',    cmd: ['tools/cdp/sync-merge.js'] }
 ];
 

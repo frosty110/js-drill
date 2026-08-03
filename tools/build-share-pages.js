@@ -71,7 +71,12 @@ const sheetSrc = (topic, unit, id) =>
 
 // A page's <head>. `depth` is how far below the deploy root the file sits, so
 // asset links resolve from p/<id>/ and sd/<t>/<u>/ alike.
-function head(depth, { title, description, canonical }) {
+// Structured data. These pages are a Q&A corpus and an image library, and
+// without it a crawler has to infer both from prose. `jsonLd` is per-page:
+// a unit declares itself a LearningResource with its questions, a sheet
+// declares an ImageObject. Emitted as one <script type="application/ld+json">,
+// which is also the shape an AI agent can lift wholesale.
+function head(depth, { title, description, canonical, image, jsonLd }) {
   const u = up(depth);
   return `<!doctype html>
 <html lang="en">
@@ -84,7 +89,10 @@ function head(depth, { title, description, canonical }) {
 <meta property="og:type" content="article">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
-<meta property="og:url" content="${esc(canonical)}">
+<meta property="og:url" content="${esc(canonical)}">${image ? `
+<meta property="og:image" content="${esc(image)}">
+<meta name="twitter:card" content="summary_large_image">` : ''}${jsonLd ? `
+<script type="application/ld+json">${JSON.stringify(jsonLd, null, 0).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="${u}ds/tokens.css">
 <link rel="stylesheet" href="${u}ds/components.css">
 <link rel="stylesheet" href="${u}css/13-share-page.css">
@@ -161,7 +169,24 @@ function lessonPage(lesson, content, sectionName) {
   out.push(head(2, {
     title: `${lesson.title} — JS Drill`,
     description: content.description || `${lesson.title} — ${sectionName} drill: canonical solution, concept questions and answer key.`,
-    canonical
+    canonical,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'LearningResource',
+      name: lesson.title,
+      description: content.description || lesson.title,
+      url: canonical,
+      learningResourceType: 'Coding exercise',
+      programmingLanguage: content.lang === 'ts' ? 'TypeScript' : 'JavaScript',
+      isPartOf: { '@type': 'Collection', name: sectionName, url: `${ORIGIN}/${DrillRoutes.sharePath('lessonIndex', {})}` },
+      hasPart: questions.map((q, i) => ({
+        '@type': 'Question',
+        position: i + 1,
+        name: String(q.q || '').slice(0, 300),
+        url: `${canonical}#q${i + 1}`,
+        acceptedAnswer: { '@type': 'Answer', text: String((q.options || [])[q.answer] || '').slice(0, 800) }
+      }))
+    }
   }));
 
   out.push(`
@@ -292,8 +317,8 @@ function sdDiagramsSection(topic, meta, unit) {
       <img src="${esc(sheetSrc(topic.id, unit.id, it.id))}" alt="${esc(`${unit.title}: ${it.title}`)}"${it.width ? ` width="${esc(it.width)}"` : ''}${it.height ? ` height="${esc(it.height)}"` : ''} loading="lazy">
       <figcaption>
         <strong>${esc(it.title)}</strong>${it.kind ? ` <span class="ds-chip">${esc(it.kind)}</span>` : ''}
-        ${it.purpose ? `<span class="sharepage__note">${md(it.purpose)}</span>` : ''}
-        <a href="${esc(sheetSrc(topic.id, unit.id, it.id))}">Open the full-size image</a>
+        <a href="${esc(up(3))}${esc(DrillRoutes.sharePath('sdSheet', { topic: topic.id, unit: unit.id, sheet: it.id }))}">Open this sheet on its own page</a>
+        · <a href="${esc(sheetSrc(topic.id, unit.id, it.id))}">the full-size image</a>
       </figcaption>
     </figure>`).join('');
 
@@ -319,10 +344,35 @@ function sdUnitPage(topic, meta, unit) {
   const questions = unit.questions || [];
   const out = [];
 
+  const firstSheet = committedSheets(topic, unit)[0];
   out.push(head(3, {
     title: `${unit.title} — ${meta.title}`,
     description: unit.summary || `${unit.title} — system design drill: questions, model answers and rubric points.`,
-    canonical
+    canonical,
+    image: firstSheet ? `${ORIGIN}/assets/system-design/infographics/${topic.id}/${unit.id}/${firstSheet.id}.png` : null,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'LearningResource',
+      name: unit.title,
+      description: unit.summary || unit.title,
+      url: canonical,
+      learningResourceType: 'Practice questions',
+      educationalLevel: 'Professional',
+      isPartOf: { '@type': 'Collection', name: meta.title, url: `${ORIGIN}/${DrillRoutes.sharePath('sdTopic', { topic: topic.id })}` },
+      teaches: (unit.keyTakeaways || []).slice(0, 6),
+      hasPart: questions.map((q, i) => ({
+        '@type': 'Question',
+        position: i + 1,
+        name: (q.q || q.prompt || '').slice(0, 300),
+        url: `${canonical}#q${i + 1}`,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: String((q.type || 'mc') === 'mc'
+            ? ((q.options || [])[q.answer] || '')
+            : (q.answer || '')).slice(0, 800)
+        }
+      }))
+    }
   }));
 
   out.push(`
@@ -406,6 +456,113 @@ function sdUnitPage(topic, meta, unit) {
   return out.join('\n');
 }
 
+// ── One sheet, one page ─────────────────────────────────────────────────────
+// The JS-free twin of the app's #/…/graphic/<id> route. A full-screen study
+// sheet is the longest-dwell surface in the app, so it is exactly what a user
+// pastes when they ask "explain this diagram" — and until this existed, that
+// paste resolved to a hash no server could read. Deliberately small: the image
+// first, the context on the next line, the way back after that.
+function sdSheetPage(topic, meta, unit, item, siblings) {
+  const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdSheet', { topic: topic.id, unit: unit.id, sheet: item.id })}`;
+  const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdSheet').appHash({ topic: topic.id, unit: unit.id, sheet: item.id })}`;
+  const u = up(4);
+  const rel = `assets/system-design/infographics/${topic.id}/${unit.id}/${item.id}.png`;
+  const out = [];
+
+  out.push(head(4, {
+    title: `${item.title} — ${unit.title}`,
+    description: item.description || `${item.title}: a system-design study sheet for ${unit.title}${item.kind ? ` (${item.kind})` : ''}.`,
+    canonical,
+    image: `${ORIGIN}/${rel}`,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'ImageObject',
+      name: `${unit.title}: ${item.title}`,
+      description: item.description || `${item.title} — a system-design study sheet for ${unit.title}.`,
+      contentUrl: `${ORIGIN}/${rel}`,
+      url: canonical,
+      encodingFormat: 'image/png',
+      width: item.width || undefined,
+      height: item.height || undefined,
+      isPartOf: { '@type': 'LearningResource', name: unit.title, url: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id })}` }
+    }
+  }));
+
+  out.push(`
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="${u}sd/">System design</a> › <a href="${u}sd/${esc(topic.id)}/">${esc(meta.title)}</a> › <a href="${u}${esc(DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id }))}">${esc(unit.title)}</a></p>
+    <h1>${esc(item.title)}</h1>
+    <p class="sharepage__meta">${item.kind ? `<span class="ds-chip">${esc(item.kind)}</span> ` : ''}<span class="ds-chip">study sheet</span></p>
+  </header>
+  <section class="ds-section" id="sheet">
+    <figure class="sharepage__sheet">
+      <img src="${u}${esc(rel)}" alt="${esc(`${unit.title}: ${item.title}`)}"${item.width ? ` width="${esc(item.width)}"` : ''}${item.height ? ` height="${esc(item.height)}"` : ''}>
+      <figcaption class="sharepage__note"><code>${esc(ORIGIN)}/${esc(rel)}</code></figcaption>
+    </figure>
+  </section>`);
+
+  // `description` is the authored sentence about THIS sheet and is the reason
+  // the page is worth indexing at all; `purpose` is optional (the auto-derived
+  // filler was stripped — see the FILLER gate in validate-system-design.js).
+  if (item.description || item.purpose) {
+    out.push(`
+  <section class="ds-section" id="what">
+    <h2>What this sheet shows</h2>
+    ${item.description ? `<p>${md(item.description)}</p>` : ''}
+    ${item.purpose ? `<p class="sharepage__note">${md(item.purpose)}</p>` : ''}
+  </section>`);
+  }
+
+  if (Array.isArray(item.flow) && item.flow.length) {
+    out.push(`
+  <section class="ds-section" id="flow">
+    <h2>Trace the flow</h2>
+    <ol class="sharepage__notes">
+      ${item.flow.map(s => `<li><strong>${esc(s.title)}</strong> — ${md(s.detail)}</li>`).join('\n      ')}
+    </ol>
+  </section>`);
+  }
+
+  if (unit.summary) {
+    out.push(`
+  <section class="ds-section" id="context">
+    <h2>What this belongs to</h2>
+    <p>${md(unit.summary)}</p>
+    <p><a href="${u}${esc(DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id }))}">All questions, model answers and diagrams for ${esc(unit.title)} →</a></p>
+  </section>`);
+  }
+
+  if (siblings.length > 1) {
+    out.push(`
+  <section class="ds-section" id="siblings">
+    <h2>Other sheets in this set</h2>
+    <ul class="sharepage__list">
+      ${siblings.filter(s => s.id !== item.id).map(s => `<li><a href="${u}${esc(DrillRoutes.sharePath('sdSheet', { topic: topic.id, unit: unit.id, sheet: s.id }))}">${esc(s.title)}</a>${s.kind ? ` <span class="ds-chip">${esc(s.kind)}</span>` : ''}</li>`).join('\n      ')}
+    </ul>
+  </section>`);
+  }
+
+  out.push(`
+  <script type="application/json" id="drill-data">${JSON.stringify({
+    topic: topic.id, unit: unit.id, sheet: item.id,
+    title: item.title, kind: item.kind || undefined,
+    image: `${ORIGIN}/${rel}`,
+    unitPage: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id })}`,
+    appUrl
+  }, null, 0).replace(/</g, '\\u003c')}</script>`);
+
+  out.push(foot(4, appUrl));
+  return out.join('\n');
+}
+
+// The sheets a unit actually has artwork for. A registered sheet may still be
+// awaiting its PNG, and nothing should link a missing image.
+function committedSheets(topic, unit) {
+  const set = INFOGRAPHIC_TOPICS.has(topic.id) ? INFOGRAPHIC_SETS[`${topic.id}/${unit.id}`] : null;
+  return (set && Array.isArray(set.items) ? set.items : []).filter(it =>
+    fs.existsSync(path.join(ROOT, 'assets', 'system-design', 'infographics', topic.id, unit.id, `${it.id}.png`)));
+}
+
 // ── Index pages ─────────────────────────────────────────────────────────────
 
 function lessonIndexPage(sections) {
@@ -485,6 +642,246 @@ function sdTopicPage(topic, meta) {
   return out.join('\n');
 }
 
+// ── Plans and tag lists ─────────────────────────────────────────────────────
+// Both are `content` in js/routes.js: a plan is an ordered subset with a time
+// budget, a tag list is "every problem that uses consistent hashing" — the same
+// link means the same thing to everyone who opens it. Both were reachable in
+// the app for months with no address the registry knew about and no page a
+// fetcher could read, which is the exact drift the reconciliation gate now
+// forbids.
+//
+// The derivations below MIRROR system-design.html (companyPlans / entryTags /
+// planUnits). They are duplicated rather than shared because that file is a
+// browser page, not a module — so the gate cross-checks the two by generating
+// from data and asserting every registered route resolves.
+const LENGTH_OF = q => (q <= 8 ? 'short' : q <= 10 ? 'medium' : 'long');
+// Mirrors familySlug in system-design.html — a part display name is not a URL.
+const familySlug = name => String(name || '').toLowerCase()
+  .replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+function facetLabel(tags, facetId, valueId) {
+  const f = (tags.facets || []).find(x => x.id === facetId);
+  const v = f && (f.values || []).find(x => x.id === valueId);
+  return v ? v.label : valueId;
+}
+
+// Position of each unit in curriculum (parts[]) order, not manifest order.
+function unitOrder(meta) {
+  const order = {};
+  let n = 0;
+  for (const part of meta.parts || []) for (const id of part.chapters) order[id] = ++n;
+  meta.chapters.forEach(c => { if (order[c.id] == null) order[c.id] = ++n; });
+  return order;
+}
+
+function companyPlans(plans, meta) {
+  const cfg = plans.companyPlans || {};
+  const min = cfg.minUnits || 4, perUnit = cfg.budgetPerUnit || 12;
+  const order = unitOrder(meta);
+  const byCompany = {};
+  meta.chapters.forEach(c => ((c.tags && c.tags.company) || []).forEach(co => {
+    (byCompany[co] || (byCompany[co] = [])).push(c.id);
+  }));
+  return Object.keys(byCompany)
+    .filter(co => byCompany[co].length >= min)
+    .sort((a, b) => byCompany[b].length - byCompany[a].length || a.localeCompare(b))
+    .map(co => ({
+      id: `company/${co}`, generated: true, mode: 'all', company: co,
+      budget: `~${Math.round(byCompany[co].length * perUnit / 60 * 10) / 10} hrs`,
+      units: byCompany[co].sort((a, b) => (order[a] || 0) - (order[b] || 0))
+    }));
+}
+
+function planUnits(meta, plan) {
+  if (plan.units === '*') return (meta.parts || []).flatMap(p => p.chapters);
+  const order = unitOrder(meta);
+  return (plan.units || []).filter(id => order[id] != null);
+}
+
+function unitLink(depth, topicId, meta, id) {
+  const c = meta.chapters.find(x => x.id === id);
+  if (!c) return '';
+  return `<li><a href="${up(depth)}${esc(DrillRoutes.sharePath('sdUnit', { topic: topicId, unit: id }))}">${esc(c.title)}</a> <span class="ds-chip">${c.questions} question${c.questions === 1 ? '' : 's'}</span></li>`;
+}
+
+function sdPlanPage(topic, meta, plan, tags) {
+  const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdPlan', { topic: topic.id, plan: plan.id })}`;
+  const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdPlan').appHash({ topic: topic.id, plan: plan.id })}`;
+  const depth = 3 + (plan.id.includes('/') ? 1 : 0);
+  const units = planUnits(meta, plan);
+  const title = plan.title || `${facetLabel(tags, 'company', plan.company)} loop`;
+  const blurb = plan.blurb || `${units.length} problems tagged as asked at ${facetLabel(tags, 'company', plan.company)}.`;
+  const out = [];
+
+  out.push(head(depth, {
+    title: `${title} — ${meta.title}`,
+    description: `${blurb} ${units.length} problems${plan.budget ? `, ${plan.budget}` : ''}.`,
+    canonical
+  }));
+  out.push(`
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="${up(depth)}sd/">System design</a> › <a href="${up(depth)}sd/${esc(topic.id)}/">${esc(meta.title)}</a></p>
+    <h1>${esc(title)}</h1>
+    <p class="sharepage__lede">${md(blurb)}</p>
+    <p class="sharepage__meta">${plan.budget ? `<span class="ds-chip">${esc(plan.budget)}</span> ` : ''}<span class="ds-chip">${units.length} problem${units.length === 1 ? '' : 's'}</span>${plan.mode === 'crux' ? ' <span class="ds-chip">crux questions only</span>' : ''}</p>
+  </header>
+  <section class="ds-section" id="units">
+    <h2>The route, in order</h2>
+    <ul class="sharepage__list">
+      ${units.map(id => unitLink(depth, topic.id, meta, id)).filter(Boolean).join('\n      ')}
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">${JSON.stringify({
+    topic: topic.id, plan: plan.id, title, budget: plan.budget,
+    mode: plan.mode || 'all',
+    units: units.map(id => ({ id, url: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: id })}` }))
+  }, null, 0).replace(/</g, '\\u003c')}</script>`);
+  out.push(foot(depth, appUrl));
+  return out.join('\n');
+}
+
+function sdTagPage(topic, meta, facet, value, units) {
+  const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdTag', { topic: topic.id, facet: facet.id, value: value.id })}`;
+  const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdTag').appHash({ topic: topic.id, facet: facet.id, value: value.id })}`;
+  const out = [];
+  out.push(head(4, {
+    title: `${value.label} — ${facet.label} — ${meta.title}`,
+    description: `${units.length} system-design problem${units.length === 1 ? '' : 's'} tagged ${facet.label}: ${value.label}.`,
+    canonical
+  }));
+  out.push(`
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="${up(4)}sd/">System design</a> › <a href="${up(4)}sd/${esc(topic.id)}/">${esc(meta.title)}</a> › ${esc(facet.label)}</p>
+    <h1>${esc(value.label)}</h1>
+    <p class="sharepage__lede">${esc(units.length)} problem${units.length === 1 ? '' : 's'} tagged <strong>${esc(facet.label)}: ${esc(value.label)}</strong>.${facet.note ? ` ${md(facet.note)}` : ''}</p>
+  </header>
+  <section class="ds-section" id="units">
+    <h2>Problems</h2>
+    <ul class="sharepage__list">
+      ${units.map(id => unitLink(4, topic.id, meta, id)).filter(Boolean).join('\n      ')}
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">${JSON.stringify({
+    topic: topic.id, facet: facet.id, value: value.id, label: value.label,
+    units: units.map(id => ({ id, url: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: id })}` }))
+  }, null, 0).replace(/</g, '\\u003c')}</script>`);
+  out.push(foot(4, appUrl));
+  return out.join('\n');
+}
+
+// Every facet value present on a topic, authored and derived alike.
+function tagIndex(meta, tags) {
+  const idx = {};
+  const add = (f, v, id) => { ((idx[f] || (idx[f] = {}))[v] || (idx[f][v] = [])).push(id); };
+  const partOf = {};
+  for (const part of meta.parts || []) for (const id of part.chapters) partOf[id] = part.name || part.title;
+  for (const c of meta.chapters) {
+    const tg = c.tags || {};
+    (tg.mechanism || []).forEach(v => add('mechanism', v, c.id));
+    if (tg.difficulty) add('difficulty', tg.difficulty, c.id);
+    (tg.company || []).forEach(v => add('company', v, c.id));
+    if (partOf[c.id]) add('family', familySlug(partOf[c.id]), c.id);
+    add('length', LENGTH_OF(c.questions || 0), c.id);
+  }
+  // Only facets the registry knows about, so a stray key can't mint a page.
+  const known = new Set((tags.facets || []).map(f => f.id));
+  Object.keys(idx).forEach(f => { if (!known.has(f)) delete idx[f]; });
+  return idx;
+}
+
+// ── The agent bridge ────────────────────────────────────────────────────────
+// The pages above only help someone who already knows they exist, and the URL
+// people actually paste is the app one. A hash fragment never reaches a server,
+// so `system-design.html#/design-problems/p03` and the bare shell are the same
+// bytes: an agent fetching either got "Loading…" and had nowhere to go.
+//
+// So each shell carries its own directions. This markup sits inside the render
+// mount, which every render path overwrites, and an inline script blanks it the
+// moment JS runs — a browser never shows it, a fetcher always does. It states
+// the hash → path rule so a reader gets there in one hop, and links the indexes
+// for one who would rather follow a link than derive one.
+//
+// Generated rather than hand-written so it cannot drift from js/routes.js, and
+// gated by --check like every other output here.
+const BRIDGE_START = '<!-- agent-bridge:start -->';
+const BRIDGE_END = '<!-- agent-bridge:end -->';
+
+function bridgeShell(title, rules, intro, body) {
+  return `${BRIDGE_START}
+  <noscript><p><strong>This page renders with JavaScript.</strong></p></noscript>
+  <div class="agent-bridge">
+    <h1>${title}</h1>
+    <p>You are reading the un-rendered shell of a client-side app. The content is
+       <strong>not</strong> in this file, and the <code>#/…</code> fragment you may have
+       been given never reaches the server, so every hash returns these same bytes.</p>
+    <p><strong>Everything here has a complete, JavaScript-free page. Swap the hash for a path:</strong></p>
+    <pre><code>${rules}</code></pre>
+    <p>${intro}</p>
+${body}
+    <p>Indexes: <a href="sd/">sd/</a> (system design) · <a href="p/">p/</a> (coding lessons) ·
+       machine-readable: <a href="sitemap.xml">sitemap.xml</a>. Every generated page also
+       embeds its content as JSON in <code>&lt;script id="drill-data"&gt;</code>.</p>
+  </div>
+  ${BRIDGE_END}`;
+}
+
+function sdAgentBridge(topics, metas) {
+  const rows = topics.map(t => {
+    const meta = metas[t.id];
+    const unit = (meta.chapters[0] || {}).id;
+    return `      <li><a href="sd/${esc(t.id)}/">${esc(meta.title)}</a> — ${meta.chapters.length} ${esc((meta.unitLabel || 'chapter').toLowerCase())}s, e.g. <code>${esc(DrillRoutes.sharePath('sdUnit', { topic: t.id, unit }))}</code></li>`;
+  }).join('\n');
+  return bridgeShell(
+    'System design — static text version',
+    `system-design.html#/design-problems/p03              →   sd/design-problems/p03/
+system-design.html#/&lt;topic&gt;/&lt;unit&gt;                       →   sd/&lt;topic&gt;/&lt;unit&gt;/
+system-design.html#/&lt;topic&gt;/&lt;unit&gt;/graphic/&lt;sheet&gt;        →   sd/&lt;topic&gt;/&lt;unit&gt;/&lt;sheet&gt;/
+system-design.html#/&lt;topic&gt;/plan/&lt;plan&gt;                  →   sd/&lt;topic&gt;/plan/&lt;plan&gt;/
+system-design.html#/&lt;topic&gt;/tag/&lt;facet&gt;/&lt;value&gt;          →   sd/&lt;topic&gt;/tag/&lt;facet&gt;/&lt;value&gt;/
+system-design.html#/&lt;topic&gt;                              →   sd/&lt;topic&gt;/
+
+system-design.html#/&lt;topic&gt;/mixed  and  /due  start a review session over the
+reader's OWN spaced-repetition state. They have no fixed content; use the
+topic page above.`,
+    'Those pages carry the full question list, every model answer and rubric point, the mermaid source of each architecture diagram, and the study-sheet images — and each sheet has a page of its own.',
+    `    <ul>\n${rows}\n    </ul>`
+  );
+}
+
+function lessonAgentBridge(sections) {
+  const total = sections.reduce((n, s) => n + s.lessons.length, 0);
+  const rows = sections.slice(0, 8).map(s =>
+    `      <li>${esc(s.name)} — ${s.lessons.length} lesson${s.lessons.length === 1 ? '' : 's'}, e.g. <code>${esc(DrillRoutes.sharePath('lesson', { id: s.lessons[0].id }))}</code></li>`
+  ).join('\n');
+  return bridgeShell(
+    'JS Drill — static text version',
+    `index.html#/two-sum          →   p/two-sum/
+index.html#/&lt;lesson-id&gt;      →   p/&lt;lesson-id&gt;/
+index.html#/&lt;lesson-id&gt;/L2   →   p/&lt;lesson-id&gt;/  (every level is on the one page)`,
+    `Those pages carry the problem, the canonical solution, every concept question with its answer key, and the fill-in exercises. ${total} lessons across ${sections.length} sections.`,
+    `    <ul>\n${rows}\n      <li>…and the rest: <a href="p/">p/</a></li>\n    </ul>`
+  );
+}
+
+// Marker-delimited replacement, so the app page owns its own markup and this
+// only ever rewrites the region it created.
+function emitBridge(relPath, markup) {
+  const abs = path.join(ROOT, relPath);
+  const current = fs.readFileSync(abs, 'utf8');
+  const a = current.indexOf(BRIDGE_START);
+  const b = current.indexOf(BRIDGE_END);
+  if (a < 0 || b < 0) {
+    throw new Error(`${relPath}: missing ${BRIDGE_START} / ${BRIDGE_END} markers — the agent bridge has nowhere to go`);
+  }
+  const next = current.slice(0, a) + markup + current.slice(b + BRIDGE_END.length);
+  written.push(relPath);
+  if (CHECK) {
+    if (next !== current) { stale++; console.error(`  stale: ${relPath} (agent bridge)`); }
+    return;
+  }
+  if (next !== current) fs.writeFileSync(abs, next);
+}
+
 // ── Write / check ───────────────────────────────────────────────────────────
 
 const written = [];
@@ -531,8 +928,14 @@ function main() {
 
   // System design.
   const topics = readJson(path.join(SD, 'topics.json')).topics;
+  const PLANS = fs.existsSync(path.join(SD, 'plans.json')) ? readJson(path.join(SD, 'plans.json')) : { plans: [] };
+  const TAGS = fs.existsSync(path.join(SD, 'tags.json')) ? readJson(path.join(SD, 'tags.json')) : { facets: [], appliesTo: [] };
   const metas = {};
   let units = 0;
+  let sheets = 0;
+  let plans = 0;
+  let tagPages = 0;
+  const skippedTags = [];
   for (const t of topics) {
     const meta = readJson(path.join(SD, t.id, 'manifest.json'));
     metas[t.id] = meta;
@@ -546,14 +949,69 @@ function main() {
         }
       }
       emit(path.join('sd', t.id, c.id, 'index.html'), sdUnitPage(t, meta, unit));
-      entries.push({ kind: 'sdUnit', params: { topic: t.id, unit: c.id } });
+      entries.push({
+        kind: 'sdUnit', params: { topic: t.id, unit: c.id },
+        images: committedSheets(t, unit).map(it => ({
+          loc: `${ORIGIN}/assets/system-design/infographics/${t.id}/${c.id}/${it.id}.png`,
+          caption: `${unit.title}: ${it.title}`
+        }))
+      });
       units++;
+
+      // …and the JS-free twin of each #/…/graphic/<id> route.
+      const items = committedSheets(t, unit);
+      for (const item of items) {
+        emit(path.join('sd', t.id, c.id, item.id, 'index.html'), sdSheetPage(t, meta, unit, item, items));
+        entries.push({
+          kind: 'sdSheet', params: { topic: t.id, unit: c.id, sheet: item.id },
+          images: [{ loc: `${ORIGIN}/assets/system-design/infographics/${t.id}/${c.id}/${item.id}.png`, caption: `${unit.title}: ${item.title}` }]
+        });
+        sheets++;
+      }
     }
     emit(path.join('sd', t.id, 'index.html'), sdTopicPage(t, meta));
     entries.push({ kind: 'sdTopic', params: { topic: t.id } });
+
+    // Plans and tag lists — content routes the app has always had and the
+    // registry only just learned about.
+    if (PLANS.appliesTo === t.id) {
+      for (const plan of (PLANS.plans || []).concat(companyPlans(PLANS, meta))) {
+        emit(path.join('sd', t.id, 'plan', ...plan.id.split('/'), 'index.html'),
+          sdPlanPage(t, meta, plan, TAGS));
+        entries.push({ kind: 'sdPlan', params: { topic: t.id, plan: plan.id } });
+        plans++;
+      }
+    }
+    if ((TAGS.appliesTo || []).includes(t.id)) {
+      const idx = tagIndex(meta, TAGS);
+      for (const facet of TAGS.facets || []) {
+        for (const value of Object.keys(idx[facet.id] || {})) {
+          // A value has to be a URL-safe id to be an address. `family` is
+          // derived from part DISPLAY NAMES ("AI & ML Infrastructure"), which
+          // would make a path with spaces and an ampersand — and the app's own
+          // route sanitiser strips those, so the two could never agree. Skip
+          // loudly rather than emitting a path nothing can round-trip; giving
+          // families real ids in tags.json is what would make them addressable.
+          if (!/^[a-z0-9][a-z0-9-]*$/i.test(value)) {
+            skippedTags.push(`${facet.id}/${value}`);
+            continue;
+          }
+          const label = { id: value, label: facetLabel(TAGS, facet.id, value) };
+          emit(path.join('sd', t.id, 'tag', facet.id, value, 'index.html'),
+            sdTagPage(t, meta, facet, label, idx[facet.id][value]));
+          entries.push({ kind: 'sdTag', params: { topic: t.id, facet: facet.id, value } });
+          tagPages++;
+        }
+      }
+    }
   }
   emit(path.join('sd', 'index.html'), sdIndexPage(topics, metas));
   entries.push({ kind: 'sdIndex', params: {} });
+
+  // Point both app shells at everything above.
+  emitBridge('system-design.html', sdAgentBridge(topics, metas));
+  emitBridge('index.html', lessonAgentBridge(
+    manifest.sections.filter(s => s.lessons.some(l => l.status === 'full'))));
 
   // Crawl metadata.
   emit('sitemap.xml', DrillRoutes.sitemapXml(entries, ORIGIN));
@@ -564,10 +1022,13 @@ function main() {
       console.error(`\n✗ ${stale} generated file(s) out of date — run: node tools/build-share-pages.js`);
       process.exit(1);
     }
-    console.log(`✓ share pages up to date (${lessons} lessons, ${units} system-design units, ${written.length} files)`);
+    console.log(`✓ share pages up to date (${lessons} lessons, ${units} units, ${sheets} sheets, ${plans} plans, ${tagPages} tag lists, ${written.length} files)`);
     return;
   }
-  console.log(`✓ wrote ${written.length} files — ${lessons} lessons, ${units} system-design units, ${topics.length} topics, sitemap, robots`);
+  if (skippedTags.length) {
+    console.log(`  note: ${skippedTags.length} tag value(s) are not URL-safe ids and got no page — ${skippedTags.slice(0, 4).join(', ')}${skippedTags.length > 4 ? ', …' : ''}`);
+  }
+  console.log(`✓ wrote ${written.length} files — ${lessons} lessons, ${units} system-design units, ${sheets} study sheets, ${plans} plans, ${tagPages} tag lists, ${topics.length} topics, sitemap, robots`);
 }
 
 main();

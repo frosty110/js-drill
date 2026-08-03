@@ -194,6 +194,61 @@ floor holds.
 
 ---
 
+## 7. Every addressable thing is fetchable
+
+**Rule — if a user can look at it, it has a URL; if it has a URL, fetching that
+URL with no JavaScript returns it.**
+
+Three consumers read our URLs and only one runs JavaScript: AI agents the user
+pastes a link into, the user's own copy-paste to a colleague or another device,
+and search crawlers. A hash fragment is **never sent to the server** (RFC 3986),
+so `system-design.html#/design-problems/p03` and the bare shell are the same
+bytes — every hash route returns `Loading…` to all three.
+
+This is a URL *design* constraint, not a rendering one. It is unaffected by
+whether pages are templated, pre-built or client-rendered, which is why it needs
+its own rule: the obvious diagnosis ("we render on the fly") points at the wrong
+fix.
+
+Path is identity, query is view state, fragment is position within a document
+the server already returned. Full contract, including the parts still unbuilt:
+[`url-contract.md`](url-contract.md).
+
+Every route declares a **disposition**: `content` (denotes something that exists
+independently of the reader — gets a static page) or `action` (a personal,
+stateful session like "what's due for me" — no page, but declares a `fallback`
+so it still resolves). `action` is a declaration, not an exemption.
+
+**Gate** — `tools/check-url-contract.js`. Four checks compare the registry to
+disk: content surfaces resolve to files, both app pages carry an agent bridge
+that cites a real path and is blanked on boot, the sitemap is complete, and a
+unit with diagrams or sheets actually renders them. The fifth **reconciles the
+registry with the app's router** — round-tripping `appHash ⇄ appParams` and
+`path ⇄ params` for every surface, checking each `action`'s fallback is real
+content, and asserting `system-design.html`'s `ROUTE_VIEW` names only registered
+surfaces.
+
+That fifth check is the one that matters. The first four were all green while
+`mixed`, `due`, `plan` and `tag` were live app routes no surface named — because
+nothing compared the two hand-written sources of routing truth. The app's router
+now *consumes* the registry (`DrillRoutes.parseAppHash`) rather than restating
+it.
+
+Assert against rendered elements, never a whole-file substring search, or a
+check will pass on a page stripped bare (one did). The gate also rejects any
+generated path that is not URL-safe — derived tag values were briefly producing
+paths with spaces and ampersands that the app's own sanitiser would have
+stripped, so the two spellings could never have agreed.
+
+If you touch these, break something on purpose and confirm it goes red.
+
+**Adding a surface** — add a row to `SURFACES` in `js/routes.js`, generate its
+page in `tools/build-share-pages.js`, and the gate picks it up with no further
+change. If the app can put the user somewhere the registry doesn't name, that
+place has no URL and the contract is already broken.
+
+---
+
 ## Adding an invariant
 
 If you find yourself writing "remember to…" in a doc, that is a rule without a

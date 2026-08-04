@@ -946,10 +946,17 @@ function applySidebarCuration() {
   });
 }
 
-// Top-bar cram progress strip: "Day N · ▓▓▓░░ · X/Y". Visible only when the
-// subscribed path is kind:'cram' AND the cycle is still active. Tap routes
-// to the cram home view (Phase 2 takes over when subscribed; for now opens
-// the Today modal).
+// Top-bar cram progress strip: "Day N · ▓▓▓░░ · X/Y" — RETIRED with the rest
+// of the old header chrome (D15 phase 2). The header now carries ONE progress
+// instrument, scoped to wherever the user is; a second bar reporting a
+// different thing beside it is exactly the disagreement the redesign exists to
+// remove. The information itself is not lost: Day N and its task count are on
+// Today's Plan, which is where cram home already lives.
+//
+// The function stays as a no-op rather than being deleted at seven call sites
+// spread across four slices, and returns early on the absent element the same
+// way it always did for non-cram users. Re-point it at a new element and every
+// caller works again.
 function updateCramProgressStrip() {
   const wrap = document.getElementById('topbar-cram-progress');
   if (!wrap) return;

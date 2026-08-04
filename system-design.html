@@ -18,12 +18,19 @@
 <!-- Share URLs — see docs/share-urls.md -->
 <script src="js/sharecode.js"></script>
 <link rel="stylesheet" href="css/14-breadcrumb.css">
+<link rel="stylesheet" href="css/15-ds-shell.css">
+<link rel="stylesheet" href="css/16-sd-shell.css">
 <script src="js/routes.js"></script>
 <!-- Derived breadcrumb (D15 phase 1). This page had exactly one up-affordance,
      a bespoke "‹ All topics" link that only appeared on a topic screen, and no
      route back into the app that owns the nav. The trail below is derived from
      routes.js's `parent` chain, so every unit/sheet/plan/tag screen gets one. -->
 <script src="js/breadcrumb.js"></script>
+<!-- The app shell — the SAME nav + header index.html renders (D15 phase 2).
+     Before this, arriving here dropped the rail and the header entirely: the
+     chrome was written against index.html's DOM ids and could not be mounted
+     twice. It is now driven by the route registry, so this page composes it. -->
+<script src="ds/shell.js"></script>
 <script src="js/infographic-viewer.js"></script>
 <!-- Optional cross-device sync (Supabase). Skipped at runtime if config missing. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -449,7 +456,7 @@
          short one so the title reads in full instead of ellipsing. -->
     <h1><span class="t-full">System Design Drill</span><span class="t-short">System Design</span></h1>
   </button>
-  <nav id="ds-crumbs" class="ds-crumbs" hidden></nav>
+  <div id="ds-shellbar" class="ds-shellbar"></div>
   <span class="spacer"></span>
   <button class="hbtn" id="stats-btn" title="Your stats" aria-label="Your stats" hidden>📊 <span class="lbl">Stats</span></button>
   <a class="hbtn" href="index.html" title="Back to JS drill">JS&nbsp;Drill&nbsp;↗</a>
@@ -1064,7 +1071,6 @@ async function renderTopicHome(t) {
       : `All caught up — no ${nounPl} due for review`;
 
   let html = `
-    <button class="crumb" id="to-topics">‹ All topics</button>
     <section class="hero">
       <p class="book-title">${esc(m.title)}</p>
       <p class="book-sub">${esc(m.subtitle || meta.kind || '')}</p>
@@ -1232,7 +1238,6 @@ async function renderTopicHome(t) {
   }
 
   app.innerHTML = html;
-  document.getElementById('to-topics').addEventListener('click', renderTopics);
   app.querySelectorAll('.ch-card').forEach(el => el.addEventListener('click', () => renderChapterDetail(t, el.dataset.ch)));
   const ce = document.getElementById('catalog-entry');
   if (ce) ce.addEventListener('click', e => {
@@ -1314,7 +1319,6 @@ async function renderChapterDetail(t, chId) {
   }
 
   app.innerHTML = `
-    <button class="crumb" id="to-chapters">‹ ${esc(META[t].title)}</button>
     <div class="detail">
       <div class="detail-tag">${esc(label)}</div>
       <h2 class="detail-title">${esc(ch.title)}</h2>
@@ -1336,7 +1340,6 @@ async function renderChapterDetail(t, chId) {
         <button class="cta ds-btn ds-btn--ghost" id="share-unit" title="Share a link carrying your results, for an AI to drill you from">Share</button>
       </div>
     </div>`;
-  document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
   document.getElementById('drill-all').addEventListener('click', () => startChapter(t, chId));
   document.getElementById('share-unit').addEventListener('click', () => openShareSheet(t, ch));
   app.querySelectorAll('[data-cmp-link]').forEach(el => el.addEventListener('click', e => {
@@ -1384,7 +1387,6 @@ async function renderComponentCatalog(t) {
   };
 
   let html = `
-    <button class="crumb" id="to-chapters">‹ ${esc(META[t] ? META[t].title : 'Building Blocks')}</button>
     <section class="hero">
       <p class="book-title">${esc(CATALOG.title || 'Component Catalog')}</p>
       <p class="book-sub">${esc(CATALOG.subtitle || '')}</p>
@@ -1414,7 +1416,6 @@ async function renderComponentCatalog(t) {
   }
 
   app.innerHTML = html;
-  document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
   app.querySelectorAll('.cmp-card').forEach(el => el.addEventListener('click', e => {
     // Let cmd/ctrl/middle-click open a real new tab; plain click renders in place.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
@@ -1453,7 +1454,6 @@ async function renderComponentDetail(t, id) {
     </a>`).join('');
 
   app.innerHTML = `
-    <button class="crumb" id="to-catalog">‹ Component catalog</button>
     <div class="detail">
       <div class="detail-tag">${esc(cat ? cat.title : 'Component')}</div>
       <h2 class="detail-title">${esc(c.title)}</h2>
@@ -1487,8 +1487,6 @@ async function renderComponentDetail(t, id) {
         ${c.mechanism ? `<a class="cta ds-btn ds-btn--ghost" href="#/design-problems/tag/mechanism/${encodeURIComponent(c.mechanism)}" id="cmp-filter">Filter problems by this</a>` : ''}
       </div>
     </div>`;
-
-  document.getElementById('to-catalog').addEventListener('click', () => renderComponentCatalog(t));
   app.querySelectorAll('[data-cmp]').forEach(el => el.addEventListener('click', e => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault(); renderComponentDetail(t, el.dataset.cmp);
@@ -1572,7 +1570,6 @@ function renderPlanDone(t, plan) {
   const app = document.getElementById('app');
   const pr = planProgress(t, plan);
   app.innerHTML = `
-    <button class="crumb" id="to-chapters">‹ ${esc(META[t].title)}</button>
     <div class="detail">
       <div class="detail-tag">Plan complete</div>
       <h2 class="detail-title">${esc(plan.title)}</h2>
@@ -1583,7 +1580,6 @@ function renderPlanDone(t, plan) {
         <button class="cta ds-btn ds-btn--ghost" id="plan-back">← All ${esc(unitNoun(t, 2))}</button>
       </div>
     </div>`;
-  document.getElementById('to-chapters').addEventListener('click', () => renderTopicHome(t));
   document.getElementById('plan-back').addEventListener('click', () => renderTopicHome(t));
   document.getElementById('plan-again').addEventListener('click', () => startPlanStep(t, plan.id, 0));
   window.scrollTo(0, 0);
@@ -2271,64 +2267,81 @@ window.addEventListener('hashchange', () => {
   applyRoute().catch(() => {});
 });
 
-// ── Breadcrumb (D15 phase 1) ────────────────────────────────────────────────
-// Same renderer as the main app, same registry, different title lookup: ids
-// come from the hash, display names come from the topic registry and the unit
-// manifests. Titles arrive asynchronously (loadTopics / loadMeta), so every
-// render falls back to the id and applyRoute() refreshes once they land.
-if (window.DrillBreadcrumb) {
+// ── App shell (D15 phase 2) ─────────────────────────────────────────────────
+// The SAME nav + header index.html renders, from the same ds/shell.js and the
+// same route registry. This block is only what is specific to THIS page: what
+// its capabilities do, and how to turn its ids into titles and its Leitner
+// boxes into a scoped meter. Nothing here reaches into the shell.
+if (window.DrillShell) {
+  // Titles arrive asynchronously (loadTopics / loadMeta / loadSets), so every
+  // resolver falls back to the id and applyRoute() refreshes once they land.
   const sdTitle = (kind, p) => {
-    if (kind === 'sdTopic') {
-      const t = TOPICS.find(x => x.id === p.topic);
-      return t ? t.title : null;
-    }
-    if (kind === 'sdComponent') {
-      const c = componentById(p.component);
-      return c ? c.title : null;
-    }
+    if (kind === 'sdTopic') { const t = TOPICS.find(x => x.id === p.topic); return t ? t.title : null; }
+    if (kind === 'sdComponent') { const c = componentById(p.component); return c ? c.title : null; }
     if (kind === 'sdUnit' || kind === 'sdSheet') {
       const m = META[p.topic];
       const ch = m && (m.chapters || []).find(c => c.id === p.unit);
       if (kind === 'sdUnit') return ch ? ch.title : null;
-      // A sheet's own title lives in the authored infographic set; the unit
-      // title is already the crumb before it, so the id is the honest label
-      // until the set is loaded.
       const set = INFOGRAPHIC_SETS && INFOGRAPHIC_SETS[`${p.topic}/${p.unit}`];
       const item = set && (set.items || []).find(i => i.id === p.sheet);
       return item ? item.title : null;
     }
     return null;
   };
-  DrillBreadcrumb.mount({
+
+  // Same contract as the main app (docs/information-architecture.md §3 rule 2):
+  // the meter reports the scope named in the breadcrumb beside it. A unit
+  // answers in questions — the grain at which you actually drill here — while
+  // a topic answers in units, which is what its own hero already reports, so
+  // the header can never disagree with the page under it.
+  const sdScope = (kind, p) => {
+    if (kind === 'sdUnit' || kind === 'sdSheet') {
+      const ch = CH[p.topic] && CH[p.topic][p.unit];
+      if (!ch) return null;
+      const st = chapterStats(p.topic, ch);
+      return st.total ? { done: st.mastered, total: st.total } : null;
+    }
+    if (kind === 'sdTopic' || kind === 'sdPlan' || kind === 'sdTag' ||
+        kind === 'sdMixed' || kind === 'sdDue' ||
+        kind === 'sdComponent' || kind === 'sdComponentIndex') {
+      if (!META[p.topic] || !CH[p.topic]) return null;
+      const st = topicUnitStats(p.topic);
+      return st.total ? { done: st.mastered, total: st.total } : null;
+    }
+    return null;
+  };
+
+  // What is due across every topic — the same question the main app's chip
+  // answers, asked of this page's own store.
+  const sdDue = () => {
+    let n = 0;
+    for (const t of TOPICS) {
+      if (!META[t.id] || !CH[t.id]) continue;
+      n += topicStats(t.id).due;
+    }
+    return n;
+  };
+
+  DrillShell.mount({
     page: 'system-design.html',
-    mount: document.getElementById('ds-crumbs'),
-    title: sdTitle,
-    // The topics landing IS this page's root — no crumb, same as Home.
-    hidden: (kind) => kind === 'sdIndex'
+    // Search and Settings have no counterpart here, so the shell renders
+    // neither — a nav that offers what the page cannot do is worse than a
+    // shorter one. Stats IS this page's Progress surface.
+    actions: { progress: () => openStats() },
+    scope: sdScope,
+    due: sdDue,
+    // The topics landing is this page's root — no crumb, same as Home.
+    crumb: { title: sdTitle, hidden: (kind) => kind === 'sdIndex' }
   });
+
   const _applyRoute = applyRoute;
   applyRoute = async function () {
     try { return await _applyRoute.apply(this, arguments); }
-    finally { DrillBreadcrumb.refresh(); }
+    finally { DrillShell.refresh(); }
   };
+  // Grading writes Leitner boxes without navigating; the meter must follow.
+  window.addEventListener('drill:storage-written', () => DrillShell.refresh());
 }
-
-document.getElementById('home-btn').addEventListener('click', renderTopics);
-document.getElementById('stats-btn').addEventListener('click', openStats);
-document.getElementById('stats-modal').addEventListener('click', e => { if (e.target.id === 'stats-modal') closeStats(); });
-
-// Sync re-hydrate: js/sync.js pulls can rewrite jsdrill.systemdesign.v1 in the
-// background (merge or replace). Without this, the page's boot-time in-memory
-// `progress` clobbers the pulled data on its next persist(). Reload the blob
-// and, when the user is between drills, repaint the current screen so due
-// counts/mastery reflect the pull; an active drill session keeps running
-// (grade() re-reads progress.boxes per grade, so nothing is lost).
-window.addEventListener('drill:sync-pulled', () => {
-  progress = load();
-  if (!session) {
-    (curTopic ? renderTopicHome(curTopic) : renderTopics()).catch(() => {});
-  }
-});
 
 applyRoute().catch(err => {
   document.getElementById('app').innerHTML =

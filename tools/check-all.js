@@ -42,7 +42,8 @@ const GATES = [
   { name: 'lesson exercises',    cmd: ['tools/validate-data.js'] },
   { name: 'system design',       cmd: ['tools/validate-system-design.js'] },
   { name: 'crawlable pages',     cmd: ['tools/build-share-pages.js', '--check'], fix: ['tools/build-share-pages.js'] },
-  { name: 'URL contract',        cmd: ['tools/check-url-contract.js'] }
+  { name: 'URL contract',        cmd: ['tools/check-url-contract.js'] },
+  { name: 'shell contract',      cmd: ['tools/check-shell-contract.js'] }
 ];
 
 // The durable browser probes — the ones that are the standing regression net

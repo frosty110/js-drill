@@ -598,7 +598,15 @@ function _handleHashChange() {
   if (!parsed) return;
   if (parsed.mode) { _dispatchModeRoute(parsed.mode, parsed.modeArg); return; }
   if (showLessonNotFoundIfDeadLink(parsed)) return;   // audit F12
-  if (state.currentLessonId !== parsed.lessonId) {
+  // The question is "am I SHOWING this lesson?", not "is this a different
+  // lesson?". They diverge whenever another surface owns the shell while
+  // state.currentLessonId still names the resume target — which is the state
+  // the app boots into: Home is rendered, currentLessonId is already the
+  // CONTINUE lesson, so navigating to that lesson's hash matched the old
+  // guard, skipped selectLesson, and left Home on screen under a URL claiming
+  // otherwise. _lessonIsRenderedSurface() reads the DOM, so it cannot drift
+  // (the same fix audit F10 applied to _updateHash for the same reason).
+  if (state.currentLessonId !== parsed.lessonId || !_lessonIsRenderedSurface()) {
     selectLesson(parsed.lessonId);
   }
   if (parsed.tab && state.currentTab !== parsed.tab) {

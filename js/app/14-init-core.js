@@ -2261,7 +2261,6 @@ function initTodaysPlanModal() {
   }
   document.getElementById('today-btn').addEventListener('click', openTodaysPlan);
   document.getElementById('today-close').addEventListener('click', () => todayModal.style.display = 'none');
-  document.getElementById('topbar-cram-progress').addEventListener('click', () => openTodaysPlan());
   todayModal.addEventListener('click', (e) => {
     if (e.target === todayModal) todayModal.style.display = 'none';
   });

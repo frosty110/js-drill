@@ -17,7 +17,13 @@
 <script src="js/storage.js"></script>
 <!-- Share URLs — see docs/share-urls.md -->
 <script src="js/sharecode.js"></script>
+<link rel="stylesheet" href="css/14-breadcrumb.css">
 <script src="js/routes.js"></script>
+<!-- Derived breadcrumb (D15 phase 1). This page had exactly one up-affordance,
+     a bespoke "‹ All topics" link that only appeared on a topic screen, and no
+     route back into the app that owns the nav. The trail below is derived from
+     routes.js's `parent` chain, so every unit/sheet/plan/tag screen gets one. -->
+<script src="js/breadcrumb.js"></script>
 <script src="js/infographic-viewer.js"></script>
 <!-- Optional cross-device sync (Supabase). Skipped at runtime if config missing. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -473,6 +479,7 @@
          short one so the title reads in full instead of ellipsing. -->
     <h1><span class="t-full">System Design Drill</span><span class="t-short">System Design</span></h1>
   </button>
+  <nav id="ds-crumbs" class="ds-crumbs" hidden></nav>
   <span class="spacer"></span>
   <button class="hbtn" id="stats-btn" title="Your stats" aria-label="Your stats" hidden><span data-icon="chart" data-icon-size="17" aria-hidden="true"></span><span class="lbl">Stats</span></button>
   <a class="hbtn" href="index.html" title="Back to JS drill">JS&nbsp;Drill<span data-icon="external-link" data-icon-size="15" aria-hidden="true"></span></a>
@@ -506,7 +513,7 @@ topic page above.</code></pre>
       <li><a href="sd/ddia/">Designing Data-Intensive Applications</a> — 12 chapters, e.g. <code>sd/ddia/ch01/</code></li>
       <li><a href="sd/interview-method/">The System Design Interview</a> — 7 sections, e.g. <code>sd/interview-method/s01/</code></li>
       <li><a href="sd/components/">Building Blocks</a> — 7 sections, e.g. <code>sd/components/c01/</code></li>
-      <li><a href="sd/design-problems/">Canonical Design Problems</a> — 32 problems, e.g. <code>sd/design-problems/p01/</code></li>
+      <li><a href="sd/design-problems/">Canonical Design Problems</a> — 36 problems, e.g. <code>sd/design-problems/p01/</code></li>
     </ul>
     <p>Indexes: <a href="sd/">sd/</a> (system design) · <a href="p/">p/</a> (coding lessons) ·
        machine-readable: <a href="sitemap.xml">sitemap.xml</a>. Every generated page also
@@ -2327,6 +2334,48 @@ window.addEventListener('hashchange', () => {
 });
 
 mountChromeIcons();
+// ── Breadcrumb (D15 phase 1) ────────────────────────────────────────────────
+// Same renderer as the main app, same registry, different title lookup: ids
+// come from the hash, display names come from the topic registry and the unit
+// manifests. Titles arrive asynchronously (loadTopics / loadMeta), so every
+// render falls back to the id and applyRoute() refreshes once they land.
+if (window.DrillBreadcrumb) {
+  const sdTitle = (kind, p) => {
+    if (kind === 'sdTopic') {
+      const t = TOPICS.find(x => x.id === p.topic);
+      return t ? t.title : null;
+    }
+    if (kind === 'sdComponent') {
+      const c = componentById(p.component);
+      return c ? c.title : null;
+    }
+    if (kind === 'sdUnit' || kind === 'sdSheet') {
+      const m = META[p.topic];
+      const ch = m && (m.chapters || []).find(c => c.id === p.unit);
+      if (kind === 'sdUnit') return ch ? ch.title : null;
+      // A sheet's own title lives in the authored infographic set; the unit
+      // title is already the crumb before it, so the id is the honest label
+      // until the set is loaded.
+      const set = INFOGRAPHIC_SETS && INFOGRAPHIC_SETS[`${p.topic}/${p.unit}`];
+      const item = set && (set.items || []).find(i => i.id === p.sheet);
+      return item ? item.title : null;
+    }
+    return null;
+  };
+  DrillBreadcrumb.mount({
+    page: 'system-design.html',
+    mount: document.getElementById('ds-crumbs'),
+    title: sdTitle,
+    // The topics landing IS this page's root — no crumb, same as Home.
+    hidden: (kind) => kind === 'sdIndex'
+  });
+  const _applyRoute = applyRoute;
+  applyRoute = async function () {
+    try { return await _applyRoute.apply(this, arguments); }
+    finally { DrillBreadcrumb.refresh(); }
+  };
+}
+
 document.getElementById('home-btn').addEventListener('click', renderTopics);
 document.getElementById('stats-btn').addEventListener('click', openStats);
 document.getElementById('stats-modal').addEventListener('click', e => { if (e.target.id === 'stats-modal') closeStats(); });

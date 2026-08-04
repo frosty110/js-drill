@@ -35,8 +35,15 @@
 // An icon-role text glyph is narrower, because '▸' in prose is fine and '▸' as
 // a disclosure marker is not. Two shapes are flagged, both of which mean "this
 // glyph IS the control": a string literal that is nothing but the glyph, and an
-// element whose entire body is the glyph. A comment that mentions one is not a
-// match, and neither is a bullet inside a sentence.
+// element whose entire body is the glyph. A bullet inside a sentence is not a
+// match.
+//
+// Unlike the emoji scan, this one SKIPS comment lines. Prose quotes a glyph to
+// talk about it — js/breadcrumb.js's header comment says the app's old
+// up-navigation was "`×` on a lesson, `Close` in a sheet" — and markdown
+// backticks in a comment are indistinguishable from string delimiters to a
+// regex. Skipping comments costs nothing: a render site is never on a line that
+// starts with one.
 //
 // Neither scan excludes comments for emoji: "this file contains no emoji" is a
 // rule anyone can check with grep and no parser can get wrong, where "no emoji
@@ -116,7 +123,8 @@ const lineOf = (src, index) => src.slice(0, index).split('\n').length;
 //   icon('x')        a page-local wrapper (system-design.html)
 //   data-icon="x"    static markup, filled at boot by mountChromeIcons()
 //   icon: 'x'        a name carried in a registry row (nav items, Home areas,
-//                    Settings rows, data/system-design/topics.json)
+//                    Settings rows) — and every `icon` field in the data/
+//                    registries listed in ICON_REGISTRIES below
 const REF_PATTERNS = [
   /\bdsIcon\(\s*['"]([A-Za-z0-9_-]+)['"]/g,
   /(?<![A-Za-z])icon\(\s*['"]([A-Za-z0-9_-]+)['"]/g,
@@ -148,13 +156,28 @@ for (const rel of files) refs.push(...iconRefs(rel, read(rel)));
 for (const [id, name] of Object.entries(DS_MODE_ICONS || {})) {
   refs.push({ name, rel: 'ds/icons.js', line: 0, note: `DS_MODE_ICONS['${id}']` });
 }
-// Content that names an icon. Registries live in data/, not in a surface file,
-// so a bad name there is invisible until the page renders nothing.
-const TOPICS = path.join(ROOT, 'data', 'system-design', 'topics.json');
-if (fs.existsSync(TOPICS)) {
-  for (const t of JSON.parse(fs.readFileSync(TOPICS, 'utf8')).topics || []) {
-    if (t.icon) refs.push({ name: t.icon, rel: 'data/system-design/topics.json', line: 0, note: `topic "${t.id}"` });
+// Registries in data/ that name an icon. They are content by location and
+// chrome by function, so a bad name there is invisible until the page renders
+// nothing — data/paths.json shipped emoji in its `icon` field for a year past
+// D07 precisely because it wasn't a surface file and nothing looked at it.
+//
+// Every `icon` field anywhere in these files is checked, at any depth, so a new
+// registry row or a new nesting level is covered without touching this list.
+const ICON_REGISTRIES = ['data/system-design/topics.json', 'data/paths.json'];
+function collectIconFields(node, rel, trail) {
+  if (Array.isArray(node)) { node.forEach((v, i) => collectIconFields(v, rel, `${trail}[${i}]`)); return; }
+  if (!node || typeof node !== 'object') return;
+  for (const [k, v] of Object.entries(node)) {
+    if (k === 'icon' && typeof v === 'string' && v) {
+      refs.push({ name: v, rel, line: 0, note: `${trail}.icon${node.id ? ` ("${node.id}")` : ''}` });
+    } else {
+      collectIconFields(v, rel, trail ? `${trail}.${k}` : k);
+    }
   }
+}
+for (const rel of ICON_REGISTRIES) {
+  const abs = path.join(ROOT, rel);
+  if (fs.existsSync(abs)) collectIconFields(JSON.parse(fs.readFileSync(abs, 'utf8')), rel, '');
 }
 const unknown = refs.filter(r => !known.has(r.name));
 if (unknown.length) {
@@ -206,16 +229,21 @@ if (emojiHits.length) {
 }
 
 // 4 ── no text glyph standing in for an icon
+// Line-by-line rather than whole-file, so a comment can quote a glyph in
+// backticks without reading as a string literal (see the header note).
+const IS_COMMENT = (l) => /^\s*(\/\/|\*|\/\*|<!--)/.test(l);
 const standinHits = [];
 for (const rel of files) {
   if (STANDIN_EXEMPT.has(rel)) continue;
-  const src = read(rel);
-  STANDIN.lastIndex = 0;
-  let m;
-  while ((m = STANDIN.exec(src))) {
-    const g = m[1] || m[2];
-    standinHits.push(`    ${rel}:${lineOf(src, m.index)}  ${g}  →  dsIcon('${STANDIN_ROLES[g]}')`);
-  }
+  read(rel).split('\n').forEach((line, i) => {
+    if (IS_COMMENT(line)) return;
+    STANDIN.lastIndex = 0;
+    let m;
+    while ((m = STANDIN.exec(line))) {
+      const g = m[1] || m[2];
+      standinHits.push(`    ${rel}:${i + 1}  ${g}  →  dsIcon('${STANDIN_ROLES[g]}')`);
+    }
+  });
 }
 if (standinHits.length) {
   failures.push(

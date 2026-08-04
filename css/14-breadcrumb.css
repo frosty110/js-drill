@@ -1,0 +1,80 @@
+/* ── 14: breadcrumb (D15 phase 1) ─────────────────────────────────────────────
+   The derived trail from js/breadcrumb.js, rendered in the topbar on both
+   index.html and system-design.html.
+
+   Phone budget (docs/information-architecture.md §3 rule 4): the crumb gets
+   the header's left side and must never push the row into horizontal scroll.
+   Middle crumbs shrink before the leaf does — the leaf is what tells you where
+   you are, the ancestors are what let you climb — and the whole strip is a
+   single non-wrapping line. Tokens only. */
+
+.ds-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;                 /* lets the flex parent actually shrink it */
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.ds-crumbs[hidden] { display: none; }
+
+.ds-crumb {
+  color: var(--ds-text-dim, #9aa0aa);
+  text-decoration: none;
+  padding: 6px 4px;
+  border-radius: var(--ds-r-sm, 6px);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Ancestors yield space first; the leaf below opts out. */
+  flex: 0 1 auto;
+}
+a.ds-crumb:hover { color: var(--ds-text, #e6e8ec); text-decoration: none; }
+a.ds-crumb:focus-visible {
+  outline: 2px solid var(--ds-accent, #f5b62b);
+  outline-offset: 1px;
+}
+
+.ds-crumb--leaf {
+  color: var(--ds-text, #e6e8ec);
+  font-weight: 600;
+  flex-shrink: 0;               /* never truncate where-you-are */
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-crumb__sep {
+  color: var(--ds-text-faint, #6b7079);
+  padding: 0 1px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+}
+
+/* ≤767px — the phone carries the leaf and its immediate parent; deeper
+   ancestors collapse to the root crumb, which is always reachable. Tapping the
+   root is the "get me out" affordance the walk found missing. */
+@media (max-width: 767px) {
+  .ds-crumbs { font-size: 12px; }
+  .ds-crumb {
+    max-width: 8.5em;
+    /* 44px tap floor (guide rule 2) without growing the header: the padding is
+       vertical-only so the row height comes from the topbar, and the hit area
+       is extended by the pseudo-element below. */
+    position: relative;
+  }
+  a.ds-crumb::after {
+    content: '';
+    position: absolute;
+    inset: -14px -2px;
+    min-height: var(--ds-tap, 44px);
+  }
+  /* Anything between the root and the last two crumbs is noise on a phone. */
+  .ds-crumbs > .ds-crumb:not(.ds-crumb--root):not(.ds-crumb--leaf):nth-last-of-type(n+3),
+  .ds-crumbs > .ds-crumb:not(.ds-crumb--root):not(.ds-crumb--leaf):nth-last-of-type(n+3) + .ds-crumb__sep {
+    display: none;
+  }
+}

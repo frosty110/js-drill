@@ -1022,7 +1022,7 @@ function openPathModal(opts = {}) {
     return `<button data-path-id="${escapeHtml(p.id)}" style="text-align:left;padding:14px 16px;border-radius:8px;background:${bg};border:1px solid ${border};color:#eef0f2;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
       ${recommendedBanner}
       <span style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <span style="font-weight:600;font-size:14px;">${escapeHtml(p.icon || '')} ${escapeHtml(p.label)}</span>
+        <span style="font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px;">${p.icon ? dsIcon(p.icon, 15) : ''}${escapeHtml(p.label)}</span>
         ${tag}
       </span>
       ${blurbHtml}

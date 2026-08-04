@@ -528,7 +528,20 @@ function _lessonIsRenderedSurface() {
   return !!(shell && shell.querySelector('[data-lesson-root], [data-lesson-loading]'));
 }
 
-function _updateHash() {
+// `push` = this was a NAVIGATION (a different place); everything else is view
+// state on the place you are already at.
+//
+// docs/information-architecture.md §5 rule 3. Every write here used to be a
+// replaceState, which is why the browser's own Back button could not retrace
+// the hierarchy — the single affordance the phone-first user reaches for most.
+// A measured walk went five levels into System Design and one Back left the
+// site, because the whole excursion had collapsed into one history entry.
+//
+// A tab is deliberately NOT a navigation: it is one lesson seen six ways (the
+// url-contract calls it view state and the static twin carries it as an
+// anchor), so tapping through tabs must not bury the screen you came from
+// under six entries you have to press Back through.
+function _updateHash(push) {
   if (!state.currentLessonId) return;
   // audit F10: _updateHash used to write the current lesson's hash whenever
   // state.currentLessonId was set, regardless of what was actually on screen.
@@ -548,7 +561,10 @@ function _updateHash() {
     h += '/' + state.currentTab;
   }
   if (window.location.hash !== h) {
-    try { history.replaceState(null, '', h); } catch (_) { window.location.hash = h; }
+    try {
+      if (push) history.pushState(null, '', h);
+      else history.replaceState(null, '', h);
+    } catch (_) { window.location.hash = h; }
   }
 }
 
@@ -642,7 +658,7 @@ function selectLesson(id) {
   saveProgress();
   renderSidebar();
   renderLesson();
-  _updateHash();
+  _updateHash(true);
   if (window.matchMedia('(max-width: 767px)').matches) {
     document.body.classList.remove('sidebar-open');
   }

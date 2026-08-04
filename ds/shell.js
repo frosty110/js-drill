@@ -202,6 +202,21 @@
     if (root.DrillBreadcrumb) root.DrillBreadcrumb.refresh();
   }
 
+  // ── Navigating dismisses what was open over you ───────────────────────────
+  // Measured: tapping Progress while the Practice sheet was open swapped the
+  // page underneath and left the sheet on top of it. An overlay is scoped to
+  // the surface it was opened from; outliving that surface makes it a second,
+  // stale screen the user has to dismiss to discover where they now are.
+  //
+  // The shell closes the ds/ overlays because those are its own components. It
+  // does NOT go hunting for a page's bespoke modals — that is the coupling this
+  // file exists to prevent — so it announces the navigation and each page
+  // closes its own. (docs/information-architecture.md §5 rule 4.)
+  function dismissOverlays() {
+    document.querySelectorAll('.ds-scrim.is-open').forEach(el => el.classList.remove('is-open'));
+    root.dispatchEvent(new CustomEvent('drill:navigated'));
+  }
+
   function mount(cfg) {
     CFG.page = cfg.page;
     CFG.actions = cfg.actions || {};
@@ -232,8 +247,8 @@
 
     renderNav();
     renderHeader();
-    root.addEventListener('hashchange', refresh);
+    root.addEventListener('hashchange', () => { dismissOverlays(); refresh(); });
   }
 
-  root.DrillShell = { mount, refresh, DESTINATIONS, AUX, currentKey };
+  root.DrillShell = { mount, refresh, dismissOverlays, DESTINATIONS, AUX, currentKey };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -133,6 +133,58 @@ const CRUMBS = `(() => {
   s.assert(!/^load-balancer$/.test(c.items[4].label), `sd: the component crumb is a title, not an id (got "${c.items[4].label}")`);
   await s.snap('sd-component');
 
+  // Back retraces HERE too — this page was the worst case: every setRoute was a
+  // replaceState, so topics → topic → unit → sheet was one history entry and a
+  // single Back jumped clean out of the page.
+  await go('#/ddia', 1500);
+  await go('#/ddia/ch01', 1600);
+  await s.eval('history.back()'); await s.sleep(1300);
+  let sdh = await s.eval('location.hash');
+  s.assert(/^#\/ddia$/.test(sdh), `sd: back retraces unit → topic (got ${sdh})`);
+  // A second Back must still be INSIDE this page. Asserting a specific hash
+  // here would be asserting the probe's own earlier route, not the contract;
+  // what the old replaceState behaviour broke was staying on the page at all.
+  await s.eval('history.back()'); await s.sleep(1300);
+  const sdPath = await s.eval('location.pathname');
+  s.assert(/system-design\.html$/.test(sdPath), `sd: a second back is still inside the page (got ${sdPath})`);
+
+  // ── Navigation correctness (D15 phase 4) ────────────────────────────────
+  // The two defects the original walk measured, each now an assertion.
+  await s.setViewport({ width: 1280, height: 900, mobile: false });
+  await s.eval(`location.href = ${JSON.stringify(URL_ARG)}`);
+  await s.sleep(2400);
+
+  // Back retraces the hierarchy. Every write used to be a replaceState, so a
+  // five-level excursion collapsed into one entry and one Back left the site.
+  await go('#/m/browse', 1300);
+  await go('#/two-sum/L1', 1700);
+  await go('#/valid-parentheses/L1', 1700);
+  await s.eval('history.back()'); await s.sleep(1400);
+  let h = await s.eval('location.hash');
+  s.assert(/two-sum/.test(h), `back retraces to the previous lesson (got ${h})`);
+  await s.eval('history.back()'); await s.sleep(1400);
+  h = await s.eval('location.hash');
+  s.assert(/\/m\/browse/.test(h), `back again retraces to Browse, not out of the app (got ${h})`);
+
+  // A tab is view state, not a place: six tabs must not bury the screen you
+  // came from under six entries.
+  await go('#/two-sum/L1', 1600);
+  const before = await s.eval('history.length');
+  await s.eval(`(()=>{const t=[...document.querySelectorAll('.tab-btn,[data-tab]')].find(b=>/L2/.test(b.textContent)); if(t)t.click();})()`);
+  await s.sleep(900);
+  const after = await s.eval('history.length');
+  s.assert(after === before, `switching tabs adds no history entry (${before} → ${after})`);
+
+  // An overlay is scoped to the surface it was opened from.
+  await go('#/m/browse', 1400);
+  await s.eval(`document.getElementById('practice-launcher-btn').click()`);
+  await s.sleep(800);
+  const opened = await s.eval(`!!document.querySelector('#practice-launcher.is-open')`);
+  s.assert(opened, 'the launcher sheet opens');
+  await go('#/m/dashboard', 1500);
+  const survived = await s.eval(`!!document.querySelector('#practice-launcher.is-open')`);
+  s.assert(!survived, 'navigating dismisses the sheet instead of leaving it over the new surface');
+
   await s.close();
   const r = s.report();
   process.exit(r.failed || r.errors ? 1 : 0);

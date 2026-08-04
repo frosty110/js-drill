@@ -2125,10 +2125,20 @@ document.addEventListener('keydown', e => {
 // ============================================================================
 let _routeSuppress = false;
 
-function setRoute(hash) {
+// Navigation by default (docs/information-architecture.md §5 rule 3). Every
+// call used to replaceState, so this page's whole hierarchy — topics → topic →
+// unit → sheet — collapsed into ONE history entry: a measured walk pressed
+// Back from a unit and landed back in the main app, then pressed it again and
+// left the site. On a phone, Back IS the navigation.
+//
+// `opts.replace` is for the one case that is not a new place: dismissing a
+// full-screen sheet restores the URL of the unit you were already on, and
+// pushing there would make Back re-open what you just closed.
+function setRoute(hash, opts) {
   if (window.location.hash === hash) return;
   _routeSuppress = true;
-  try { history.replaceState(null, '', hash); } catch (_) { window.location.hash = hash; }
+  const write = (opts && opts.replace) ? history.replaceState : history.pushState;
+  try { write.call(history, null, '', hash); } catch (_) { window.location.hash = hash; }
   // The replaceState above doesn't fire hashchange, but the fallback does —
   // release the guard on the next tick either way.
   setTimeout(() => { _routeSuppress = false; }, 0);
@@ -2259,7 +2269,7 @@ document.addEventListener('drill-infographic-open', e => {
 });
 document.addEventListener('drill-infographic-close', () => {
   if (!curTopic || !curUnitForGraphic) return;
-  setRoute(`#/${curTopic}/${curUnitForGraphic}`);
+  setRoute(`#/${curTopic}/${curUnitForGraphic}`, { replace: true });
 });
 
 window.addEventListener('hashchange', () => {

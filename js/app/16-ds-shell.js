@@ -140,6 +140,17 @@
     // Passing a level changes the meter under the user's cursor; storage is the
     // one signal every write path already goes through (js/storage.js).
     window.addEventListener('drill:storage-written', () => DrillShell.refresh());
+
+    // This page's overlays predate ds/ and are plain `.modal` elements toggled
+    // by inline display, so the shell cannot know about them — it announces the
+    // navigation and we close our own (docs/information-architecture.md §5
+    // rule 4). Without this, a sheet opened over Browse was still on top after
+    // navigating to Progress.
+    window.addEventListener('drill:navigated', () => {
+      document.querySelectorAll('.modal').forEach(m => {
+        if (m.style.display && m.style.display !== 'none') m.style.display = 'none';
+      });
+    });
   }
 
   // Topbar chrome: swap the emoji glyphs for the ds stroke icon set (D07).

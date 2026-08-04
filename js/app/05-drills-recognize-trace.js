@@ -45,8 +45,8 @@ async function startRecognizeSession() {
     shell.innerHTML = `
       <div class="recognize-shell">
         <div class="recognize-header">
-          <span>🔎 Recognize · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-recognize">✕ Exit</button>
+          <span>${dsIcon('scan', 15)} Recognize · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-recognize">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="recognize-prompt">${escapeHtml(card.prompt)}</div>
         <div class="recognize-options">
@@ -83,8 +83,8 @@ async function startRecognizeSession() {
         });
         const fb = shell.querySelector('[data-recognize-feedback]');
         fb.innerHTML = wasCorrect
-          ? `<span class="recognize-good">✓ ${escapeHtml(card.correct)}</span>`
-          : `<span class="recognize-bad">✗ Was: ${escapeHtml(card.correct)}</span>`;
+          ? `<span class="recognize-good">${dsIcon('check', 14)}${escapeHtml(card.correct)}</span>`
+          : `<span class="recognize-bad">${dsIcon('alert', 14)} Was: ${escapeHtml(card.correct)}</span>`;
         setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 700 : 1400);
       });
     });
@@ -95,14 +95,14 @@ async function startRecognizeSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell">
-        <div class="recognize-header"><span>🔎 Recognize · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('scan', 15)} Recognize · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} correct</div>
           <div class="recognize-summary-line">Median time per card: ${(median / 1000).toFixed(1)}s</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.recognize.correct} / ${state.recognize.attempts} (${state.recognize.attempts > 0 ? Math.round(state.recognize.correct / state.recognize.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="recognize-again">🔎 Another session</button>
+            <button class="primary" data-action="recognize-again">${dsIcon('scan', 15)} Another session</button>
             <button class="secondary" data-action="recognize-done">Done</button>
           </div>
         </div>
@@ -174,25 +174,25 @@ async function startBigOSession() {
   // letter-chip + 7-sec-timer + streak mechanics. Passing the prebuilt deck
   // skips Rapid-Fire's full-corpus preload (heavier) and shorter session
   // length matches the denser concentration of complexity Qs.
-  return _runRapidFireWithDeck(deck, { label: '⏱ Big-O', emoji: '⏱' });
+  return _runRapidFireWithDeck(deck, { label: dsIcon('clock', 15) + ' Big-O', emoji: '⏱' });
 }
 
-// iter 83→: 🎯 Crux — forced-choice recall of the ONE key trick per problem.
-// Evolved from the old 🎰 Gotcha Roulette (honor-system "knew it / didn't"
+// iter 83→: Crux — forced-choice recall of the ONE key trick per problem.
+// Evolved from the old Gotcha Roulette (honor-system "knew it / didn't"
 // recognition over reference.notes[], audit 12/21 — recognition only, no
 // verifiable retrieval). This is a real retrieval test over the authored
 // `reference.crux` field (the single insight that unlocks the optimal
 // solution). Two modes:
 //   Easy — 4-option MC. Distractors are HYBRID: the lesson's own authored
 //          `reference.cruxDistractors` first, padded as needed from OTHER
-//          lessons' real cruxes (same section preferred → most confusable).
+// lessons' real cruxes (same section preferred → most confusable).
 //          Believable wrong answers by construction (every pad is a real trick
 //          from an adjacent problem). Forced pick before reveal.
 //   Hard — free recall. Type the trick from memory, then "Copy for AI grading"
 //          exports {problem + your answer + canonical crux} to the clipboard
 //          for an LLM to grade (reuses copyTextToClipboard from slice 12a, the
 //          same BYOK bridge as the L1 "Ask AI to teach me" export). Reveal +
-//          honest self-grade (✓/✗) closes the loop into stats/weakness.
+// honest self-grade (✓/✗) closes the loop into stats/weakness.
 // Corpus: `reference.crux` across patterns/applied lessons (53 seeded; grows as
 // more lessons author the field). `state.gotcha` stats are reused as-is.
 const CRUX_DECK_LEN = 8;
@@ -290,17 +290,17 @@ async function startCruxSession() {
   shell.innerHTML = `
     <div class="recognize-shell crux-shell">
       <div class="recognize-header">
-        <span>🎯 Crux — recall the key trick</span>
-        <button class="recognize-exit" data-action="exit-crux">✕ Exit</button>
+        <span>${dsIcon('target', 15)} Crux — recall the key trick</span>
+        <button class="recognize-exit" data-action="exit-crux">${dsIcon('x', 13)} Exit</button>
       </div>
       <div class="crux-mode-intro">One problem at a time — recall <strong>the</strong> insight that unlocks the optimal solution. Pick a mode:</div>
       <div class="crux-mode-pick">
         <button class="crux-mode-btn" data-mode="easy">
-          <span class="crux-mode-title">🟢 Easy — Multiple choice</span>
+          <span class="crux-mode-title">${dsIcon('check-circle', 15)} Easy — Multiple choice</span>
           <span class="crux-mode-sub">Pick the right trick from 4 believable options</span>
         </button>
         <button class="crux-mode-btn" data-mode="hard">
-          <span class="crux-mode-title">🔴 Hard — Describe it</span>
+          <span class="crux-mode-title">${dsIcon('alert', 15)} Hard — Describe it</span>
           <span class="crux-mode-sub">Type the trick from memory · export to an AI to grade</span>
         </button>
       </div>
@@ -379,8 +379,8 @@ function _runCruxDeck(pool, mode) {
     shell.innerHTML = `
       <div class="recognize-shell crux-shell">
         <div class="recognize-header">
-          <span>🎯 Crux · ${idx + 1} of ${deck.length} · ${modeLabel}</span>
-          <button class="recognize-exit" data-action="exit-crux">✕ Exit</button>
+          <span>${dsIcon('target', 15)} Crux · ${idx + 1} of ${deck.length} · ${modeLabel}</span>
+          <button class="recognize-exit" data-action="exit-crux">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="crux-q-label">What's the key insight that unlocks the optimal solution?</div>
         <div class="crux-prompt">${escapeHtml(card.prompt)}</div>
@@ -407,7 +407,7 @@ function _runCruxDeck(pool, mode) {
         });
         const fb = shell.querySelector('[data-crux-feedback]');
         fb.innerHTML = `
-          <div class="crux-verdict ${wasCorrect ? 'crux-verdict-good' : 'crux-verdict-bad'}">${wasCorrect ? '✓ That\'s the move.' : '✗ Not the key trick.'}</div>
+          <div class="crux-verdict ${wasCorrect ? 'crux-verdict-good' : 'crux-verdict-bad'}">${wasCorrect ? dsIcon('check', 14) + ' That\'s the move.' : dsIcon('alert', 14) + ' Not the key trick.'}</div>
           ${revealHtml(card, { showCrux: false })}
         `;
         wireReveal(fb, card);
@@ -419,14 +419,14 @@ function _runCruxDeck(pool, mode) {
     shell.innerHTML = `
       <div class="recognize-shell crux-shell">
         <div class="recognize-header">
-          <span>🎯 Crux · ${idx + 1} of ${deck.length} · ${modeLabel}</span>
-          <button class="recognize-exit" data-action="exit-crux">✕ Exit</button>
+          <span>${dsIcon('target', 15)} Crux · ${idx + 1} of ${deck.length} · ${modeLabel}</span>
+          <button class="recognize-exit" data-action="exit-crux">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="crux-q-label">Recall the key trick from memory — what's the one insight?</div>
         <div class="crux-prompt">${escapeHtml(card.prompt)}</div>
         <textarea class="crux-textarea" placeholder="Type the insight that makes the optimal solution work…" rows="3"></textarea>
         <div class="crux-hard-actions">
-          <button class="recognize-opt crux-hard-btn" data-action="crux-copy">📋 Copy for AI grading</button>
+          <button class="recognize-opt crux-hard-btn" data-action="crux-copy">${dsIcon('clipboard', 15)} Copy for AI grading</button>
           <button class="recognize-opt crux-hard-btn crux-hard-reveal" data-action="crux-reveal">Reveal answer →</button>
         </div>
         <div class="recognize-feedback" data-crux-feedback></div>
@@ -438,7 +438,7 @@ function _runCruxDeck(pool, mode) {
     copyBtn.addEventListener('click', async () => {
       const ok = await copyTextToClipboard(_cruxBuildAiPrompt(card, ta.value));
       const orig = copyBtn.innerHTML;
-      copyBtn.innerHTML = ok ? '✓ Copied — paste into AI' : '✗ Copy failed';
+      copyBtn.innerHTML = ok ? dsIcon('check', 14) + ' Copied — paste into AI' : dsIcon('alert', 14) + ' Copy failed';
       setTimeout(() => { copyBtn.innerHTML = orig; }, 1800);
     });
     let revealed = false;
@@ -451,8 +451,8 @@ function _runCruxDeck(pool, mode) {
         ${revealHtml(card, { showCrux: true })}
         <div class="crux-selfgrade">
           <span class="crux-selfgrade-label">How close were you?</span>
-          <button class="recognize-opt crux-selfgrade-btn" data-grade="hit">✓ Nailed it</button>
-          <button class="recognize-opt crux-selfgrade-btn" data-grade="miss">✗ Missed it</button>
+          <button class="recognize-opt crux-selfgrade-btn" data-grade="hit">${dsIcon('check', 14)} Nailed it</button>
+          <button class="recognize-opt crux-selfgrade-btn" data-grade="miss">${dsIcon('alert', 14)} Missed it</button>
         </div>
       `;
       wireReveal(fb, card);
@@ -473,13 +473,13 @@ function _runCruxDeck(pool, mode) {
     const pct = Math.round((knew / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell crux-shell">
-        <div class="recognize-header"><span>🎯 Crux · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('target', 15)} Crux · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${knew} of ${deck.length} tricks recalled · ${deck.length - knew} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.gotcha.correct} / ${state.gotcha.attempts} (${state.gotcha.attempts > 0 ? Math.round(state.gotcha.correct / state.gotcha.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="crux-again">🎯 Another round</button>
+            <button class="primary" data-action="crux-again">${dsIcon('target', 15)} Another round</button>
             <button class="secondary" data-action="crux-done">Done</button>
           </div>
         </div>
@@ -491,7 +491,7 @@ function _runCruxDeck(pool, mode) {
   renderCard();
 }
 
-// iter 91: 🎬 Conversation Drill — interview-arc classifier over the 99 Patterns
+// iter 91: Conversation Drill — interview-arc classifier over the 99 Patterns
 // + Applied lessons' `conversation.sections[]` corpus. Each card shows ONE
 // .say paragraph with the section title HIDDEN; user taps which of the 6
 // fixed interview-phase types it is (Restate / Brute force / Spot pattern /
@@ -504,12 +504,12 @@ function _runCruxDeck(pool, mode) {
 const CONV_DRILL_DECK_LEN = 10;
 const CONV_DRILL_MIN_SAY_LEN = 100;
 const CONV_DRILL_PHASES = [
-  { idx: 1, label: '🎯 Restate', hint: 'Clarify the problem' },
-  { idx: 2, label: '🧱 Brute force', hint: 'Naive solution first' },
-  { idx: 3, label: '💡 Spot pattern', hint: 'Identify the technique' },
-  { idx: 4, label: '🔍 Trace', hint: 'Walk through an example' },
-  { idx: 5, label: '⚠️ Edge cases', hint: 'Boundary conditions' },
-  { idx: 6, label: '📏 Complexity', hint: 'Big-O & wrap-up' }
+  { idx: 1, label: dsIcon('target', 15) + ' Restate', hint: 'Clarify the problem' },
+  { idx: 2, label: dsIcon('blocks', 15) + ' Brute force', hint: 'Naive solution first' },
+  { idx: 3, label: dsIcon('lightbulb', 15) + ' Spot pattern', hint: 'Identify the technique' },
+  { idx: 4, label: dsIcon('search', 15) + ' Trace', hint: 'Walk through an example' },
+  { idx: 5, label: dsIcon('alert', 15) + ' Edge cases', hint: 'Boundary conditions' },
+  { idx: 6, label: dsIcon('gauge', 15) + ' Complexity', hint: 'Big-O & wrap-up' }
 ];
 function _convDrillPhaseIdx(title) {
   // Titles like "1. Restate & clarify" / "3. Spot the pattern — API shape…".
@@ -584,8 +584,8 @@ async function startConvDrillSession() {
     shell.innerHTML = `
       <div class="recognize-shell conv-drill-shell">
         <div class="recognize-header">
-          <span>🎬 Conv · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-conv">✕ Exit</button>
+          <span>${dsIcon('message', 15)} Conv · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-conv">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="conv-drill-tag">Which phase of the interview is this?</div>
         <div class="conv-drill-say">${escapeHtml(card.say)}</div>
@@ -643,13 +643,13 @@ async function startConvDrillSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell conv-drill-shell">
-        <div class="recognize-header"><span>🎬 Conv · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('message', 15)} Conv · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} phases identified · ${deck.length - correct} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.convDrill.correct} / ${state.convDrill.attempts} (${state.convDrill.attempts > 0 ? Math.round(state.convDrill.correct / state.convDrill.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="conv-again">🎬 Another session</button>
+            <button class="primary" data-action="conv-again">${dsIcon('message', 15)} Another session</button>
             <button class="secondary" data-action="conv-done">Done</button>
           </div>
         </div>
@@ -661,13 +661,13 @@ async function startConvDrillSession() {
   renderCard();
 }
 
-// iter 93: 🧬 Trace-Hop — pick-the-middle-state mobile quiz over
+// iter 93: Trace-Hop — pick-the-middle-state mobile quiz over
 // `walkthrough.trace` yields. Each card shows 3 CONSECUTIVE trace frames
 // (K-1, K, K+1) with the MIDDLE frame's `state` panel BLANKED; user taps
 // which of 4 state-objects fits there. Distractors are sampled from OTHER
 // frames of the SAME trace (not other lessons) so the user reasons about
 // "which step belongs here" rather than type-matching. Distinct from
-// 🪲 Walkthrough Bug-Hunt (which mutates a state value and asks "which row
+// Walkthrough Bug-Hunt (which mutates a state value and asks "which row
 // is corrupted") — Trace-Hop tests positional state recall, the mental
 // model the rusty engineer needs to WRITE the code from scratch.
 // From roadmap.md iter-90 #2 (vision iter — 2nd promoted entry). Reuses
@@ -791,8 +791,8 @@ async function startTraceHopSession() {
     shell.innerHTML = `
       <div class="recognize-shell trace-hop-shell">
         <div class="recognize-header">
-          <span>🧬 Trace-Hop · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-trace-hop">✕ Exit</button>
+          <span>${dsIcon('activity', 15)} Trace-Hop · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-trace-hop">${dsIcon('x', 13)} Exit</button>
         </div>
         ${exampleLine}
         <div class="trace-hop-tag">Which state fits the middle frame?</div>
@@ -848,7 +848,7 @@ async function startTraceHopSession() {
         if (fb) {
           fb.innerHTML = `
             <div class="trace-hop-reveal">
-              <div class="trace-hop-reveal-title">${wasRight ? '✓ Got it' : '✗ The middle state was option ' + String.fromCharCode(65 + card.options.findIndex(o => o.isCorrect))}</div>
+              <div class="trace-hop-reveal-title">${wasRight ? dsIcon('check', 14) + ' Got it' : dsIcon('alert', 14) + ' The middle state was option ' + String.fromCharCode(65 + card.options.findIndex(o => o.isCorrect))}</div>
               <div class="trace-hop-reveal-lesson">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
               <button class="trace-hop-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
               <button class="trace-hop-next" data-action="trace-hop-next">Next card</button>
@@ -868,13 +868,13 @@ async function startTraceHopSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell trace-hop-shell">
-        <div class="recognize-header"><span>🧬 Trace-Hop · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('activity', 15)} Trace-Hop · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} states identified · ${deck.length - correct} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.traceHop.correct} / ${state.traceHop.attempts} (${state.traceHop.attempts > 0 ? Math.round(state.traceHop.correct / state.traceHop.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="trace-hop-again">🧬 Another session</button>
+            <button class="primary" data-action="trace-hop-again">${dsIcon('activity', 15)} Another session</button>
             <button class="secondary" data-action="trace-hop-done">Done</button>
           </div>
         </div>
@@ -886,11 +886,11 @@ async function startTraceHopSession() {
   renderCard();
 }
 
-// iter 97: 📝 Notes Cloze Tap-Drill — cloze-MC over `reference.notes[]` text.
+// iter 97: Notes Cloze Tap-Drill — cloze-MC over `reference.notes[]` text.
 // Each card shows ONE note string with one keyword blanked + 4 tap options.
 // Distractors sampled from notes in OTHER lessons (preferring same section
 // for plausibility). Third recall direction over the notes corpus —
-// distinct from 🎰 Gotcha (whole-note yes/no recognition) and 🃏 Flash
+// distinct from Gotcha (whole-note yes/no recognition) and Flash
 // (canonical-code cloze). Forces actual keyword recall (not just affirm
 // familiarity), which is closer to interview pressure. From roadmap.md
 // iter-95 #1 (vision iter top promoted entry).
@@ -1057,8 +1057,8 @@ async function startNotesDrillSession() {
     shell.innerHTML = `
       <div class="recognize-shell notes-drill-shell">
         <div class="recognize-header">
-          <span>📝 Notes · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-notes">✕ Exit</button>
+          <span>${dsIcon('file-text', 15)} Notes · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-notes">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="notes-drill-tag">Which word fits the blank?</div>
         <div class="notes-drill-note">${escapeHtml(card.prefix)}<span class="notes-drill-blank">___</span>${escapeHtml(card.suffix)}</div>
@@ -1117,13 +1117,13 @@ async function startNotesDrillSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell notes-drill-shell">
-        <div class="recognize-header"><span>📝 Notes · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('file-text', 15)} Notes · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} keywords recalled · ${deck.length - correct} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.notesDrill.correct} / ${state.notesDrill.attempts} (${state.notesDrill.attempts > 0 ? Math.round(state.notesDrill.correct / state.notesDrill.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="notes-again">📝 Another session</button>
+            <button class="primary" data-action="notes-again">${dsIcon('file-text', 15)} Another session</button>
             <button class="secondary" data-action="notes-done">Done</button>
           </div>
         </div>
@@ -1135,7 +1135,7 @@ async function startNotesDrillSession() {
   renderCard();
 }
 
-// iter 98: 🪐 Mechanic Constellation — multi-select recall over the
+// iter 98: Mechanic Constellation — multi-select recall over the
 // `mechanics[]` tag. Each card shows ONE mechanic name + 6 lesson titles
 // (3 tagged with the mechanic, 3 not); user picks 3 they think are
 // tagged. Per-tap immediate-feedback (mirrors iter-93/97 pattern):

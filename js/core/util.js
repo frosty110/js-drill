@@ -210,7 +210,7 @@
   //    `.text` matches any mechanic label/id are preferred — pure shuffle
   //    falls back when no mechanic match exists.
   //  - When `opts.onRate` is a callback, each revealed blur span renders
-  //    a tiny 👍/👎 chip pair after reveal; the user's tap calls
+  //    a tiny thumbs-up/thumbs-down chip pair after reveal; the user's tap calls
   //    `onRate('knew' | 'blanked')`. The Reference tab uses this to
   //    persist `state.flash[lessonId]` counters and flag weakness on
   //    session-threshold blanks.
@@ -277,10 +277,12 @@
         const reveal = () => {
           span.classList.add('revealed');
           if (typeof opts.onRate === 'function' && !rated) {
-            // Inject a tiny 👍 / 👎 chip pair right after the token.
+            // Inject a tiny thumbs-up / thumbs-down chip pair after the token.
             const chips = document.createElement('span');
             chips.className = 'flash-rate-chips';
-            chips.innerHTML = '<button type="button" class="flash-rate" data-rate="knew" title="Recalled it">👍</button><button type="button" class="flash-rate" data-rate="blanked" title="Blanked — flag for review">👎</button>';
+            chips.innerHTML =
+              `<button type="button" class="flash-rate" data-rate="knew" title="Recalled it" aria-label="Recalled it">${dsIcon('thumbs-up', 14)}</button>` +
+              `<button type="button" class="flash-rate" data-rate="blanked" title="Blanked — flag for review" aria-label="Blanked — flag for review">${dsIcon('thumbs-down', 14)}</button>`;
             chips.addEventListener('click', (e) => {
               const btn = e.target.closest('.flash-rate');
               if (!btn || rated) return;

@@ -13,7 +13,7 @@
 //                at the grain of a single question. Everything else in
 //                state.progress is level-grained ('L1': 'passed'), which can't
 //                answer "which distractor pulled me".
-//   2. CODEC     lesson state → share code, via js/sharecode.js. The code is
+// 2. CODEC     lesson state → share code, via js/sharecode.js. The code is
 //                built ON DEMAND at click time from live state: no share
 //                records, no cache, no server, nothing to invalidate.
 //   3. UI        the share sheet — Copy link / Copy for AI.
@@ -200,8 +200,8 @@ function openShareSheet(lessonId) {
         ? `Your results: <code>${escapeHtml(code)}</code> — uppercase is a right answer, lowercase is the wrong option you picked, <code>-</code> is unanswered.`
         : `You haven't answered anything here yet, so the link carries the lesson only.`}</p>
       <div class="share-actions">
-        <button class="ds-btn ds-btn--primary ds-btn--block" data-share-copy>${dsIcon('link', 15)}Copy link</button>
-        <button class="ds-btn ds-btn--block" data-share-ai>${dsIcon('sparkles', 15)}Copy for AI${typed && typed.code ? ' (with my code)' : ''}</button>
+        <button class="ds-btn ds-btn--primary ds-btn--block" data-share-copy>${dsIcon('link', 15)} Copy link</button>
+        <button class="ds-btn ds-btn--block" data-share-ai>${dsIcon('sparkles', 15)} Copy for AI${typed && typed.code ? ' (with my code)' : ''}</button>
       </div>
       <p class="share-foot">Opens a plain page with the full lesson, the answer key and a legend for the code — no sign-in, nothing stored anywhere.${typed && typed.code ? ' Copy&nbsp;for&nbsp;AI also includes the code you typed, which the URL can\'t carry.' : ''}</p>
     </div>`;
@@ -231,11 +231,13 @@ function openShareSheet(lessonId) {
     if (navigator.share && matchMedia('(pointer: coarse)').matches) {
       try { await navigator.share({ title: lesson.title, url }); return; } catch (_) { /* fall through to copy */ }
     }
-    flash(btn, await copyTextToClipboard(url) ? '✓ Copied' : '✗ Copy failed');
+    flash(btn, await copyTextToClipboard(url)
+      ? dsIcon('check', 15) + ' Copied' : dsIcon('alert', 15) + ' Copy failed');
   });
 
   scrim.querySelector('[data-share-ai]').addEventListener('click', async e => {
     const payload = buildLessonAiPayload(lessonId);
-    flash(e.currentTarget, await copyTextToClipboard(payload) ? '✓ Copied — paste into your AI' : '✗ Copy failed');
+    flash(e.currentTarget, await copyTextToClipboard(payload)
+      ? dsIcon('check', 15) + ' Copied — paste into your AI' : dsIcon('alert', 15) + ' Copy failed');
   });
 }

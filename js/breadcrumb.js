@@ -98,7 +98,12 @@
     // there is room). Middle crumbs collapse via css/14-breadcrumb.css.
     el.innerHTML = items.map((c, i) => {
       const last = i === items.length - 1;
-      const sep = i ? '<span class="ds-crumb__sep" aria-hidden="true">›</span>' : '';
+      // The separator is a chevron, and every other chevron in the family is a
+      // ds icon — a font glyph here reads at a different weight beside them
+      // (invariant 9). dsIcon is a hard dependency of every page that mounts a
+      // breadcrumb, but degrade to nothing rather than throwing.
+      const sep = i ? `<span class="ds-crumb__sep" aria-hidden="true">${
+        typeof dsIcon === 'function' ? dsIcon('chevron-right', 13) : ''}</span>` : '';
       const cls = 'ds-crumb' + (last ? ' ds-crumb--leaf' : '') + (c.root ? ' ds-crumb--root' : '');
       const body = esc(c.label);
       const h = last ? null : href(c);

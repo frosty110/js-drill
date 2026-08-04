@@ -191,7 +191,7 @@ function renderL2(body, lesson, content) {
         appendHistory(lesson.id, 'L2-struggle-pass');
       }
       if (allBlanksRight && matched) {
-        feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
+        feedback.innerHTML = `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} Pass</span>`;
         exerciseState[exi].passed = true;
         checkL2Overall();
         _scrollNextUnpassedL2(exi, wrap, exerciseState);
@@ -250,7 +250,7 @@ function renderL2(body, lesson, content) {
       // srBadgeHtml reads it.
       markPassed(lesson.id, 'L2');
       document.getElementById('l2-status').innerHTML =
-        '<span class="text-emerald-400 font-medium">✓ L2 passed.</span>' +
+        `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} L2 passed.</span>` +
         srBadgeHtml(lesson.id, 'pass');
       status.querySelector('[data-action="next-l3"]').classList.remove('hidden');
     }
@@ -263,7 +263,7 @@ function renderL2(body, lesson, content) {
     if (!s.passed) return;
     const card = wrap.children[exi + 1]; // +1 for the intro div
     const feedback = card?.querySelector('.feedback');
-    if (feedback) feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
+    if (feedback) feedback.innerHTML = `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} Pass</span>`;
   });
   checkL2Overall();
 }
@@ -420,7 +420,7 @@ function renderL2Mobile(body, lesson, content) {
         appendHistory(lesson.id, 'L2-struggle-pass');
       }
       if (allBlanksRight && matched) {
-        feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
+        feedback.innerHTML = `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} Pass</span>`;
         exerciseState[exi].passed = true;
         checkL2Overall();
         _scrollNextUnpassedL2(exi, wrap, exerciseState);
@@ -605,7 +605,7 @@ function renderL2Mobile(body, lesson, content) {
       // srBadgeHtml reads it.
       markPassed(lesson.id, 'L2');
       document.getElementById('l2-status').innerHTML =
-        '<span class="text-emerald-400 font-medium">✓ L2 passed.</span>' +
+        `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} L2 passed.</span>` +
         srBadgeHtml(lesson.id, 'pass');
       status.querySelector('[data-action="next-l3"]').classList.remove('hidden');
     }
@@ -617,7 +617,7 @@ function renderL2Mobile(body, lesson, content) {
     if (!s.passed) return;
     const card = wrap.querySelectorAll('.feedback')[exi]?.closest('.mb-6');
     const feedback = card?.querySelector('.feedback');
-    if (feedback) feedback.innerHTML = '<span class="text-emerald-400 font-medium">✓ Pass</span>';
+    if (feedback) feedback.innerHTML = `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} Pass</span>`;
   });
   checkL2Overall();
 }

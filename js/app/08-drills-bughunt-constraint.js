@@ -65,7 +65,7 @@ function _streakMapBuckets(lookbackDays = 60) {
   for (const b of buckets) b.missedLessonIds = Array.from(b.missedLessonIds);
   return buckets;
 }
-// iter 73: 🪲 Code Bug-Hunt — first §9B (Code Evaluation Skills) surface,
+// iter 73: Code Bug-Hunt — first §9B (Code Evaluation Skills) surface,
 // closing the 37-iter gap flagged by iter-36's catalog cross-cutting note.
 // Auto-mutator picks a random patterns-track canonical, applies ONE simple
 // operator/boundary mutation at ONE random site, verifies via runCode() that
@@ -208,7 +208,7 @@ async function startBugHuntSession() {
   state.bugHunt.lastRunAt = Date.now();
   saveProgress();
   const shell = document.getElementById('lesson-shell');
-  shell.innerHTML = `<div class="bug-shell"><div class="bug-loading">🪲 Hunting bugs…</div></div>`;
+  shell.innerHTML = `<div class="bug-shell"><div class="bug-loading">${dsIcon('bug', 15)} Hunting bugs…</div></div>`;
   const deck = await _bugHuntBuildDeck();
   if (!deck.length) {
     shell.innerHTML = `<div class="bug-shell"><div class="bug-loading">No breakable canonicals found in this round — try again.</div><div class="bug-summary-actions"><button class="secondary" data-action="bug-back">Back</button></div></div>`;
@@ -224,8 +224,8 @@ async function startBugHuntSession() {
     shell.innerHTML = `
       <div class="bug-shell">
         <div class="bug-header">
-          <span>🪲 Bug-Hunt · ${idx + 1} of ${deck.length}</span>
-          <button class="bug-exit" data-action="exit-bug">✕ Exit</button>
+          <span>${dsIcon('bug', 15)} Bug-Hunt · ${idx + 1} of ${deck.length}</span>
+          <button class="bug-exit" data-action="exit-bug">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="bug-meta">${escapeHtml(card.sectionName)} · <span class="bug-lesson">${escapeHtml(card.lessonTitle)}</span></div>
         <div class="bug-prompt">One operator was flipped. Tap the buggy line.</div>
@@ -254,8 +254,8 @@ async function startBugHuntSession() {
       });
       const fb = shell.querySelector('[data-bug-feedback]');
       if (fb) fb.innerHTML = wasCorrect
-        ? `<span class="bug-good">✓ Line ${card.buggyLine} · ${escapeHtml(card.mutator)}</span>`
-        : `<span class="bug-bad">✗ Actually line ${card.buggyLine} (${escapeHtml(card.mutator)})</span>`;
+        ? `<span class="bug-good">${dsIcon('check', 14)} Line ${card.buggyLine} · ${escapeHtml(card.mutator)}</span>`
+        : `<span class="bug-bad">${dsIcon('alert', 14)} Actually line ${card.buggyLine} (${escapeHtml(card.mutator)})</span>`;
       setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 900 : 1700);
     };
     lineBtns.forEach(btn => btn.addEventListener('click', () => grade(+btn.dataset.lineIdx)));
@@ -265,13 +265,13 @@ async function startBugHuntSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="bug-shell">
-        <div class="bug-header"><span>🪲 Bug-Hunt · done</span></div>
+        <div class="bug-header"><span>${dsIcon('bug', 15)} Bug-Hunt · done</span></div>
         <div class="bug-summary">
           <div class="bug-summary-pct">${pct}%</div>
           <div class="bug-summary-line">${correct} of ${deck.length} bugs found</div>
           <div class="bug-summary-lifetime">Lifetime: ${state.bugHunt.correct} / ${state.bugHunt.attempts} (${state.bugHunt.attempts > 0 ? Math.round(state.bugHunt.correct / state.bugHunt.attempts * 100) : 0}%)</div>
           <div class="bug-summary-actions">
-            <button class="primary" data-action="bug-again">🪲 Another hunt</button>
+            <button class="primary" data-action="bug-again">${dsIcon('bug', 15)} Another hunt</button>
             <button class="secondary" data-action="bug-done">Done</button>
           </div>
         </div>
@@ -284,7 +284,7 @@ async function startBugHuntSession() {
   renderCard();
 }
 
-// iter 142: 🔀 Mutate-and-Predict — §9B forward-simulation drill. Where
+// iter 142: Mutate-and-Predict — §9B forward-simulation drill. Where
 // Bug-Hunt (iter 73) trains LOCALIZATION (click the buggy line — visual /
 // textual recognition), Mutate trains FORWARD SIMULATION (name the type
 // of failure the mutation causes — mental trace + taxonomy classification).
@@ -441,8 +441,8 @@ async function startMutateSession() {
     shell.innerHTML = `
       <div class="recognize-shell mutate-shell">
         <div class="recognize-header">
-          <span>🔀 Mutate · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-mutate">✕ Exit</button>
+          <span>${dsIcon('swap', 15)} Mutate · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-mutate">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="whatif-lesson-tag">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
         <pre class="whatif-canonical cm-s-dracula" data-mutate-code></pre>
@@ -493,7 +493,7 @@ async function startMutateSession() {
               : `Output: <span class="mono">${escapeHtml(card.observedOutput)}</span> (expected <span class="mono">${escapeHtml(card.expectedOutput)}</span>)`;
           fb.innerHTML = `
             <div class="whatif-reveal">
-              <div class="whatif-reveal-title">${wasRight ? '✓ Got it' : '✗ The right answer was'}</div>
+              <div class="whatif-reveal-title">${wasRight ? dsIcon('check', 14) + ' Got it' : dsIcon('alert', 14) + ' The right answer was'}</div>
               <div class="whatif-reveal-val">${escapeHtml(MUTATE_CLASSES[card.correctClass].label)}</div>
               <div class="mutate-observed">${obs}</div>
               <button class="whatif-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
@@ -514,13 +514,13 @@ async function startMutateSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell mutate-shell">
-        <div class="recognize-header"><span>🔀 Mutate · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('swap', 15)} Mutate · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} consequences predicted · ${deck.length - correct} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.mutate.correct} / ${state.mutate.attempts} (${state.mutate.attempts > 0 ? Math.round(state.mutate.correct / state.mutate.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="mutate-again">🔀 Another session</button>
+            <button class="primary" data-action="mutate-again">${dsIcon('swap', 15)} Another session</button>
             <button class="secondary" data-action="mutate-done">Done</button>
           </div>
         </div>
@@ -532,7 +532,7 @@ async function startMutateSession() {
   renderCard();
 }
 
-// iter 147: 📞 Phone Screen Simulator — Cat 2 Paths & Sessions. Chains 3 cards
+// iter 147: Phone Screen Simulator — Cat 2 Paths & Sessions. Chains 3 cards
 // (1 syntax-track Reference-readonly warmup + 1 pattern-track L3 editor + 1
 // mechanic-related L2 fill follow-up) under ONE unbroken timer (~12-15 min
 // total). The unified clock is the load-bearing piece — Mock has a timer but
@@ -544,11 +544,11 @@ async function startMutateSession() {
 // Deck recipe is deterministic per-session (random within each card slot):
 //   - Card 1: any syntax-track full lesson (any has notes; iter-144 scan
 //     confirmed 100% reference.notes coverage).
-//   - Card 2: random pattern-track full lesson with ≥1 mechanic (72 / 79
+// - Card 2: random pattern-track full lesson with ≥1 mechanic (72 / 79
 //     pattern lessons qualify per iter-147 pre-scan).
-//   - Card 3: a DIFFERENT lesson sharing ≥1 mechanic with card 2 (via
+// - Card 3: a DIFFERENT lesson sharing ≥1 mechanic with card 2 (via
 //     existing MECHANIC_INDEX). Fallback: any random pattern lesson if no
-//     mechanic-overlap candidate exists (rare — 24 mechanics shared by ≥3
+// mechanic-overlap candidate exists (rare — 24 mechanics shared by ≥3
 //     lessons make the overlap pick reliable).
 async function _phoneScreenBuildDeck() {
   // Force-load all content first so MECHANIC_INDEX is complete; reuses the
@@ -637,8 +637,8 @@ async function startPhoneScreenSession() {
     shell.innerHTML = `
       <div class="recognize-shell phone-screen-shell">
         <div class="recognize-header">
-          <span>📞 Phone Screen · <span id="phone-screen-timer" class="mono">0:00</span></span>
-          <button class="recognize-exit" data-action="exit-phone-screen">✕ End interview</button>
+          <span>${dsIcon('phone', 15)} Phone Screen · <span id="phone-screen-timer" class="mono">0:00</span></span>
+          <button class="recognize-exit" data-action="exit-phone-screen">${dsIcon('x', 13)} End interview</button>
         </div>
         <div class="phone-pips" aria-label="3-card session progress">${pipsHtml()}</div>
         <div class="phone-card-tag">Card ${idx + 1} of 3 · ${escapeHtml(deck[idx].title)} · ${escapeHtml(deck[idx].sectionName)}</div>
@@ -705,20 +705,20 @@ async function startPhoneScreenSession() {
       const fb = shell.querySelector('[data-phone-feedback]');
       shell.querySelector('[data-action="phone-run"]').addEventListener('click', async () => {
         const code = cm.getValue();
-        if (!code.trim()) { fb.textContent = '✗ Editor empty.'; fb.className = 'phone-feedback phone-feedback-warn'; return; }
+        if (!code.trim()) { fb.innerHTML = dsIcon('alert', 14) + ' Editor empty.'; fb.className = 'phone-feedback phone-feedback-warn'; return; }
         fb.textContent = 'Running…'; fb.className = 'phone-feedback';
         const res = await runCode(code);
         if (!res.ok) {
-          fb.textContent = `✗ Error: ${(res.output || 'unknown').slice(0, 60)}`;
+          fb.innerHTML = dsIcon('alert', 14) + ` Error: ${(res.output || 'unknown').slice(0, 60)}`;
           fb.className = 'phone-feedback phone-feedback-err';
         } else if ((res.output || '') === drill.expectedOutput) {
-          fb.textContent = '✓ Pass — moving to follow-up';
+          fb.innerHTML = dsIcon('check', 14) + ' Pass — moving to follow-up';
           fb.className = 'phone-feedback phone-feedback-pass';
           outcomes.push({ kind: 'pattern', lessonId: card.lessonId, passed: true });
           setTimeout(() => { idx++; renderCard(); }, 700);
         } else {
           const got = (res.output || '(empty)').slice(0, 60);
-          fb.textContent = `✗ Output: ${got} (expected: ${drill.expectedOutput.slice(0, 40)})`;
+          fb.innerHTML = dsIcon('alert', 14) + ` Output: ${got} (expected: ${drill.expectedOutput.slice(0, 40)})`;
           fb.className = 'phone-feedback phone-feedback-warn';
         }
       });
@@ -771,12 +771,12 @@ async function startPhoneScreenSession() {
           }
         });
         if (allCorrect) {
-          fb.textContent = '✓ All blanks correct — finishing';
+          fb.innerHTML = dsIcon('check', 14) + ' All blanks correct — finishing';
           fb.className = 'phone-feedback phone-feedback-pass';
           outcomes.push({ kind: 'followup', lessonId: card.lessonId, passed: true });
           setTimeout(() => { idx++; renderCard(); }, 700);
         } else {
-          fb.textContent = '✗ One or more blanks wrong (red borders). Retry or Skip.';
+          fb.innerHTML = dsIcon('alert', 14) + ' One or more blanks wrong (red borders). Retry or Skip.';
           fb.className = 'phone-feedback phone-feedback-warn';
         }
       });
@@ -795,16 +795,16 @@ async function startPhoneScreenSession() {
     saveProgress();
     shell.innerHTML = `
       <div class="recognize-shell phone-screen-shell">
-        <div class="recognize-header"><span>📞 Phone Screen · Done · ${formatTime(totalMs)}</span></div>
+        <div class="recognize-header"><span>${dsIcon('phone', 15)} Phone Screen · Done · ${formatTime(totalMs)}</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${passedCount} / 3</div>
           <div class="recognize-summary-line">${passedCount} of 3 cards passed in ${formatTime(totalMs)} total time</div>
           <ul class="phone-summary-list">
-            ${outcomes.map((o, i) => `<li class="phone-summary-row"><span class="phone-summary-kind">${o.kind}</span> · <span class="${o.passed ? 'phone-summary-pass' : 'phone-summary-fail'}">${o.passed ? '✓' : '✗'}</span> · <span class="phone-summary-lesson">${escapeHtml(deck[i].title)}</span></li>`).join('')}
+            ${outcomes.map((o, i) => `<li class="phone-summary-row"><span class="phone-summary-kind">${o.kind}</span> · <span class="${o.passed ? 'phone-summary-pass' : 'phone-summary-fail'}">${dsIcon(o.passed ? 'check' : 'alert', 13)}</span> · <span class="phone-summary-lesson">${escapeHtml(deck[i].title)}</span></li>`).join('')}
           </ul>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.phoneScreen.completions} completed sessions of ${state.phoneScreen.sessions} started</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="phone-again">📞 Another session</button>
+            <button class="primary" data-action="phone-again">${dsIcon('phone', 15)} Another session</button>
             <button class="secondary" data-action="phone-done">Done</button>
           </div>
         </div>
@@ -816,7 +816,7 @@ async function startPhoneScreenSession() {
   renderCard();
 }
 
-// iter 148: 🚧 Constraint-Shift Drill — Cat 9 §9C Adaptation/transfer + Cat 4
+// iter 148: Constraint-Shift Drill — Cat 9 §9C Adaptation/transfer + Cat 4
 // sidecar registry hybrid. First §9C ship ever; 5th sidecar registry after
 // iter-79 complexity-claims / iter-86-87 idiom-pairs / iter-117 clarify-
 // distractor-bank / iter-118 hotseat-followups. Each card shows a real
@@ -888,8 +888,8 @@ async function startConstraintShiftSession() {
     shell.innerHTML = `
       <div class="recognize-shell shift-shell">
         <div class="recognize-header">
-          <span>🚧 Constraint-Shift · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-shift">✕ Exit</button>
+          <span>${dsIcon('move-horizontal', 15)} Constraint-Shift · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-shift">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="whatif-lesson-tag">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
         <div class="shift-claims-block">
@@ -938,7 +938,7 @@ async function startConstraintShiftSession() {
     shell.querySelector('[data-action="shift-run"]').addEventListener('click', async () => {
       const userCode = cm.getValue();
       if (!userCode.trim()) {
-        fb.textContent = '✗ Editor empty — type your shifted solution first.';
+        fb.innerHTML = dsIcon('alert', 14) + ' Editor empty — type your shifted solution first.';
         fb.className = 'shift-feedback shift-feedback-warn';
         return;
       }
@@ -954,25 +954,25 @@ async function startConstraintShiftSession() {
       } catch (_) { /* malformed regex in sidecar — treat as no-catch */ }
       state.constraintShift.attempts++;
       if (!res.ok) {
-        fb.innerHTML = `✗ Runtime error: ${escapeHtml((res.output || 'unknown').slice(0, 80))}`;
+        fb.innerHTML = dsIcon('alert', 14) + ` Runtime error: ${escapeHtml((res.output || 'unknown').slice(0, 80))}`;
         fb.className = 'shift-feedback shift-feedback-err';
         state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
         appendHistory(card.lessonId, 'L1-miss');
       } else if (!outputMatches) {
         const got = (res.output || '(empty)').slice(0, 60);
-        fb.innerHTML = `✗ Output: <span class="mono">${escapeHtml(got)}</span> (expected <span class="mono">${escapeHtml(card.expectedOutput.slice(0, 40))}</span>)`;
+        fb.innerHTML = dsIcon('alert', 14) + ` Output: <span class="mono">${escapeHtml(got)}</span> (expected <span class="mono">${escapeHtml(card.expectedOutput.slice(0, 40))}</span>)`;
         fb.className = 'shift-feedback shift-feedback-warn';
         state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
         appendHistory(card.lessonId, 'L1-miss');
       } else if (regexCatchesAntipattern) {
-        fb.innerHTML = `✗ Output correct but you still used the original-constraint technique. ${escapeHtml(card.structuralCheckExplain)}`;
+        fb.innerHTML = dsIcon('alert', 14) + ` Output correct but you still used the original-constraint technique. ${escapeHtml(card.structuralCheckExplain)}`;
         fb.className = 'shift-feedback shift-feedback-warn';
         state.weakness[card.lessonId] = (state.weakness[card.lessonId] || 0) + 1;
         appendHistory(card.lessonId, 'L1-miss');
       } else {
         correct++;
         state.constraintShift.correct++;
-        fb.textContent = '✓ Output matches AND structural check passes — constraint shift complete.';
+        fb.innerHTML = dsIcon('check', 14) + ' Output matches AND structural check passes — constraint shift complete.';
         fb.className = 'shift-feedback shift-feedback-pass';
       }
       saveProgress();
@@ -992,13 +992,13 @@ async function startConstraintShiftSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell shift-shell">
-        <div class="recognize-header"><span>🚧 Constraint-Shift · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('move-horizontal', 15)} Constraint-Shift · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} shifts completed cleanly</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.constraintShift.correct} / ${state.constraintShift.attempts} (${state.constraintShift.attempts > 0 ? Math.round(state.constraintShift.correct / state.constraintShift.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="shift-again">🚧 Another session</button>
+            <button class="primary" data-action="shift-again">${dsIcon('move-horizontal', 15)} Another session</button>
             <button class="secondary" data-action="shift-done">Done</button>
           </div>
         </div>

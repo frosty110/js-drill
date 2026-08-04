@@ -96,8 +96,8 @@ async function startConstellationSession() {
     shell.innerHTML = `
       <div class="recognize-shell constellation-shell">
         <div class="recognize-header">
-          <span>🪐 Constellation · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-constellation">✕ Exit</button>
+          <span>${dsIcon('network', 15)} Constellation · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-constellation">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="constellation-tag">Pick the 3 lessons that use this idiom:</div>
         <div class="constellation-mech">
@@ -137,7 +137,7 @@ async function startConstellationSession() {
         btn.disabled = true;
         btn.classList.add(wasRight ? 'recognize-opt-correct' : 'recognize-opt-wrong');
         const mark = shell.querySelector(`[data-mark="${optIdx}"]`);
-        if (mark) mark.textContent = wasRight ? '✓' : '✗';
+        if (mark) mark.innerHTML = dsIcon(wasRight ? 'check' : 'alert', 13);
         if (counterEl) counterEl.textContent = String(picks);
         if (picks >= CONSTELLATION_PICKS_PER_CARD) {
           // Reveal phase: mark the remaining untagged-as-wrong + missed-correct.
@@ -177,13 +177,13 @@ async function startConstellationSession() {
     const perfectCards = perCardCorrect.filter(n => n === 3).length;
     shell.innerHTML = `
       <div class="recognize-shell constellation-shell">
-        <div class="recognize-header"><span>🪐 Constellation · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('network', 15)} Constellation · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${totalCorrect} of ${totalPossible} correct picks · ${perfectCards} of ${deck.length} cards perfect (all 3)</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.mechConstellation.correct} / ${state.mechConstellation.attempts} (${state.mechConstellation.attempts > 0 ? Math.round(state.mechConstellation.correct / state.mechConstellation.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="constellation-again">🪐 Another session</button>
+            <button class="primary" data-action="constellation-again">${dsIcon('network', 15)} Another session</button>
             <button class="secondary" data-action="constellation-done">Done</button>
           </div>
         </div>
@@ -195,7 +195,7 @@ async function startConstellationSession() {
   renderCard();
 }
 
-// iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over walkthrough
+// iter 99: Reverse-Walkthrough — backward-direction recall over walkthrough
 // trace data. Each card shows the FINAL `{state, returns}` of one walkthrough
 // example + 3 input options (all 3 examples from the SAME lesson); user taps
 // which input produced this final state. **Adapted spec** from iter-95
@@ -288,8 +288,8 @@ async function startReverseWalkSession() {
     shell.innerHTML = `
       <div class="recognize-shell reverse-walk-shell">
         <div class="recognize-header">
-          <span>⏪ Reverse · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-reverse-walk">✕ Exit</button>
+          <span>${dsIcon('rewind', 15)} Reverse · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-reverse-walk">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="reverse-walk-lesson-tag">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
         <div class="reverse-walk-tag">Which input produced this final state?</div>
@@ -333,7 +333,7 @@ async function startReverseWalkSession() {
         if (fb) {
           fb.innerHTML = `
             <div class="reverse-walk-reveal">
-              <div class="reverse-walk-reveal-title">${wasRight ? '✓ Got it' : '✗ The correct input was the highlighted one'}</div>
+              <div class="reverse-walk-reveal-title">${wasRight ? dsIcon('check', 14) + ' Got it' : dsIcon('alert', 14) + ' The correct input was the highlighted one'}</div>
               <div class="reverse-walk-reveal-label">${escapeHtml(card.correctLabel)}</div>
               <button class="reverse-walk-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
               <button class="reverse-walk-next" data-action="reverse-walk-next">Next card</button>
@@ -353,13 +353,13 @@ async function startReverseWalkSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell reverse-walk-shell">
-        <div class="recognize-header"><span>⏪ Reverse · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('rewind', 15)} Reverse · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} inputs matched · ${deck.length - correct} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.reverseWalk.correct} / ${state.reverseWalk.attempts} (${state.reverseWalk.attempts > 0 ? Math.round(state.reverseWalk.correct / state.reverseWalk.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="reverse-walk-again">⏪ Another session</button>
+            <button class="primary" data-action="reverse-walk-again">${dsIcon('rewind', 15)} Another session</button>
             <button class="secondary" data-action="reverse-walk-done">Done</button>
           </div>
         </div>
@@ -371,7 +371,7 @@ async function startReverseWalkSession() {
   renderCard();
 }
 
-// iter 122: 🧪 What-If Output Predictor — given the (memorized) canonical
+// iter 122: What-If Output Predictor — given the (memorized) canonical
 // + ONE input drawn from `walkthrough.examples[].label`, pick the function's
 // output from 4 MC options. Inverts the L1/L2/L3 ladder — L1 tests concepts,
 // L2/L3 test code production, Crystal Ball (iter 77) tests "what does this
@@ -400,7 +400,7 @@ function _whatifStringify(v) {
 function _whatifShifts(raw, asStr) {
   // Produce 2-3 plausible-wrong variants of the correct answer. Strategy
   // varies by output shape to avoid type-mismatch giveaways (the iter-30
-  // audit's anti-pattern that 🔮 Crystal's same-output-type filter also
+  // audit's anti-pattern that Crystal's same-output-type filter also
   // protects against). Returns an array of string candidates; caller dedups.
   const out = [];
   if (typeof raw === 'number') {
@@ -534,8 +534,8 @@ async function startWhatifSession() {
     shell.innerHTML = `
       <div class="recognize-shell whatif-shell">
         <div class="recognize-header">
-          <span>🧪 What-If · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-whatif">✕ Exit</button>
+          <span>${dsIcon('flask', 15)} What-If · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-whatif">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="whatif-lesson-tag">${escapeHtml(card.lessonTitle)} · ${escapeHtml(card.sectionName)}</div>
         <pre class="whatif-canonical cm-s-dracula" data-whatif-code></pre>
@@ -583,7 +583,7 @@ async function startWhatifSession() {
         if (fb) {
           fb.innerHTML = `
             <div class="whatif-reveal">
-              <div class="whatif-reveal-title">${wasRight ? '✓ Got it' : '✗ The correct output was'}</div>
+              <div class="whatif-reveal-title">${wasRight ? dsIcon('check', 14) + ' Got it' : dsIcon('alert', 14) + ' The correct output was'}</div>
               <div class="whatif-reveal-val">${escapeHtml(card.correctVal)}</div>
               <button class="whatif-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
               <button class="whatif-next" data-action="whatif-next">Next card</button>
@@ -603,13 +603,13 @@ async function startWhatifSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell whatif-shell">
-        <div class="recognize-header"><span>🧪 What-If · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('flask', 15)} What-If · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} outputs correct · ${deck.length - correct} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.whatif.correct} / ${state.whatif.attempts} (${state.whatif.attempts > 0 ? Math.round(state.whatif.correct / state.whatif.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="whatif-again">🧪 Another session</button>
+            <button class="primary" data-action="whatif-again">${dsIcon('flask', 15)} Another session</button>
             <button class="secondary" data-action="whatif-done">Done</button>
           </div>
         </div>
@@ -621,12 +621,12 @@ async function startWhatifSession() {
   renderCard();
 }
 
-// iter 102: 🗂 Notes→Lesson Reverse Lookup — cross-corpus localization over
+// iter 102: Notes→Lesson Reverse Lookup — cross-corpus localization over
 // `reference.notes[]`. Each card shows ONE note string + 4 lesson-title MC
 // buttons (1 correct + 3 distractors, same-section-preferred for plausibility);
 // user taps which lesson the note belongs to. Reveal shows lesson + drill CTA.
-// Third recall direction over the notes corpus: 🎰 Gotcha = whole-note yes/no
-// recognition; 📝 Notes Cloze = intra-note keyword cloze; 🗂 Locate = note →
+// Third recall direction over the notes corpus: Gotcha = whole-note yes/no
+// recognition; Notes Cloze = intra-note keyword cloze; 🗂 Locate = note →
 // which lesson localization. Interview-mid-problem retrieval pattern: "I
 // remember a gotcha about negative-zero, where was that?" — currently
 // unsupported. From roadmap.md iter-100 #2.
@@ -721,8 +721,8 @@ async function startNotesLocateSession() {
     shell.innerHTML = `
       <div class="recognize-shell notes-locate-shell">
         <div class="recognize-header">
-          <span>🗂 Locate · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-notes-locate">✕ Exit</button>
+          <span>${dsIcon('search', 15)} Locate · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-notes-locate">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="notes-locate-tag">Which lesson does this gotcha belong to?</div>
         <div class="notes-locate-note">${escapeHtml(card.note)}</div>
@@ -765,7 +765,7 @@ async function startNotesLocateSession() {
           const correctLesson = card.options.find(o => o.isCorrect).lesson;
           fb.innerHTML = `
             <div class="notes-locate-reveal">
-              <div class="notes-locate-reveal-title">${wasRight ? '✓ Got it' : '✗ The note was from'}: <strong>${escapeHtml(correctLesson.title)}</strong></div>
+              <div class="notes-locate-reveal-title">${wasRight ? dsIcon('check', 14) + ' Got it' : dsIcon('alert', 14) + ' The note was from'}: <strong>${escapeHtml(correctLesson.title)}</strong></div>
               <div class="notes-locate-reveal-section">${escapeHtml(correctLesson.section)}</div>
               <button class="notes-locate-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
               <button class="notes-locate-next" data-action="notes-locate-next">Next card</button>
@@ -785,13 +785,13 @@ async function startNotesLocateSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell notes-locate-shell">
-        <div class="recognize-header"><span>🗂 Locate · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('search', 15)} Locate · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} lessons identified · ${deck.length - correct} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.notesLocate.correct} / ${state.notesLocate.attempts} (${state.notesLocate.attempts > 0 ? Math.round(state.notesLocate.correct / state.notesLocate.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="notes-locate-again">🗂 Another session</button>
+            <button class="primary" data-action="notes-locate-again">${dsIcon('search', 15)} Another session</button>
             <button class="secondary" data-action="notes-locate-done">Done</button>
           </div>
         </div>
@@ -803,7 +803,7 @@ async function startNotesLocateSession() {
   renderCard();
 }
 
-// iter 109: 🔖 Match — bidirectional title ↔ description matcher (Cat 8 first
+// iter 109: Match — bidirectional title ↔ description matcher (Cat 8 first
 // ship; algorithm name ↔ description). Drills the name-to-concept retrieval
 // direction the L1→L2→L3 ladder doesn't cover: "you've heard of Kadane's —
 // what does it do?" and the reverse. Pure recombination over already-loaded
@@ -916,8 +916,8 @@ async function startMatchSession() {
     shell.innerHTML = `
       <div class="recognize-shell match-shell" data-direction="${card.direction}">
         <div class="recognize-header">
-          <span>🔖 Match · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-match">✕ Exit</button>
+          <span>${dsIcon('bookmark', 15)} Match · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-match">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="match-tag">${escapeHtml(promptLabel)}</div>
         <div class="match-prompt">${promptBody}</div>
@@ -953,7 +953,7 @@ async function startMatchSession() {
         if (fb) {
           fb.innerHTML = `
             <div class="match-reveal">
-              <div class="match-reveal-title">${wasRight ? '✓ Got it' : '✗ Correct match'}: <strong>${escapeHtml(card.title)}</strong></div>
+              <div class="match-reveal-title">${wasRight ? dsIcon('check', 14) + ' Got it' : dsIcon('alert', 14) + ' Correct match'}: <strong>${escapeHtml(card.title)}</strong></div>
               <div class="match-reveal-section">${escapeHtml(card.sectionName)}</div>
               <button class="match-drill" data-drill="${escapeHtml(card.lessonId)}">Drill this lesson →</button>
               <button class="match-next" data-action="match-next">Next card</button>
@@ -973,13 +973,13 @@ async function startMatchSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell match-shell">
-        <div class="recognize-header"><span>🔖 Match · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('bookmark', 15)} Match · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} matched · ${deck.length - correct} flagged as weak spots</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.match.correct} / ${state.match.attempts} (${state.match.attempts > 0 ? Math.round(state.match.correct / state.match.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="match-again">🔖 Another session</button>
+            <button class="primary" data-action="match-again">${dsIcon('bookmark', 15)} Another session</button>
             <button class="secondary" data-action="match-done">Done</button>
           </div>
         </div>
@@ -991,7 +991,7 @@ async function startMatchSession() {
   renderCard();
 }
 
-// iter 111: 🌈 Sections — section mastery heatmap (Cat 7 § Metacognition;
+// iter 111: Sections — section mastery heatmap (Cat 7 § Metacognition;
 // spatial axis vs the 5 existing temporal Cat 7 surfaces — Hint-Cost,
 // Half-Life, Heatstrip, At Risk, Resurrect all operate on TIME HORIZONS,
 // none aggregates to SECTION grain). 28-cell grid colored by per-section
@@ -1057,8 +1057,8 @@ function startSectionGrid() {
   shell.innerHTML = `
     <div class="recognize-shell sg-shell">
       <div class="recognize-header">
-        <span>🌈 Sections · mastery heatmap</span>
-        <button class="recognize-exit" data-action="exit-sg">✕ Exit</button>
+        <span>${dsIcon('grid', 15)} Sections · mastery heatmap</span>
+        <button class="recognize-exit" data-action="exit-sg">${dsIcon('x', 13)} Exit</button>
       </div>
       <div class="sg-nudge">Where to study tonight? Try <strong>${escapeHtml(weakestSection.name)}</strong> (${weakestSection.pct}% mastered).</div>
       <div class="sg-grid">
@@ -1096,7 +1096,7 @@ function startSectionGrid() {
   });
 }
 
-// iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill. Loads a curated
+// iter 86: Swap-Bench — pairwise idiom-equivalence drill. Loads a curated
 // data/idiom-pairs.json of {a, b, sameBehavior, explain, sourceLessonId?}.
 // Each card stacks two snippets vertically (mobile-first; PROFILE.md 80%-phone)
 // and asks "Same behavior?". Forces transfer-of-mental-model — the rusty

@@ -128,7 +128,7 @@
             <button class="infographic-viewer__button" type="button" data-action="copy-link" title="Copy a link to this sheet">Link</button>
             <a class="infographic-viewer__button" data-action="download" title="Download PNG">↓ PNG</a>
           </div>
-          <button class="infographic-viewer__button infographic-viewer__button--close" type="button" data-action="close" aria-label="Close infographic">×</button>
+          <button class="infographic-viewer__button infographic-viewer__button--close" type="button" data-action="close" aria-label="Close infographic">${dsIcon('x', 18)}</button>
         </div>
         <div class="infographic-viewer__stage">
           <img class="infographic-viewer__image" alt="">

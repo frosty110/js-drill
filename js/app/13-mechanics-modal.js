@@ -137,7 +137,7 @@ function renderMechanicsModal() {
   }
 
   if (_mechanicsView === 'matrix') {
-    titleEl.textContent = '🧩 Mechanics · Track × Tag';
+    titleEl.innerHTML = dsIcon('box', 15) + ' Mechanics · Track × Tag';
     subEl.textContent = 'Mastered/total per (mechanic, track). Transfer gaps highlighted — mechanics mastered in one track but not another.';
     backBtn.style.display = 'none';
     body.innerHTML = _renderMechanicsMatrixHtml();
@@ -148,7 +148,7 @@ function renderMechanicsModal() {
         const m = MECHANICS.find(x => x.id === mid);
         if (!m) return;
         _mechanicsSelectedId = mid;
-        _mechanicsPrevView = 'matrix';  // back button → matrix view
+        _mechanicsPrevView = 'matrix';  // back button  matrix view
         _mechanicsView = 'detail';
         renderMechanicsModal();
       });
@@ -157,7 +157,7 @@ function renderMechanicsModal() {
   }
 
   if (_mechanicsView === 'list') {
-    titleEl.textContent = '🧩 Mechanics';
+    titleEl.innerHTML = dsIcon('box', 15) + ' Mechanics';
     subEl.textContent = 'Code idioms tagged across lessons. Tap a mechanic to see every lesson where it appears.';
     backBtn.style.display = 'none';
     body.innerHTML = _renderMechanicsListHtml();
@@ -165,7 +165,7 @@ function renderMechanicsModal() {
     body.querySelectorAll('[data-mech-id]').forEach(btn => {
       btn.addEventListener('click', () => {
         _mechanicsSelectedId = btn.getAttribute('data-mech-id');
-        _mechanicsPrevView = 'list';  // iter 63: back button → list view
+        _mechanicsPrevView = 'list';  // iter 63: back button  list view
         _mechanicsView = 'detail';
         renderMechanicsModal();
       });
@@ -173,7 +173,7 @@ function renderMechanicsModal() {
   } else {
     const m = MECHANICS.find(x => x.id === _mechanicsSelectedId);
     if (!m) { _mechanicsView = 'list'; renderMechanicsModal(); return; }
-    titleEl.textContent = '🧩 ' + m.label;
+    titleEl.innerHTML = dsIcon('box', 15) + '' + m.label;
     subEl.textContent = m.blurb;
     backBtn.style.display = '';
     body.innerHTML = _renderMechanicsDetailHtml(m);
@@ -383,7 +383,7 @@ function _renderMechanicsDetailHtml(m) {
     const overall = lessonOverallStatus(id);
     const dotColor = overall === 'mastered' ? '#34d399' : (overall === 'in_progress' ? '#facc15' : '#4a4f58');
     const tagBits = [];
-    if (isDueForReview(id)) tagBits.push(`<span style="color:#ffce5a; font-size:11px;">🕒 due</span>`);
+    if (isDueForReview(id)) tagBits.push(`<span style="color:#ffce5a; font-size:11px;">${dsIcon('clock', 15)} due</span>`);
     if (state.weakness[id]) tagBits.push(`<span style="color:#fdba74; font-size:11px;">⚠ weak</span>`);
     const trackMeta = TRACK_PILLS[lesson.track] || TRACK_PILLS.patterns;
     html += `<button data-lesson-id="${escapeHtml(id)}" style="text-align:left; padding:10px 12px; border-radius:8px; background:#262930; border:1px solid #363a43; color:#eef0f2; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px;">

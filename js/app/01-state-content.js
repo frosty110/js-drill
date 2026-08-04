@@ -48,9 +48,9 @@ window.DrillUtil.setCodeModeResolver(() => lessonCodeMode(state.currentLessonId)
 //  only the app shell + runtime.
 // ──────────────────────────────────────────────────────────────────────────
 let CURRICULUM = [];                  // populated from manifest on boot
-const SECTION_SLUGS = {};             // section display name → URL slug
-const CONTENT = {};                   // id → lesson body (lazy cache)
-const _lessonInflight = {};           // id → Promise (dedupe concurrent loads)
+const SECTION_SLUGS = {};             // section display name  URL slug
+const CONTENT = {};                   // id  lesson body (lazy cache)
+const _lessonInflight = {};           // id  Promise (dedupe concurrent loads)
 
 async function loadManifest() {
   const res = await fetch('data/manifest.json', { cache: 'no-cache' });
@@ -156,7 +156,7 @@ function _drillEmptyState(title, message, opts = {}) {
 // ──────────────────────────────────────────────────────────────────────────
 let MECHANICS = [];                    // [{id, label, category, blurb, snippet}]
 let MECHANIC_CATEGORIES = [];          // [{id, label}]
-let MECHANIC_INDEX = new Map();        // mechId → Set<lessonId>
+let MECHANIC_INDEX = new Map();        // mechId  Set<lessonId>
 let _mechanicsRegistryLoaded = false;
 
 async function loadMechanicsRegistry() {
@@ -279,44 +279,44 @@ const state = {
   searchQuery: '',
   streak: 0,      // consecutive lessons mastered in this run (resets on reload)
   bestTimes: {},  // { lessonId: ms } — fastest mock-interview pass
-  mockHistory: {},  // { lessonId: [ms, ms, ...] } — last N=MOCK_HISTORY_MAX successful mock times, oldest→newest
+  mockHistory: {},  // { lessonId: [ms, ms, ...] } — last N=MOCK_HISTORY_MAX successful mock times, oldestnewest
   mock: { active: false, startTime: 0, lessonId: null, tickHandle: null },
   starterPath: false, // when true, sidebar shows only the linear starter path
   starterPathTrack: 'all', // 'all' | 'syntax' | 'patterns' | 'applied' — track-scope filter for the path (iter 39)
   recognize: { attempts: 0, correct: 0 }, // iter 49: Pattern Recognition Speed Drill lifetime stats (additive)
   rapidFire: { attempts: 0, correct: 0, bestStreak: 0, lastRunAt: 0 }, // iter 54: cross-lesson L1 interleaving stream (additive)
   warmup: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 57: 3-card daily-plan swipe-stack micro-session (additive)
-  speedrun: { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 }, // iter 71: 🏁 Section Speedrun — per-section first mobile timed-pressure surface; bests keyed by section slug (additive, no `__v` bump)
-  gauntlet: { sessions: 0, completions: 0, lastRunAt: 0, bySection: {} }, // iter 125: 🥊 Pattern-Family Gauntlet — chained L1 stream over EVERY L1 question of EVERY full lesson in one section. Cousin to Speedrun (1 L1/lesson + timer); Gauntlet is all-L1 untimed for family-grain interleaving. bySection[slug] = { sessions, lastCorrect, lastTotal } (additive, no `__v` bump)
-  bugHunt: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 73: 🪲 Bug-Hunt — §9B code-evaluation skill drill (additive, no `__v` bump)
-  crystal: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 77: 🔮 Predict — mental-execution drill (additive, no `__v` bump)
-  claim: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 79: 📐 Smell-Test Complexity-Claim drill (additive, no `__v` bump)
-  gotcha: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 83: 🎰 Gotcha Roulette — reference.notes recall stream (additive, no `__v` bump)
-  swapBench: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0, pairs: {} }, // iter 86: 🔀 Swap-Bench — pairwise idiom-equivalence drill. iter eval-2026-05-30 added per-pair SR via `pairs[id] = { dueAt, interval }` (additive, no `__v` bump)
-  convDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 91: 🎬 Conversation Drill — 6-section interview-arc classifier over conversation.sections[] (additive, no `__v` bump)
-  traceHop: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 93: 🧬 Trace-Hop — pick-the-middle-state mobile quiz over walkthrough.trace yields (additive, no `__v` bump)
-  notesDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 97: 📝 Notes Cloze Tap-Drill — cloze-MC over reference.notes[] keywords (additive, no `__v` bump)
-  mechConstellation: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 98: 🪐 Mechanic Constellation — multi-select recall over mechanics[] tag (additive, no `__v` bump)
-  reverseWalk: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 99: ⏪ Reverse-Walkthrough — backward-direction recall over walkthrough.examples (additive, no `__v` bump)
-  notesLocate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 102: 🗂 Notes→Lesson Reverse Lookup — cross-corpus localization (additive, no `__v` bump)
-  match: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 109: 🔖 Match — bidirectional title ↔ description matcher (additive, no `__v` bump)
-  offlinePack: { lessonCount: 0, totalCount: 0, lastCheckedAt: 0 }, // iter 113: 📦 Offline Drill Pack — last-known SW cache stats for sidebar chip (additive, no `__v` bump)
-  syncHintShown: false, // iter 114: ☁️ Sync Onboarding — one-time hint-banner-dismissed flag (additive, no `__v` bump)
-  clarifyRitualOn: false, // iter 117: 🎤 Clarify-First Ritual — opt-in toggle gates Patterns/Applied L3 behind clarifier chip drill (default OFF — user must opt in)
-  clarify: { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 }, // iter 117: 🎤 Clarify-First Ritual — lifetime stats (attempts = total chip-taps; correct = right chips tapped; completed = full rituals passed)
-  hotseatOn: false, // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle surfaces a post-L3-pass tap-card with a mechanic-tag-derived follow-up + 3 distractors (default OFF — user must opt in)
-  hotseat: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 118: 🔥 Hot-Seat Follow-Up — lifetime stats (attempts = chip-taps; correct = right chips on first try; sessions = cards shown)
-  whatif: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 122: 🧪 What-If Output Predictor — pick the output for a specific walkthrough-example input (additive, no `__v` bump)
-  mutate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 142: 🔀 Mutate-and-Predict — 5-card session showing canonical with ONE line mutated; user picks consequence-class taxonomy (still-correct / wrong-content-same-shape / throws / different-type). §9B forward-simulation drill — distinct from iter-73 Bug-Hunt's locate-the-bug task
-  phoneScreen: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 147: 📞 Phone Screen Simulator — chained 3-card session (syntax warmup + pattern L3 + mechanic-related L2 follow-up) under ONE unbroken timer. Cat 2 Paths & Sessions; distinct from Mock (single lesson) + Gauntlet (same-section L1 chain, no timer) via chained-different-lesson-types + single-timer combination
-  constraintShift: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 148: 🚧 Constraint-Shift Drill — multi-card session showing canonical with swapped constraint claim; user rewrites; grade via runCode + per-entry structural-fingerprint regex (must NOT match for passage). First Cat 9 §9C ship ever; 5th sidecar registry (data/constraint-shifts.json)
-  calibrateOn: false, // iter 119: ⏱ Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
+  speedrun: { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 }, // iter 71: Section Speedrun — per-section first mobile timed-pressure surface; bests keyed by section slug (additive, no `__v` bump)
+  gauntlet: { sessions: 0, completions: 0, lastRunAt: 0, bySection: {} }, // iter 125: Pattern-Family Gauntlet — chained L1 stream over EVERY L1 question of EVERY full lesson in one section. Cousin to Speedrun (1 L1/lesson + timer); Gauntlet is all-L1 untimed for family-grain interleaving. bySection[slug] = { sessions, lastCorrect, lastTotal } (additive, no `__v` bump)
+  bugHunt: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 73: Bug-Hunt — §9B code-evaluation skill drill (additive, no `__v` bump)
+  crystal: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 77: Predict — mental-execution drill (additive, no `__v` bump)
+  claim: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 79: Smell-Test Complexity-Claim drill (additive, no `__v` bump)
+  gotcha: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 83: Gotcha Roulette — reference.notes recall stream (additive, no `__v` bump)
+  swapBench: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0, pairs: {} }, // iter 86: Swap-Bench — pairwise idiom-equivalence drill. iter eval-2026-05-30 added per-pair SR via `pairs[id] = { dueAt, interval }` (additive, no `__v` bump)
+  convDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 91: Conversation Drill — 6-section interview-arc classifier over conversation.sections[] (additive, no `__v` bump)
+  traceHop: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 93: Trace-Hop — pick-the-middle-state mobile quiz over walkthrough.trace yields (additive, no `__v` bump)
+  notesDrill: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 97: Notes Cloze Tap-Drill — cloze-MC over reference.notes[] keywords (additive, no `__v` bump)
+  mechConstellation: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 98: Mechanic Constellation — multi-select recall over mechanics[] tag (additive, no `__v` bump)
+  reverseWalk: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 99: Reverse-Walkthrough — backward-direction recall over walkthrough.examples (additive, no `__v` bump)
+  notesLocate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 102: NotesLesson Reverse Lookup — cross-corpus localization (additive, no `__v` bump)
+  match: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 109: Match — bidirectional title  description matcher (additive, no `__v` bump)
+  offlinePack: { lessonCount: 0, totalCount: 0, lastCheckedAt: 0 }, // iter 113: Offline Drill Pack — last-known SW cache stats for sidebar chip (additive, no `__v` bump)
+  syncHintShown: false, // iter 114: Sync Onboarding — one-time hint-banner-dismissed flag (additive, no `__v` bump)
+  clarifyRitualOn: false, // iter 117: Clarify-First Ritual — opt-in toggle gates Patterns/Applied L3 behind clarifier chip drill (default OFF — user must opt in)
+  clarify: { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 }, // iter 117: Clarify-First Ritual — lifetime stats (attempts = total chip-taps; correct = right chips tapped; completed = full rituals passed)
+  hotseatOn: false, // iter 118: Hot-Seat Follow-Up — opt-in toggle surfaces a post-L3-pass tap-card with a mechanic-tag-derived follow-up + 3 distractors (default OFF — user must opt in)
+  hotseat: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 118: Hot-Seat Follow-Up — lifetime stats (attempts = chip-taps; correct = right chips on first try; sessions = cards shown)
+  whatif: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 122: What-If Output Predictor — pick the output for a specific walkthrough-example input (additive, no `__v` bump)
+  mutate: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 142: Mutate-and-Predict — 5-card session showing canonical with ONE line mutated; user picks consequence-class taxonomy (still-correct / wrong-content-same-shape / throws / different-type). §9B forward-simulation drill — distinct from iter-73 Bug-Hunt's locate-the-bug task
+  phoneScreen: { sessions: 0, completions: 0, lastRunAt: 0 }, // iter 147: Phone Screen Simulator — chained 3-card session (syntax warmup + pattern L3 + mechanic-related L2 follow-up) under ONE unbroken timer. Cat 2 Paths & Sessions; distinct from Mock (single lesson) + Gauntlet (same-section L1 chain, no timer) via chained-different-lesson-types + single-timer combination
+  constraintShift: { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 }, // iter 148: Constraint-Shift Drill — multi-card session showing canonical with swapped constraint claim; user rewrites; grade via runCode + per-entry structural-fingerprint regex (must NOT match for passage). First Cat 9 §9C ship ever; 5th sidecar registry (data/constraint-shifts.json)
+  calibrateOn: false, // iter 119: Time-to-Solve Calibration — opt-in toggle surfaces a pre-L3 estimate strip (default OFF)
   timeCalibration: { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } }, // iter 119: byMechanic[id] = { predictions: [{bucket, actualMs, errorSec}], median errorSec computed on read }. meta tracks engagement separately (estimates = bucket taps; skips = skip taps; passes = passes-with-estimate)
-  paceBarOn: false, // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF) surfaces a peripheral-vision width-growing bar above the L3 editor against user's OWN median time-to-solve. L75 anti-gamification mitigated: user's own median only (no global benchmark), no timer numerals, no streak, auto-hides when no data.
-  hapticOn: false, // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF) fires navigator.vibrate on L1 correct (30ms) / L1 miss (2×60ms) / L3 pass (120ms) / Rapid-Fire streak-of-5 (3-pulse roll). Toggle button auto-hides on platforms where the Vibration API is absent (iOS Safari, desktop without vibration motor). Tactile dual-coding channel for mobile-first audience.
-  adhdMode: false, // 🖍 ADHD Mode — opt-in toggle (default OFF) restyles the Conversation tab for focus: bionic word-heads (bold leading letters as fixation anchors), marker-highlight on backtick code terms (cyan in "What I'd say" blocks, amber in "Why this matters"), and looser line + section spacing. Render-time gated (bionic markup only emitted when ON); body.adhd-mode class drives the CSS. Conversation tab only.
-  fontScale: 'lg', // 🔠 App-wide font size — 'md' (1.0×) | 'lg' (1.125×, default — bumps everything ~12.5% over the original baseline) | 'xl' (1.25×). Drives the --font-scale CSS variable on :root, which scales html font-size so every rem-based value (Tailwind text-* utilities, conv-* spacing, modal bodies, etc.) scales uniformly. Hard-coded pixel sizes (CodeMirror, .code-block) keep their explicit values so mobile density stays sane. Toggle via 🔠 Font in ⚙️ Settings; persisted across sessions.
-  commandUsage: {}, // iter 104: 🗺 Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
+  paceBarOn: false, // iter 140: Pace-Bar — opt-in toggle (default OFF) surfaces a peripheral-vision width-growing bar above the L3 editor against user's OWN median time-to-solve. L75 anti-gamification mitigated: user's own median only (no global benchmark), no timer numerals, no streak, auto-hides when no data.
+  hapticOn: false, // iter 141: Haptic Tap-Pulse — opt-in toggle (default OFF) fires navigator.vibrate on L1 correct (30ms) / L1 miss (2×60ms) / L3 pass (120ms) / Rapid-Fire streak-of-5 (3-pulse roll). Toggle button auto-hides on platforms where the Vibration API is absent (iOS Safari, desktop without vibration motor). Tactile dual-coding channel for mobile-first audience.
+  adhdMode: false, //  ADHD Mode — opt-in toggle (default OFF) restyles the Conversation tab for focus: bionic word-heads (bold leading letters as fixation anchors), marker-highlight on backtick code terms (cyan in "What I'd say" blocks, amber in "Why this matters"), and looser line + section spacing. Render-time gated (bionic markup only emitted when ON); body.adhd-mode class drives the CSS. Conversation tab only.
+  fontScale: 'lg', //  App-wide font size — 'md' (1.0×) | 'lg' (1.125×, default — bumps everything ~12.5% over the original baseline) | 'xl' (1.25×). Drives the --font-scale CSS variable on :root, which scales html font-size so every rem-based value (Tailwind text-* utilities, conv-* spacing, modal bodies, etc.) scales uniformly. Hard-coded pixel sizes (CodeMirror, .code-block) keep their explicit values so mobile density stays sane. Toggle via  Font in  Settings; persisted across sessions.
+  commandUsage: {}, // iter 104: Sidebar Command Palette — `{ [commandId]: count }` recent-use counter for fuzzy-search ranking (additive, no `__v` bump)
   misses: {},          // iter 58: { lessonId: [{ at: ms, level: 'L1'|'L2'|'L3', tag: string }] } — Mistake Tagging Postmortem (additive, opt-in)
   // Per-QUESTION record of the most recent attempt, in AUTHORED index order —
   // the grain state.progress can't express ('L1':'passed' can't say which
@@ -325,17 +325,17 @@ const state = {
   //                 L2: { results: [bool|null], at },
   //                 L3: { ok: bool, code: string, at } } }
   answers: {},
-  subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the 📅 button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
+  subscribedPathId: 'starter', // which study plan the user is on — see PATHS registry. Routes the  button. Progress is shared across paths (keyed by lesson id), so switching never resets mastery.
   cramTaskChecks: {},  // { taskId: true } — non-lesson task ticks for cram-kind paths (e.g. "write BFS on paper"). Lesson-linked tasks auto-check via isLessonFullyDone.
   cramView: { mode: 'today', dayIndex: -1 },  // active Cram Home view. mode: 'today' (live day) | 'day' (specific past/future day, dayIndex set) | 'all' (all days expanded) | 'open-from' (only !done items from dayIndex).
   cramReview: { items: {}, session: null },  // SR over cram glossary/cheat/behavior/code-shapes. items[itemId] = { familiarity 0-3, lastReviewedAt }. session = active queue { queue, index, revealed, gotIt, fuzzy } | null.
-  glossaryQuiz: { sessions: 0, attempts: 0, correct: 0, lastRunAt: 0, perTerm: {}, session: null },  // MC quiz over cram glossary terms. Mixed direction (term→def + def→term), 10 cards/session. session = { queue, index, picked, correctCount } | null. perTerm[term] = { seen, correct }.
+  glossaryQuiz: { sessions: 0, attempts: 0, correct: 0, lastRunAt: 0, perTerm: {}, session: null },  // MC quiz over cram glossary terms. Mixed direction (termdef + defterm), 10 cards/session. session = { queue, index, picked, correctCount } | null. perTerm[term] = { seen, correct }.
   walkthrough: {},  // iter eval-2026-05-30: { [lessonId]: { quizAttempts, quizCorrect, bugAttempts, bugCorrect, lastRunAt, scrubbed } } — Walkthrough tab Quiz/Bug outcome persistence + scrub-to-end flag for default-open-Quiz behavior (additive, no `__v` bump)
-  flash: {},  // iter eval-2026-05-30: { [lessonId]: { attempts, blanks, lastRunAt } } — 🃏 Flash mode per-token self-rate persistence; "blanked" taps feed state.weakness on session threshold (additive, no `__v` bump)
+  flash: {},  // iter eval-2026-05-30: { [lessonId]: { attempts, blanks, lastRunAt } } —  Flash mode per-token self-rate persistence; "blanked" taps feed state.weakness on session threshold (additive, no `__v` bump)
   revealed: {},   // { lessonId: { L2: true, L3: true } } — track integrity
   revealedAt: {},        // { lessonId: { L2: epochMs } } — when the flag was SET; lets sync merge "newest event wins" instead of OR-resurrecting cleared rings
   revealedClearedAt: {}, // { lessonId: { L2: epochMs } } — when a clean pass CLEARED the flag (Reveal Replay invariant); newer clear beats a stale flag from another device
-  partialL1: {},  // { lessonId: true } — L1 passed at ≥80%/miss-one but NOT 100%; drives the amber (vs emerald) ✓ and keeps the missed question(s) in the weakness queue for re-review
+  partialL1: {},  // { lessonId: true } — L1 passed at 80%/miss-one but NOT 100%; drives the amber (vs emerald)  and keeps the missed question(s) in the weakness queue for re-review
   lastLessonId: null, // persisted across sessions for resume
   lastTab: null,
   welcomed: false,    // hide welcome panel after first dismissal

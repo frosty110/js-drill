@@ -288,6 +288,46 @@ function checkReconciliation() {
     }
   }
 
+  // ── The parent chain (D15 phase 1) ────────────────────────────────────────
+  // docs/information-architecture.md §5 rule 1: every row declares `parent`,
+  // and the chain terminates at a top level without a cycle. Unenforced, this
+  // decays exactly the way the routes themselves did — a row added without one
+  // is a surface with no place in the hierarchy, and the only symptom is a
+  // breadcrumb that silently stops one level short.
+  for (const s of DrillRoutes.SURFACES) {
+    checked++;
+    if (!('parent' in s)) {
+      fail.push(`${s.kind}: no \`parent\` — declare the containing surface, or null for a top level (docs/information-architecture.md §5)`);
+      continue;
+    }
+    checked++;
+    if (s.parent !== null && !DrillRoutes.SURFACES.some(x => x.kind === s.parent)) {
+      fail.push(`${s.kind}: parent "${s.parent}" is not a surface`);
+      continue;
+    }
+    // ancestors() throws on a cycle rather than hanging.
+    checked++;
+    try { DrillRoutes.ancestors(s.kind); }
+    catch (e) { fail.push(`${s.kind}: ${e.message}`); continue; }
+
+    // A crumb must be legible without the caller resolving anything — the
+    // static pages and a cold app both render before titles are known.
+    checked++;
+    const trail = DrillRoutes.crumbs(s.kind, samples[s.kind] || {});
+    if (trail.length !== DrillRoutes.ancestors(s.kind).length + 1) {
+      fail.push(`${s.kind}: crumb trail length disagrees with its ancestor chain`);
+    } else if (trail.some(c => !c.label || c.label === 'undefined')) {
+      fail.push(`${s.kind}: a crumb has no label — add crumbLabel() to the row it came from`);
+    }
+
+    // Params flow down, so a parent must be addressable with its child's
+    // params. This is what lets one object walk the whole trail.
+    checked++;
+    if (trail.some(c => !c.self && c.appHref == null)) {
+      fail.push(`${s.kind}: an ancestor crumb has no appHref — its params don't survive the walk down from ${s.kind}`);
+    }
+  }
+
   // And the app's router must not be inventing routes behind the registry's
   // back. system-design.html declares its views in one table now; every value
   // there has to correspond to a surface.

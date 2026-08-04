@@ -45,6 +45,7 @@ const APP_SHELL = [
   './js/app/22-home.js',
   './js/app/23-review.js',
   './js/app/24-share.js',
+  './js/app/25-breadcrumb.js',
   './css/01-base.css',
   './css/02-sidebar.css',
   './css/03-tabs.css',
@@ -57,6 +58,7 @@ const APP_SHELL = [
   './css/10-ds-lesson.css',
   './css/11-ds-home.css',
   './css/12-ds-share.css',
+  './css/14-breadcrumb.css',
   './ds/tokens.css',
   './ds/components.css',
   './ds/icons.js',
@@ -66,6 +68,7 @@ const APP_SHELL = [
   // before the app slices, so an offline boot without them is a broken boot.
   './js/sharecode.js',
   './js/routes.js',
+  './js/breadcrumb.js',
   './js/sync.js',
   './js/supabase-config.js',
   './js/supabase-client.js',

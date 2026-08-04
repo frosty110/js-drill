@@ -77,6 +77,29 @@
   //              failed outright, and some dropped the ?s= across the hop.
   //              parseSharePath() still accepts the slashless form, so links
   //              shared before this change keep working. Absent on 'action'.
+  //   parent     the kind of the surface that CONTAINS this one, or null for a
+  //              top level. This is the hierarchy — the one fact the registry
+  //              was missing (docs/information-architecture.md §5, D15). Before
+  //              it, a row could say what a URL *is* and never what it is
+  //              *inside of*, so breadcrumbs, up-navigation, truthful
+  //              aria-current and scoped progress each had to be hand-authored
+  //              per surface — which is why a measured walk found 0 of 15
+  //              surfaces with a breadcrumb and no aria-current anywhere inside
+  //              a lesson. Declare it once here; derive all four.
+  //
+  //              `null` means top level, NOT "no ancestor": every page renders
+  //              Home ahead of the chain (js/breadcrumb.js). Home is not a row
+  //              because it is an appMode, and appMode is one row for ~40 modes.
+  //
+  //              A child's params are a superset of its parent's by
+  //              construction (sdSheet {topic,unit,sheet} → sdUnit {topic,unit}
+  //              → sdTopic {topic}), so one params object walks the whole chain.
+  //
+  //   crumbLabel()  params → the breadcrumb's text when no better title is
+  //              known. Callers that CAN resolve a real title (the app has the
+  //              manifests; the generator has the files) pass `opts.title` to
+  //              crumbs() and this is the fallback.
+  //
   //   params()   path segments → params, or null when the shape doesn't match
   //   appHash()  params  → the live-app URL that renders the same thing
   //   appParams()  hash segments → params, or null. The INVERSE of appHash,
@@ -93,6 +116,10 @@
       disposition: 'content',
       sitemap: true,
       title: 'All coding lessons',
+      // Top level: the coding corpus. Becomes "Library" when D15 phase 4 folds
+      // Home's track cards in; the label tracks what ships, not the target.
+      parent: null,
+      crumbLabel: () => 'Browse',
       path: () => 'p/',
       params: segs => (segs.length === 0 ? {} : null),
       appHash: () => 'index.html#/m/browse',
@@ -106,6 +133,12 @@
       codeKind: 'lesson',
       disposition: 'content',
       sitemap: true,
+      // The section between Browse and a lesson is real hierarchy with no
+      // address yet (there is no #/section/trees route), so it is not a row.
+      // js/breadcrumb.js splices it in unlinked via `extra`; when sections get
+      // routes it becomes a row and the splice goes away.
+      parent: 'lessonIndex',
+      crumbLabel: p => p.id,
       path: p => `p/${encodeURIComponent(p.id)}/`,
       params: segs => (segs.length === 1 ? { id: segs[0] } : null),
       // The optional tab (#/two-sum/L2) is view state on one lesson, so it
@@ -128,6 +161,11 @@
       disposition: 'action',
       fallback: 'lessonIndex',
       sitemap: false,
+      // Top level: a mode is launched from wherever you are, so it has no
+      // structural container. `home` is the one mode that IS the root — the
+      // renderer drops the duplicate crumb rather than printing "Home › Home".
+      parent: null,
+      crumbLabel: p => p.mode,
       appHash: p => `index.html#/m/${encodeURIComponent(p.mode)}`,
       appParams: segs => (segs.length >= 2 && segs[0] === 'm' && segs[1] !== 'browse'
         ? { mode: segs.slice(1).join('/') }
@@ -142,6 +180,9 @@
       disposition: 'content',
       sitemap: true,
       title: 'System design topics',
+      // Top level today; becomes a Library track in a later D15 slice (§4.1).
+      parent: null,
+      crumbLabel: () => 'System Design',
       path: () => 'sd/',
       params: segs => (segs.length === 0 ? {} : null),
       appHash: () => 'system-design.html#/',
@@ -155,6 +196,8 @@
       codeKind: null,
       disposition: 'content',
       sitemap: true,
+      parent: 'sdIndex',
+      crumbLabel: p => p.topic,
       path: p => `sd/${encodeURIComponent(p.topic)}/`,
       params: segs => (segs.length === 1 ? { topic: segs[0] } : null),
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}`,
@@ -172,6 +215,8 @@
       codeKind: null,
       disposition: 'content',
       sitemap: true,
+      parent: 'sdTopic',
+      crumbLabel: p => `Plan · ${p.plan}`,
       path: p => `sd/${encodeURIComponent(p.topic)}/plan/${p.plan.split('/').map(encodeURIComponent).join('/')}/`,
       params: segs => (segs.length >= 3 && segs[1] === 'plan' ? { topic: segs[0], plan: segs.slice(2).join('/') } : null),
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/plan/${p.plan.split('/').map(encodeURIComponent).join('/')}`,
@@ -188,6 +233,8 @@
       codeKind: null,
       disposition: 'content',
       sitemap: true,
+      parent: 'sdTopic',
+      crumbLabel: p => `${p.facet}: ${p.value}`,
       path: p => `sd/${encodeURIComponent(p.topic)}/tag/${encodeURIComponent(p.facet)}/${encodeURIComponent(p.value)}/`,
       params: segs => (segs.length === 4 && segs[1] === 'tag' ? { topic: segs[0], facet: segs[2], value: segs[3] } : null),
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/tag/${encodeURIComponent(p.facet)}/${encodeURIComponent(p.value)}`,
@@ -205,6 +252,8 @@
       disposition: 'action',
       fallback: 'sdTopic',
       sitemap: false,
+      parent: 'sdTopic',
+      crumbLabel: () => 'Mixed',
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/mixed`,
       appParams: segs => (segs.length === 2 && segs[1] === 'mixed' ? { topic: segs[0] } : null)
     },
@@ -218,6 +267,8 @@
       disposition: 'action',
       fallback: 'sdTopic',
       sitemap: false,
+      parent: 'sdTopic',
+      crumbLabel: () => 'Due',
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/due`,
       appParams: segs => (segs.length === 2 && segs[1] === 'due' ? { topic: segs[0] } : null)
     },
@@ -229,6 +280,8 @@
       codeKind: 'unit',
       disposition: 'content',
       sitemap: true,
+      parent: 'sdTopic',
+      crumbLabel: p => p.unit,
       path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/`,
       params: segs => (segs.length === 2 && !SD_RESERVED.has(segs[1]) ? { topic: segs[0], unit: segs[1] } : null),
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}`,
@@ -246,6 +299,8 @@
       codeKind: null,
       disposition: 'content',
       sitemap: true,
+      parent: 'sdUnit',
+      crumbLabel: p => p.sheet,
       path: p => `sd/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/${encodeURIComponent(p.sheet)}/`,
       params: segs => (segs.length === 3 && !SD_RESERVED.has(segs[1]) ? { topic: segs[0], unit: segs[1], sheet: segs[2] } : null),
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/${encodeURIComponent(p.unit)}/graphic/${encodeURIComponent(p.sheet)}`,
@@ -260,6 +315,56 @@
     const s = BY_KIND[kind];
     if (!s) throw new Error(`Unknown surface kind: ${kind}`);
     return s;
+  }
+
+  // ── Hierarchy ─────────────────────────────────────────────────────────────
+  // Walking `parent` is the whole mechanism. Four things that used to be
+  // hand-authored per surface now derive from it: the breadcrumb, the single
+  // up-affordance, truthful aria-current, and the header's scoped progress
+  // (docs/information-architecture.md §5).
+
+  // Ancestor kinds, ROOT-first, excluding `kind` itself.
+  // Throws on a cycle rather than looping — the gate calls this on every row.
+  function ancestors(kind) {
+    const out = [];
+    const seen = new Set([kind]);
+    let cur = surface(kind).parent;
+    while (cur) {
+      if (seen.has(cur)) throw new Error(`routes: parent cycle at "${cur}" (from "${kind}")`);
+      seen.add(cur);
+      out.unshift(cur);
+      cur = surface(cur).parent;
+    }
+    return out;
+  }
+
+  // The breadcrumb trail for a surface: root → … → self.
+  //
+  //   crumbs('sdUnit', { topic: 'ddia', unit: 'ch01' })
+  //     → [ {kind:'sdIndex', label:'System Design', …},
+  //         {kind:'sdTopic', label:'ddia', …},
+  //         {kind:'sdUnit',  label:'ch01', self:true, …} ]
+  //
+  // opts.title(kind, params) supplies real display titles when the caller has
+  // them (the app holds the manifests, the generator holds the files); the
+  // row's own crumbLabel() is the fallback so this is never empty.
+  //
+  // Every item carries both spellings of its address — appHref for the live
+  // app, sharePath for the static twin — so one trail serves the SPA header
+  // and the generated pages without either re-deriving links.
+  function crumbs(kind, params, opts) {
+    const o = opts || {};
+    const p = params || {};
+    return ancestors(kind).concat([kind]).map(k => {
+      const s = surface(k);
+      let label = null;
+      if (typeof o.title === 'function') { try { label = o.title(k, p); } catch (_) { label = null; } }
+      if (!label && typeof s.crumbLabel === 'function') { try { label = s.crumbLabel(p); } catch (_) { label = null; } }
+      const item = { kind: k, params: p, label: String(label || s.title || k), self: k === kind };
+      try { item.appHref = s.appHash(p); } catch (_) { item.appHref = null; }
+      try { item.sharePath = typeof s.path === 'function' ? s.path(p) : null; } catch (_) { item.sharePath = null; }
+      return item;
+    });
   }
 
   // ── Base URL resolution ───────────────────────────────────────────────────
@@ -410,7 +515,7 @@
 
   return {
     SURFACES, APP_PAGES, SD_RESERVED,
-    surface, baseUrl,
+    surface, baseUrl, ancestors, crumbs,
     shareUrl, sharePath, appUrl, codeKind,
     parseSharePath, parseAppHash, resolveForFetch, currentCode,
     sitemapXml

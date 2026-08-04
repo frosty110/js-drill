@@ -246,7 +246,7 @@ Each phase is independently shippable and leaves the app green.
 
 | Phase | Change | Unblocks |
 |---|---|---|
-| **1** | `parent` on every `js/routes.js` row + derive the breadcrumb. No visual change beyond the crumb. | everything |
+| **1** ✅ | `parent` on every `js/routes.js` row + derive the breadcrumb. No visual change beyond the crumb. | everything |
 | **2** | Header: breadcrumb + scoped meter + due count. Delete `Plan` / `System Design` / the fossil menus. | — |
 | **3** | Progress leaves the rail → becomes the header panel. | rail drops to 4 |
 | **4** | Home's track cards merge into Library; delete *More*. | rail drops to 3 |
@@ -259,6 +259,28 @@ Phase 5 carries the real risk: Home is already dense, and PROFILE's user needs
 it to stay a one-decision screen. Ship it behind the feature-flag sequence
 (`feature-scaffold` → `feature-wire` → `feature-ship`) and screenshot at 390px
 before removing the flag.
+
+### Phase 1 — shipped
+
+`parent` + `crumbLabel()` on all 11 registry rows; `ancestors()` and `crumbs()`
+derive from them; `js/breadcrumb.js` paints the trail on **both** hash-routed
+pages; `js/app/25-breadcrumb.js` supplies the app's titles and splices the
+unlinked section crumb. Gated by five new assertions per row in
+`tools/check-url-contract.js` (every row declares `parent`; it names a real
+surface; no cycle; every crumb has a label; a parent stays addressable with its
+child's params) and by `tools/cdp/nav-hierarchy.js`, 24 assertions at 390px and
+1280px across both pages, now in `PROBE_SUITE`.
+
+Purely additive — no surface moved, nothing was deleted, and `ds-page-frame`
+(33), `home-nav` (32 + 7), `sd-tags-nav` (41) and the boot smoke all stayed
+green.
+
+**Left standing on purpose:** the bespoke up-affordances (`×` on a lesson,
+`Close` in a sheet, `‹ All topics` on a system-design topic) are still there, so
+a system-design unit currently shows both the derived trail and the old link.
+Retiring them is phase 6's "one up-affordance," not phase 1's — they are load-
+bearing for existing probes and removing them is a visual change this phase
+promised not to make.
 
 ---
 

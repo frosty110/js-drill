@@ -58,6 +58,21 @@ const CARD = `(() => {
 
   // ── Mobile first: 80% of study happens on a phone (PROFILE.md) ───────────
   const s = await connect({ url: SD('#/design-problems'), mobile: true, outDir: OUT });
+
+  // Start from a known store. A mixed session is composed FROM the Leitner
+  // boxes, so whatever the previous probe left behind decides which cards this
+  // one gets — and the "saw both card types" assertion below needs the pool to
+  // still contain both. Run standalone this passed; run straight after
+  // sd-tags-nav (which drills real cards) it saw 12 open and 0 MC, because
+  // every MC in the pool had been answered into a later box.
+  //
+  // sd-tags-nav already does exactly this, for exactly this reason — its header
+  // records that a second consecutive run booted with a persisted filter. A
+  // probe that does not control its own preconditions is measuring the probe
+  // that ran before it.
+  await s.eval(`localStorage.removeItem('jsdrill.systemdesign.v1')`);
+  await s.reload();
+  await s.eval(`location.hash = '#/design-problems'`);
   await s.sleep(900);
 
   // ── Mixed session: every card carries its unit ───────────────────────────

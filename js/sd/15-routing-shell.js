@@ -165,6 +165,15 @@ window.addEventListener('hashchange', () => {
   applyRoute().catch(() => {});
 });
 
+// The page's own chrome. These three were lost when the D15 shell block was
+// spliced in over the old breadcrumb wiring — an off-by-a-few-lines splice
+// boundary that took the wordmark and Stats listeners with it. Nothing failed
+// loudly: the wordmark simply stopped going anywhere, and only home-nav.js's
+// system-design section (which clicks it) noticed.
+document.getElementById('home-btn').addEventListener('click', renderTopics);
+document.getElementById('stats-btn').addEventListener('click', openStats);
+document.getElementById('stats-modal').addEventListener('click', e => { if (e.target.id === 'stats-modal') closeStats(); });
+
 // ── App shell (D15 phase 2) ─────────────────────────────────────────────────
 // The SAME nav + header index.html renders, from the same ds/shell.js and the
 // same route registry. This block is only what is specific to THIS page: what

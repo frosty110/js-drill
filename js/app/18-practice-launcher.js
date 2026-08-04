@@ -14,7 +14,7 @@
 //
 // The desktop topbar menus are untouched (they retire with the P4 rail).
 
-(() => {
+((root) => {
   const GROUPS = [
     { key: 'practice', label: 'Sessions' },
     { key: 'drills', label: 'Drills · pick a recall family' },
@@ -172,4 +172,28 @@
 
   const btn = document.getElementById('practice-launcher-btn');
   if (btn) btn.addEventListener('click', openSheet);
-})();
+
+  // ── Reuse surface (D15 phase 3) ──────────────────────────────────────────
+  // Practice is a VERB, not a place (docs/information-architecture.md §2), so
+  // its sessions belong on Home — the screen that answers "what do I do now?"
+  // — while the ~17 drill families stay behind this sheet. Home renders the
+  // sessions by asking for them here rather than restating the taxonomy: one
+  // owner for what a practice row is and what tapping one does, two places it
+  // can appear. Without this, the two lists drift, which is precisely how
+  // Home's "More" and this sheet came to offer the same four rows.
+  root.PracticeLauncher = {
+    open: openSheet,
+    close: closeSheet,
+    /** Rows for one taxonomy group, unwrapped (no section label / card). */
+    groupHtml(key) {
+      const cat = TOPBAR_MENU_TAXONOMY[key];
+      if (!cat) return '';
+      const entries = Array.isArray(cat.groups) ? cat.groups.flatMap(g => g.items) : cat.items;
+      return entries
+        .map(e => (typeof e === 'string' ? _topbarItemFromButton(document.getElementById(e)) : e))
+        .filter(Boolean).map(rowHtml).join('');
+    },
+    /** Tap semantics for a row rendered by groupHtml(), verbatim. */
+    onRowTap
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);

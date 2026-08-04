@@ -580,8 +580,11 @@ const TOPBAR_MENU_TAXONOMY = {
       // (action:'href' — a plain link row). Diagnostic previously had ZERO
       // entry points after first run; System Design was palette-only on the
       // phone. Both rows die in P8 when page unification lands.
-      { icon: 'clipboard-list', label: 'Diagnostic', desc: '43-question baseline — retake every few weeks', action: 'href', href: 'diagnostic.html' },
-      { icon: 'sysdesign', label: 'System Design', get desc() { return designProblemsBlurb(); }, action: 'href', href: 'system-design.html' }
+      // Diagnostic is a standalone page with no nav rung of its own, so it
+      // needs this row. System Design used to sit beside it and no longer
+      // does: it is a primary destination (D15 §4), and a launcher row for a
+      // rail item is a second door onto one room.
+      { icon: 'clipboard-list', label: 'Diagnostic', desc: '43-question baseline — retake every few weeks', action: 'href', href: 'diagnostic.html' }
     ]
   },
   drills: {

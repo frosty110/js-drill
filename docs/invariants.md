@@ -249,6 +249,47 @@ place has no URL and the contract is already broken.
 
 ---
 
+## 8. Every graph edge says what it is for
+
+**Rule — a component tagged onto a design problem must carry an annotation
+saying what that component is *doing* in that problem.**
+
+The component catalog and the canonical design problems are two directions
+through one graph. `tags.mechanism` supplies the edges; `mechanism-map.json`
+supplies the meaning. Both endpoints render the same annotation.
+
+Without it the surface still works, and that is the danger. A component page
+would list eleven problem names, a problem page would list four component names,
+every link would resolve, nothing would be red — and the page would teach
+nothing, because "News Feed uses caching" is not a fact anyone needs. What they
+need is *"the per-user timeline of post IDs, hydrated on read"*, which is a
+different job from caching in the URL shortener despite the identical tag.
+
+The annotation is written once and rendered at both ends, so it must be a
+**predicate about the job**, never a sentence that only parses from one side.
+"…the per-user timeline of post IDs" reads correctly on both pages; "News Feed
+uses caching for its timeline" is nonsense on the News Feed page.
+
+**Gate** — `validateCatalog()` in `tools/validate-system-design.js`. Seven
+checks; the load-bearing one is **coverage**: for every component declaring a
+`mechanism`, every design problem already tagged with that mechanism must have
+an annotation. Tagging a problem and forgetting the annotation is a build
+failure rather than a page that quietly degrades into a link farm. The rest
+guard the things that also fail silently — a category that doesn't exist (the
+component renders nowhere), a mechanism not in `tags.json` (the chip deep-links
+to an empty list), a dangling `alternatives` id, a "this problem uses…"
+preamble, and an annotation over 220 characters.
+
+Extra annotations beyond the tagged set are allowed: the facet indexes each
+problem's 2–4 *headline* mechanisms, and the catalog is free to be finer.
+
+**Escape hatch** — none needed. Removing the mechanism tag removes the
+requirement, which is the honest way to say "this isn't really used here."
+
+Full contract: [`component-catalog.md`](component-catalog.md).
+
+---
+
 ## Adding an invariant
 
 If you find yourself writing "remember to…" in a doc, that is a rule without a

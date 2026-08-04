@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Work Queue — Async &amp; Messaging — system design</title>
+<meta name="description" content="A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/work-queue/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Work Queue — Async &amp; Messaging — system design">
+<meta property="og:description" content="A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/work-queue/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Work Queue</h1>
+    <p class="sharepage__lede">A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>The prompt has work that must happen but not before the user gets a response</li><li>Producer and consumer rates differ, especially in bursts</li><li>Retries need to be automatic and durable across a worker crash</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>The caller needs the result to continue — you have added latency and a callback problem</li><li>Strict end-to-end ordering across all work is required</li><li>The work is trivial; a queue adds an operational component to save nothing</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Eventual consistency becomes visible to users (&#39;it will appear in a moment&#39;)</li><li>Another durable system to run, monitor and reason about</li><li>Every consumer must be idempotent, because delivery is at-least-once</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Unbounded backlog growth when consumers cannot keep up, turning latency into an outage</li><li>Poison message retried forever, blocking the queue behind it</li><li>Duplicate processing from redelivery after a consumer crash mid-work</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/pubsub/">Pub/Sub</a> — A queue gives each message to ONE consumer; pub/sub gives it to all of them. Different question.</li>
+      <li><a href="../../../../sd/components/c/backpressure/">Backpressure</a> — A queue absorbs bursts; it does not fix a consumer that is permanently too slow.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 5 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p05/">Design a Web Crawler</a> — The URL frontier — the crawler&#39;s queue of what to fetch next, with politeness and priority encoded in how items are dequeued.</li>
+      <li><a href="../../../../sd/design-problems/p07/">Design a Notification System</a> — Decouples the triggering event from delivery, so a slow SMS provider cannot block push notifications or the request that caused them.</li>
+      <li><a href="../../../../sd/design-problems/p20/">Design a Distributed Job Scheduler</a> — The dispatch path: due jobs are enqueued and worker pools pull from it, which is what separates deciding-what-is-due from running-it.</li>
+      <li><a href="../../../../sd/design-problems/p22/">Design an LLM Inference Platform</a> — Inference requests wait for scarce GPU capacity rather than being rejected outright, with queue depth feeding the admission decision.</li>
+      <li><a href="../../../../sd/design-problems/p31/">Design a Content Moderation Pipeline</a> — Content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"work-queue","title":"Work Queue","category":"async-messaging","mechanism":"work-queue","what":"A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path.","reachFor":["The prompt has work that must happen but not before the user gets a response","Producer and consumer rates differ, especially in bursts","Retries need to be automatic and durable across a worker crash"],"avoid":["The caller needs the result to continue — you have added latency and a callback problem","Strict end-to-end ordering across all work is required","The work is trivial; a queue adds an operational component to save nothing"],"costs":["Eventual consistency becomes visible to users ('it will appear in a moment')","Another durable system to run, monitor and reason about","Every consumer must be idempotent, because delivery is at-least-once"],"failureModes":["Unbounded backlog growth when consumers cannot keep up, turning latency into an outage","Poison message retried forever, blocking the queue behind it","Duplicate processing from redelivery after a consumer crash mid-work"],"usedIn":[{"problem":"p05","title":"Design a Web Crawler","doing":"The URL frontier — the crawler's queue of what to fetch next, with politeness and priority encoded in how items are dequeued.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p05/"},{"problem":"p07","title":"Design a Notification System","doing":"Decouples the triggering event from delivery, so a slow SMS provider cannot block push notifications or the request that caused them.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p07/"},{"problem":"p20","title":"Design a Distributed Job Scheduler","doing":"The dispatch path: due jobs are enqueued and worker pools pull from it, which is what separates deciding-what-is-due from running-it.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p20/"},{"problem":"p22","title":"Design an LLM Inference Platform","doing":"Inference requests wait for scarce GPU capacity rather than being rejected outright, with queue depth feeding the admission decision.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p22/"},{"problem":"p31","title":"Design a Content Moderation Pipeline","doing":"Content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p31/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/work-queue">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

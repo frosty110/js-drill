@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sharding — Data Distribution — system design</title>
+<meta name="description" content="Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/sharding/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Sharding — Data Distribution — system design">
+<meta property="og:description" content="Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/sharding/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Sharding</h1>
+    <p class="sharepage__lede">Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>The dataset or its write volume exceeds what one machine can hold or serve</li><li>The prompt gives numbers that clearly exceed one primary</li><li>There is a natural partition key with high cardinality and even distribution</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>One machine still fits — sharding is a permanent complexity tax paid in advance</li><li>Queries routinely span all partitions; you have built scatter-gather, not scale</li><li>No good key exists and every candidate is skewed</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Cross-shard queries and transactions become application problems</li><li>Resharding is a migration with a data-movement plan, not a config change</li><li>Every operational task multiplies by the shard count</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Skew: one partition holds the celebrity and saturates while others idle</li><li>Scatter-gather latency governed by the slowest shard, so p99 degrades as shards are added</li><li>A key chosen for even distribution that forces every read to fan out</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/consistent-hashing/">Consistent Hashing</a> — The placement scheme that makes adding and removing shards cheap; sharding is the what, this is the how.</li>
+      <li><a href="../../../../sd/components/c/replication/">Replication</a> — If reads are the bottleneck and the data fits, replicas scale reads without splitting anything.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 7 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p01/">Design a URL Shortener</a> — Splits the mapping table by short-code hash once one primary cannot hold the row count. Access is pure key lookup, which shards about as cleanly as anything does.</li>
+      <li><a href="../../../../sd/design-problems/p11/">Design a Leaderboard</a> — Partitions scores by leaderboard and time window; one global sorted set would concentrate every write in the system on a single node.</li>
+      <li><a href="../../../../sd/design-problems/p14/">Design a Typeahead / Autocomplete Service</a> — The trie is partitioned by prefix — the textbook uneven partition, since &#39;a&#39; and &#39;th&#39; carry orders of magnitude more traffic than &#39;zq&#39;.</li>
+      <li><a href="../../../../sd/design-problems/p21/">Design a Distributed Key-Value Store</a> — The core mechanic. The keyspace is divided across nodes by ring position, and every other feature in the design is built on top of that division.</li>
+      <li><a href="../../../../sd/design-problems/p24/">Design a Proximity Service</a> — Geo cells are the partition key, so nearby entities land on the same node. Locality is the point; population skew is the price you agree to pay.</li>
+      <li><a href="../../../../sd/design-problems/p25/">Design a Search Engine</a> — The index is split document-wise so each shard holds a slice of the corpus; a query scatters to every shard and gathers the top-K.</li>
+      <li><a href="../../../../sd/design-problems/p26/">Design an Observability Platform</a> — Telemetry is partitioned by series or tenant, because ingest volume is the defining constraint and no single node absorbs a firehose.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"sharding","title":"Sharding","category":"data-distribution","mechanism":"sharding","what":"Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally.","reachFor":["The dataset or its write volume exceeds what one machine can hold or serve","The prompt gives numbers that clearly exceed one primary","There is a natural partition key with high cardinality and even distribution"],"avoid":["One machine still fits — sharding is a permanent complexity tax paid in advance","Queries routinely span all partitions; you have built scatter-gather, not scale","No good key exists and every candidate is skewed"],"costs":["Cross-shard queries and transactions become application problems","Resharding is a migration with a data-movement plan, not a config change","Every operational task multiplies by the shard count"],"failureModes":["Skew: one partition holds the celebrity and saturates while others idle","Scatter-gather latency governed by the slowest shard, so p99 degrades as shards are added","A key chosen for even distribution that forces every read to fan out"],"usedIn":[{"problem":"p01","title":"Design a URL Shortener","doing":"Splits the mapping table by short-code hash once one primary cannot hold the row count. Access is pure key lookup, which shards about as cleanly as anything does.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p01/"},{"problem":"p11","title":"Design a Leaderboard","doing":"Partitions scores by leaderboard and time window; one global sorted set would concentrate every write in the system on a single node.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p11/"},{"problem":"p14","title":"Design a Typeahead / Autocomplete Service","doing":"The trie is partitioned by prefix — the textbook uneven partition, since 'a' and 'th' carry orders of magnitude more traffic than 'zq'.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p14/"},{"problem":"p21","title":"Design a Distributed Key-Value Store","doing":"The core mechanic. The keyspace is divided across nodes by ring position, and every other feature in the design is built on top of that division.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p21/"},{"problem":"p24","title":"Design a Proximity Service","doing":"Geo cells are the partition key, so nearby entities land on the same node. Locality is the point; population skew is the price you agree to pay.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p24/"},{"problem":"p25","title":"Design a Search Engine","doing":"The index is split document-wise so each shard holds a slice of the corpus; a query scatters to every shard and gathers the top-K.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p25/"},{"problem":"p26","title":"Design an Observability Platform","doing":"Telemetry is partitioned by series or tenant, because ingest volume is the defining constraint and no single node absorbs a firehose.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p26/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/sharding">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

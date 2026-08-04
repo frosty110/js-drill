@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Distributed Lock — Correctness &amp; Coordination — system design</title>
+<meta name="description" content="A lease held in a shared store that grants one holder the right to act on a resource for a bounded time.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/distributed-lock/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Distributed Lock — Correctness &amp; Coordination — system design">
+<meta property="og:description" content="A lease held in a shared store that grants one holder the right to act on a resource for a bounded time.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/distributed-lock/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Distributed Lock</h1>
+    <p class="sharepage__lede">A lease held in a shared store that grants one holder the right to act on a resource for a bounded time.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>A critical section spans processes and double execution would corrupt state</li><li>A cheap mutual exclusion is needed for a short operation</li><li>You need to serialise access to something that has no transaction of its own</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>The operation could be made idempotent instead — that is almost always the better answer</li><li>The lock would be held across a long or user-driven operation</li><li>You are using it as a correctness guarantee without fencing tokens</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Every acquisition is a network round trip on the critical path</li><li>TTL choice is a genuine tradeoff: too short breaks long work, too long stalls after a crash</li><li>The lock store becomes a hard dependency and a bottleneck</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Holder pauses (GC, VM freeze) past its TTL while still believing it holds the lock</li><li>No fencing token, so a stale holder&#39;s write is accepted after the lock moved on</li><li>Deadlock or livelock from multiple locks acquired in inconsistent order</li><li>Lock-store failover losing lock state entirely and admitting two holders</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/idempotency/">Idempotency</a> — Make the double execution harmless instead of preventing it. Fewer moving parts, no TTL to tune.</li>
+      <li><a href="../../../../sd/components/c/ordering/">Message Ordering</a> — Serialise by routing to one partition owner rather than by contending on a lock.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 0 design problems</h2>
+    <p>Not yet mapped to a canonical design problem.</p>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"distributed-lock","title":"Distributed Lock","category":"correctness-coordination","mechanism":null,"what":"A lease held in a shared store that grants one holder the right to act on a resource for a bounded time.","reachFor":["A critical section spans processes and double execution would corrupt state","A cheap mutual exclusion is needed for a short operation","You need to serialise access to something that has no transaction of its own"],"avoid":["The operation could be made idempotent instead — that is almost always the better answer","The lock would be held across a long or user-driven operation","You are using it as a correctness guarantee without fencing tokens"],"costs":["Every acquisition is a network round trip on the critical path","TTL choice is a genuine tradeoff: too short breaks long work, too long stalls after a crash","The lock store becomes a hard dependency and a bottleneck"],"failureModes":["Holder pauses (GC, VM freeze) past its TTL while still believing it holds the lock","No fencing token, so a stale holder's write is accepted after the lock moved on","Deadlock or livelock from multiple locks acquired in inconsistent order","Lock-store failover losing lock state entirely and admitting two holders"],"usedIn":[]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/distributed-lock">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

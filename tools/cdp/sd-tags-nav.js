@@ -32,7 +32,14 @@ const N_FAMILIES = MANIFEST.parts.length;
 
   // ── Mobile first: 80% of study happens on a phone (PROFILE.md) ───────────
   const s = await connect({ url: SD('#/design-problems'), mobile: true, outDir: OUT });
-  await s.sleep(900);
+  // The tag-deep-link cases below REPLACE the saved filter, and the filter is
+  // persisted — so a second run booted with a filter already applied and open,
+  // which inverted the very first `filter-toggle` click and made the run fail
+  // on a chip that was no longer on screen. Reset first, the way
+  // tools/cdp/ds-dragscroll.js does, so consecutive runs test the same screen.
+  await s.eval(`localStorage.removeItem('jsdrill.systemdesign.v1')`);
+  await s.eval(`location.reload()`);
+  await s.sleep(1100);
   await s.snap('01-topic-home-mobile');
 
   const parts = await s.eval(`
@@ -140,10 +147,18 @@ const N_FAMILIES = MANIFEST.parts.length;
   await s.snap('05-detail-chips');
   const detailChips = await s.eval(`
     Array.from(document.querySelectorAll('.detail-tags .sd-chip')).map(e => e.textContent.trim()).join('|')`);
-  s.assert(/Consistent hashing/.test(detailChips), `p12 shows mechanism chips, got ${detailChips}`);
+  s.assert(/Medium/.test(detailChips), `p12 shows difficulty + company chips, got ${detailChips}`);
+  // The mechanism half of this row was PROMOTED, not removed: bare chips linking
+  // sideways to a filtered list became the "Components in play" block, where each
+  // mechanism resolves to its component page and carries the annotation saying
+  // what it is doing in THIS problem. The old tag route stays reachable from
+  // there. See docs/component-catalog.md and tools/cdp/sd-component-catalog.js.
   s.assert(await s.eval(`
-    !!document.querySelector('.detail-tags a[href*="tag/mechanism/consistent-hashing"]')`),
-    'mechanism chip links to its filtered list');
+    !!document.querySelector('.cmp-inplay a[data-cmp-link="consistent-hashing"]')`),
+    'p12 links its mechanisms to component pages');
+  const inPlayNote = await s.eval(`
+    (document.querySelector('.cmp-inplay [data-cmp-link="consistent-hashing"] .cmp-use__note')||{}).textContent||''`);
+  s.assert(inPlayNote.trim().length > 20, `the component link says what it is doing here, got "${inPlayNote}"`);
 
   // The transfer surface: tapping consistent-hashing shows every problem using it.
   await s.eval(`location.hash = '#/design-problems/tag/mechanism/consistent-hashing'`);

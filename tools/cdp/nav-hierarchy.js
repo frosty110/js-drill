@@ -122,6 +122,17 @@ const CRUMBS = `(() => {
   s.assert(c.items[2].link, 'sd: the topic is climbable from inside a unit');
   await s.snap('sd-unit');
 
+  // The component catalog landed on main while D15 phase 1 was in flight — it
+  // is the first surface added AFTER `parent` became mandatory, so it is the
+  // proof the gate works on new rows rather than only on the ones it was
+  // written against. A component is Home › System Design › <topic> › Catalog ›
+  // <component>: five deep, the deepest place the app can put you.
+  c = await go('#/components/c/load-balancer', 1800);
+  s.assert(c.items.length === 5, `sd: a component has 5 crumbs (got ${c.items.length})`);
+  s.assert(/Catalog/i.test(c.items[3].label), `sd: the catalog sits between topic and component (got "${c.items[3].label}")`);
+  s.assert(!/^load-balancer$/.test(c.items[4].label), `sd: the component crumb is a title, not an id (got "${c.items[4].label}")`);
+  await s.snap('sd-component');
+
   await s.close();
   const r = s.report();
   process.exit(r.failed || r.errors ? 1 : 0);

@@ -286,6 +286,10 @@
       codeKind: null,
       disposition: 'content',
       sitemap: true,
+      // The catalog is a view OF a topic — sd/<topic>/catalog/ — so it hangs
+      // off sdTopic, and a component hangs off the catalog.
+      parent: 'sdTopic',
+      crumbLabel: () => 'Catalog',
       title: 'Component catalog',
       path: p => `sd/${encodeURIComponent(p.topic)}/catalog/`,
       params: segs => (segs.length === 2 && segs[1] === 'catalog' ? { topic: segs[0] } : null),
@@ -303,6 +307,8 @@
       codeKind: null,
       disposition: 'content',
       sitemap: true,
+      parent: 'sdComponentIndex',
+      crumbLabel: p => p.component,
       path: p => `sd/${encodeURIComponent(p.topic)}/c/${encodeURIComponent(p.component)}/`,
       params: segs => (segs.length === 3 && segs[1] === 'c' ? { topic: segs[0], component: segs[2] } : null),
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/c/${encodeURIComponent(p.component)}`,

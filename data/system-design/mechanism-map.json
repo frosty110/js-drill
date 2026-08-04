@@ -12,7 +12,8 @@
       "p22": "Prompt-prefix and KV-cache reuse across requests, so a shared system prompt is not recomputed per call — the dominant saving in LLM serving.",
       "p24": "Popular geo cells, whose query volume is wildly skewed toward a few dense urban areas. A short TTL absorbs most reads before the index sees them.",
       "p30": "The online store is a cache by another name: precomputed features in a low-latency store, because inference cannot wait for a batch job to finish.",
-      "p32": "Session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard."
+      "p32": "Session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard.",
+      "p34": "Adjudications are cached rather than raw matches, so a name a human already cleared against the current list version does not re-enter the review queue on every payment."
     },
     "sharding": {
       "p01": "Splits the mapping table by short-code hash once one primary cannot hold the row count. Access is pure key lookup, which shards about as cleanly as anything does.",
@@ -30,7 +31,9 @@
       "p17": "Orders must survive retry without dispensing twice; the key is recorded with the fulfilment record, not before it.",
       "p20": "A job execution is keyed, so at-least-once dispatch does not run the same scheduled task twice on two different workers.",
       "p29": "The delivery id sent with every request, so receivers can recognise a redelivery. Its absence is what makes at-least-once dangerous for them.",
-      "p32": "Token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke."
+      "p32": "Token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke.",
+      "p33": "A redelivered alert file must not re-investigate what was already decided, so the key is the source alert id and revision rather than anything the pipeline generates.",
+      "p36": "A vendor timeout is ambiguous about whether the work happened, so the retry has to record one result and incur one charge no matter how many attempts it took."
     },
     "replication": {
       "p12": "Each entry is held on N successive ring nodes, so losing one node degrades the hit rate instead of losing a whole slice of the keyspace.",
@@ -52,28 +55,35 @@
       "p23": "Reranks vector-retrieved candidates before they reach the model, because approximate-nearest-neighbour recall is not the same thing as relevance.",
       "p25": "Scores matching documents so the top-K is worth reading. Retrieval finds candidates; ranking is what makes the result page useful.",
       "p28": "Drives the entire product. The feed is not a follow graph but a ranked stream, so the ranker IS the short-form video experience.",
-      "p31": "Prioritises the review queue so the most likely violations and the highest-reach content reach a human moderator first."
+      "p31": "Prioritises the review queue so the most likely violations and the highest-reach content reach a human moderator first.",
+      "p34": "Scoring the surviving candidates is where date of birth, nationality and identifiers separate a genuine hit from a common surname, and it produces three bands rather than a boolean."
     },
     "work-queue": {
       "p05": "The URL frontier — the crawler's queue of what to fetch next, with politeness and priority encoded in how items are dequeued.",
       "p07": "Decouples the triggering event from delivery, so a slow SMS provider cannot block push notifications or the request that caused them.",
       "p20": "The dispatch path: due jobs are enqueued and worker pools pull from it, which is what separates deciding-what-is-due from running-it.",
       "p22": "Inference requests wait for scarce GPU capacity rather than being rejected outright, with queue depth feeding the admission decision.",
-      "p31": "Content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity."
+      "p31": "Content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity.",
+      "p33": "Alerts arrive as an overnight batch and each investigation runs for minutes, so the queue is what decouples a 4K-alert dump from a fixed pool of concurrent investigations.",
+      "p35": "The workers are people, so the queue hands out leases rather than assignments and reclaims anything a reviewer abandons without needing the client to cooperate.",
+      "p36": "Verification hops have wildly different latencies, from a 2-second API call to a manual check taking days, so the work is queued per hop rather than held open per application."
     },
     "backpressure": {
       "p05": "Politeness limits and frontier depth bound how fast the crawler pulls, so it neither melts a target site nor outruns its own parsers.",
       "p19": "Producers are slowed when partitions cannot absorb writes, because the alternative is unbounded broker storage followed by a hard failure.",
       "p22": "Queue depth signals the admission controller to reject or shed, rather than accumulating requests that will time out before a GPU frees up.",
       "p26": "Ingest pushes back on agents when the pipeline saturates — dropping telemetry is preferable to the observability platform collapsing under it.",
-      "p29": "A slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest."
+      "p29": "A slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest.",
+      "p33": "Per-tenant concurrency caps keep one bank's overnight backfill from consuming every worker slot, because the shared ceiling is model and vendor spend rather than CPU."
     },
     "rate-limiting": {
       "p05": "Per-domain politeness. The crawler caps its own request rate per host — a limiter pointed at itself rather than at incoming callers.",
       "p08": "The problem itself. Every decision here is about where the counter lives and how exact it needs to be across a fleet of gateways.",
       "p29": "Delivery attempts per receiver endpoint are capped, so retries toward a struggling customer do not turn into an attack on them.",
       "p31": "Caps per-uploader submission rate — the cheapest defence against bulk spam, applied before any model spends compute on the content.",
-      "p32": "Login attempts per account and per IP, the primary defence against credential stuffing and brute force."
+      "p32": "Login attempts per account and per IP, the primary defence against credential stuffing and brute force.",
+      "p34": "Escalations are throttled into the review queue rather than at the matcher, because matching is cheap and the humans are the bottleneck that a list delta would otherwise flood.",
+      "p35": "Admission into the queue is metered per lane, so a 500K-item batch dump drains gradually instead of displacing the live stream that has deadlines attached."
     },
     "hot-keys": {
       "p02": "The celebrity account: one write with tens of millions of followers, which is precisely the case that breaks naive fan-out-on-write.",
@@ -108,7 +118,8 @@
     "blob-storage": {
       "p03": "Holds the original photos and their derived sizes; the database stores only metadata and the object key that points at them.",
       "p04": "Stores raw uploads and every transcoded rendition, which is why storage cost multiplies by the size of the bitrate ladder.",
-      "p13": "The backing store for content-addressed chunks, with the file manifest in a database pointing at each one."
+      "p13": "The backing store for content-addressed chunks, with the file manifest in a database pointing at each one.",
+      "p36": "The uploaded document is evidence with the same retention obligation as the decision, so the original is content-addressed and never replaced by anything derived from it."
     },
     "transcoding": {
       "p04": "Converts each upload into the full bitrate ladder, so players can adapt to changing network conditions mid-playback.",
@@ -118,12 +129,14 @@
     "ordering": {
       "p06": "Messages within one conversation must appear in the same order for every participant, which pins a conversation to a single partition.",
       "p10": "Operations on a document must apply in an agreed sequence — the thing the OT or CRDT machinery exists to establish.",
-      "p19": "Per-partition ordering is the guarantee the broker sells; global ordering is deliberately not offered because it would serialise everything."
+      "p19": "Per-partition ordering is the guarantee the broker sells; global ordering is deliberately not offered because it would serialise everything.",
+      "p35": "Arrival order carries no information about importance, so the queue orders by risk and deadline with an aging term that bounds how long the tail can wait."
     },
     "at-least-once": {
       "p07": "A notification may arrive twice but must never be silently dropped, which is what sets the deduplication requirement downstream.",
       "p20": "A scheduled job may fire twice if a worker dies mid-run, so job bodies have to tolerate re-execution by construction.",
-      "p29": "The contract offered to receivers — retried until acknowledged — which is why every delivery carries an id they can dedupe on."
+      "p29": "The contract offered to receivers — retried until acknowledged — which is why every delivery carries an id they can dedupe on.",
+      "p33": "Alert delivery is retried by the bank and by the transport, so the pipeline assumes duplicates by default and makes the investigation step safe to repeat rather than trying to deduplicate at the edge."
     },
     "consistent-hashing": {
       "p08": "Routes each client key to the node holding its counter, so limiter state is not remapped every time a gateway is added or removed.",
@@ -133,17 +146,20 @@
     "reservation": {
       "p09": "A driver is held for a rider while the offer is outstanding, so two riders cannot be matched to the same car.",
       "p16": "Seats are held for the duration of checkout with an expiry — the mechanism that prevents overselling without locking for the whole session.",
-      "p17": "Stock is held while the order and its authorisation clear, since dispensing against inventory that is already gone is not recoverable."
+      "p17": "Stock is held while the order and its authorisation clear, since dispensing against inventory that is already gone is not recoverable.",
+      "p35": "A claimed item is held under an expiring lease, which gives at-most-one-active-reviewer without a lock service and returns the item automatically when someone closes their laptop."
     },
     "conflict-resolution": {
       "p10": "Concurrent edits to the same region are merged rather than rejected — the decision that makes collaborative editing feel live instead of contested.",
       "p13": "Two devices editing the same file offline produce divergent versions, and the design must choose between merging and conflicted copies.",
-      "p21": "Concurrent writes accepted by different replicas are reconciled with version vectors, since a quorum permits them by construction."
+      "p21": "Concurrent writes accepted by different replicas are reconciled with version vectors, since a quorum permits them by construction.",
+      "p36": "The document, the registry and the applicant will state different addresses, so precedence is declared in advance and the winning source is recorded rather than silently overwriting."
     },
     "search-index": {
       "p14": "The prefix-to-completions structure that turns each keystroke into a lookup rather than a scan over the query log.",
       "p23": "Keyword retrieval running alongside vector search, because hybrid retrieval consistently beats either one alone on real queries.",
-      "p25": "The inverted index is the system: term → posting list is what makes query time independent of corpus size."
+      "p25": "The inverted index is the system: term → posting list is what makes query time independent of corpus size.",
+      "p34": "Alias, transliteration and spelling expansion turn 40K sanctioned entities into millions of searchable strings, so candidate generation runs over an n-gram index rather than the entity list."
     },
     "dedup": {
       "p05": "URL and content deduplication, so the crawler neither re-fetches a page nor stores identical content under two different addresses.",

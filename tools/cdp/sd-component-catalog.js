@@ -69,6 +69,12 @@ const TOTAL_EDGES = COMPONENTS.reduce((n, c) => n + usesOf(c.id), 0);
   const rendered = await s.eval(`Array.from(document.querySelectorAll('.cmp-card')).map(e=>e.dataset.cmp)`);
   const missing = COMPONENTS.map(c => c.id).filter(id => !rendered.includes(id));
   s.assert(missing.length === 0, `every component renders (missing: ${missing.slice(0, 3).join(',')})`);
+  // Completeness: a component with no edges shows a "–" and teaches nothing
+  // about transfer. Derived, so this stays honest as the catalog grows.
+  const unmapped = COMPONENTS.filter(c => usesOf(c.id) === 0).map(c => c.id);
+  const placeholders = await s.eval(`document.querySelectorAll('.cmp-card__uses--none').length`);
+  s.assert(placeholders === unmapped.length,
+    `${unmapped.length} unmapped component(s) render as such, got ${placeholders}`);
 
   // 3. Ordering — most-used first inside a category. The asymmetry IS the
   //    curriculum signal, so a flat alphabetical list would be a regression.
@@ -129,12 +135,28 @@ const TOTAL_EDGES = COMPONENTS.reduce((n, c) => n + usesOf(c.id), 0);
   const inPlay = await s.eval(`
     Array.from(document.querySelectorAll('.cmp-inplay .cmp-use')).map(e => ({
       id: e.dataset.cmpLink,
-      title: (e.querySelector('.cmp-use__title')||{}).textContent.trim(),
+      sig: e.classList.contains('cmp-use--sig'),
       note: (e.querySelector('.cmp-use__note')||{}).textContent.trim()
     }))`);
-  const p02Mechs = (DP.chapters.find(c => c.id === 'p02').tags.mechanism) || [];
-  s.assert(inPlay.length === p02Mechs.length,
-    `p02 shows ${p02Mechs.length} components in play, got ${inPlay.length}`);
+  // Derived from the EDGE FILE, not from tags.mechanism. The facet carries only
+  // the 2-4 headline mechanisms and is deliberately not grown to match the
+  // catalog (60 filter chips would be unusable on a phone), so a problem leans
+  // on more components than it is tagged with. docs/component-catalog.md.
+  const p02Edges = COMPONENTS.filter(c => (EDGES[c.id] || {}).p02).map(c => c.id);
+  s.assert(inPlay.length === p02Edges.length,
+    `p02 shows every component with an edge to it (${p02Edges.length}), got ${inPlay.length}`);
+  s.assert(inPlay.length > (DP.chapters.find(c => c.id === 'p02').tags.mechanism || []).length,
+    'the parts list is richer than the headline facet — it is edge-derived, not tag-derived');
+
+  // Signature components (the tagged ones) sort first and are marked, so the
+  // priority signal survives the longer list.
+  const mechOwner = Object.fromEntries(COMPONENTS.filter(c => c.mechanism).map(c => [c.mechanism, c.id]));
+  const p02Sig = new Set(((DP.chapters.find(c => c.id === 'p02').tags.mechanism) || []).map(m => mechOwner[m]).filter(Boolean));
+  s.assert(inPlay.filter(x => x.sig).length === p02Sig.size,
+    `p02 marks its ${p02Sig.size} signature components, got ${inPlay.filter(x => x.sig).length}`);
+  const lastSig = inPlay.map(x => x.sig).lastIndexOf(true);
+  s.assert(inPlay.slice(0, lastSig + 1).every(x => x.sig), 'signature components sort ahead of supporting ones');
+
   const backEdge = inPlay.find(x => x.id === 'caching');
   s.assert(!!backEdge, 'the problem links back to the caching component');
   s.assert(backEdge.note === EDGES.caching.p02,

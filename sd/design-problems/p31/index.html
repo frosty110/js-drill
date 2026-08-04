@@ -33,6 +33,17 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">5</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/work-queue/">Work Queue</a> <span class="ds-chip">signature</span> — Content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity.</li>
+      <li><a href="../../../sd/components/c/stream-processing/">Stream Processing</a> <span class="ds-chip">signature</span> — Uploads flow through a scoring pipeline continuously, so moderation decisions land within seconds of publish rather than on a schedule.</li>
+      <li><a href="../../../sd/components/c/rate-limiting/">Rate Limiting</a> <span class="ds-chip">signature</span> — Caps per-uploader submission rate — the cheapest defence against bulk spam, applied before any model spends compute on the content.</li>
+      <li><a href="../../../sd/components/c/ranking/">Ranking</a> <span class="ds-chip">signature</span> — Prioritises the review queue so the most likely violations and the highest-reach content reach a human moderator first.</li>
+      <li><a href="../../../sd/components/c/pubsub/">Pub/Sub</a> — An upload event reaches the scoring models, the audit log and the review queue without the uploader knowing any of them exist.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Screen uploaded content (text, image, video) against policy categories; auto-remove clear violations; queue uncertain cases for human review; support appeals; keep an audit trail.</li><li>Categories differ in stakes — CSAM and imminent violence versus spam or mild nudity — and justify different handling, not one pipeline setting.</li><li>Both error directions are harmful: a false negative leaves harm live, a false positive silences a legitimate user. There is no &#39;safe&#39; default.</li><li>Auditability and regulatory reporting (DSA, transparency reports) are requirements, so every decision needs a durable record with its reason.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>100M items/day → ~1,150/s average, design for ~5K/s peak</li><li>Classifier inference at that rate is tractable with batching and a cheap-first cascade</li><li>The number that decides the design is HUMAN capacity: a 1% uncertain band is 1M reviews/day, at 30s each ≈ 8,300 reviewer-hours — over a thousand full-time reviewers</li><li>Moving the uncertain band from 1% to 0.5% halves a thousand-person operation</li><li>Reviewer throughput cannot be autoscaled quickly</li><li>Catastrophic categories may need synchronous pre-publish blocking; the rest are async within seconds</li></ul>

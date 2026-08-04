@@ -33,6 +33,18 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">6</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/caching/">Cache</a> <span class="ds-chip">signature</span> — Hot short-code → long-URL lookups. The mapping is immutable once created, so there is no invalidation story to get wrong — only capacity and TTL.</li>
+      <li><a href="../../../sd/components/c/sharding/">Sharding</a> <span class="ds-chip">signature</span> — Splits the mapping table by short-code hash once one primary cannot hold the row count. Access is pure key lookup, which shards about as cleanly as anything does.</li>
+      <li><a href="../../../sd/components/c/id-generation/">Distributed ID Generation</a> <span class="ds-chip">signature</span> — Produces the short code itself. Counter-encoding versus random-with-collision-check versus hashing is the heart of this problem.</li>
+      <li><a href="../../../sd/components/c/kv-store/">Key-Value Store</a> — Holds the short-code → URL mapping. Every access is a lookup by key, which is the shape a KV store scales furthest on.</li>
+      <li><a href="../../../sd/components/c/bloom-filter/">Bloom Filter</a> — Answers &#39;has this short code been issued&#39; without a lookup, turning most collision checks into a memory read.</li>
+      <li><a href="../../../sd/components/c/rest-api/">REST</a> — The public creation and redirect surface, where a cacheable GET and a 301 are doing most of the work.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Shorten a long URL into a unique short code; <code>GET /{code}</code> redirects to the original.</li><li>Optional: custom alias, expiry, click analytics.</li><li>Out of v1 scope: accounts, editing, rich dashboards.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>100M new URLs/day · ~100:1 read:write skew</li><li>~1.2K writes/s avg (~3K peak) · ~116K reads/s avg (~230K peak)</li><li>5-year retention → ~182B mappings, ~90 TB at ~500 B each</li><li>Availability-critical (a dead redirect breaks every embedded link); &lt;10ms redirect from edge</li></ul>

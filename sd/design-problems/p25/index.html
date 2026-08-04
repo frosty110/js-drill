@@ -33,6 +33,20 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">8</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/sharding/">Sharding</a> <span class="ds-chip">signature</span> — The index is split document-wise so each shard holds a slice of the corpus; a query scatters to every shard and gathers the top-K.</li>
+      <li><a href="../../../sd/components/c/replication/">Replication</a> <span class="ds-chip">signature</span> — Index shards are replicated for read throughput and node loss. Query volume, not durability, is what drives the replica count here.</li>
+      <li><a href="../../../sd/components/c/search-index/">Inverted Index / Search</a> <span class="ds-chip">signature</span> — The inverted index is the system: term → posting list is what makes query time independent of corpus size.</li>
+      <li><a href="../../../sd/components/c/ranking/">Ranking</a> <span class="ds-chip">signature</span> — Scores matching documents so the top-K is worth reading. Retrieval finds candidates; ranking is what makes the result page useful.</li>
+      <li><a href="../../../sd/components/c/outbox-cdc/">Transactional Outbox / CDC</a> — Index updates are driven from the document store&#39;s change log, so the index converges on the source of truth without a dual write.</li>
+      <li><a href="../../../sd/components/c/trie-autocomplete/">Trie / Autocomplete</a> — Powers query suggestions alongside the main index, which is a prefix problem rather than a relevance one.</li>
+      <li><a href="../../../sd/components/c/grpc/">gRPC</a> — Fans a query out to index shards and gathers results, paying serialisation cost on every shard of every query.</li>
+      <li><a href="../../../sd/components/c/pagination/">Cursor Pagination</a> — Result paging, where deep pages are expensive by construction because every shard must produce the full prefix.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Index documents; serve keyword queries with boolean and phrase support; rank by relevance; paginate; filters and facets.</li><li>The corpus is large but bounded (say 1B documents), not the open web — no crawling or spam adversaries.</li><li>Query availability matters more than indexing availability: indexing can lag, search cannot go down.</li><li>Relevance is the product and needs a metric (NDCG, click-through). Out of scope: crawling, personalization, deep query understanding.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>1B documents at ~1 KB of text ≈ 1 TB raw; the inverted index lands at ~200–300 GB compressed</li><li>At ~50 GB per shard that&#39;s 5–10 primary shards, replicated a few times</li><li>Two independent scaling axes: more documents needs more shards, more queries needs more replicas</li><li>Every query fans out to every shard, so p99 is the SLOWEST shard: with 10 shards, a 1-in-100 slow response makes ~1 in 10 queries slow</li><li>p99 query latency under ~200ms</li></ul>

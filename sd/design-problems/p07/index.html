@@ -33,6 +33,21 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">9</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/work-queue/">Work Queue</a> <span class="ds-chip">signature</span> — Decouples the triggering event from delivery, so a slow SMS provider cannot block push notifications or the request that caused them.</li>
+      <li><a href="../../../sd/components/c/fanout/">Fan-out</a> <span class="ds-chip">signature</span> — One triggering event expanded into per-user, per-channel deliveries, with email, push and SMS each a separate send from a single source event.</li>
+      <li><a href="../../../sd/components/c/at-least-once/">At-Least-Once Delivery</a> <span class="ds-chip">signature</span> — A notification may arrive twice but must never be silently dropped, which is what sets the deduplication requirement downstream.</li>
+      <li><a href="../../../sd/components/c/idempotency/">Idempotency</a> <span class="ds-chip">signature</span> — Deduplicates sends, so an at-least-once redelivery does not mean the user&#39;s phone buzzes twice for one event.</li>
+      <li><a href="../../../sd/components/c/pubsub/">Pub/Sub</a> — One triggering event delivered to the email, push and SMS pipelines independently, so adding a channel never touches the producer.</li>
+      <li><a href="../../../sd/components/c/dead-letter-queue/">Dead-Letter Queue</a> — Catches notifications that fail past their retry budget, so one permanently bad recipient cannot block the delivery pipeline.</li>
+      <li><a href="../../../sd/components/c/circuit-breaker/">Circuit Breaker</a> — Trips when a downstream provider starts failing, so notifications on other channels are not dragged down with it.</li>
+      <li><a href="../../../sd/components/c/retry-backoff/">Retry with Backoff &amp; Jitter</a> — Governs redelivery after a transient provider error, with jitter so every pending notification does not retry in lockstep.</li>
+      <li><a href="../../../sd/components/c/sse/">Server-Sent Events</a> — Streams notifications to a web client one way, with browser-native reconnect doing work a raw socket would make you build.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>A send API other services call; channels: mobile push (APNS/FCM), email, SMS, optional in-app/web.</li><li>Per-user, per-channel, per-category preferences and opt-out; templating/localization; delivery status tracking.</li><li>Traffic classes with different priority and consent rules: transactional (OTP, receipts) · promotional/bulk · system alerts.</li><li>Out of scope: we don&#39;t compose business logic — callers pass an event plus a target user or template.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>100M DAU × ~5 notifications/day → 500M sends/day, ~5.8K/s average</li><li>Bursty: campaign blasts and morning OTP surges push peak to ~30–60K/s — size for ~10× average</li><li>Fan-out: one event produces 2–3 channel sends, so dispatch QPS runs above ingest</li><li>Sustained peak is bounded by APNS/FCM/Twilio throttles, not our compute</li><li>At-least-once with dedup (not exactly-once); OTP in seconds, bulk at throughput</li></ul>

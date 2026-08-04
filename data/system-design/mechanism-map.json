@@ -1,6 +1,30 @@
 {
   "_doc": "docs/component-catalog.md — edges of the component↔problem graph. Keyed by component id, then by design-problem unit id. Each value says WHAT THE COMPONENT IS DOING in that problem, phrased as a predicate about the job so the same string reads correctly rendered at either endpoint. Gate 5 in validate-system-design.js requires an entry for every problem tagged with a component's mechanism.",
   "edges": {
+    "load-balancer": {
+      "p06": "Spreads long-lived socket connections across the chat fleet, where the stateless assumption breaks — a connection pinned for hours is not a request you can rebalance.",
+      "p09": "Distributes driver and rider connections across the matching fleet, rebalancing only on reconnect since an open socket cannot be moved.",
+      "p27": "Spreads viewer connections at broadcast start, when a million clients arrive inside the same few seconds rather than arriving smoothly.",
+      "p32": "Fronts a stateless auth tier, which is what lets any node validate any session — and the reason session state lives in a shared store rather than server memory."
+    },
+    "reverse-proxy": {
+      "p04": "Terminates TLS and buffers large uploads at the edge, so a slow uploader on a phone does not hold an application thread for the length of the transfer.",
+      "p13": "Absorbs slow client uploads and TLS at the edge, while the chunks themselves go direct to object storage rather than through the application tier."
+    },
+    "api-gateway": {
+      "p08": "The venue the limiter actually runs in — the decision belongs at the front door, before a request has cost any backend capacity.",
+      "p22": "Enforces auth, per-tenant quota and admission before a request reaches a GPU, which is the last point where rejecting is still cheap.",
+      "p32": "Validates the session on every request so downstream services never re-implement auth, making it the single enforcement point."
+    },
+    "service-discovery": {
+      "p12": "Tells clients which nodes are on the ring right now; a stale membership view means two clients hash the same key to different nodes.",
+      "p19": "Lets producers and consumers find the current leader for a partition, which moves whenever an election happens.",
+      "p21": "Propagates ring membership so every node agrees on who owns which key range — usually by gossip rather than a central registry."
+    },
+    "dns-routing": {
+      "p04": "Steers viewers to a nearby CDN PoP before the first byte is requested, which is where most of the latency win is actually won.",
+      "p27": "Routes viewers to a regional edge at stream start; region-level failover happens here, not at the load balancer."
+    },
     "caching": {
       "p01": "Hot short-code → long-URL lookups. The mapping is immutable once created, so there is no invalidation story to get wrong — only capacity and TTL.",
       "p02": "The per-user timeline of post IDs in Redis, hydrated to full post bodies on read. The cache IS the precomputed feed, not an optimisation over it.",
@@ -14,6 +38,59 @@
       "p30": "The online store is a cache by another name: precomputed features in a low-latency store, because inference cannot wait for a batch job to finish.",
       "p32": "Session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard."
     },
+    "cdn": {
+      "p03": "Serves the image bytes themselves, so origin egress does not scale with viewer count and users fetch from a nearby PoP.",
+      "p04": "Distributes video segments — the economics of the whole design, since origin bandwidth for video is the cost that dominates everything else.",
+      "p27": "Delivers HLS/DASH segments to viewers, which is what makes a million-concurrent-viewer broadcast affordable at all.",
+      "p28": "Prefetches and serves the next videos in the feed, because perceived instant playback is the product's core interaction."
+    },
+    "hot-keys": {
+      "p02": "The celebrity account: one write with tens of millions of followers, which is precisely the case that breaks naive fan-out-on-write.",
+      "p11": "One popular leaderboard absorbs most of the reads and writes, so its sorted set has to be split or replicated away from the others.",
+      "p18": "A viral campaign concentrates click events on a single aggregation key, saturating whichever partition happens to own it.",
+      "p24": "Dense urban cells hold vastly more entities and receive vastly more queries than the rest of the grid, by orders of magnitude."
+    },
+    "edge-compute": {
+      "p04": "Validates signed playback tokens at the PoP, so authorisation does not cost a round trip to origin on every segment request.",
+      "p28": "Assembles and prefetches the next few videos near the user, because playback starting instantly is the product's core interaction."
+    },
+    "relational-db": {
+      "p15": "Holds the ledger, where a partial write is not a degraded mode but a lost or duplicated payment — the case ACID exists for.",
+      "p16": "Enforces seat uniqueness transactionally; overselling is the specific failure this store is chosen to make impossible.",
+      "p17": "Holds orders, authorisations and the dispensing audit trail, where regulatory correctness outranks throughput.",
+      "p32": "The user and credential store — modest volume, strong consistency, and the place a password change must take effect immediately."
+    },
+    "kv-store": {
+      "p01": "Holds the short-code → URL mapping. Every access is a lookup by key, which is the shape a KV store scales furthest on.",
+      "p20": "Stores per-job execution state keyed by job id, written and read far more often than it is queried.",
+      "p32": "Holds sessions and refresh tokens keyed by id, with TTL doing the expiry work the application would otherwise schedule itself."
+    },
+    "document-store": {
+      "p03": "Holds photo metadata — a self-contained record read as a whole, with fields that vary by capture source.",
+      "p13": "Holds the file manifest: chunk list, versions and sharing state for one file, all read together on every sync."
+    },
+    "wide-column-store": {
+      "p06": "Messages partitioned by conversation and clustered by time, so 'the last 50 in this thread' is one contiguous read.",
+      "p18": "Absorbs the raw click firehose, where write throughput is the constraint and reads are always a range within one key.",
+      "p26": "Holds telemetry partitioned by series, chosen because ingest volume is the defining constraint and queries never span partitions."
+    },
+    "time-series-db": {
+      "p18": "Stores per-window click counts with retention and rollup handled by the engine rather than by a job you maintain.",
+      "p26": "The natural home for metrics — downsampling and retention are built in, and label cardinality becomes the budget to manage."
+    },
+    "blob-storage": {
+      "p03": "Holds the original photos and their derived sizes; the database stores only metadata and the object key that points at them.",
+      "p04": "Stores raw uploads and every transcoded rendition, which is why storage cost multiplies by the size of the bitrate ladder.",
+      "p13": "The backing store for content-addressed chunks, with the file manifest in a database pointing at each one."
+    },
+    "chunking": {
+      "p13": "Files are split so only changed blocks transfer on edit, which is what makes syncing a large file after a small change cheap.",
+      "p23": "Documents are split into passages small enough to embed meaningfully and to fit a context window, with overlap so meaning survives the cut."
+    },
+    "dedup": {
+      "p05": "URL and content deduplication, so the crawler neither re-fetches a page nor stores identical content under two different addresses.",
+      "p13": "Content-addressed chunks mean an identical block uploaded by any user is stored once — where the storage savings in this design come from."
+    },
     "sharding": {
       "p01": "Splits the mapping table by short-code hash once one primary cannot hold the row count. Access is pure key lookup, which shards about as cleanly as anything does.",
       "p11": "Partitions scores by leaderboard and time window; one global sorted set would concentrate every write in the system on a single node.",
@@ -23,15 +100,6 @@
       "p25": "The index is split document-wise so each shard holds a slice of the corpus; a query scatters to every shard and gathers the top-K.",
       "p26": "Telemetry is partitioned by series or tenant, because ingest volume is the defining constraint and no single node absorbs a firehose."
     },
-    "idempotency": {
-      "p07": "Deduplicates sends, so an at-least-once redelivery does not mean the user's phone buzzes twice for one event.",
-      "p15": "The client-supplied key on every transfer, recorded in the same transaction as the ledger entry — the difference between a retry and a double charge.",
-      "p16": "Booking requests carry a key, so a double-tap or a lost response does not leave one user holding two seats for the same show.",
-      "p17": "Orders must survive retry without dispensing twice; the key is recorded with the fulfilment record, not before it.",
-      "p20": "A job execution is keyed, so at-least-once dispatch does not run the same scheduled task twice on two different workers.",
-      "p29": "The delivery id sent with every request, so receivers can recognise a redelivery. Its absence is what makes at-least-once dangerous for them.",
-      "p32": "Token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke."
-    },
     "replication": {
       "p12": "Each entry is held on N successive ring nodes, so losing one node degrades the hit rate instead of losing a whole slice of the keyspace.",
       "p15": "Synchronous replication of the ledger, because losing an acknowledged financial write is not a degraded mode — it is an unrecoverable defect.",
@@ -40,19 +108,17 @@
       "p25": "Index shards are replicated for read throughput and node loss. Query volume, not durability, is what drives the replica count here.",
       "p32": "Session state is replicated across regions, so a login in one region is honoured in another without a cross-region read on every request."
     },
-    "fanout": {
-      "p02": "The central tradeoff: push each post into every follower's timeline on write, or assemble on read — with the hybrid as the production answer.",
-      "p03": "New photos are pushed into follower feeds, carrying the same celebrity write-amplification problem and the same hybrid escape hatch.",
-      "p06": "One message delivered to every member of a group conversation — a fan-out over live connections rather than over stored timelines.",
-      "p07": "One triggering event expanded into per-user, per-channel deliveries, with email, push and SMS each a separate send from a single source event.",
-      "p27": "One encoded stream distributed to the entire audience at once, where the fan-out degree is the viewer count and the CDN is what makes it affordable."
+    "consistent-hashing": {
+      "p08": "Routes each client key to the node holding its counter, so limiter state is not remapped every time a gateway is added or removed.",
+      "p12": "Places keys on the ring so adding a node moves ~1/N of them, instead of invalidating the whole cache and stampeding the origin.",
+      "p21": "Assigns key ranges to nodes and defines the replica set as the next N nodes clockwise from the key's ring position."
     },
-    "ranking": {
-      "p02": "Orders the assembled timeline by recency, affinity and engagement rather than pure chronology — the second half of the feed problem after fan-out.",
-      "p23": "Reranks vector-retrieved candidates before they reach the model, because approximate-nearest-neighbour recall is not the same thing as relevance.",
-      "p25": "Scores matching documents so the top-K is worth reading. Retrieval finds candidates; ranking is what makes the result page useful.",
-      "p28": "Drives the entire product. The feed is not a follow graph but a ranked stream, so the ranker IS the short-form video experience.",
-      "p31": "Prioritises the review queue so the most likely violations and the highest-reach content reach a human moderator first."
+    "quorum": {
+      "p15": "W and R are set so an acknowledged ledger write survives losing a replica; latency is spent deliberately to buy that guarantee.",
+      "p21": "Tunable N/W/R is the interface through which this design exposes the consistency-availability tradeoff to its callers."
+    },
+    "id-generation": {
+      "p01": "Produces the short code itself. Counter-encoding versus random-with-collision-check versus hashing is the heart of this problem."
     },
     "work-queue": {
       "p05": "The URL frontier — the crawler's queue of what to fetch next, with politeness and priority encoded in how items are dequeued.",
@@ -61,59 +127,17 @@
       "p22": "Inference requests wait for scarce GPU capacity rather than being rejected outright, with queue depth feeding the admission decision.",
       "p31": "Content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity."
     },
-    "backpressure": {
-      "p05": "Politeness limits and frontier depth bound how fast the crawler pulls, so it neither melts a target site nor outruns its own parsers.",
-      "p19": "Producers are slowed when partitions cannot absorb writes, because the alternative is unbounded broker storage followed by a hard failure.",
-      "p22": "Queue depth signals the admission controller to reject or shed, rather than accumulating requests that will time out before a GPU frees up.",
-      "p26": "Ingest pushes back on agents when the pipeline saturates — dropping telemetry is preferable to the observability platform collapsing under it.",
-      "p29": "A slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest."
+    "pubsub": {
+      "p07": "One triggering event delivered to the email, push and SMS pipelines independently, so adding a channel never touches the producer.",
+      "p26": "Telemetry is published once and consumed by alerting, storage and dashboards separately, each at its own pace.",
+      "p31": "An upload event reaches the scoring models, the audit log and the review queue without the uploader knowing any of them exist."
     },
-    "rate-limiting": {
-      "p05": "Per-domain politeness. The crawler caps its own request rate per host — a limiter pointed at itself rather than at incoming callers.",
-      "p08": "The problem itself. Every decision here is about where the counter lives and how exact it needs to be across a fleet of gateways.",
-      "p29": "Delivery attempts per receiver endpoint are capped, so retries toward a struggling customer do not turn into an attack on them.",
-      "p31": "Caps per-uploader submission rate — the cheapest defence against bulk spam, applied before any model spends compute on the content.",
-      "p32": "Login attempts per account and per IP, the primary defence against credential stuffing and brute force."
-    },
-    "hot-keys": {
-      "p02": "The celebrity account: one write with tens of millions of followers, which is precisely the case that breaks naive fan-out-on-write.",
-      "p11": "One popular leaderboard absorbs most of the reads and writes, so its sorted set has to be split or replicated away from the others.",
-      "p18": "A viral campaign concentrates click events on a single aggregation key, saturating whichever partition happens to own it.",
-      "p24": "Dense urban cells hold vastly more entities and receive vastly more queries than the rest of the grid, by orders of magnitude."
-    },
-    "cdn": {
-      "p03": "Serves the image bytes themselves, so origin egress does not scale with viewer count and users fetch from a nearby PoP.",
-      "p04": "Distributes video segments — the economics of the whole design, since origin bandwidth for video is the cost that dominates everything else.",
-      "p27": "Delivers HLS/DASH segments to viewers, which is what makes a million-concurrent-viewer broadcast affordable at all.",
-      "p28": "Prefetches and serves the next videos in the feed, because perceived instant playback is the product's core interaction."
-    },
-    "websockets": {
-      "p06": "Holds the client connection so inbound messages are pushed instantly, with presence and delivery receipts riding the same channel.",
-      "p09": "Carries continuous driver location updates and ride-match offers — both server-initiated and both latency-critical.",
-      "p10": "Streams each operation to every other collaborator, which is the only way the shared-cursor experience can feel live.",
-      "p27": "Powers chat and reactions alongside the video, providing the interactive layer a segment-based CDN path structurally cannot."
-    },
-    "aggregation": {
-      "p11": "Scores are maintained as running totals rather than recomputed, so a read is a range query on a sorted set instead of a scan.",
-      "p18": "The output of the system: click counts per ad per window, maintained incrementally because the raw stream is far too large to scan on demand.",
-      "p26": "Metrics are pre-rolled into time buckets at ingest, so a dashboard query reads summaries instead of scanning raw telemetry.",
-      "p30": "Windowed feature values — counts and averages over recent activity — computed once and served to every model that needs them."
-    },
-    "stream-processing": {
-      "p18": "Windowed counting over the click firehose, where watermarks and late-event policy decide what a given 'minute' actually contains.",
-      "p26": "Telemetry is enriched, sampled and aggregated in flight, because storing everything raw and querying later meets neither the cost nor latency bar.",
-      "p30": "Real-time features are derived from event streams as they arrive — what makes an online feature fresher than a nightly batch job.",
-      "p31": "Uploads flow through a scoring pipeline continuously, so moderation decisions land within seconds of publish rather than on a schedule."
-    },
-    "blob-storage": {
-      "p03": "Holds the original photos and their derived sizes; the database stores only metadata and the object key that points at them.",
-      "p04": "Stores raw uploads and every transcoded rendition, which is why storage cost multiplies by the size of the bitrate ladder.",
-      "p13": "The backing store for content-addressed chunks, with the file manifest in a database pointing at each one."
-    },
-    "transcoding": {
-      "p04": "Converts each upload into the full bitrate ladder, so players can adapt to changing network conditions mid-playback.",
-      "p27": "Must run in near-real-time against live ingest, which is exactly what makes it harder here than in the on-demand case.",
-      "p28": "Produces the short vertical renditions and thumbnails, at a volume driven by upload rate rather than by watch time."
+    "fanout": {
+      "p02": "The central tradeoff: push each post into every follower's timeline on write, or assemble on read — with the hybrid as the production answer.",
+      "p03": "New photos are pushed into follower feeds, carrying the same celebrity write-amplification problem and the same hybrid escape hatch.",
+      "p06": "One message delivered to every member of a group conversation — a fan-out over live connections rather than over stored timelines.",
+      "p07": "One triggering event expanded into per-user, per-channel deliveries, with email, push and SMS each a separate send from a single source event.",
+      "p27": "One encoded stream distributed to the entire audience at once, where the fan-out degree is the viewer count and the CDN is what makes it affordable."
     },
     "ordering": {
       "p06": "Messages within one conversation must appear in the same order for every participant, which pins a conversation to a single partition.",
@@ -125,10 +149,44 @@
       "p20": "A scheduled job may fire twice if a worker dies mid-run, so job bodies have to tolerate re-execution by construction.",
       "p29": "The contract offered to receivers — retried until acknowledged — which is why every delivery carries an id they can dedupe on."
     },
-    "consistent-hashing": {
-      "p08": "Routes each client key to the node holding its counter, so limiter state is not remapped every time a gateway is added or removed.",
-      "p12": "Places keys on the ring so adding a node moves ~1/N of them, instead of invalidating the whole cache and stampeding the origin.",
-      "p21": "Assigns key ranges to nodes and defines the replica set as the next N nodes clockwise from the key's ring position."
+    "exactly-once": {
+      "p15": "A transfer must debit and credit exactly once; a duplicate here is money moved twice, so the ledger write and the dedup record commit together.",
+      "p18": "Click counts must not double under retry, which is why the aggregation sink and the offset commit are made atomic with each other."
+    },
+    "dead-letter-queue": {
+      "p07": "Catches notifications that fail past their retry budget, so one permanently bad recipient cannot block the delivery pipeline.",
+      "p20": "Holds jobs that failed every attempt, turning a silent stall into a queue someone can inspect and replay.",
+      "p29": "Where a delivery lands once the retry schedule is exhausted — the difference between a customer being behind and being silently dropped."
+    },
+    "outbox-cdc": {
+      "p15": "The ledger write and its event commit in one transaction, so a payment can never be recorded without the event telling everyone else.",
+      "p17": "Each workflow step announces completion from the same transaction that performed it, which is what makes the saga recoverable.",
+      "p25": "Index updates are driven from the document store's change log, so the index converges on the source of truth without a dual write."
+    },
+    "stream-processing": {
+      "p18": "Windowed counting over the click firehose, where watermarks and late-event policy decide what a given 'minute' actually contains.",
+      "p26": "Telemetry is enriched, sampled and aggregated in flight, because storing everything raw and querying later meets neither the cost nor latency bar.",
+      "p30": "Real-time features are derived from event streams as they arrive — what makes an online feature fresher than a nightly batch job.",
+      "p31": "Uploads flow through a scoring pipeline continuously, so moderation decisions land within seconds of publish rather than on a schedule."
+    },
+    "aggregation": {
+      "p11": "Scores are maintained as running totals rather than recomputed, so a read is a range query on a sorted set instead of a scan.",
+      "p18": "The output of the system: click counts per ad per window, maintained incrementally because the raw stream is far too large to scan on demand.",
+      "p26": "Metrics are pre-rolled into time buckets at ingest, so a dashboard query reads summaries instead of scanning raw telemetry.",
+      "p30": "Windowed feature values — counts and averages over recent activity — computed once and served to every model that needs them."
+    },
+    "idempotency": {
+      "p07": "Deduplicates sends, so an at-least-once redelivery does not mean the user's phone buzzes twice for one event.",
+      "p15": "The client-supplied key on every transfer, recorded in the same transaction as the ledger entry — the difference between a retry and a double charge.",
+      "p16": "Booking requests carry a key, so a double-tap or a lost response does not leave one user holding two seats for the same show.",
+      "p17": "Orders must survive retry without dispensing twice; the key is recorded with the fulfilment record, not before it.",
+      "p20": "A job execution is keyed, so at-least-once dispatch does not run the same scheduled task twice on two different workers.",
+      "p29": "The delivery id sent with every request, so receivers can recognise a redelivery. Its absence is what makes at-least-once dangerous for them.",
+      "p32": "Token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke."
+    },
+    "saga": {
+      "p15": "A transfer spanning accounts or external processors proceeds as compensable steps, because no distributed transaction spans them.",
+      "p17": "Order → payment → pharmacy fulfilment crosses systems, and each step needs a compensation because some of them cannot be rolled back at all."
     },
     "reservation": {
       "p09": "A driver is held for a rider while the offer is outstanding, so two riders cannot be matched to the same car.",
@@ -140,47 +198,124 @@
       "p13": "Two devices editing the same file offline produce divergent versions, and the design must choose between merging and conflicted copies.",
       "p21": "Concurrent writes accepted by different replicas are reconciled with version vectors, since a quorum permits them by construction."
     },
+    "leader-election": {
+      "p19": "Each partition has exactly one leader accepting writes, and electing a new one on failure is what lets the broker survive node loss.",
+      "p20": "Exactly one scheduler instance may decide which jobs are due, or every due job fires once per running instance."
+    },
+    "distributed-lock": {
+      "p09": "Serialises assignment of one driver, so two concurrent matches cannot both claim the same car.",
+      "p16": "Guards the seat-hold critical section under flash-sale contention, where optimistic retry alone would thrash.",
+      "p20": "Ensures one scheduler tick executes once, with a lease so a crashed holder does not stall the schedule forever."
+    },
+    "rate-limiting": {
+      "p05": "Per-domain politeness. The crawler caps its own request rate per host — a limiter pointed at itself rather than at incoming callers.",
+      "p08": "The problem itself. Every decision here is about where the counter lives and how exact it needs to be across a fleet of gateways.",
+      "p29": "Delivery attempts per receiver endpoint are capped, so retries toward a struggling customer do not turn into an attack on them.",
+      "p31": "Caps per-uploader submission rate — the cheapest defence against bulk spam, applied before any model spends compute on the content.",
+      "p32": "Login attempts per account and per IP, the primary defence against credential stuffing and brute force."
+    },
+    "backpressure": {
+      "p05": "Politeness limits and frontier depth bound how fast the crawler pulls, so it neither melts a target site nor outruns its own parsers.",
+      "p19": "Producers are slowed when partitions cannot absorb writes, because the alternative is unbounded broker storage followed by a hard failure.",
+      "p22": "Queue depth signals the admission controller to reject or shed, rather than accumulating requests that will time out before a GPU frees up.",
+      "p26": "Ingest pushes back on agents when the pipeline saturates — dropping telemetry is preferable to the observability platform collapsing under it.",
+      "p29": "A slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest."
+    },
+    "circuit-breaker": {
+      "p07": "Trips when a downstream provider starts failing, so notifications on other channels are not dragged down with it.",
+      "p17": "Cuts off a failing pharmacy or payment integration rather than letting its latency consume the whole order pipeline.",
+      "p29": "Stops attempts to an endpoint that is consistently failing, which protects both your capacity and the receiver's recovery."
+    },
+    "retry-backoff": {
+      "p05": "Re-fetches a page that timed out on a growing, jittered delay, so a struggling host is not hit again immediately.",
+      "p07": "Governs redelivery after a transient provider error, with jitter so every pending notification does not retry in lockstep.",
+      "p20": "Decides how a failed attempt is re-scheduled, and the ceiling at which it stops being retried and is dead-lettered.",
+      "p29": "The delivery schedule itself — exponential, jittered and capped, because a receiver's outage must not become a retry storm."
+    },
+    "load-shedding": {
+      "p18": "Sampling the click stream under extreme load, accepting an estimate rather than losing the pipeline entirely.",
+      "p22": "Rejects low-priority requests once queue depth implies they would time out anyway, freeing GPUs for work that can still land.",
+      "p26": "Drops or samples telemetry when ingest saturates, on the principle that partial observability beats none."
+    },
+    "bulkhead": {
+      "p22": "Separate GPU pools per priority class, so a batch job cannot consume the capacity interactive requests depend on.",
+      "p26": "Per-tenant ingest partitions, so one customer instrumenting a hot loop cannot degrade everyone else's dashboards.",
+      "p29": "Per-endpoint delivery concurrency, so one slow receiver occupies a bounded slice of the worker pool and no more."
+    },
     "search-index": {
       "p14": "The prefix-to-completions structure that turns each keystroke into a lookup rather than a scan over the query log.",
       "p23": "Keyword retrieval running alongside vector search, because hybrid retrieval consistently beats either one alone on real queries.",
       "p25": "The inverted index is the system: term → posting list is what makes query time independent of corpus size."
     },
-    "dedup": {
-      "p05": "URL and content deduplication, so the crawler neither re-fetches a page nor stores identical content under two different addresses.",
-      "p13": "Content-addressed chunks mean an identical block uploaded by any user is stored once — where the storage savings in this design come from."
+    "vector-search": {
+      "p23": "Retrieves passages by embedding similarity, which is what lets a question phrased differently from the source document still find it."
+    },
+    "ranking": {
+      "p02": "Orders the assembled timeline by recency, affinity and engagement rather than pure chronology — the second half of the feed problem after fan-out.",
+      "p23": "Reranks vector-retrieved candidates before they reach the model, because approximate-nearest-neighbour recall is not the same thing as relevance.",
+      "p25": "Scores matching documents so the top-K is worth reading. Retrieval finds candidates; ranking is what makes the result page useful.",
+      "p28": "Drives the entire product. The feed is not a follow graph but a ranked stream, so the ranker IS the short-form video experience.",
+      "p31": "Prioritises the review queue so the most likely violations and the highest-reach content reach a human moderator first."
     },
     "geo-index": {
       "p09": "Indexes driver locations by cell, so 'nearby available drivers' is a range scan rather than a distance calculation across the fleet.",
       "p24": "The core structure: businesses indexed by geohash or S2 cell, with neighbouring cells scanned to catch results just over a boundary."
     },
-    "chunking": {
-      "p13": "Files are split so only changed blocks transfer on edit, which is what makes syncing a large file after a small change cheap.",
-      "p23": "Documents are split into passages small enough to embed meaningfully and to fit a context window, with overlap so meaning survives the cut."
+    "bloom-filter": {
+      "p01": "Answers 'has this short code been issued' without a lookup, turning most collision checks into a memory read.",
+      "p05": "The seen-URL check — the canonical use, asked billions of times, where a false positive only costs a skipped page.",
+      "p13": "Tests whether a chunk already exists before uploading it, so the dedup path avoids a round trip for genuinely new content.",
+      "p21": "Sits in front of each SSTable so a read skips files that certainly do not hold the key."
     },
-    "exactly-once": {
-      "p15": "A transfer must debit and credit exactly once; a duplicate here is money moved twice, so the ledger write and the dedup record commit together.",
-      "p18": "Click counts must not double under retry, which is why the aggregation sink and the offset commit are made atomic with each other."
+    "trie-autocomplete": {
+      "p14": "The structure the whole design rests on: prefix nodes carrying precomputed top-K completions.",
+      "p25": "Powers query suggestions alongside the main index, which is a prefix problem rather than a relevance one."
     },
-    "saga": {
-      "p15": "A transfer spanning accounts or external processors proceeds as compensable steps, because no distributed transaction spans them.",
-      "p17": "Order → payment → pharmacy fulfilment crosses systems, and each step needs a compensation because some of them cannot be rolled back at all."
+    "websockets": {
+      "p06": "Holds the client connection so inbound messages are pushed instantly, with presence and delivery receipts riding the same channel.",
+      "p09": "Carries continuous driver location updates and ride-match offers — both server-initiated and both latency-critical.",
+      "p10": "Streams each operation to every other collaborator, which is the only way the shared-cursor experience can feel live.",
+      "p27": "Powers chat and reactions alongside the video, providing the interactive layer a segment-based CDN path structurally cannot."
     },
-    "leader-election": {
-      "p19": "Each partition has exactly one leader accepting writes, and electing a new one on failure is what lets the broker survive node loss.",
-      "p20": "Exactly one scheduler instance may decide which jobs are due, or every due job fires once per running instance."
+    "sse": {
+      "p07": "Streams notifications to a web client one way, with browser-native reconnect doing work a raw socket would make you build.",
+      "p22": "Streams generated tokens back as they are produced, which is what makes a slow model feel responsive."
+    },
+    "rest-api": {
+      "p01": "The public creation and redirect surface, where a cacheable GET and a 301 are doing most of the work.",
+      "p16": "The booking surface, where PUT/POST semantics and idempotency keys decide whether a double-tap books two seats.",
+      "p29": "The contract you require of receivers — a URL, a 2xx and a timeout — which is the entire integration surface they implement."
+    },
+    "grpc": {
+      "p09": "Internal calls between matching, pricing and trip services, where per-call overhead matters at ride-request volume.",
+      "p22": "Carries requests to the model servers, with streaming built in rather than layered on.",
+      "p25": "Fans a query out to index shards and gathers results, paying serialisation cost on every shard of every query."
+    },
+    "graphql": {
+      "p02": "Lets the client fetch posts, authors and engagement counts in one round trip instead of three, which matters most on mobile.",
+      "p03": "Serves web, iOS and Android clients that each need a different slice of the same photo and profile graph."
+    },
+    "webhooks": {
+      "p15": "How the payment processor reports that an asynchronous authorisation settled — the event the ledger is waiting on.",
+      "p17": "Carries fulfilment and authorisation callbacks from pharmacy and payment partners you do not control.",
+      "p29": "The problem itself: everything here is about delivering one to a receiver you neither control nor trust to be up."
+    },
+    "pagination": {
+      "p02": "Cursor-based feed paging, so posts arriving mid-scroll do not shift the window and duplicate what the user just read.",
+      "p06": "Scrollback through message history, keyed on message id so a long thread pages backwards at constant cost.",
+      "p25": "Result paging, where deep pages are expensive by construction because every shard must produce the full prefix."
+    },
+    "transcoding": {
+      "p04": "Converts each upload into the full bitrate ladder, so players can adapt to changing network conditions mid-playback.",
+      "p27": "Must run in near-real-time against live ingest, which is exactly what makes it harder here than in the on-demand case.",
+      "p28": "Produces the short vertical renditions and thumbnails, at a volume driven by upload rate rather than by watch time."
     },
     "feature-serving": {
       "p28": "User and video features are fetched at request time to score the candidate set inside the feed's latency budget.",
       "p30": "The problem itself — the online/offline split and point-in-time correctness are the entire design."
     },
-    "id-generation": {
-      "p01": "Produces the short code itself. Counter-encoding versus random-with-collision-check versus hashing is the heart of this problem."
-    },
     "resource-scheduling": {
       "p22": "GPU allocation across requests, where continuous batching and priority classes decide whether very expensive hardware sits idle."
-    },
-    "vector-search": {
-      "p23": "Retrieves passages by embedding similarity, which is what lets a question phrased differently from the source document still find it."
     }
   }
 }

@@ -33,6 +33,22 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">10</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/at-least-once/">At-Least-Once Delivery</a> <span class="ds-chip">signature</span> — The contract offered to receivers — retried until acknowledged — which is why every delivery carries an id they can dedupe on.</li>
+      <li><a href="../../../sd/components/c/idempotency/">Idempotency</a> <span class="ds-chip">signature</span> — The delivery id sent with every request, so receivers can recognise a redelivery. Its absence is what makes at-least-once dangerous for them.</li>
+      <li><a href="../../../sd/components/c/rate-limiting/">Rate Limiting</a> <span class="ds-chip">signature</span> — Delivery attempts per receiver endpoint are capped, so retries toward a struggling customer do not turn into an attack on them.</li>
+      <li><a href="../../../sd/components/c/backpressure/">Backpressure</a> <span class="ds-chip">signature</span> — A slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest.</li>
+      <li><a href="../../../sd/components/c/dead-letter-queue/">Dead-Letter Queue</a> — Where a delivery lands once the retry schedule is exhausted — the difference between a customer being behind and being silently dropped.</li>
+      <li><a href="../../../sd/components/c/circuit-breaker/">Circuit Breaker</a> — Stops attempts to an endpoint that is consistently failing, which protects both your capacity and the receiver&#39;s recovery.</li>
+      <li><a href="../../../sd/components/c/retry-backoff/">Retry with Backoff &amp; Jitter</a> — The delivery schedule itself — exponential, jittered and capped, because a receiver&#39;s outage must not become a retry storm.</li>
+      <li><a href="../../../sd/components/c/bulkhead/">Bulkhead Isolation</a> — Per-endpoint delivery concurrency, so one slow receiver occupies a bounded slice of the worker pool and no more.</li>
+      <li><a href="../../../sd/components/c/rest-api/">REST</a> — The contract you require of receivers — a URL, a 2xx and a timeout — which is the entire integration surface they implement.</li>
+      <li><a href="../../../sd/components/c/webhooks/">Webhooks</a> — The problem itself: everything here is about delivering one to a receiver you neither control nor trust to be up.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Customers register endpoint URLs and subscribe to event types; deliver matching events; expose delivery history and failure replay.</li><li>The receiver is a third party you don&#39;t control — it can be slow, down, misconfigured, or return 200 while ignoring the body.</li><li>At-least-once with bounded retries; best-effort ordering plus an event timestamp (strict ordering conflicts with parallel delivery and retries).</li><li>Isolation is the headline requirement: one unhealthy endpoint must not affect other customers&#39; delivery.</li><li>Receivers must be able to verify authenticity, and the system must not be usable to attack internal services (SSRF).</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>10M events/day across 50K endpoints → ~116/s average, maybe ~600/s peak — modest</li><li>Rate isn&#39;t the constraint, CONCURRENCY is: 600/s at ~3s average is ~1,800 in-flight requests</li><li>The failing tail is what hurts: an endpoint timing out at 10s holds a worker ten times longer than a healthy one</li><li>Retries add load exactly when things are worst — a downstream outage multiplies attempts across every subscriber at once</li><li>Deliver within seconds for healthy endpoints; producers must never block on delivery</li></ul>

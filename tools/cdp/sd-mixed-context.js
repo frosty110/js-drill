@@ -58,7 +58,14 @@ const CARD = `(() => {
 
   // ── Mobile first: 80% of study happens on a phone (PROFILE.md) ───────────
   const s = await connect({ url: SD('#/design-problems'), mobile: true, outDir: OUT });
-  await s.sleep(900);
+  // A mixed session is ordered new-first over saved Leitner state, so the slice
+  // this probe walks depends on whatever graded it last — including OTHER probes
+  // sharing the browser profile. That made "saw both card types" pass or fail by
+  // suite order rather than by anything real. Reset first, the way
+  // tools/cdp/ds-dragscroll.js does, so every run walks the same pool.
+  await s.eval(`localStorage.removeItem('jsdrill.systemdesign.v1')`);
+  await s.eval(`location.reload()`);
+  await s.sleep(1100);
 
   // ── Mixed session: every card carries its unit ───────────────────────────
   await s.eval(`location.hash = '#/design-problems/mixed'`);

@@ -177,6 +177,34 @@ Keyed by **component id**, not mechanism id. Most components are a mechanism
 facet is a coarse index of each problem's 2–4 *headline* mechanisms, while the
 catalog is free to be finer-grained.
 
+### When an edge exists
+
+**An edge exists when the component is a DECISION in that problem** — something
+a candidate has to choose and defend — not merely something present in the
+architecture.
+
+This is the rule that keeps the graph worth reading. A load balancer appears in
+all 32 designs; it is a *decision* in about four (the ones where long-lived
+connections break the stateless assumption). Authoring an edge everywhere the
+component technically appears would rebuild the link farm the annotations exist
+to prevent, just with more words in it.
+
+Current shape: **196 edges over 60 components**, 3–10 per problem, ~6 on average.
+
+### Signature vs. supporting
+
+A problem's `tags.mechanism` names its 2–4 **signature** components — the ones an
+interviewer actually probes. The edge file names all ~6 it leans on. Both are
+worth showing, so both endpoints sort the signature ones first and mark them,
+rather than hiding the rest or flattening the distinction.
+
+**The facet is deliberately NOT grown to match the catalog.** `tags.json`'s
+`mechanism` values are the *filter* index, and a filter panel with 60 chips is
+unusable on a phone — which is where 80% of study happens (PROFILE.md). This is
+why the problem→component list is derived from the **edge file** rather than
+from the tags: reading it from the facet would have hidden two thirds of each
+parts list behind a filter-sizing decision that has nothing to do with it.
+
 ---
 
 ## Gates
@@ -234,6 +262,11 @@ Two surfaces, registered in `js/routes.js` like every other addressable place
 |---|---|---|
 | `sdComponentIndex` | `system-design.html#/components/catalog` | `sd/components/catalog/` |
 | `sdComponent` | `system-design.html#/components/c/<id>` | `sd/components/c/<id>/` |
+
+**Both endpoints of every edge are fetchable.** A component page lists its
+problems and each design problem's page lists its components, in the static
+output as well as in the app. A one-way graph over HTTP would satisfy invariant
+7 for each page individually while making the traversal itself app-only.
 
 Both are `content` disposition — a component page means the same thing to
 everyone who opens it, so it is crawlable, shareable and quotable, and the

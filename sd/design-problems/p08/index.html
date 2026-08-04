@@ -33,6 +33,16 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">4</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/caching/">Cache</a> <span class="ds-chip">signature</span> — The counter state itself. Limiter state is small, extremely hot, and worthless once stale — which is exactly the shape an in-memory store is for.</li>
+      <li><a href="../../../sd/components/c/consistent-hashing/">Consistent Hashing</a> <span class="ds-chip">signature</span> — Routes each client key to the node holding its counter, so limiter state is not remapped every time a gateway is added or removed.</li>
+      <li><a href="../../../sd/components/c/rate-limiting/">Rate Limiting</a> <span class="ds-chip">signature</span> — The problem itself. Every decision here is about where the counter lives and how exact it needs to be across a fleet of gateways.</li>
+      <li><a href="../../../sd/components/c/api-gateway/">API Gateway</a> — The venue the limiter actually runs in — the decision belongs at the front door, before a request has cost any backend capacity.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Limit requests per client per window (e.g. 100 req/min); different rules per endpoint/tier; reject with 429 plus retry guidance.</li><li>Decide the limiting key — user id, API key, IP, or a combination — and whether limits are global or per-endpoint.</li><li>Runs as middleware at the API gateway/edge.</li><li>State the behaviour when the counter store is unreachable: fail open (availability) or fail closed (protection).</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>The gateway fronts 1M req/s at peak → ~1M counter ops/s (one check per request)</li><li>A single Redis node does ~100–200K ops/s → shard by key across a cluster</li><li>State is tiny: a counter plus TTL is tens of bytes, so even 100M active keys is a few GB</li><li>Latency budget is the tight constraint: sub-ms to low-ms, on every request&#39;s hot path</li><li>Write-dominated — every check mutates a counter. Hot keys (one abuser, a shared NAT IP) pile onto one shard.</li></ul>

@@ -230,6 +230,14 @@
   .cmp-use__note{font-size:13px;color:var(--muted);line-height:1.55}
   .cmp-empty{margin:0;font-size:13.5px;color:var(--muted);line-height:1.55}
   .cmp-inplay{margin-top:16px}
+  /* A problem leans on ~6 components but only 2-4 are its HEADLINE mechanisms —
+     the ones an interviewer actually probes. Both are worth listing; conflating
+     them would lose the priority signal, so the tagged ones sort first and say
+     so rather than being separated into a second block nobody scrolls to. */
+  .cmp-use--sig{border-left:3px solid var(--accent)}
+  .cmp-sig{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:999px;
+    background:var(--ds-accent-soft);color:var(--ds-accent-hi);font-size:10px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
 
   .sd-filter{background:var(--panel);border:1px solid var(--panel-2);border-radius:var(--radius);
     margin:18px 0 4px;overflow:hidden}
@@ -608,14 +616,26 @@ function componentEdges(id) {
   const byProblem = (EDGES && EDGES[id]) || {};
   return Object.keys(byProblem).sort().map(pid => ({ problem: pid, note: byProblem[pid] }));
 }
-// The reverse lookup a design problem needs: its mechanisms, resolved to
-// components, carrying the same annotation the component page shows.
+// The reverse lookup a design problem needs. The EDGE FILE is the graph's
+// source of truth here, NOT `tags.mechanism`: the facet indexes each problem's
+// 2–4 HEADLINE mechanisms and has to stay small enough to work as a filter (60
+// chips would be unusable on a phone), while the catalog is deliberately finer
+// — a problem leans on ~6 components, not 3. Deriving this from the tags would
+// have hidden most of the parts list behind a filter-sizing decision.
+//
+// The tagged ones are still distinguished: they are what an interviewer probes,
+// so they sort first and carry a marker. Iteration order is the catalog's
+// authored order, so the list is stable between renders.
 function problemComponents(pid, mechanisms) {
-  return (mechanisms || []).map(m => {
-    const cid = componentForMechanism(m);
-    const c = cid ? componentById(cid) : null;
-    return c ? { component: c, note: ((EDGES && EDGES[cid]) || {})[pid] || '' } : null;
-  }).filter(Boolean);
+  const signature = new Set((mechanisms || []).map(componentForMechanism).filter(Boolean));
+  const out = [];
+  for (const [cid, byProblem] of Object.entries(EDGES || {})) {
+    const note = byProblem[pid];
+    if (!note) continue;
+    const c = componentById(cid);
+    if (c) out.push({ component: c, note, signature: signature.has(cid) });
+  }
+  return out.sort((a, b) => (b.signature ? 1 : 0) - (a.signature ? 1 : 0));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1295,12 +1315,13 @@ async function renderChapterDetail(t, chId) {
   if (dTags && dTags.mechanism.length) {
     await loadCatalog();
     const used = problemComponents(chId, dTags.mechanism);
+    const sig = used.filter(u => u.signature).length;
     if (used.length) componentRow = `
       <section class="cmp-block cmp-block--uses cmp-inplay">
-        <h3>Components in play</h3>
+        <h3>Components in play — ${used.length}${sig ? `, ${sig} signature` : ''}</h3>
         <div class="cmp-uses">${used.map(u => `
-          <a class="cmp-use" href="#/components/c/${encodeURIComponent(u.component.id)}" data-cmp-link="${esc(u.component.id)}">
-            <span class="cmp-use__title">${esc(u.component.title)}</span>
+          <a class="cmp-use${u.signature ? ' cmp-use--sig' : ''}" href="#/components/c/${encodeURIComponent(u.component.id)}" data-cmp-link="${esc(u.component.id)}">
+            <span class="cmp-use__title">${esc(u.component.title)}${u.signature ? ' <span class="cmp-sig" title="A headline mechanism for this problem — what an interviewer probes">signature</span>' : ''}</span>
             <span class="cmp-use__note">${fmt(u.note || u.component.what)}</span>
           </a>`).join('')}</div>
       </section>`;

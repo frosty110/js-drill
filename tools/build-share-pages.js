@@ -338,7 +338,7 @@ function sdDiagramsSection(topic, meta, unit) {
   </section>`;
 }
 
-function sdUnitPage(topic, meta, unit) {
+function sdUnitPage(topic, meta, unit, catalog, edges, entry) {
   const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: unit.id })}`;
   const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdUnit').appHash({ topic: topic.id, unit: unit.id })}`;
   const questions = unit.questions || [];
@@ -384,6 +384,31 @@ function sdUnitPage(topic, meta, unit) {
   </header>`);
 
   out.push(resultsMount);
+
+  // ── The problem → component half of the graph ────────────────────────────
+  // Both endpoints of every edge have to be fetchable, or the traversal only
+  // works in the app: a component page listing its problems while the problem
+  // pages say nothing about components is a one-way graph to anyone reading
+  // over HTTP. Derived from the EDGE FILE, not from tags.mechanism — the facet
+  // carries only the 2-4 headline mechanisms. docs/component-catalog.md.
+  if (catalog && edges) {
+    const byId = Object.fromEntries((catalog.components || []).map(c => [c.id, c]));
+    const mechToComp = Object.fromEntries((catalog.components || []).filter(c => c.mechanism).map(c => [c.mechanism, c.id]));
+    const signature = new Set(((entry && entry.tags && entry.tags.mechanism) || []).map(m => mechToComp[m]).filter(Boolean));
+    const used = [];
+    for (const [cid, byProblem] of Object.entries(edges)) {
+      if (!byProblem[unit.id] || !byId[cid]) continue;
+      used.push({ c: byId[cid], note: byProblem[unit.id], sig: signature.has(cid) });
+    }
+    used.sort((a, b) => (b.sig ? 1 : 0) - (a.sig ? 1 : 0));
+    if (used.length) out.push(`
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">${used.length}</span></h2>
+    <ul class="sharepage__list">
+      ${used.map(u => `<li><a href="${up(3)}${esc(DrillRoutes.sharePath('sdComponent', { topic: catalog.appliesTo, component: u.c.id }))}">${esc(u.c.title)}</a>${u.sig ? ' <span class="ds-chip">signature</span>' : ''} — ${md(u.note)}</li>`).join('\n      ')}
+    </ul>
+  </section>`);
+  }
 
   // The brief before the key ideas: an agent handed this URL needs the scoped
   // requirements and the scale constants to judge an answer at all — most of
@@ -1088,7 +1113,7 @@ function main() {
           throw new Error(`${t.id}/${c.id}: ${q.options.length} options exceeds the share alphabet`);
         }
       }
-      emit(path.join('sd', t.id, c.id, 'index.html'), sdUnitPage(t, meta, unit));
+      emit(path.join('sd', t.id, c.id, 'index.html'), sdUnitPage(t, meta, unit, CATALOG, EDGES, c));
       entries.push({
         kind: 'sdUnit', params: { topic: t.id, unit: c.id },
         images: committedSheets(t, unit).map(it => ({

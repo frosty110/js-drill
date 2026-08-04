@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pre-Aggregation &amp; Rollups — Async &amp; Messaging — system design</title>
+<meta name="description" content="Maintaining counters and summaries as data arrives, so a read is a lookup instead of a scan.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/aggregation/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Pre-Aggregation &amp; Rollups — Async &amp; Messaging — system design">
+<meta property="og:description" content="Maintaining counters and summaries as data arrives, so a read is a lookup instead of a scan.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/aggregation/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Pre-Aggregation &amp; Rollups</h1>
+    <p class="sharepage__lede">Maintaining counters and summaries as data arrives, so a read is a lookup instead of a scan.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>The prompt asks for counts, totals or top-N over volumes too large to scan per request</li><li>The same aggregate is read far more often than the underlying events change</li><li>Dashboards or leaderboards need sub-second reads</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>Query dimensions are unknown or ad-hoc; you cannot pre-aggregate every combination</li><li>Exact answers over arbitrary time ranges are required and the rollup granularity would not support them</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Every new dimension multiplies the number of aggregates to maintain</li><li>Backfilling a new aggregate means reprocessing history</li><li>Aggregates can drift from the source and need periodic reconciliation</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Double counting on retry, so the counter is wrong and nothing signals it</li><li>Hot counter — one popular entity&#39;s increments exceed a single partition&#39;s write throughput</li><li>Rollup granularity chosen too coarse to answer a question the product later asks</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/stream-processing/">Stream Processing</a> — When aggregation needs windows, joins or late-data handling, you want a real stream engine.</li>
+      <li><a href="../../../../sd/components/c/hot-keys/">Hot-Key Mitigation</a> — Sharded counters are the standard fix once one aggregate becomes a write hotspot.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 4 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p11/">Design a Leaderboard</a> — Scores are maintained as running totals rather than recomputed, so a read is a range query on a sorted set instead of a scan.</li>
+      <li><a href="../../../../sd/design-problems/p18/">Design an Ad Click Aggregator</a> — The output of the system: click counts per ad per window, maintained incrementally because the raw stream is far too large to scan on demand.</li>
+      <li><a href="../../../../sd/design-problems/p26/">Design an Observability Platform</a> — Metrics are pre-rolled into time buckets at ingest, so a dashboard query reads summaries instead of scanning raw telemetry.</li>
+      <li><a href="../../../../sd/design-problems/p30/">Design a Feature Store</a> — Windowed feature values — counts and averages over recent activity — computed once and served to every model that needs them.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"aggregation","title":"Pre-Aggregation & Rollups","category":"async-messaging","mechanism":"aggregation","what":"Maintaining counters and summaries as data arrives, so a read is a lookup instead of a scan.","reachFor":["The prompt asks for counts, totals or top-N over volumes too large to scan per request","The same aggregate is read far more often than the underlying events change","Dashboards or leaderboards need sub-second reads"],"avoid":["Query dimensions are unknown or ad-hoc; you cannot pre-aggregate every combination","Exact answers over arbitrary time ranges are required and the rollup granularity would not support them"],"costs":["Every new dimension multiplies the number of aggregates to maintain","Backfilling a new aggregate means reprocessing history","Aggregates can drift from the source and need periodic reconciliation"],"failureModes":["Double counting on retry, so the counter is wrong and nothing signals it","Hot counter — one popular entity's increments exceed a single partition's write throughput","Rollup granularity chosen too coarse to answer a question the product later asks"],"usedIn":[{"problem":"p11","title":"Design a Leaderboard","doing":"Scores are maintained as running totals rather than recomputed, so a read is a range query on a sorted set instead of a scan.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p11/"},{"problem":"p18","title":"Design an Ad Click Aggregator","doing":"The output of the system: click counts per ad per window, maintained incrementally because the raw stream is far too large to scan on demand.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p18/"},{"problem":"p26","title":"Design an Observability Platform","doing":"Metrics are pre-rolled into time buckets at ingest, so a dashboard query reads summaries instead of scanning raw telemetry.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p26/"},{"problem":"p30","title":"Design a Feature Store","doing":"Windowed feature values — counts and averages over recent activity — computed once and served to every model that needs them.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p30/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/aggregation">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

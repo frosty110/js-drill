@@ -43,7 +43,10 @@
   // unit. Without this list `sd/design-problems/plan/night-before/` and
   // `sd/design-problems/p06/overview/` are the same shape, and a plan would
   // parse as a study sheet.
-  const SD_RESERVED = new Set(['plan', 'tag', 'mixed', 'due']);
+  // `catalog` and `c` join them for the component catalog: without the
+  // discriminator, a component id and a unit id share a shape, and
+  // `#/components/c01` would be ambiguous between the two.
+  const SD_RESERVED = new Set(['plan', 'tag', 'mixed', 'due', 'catalog', 'c']);
 
   // ── The registry ──────────────────────────────────────────────────────────
   // ONE row per place the app can put the user. Not "per crawlable page" —
@@ -271,6 +274,39 @@
       crumbLabel: () => 'Due',
       appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/due`,
       appParams: segs => (segs.length === 2 && segs[1] === 'due' ? { topic: segs[0] } : null)
+    },
+    {
+      // The component catalog — every building block grouped by category.
+      // Content: the same list for everyone, and the entry point a crawler or
+      // an agent needs in order to find the component pages at all.
+      kind: 'sdComponentIndex',
+      page: 'system-design.html',
+      dir: 'sd',
+      arity: 2,
+      codeKind: null,
+      disposition: 'content',
+      sitemap: true,
+      title: 'Component catalog',
+      path: p => `sd/${encodeURIComponent(p.topic)}/catalog/`,
+      params: segs => (segs.length === 2 && segs[1] === 'catalog' ? { topic: segs[0] } : null),
+      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/catalog`,
+      appParams: segs => (segs.length === 2 && segs[1] === 'catalog' ? { topic: segs[0] } : null)
+    },
+    {
+      // One component — what it is, when to reach for it, what it costs, and
+      // every design problem that uses it with what it is doing there. The
+      // other direction of the same edge a problem's mechanism chip walks.
+      kind: 'sdComponent',
+      page: 'system-design.html',
+      dir: 'sd',
+      arity: 3,
+      codeKind: null,
+      disposition: 'content',
+      sitemap: true,
+      path: p => `sd/${encodeURIComponent(p.topic)}/c/${encodeURIComponent(p.component)}/`,
+      params: segs => (segs.length === 3 && segs[1] === 'c' ? { topic: segs[0], component: segs[2] } : null),
+      appHash: p => `system-design.html#/${encodeURIComponent(p.topic)}/c/${encodeURIComponent(p.component)}`,
+      appParams: segs => (segs.length === 3 && segs[1] === 'c' ? { topic: segs[0], component: segs[2] } : null)
     },
     {
       kind: 'sdUnit',

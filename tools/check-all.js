@@ -60,6 +60,7 @@ const PROBE_SUITE = [
   { name: 'sd study plans',      cmd: ['tools/cdp/sd-plans.js'] },
   { name: 'sd tags + nav',       cmd: ['tools/cdp/sd-tags-nav.js'] },
   { name: 'sd mixed context',    cmd: ['tools/cdp/sd-mixed-context.js'] },
+  { name: 'sd component catalog',cmd: ['tools/cdp/sd-component-catalog.js'] },
   { name: 'agent bridge',        cmd: ['tools/cdp/agent-bridge.js'] },
   { name: 'sync merge rules',    cmd: ['tools/cdp/sync-merge.js'] }
 ];

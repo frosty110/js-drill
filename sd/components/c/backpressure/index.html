@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backpressure — Control &amp; Protection — system design</title>
+<meta name="description" content="Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/backpressure/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Backpressure — Control &amp; Protection — system design">
+<meta property="og:description" content="Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/backpressure/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Backpressure</h1>
+    <p class="sharepage__lede">Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>Producer and consumer rates can diverge for sustained periods</li><li>The prompt has a pipeline where an unbounded buffer would just relocate the failure</li><li>Memory or queue depth is a real constraint</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>Bursts are short and a buffer genuinely absorbs them</li><li>The producer physically cannot slow down — a firehose of external events — in which case you must shed instead</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Slowness propagates upstream by design, so the effect is visible to callers</li><li>Every stage needs a bounded buffer and a policy for what happens when it is full</li><li>Harder to reason about: a slow leaf can stall the root</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Unbounded queue chosen &#39;temporarily&#39;, converting a latency problem into an out-of-memory crash</li><li>Backpressure propagating all the way to a user-facing request path and timing everyone out</li><li>Deadlock when two stages apply backpressure to each other in a cycle</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/load-shedding/">Load Shedding</a> — When you cannot slow the producer, drop work deliberately by priority.</li>
+      <li><a href="../../../../sd/components/c/work-queue/">Work Queue</a> — A durable queue absorbs bursts; pair with backpressure so &#39;burst&#39; cannot silently become &#39;forever&#39;.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 5 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p05/">Design a Web Crawler</a> — Politeness limits and frontier depth bound how fast the crawler pulls, so it neither melts a target site nor outruns its own parsers.</li>
+      <li><a href="../../../../sd/design-problems/p19/">Design a Distributed Message Queue</a> — Producers are slowed when partitions cannot absorb writes, because the alternative is unbounded broker storage followed by a hard failure.</li>
+      <li><a href="../../../../sd/design-problems/p22/">Design an LLM Inference Platform</a> — Queue depth signals the admission controller to reject or shed, rather than accumulating requests that will time out before a GPU frees up.</li>
+      <li><a href="../../../../sd/design-problems/p26/">Design an Observability Platform</a> — Ingest pushes back on agents when the pipeline saturates — dropping telemetry is preferable to the observability platform collapsing under it.</li>
+      <li><a href="../../../../sd/design-problems/p29/">Design a Webhook Delivery System</a> — A slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"backpressure","title":"Backpressure","category":"control-protection","mechanism":"backpressure","what":"Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks.","reachFor":["Producer and consumer rates can diverge for sustained periods","The prompt has a pipeline where an unbounded buffer would just relocate the failure","Memory or queue depth is a real constraint"],"avoid":["Bursts are short and a buffer genuinely absorbs them","The producer physically cannot slow down — a firehose of external events — in which case you must shed instead"],"costs":["Slowness propagates upstream by design, so the effect is visible to callers","Every stage needs a bounded buffer and a policy for what happens when it is full","Harder to reason about: a slow leaf can stall the root"],"failureModes":["Unbounded queue chosen 'temporarily', converting a latency problem into an out-of-memory crash","Backpressure propagating all the way to a user-facing request path and timing everyone out","Deadlock when two stages apply backpressure to each other in a cycle"],"usedIn":[{"problem":"p05","title":"Design a Web Crawler","doing":"Politeness limits and frontier depth bound how fast the crawler pulls, so it neither melts a target site nor outruns its own parsers.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p05/"},{"problem":"p19","title":"Design a Distributed Message Queue","doing":"Producers are slowed when partitions cannot absorb writes, because the alternative is unbounded broker storage followed by a hard failure.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p19/"},{"problem":"p22","title":"Design an LLM Inference Platform","doing":"Queue depth signals the admission controller to reject or shed, rather than accumulating requests that will time out before a GPU frees up.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p22/"},{"problem":"p26","title":"Design an Observability Platform","doing":"Ingest pushes back on agents when the pipeline saturates — dropping telemetry is preferable to the observability platform collapsing under it.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p26/"},{"problem":"p29","title":"Design a Webhook Delivery System","doing":"A slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p29/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/backpressure">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

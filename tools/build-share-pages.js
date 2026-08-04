@@ -632,7 +632,7 @@ function sdIndexPage(topics, metas) {
   return out.join('\n');
 }
 
-function sdTopicPage(topic, meta) {
+function sdTopicPage(topic, meta, catalog) {
   const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdTopic', { topic: topic.id })}`;
   const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdTopic').appHash({ topic: topic.id })}`;
   const out = [];
@@ -646,7 +646,12 @@ function sdTopicPage(topic, meta) {
     <p class="sharepage__crumb"><a href="${up(2)}sd/">System design</a></p>
     <h1>${esc(meta.title)}</h1>
     ${meta.subtitle ? `<p class="sharepage__lede">${esc(meta.subtitle)}</p>` : ''}
-  </header>
+  </header>${catalog ? `
+  <section class="ds-section" id="catalog">
+    <h2>Component catalog</h2>
+    <p><a href="${up(2)}${esc(DrillRoutes.sharePath('sdComponentIndex', { topic: topic.id }))}">${(catalog.components || []).length} building blocks, worked backwards</a> —
+       what each one is, the signal in a prompt that says reach for it, what it costs, and every canonical design problem that uses it.</p>
+  </section>` : ''}
   <section class="ds-section" id="units">
     <h2>${esc(meta.unitLabel || 'Chapter')}s <span class="sharepage__count">${meta.chapters.length}</span></h2>
     <ul class="sharepage__list">
@@ -779,6 +784,119 @@ function sdTagPage(topic, meta, facet, value, units) {
   <script type="application/json" id="drill-data">${JSON.stringify({
     topic: topic.id, facet: facet.id, value: value.id, label: value.label,
     units: units.map(id => ({ id, url: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: topic.id, unit: id })}` }))
+  }, null, 0).replace(/</g, '\\u003c')}</script>`);
+  out.push(foot(4, appUrl));
+  return out.join('\n');
+}
+
+// ── Component catalog ───────────────────────────────────────────────────────
+// The JS-free twin of #/components/catalog and #/components/c/<id>. Both
+// directions of the component↔problem graph are rendered as real links, so a
+// fetcher handed either endpoint can walk to the other — which is the entire
+// point of the surface. Contract: docs/component-catalog.md.
+function sdCatalogIndexPage(topic, meta, catalog, edges) {
+  const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdComponentIndex', { topic: topic.id })}`;
+  const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdComponentIndex').appHash({ topic: topic.id })}`;
+  const comps = catalog.components || [];
+  const usesOf = id => Object.keys((edges || {})[id] || {}).length;
+  const idx = Object.fromEntries(comps.map((c, i) => [c.id, i]));
+  const out = [];
+  out.push(head(3, {
+    title: `${catalog.title || 'Component catalog'} — ${meta.title}`,
+    description: catalog.description || 'Every system-design building block: when to reach for it, what it costs, and which canonical problems use it.',
+    canonical
+  }));
+  out.push(`
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="${up(3)}sd/">System design</a> › <a href="${up(3)}sd/${esc(topic.id)}/">${esc(meta.title)}</a></p>
+    <h1>${esc(catalog.title || 'Component catalog')}</h1>
+    <p class="sharepage__lede">${esc(catalog.description || '')}</p>
+    <p><strong>${comps.length}</strong> components · <strong>${(catalog.categories || []).length}</strong> categories ·
+       <strong>${comps.reduce((n, c) => n + usesOf(c.id), 0)}</strong> links into the canonical design problems</p>
+  </header>`);
+  for (const cat of catalog.categories || []) {
+    const list = comps.filter(c => c.category === cat.id)
+      .sort((a, b) => usesOf(b.id) - usesOf(a.id) || idx[a.id] - idx[b.id]);
+    if (!list.length) continue;
+    out.push(`
+  <section class="ds-section" id="${esc(cat.id)}">
+    <h2>${esc(cat.title)}</h2>
+    <p>${esc(cat.blurb || '')}</p>
+    <ul class="sharepage__list">
+      ${list.map(c => {
+        const n = usesOf(c.id);
+        return `<li><a href="${up(3)}${esc(DrillRoutes.sharePath('sdComponent', { topic: topic.id, component: c.id }))}">${esc(c.title)}</a>` +
+          `${n ? ` <span class="ds-chip">${n} problem${n === 1 ? '' : 's'}</span>` : ''} — ${md(c.what)}</li>`;
+      }).join('\n      ')}
+    </ul>
+  </section>`);
+  }
+  out.push(`
+  <script type="application/json" id="drill-data">${JSON.stringify({
+    topic: topic.id, kind: 'component-catalog',
+    components: comps.map(c => ({
+      id: c.id, title: c.title, category: c.category, uses: usesOf(c.id),
+      url: `${ORIGIN}/${DrillRoutes.sharePath('sdComponent', { topic: topic.id, component: c.id })}`
+    }))
+  }, null, 0).replace(/</g, '\\u003c')}</script>`);
+  out.push(foot(3, appUrl));
+  return out.join('\n');
+}
+
+function sdComponentPage(topic, meta, catalog, component, edges, dpMeta) {
+  const canonical = `${ORIGIN}/${DrillRoutes.sharePath('sdComponent', { topic: topic.id, component: component.id })}`;
+  const appUrl = `${ORIGIN}/${DrillRoutes.surface('sdComponent').appHash({ topic: topic.id, component: component.id })}`;
+  const cat = (catalog.categories || []).find(c => c.id === component.category);
+  const byId = Object.fromEntries((catalog.components || []).map(c => [c.id, c]));
+  const dpTitle = {};
+  for (const c of (dpMeta && dpMeta.chapters) || []) dpTitle[c.id] = c.title;
+  const uses = Object.keys((edges || {})[component.id] || {}).sort()
+    .map(pid => ({ id: pid, note: edges[component.id][pid] }));
+  const out = [];
+  out.push(head(4, {
+    title: `${component.title} — ${cat ? cat.title : 'Component'} — system design`,
+    description: component.what,
+    canonical
+  }));
+  const bullets = (label, items) => (items && items.length) ? `
+  <section class="ds-section">
+    <h2>${esc(label)}</h2>
+    <ul>${items.map(x => `<li>${md(x)}</li>`).join('')}</ul>
+  </section>` : '';
+  out.push(`
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="${up(4)}sd/">System design</a> › <a href="${up(4)}sd/${esc(topic.id)}/">${esc(meta.title)}</a> › <a href="${up(4)}${esc(DrillRoutes.sharePath('sdComponentIndex', { topic: topic.id }))}">Component catalog</a></p>
+    <h1>${esc(component.title)}</h1>
+    <p class="sharepage__lede">${md(component.what)}</p>
+  </header>
+  ${bullets('Reach for it when', component.reachFor)}
+  ${bullets("Don't reach for it when", component.avoid)}
+  ${bullets('What it costs you', component.costs)}
+  ${bullets('How it breaks', component.failureModes)}`);
+  const alts = (component.alternatives || []).filter(a => byId[a.id]);
+  if (alts.length) out.push(`
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      ${alts.map(a => `<li><a href="${up(4)}${esc(DrillRoutes.sharePath('sdComponent', { topic: topic.id, component: a.id }))}">${esc(byId[a.id].title)}</a> — ${md(a.note)}</li>`).join('\n      ')}
+    </ul>
+  </section>`);
+  out.push(`
+  <section class="ds-section" id="used-in">
+    <h2>Used in ${uses.length} design problem${uses.length === 1 ? '' : 's'}</h2>
+    ${uses.length ? `<ul class="sharepage__list">
+      ${uses.map(u => `<li><a href="${up(4)}${esc(DrillRoutes.sharePath('sdUnit', { topic: 'design-problems', unit: u.id }))}">${esc(dpTitle[u.id] || u.id)}</a> — ${md(u.note)}</li>`).join('\n      ')}
+    </ul>` : '<p>Not yet mapped to a canonical design problem.</p>'}
+  </section>
+  <script type="application/json" id="drill-data">${JSON.stringify({
+    topic: topic.id, kind: 'component', id: component.id, title: component.title,
+    category: component.category, mechanism: component.mechanism || null,
+    what: component.what, reachFor: component.reachFor, avoid: component.avoid,
+    costs: component.costs, failureModes: component.failureModes,
+    usedIn: uses.map(u => ({
+      problem: u.id, title: dpTitle[u.id] || u.id, doing: u.note,
+      url: `${ORIGIN}/${DrillRoutes.sharePath('sdUnit', { topic: 'design-problems', unit: u.id })}`
+    }))
   }, null, 0).replace(/</g, '\\u003c')}</script>`);
   out.push(foot(4, appUrl));
   return out.join('\n');
@@ -945,11 +1063,18 @@ function main() {
   const topics = readJson(path.join(SD, 'topics.json')).topics;
   const PLANS = fs.existsSync(path.join(SD, 'plans.json')) ? readJson(path.join(SD, 'plans.json')) : { plans: [] };
   const TAGS = fs.existsSync(path.join(SD, 'tags.json')) ? readJson(path.join(SD, 'tags.json')) : { facets: [], appliesTo: [] };
+  // The catalog lives under the components topic but links into design
+  // problems, so it is read once here rather than per topic.
+  const CATALOG_FILE = path.join(SD, 'components', 'catalog.json');
+  const CATALOG = fs.existsSync(CATALOG_FILE) ? readJson(CATALOG_FILE) : null;
+  const EDGES = fs.existsSync(path.join(SD, 'mechanism-map.json'))
+    ? (readJson(path.join(SD, 'mechanism-map.json')).edges || {}) : {};
   const metas = {};
   let units = 0;
   let sheets = 0;
   let plans = 0;
   let tagPages = 0;
+  let components = 0;
   const skippedTags = [];
   for (const t of topics) {
     const meta = readJson(path.join(SD, t.id, 'manifest.json'));
@@ -984,8 +1109,20 @@ function main() {
         sheets++;
       }
     }
-    emit(path.join('sd', t.id, 'index.html'), sdTopicPage(t, meta));
+    emit(path.join('sd', t.id, 'index.html'), sdTopicPage(t, meta, CATALOG && CATALOG.appliesTo === t.id ? CATALOG : null));
     entries.push({ kind: 'sdTopic', params: { topic: t.id } });
+
+    // Component catalog — the topic's inverted view, plus one page per block.
+    if (CATALOG && CATALOG.appliesTo === t.id) {
+      emit(path.join('sd', t.id, 'catalog', 'index.html'), sdCatalogIndexPage(t, meta, CATALOG, EDGES));
+      entries.push({ kind: 'sdComponentIndex', params: { topic: t.id } });
+      for (const comp of CATALOG.components || []) {
+        emit(path.join('sd', t.id, 'c', comp.id, 'index.html'),
+          sdComponentPage(t, meta, CATALOG, comp, EDGES, metas['design-problems'] || readJson(path.join(SD, 'design-problems', 'manifest.json'))));
+        entries.push({ kind: 'sdComponent', params: { topic: t.id, component: comp.id } });
+        components++;
+      }
+    }
 
     // Plans and tag lists — content routes the app has always had and the
     // registry only just learned about.
@@ -1037,13 +1174,13 @@ function main() {
       console.error(`\n✗ ${stale} generated file(s) out of date — run: node tools/build-share-pages.js`);
       process.exit(1);
     }
-    console.log(`✓ share pages up to date (${lessons} lessons, ${units} units, ${sheets} sheets, ${plans} plans, ${tagPages} tag lists, ${written.length} files)`);
+    console.log(`✓ share pages up to date (${lessons} lessons, ${units} units, ${sheets} sheets, ${plans} plans, ${tagPages} tag lists, ${components} components, ${written.length} files)`);
     return;
   }
   if (skippedTags.length) {
     console.log(`  note: ${skippedTags.length} tag value(s) are not URL-safe ids and got no page — ${skippedTags.slice(0, 4).join(', ')}${skippedTags.length > 4 ? ', …' : ''}`);
   }
-  console.log(`✓ wrote ${written.length} files — ${lessons} lessons, ${units} system-design units, ${sheets} study sheets, ${plans} plans, ${tagPages} tag lists, ${topics.length} topics, sitemap, robots`);
+  console.log(`✓ wrote ${written.length} files — ${lessons} lessons, ${units} system-design units, ${sheets} study sheets, ${plans} plans, ${tagPages} tag lists, ${components} component pages, ${topics.length} topics, sitemap, robots`);
 }
 
 main();

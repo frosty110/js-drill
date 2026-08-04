@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Replication — Data Distribution — system design</title>
+<meta name="description" content="Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/replication/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Replication — Data Distribution — system design">
+<meta property="og:description" content="Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/replication/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Replication</h1>
+    <p class="sharepage__lede">Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>Durability or availability is a stated requirement — losing one node must not lose data</li><li>Read volume dwarfs write volume and the dataset fits on one machine</li><li>Users are geographically spread and reads should be served locally</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>Writes are the bottleneck — replication multiplies write work rather than reducing it</li><li>The application cannot tolerate reading a value that is momentarily behind</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Replication lag is now a semantic your application must handle explicitly</li><li>Synchronous replication trades latency and availability for consistency; asynchronous trades the reverse</li><li>N× storage and N× write amplification</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Read-your-writes violated because a read landed on a lagging replica</li><li>Split brain during a partition, with two nodes both accepting writes</li><li>Failover promoting a replica that had not caught up, silently losing acknowledged writes</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/quorum/">Quorum (N/W/R)</a> — Quorum reads/writes let you tune the consistency-availability point instead of accepting the default.</li>
+      <li><a href="../../../../sd/components/c/sharding/">Sharding</a> — Replication scales reads; sharding scales writes and capacity. Most real systems need both.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 6 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p12/">Design a Distributed Cache</a> — Each entry is held on N successive ring nodes, so losing one node degrades the hit rate instead of losing a whole slice of the keyspace.</li>
+      <li><a href="../../../../sd/design-problems/p15/">Design a Payment System (Wallet / Ledger)</a> — Synchronous replication of the ledger, because losing an acknowledged financial write is not a degraded mode — it is an unrecoverable defect.</li>
+      <li><a href="../../../../sd/design-problems/p19/">Design a Distributed Message Queue</a> — Each partition has a leader and followers; the in-sync replica set is what lets an acknowledged publish survive a broker dying.</li>
+      <li><a href="../../../../sd/design-problems/p21/">Design a Distributed Key-Value Store</a> — N replicas per key range with tunable W and R — where this problem&#39;s entire consistency-versus-availability conversation actually lives.</li>
+      <li><a href="../../../../sd/design-problems/p25/">Design a Search Engine</a> — Index shards are replicated for read throughput and node loss. Query volume, not durability, is what drives the replica count here.</li>
+      <li><a href="../../../../sd/design-problems/p32/">Design an Authentication &amp; Session Service</a> — Session state is replicated across regions, so a login in one region is honoured in another without a cross-region read on every request.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"replication","title":"Replication","category":"data-distribution","mechanism":"replication","what":"Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity.","reachFor":["Durability or availability is a stated requirement — losing one node must not lose data","Read volume dwarfs write volume and the dataset fits on one machine","Users are geographically spread and reads should be served locally"],"avoid":["Writes are the bottleneck — replication multiplies write work rather than reducing it","The application cannot tolerate reading a value that is momentarily behind"],"costs":["Replication lag is now a semantic your application must handle explicitly","Synchronous replication trades latency and availability for consistency; asynchronous trades the reverse","N× storage and N× write amplification"],"failureModes":["Read-your-writes violated because a read landed on a lagging replica","Split brain during a partition, with two nodes both accepting writes","Failover promoting a replica that had not caught up, silently losing acknowledged writes"],"usedIn":[{"problem":"p12","title":"Design a Distributed Cache","doing":"Each entry is held on N successive ring nodes, so losing one node degrades the hit rate instead of losing a whole slice of the keyspace.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p12/"},{"problem":"p15","title":"Design a Payment System (Wallet / Ledger)","doing":"Synchronous replication of the ledger, because losing an acknowledged financial write is not a degraded mode — it is an unrecoverable defect.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p15/"},{"problem":"p19","title":"Design a Distributed Message Queue","doing":"Each partition has a leader and followers; the in-sync replica set is what lets an acknowledged publish survive a broker dying.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p19/"},{"problem":"p21","title":"Design a Distributed Key-Value Store","doing":"N replicas per key range with tunable W and R — where this problem's entire consistency-versus-availability conversation actually lives.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p21/"},{"problem":"p25","title":"Design a Search Engine","doing":"Index shards are replicated for read throughput and node loss. Query volume, not durability, is what drives the replica count here.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p25/"},{"problem":"p32","title":"Design an Authentication & Session Service","doing":"Session state is replicated across regions, so a login in one region is honoured in another without a cross-region read on every request.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p32/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/replication">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

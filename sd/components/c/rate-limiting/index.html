@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rate Limiting — Control &amp; Protection — system design</title>
+<meta name="description" content="Capping how many requests a caller may make in a window, to protect capacity and enforce fairness.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/rate-limiting/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Rate Limiting — Control &amp; Protection — system design">
+<meta property="og:description" content="Capping how many requests a caller may make in a window, to protect capacity and enforce fairness.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/rate-limiting/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Rate Limiting</h1>
+    <p class="sharepage__lede">Capping how many requests a caller may make in a window, to protect capacity and enforce fairness.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>A public API where one caller could consume everyone&#39;s capacity</li><li>The prompt mentions abuse, scraping, brute force or tiered plans</li><li>You call a third party with its own quota you must not exceed</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>The bottleneck is internal and unbounded work, not caller volume — that is load shedding or backpressure</li><li>Legitimate bursts are normal and a hard cap would break the product</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Distributed counters mean either shared state on the hot path or approximate limits</li><li>Limit values are a product decision that will be wrong at first</li><li>Every rejected request still costs you the work of rejecting it</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Fixed-window boundary allowing double the limit across the boundary instant</li><li>Limiter store outage forcing a fail-open (unprotected) or fail-closed (outage) choice you never made explicitly</li><li>Limiting by IP and blocking an entire NAT&#39;d office or mobile carrier</li><li>No Retry-After, so well-behaved clients retry immediately and amplify the overload</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/backpressure/">Backpressure</a> — Rate limiting protects you from callers; backpressure tells callers to slow down because you are full.</li>
+      <li><a href="../../../../sd/components/c/load-shedding/">Load Shedding</a> — When you must drop work by priority under overload rather than by per-caller quota.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 5 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p05/">Design a Web Crawler</a> — Per-domain politeness. The crawler caps its own request rate per host — a limiter pointed at itself rather than at incoming callers.</li>
+      <li><a href="../../../../sd/design-problems/p08/">Design a Distributed Rate Limiter</a> — The problem itself. Every decision here is about where the counter lives and how exact it needs to be across a fleet of gateways.</li>
+      <li><a href="../../../../sd/design-problems/p29/">Design a Webhook Delivery System</a> — Delivery attempts per receiver endpoint are capped, so retries toward a struggling customer do not turn into an attack on them.</li>
+      <li><a href="../../../../sd/design-problems/p31/">Design a Content Moderation Pipeline</a> — Caps per-uploader submission rate — the cheapest defence against bulk spam, applied before any model spends compute on the content.</li>
+      <li><a href="../../../../sd/design-problems/p32/">Design an Authentication &amp; Session Service</a> — Login attempts per account and per IP, the primary defence against credential stuffing and brute force.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"rate-limiting","title":"Rate Limiting","category":"control-protection","mechanism":"rate-limiting","what":"Capping how many requests a caller may make in a window, to protect capacity and enforce fairness.","reachFor":["A public API where one caller could consume everyone's capacity","The prompt mentions abuse, scraping, brute force or tiered plans","You call a third party with its own quota you must not exceed"],"avoid":["The bottleneck is internal and unbounded work, not caller volume — that is load shedding or backpressure","Legitimate bursts are normal and a hard cap would break the product"],"costs":["Distributed counters mean either shared state on the hot path or approximate limits","Limit values are a product decision that will be wrong at first","Every rejected request still costs you the work of rejecting it"],"failureModes":["Fixed-window boundary allowing double the limit across the boundary instant","Limiter store outage forcing a fail-open (unprotected) or fail-closed (outage) choice you never made explicitly","Limiting by IP and blocking an entire NAT'd office or mobile carrier","No Retry-After, so well-behaved clients retry immediately and amplify the overload"],"usedIn":[{"problem":"p05","title":"Design a Web Crawler","doing":"Per-domain politeness. The crawler caps its own request rate per host — a limiter pointed at itself rather than at incoming callers.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p05/"},{"problem":"p08","title":"Design a Distributed Rate Limiter","doing":"The problem itself. Every decision here is about where the counter lives and how exact it needs to be across a fleet of gateways.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p08/"},{"problem":"p29","title":"Design a Webhook Delivery System","doing":"Delivery attempts per receiver endpoint are capped, so retries toward a struggling customer do not turn into an attack on them.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p29/"},{"problem":"p31","title":"Design a Content Moderation Pipeline","doing":"Caps per-uploader submission rate — the cheapest defence against bulk spam, applied before any model spends compute on the content.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p31/"},{"problem":"p32","title":"Design an Authentication & Session Service","doing":"Login attempts per account and per IP, the primary defence against credential stuffing and brute force.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p32/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/rate-limiting">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

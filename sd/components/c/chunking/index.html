@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chunking — Storage &amp; Data Stores — system design</title>
+<meta name="description" content="Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/chunking/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Chunking — Storage &amp; Data Stores — system design">
+<meta property="og:description" content="Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/chunking/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Chunking</h1>
+    <p class="sharepage__lede">Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>Files are large enough that a failed transfer must not restart from zero</li><li>Only part of a file typically changes between versions</li><li>You want parallel upload or download, or per-piece deduplication</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>Payloads are small; per-chunk metadata will exceed the data</li><li>The consumer needs the whole object anyway and cannot start early</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>A manifest per object, and now the manifest is a consistency problem of its own</li><li>Chunk-size choice is a real tradeoff: small chunks dedup better, large chunks cost less metadata</li><li>Reassembly and ordering logic on the read path</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Partial uploads leaving orphan chunks nobody garbage collects</li><li>Manifest written before all chunks are durable, producing an object that reads as corrupt</li><li>Fixed-size chunking defeating dedup because one inserted byte shifts every boundary</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/blob-storage/">Object / Blob Storage</a> — Multipart upload gives you most of the retry benefit without you owning a manifest.</li>
+      <li><a href="../../../../sd/components/c/dedup/">Deduplication</a> — Chunking is usually the enabler for dedup rather than an end in itself.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 2 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p13/">Design a File Sync / Object Storage Service</a> — Files are split so only changed blocks transfer on edit, which is what makes syncing a large file after a small change cheap.</li>
+      <li><a href="../../../../sd/design-problems/p23/">Design a RAG / Semantic Search System</a> — Documents are split into passages small enough to embed meaningfully and to fit a context window, with overlap so meaning survives the cut.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"chunking","title":"Chunking","category":"storage","mechanism":"chunking","what":"Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece.","reachFor":["Files are large enough that a failed transfer must not restart from zero","Only part of a file typically changes between versions","You want parallel upload or download, or per-piece deduplication"],"avoid":["Payloads are small; per-chunk metadata will exceed the data","The consumer needs the whole object anyway and cannot start early"],"costs":["A manifest per object, and now the manifest is a consistency problem of its own","Chunk-size choice is a real tradeoff: small chunks dedup better, large chunks cost less metadata","Reassembly and ordering logic on the read path"],"failureModes":["Partial uploads leaving orphan chunks nobody garbage collects","Manifest written before all chunks are durable, producing an object that reads as corrupt","Fixed-size chunking defeating dedup because one inserted byte shifts every boundary"],"usedIn":[{"problem":"p13","title":"Design a File Sync / Object Storage Service","doing":"Files are split so only changed blocks transfer on edit, which is what makes syncing a large file after a small change cheap.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p13/"},{"problem":"p23","title":"Design a RAG / Semantic Search System","doing":"Documents are split into passages small enough to embed meaningfully and to fit a context window, with overlap so meaning survives the cut.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p23/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/chunking">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

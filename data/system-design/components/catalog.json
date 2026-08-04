@@ -1,0 +1,1911 @@
+{
+  "appliesTo": "components",
+  "title": "Component Catalog",
+  "subtitle": "The building blocks, worked backwards",
+  "description": "Each component: what it is, the signal in a prompt that says reach for it, what it costs, how it breaks, and every canonical design problem that uses it — with what it is doing there.",
+  "categories": [
+    {
+      "id": "traffic-routing",
+      "title": "Traffic & Routing",
+      "blurb": "How a request finds a healthy server."
+    },
+    {
+      "id": "caching-delivery",
+      "title": "Caching & Delivery",
+      "blurb": "How to stop doing the same expensive work twice."
+    },
+    {
+      "id": "storage",
+      "title": "Storage & Data Stores",
+      "blurb": "Where bytes live, and which store to name."
+    },
+    {
+      "id": "data-distribution",
+      "title": "Data Distribution",
+      "blurb": "Spreading one dataset across many machines."
+    },
+    {
+      "id": "async-messaging",
+      "title": "Async & Messaging",
+      "blurb": "Decoupling the producer from the consumer."
+    },
+    {
+      "id": "correctness-coordination",
+      "title": "Correctness & Coordination",
+      "blurb": "Getting the right answer when parts fail independently."
+    },
+    {
+      "id": "control-protection",
+      "title": "Control & Protection",
+      "blurb": "Keeping load inside what the system can survive."
+    },
+    {
+      "id": "indexes-search",
+      "title": "Indexes & Search",
+      "blurb": "Finding the needle without scanning the haystack."
+    },
+    {
+      "id": "apis-realtime",
+      "title": "APIs & Realtime",
+      "blurb": "How callers talk to you, and how you talk back."
+    },
+    {
+      "id": "media-ml",
+      "title": "Media & ML Serving",
+      "blurb": "Specialised workloads with their own economics."
+    }
+  ],
+  "components": [
+    {
+      "id": "load-balancer",
+      "category": "traffic-routing",
+      "title": "Load Balancer",
+      "what": "A single address in front of many interchangeable servers, spreading requests and routing around dead ones.",
+      "reachFor": [
+        "The prompt says a fleet of stateless app servers behind one endpoint",
+        "You need to survive a server dying without the client noticing",
+        "Traffic must be added to or removed from a pool during a deploy"
+      ],
+      "avoid": [
+        "The backends are NOT interchangeable — a request must reach one specific shard owner, which is routing, not balancing",
+        "You reach for it to solve a database bottleneck; balancing the tier in front of the bottleneck moves nothing"
+      ],
+      "costs": [
+        "One more hop of latency and one more thing that can be misconfigured",
+        "It becomes the failure domain — an LB outage is a total outage, so it needs its own redundancy",
+        "Health-check tuning is a real tradeoff: aggressive checks eject healthy nodes, lax ones send traffic into a black hole"
+      ],
+      "failureModes": [
+        "Sticky sessions defeat even distribution and turn one hot client into one hot server",
+        "A slow-but-alive backend passes health checks while poisoning latency for everyone routed to it",
+        "Cascading ejection: checks eject nodes under load, concentrating load on the survivors, which then fail checks too"
+      ],
+      "alternatives": [
+        { "id": "dns-routing", "note": "DNS steers between REGIONS; an LB steers between servers. Different blast radius, different failover speed." },
+        { "id": "service-discovery", "note": "Discovery lets the caller pick a backend itself, removing the middle hop — normal for internal service-to-service." }
+      ],
+      "drill": { "topic": "components", "unit": "c01" }
+    },
+    {
+      "id": "reverse-proxy",
+      "category": "traffic-routing",
+      "title": "Reverse Proxy",
+      "what": "A server-side intermediary that terminates the client connection and speaks to backends on its behalf, so cross-cutting work happens once at the edge.",
+      "reachFor": [
+        "TLS termination, compression, or request buffering should happen in one place, not in every service",
+        "You want to serve static assets and proxy dynamic paths from the same hostname",
+        "Slow clients must not tie up application threads"
+      ],
+      "avoid": [
+        "The only need is spreading load — that is a load balancer, and calling it a proxy adds vocabulary without adding a decision",
+        "Per-caller policy, auth and quotas are the real requirement — that is an API gateway"
+      ],
+      "costs": [
+        "Another network hop and another config surface",
+        "Buffering large uploads costs memory at the edge",
+        "It sees plaintext after TLS termination, so it becomes a security-relevant component"
+      ],
+      "failureModes": [
+        "Header and body size limits silently truncate or reject at the edge, producing errors the backend never sees",
+        "Connection-pool exhaustion to backends throttles everything behind it",
+        "Timeout mismatches between proxy and backend produce duplicated work: the proxy retries a request still running"
+      ],
+      "alternatives": [
+        { "id": "api-gateway", "note": "A gateway is a reverse proxy that also owns auth, rate limits and per-route policy. Pick it when policy is the point." },
+        { "id": "load-balancer", "note": "If nothing cross-cutting happens at the hop, you only needed balancing." }
+      ],
+      "drill": { "topic": "components", "unit": "c01" }
+    },
+    {
+      "id": "api-gateway",
+      "category": "traffic-routing",
+      "title": "API Gateway",
+      "what": "The single front door for external callers: authenticates, applies quota, routes to the right service, and normalises the response.",
+      "reachFor": [
+        "The prompt has many backend services but one public API surface",
+        "Auth, rate limiting and request validation must be enforced before traffic reaches any service",
+        "Clients need one contract while services behind it change shape"
+      ],
+      "avoid": [
+        "Internal service-to-service calls — a gateway in the middle of a mesh adds a hop and a bottleneck for no policy benefit",
+        "It becomes a place to put business logic; that turns the gateway into an undeployable monolith everyone is afraid of"
+      ],
+      "costs": [
+        "A shared choke point: its capacity is the API's capacity, and its deploys are everyone's deploys",
+        "Latency on every single request, including ones that needed nothing from it",
+        "Route config becomes a distributed-ownership problem across teams"
+      ],
+      "failureModes": [
+        "Auth-service dependency makes the gateway fail closed and take the whole API down with it",
+        "Per-route config drift: a service ships a new endpoint the gateway does not know about",
+        "Fan-out aggregation inside the gateway turns one client timeout into N abandoned backend calls"
+      ],
+      "alternatives": [
+        { "id": "reverse-proxy", "note": "If you need TLS and routing but no per-caller policy, a plain reverse proxy is less machinery." },
+        { "id": "rate-limiting", "note": "The gateway is usually WHERE rate limiting lives; the limiter is the mechanism, the gateway is the venue." }
+      ],
+      "drill": { "topic": "components", "unit": "c01" }
+    },
+    {
+      "id": "service-discovery",
+      "category": "traffic-routing",
+      "title": "Service Discovery",
+      "what": "A registry that answers 'where is service X right now', so callers reach live instances without hardcoded addresses.",
+      "reachFor": [
+        "Instances come and go constantly — autoscaling, rolling deploys, container schedulers",
+        "Internal callers should route directly to backends rather than through a shared LB",
+        "The prompt mentions a service mesh or sidecar proxies"
+      ],
+      "avoid": [
+        "A fixed, small set of long-lived hosts — a config file is honest and has no failure mode",
+        "You need routing decisions based on request CONTENT; discovery answers 'where', not 'which one for this request'"
+      ],
+      "costs": [
+        "A strongly-consistent registry is itself a distributed system to run and to keep available",
+        "Client-side libraries must be kept in step across every language you deploy",
+        "Registration lag means the registry is always slightly behind reality"
+      ],
+      "failureModes": [
+        "Stale entries route traffic to instances that are already gone",
+        "Registry outage is a total outage unless callers cache last-known-good and fail static",
+        "Thundering herd of re-registration after a network partition heals"
+      ],
+      "alternatives": [
+        { "id": "load-balancer", "note": "A load balancer centralises the same decision; discovery distributes it to callers. One hop vs. one library everywhere." },
+        { "id": "dns-routing", "note": "DNS is discovery with weak TTL semantics — fine for coarse-grained, wrong for second-by-second membership." }
+      ],
+      "drill": { "topic": "components", "unit": "c01" }
+    },
+    {
+      "id": "dns-routing",
+      "category": "traffic-routing",
+      "title": "DNS & Anycast Routing",
+      "what": "Steering users to a region or PoP before a connection is ever made, using DNS answers or a single IP announced from many locations.",
+      "reachFor": [
+        "The prompt is global and the first requirement is 'users hit the nearest region'",
+        "You need region-level failover, not server-level",
+        "Traffic must be split by geography, weight or latency at the entry point"
+      ],
+      "avoid": [
+        "Fast failover is required — resolver and client TTL caching means DNS changes take minutes to hours to propagate",
+        "You are steering individual requests; by the time DNS answered, the request already committed to an address"
+      ],
+      "costs": [
+        "TTL is a tradeoff you cannot escape: short TTLs cost query volume, long TTLs cost failover time",
+        "Clients and resolvers routinely ignore your TTL anyway",
+        "Anycast requires network-layer control most teams do not have in-house"
+      ],
+      "failureModes": [
+        "Stale cached answers keep sending users to a region you just drained",
+        "Anycast route flaps mid-connection can break long-lived TCP sessions",
+        "GeoDNS resolves by RESOLVER location, not user location — a centralised corporate resolver mis-steers a whole company"
+      ],
+      "alternatives": [
+        { "id": "load-balancer", "note": "Use DNS to pick the region, an LB to pick the server. They compose; they do not compete." },
+        { "id": "cdn", "note": "A CDN already does global steering as part of its product — usually the cheaper answer for static content." }
+      ],
+      "drill": { "topic": "components", "unit": "c01" }
+    },
+    {
+      "id": "caching",
+      "category": "caching-delivery",
+      "title": "Cache",
+      "mechanism": "caching",
+      "what": "A fast store holding the answer to work you already did, so the expensive path runs once for many reads.",
+      "reachFor": [
+        "The prompt gives a lopsided read:write ratio — 100:1 and up",
+        "The answer is expensive to compute or fetch and changes far more slowly than it is read",
+        "A stated staleness tolerance ('feed can be up to a minute old') is an explicit invitation"
+      ],
+      "avoid": [
+        "Reads must reflect writes immediately — a cache is a correctness hazard you added on purpose",
+        "The working set is uniformly random over a huge keyspace; the hit rate will not pay for the machinery",
+        "Write-heavy workloads where you would spend more invalidating than serving"
+      ],
+      "costs": [
+        "Every cache is a second copy of the truth, and now you own the invalidation problem",
+        "Memory is expensive, so capacity forces an eviction policy you must justify",
+        "Debugging gets harder: behaviour now depends on whether something was warm"
+      ],
+      "failureModes": [
+        "Stampede — a hot key expires and every concurrent request hits the origin at once",
+        "Hot key — a single entry exceeds one node's throughput no matter how many nodes you add",
+        "Cold start after a flush or deploy sends full production load at a database sized for cache-miss traffic",
+        "Silent staleness: an invalidation is missed and wrong data is served indefinitely with no error"
+      ],
+      "alternatives": [
+        { "id": "cdn", "note": "Same idea moved to the network edge. Pick a CDN when the payload is static and the win is geographic distance." },
+        { "id": "search-index", "note": "If reads are QUERIES rather than key lookups, a precomputed index beats caching every distinct query." }
+      ],
+      "drill": { "topic": "components", "unit": "c02" }
+    },
+    {
+      "id": "cdn",
+      "category": "caching-delivery",
+      "title": "CDN",
+      "mechanism": "cdn",
+      "what": "A globally distributed cache of your static bytes, serving users from a nearby PoP instead of your origin.",
+      "reachFor": [
+        "The payload is large, static and read by many people — images, video segments, JS bundles",
+        "The prompt names a global user base and latency is a stated requirement",
+        "Origin egress bandwidth is the thing that will not scale"
+      ],
+      "avoid": [
+        "Responses are personalised per user — you are caching a thing with an audience of one",
+        "Content must be revoked instantly; purge propagation is not immediate",
+        "The bottleneck is compute, not distance or bandwidth"
+      ],
+      "costs": [
+        "You now have cache state in hundreds of places you cannot inspect",
+        "Purge is eventually consistent and often billed per request",
+        "Cache-key design becomes a real engineering problem the moment headers or query strings vary"
+      ],
+      "failureModes": [
+        "Stale asset served long after deploy because the URL did not change",
+        "Cache fragmentation: a varying header splits one hot object into thousands of cold ones",
+        "Origin shielding absent, so a cold global cache means every PoP independently stampedes the origin"
+      ],
+      "alternatives": [
+        { "id": "caching", "note": "An origin-side cache when the win is compute, not distance." },
+        { "id": "edge-compute", "note": "When the response must be assembled per request but you still want it done near the user." }
+      ],
+      "drill": { "topic": "components", "unit": "c03" }
+    },
+    {
+      "id": "hot-keys",
+      "category": "caching-delivery",
+      "title": "Hot-Key Mitigation",
+      "mechanism": "hot-keys",
+      "what": "Techniques for the one key whose traffic exceeds what a single shard or cache node can serve — replicate it, split it, or absorb it locally.",
+      "reachFor": [
+        "The prompt contains a celebrity, a viral item, or a flash sale on one SKU",
+        "Load is skewed enough that adding shards does not help because the skew rides along",
+        "One partition is saturated while the rest of the fleet is idle"
+      ],
+      "avoid": [
+        "Load is genuinely uniform; you are solving a problem the workload does not have",
+        "The hot entity needs strong consistency — replicating it multiplies the write-coordination cost"
+      ],
+      "costs": [
+        "Key splitting (key#1..key#N) pushes fan-in complexity to every reader",
+        "Local in-process caches multiply staleness windows by the number of app servers",
+        "Detection needs per-key telemetry you probably are not collecting yet"
+      ],
+      "failureModes": [
+        "Mitigation applied statically, so yesterday's celebrity is replicated and today's is melting a shard",
+        "Split counters read before all sub-keys are summed, producing numbers that go backwards",
+        "The hot key is a WRITE key, so replication makes contention worse rather than better"
+      ],
+      "alternatives": [
+        { "id": "consistent-hashing", "note": "Solves uneven placement, not uneven demand. Virtual nodes will not save you from one viral key." },
+        { "id": "caching", "note": "A local cache tier in front absorbs read skew without touching the sharding scheme." }
+      ],
+      "drill": { "topic": "components", "unit": "c02" }
+    },
+    {
+      "id": "edge-compute",
+      "category": "caching-delivery",
+      "title": "Edge Compute",
+      "what": "Running small amounts of your logic in the CDN's PoPs, so personalisation, auth or rewriting happens near the user instead of at origin.",
+      "reachFor": [
+        "Responses need small per-user variation but the bulk is cacheable",
+        "A redirect, A/B assignment or token check should not cost a round trip to origin",
+        "You want to cache aggressively but the cache key depends on a computed value"
+      ],
+      "avoid": [
+        "The logic needs your primary database — you have moved the compute but not the data",
+        "Anything requiring long execution, large memory, or strong consistency"
+      ],
+      "costs": [
+        "A constrained runtime with tight CPU and memory limits and a restricted API surface",
+        "Deploys now target a fleet you do not operate, with its own rollout semantics",
+        "Debugging and observability at the edge is markedly worse than at origin"
+      ],
+      "failureModes": [
+        "Edge logic diverges from origin logic and the two disagree about the same request",
+        "A bad edge deploy has global blast radius and no gradual rollout",
+        "Cold starts add latency to exactly the requests you moved to the edge to speed up"
+      ],
+      "alternatives": [
+        { "id": "cdn", "note": "If the variation can be pushed into the URL, plain CDN caching is simpler and faster." },
+        { "id": "api-gateway", "note": "Central policy at origin when consistency of the rule matters more than the round trip." }
+      ],
+      "drill": { "topic": "components", "unit": "c03" }
+    },
+    {
+      "id": "relational-db",
+      "category": "storage",
+      "title": "Relational Database",
+      "what": "Row storage with a fixed schema, joins, secondary indexes and multi-row ACID transactions.",
+      "reachFor": [
+        "The prompt says money, inventory, bookings, or anything where a partial write is a bug with a lawyer attached",
+        "Entities are related and access patterns are not known up front — joins buy you flexibility",
+        "You need read-your-writes and cross-row invariants enforced by the store"
+      ],
+      "avoid": [
+        "Write volume that exceeds one primary and the data has no clean partition key",
+        "Schemaless, high-churn documents where every row would be half null",
+        "Append-only telemetry at millions of events per second"
+      ],
+      "costs": [
+        "Vertical scaling has a ceiling and horizontal scaling means sharding you implement yourself",
+        "Schema migrations on large tables are an operational event, not a deploy",
+        "Joins that were free at 1M rows are a capacity plan at 1B"
+      ],
+      "failureModes": [
+        "Lock contention on a hot row serialises the whole workload",
+        "Connection exhaustion from an app tier that scaled out faster than the pool",
+        "An unindexed query pattern discovered in production as a full table scan"
+      ],
+      "alternatives": [
+        { "id": "kv-store", "note": "If every access is by primary key and you need no transactions, a KV store scales further for less." },
+        { "id": "wide-column-store", "note": "When write volume and partition-key access dominate and you can give up joins." }
+      ]
+    },
+    {
+      "id": "kv-store",
+      "category": "storage",
+      "title": "Key-Value Store",
+      "what": "A hash table with an operations team: get and put by key, partitioned across nodes, no query language.",
+      "reachFor": [
+        "Every access in the prompt is 'look this up by its id'",
+        "You need very high throughput and predictable single-digit-millisecond latency",
+        "The value is opaque to the store — a session, a blob of JSON, a serialized object"
+      ],
+      "avoid": [
+        "You will need to query by anything other than the key; you would be building indexes by hand",
+        "Cross-key transactions or invariants",
+        "Analytical scans over the whole dataset"
+      ],
+      "costs": [
+        "Access patterns are frozen into the key design, and changing them means a migration",
+        "Secondary indexes, if the store has them, are usually eventually consistent",
+        "You own denormalisation and therefore the consistency between copies"
+      ],
+      "failureModes": [
+        "Hot partition from a key design that concentrates traffic",
+        "Unbounded value growth turning one key into a multi-megabyte read",
+        "Eventual consistency surfacing as a read that does not contain the write you just made"
+      ],
+      "alternatives": [
+        { "id": "relational-db", "note": "The moment two rows must change together, you want transactions more than you want throughput." },
+        { "id": "document-store", "note": "Same key-based access but with queryable structure inside the value." }
+      ]
+    },
+    {
+      "id": "document-store",
+      "category": "storage",
+      "title": "Document Store",
+      "what": "Key-value where the value is a structured document the engine can index and query inside.",
+      "reachFor": [
+        "Entities are self-contained and read as a whole — a product, a profile, an order with its lines",
+        "The schema varies per record or evolves quickly",
+        "You want secondary indexes without committing to a rigid schema"
+      ],
+      "avoid": [
+        "Data is highly relational and the same fact would be duplicated across many documents",
+        "You need multi-document transactions as the normal case, not the exception",
+        "Aggregations across the entire collection are the primary workload"
+      ],
+      "costs": [
+        "Denormalisation means one fact lives in many documents and updates fan out",
+        "Unbounded arrays inside a document become an anti-pattern that is painful to undo",
+        "Schema flexibility becomes schema drift without discipline in the application layer"
+      ],
+      "failureModes": [
+        "Documents grow past the engine's size limit and writes start failing",
+        "Index bloat from indexing fields inside large nested structures",
+        "Application-level joins doing N+1 fetches that a relational engine would have planned"
+      ],
+      "alternatives": [
+        { "id": "relational-db", "note": "When the same entity is read in many different shapes, normalise and join instead of duplicating." },
+        { "id": "search-index", "note": "For full-text or faceted query over documents, a search engine is the right tool." }
+      ]
+    },
+    {
+      "id": "wide-column-store",
+      "category": "storage",
+      "title": "Wide-Column Store",
+      "what": "Partition-key-first storage (Cassandra, HBase, DynamoDB) built for enormous write volume and range scans within a partition.",
+      "reachFor": [
+        "Write throughput is the headline requirement and writes are spread across many partition keys",
+        "Access is always 'give me a range within one partition' — a user's messages, a device's readings",
+        "The prompt needs multi-region writes with tunable consistency"
+      ],
+      "avoid": [
+        "Query patterns are unknown or will change — the partition key is close to irreversible",
+        "You need joins, or transactions spanning partitions",
+        "The dataset is small enough that one relational primary would do"
+      ],
+      "costs": [
+        "You design tables per query, so a new access pattern means a new table and a backfill",
+        "Tombstones and compaction are operational concerns that leak into latency",
+        "Eventual consistency by default; strong reads cost latency and availability"
+      ],
+      "failureModes": [
+        "Unbounded partition growth turning one partition into a hotspot and then a timeout",
+        "Tombstone accumulation making range scans progressively slower until compaction catches up",
+        "Last-write-wins silently discarding a concurrent update"
+      ],
+      "alternatives": [
+        { "id": "time-series-db", "note": "If every row is a timestamped measurement, a purpose-built TSDB gives you retention and rollups for free." },
+        { "id": "kv-store", "note": "When you never need range scans within a partition, plain KV is simpler." }
+      ]
+    },
+    {
+      "id": "time-series-db",
+      "category": "storage",
+      "title": "Time-Series Store",
+      "what": "A store specialised for append-only timestamped measurements, with automatic downsampling, retention and time-range queries.",
+      "reachFor": [
+        "The prompt is metrics, telemetry, IoT readings, or click events keyed by time",
+        "Old data becomes less valuable at a predictable rate and can be rolled up",
+        "Queries are almost always 'this series, this window, this aggregate'"
+      ],
+      "avoid": [
+        "Records get updated after they are written — TSDBs assume append-only",
+        "High-cardinality dimensions per point; label cardinality is the classic way to melt one",
+        "You need transactional guarantees or joins"
+      ],
+      "costs": [
+        "Cardinality is the budget, and it is easy to blow up accidentally",
+        "Retention and rollup policy is a product decision you must make early",
+        "Another store class to operate and to back up"
+      ],
+      "failureModes": [
+        "Cardinality explosion from a label like user_id or request_id",
+        "Queries spanning long windows at full resolution overwhelming memory",
+        "Late-arriving points landing after a window was already rolled up"
+      ],
+      "alternatives": [
+        { "id": "stream-processing", "note": "If the aggregate matters more than the raw points, compute it in-flight and never store them." },
+        { "id": "wide-column-store", "note": "A generic partition-by-entity, cluster-by-time table when you need control over the layout." }
+      ]
+    },
+    {
+      "id": "blob-storage",
+      "category": "storage",
+      "title": "Object / Blob Storage",
+      "mechanism": "blob-storage",
+      "what": "Cheap, effectively unbounded storage for immutable files addressed by key, with HTTP access and lifecycle tiering.",
+      "reachFor": [
+        "The prompt has large binary payloads — images, video, backups, documents",
+        "The bytes are written once and read many times",
+        "Storage cost at scale is a stated concern, or the data must outlive any server"
+      ],
+      "avoid": [
+        "You need to update a small part of an object; blob stores replace, they do not patch",
+        "Access needs to be transactional with your database",
+        "Latency requirements are single-digit milliseconds"
+      ],
+      "costs": [
+        "Eventually-consistent listing and metadata in many implementations",
+        "Egress is the line item that surprises people, which is why a CDN sits in front",
+        "Two systems now hold related state — the object and the row that describes it"
+      ],
+      "failureModes": [
+        "Orphaned objects when the database row is deleted but the object is not, or vice versa",
+        "Uploads going through the app tier and saturating it, instead of client-direct with presigned URLs",
+        "Hot prefixes throttling throughput in stores that partition by key prefix"
+      ],
+      "alternatives": [
+        { "id": "chunking", "note": "For very large or resumable payloads, chunk before you store — it changes the failure story entirely." },
+        { "id": "cdn", "note": "Blob storage holds the bytes; a CDN is how users actually get them without paying origin egress." }
+      ]
+    },
+    {
+      "id": "chunking",
+      "category": "storage",
+      "title": "Chunking",
+      "mechanism": "chunking",
+      "what": "Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece.",
+      "reachFor": [
+        "Files are large enough that a failed transfer must not restart from zero",
+        "Only part of a file typically changes between versions",
+        "You want parallel upload or download, or per-piece deduplication"
+      ],
+      "avoid": [
+        "Payloads are small; per-chunk metadata will exceed the data",
+        "The consumer needs the whole object anyway and cannot start early"
+      ],
+      "costs": [
+        "A manifest per object, and now the manifest is a consistency problem of its own",
+        "Chunk-size choice is a real tradeoff: small chunks dedup better, large chunks cost less metadata",
+        "Reassembly and ordering logic on the read path"
+      ],
+      "failureModes": [
+        "Partial uploads leaving orphan chunks nobody garbage collects",
+        "Manifest written before all chunks are durable, producing an object that reads as corrupt",
+        "Fixed-size chunking defeating dedup because one inserted byte shifts every boundary"
+      ],
+      "alternatives": [
+        { "id": "blob-storage", "note": "Multipart upload gives you most of the retry benefit without you owning a manifest." },
+        { "id": "dedup", "note": "Chunking is usually the enabler for dedup rather than an end in itself." }
+      ]
+    },
+    {
+      "id": "dedup",
+      "category": "storage",
+      "title": "Deduplication",
+      "mechanism": "dedup",
+      "what": "Storing identical content once by addressing it with a hash of its bytes, so repeats cost a reference instead of a copy.",
+      "reachFor": [
+        "The prompt implies heavy duplication — shared files, re-uploads, mirrored pages",
+        "Storage or bandwidth cost is an explicit constraint",
+        "You need to detect 'have I already processed this?' cheaply"
+      ],
+      "avoid": [
+        "Content is unique by nature; you pay hashing cost for nothing",
+        "Per-copy metadata or permissions must differ, and a shared object cannot carry them"
+      ],
+      "costs": [
+        "Hashing on the write path, and a content-address index that must itself scale",
+        "Reference counting, which means deletion is now a distributed garbage-collection problem",
+        "Cross-tenant dedup raises real security and isolation questions"
+      ],
+      "failureModes": [
+        "Reference count leaks so nothing is ever reclaimed",
+        "Deleting an object still referenced by another user",
+        "Hash collision handling ignored entirely because it 'cannot happen'"
+      ],
+      "alternatives": [
+        { "id": "bloom-filter", "note": "If you only need 'have I seen this before' and can tolerate false positives, a bloom filter is far cheaper." },
+        { "id": "chunking", "note": "Chunk-level dedup catches partial overlap that whole-file dedup misses." }
+      ]
+    },
+    {
+      "id": "sharding",
+      "category": "data-distribution",
+      "title": "Sharding",
+      "mechanism": "sharding",
+      "what": "Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally.",
+      "reachFor": [
+        "The dataset or its write volume exceeds what one machine can hold or serve",
+        "The prompt gives numbers that clearly exceed one primary",
+        "There is a natural partition key with high cardinality and even distribution"
+      ],
+      "avoid": [
+        "One machine still fits — sharding is a permanent complexity tax paid in advance",
+        "Queries routinely span all partitions; you have built scatter-gather, not scale",
+        "No good key exists and every candidate is skewed"
+      ],
+      "costs": [
+        "Cross-shard queries and transactions become application problems",
+        "Resharding is a migration with a data-movement plan, not a config change",
+        "Every operational task multiplies by the shard count"
+      ],
+      "failureModes": [
+        "Skew: one partition holds the celebrity and saturates while others idle",
+        "Scatter-gather latency governed by the slowest shard, so p99 degrades as shards are added",
+        "A key chosen for even distribution that forces every read to fan out"
+      ],
+      "alternatives": [
+        { "id": "consistent-hashing", "note": "The placement scheme that makes adding and removing shards cheap; sharding is the what, this is the how." },
+        { "id": "replication", "note": "If reads are the bottleneck and the data fits, replicas scale reads without splitting anything." }
+      ],
+      "drill": { "topic": "components", "unit": "c06" }
+    },
+    {
+      "id": "replication",
+      "category": "data-distribution",
+      "title": "Replication",
+      "mechanism": "replication",
+      "what": "Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity.",
+      "reachFor": [
+        "Durability or availability is a stated requirement — losing one node must not lose data",
+        "Read volume dwarfs write volume and the dataset fits on one machine",
+        "Users are geographically spread and reads should be served locally"
+      ],
+      "avoid": [
+        "Writes are the bottleneck — replication multiplies write work rather than reducing it",
+        "The application cannot tolerate reading a value that is momentarily behind"
+      ],
+      "costs": [
+        "Replication lag is now a semantic your application must handle explicitly",
+        "Synchronous replication trades latency and availability for consistency; asynchronous trades the reverse",
+        "N× storage and N× write amplification"
+      ],
+      "failureModes": [
+        "Read-your-writes violated because a read landed on a lagging replica",
+        "Split brain during a partition, with two nodes both accepting writes",
+        "Failover promoting a replica that had not caught up, silently losing acknowledged writes"
+      ],
+      "alternatives": [
+        { "id": "quorum", "note": "Quorum reads/writes let you tune the consistency-availability point instead of accepting the default." },
+        { "id": "sharding", "note": "Replication scales reads; sharding scales writes and capacity. Most real systems need both." }
+      ],
+      "drill": { "topic": "components", "unit": "c06" }
+    },
+    {
+      "id": "consistent-hashing",
+      "category": "data-distribution",
+      "title": "Consistent Hashing",
+      "mechanism": "consistent-hashing",
+      "what": "Placing keys and nodes on a ring so adding or removing a node moves only ~1/N of keys instead of remapping everything.",
+      "reachFor": [
+        "Membership changes routinely — autoscaling caches, nodes failing and returning",
+        "A remap would invalidate a cache wholesale and stampede the origin",
+        "You need a placement rule every client can compute without asking a coordinator"
+      ],
+      "avoid": [
+        "The node set is fixed and rare changes can be handled by a planned migration",
+        "Load is skewed by demand rather than by key count — the ring cannot fix a viral key"
+      ],
+      "costs": [
+        "Virtual nodes are required for even distribution, which means more ring metadata",
+        "Every client needs the same ring view, so ring membership becomes shared state",
+        "Range queries are impossible; the hash destroys ordering by design"
+      ],
+      "failureModes": [
+        "Too few virtual nodes producing badly uneven load",
+        "Clients disagreeing about ring membership and writing the same key to different nodes",
+        "Cascading failure as a dead node's share lands entirely on its ring successor"
+      ],
+      "alternatives": [
+        { "id": "sharding", "note": "Range-based sharding when you need ordered scans and can accept manual rebalancing." },
+        { "id": "hot-keys", "note": "The ring balances key COUNT, never key DEMAND — pair it with hot-key handling." }
+      ],
+      "drill": { "topic": "components", "unit": "c06" }
+    },
+    {
+      "id": "quorum",
+      "category": "data-distribution",
+      "title": "Quorum (N/W/R)",
+      "what": "Requiring W acknowledgements to write and R responses to read out of N replicas, tuning consistency against availability.",
+      "reachFor": [
+        "The prompt asks you to reason explicitly about the consistency-availability tradeoff",
+        "You want strong reads sometimes and fast reads other times, from the same store",
+        "Replicas span regions and you must survive losing one"
+      ],
+      "avoid": [
+        "A single-leader store already gives you what you need with less to explain",
+        "The application cannot handle the conflict resolution that concurrent writes require"
+      ],
+      "costs": [
+        "Latency is governed by the slowest replica in the quorum",
+        "W+R>N gives overlap, not linearizability — concurrent writes still need conflict resolution",
+        "Operational reasoning gets harder; correctness now depends on numbers in a config"
+      ],
+      "failureModes": [
+        "Sloppy quorum accepting writes on nodes outside the intended set, so a later read misses them",
+        "Read repair storms after a partition heals",
+        "Choosing W+R≤N for latency and quietly accepting stale reads nobody documented"
+      ],
+      "alternatives": [
+        { "id": "replication", "note": "Plain leader-follower replication when you do not need per-request tuning." },
+        { "id": "conflict-resolution", "note": "Quorums make concurrent writes possible; something still has to decide who wins." }
+      ],
+      "drill": { "topic": "components", "unit": "c06" }
+    },
+    {
+      "id": "id-generation",
+      "category": "data-distribution",
+      "title": "Distributed ID Generation",
+      "mechanism": "id-generation",
+      "what": "Producing unique identifiers across many machines without a central allocator — Snowflake-style, UUID, or ranged counters.",
+      "reachFor": [
+        "Many nodes must mint ids concurrently without coordinating on every one",
+        "Ids need to be roughly time-ordered for index locality or pagination",
+        "The prompt needs short, opaque or non-guessable public identifiers"
+      ],
+      "avoid": [
+        "One database's auto-increment still keeps up — it is simpler and monotonic",
+        "Ids must be strictly gapless or sequential, which distributed generation cannot promise"
+      ],
+      "costs": [
+        "Snowflake-style ids need a machine-id assignment scheme and clock discipline",
+        "Random UUIDs destroy index locality and inflate B-tree page splits",
+        "Encoding choices leak information — a sequential id tells competitors your volume"
+      ],
+      "failureModes": [
+        "Clock skew or NTP step-back producing duplicate or out-of-order ids",
+        "Machine-id collision after a scaling event reuses an identifier",
+        "Range allocator becoming a single point of failure everyone forgot was in the path"
+      ],
+      "alternatives": [
+        { "id": "relational-db", "note": "A single auto-increment column is correct and boring until you actually outgrow one primary." },
+        { "id": "consistent-hashing", "note": "If the id only needs to route, hashing an existing natural key may remove the problem." }
+      ],
+      "drill": { "topic": "components", "unit": "c06" }
+    },
+    {
+      "id": "work-queue",
+      "category": "async-messaging",
+      "title": "Work Queue",
+      "mechanism": "work-queue",
+      "what": "A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path.",
+      "reachFor": [
+        "The prompt has work that must happen but not before the user gets a response",
+        "Producer and consumer rates differ, especially in bursts",
+        "Retries need to be automatic and durable across a worker crash"
+      ],
+      "avoid": [
+        "The caller needs the result to continue — you have added latency and a callback problem",
+        "Strict end-to-end ordering across all work is required",
+        "The work is trivial; a queue adds an operational component to save nothing"
+      ],
+      "costs": [
+        "Eventual consistency becomes visible to users ('it will appear in a moment')",
+        "Another durable system to run, monitor and reason about",
+        "Every consumer must be idempotent, because delivery is at-least-once"
+      ],
+      "failureModes": [
+        "Unbounded backlog growth when consumers cannot keep up, turning latency into an outage",
+        "Poison message retried forever, blocking the queue behind it",
+        "Duplicate processing from redelivery after a consumer crash mid-work"
+      ],
+      "alternatives": [
+        { "id": "pubsub", "note": "A queue gives each message to ONE consumer; pub/sub gives it to all of them. Different question." },
+        { "id": "backpressure", "note": "A queue absorbs bursts; it does not fix a consumer that is permanently too slow." }
+      ],
+      "drill": { "topic": "components", "unit": "c04" }
+    },
+    {
+      "id": "pubsub",
+      "category": "async-messaging",
+      "title": "Pub/Sub",
+      "what": "One published event delivered to every interested subscriber, so producers never learn who consumes them.",
+      "reachFor": [
+        "Several unrelated systems must react to the same event",
+        "You want to add a new consumer later without touching the producer",
+        "The prompt describes an event that fans out to notifications, analytics and search indexing at once"
+      ],
+      "avoid": [
+        "Exactly one worker should handle each item — that is a work queue",
+        "The producer needs to know the work completed"
+      ],
+      "costs": [
+        "No single place shows what happens when an event fires; tracing gets harder",
+        "Every subscriber is a new failure mode for the same event",
+        "Schema evolution must satisfy consumers you may not know about"
+      ],
+      "failureModes": [
+        "A slow subscriber applying backpressure to the whole topic, or being silently dropped",
+        "Event-schema change breaking a consumer nobody remembered existed",
+        "Redelivery producing duplicate side effects in every subscriber at once"
+      ],
+      "alternatives": [
+        { "id": "work-queue", "note": "When the work must happen once, not N times." },
+        { "id": "outbox-cdc", "note": "If the event must be exactly as durable as the database write that caused it." }
+      ],
+      "drill": { "topic": "components", "unit": "c04" }
+    },
+    {
+      "id": "fanout",
+      "category": "async-messaging",
+      "title": "Fan-out",
+      "mechanism": "fanout",
+      "what": "Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull).",
+      "reachFor": [
+        "Reads vastly outnumber writes and the read must be fast",
+        "The prompt describes feeds, timelines or notifications with a follower graph",
+        "The per-recipient view is expensive to assemble at query time"
+      ],
+      "avoid": [
+        "One writer has millions of recipients — write amplification explodes",
+        "Recipients rarely read what you precomputed; you did the work for nothing",
+        "The content changes after delivery and every copy would need updating"
+      ],
+      "costs": [
+        "Storage for N copies of what was logically one item",
+        "Write amplification proportional to the fan-out degree",
+        "Deletes and edits must chase every copy you created"
+      ],
+      "failureModes": [
+        "Celebrity write becoming a thundering-herd event that stalls the fan-out pipeline",
+        "Partial fan-out on failure leaving some recipients with the item and others without",
+        "Unbounded per-recipient lists growing forever because nothing caps them"
+      ],
+      "alternatives": [
+        { "id": "ranking", "note": "Fan-out decides WHAT is in the feed; ranking decides the order. The hybrid answer needs both." },
+        { "id": "caching", "note": "Fan-out-on-read plus an aggressive cache is the pull-side answer, and it is right for low-follower accounts." }
+      ],
+      "drill": { "topic": "components", "unit": "c04" }
+    },
+    {
+      "id": "ordering",
+      "category": "async-messaging",
+      "title": "Message Ordering",
+      "mechanism": "ordering",
+      "what": "Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition.",
+      "reachFor": [
+        "State transitions must apply in sequence — edits, balances, status changes",
+        "The prompt says messages in a conversation or a stream must not appear out of order",
+        "A later event invalidates an earlier one and applying them backwards corrupts state"
+      ],
+      "avoid": [
+        "Operations are commutative; ordering costs parallelism you did not need to spend",
+        "Global ordering across all keys is the requirement — that serialises everything"
+      ],
+      "costs": [
+        "Per-key ordering means per-key serialisation, capping parallelism at the partition count",
+        "A partition's throughput becomes the ceiling for its hottest key",
+        "Rebalancing consumers has to preserve the guarantee, which complicates scaling"
+      ],
+      "failureModes": [
+        "Retrying a failed message out of band and applying it after its successor",
+        "Repartitioning silently breaking the key-to-partition binding that provided the order",
+        "Clock-based ordering across producers giving an order that never actually happened"
+      ],
+      "alternatives": [
+        { "id": "conflict-resolution", "note": "If you cannot order, make the operations mergeable instead — CRDTs and version vectors." },
+        { "id": "idempotency", "note": "Sequence numbers plus idempotent apply lets a consumer detect and discard out-of-order replays." }
+      ],
+      "drill": { "topic": "components", "unit": "c04" }
+    },
+    {
+      "id": "at-least-once",
+      "category": "async-messaging",
+      "title": "At-Least-Once Delivery",
+      "mechanism": "at-least-once",
+      "what": "The default durable-messaging guarantee: a message is redelivered until acknowledged, so it may arrive more than once but never zero times.",
+      "reachFor": [
+        "Losing a message is unacceptable and duplicates are survivable",
+        "Consumers can be made idempotent",
+        "The prompt involves deliveries, notifications or webhooks that must not be dropped"
+      ],
+      "avoid": [
+        "Side effects are irreversible and cannot be deduplicated — charging a card twice is not a rounding error",
+        "Duplicate suppression cannot be implemented anywhere in the pipeline"
+      ],
+      "costs": [
+        "Every consumer must carry deduplication or idempotency logic",
+        "Retry policy is a real design surface: interval, ceiling, jitter, give-up",
+        "Duplicate rate is invisible unless you measure it"
+      ],
+      "failureModes": [
+        "Consumer acknowledges before the work is durable and the message is lost anyway",
+        "Retry storm after a downstream outage, amplifying load exactly when it is weakest",
+        "Poison message consuming the entire retry budget forever with no dead-letter path"
+      ],
+      "alternatives": [
+        { "id": "exactly-once", "note": "Effectively-once via idempotency keys and transactional sinks — more machinery, stronger promise." },
+        { "id": "dead-letter-queue", "note": "The required companion: somewhere for a message that has failed enough times to go." }
+      ],
+      "drill": { "topic": "components", "unit": "c04" }
+    },
+    {
+      "id": "exactly-once",
+      "category": "async-messaging",
+      "title": "Exactly-Once (Effectively-Once)",
+      "mechanism": "exactly-once",
+      "what": "Making duplicate delivery invisible in the result, by pairing at-least-once transport with idempotent or transactional application.",
+      "reachFor": [
+        "The prompt counts money, inventory or billable events where a double-apply is a real defect",
+        "Aggregates must be exact rather than approximately right",
+        "You control the sink well enough to commit offset and effect together"
+      ],
+      "avoid": [
+        "The sink is a third party you cannot make transactional",
+        "Approximate results are acceptable — you are buying an expensive guarantee for nothing"
+      ],
+      "costs": [
+        "Deduplication state per key, which must be kept for at least the retry window",
+        "Transactional writes are slower and constrain which sinks you may use",
+        "It is only exactly-once within the boundary you control; the edges remain at-least-once"
+      ],
+      "failureModes": [
+        "Dedup window expiring before a delayed retry arrives, admitting the duplicate you designed against",
+        "Dedup store and sink not committed atomically, so a crash between them re-applies",
+        "Believing the broker's exactly-once flag covers your external side effects — it does not"
+      ],
+      "alternatives": [
+        { "id": "idempotency", "note": "Usually the cheaper route: make the operation safe to repeat and stop trying to prevent repeats." },
+        { "id": "at-least-once", "note": "If duplicates are harmless, do not pay for this." }
+      ],
+      "drill": { "topic": "components", "unit": "c04" }
+    },
+    {
+      "id": "dead-letter-queue",
+      "category": "async-messaging",
+      "title": "Dead-Letter Queue",
+      "what": "A side channel for messages that have failed processing too many times, so one bad item cannot block the pipeline forever.",
+      "reachFor": [
+        "Any at-least-once pipeline — this is the companion, not an optional extra",
+        "Failures may be permanent (malformed input) as well as transient",
+        "You need to inspect and replay failures after fixing a bug"
+      ],
+      "avoid": [
+        "Nothing — but it is misused when it becomes a place messages go to be forgotten"
+      ],
+      "costs": [
+        "Another queue to monitor, and an alerting policy for it",
+        "A replay tool, or the DLQ is just a landfill",
+        "Ordering guarantees are broken for anything that detours through it"
+      ],
+      "failureModes": [
+        "Nobody watches it, so silent data loss looks exactly like success",
+        "Replaying without fixing the cause, so items round-trip forever",
+        "Filling up because the retry threshold was tuned for a transient failure mode that turned permanent"
+      ],
+      "alternatives": [
+        { "id": "at-least-once", "note": "The delivery guarantee that makes a DLQ necessary in the first place." },
+        { "id": "retry-backoff", "note": "Retry policy decides how long something struggles before it is dead-lettered." }
+      ],
+      "drill": { "topic": "components", "unit": "c04" }
+    },
+    {
+      "id": "outbox-cdc",
+      "category": "async-messaging",
+      "title": "Transactional Outbox / CDC",
+      "what": "Writing the event into the same database transaction as the state change, then shipping it from the table or the write-ahead log — so the event and the data cannot disagree.",
+      "reachFor": [
+        "A state change must reliably produce an event and you cannot afford to lose either",
+        "The prompt has a dual-write problem: database plus queue, with no distributed transaction available",
+        "Downstream systems (search index, cache, analytics) must converge on the database's truth"
+      ],
+      "avoid": [
+        "The event does not need to be as durable as the write; a direct publish is far less machinery",
+        "You do not own the database, or cannot run a relay next to it"
+      ],
+      "costs": [
+        "An outbox table plus a relay process, or a CDC pipeline to operate",
+        "Additional write volume and a table that needs pruning",
+        "Events carry database shape, so the schema becomes an external contract"
+      ],
+      "failureModes": [
+        "Relay lag making 'reliable' events arbitrarily late",
+        "Outbox table growing without bound because pruning was never built",
+        "CDC replaying from an old log position and re-emitting a flood of duplicates"
+      ],
+      "alternatives": [
+        { "id": "pubsub", "note": "Direct publish when losing the occasional event is genuinely acceptable." },
+        { "id": "saga", "note": "For multi-service workflows, the outbox is how each step reliably announces it happened." }
+      ]
+    },
+    {
+      "id": "stream-processing",
+      "category": "async-messaging",
+      "title": "Stream Processing",
+      "mechanism": "stream-processing",
+      "what": "Continuous computation over an unbounded event stream — windowed aggregation, enrichment and joins applied as data arrives.",
+      "reachFor": [
+        "The prompt needs near-real-time aggregates over a firehose",
+        "Storing every raw event to query later is too expensive or too slow",
+        "Results must update continuously rather than on a schedule"
+      ],
+      "avoid": [
+        "A nightly batch would satisfy the requirement — batch is dramatically simpler to operate and reason about",
+        "The computation needs arbitrary access to all historical data at once"
+      ],
+      "costs": [
+        "Windowing, watermarks and late-data policy are decisions you cannot avoid making",
+        "Stateful operators need checkpointed state, which is the hard operational part",
+        "Reprocessing history means replaying the stream, and that has to be designed for"
+      ],
+      "failureModes": [
+        "Late events arriving after their window closed and being silently dropped",
+        "Unbounded state growth in a keyed operator with no TTL",
+        "Checkpoint failures forcing a restart that re-emits already-published results"
+      ],
+      "alternatives": [
+        { "id": "aggregation", "note": "If you only need counters, a pre-aggregated store may be enough without a stream framework." },
+        { "id": "time-series-db", "note": "Store the points and let the query engine aggregate, when freshness requirements are looser." }
+      ]
+    },
+    {
+      "id": "aggregation",
+      "category": "async-messaging",
+      "title": "Pre-Aggregation & Rollups",
+      "mechanism": "aggregation",
+      "what": "Maintaining counters and summaries as data arrives, so a read is a lookup instead of a scan.",
+      "reachFor": [
+        "The prompt asks for counts, totals or top-N over volumes too large to scan per request",
+        "The same aggregate is read far more often than the underlying events change",
+        "Dashboards or leaderboards need sub-second reads"
+      ],
+      "avoid": [
+        "Query dimensions are unknown or ad-hoc; you cannot pre-aggregate every combination",
+        "Exact answers over arbitrary time ranges are required and the rollup granularity would not support them"
+      ],
+      "costs": [
+        "Every new dimension multiplies the number of aggregates to maintain",
+        "Backfilling a new aggregate means reprocessing history",
+        "Aggregates can drift from the source and need periodic reconciliation"
+      ],
+      "failureModes": [
+        "Double counting on retry, so the counter is wrong and nothing signals it",
+        "Hot counter — one popular entity's increments exceed a single partition's write throughput",
+        "Rollup granularity chosen too coarse to answer a question the product later asks"
+      ],
+      "alternatives": [
+        { "id": "stream-processing", "note": "When aggregation needs windows, joins or late-data handling, you want a real stream engine." },
+        { "id": "hot-keys", "note": "Sharded counters are the standard fix once one aggregate becomes a write hotspot." }
+      ]
+    },
+    {
+      "id": "idempotency",
+      "category": "correctness-coordination",
+      "title": "Idempotency",
+      "mechanism": "idempotency",
+      "what": "Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect.",
+      "reachFor": [
+        "Any retry path exists — and in a distributed system one always does",
+        "The prompt involves payments, orders, or anything a user could double-submit",
+        "Network timeouts leave the caller genuinely unable to tell whether the write happened"
+      ],
+      "avoid": [
+        "The operation is naturally idempotent already (a PUT of a full resource); adding keys is ceremony",
+        "There is nowhere durable to record the key at the moment of the effect"
+      ],
+      "costs": [
+        "A key store with a retention window, and that window is a real correctness parameter",
+        "The key must be recorded atomically with the effect, which constrains your storage choices",
+        "Clients must generate and reuse keys correctly — a contract you have to document and police"
+      ],
+      "failureModes": [
+        "Key recorded after the effect, so a crash between them admits a duplicate",
+        "Retention expiring before the last legitimate retry arrives",
+        "Client regenerating a new key per retry, which defeats the entire mechanism",
+        "Same key reused for a genuinely different request, silently returning the wrong prior result"
+      ],
+      "alternatives": [
+        { "id": "exactly-once", "note": "The pipeline-level version of the same goal; idempotency is the per-operation building block." },
+        { "id": "reservation", "note": "When the operation must hold a scarce resource rather than just be safe to repeat." }
+      ],
+      "drill": { "topic": "components", "unit": "c06" }
+    },
+    {
+      "id": "saga",
+      "category": "correctness-coordination",
+      "title": "Saga",
+      "mechanism": "saga",
+      "what": "A multi-step workflow across services where each step has a compensating action, because no distributed transaction is available.",
+      "reachFor": [
+        "A business operation spans several services that each own their own data",
+        "The prompt needs all-or-nothing semantics across boundaries where 2PC is not viable",
+        "Steps involve external parties — payment processors, shipping, third-party APIs"
+      ],
+      "avoid": [
+        "All the state lives in one database — use a transaction and stop inventing",
+        "Steps genuinely cannot be compensated (an email is sent, a drug is dispensed) and the design pretends they can"
+      ],
+      "costs": [
+        "Every forward step needs a compensating step, roughly doubling the logic",
+        "Intermediate states are visible to users, so the product must define what they see",
+        "Orchestration state has to be durable and recoverable, which is another service"
+      ],
+      "failureModes": [
+        "Compensation itself failing, leaving the workflow stuck in a half-applied state",
+        "Non-compensatable side effect performed before a step that can still fail",
+        "Orchestrator crash mid-saga with no durable record of how far it got",
+        "Concurrent sagas on the same entity interleaving into a state neither expected"
+      ],
+      "alternatives": [
+        { "id": "reservation", "note": "A two-phase reserve-then-confirm is a lighter pattern when the risk is only about holding scarce stock." },
+        { "id": "outbox-cdc", "note": "The reliable way for each saga step to announce completion without a dual-write." }
+      ]
+    },
+    {
+      "id": "reservation",
+      "category": "correctness-coordination",
+      "title": "Reservation / Hold",
+      "mechanism": "reservation",
+      "what": "Temporarily claiming a scarce resource with an expiry, so a user can complete a multi-step flow without it being sold underneath them.",
+      "reachFor": [
+        "Inventory is finite and the purchase flow takes more than one request — seats, rooms, drivers",
+        "Overselling is unacceptable but locking for the whole session is unacceptable too",
+        "The prompt describes a checkout, booking or matching flow"
+      ],
+      "avoid": [
+        "The resource is effectively unlimited; a hold is pure overhead",
+        "The flow is a single atomic request — just do the transaction"
+      ],
+      "costs": [
+        "Expiry handling: something must reliably release abandoned holds",
+        "Held-but-unsold inventory is real lost revenue during high demand",
+        "Users see 'available' counts that include or exclude holds, and you must decide which"
+      ],
+      "failureModes": [
+        "Holds never expiring because the sweeper failed, silently freezing inventory",
+        "Race between expiry and confirmation, releasing something that was just purchased",
+        "Hold count not enforced atomically, so concurrent requests both succeed and oversell"
+      ],
+      "alternatives": [
+        { "id": "distributed-lock", "note": "A lock blocks others outright; a reservation is a lock with an owner, an expiry and a business meaning." },
+        { "id": "saga", "note": "When the hold spans several services, the reservation becomes one step of a saga." }
+      ]
+    },
+    {
+      "id": "conflict-resolution",
+      "category": "correctness-coordination",
+      "title": "Conflict Resolution",
+      "mechanism": "conflict-resolution",
+      "what": "Deciding what the truth is when two writers modified the same thing concurrently — last-write-wins, version vectors, OT or CRDTs.",
+      "reachFor": [
+        "Writes can happen in multiple places at once — offline clients, multi-region, collaborative editing",
+        "The prompt says users edit the same document or record simultaneously",
+        "You chose availability over coordination and now must handle the consequence"
+      ],
+      "avoid": [
+        "A single leader orders all writes — you do not have conflicts to resolve",
+        "Silent data loss is unacceptable and you are reaching for last-write-wins because it is easy"
+      ],
+      "costs": [
+        "Version metadata per item, which can rival the data in size",
+        "CRDTs constrain the operations you may offer; OT requires a central sequencer",
+        "Some conflicts are genuinely a product decision and must be surfaced to a human"
+      ],
+      "failureModes": [
+        "Last-write-wins discarding a concurrent update with no trace it existed",
+        "Clock skew making 'last' the wrong write entirely",
+        "Tombstone and version metadata growing without bound",
+        "Merge semantics that are technically correct but produce nonsense the user did not intend"
+      ],
+      "alternatives": [
+        { "id": "ordering", "note": "Route all writes for one key through one partition and the conflict never arises." },
+        { "id": "distributed-lock", "note": "Prevent concurrent modification instead of reconciling it — at the cost of availability." }
+      ]
+    },
+    {
+      "id": "leader-election",
+      "category": "correctness-coordination",
+      "title": "Leader Election",
+      "mechanism": "leader-election",
+      "what": "Picking exactly one node to perform a role, with an agreed way to notice failure and pick again.",
+      "reachFor": [
+        "Exactly one process must do a job — a scheduler, a compactor, a partition owner",
+        "The prompt needs automatic failover without an operator",
+        "Multiple nodes doing the work concurrently would be incorrect, not just wasteful"
+      ],
+      "avoid": [
+        "The work is safely parallel — election adds a coordination dependency for nothing",
+        "You would be implementing consensus yourself; use etcd, ZooKeeper or Raft"
+      ],
+      "costs": [
+        "A consensus system in your dependency graph, with its own availability story",
+        "Failover is not instant; there is a detection window where nobody is leader",
+        "Leases and fencing tokens must be honoured by the work itself, not just the election"
+      ],
+      "failureModes": [
+        "Split brain — a paused leader wakes up still believing it holds the role",
+        "Election storms flapping the role between nodes under load",
+        "Work performed after the lease expired because the worker never checked",
+        "The leader becoming a throughput bottleneck nobody planned for"
+      ],
+      "alternatives": [
+        { "id": "distributed-lock", "note": "A lock with a lease is election for one task rather than for a standing role." },
+        { "id": "consistent-hashing", "note": "Partition ownership by hash gives every node a role without a single leader." }
+      ],
+      "drill": { "topic": "components", "unit": "c06" }
+    },
+    {
+      "id": "distributed-lock",
+      "category": "correctness-coordination",
+      "title": "Distributed Lock",
+      "what": "A lease held in a shared store that grants one holder the right to act on a resource for a bounded time.",
+      "reachFor": [
+        "A critical section spans processes and double execution would corrupt state",
+        "A cheap mutual exclusion is needed for a short operation",
+        "You need to serialise access to something that has no transaction of its own"
+      ],
+      "avoid": [
+        "The operation could be made idempotent instead — that is almost always the better answer",
+        "The lock would be held across a long or user-driven operation",
+        "You are using it as a correctness guarantee without fencing tokens"
+      ],
+      "costs": [
+        "Every acquisition is a network round trip on the critical path",
+        "TTL choice is a genuine tradeoff: too short breaks long work, too long stalls after a crash",
+        "The lock store becomes a hard dependency and a bottleneck"
+      ],
+      "failureModes": [
+        "Holder pauses (GC, VM freeze) past its TTL while still believing it holds the lock",
+        "No fencing token, so a stale holder's write is accepted after the lock moved on",
+        "Deadlock or livelock from multiple locks acquired in inconsistent order",
+        "Lock-store failover losing lock state entirely and admitting two holders"
+      ],
+      "alternatives": [
+        { "id": "idempotency", "note": "Make the double execution harmless instead of preventing it. Fewer moving parts, no TTL to tune." },
+        { "id": "ordering", "note": "Serialise by routing to one partition owner rather than by contending on a lock." }
+      ]
+    },
+    {
+      "id": "rate-limiting",
+      "category": "control-protection",
+      "title": "Rate Limiting",
+      "mechanism": "rate-limiting",
+      "what": "Capping how many requests a caller may make in a window, to protect capacity and enforce fairness.",
+      "reachFor": [
+        "A public API where one caller could consume everyone's capacity",
+        "The prompt mentions abuse, scraping, brute force or tiered plans",
+        "You call a third party with its own quota you must not exceed"
+      ],
+      "avoid": [
+        "The bottleneck is internal and unbounded work, not caller volume — that is load shedding or backpressure",
+        "Legitimate bursts are normal and a hard cap would break the product"
+      ],
+      "costs": [
+        "Distributed counters mean either shared state on the hot path or approximate limits",
+        "Limit values are a product decision that will be wrong at first",
+        "Every rejected request still costs you the work of rejecting it"
+      ],
+      "failureModes": [
+        "Fixed-window boundary allowing double the limit across the boundary instant",
+        "Limiter store outage forcing a fail-open (unprotected) or fail-closed (outage) choice you never made explicitly",
+        "Limiting by IP and blocking an entire NAT'd office or mobile carrier",
+        "No Retry-After, so well-behaved clients retry immediately and amplify the overload"
+      ],
+      "alternatives": [
+        { "id": "backpressure", "note": "Rate limiting protects you from callers; backpressure tells callers to slow down because you are full." },
+        { "id": "load-shedding", "note": "When you must drop work by priority under overload rather than by per-caller quota." }
+      ],
+      "drill": { "topic": "components", "unit": "c05" }
+    },
+    {
+      "id": "backpressure",
+      "category": "control-protection",
+      "title": "Backpressure",
+      "mechanism": "backpressure",
+      "what": "Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks.",
+      "reachFor": [
+        "Producer and consumer rates can diverge for sustained periods",
+        "The prompt has a pipeline where an unbounded buffer would just relocate the failure",
+        "Memory or queue depth is a real constraint"
+      ],
+      "avoid": [
+        "Bursts are short and a buffer genuinely absorbs them",
+        "The producer physically cannot slow down — a firehose of external events — in which case you must shed instead"
+      ],
+      "costs": [
+        "Slowness propagates upstream by design, so the effect is visible to callers",
+        "Every stage needs a bounded buffer and a policy for what happens when it is full",
+        "Harder to reason about: a slow leaf can stall the root"
+      ],
+      "failureModes": [
+        "Unbounded queue chosen 'temporarily', converting a latency problem into an out-of-memory crash",
+        "Backpressure propagating all the way to a user-facing request path and timing everyone out",
+        "Deadlock when two stages apply backpressure to each other in a cycle"
+      ],
+      "alternatives": [
+        { "id": "load-shedding", "note": "When you cannot slow the producer, drop work deliberately by priority." },
+        { "id": "work-queue", "note": "A durable queue absorbs bursts; pair with backpressure so 'burst' cannot silently become 'forever'." }
+      ],
+      "drill": { "topic": "components", "unit": "c04" }
+    },
+    {
+      "id": "circuit-breaker",
+      "category": "control-protection",
+      "title": "Circuit Breaker",
+      "what": "Tripping a dependency call to fail fast after repeated failures, then probing periodically to see whether it has recovered.",
+      "reachFor": [
+        "A downstream dependency can fail or slow down and you must not go down with it",
+        "The prompt asks how the system degrades when one service is unavailable",
+        "Retries against a failing dependency would make its recovery harder"
+      ],
+      "avoid": [
+        "The dependency is genuinely required and there is no meaningful fallback — failing fast just fails faster",
+        "Failures are per-request and independent rather than indicative of dependency health"
+      ],
+      "costs": [
+        "Thresholds and probe intervals are tuning parameters with no obviously right value",
+        "A fallback path that is rarely exercised is a fallback path that does not work",
+        "State is usually per-process, so behaviour differs across the fleet"
+      ],
+      "failureModes": [
+        "Tripping on a transient blip and cutting off a healthy dependency",
+        "Half-open probes stampeding a recovering service and re-tripping it immediately",
+        "Breaker around a non-critical call taking down the critical path because the fallback was never tested"
+      ],
+      "alternatives": [
+        { "id": "retry-backoff", "note": "Retries handle transient failures; a breaker handles sustained ones. You need both, in that order." },
+        { "id": "bulkhead", "note": "Isolate the resources a bad dependency can consume instead of detecting it after the fact." }
+      ]
+    },
+    {
+      "id": "retry-backoff",
+      "category": "control-protection",
+      "title": "Retry with Backoff & Jitter",
+      "what": "Re-attempting a failed call on an exponentially increasing, randomised delay, so transient failures heal without synchronising the fleet.",
+      "reachFor": [
+        "Failures are transient — a timeout, a brief unavailability, a throttled response",
+        "The operation is idempotent or has been made so",
+        "The prompt asks how you handle partial failure in a distributed call graph"
+      ],
+      "avoid": [
+        "The failure is deterministic; retrying a malformed request just multiplies it",
+        "The operation is not idempotent and duplicates would be harmful",
+        "You are retrying at several layers at once, multiplying attempts geometrically"
+      ],
+      "costs": [
+        "Retries consume capacity at exactly the moment capacity is scarce",
+        "Latency budget must accommodate the retries or the caller times out anyway",
+        "Attempt caps and total deadlines are required, and are extra parameters to get right"
+      ],
+      "failureModes": [
+        "No jitter, so every client retries in lockstep and produces a synchronised thundering herd",
+        "Retry amplification across layers turning one user request into dozens of backend calls",
+        "Retrying a request that actually succeeded but whose response was lost, without an idempotency key"
+      ],
+      "alternatives": [
+        { "id": "circuit-breaker", "note": "Once failures are sustained rather than transient, stop retrying and trip." },
+        { "id": "work-queue", "note": "Move the work off the request path and let the queue own durable retry." }
+      ]
+    },
+    {
+      "id": "load-shedding",
+      "category": "control-protection",
+      "title": "Load Shedding",
+      "what": "Deliberately dropping or degrading lower-priority work under overload so the system serves its most important traffic instead of failing at everything.",
+      "reachFor": [
+        "Demand can exceed capacity and you cannot slow the source",
+        "Some traffic is genuinely more important than the rest — checkout over recommendations",
+        "The prompt asks what happens at 10× expected load"
+      ],
+      "avoid": [
+        "All traffic is equally critical, so there is nothing to shed that does not hurt equally",
+        "Capacity is the actual answer and shedding is being used to avoid provisioning"
+      ],
+      "costs": [
+        "You need a priority classification for traffic, which is a product decision",
+        "Shed requests are visible failures, so the client experience must be designed",
+        "Detecting overload accurately is harder than it looks — queue depth beats CPU"
+      ],
+      "failureModes": [
+        "Shedding triggered too late, once queues are already deep and latency is unrecoverable",
+        "Shedding cheap requests while expensive ones sail through, so it does not reduce load",
+        "Clients retrying shed requests immediately, converting a shed into an amplification"
+      ],
+      "alternatives": [
+        { "id": "rate-limiting", "note": "Per-caller fairness before overload; shedding is the emergency response after." },
+        { "id": "backpressure", "note": "If the producer CAN be slowed, do that instead — no work is lost." }
+      ],
+      "drill": { "topic": "components", "unit": "c05" }
+    },
+    {
+      "id": "bulkhead",
+      "category": "control-protection",
+      "title": "Bulkhead Isolation",
+      "what": "Partitioning resources — thread pools, connections, even fleets — so one dependency or tenant cannot consume everything.",
+      "reachFor": [
+        "One slow dependency currently exhausts a shared pool and takes down unrelated paths",
+        "The prompt is multi-tenant and one customer must not be able to starve the others",
+        "Critical and non-critical work share infrastructure today"
+      ],
+      "avoid": [
+        "There is only one dependency and one class of work — partitioning buys nothing",
+        "Utilisation matters more than isolation; reserved partitions sit idle by design"
+      ],
+      "costs": [
+        "Lower average utilisation, since capacity is reserved rather than pooled",
+        "More pools to size and monitor, each with its own saturation behaviour",
+        "Cell-based isolation multiplies deployment and operational surface"
+      ],
+      "failureModes": [
+        "Pools sized by guesswork, so one saturates constantly while another idles",
+        "A shared resource one level down (a connection pool, a database) undoing the isolation above it",
+        "Noisy-neighbour effects surviving because the partition was logical, not physical"
+      ],
+      "alternatives": [
+        { "id": "circuit-breaker", "note": "Detect and cut off a bad dependency rather than pre-partitioning for it." },
+        { "id": "rate-limiting", "note": "Per-tenant quotas achieve fairness without reserving capacity per tenant." }
+      ]
+    },
+    {
+      "id": "search-index",
+      "category": "indexes-search",
+      "title": "Inverted Index / Search",
+      "mechanism": "search-index",
+      "what": "A term-to-document mapping built ahead of time, so full-text and faceted queries are lookups rather than scans.",
+      "reachFor": [
+        "Users query by content rather than by key — free text, filters, facets",
+        "The prompt needs relevance ordering, not just matching",
+        "A LIKE '%…%' over the primary store would be a full scan"
+      ],
+      "avoid": [
+        "Lookups are always by primary key",
+        "The index would need to be transactionally consistent with the database",
+        "The corpus is small enough to filter in memory"
+      ],
+      "costs": [
+        "A second copy of the data with its own ingestion pipeline and lag",
+        "Analysis choices — tokenising, stemming, language — are baked in at index time",
+        "Reindexing after a mapping change is a full rebuild, not a migration"
+      ],
+      "failureModes": [
+        "Index drifting from the source of truth with no reconciliation job to catch it",
+        "Deep pagination degrading badly because every shard must return the full prefix",
+        "Hot shard from an uneven document distribution",
+        "Ingestion lag making just-written content unfindable exactly when users look for it"
+      ],
+      "alternatives": [
+        { "id": "trie-autocomplete", "note": "For prefix matching specifically, a trie is far cheaper than a general search engine." },
+        { "id": "vector-search", "note": "When the match should be semantic rather than lexical." }
+      ]
+    },
+    {
+      "id": "vector-search",
+      "category": "indexes-search",
+      "title": "Vector Search",
+      "mechanism": "vector-search",
+      "what": "Approximate nearest-neighbour lookup over embeddings, retrieving by semantic similarity instead of by keyword.",
+      "reachFor": [
+        "The prompt needs 'find things like this' where the match is meaning, not spelling",
+        "Retrieval feeds an LLM (RAG) or a recommender",
+        "Users phrase queries differently from the source documents"
+      ],
+      "avoid": [
+        "Exact matching and filtering are what users need — keyword search is cheaper and explainable",
+        "The corpus changes constantly and index rebuilds cannot keep up",
+        "You cannot explain why a result was returned and the product requires that"
+      ],
+      "costs": [
+        "Embeddings must be generated and regenerated whenever the model changes",
+        "ANN indexes are memory-hungry and trade recall for latency by construction",
+        "Hybrid ranking with keyword search is usually necessary, so you run both"
+      ],
+      "failureModes": [
+        "Model version drift making old and new embeddings incomparable in the same index",
+        "Recall silently degrading as index parameters are tuned for latency",
+        "Chunking strategy destroying the context that made a passage meaningful",
+        "No metadata filtering, so results are semantically close but structurally invalid"
+      ],
+      "alternatives": [
+        { "id": "search-index", "note": "Lexical search when exactness, filters and explainability matter more than semantics." },
+        { "id": "ranking", "note": "Retrieval gets candidates; ranking decides the order. Vector search is the first stage, not the whole answer." }
+      ]
+    },
+    {
+      "id": "ranking",
+      "category": "indexes-search",
+      "title": "Ranking",
+      "mechanism": "ranking",
+      "what": "Ordering a candidate set by a score — recency, affinity, engagement, relevance — usually as a cheap retrieval stage followed by an expensive scoring stage.",
+      "reachFor": [
+        "There are far more matching items than can be shown, and order is the product",
+        "The prompt mentions feeds, recommendations, search results or 'what the user sees first'",
+        "Simple chronological ordering demonstrably under-serves users"
+      ],
+      "avoid": [
+        "Chronological is the expected contract and reordering would violate user trust",
+        "The candidate set is small enough that order barely matters",
+        "You cannot measure whether the ranking is working"
+      ],
+      "costs": [
+        "A feature pipeline, and features are the expensive, high-maintenance part",
+        "Scoring latency forces a multi-stage architecture: cheap retrieval, expensive rank on the top-K",
+        "Training and serving must agree, or you get skew that is very hard to debug"
+      ],
+      "failureModes": [
+        "Training/serving skew from features computed differently in the two paths",
+        "Feedback loops where the ranker promotes what it already promoted",
+        "Cold start for new users and new items with no signal to rank on",
+        "Score computed over a stale candidate set, ranking items that no longer exist"
+      ],
+      "alternatives": [
+        { "id": "feature-serving", "note": "The infrastructure ranking depends on — where the signals come from at request time." },
+        { "id": "aggregation", "note": "Precomputed counters make a serviceable ranking signal without a model." }
+      ]
+    },
+    {
+      "id": "geo-index",
+      "category": "indexes-search",
+      "title": "Geospatial Index",
+      "mechanism": "geo-index",
+      "what": "Mapping 2-D coordinates onto a 1-D key that preserves locality — geohash, quadtree or S2 — so 'what is near me' becomes a range scan.",
+      "reachFor": [
+        "The prompt asks for nearby drivers, restaurants, stores or users",
+        "Location updates are frequent and proximity queries must be fast",
+        "A naive distance calculation over every row would be a full scan"
+      ],
+      "avoid": [
+        "Locations are static and few",
+        "Queries are by region name or administrative boundary rather than by radius",
+        "Exact distance ordering matters more than fast candidate retrieval"
+      ],
+      "costs": [
+        "Precision level is a tradeoff between cell size and the number of cells to scan",
+        "Boundary handling requires querying neighbouring cells, not just the containing one",
+        "High-frequency location updates are a write-heavy workload of their own"
+      ],
+      "failureModes": [
+        "Edge cases at cell boundaries missing a genuinely nearby result",
+        "Dense urban cells holding orders of magnitude more entities than rural ones",
+        "Fixed precision performing badly in both dense and sparse regions simultaneously",
+        "Write amplification from updating the index on every location ping"
+      ],
+      "alternatives": [
+        { "id": "sharding", "note": "Geo cells make a natural partition key, but they inherit population skew — plan for it." },
+        { "id": "caching", "note": "Popular areas are queried repeatedly; a short-TTL cache absorbs most of the read load." }
+      ]
+    },
+    {
+      "id": "bloom-filter",
+      "category": "indexes-search",
+      "title": "Bloom Filter",
+      "what": "A compact probabilistic set that answers 'definitely not present' or 'probably present', trading exactness for tiny memory.",
+      "reachFor": [
+        "You need to avoid an expensive lookup for keys that are usually absent",
+        "Memory is the constraint and false positives are cheap to recover from",
+        "The prompt has dedup or membership checks over a huge keyspace"
+      ],
+      "avoid": [
+        "A false positive would be a correctness bug rather than a wasted lookup",
+        "You need deletion — standard bloom filters cannot remove elements",
+        "The set is small enough for an exact structure"
+      ],
+      "costs": [
+        "Sizing must be decided up front from expected cardinality and target error rate",
+        "It degrades as it fills, and the only fix is to rebuild",
+        "Another structure to keep in sync with the real data"
+      ],
+      "failureModes": [
+        "Filter saturating past its design cardinality so the false-positive rate silently climbs",
+        "Treating 'probably present' as 'present' and skipping the confirming lookup",
+        "Attempting deletion by clearing bits and corrupting other members"
+      ],
+      "alternatives": [
+        { "id": "dedup", "note": "When you need certainty, an exact content-address index is the honest answer." },
+        { "id": "caching", "note": "A negative cache stores known-absent keys exactly, at higher memory cost." }
+      ],
+      "drill": { "topic": "components", "unit": "c06" }
+    },
+    {
+      "id": "trie-autocomplete",
+      "category": "indexes-search",
+      "title": "Trie / Autocomplete",
+      "what": "A prefix tree with top-K completions precomputed at each node, so a keystroke returns suggestions in a single traversal.",
+      "reachFor": [
+        "The prompt is typeahead, search suggestions or command completion",
+        "Latency budget is tens of milliseconds because it fires on every keystroke",
+        "The suggestion set changes far more slowly than it is queried"
+      ],
+      "avoid": [
+        "Matching should be fuzzy or semantic rather than prefix-based",
+        "The suggestion set is tiny — a filter over an array is simpler",
+        "Suggestions must be personalised per user at full precision"
+      ],
+      "costs": [
+        "Memory grows with the vocabulary, and storing top-K at every node multiplies it",
+        "Rebuilds are batch jobs, so new terms appear on a delay",
+        "Sharding a trie by prefix creates uneven partitions by construction"
+      ],
+      "failureModes": [
+        "Popular prefixes ('a', 'th') becoming hot shards that serve most of the traffic",
+        "Stale top-K after a spike in popularity for a term the last rebuild missed",
+        "Memory blowup from storing full strings at every node instead of references",
+        "No typo tolerance, so a single mistyped character returns nothing"
+      ],
+      "alternatives": [
+        { "id": "search-index", "note": "A general search engine with an edge-ngram analyser, when you want fuzziness and are willing to pay for it." },
+        { "id": "caching", "note": "Popular prefixes dominate the distribution; caching their results absorbs most requests before the trie." }
+      ]
+    },
+    {
+      "id": "websockets",
+      "category": "apis-realtime",
+      "title": "WebSockets / Persistent Connections",
+      "mechanism": "websockets",
+      "what": "A long-lived bidirectional connection, so the server can push without the client asking and latency is one hop rather than one poll interval.",
+      "reachFor": [
+        "The server must initiate — chat messages, live location, presence, collaborative edits",
+        "Updates are frequent enough that polling would be wasteful or too slow",
+        "The prompt says real time and means sub-second"
+      ],
+      "avoid": [
+        "Updates are one-way server-to-client and infrequent — SSE is simpler and survives proxies better",
+        "Clients are mobile and frequently backgrounded, where connections die constantly",
+        "Update frequency is low enough that polling is honestly fine"
+      ],
+      "costs": [
+        "Connection state pins users to servers, which breaks stateless load balancing",
+        "Memory and file descriptors per connection cap how many fit on a box",
+        "You must build reconnect, resume and missed-message backfill yourself"
+      ],
+      "failureModes": [
+        "Reconnect storm after a deploy or network blip, all clients at once",
+        "Messages sent while disconnected being lost with no replay path",
+        "Idle proxies and load balancers silently killing connections without a heartbeat",
+        "Uneven connection distribution because balancing happened at connect time and never again"
+      ],
+      "alternatives": [
+        { "id": "sse", "note": "Server-to-client only, over plain HTTP, with automatic browser reconnect. Usually enough for feeds and notifications." },
+        { "id": "webhooks", "note": "When the recipient is a server rather than a browser, push to their endpoint instead of holding a socket." }
+      ],
+      "drill": { "topic": "components", "unit": "c07" }
+    },
+    {
+      "id": "sse",
+      "category": "apis-realtime",
+      "title": "Server-Sent Events",
+      "what": "A one-way stream of events over a normal HTTP response, with browser-native reconnect and event ids for resumption.",
+      "reachFor": [
+        "Updates flow server-to-client only — notifications, progress, token streaming",
+        "You want push without owning reconnect logic",
+        "Corporate proxies and infrastructure that dislike WebSocket upgrades are in play"
+      ],
+      "avoid": [
+        "The client needs to send frequently on the same channel — that is WebSockets",
+        "You need binary frames",
+        "Very high per-client message rates where framing overhead matters"
+      ],
+      "costs": [
+        "Still one held connection per client, with the same fan-out and capacity implications",
+        "Text-only, so binary payloads must be encoded",
+        "Older HTTP/1.1 clients hit per-domain connection limits"
+      ],
+      "failureModes": [
+        "Buffering proxies holding events until the buffer fills, destroying the latency benefit",
+        "Missing Last-Event-ID handling, so a reconnect silently loses everything sent while away",
+        "No heartbeat, so a dead connection looks identical to an idle one"
+      ],
+      "alternatives": [
+        { "id": "websockets", "note": "When the client must talk back on the same channel at the same cadence." },
+        { "id": "pagination", "note": "For infrequent updates, polling a cursor endpoint is simpler than any push channel." }
+      ],
+      "drill": { "topic": "components", "unit": "c07" }
+    },
+    {
+      "id": "rest-api",
+      "category": "apis-realtime",
+      "title": "REST",
+      "what": "Resource-oriented HTTP with standard verbs, status codes and cacheable GETs — the default public API shape.",
+      "reachFor": [
+        "A public API consumed by clients you do not control",
+        "You want HTTP caching, proxies and tooling to work without special support",
+        "Broad accessibility matters more than payload efficiency"
+      ],
+      "avoid": [
+        "Chatty internal service-to-service calls where serialisation overhead dominates",
+        "Clients need wildly different subsets of the same data and you are drowning in endpoint variants"
+      ],
+      "costs": [
+        "Over- and under-fetching, which drives clients to make several round trips",
+        "Versioning is a real design burden once you have external consumers",
+        "No schema enforcement unless you add one"
+      ],
+      "failureModes": [
+        "Non-idempotent POST retried after a timeout, creating a duplicate resource",
+        "Offset pagination degrading and skipping rows as the underlying data shifts",
+        "Breaking changes shipped without a version, discovered by customers",
+        "Endpoint proliferation as each client gets its own bespoke variant"
+      ],
+      "alternatives": [
+        { "id": "grpc", "note": "Internal, high-volume, strongly-typed service calls where efficiency and contracts matter." },
+        { "id": "graphql", "note": "When clients need very different shapes of the same graph and round trips are the pain." }
+      ],
+      "drill": { "topic": "components", "unit": "c07" }
+    },
+    {
+      "id": "grpc",
+      "category": "apis-realtime",
+      "title": "gRPC",
+      "what": "Binary RPC over HTTP/2 with an IDL-defined contract, code generation, streaming and multiplexing.",
+      "reachFor": [
+        "Internal service-to-service calls at high volume",
+        "You want a generated, type-checked contract across several languages",
+        "Bidirectional or server streaming is needed without hand-rolling it"
+      ],
+      "avoid": [
+        "Browsers are first-class clients — it needs a proxy layer to work there",
+        "Third-party developers must integrate quickly with curl and a doc page",
+        "Human-debuggable payloads matter more than efficiency"
+      ],
+      "costs": [
+        "Toolchain and codegen in every language you ship",
+        "Binary payloads are hard to inspect on the wire",
+        "Load balancing HTTP/2 needs L7 awareness; naive L4 pins all calls to one connection"
+      ],
+      "failureModes": [
+        "Long-lived HTTP/2 connections defeating L4 balancing and hot-spotting one backend",
+        "Proto field reuse or renumbering silently corrupting decoded messages",
+        "Deadline not propagated, so a cancelled call keeps running downstream",
+        "Streaming RPCs leaking when neither side closes"
+      ],
+      "alternatives": [
+        { "id": "rest-api", "note": "External consumers, browser clients, or when 'works with curl' is a requirement." },
+        { "id": "pubsub", "note": "If the caller does not need a response, an event is looser coupling than an RPC." }
+      ],
+      "drill": { "topic": "components", "unit": "c07" }
+    },
+    {
+      "id": "graphql",
+      "category": "apis-realtime",
+      "title": "GraphQL",
+      "what": "A single endpoint where the client declares exactly which fields of a graph it wants, in one round trip.",
+      "reachFor": [
+        "Many client types need very different subsets of the same data",
+        "Mobile round trips are the bottleneck and over-fetching is measurable",
+        "The data is genuinely a graph and clients traverse it differently"
+      ],
+      "avoid": [
+        "One client with stable needs — you have added a query planner for nothing",
+        "HTTP caching is important; a POSTed query defeats it",
+        "You cannot control or budget what clients ask for"
+      ],
+      "costs": [
+        "N+1 resolution unless you build dataloader-style batching",
+        "Query cost analysis is required or a single query can take down the backend",
+        "Caching moves from HTTP into your application"
+      ],
+      "failureModes": [
+        "Deeply nested query exhausting the server, effectively a self-inflicted denial of service",
+        "N+1 database calls hidden behind innocuous-looking field resolvers",
+        "Schema growing into a shared dumping ground nobody can deprecate anything from",
+        "Errors returned with HTTP 200, so infrastructure-level monitoring reports everything as fine"
+      ],
+      "alternatives": [
+        { "id": "rest-api", "note": "Fewer moving parts, real HTTP caching, and usually enough." },
+        { "id": "grpc", "note": "When the callers are services rather than varied UI clients." }
+      ],
+      "drill": { "topic": "components", "unit": "c07" }
+    },
+    {
+      "id": "webhooks",
+      "category": "apis-realtime",
+      "title": "Webhooks",
+      "what": "Pushing events to a URL the customer registered, so their server learns about changes without polling yours.",
+      "reachFor": [
+        "External systems must react to your events promptly",
+        "Polling would be wasteful at your customer count",
+        "The prompt describes integrations, payment events or third-party notifications"
+      ],
+      "avoid": [
+        "The receiver cannot host a public endpoint",
+        "Ordering across events is required — delivery order cannot be guaranteed",
+        "Sub-second latency matters; delivery is best-effort with retries"
+      ],
+      "costs": [
+        "You now own delivery: retries, backoff, dead-lettering and a replay tool",
+        "Receiver endpoints are unreliable and slow, and that becomes your operational problem",
+        "Signing, secret rotation and replay protection are required, not optional"
+      ],
+      "failureModes": [
+        "A dead endpoint accumulating an unbounded retry backlog that starves healthy deliveries",
+        "Retry storms hammering a receiver that is already struggling",
+        "Duplicate delivery corrupting receiver state because no idempotency key was sent",
+        "SSRF via customer-supplied URLs pointed at internal addresses"
+      ],
+      "alternatives": [
+        { "id": "pagination", "note": "A polled cursor feed is far less machinery when near-real-time is not required." },
+        { "id": "at-least-once", "note": "The delivery guarantee webhooks provide — receivers must be idempotent." }
+      ],
+      "drill": { "topic": "components", "unit": "c07" }
+    },
+    {
+      "id": "pagination",
+      "category": "apis-realtime",
+      "title": "Cursor Pagination",
+      "what": "Returning a page plus an opaque cursor pointing at the last item, so the next page seeks rather than counting from the start.",
+      "reachFor": [
+        "Result sets are large and clients page through them",
+        "New items arrive while a client is paging — a feed, a log, a timeline",
+        "Deep pages must stay as fast as shallow ones"
+      ],
+      "avoid": [
+        "Users must jump to an arbitrary page number, which cursors cannot express",
+        "The result set is small and bounded",
+        "There is no stable, unique sort key to build a cursor from"
+      ],
+      "costs": [
+        "Requires a stable total ordering, usually a compound key including a tiebreaker",
+        "No total count without a separate query",
+        "Cursor encoding becomes a compatibility surface once clients persist them"
+      ],
+      "failureModes": [
+        "OFFSET used instead, so page 500 scans and discards 10,000 rows",
+        "Items skipped or repeated when new rows arrive between requests",
+        "Non-unique sort key causing rows at a boundary to be dropped",
+        "Cursor format changed and previously issued cursors stop decoding"
+      ],
+      "alternatives": [
+        { "id": "search-index", "note": "For ranked or faceted results, the engine's own paging semantics apply and deep paging is its own problem." },
+        { "id": "sse", "note": "If the client wants everything new as it happens, push beats repeated paging." }
+      ],
+      "drill": { "topic": "components", "unit": "c07" }
+    },
+    {
+      "id": "transcoding",
+      "category": "media-ml",
+      "title": "Transcoding Pipeline",
+      "mechanism": "transcoding",
+      "what": "Converting uploaded media into the ladder of formats, resolutions and bitrates that clients actually stream.",
+      "reachFor": [
+        "Users upload video or audio in arbitrary formats",
+        "Playback must adapt to device capability and network conditions",
+        "The prompt mentions streaming, adaptive bitrate or thumbnails"
+      ],
+      "avoid": [
+        "Media is already in a single known format every client supports",
+        "Volume is low enough that an off-the-shelf managed service is obviously right"
+      ],
+      "costs": [
+        "CPU or GPU capacity that dwarfs the rest of the system",
+        "Storage multiplies by the number of renditions you generate",
+        "Latency between upload and availability is now a product decision"
+      ],
+      "failureModes": [
+        "Queue backing up during an upload spike, so publish latency grows without bound",
+        "A single enormous file monopolising workers and starving everything behind it",
+        "Partial ladder published, so some clients get a resolution that does not exist",
+        "Retrying a half-finished job and paying full cost again with no checkpointing"
+      ],
+      "alternatives": [
+        { "id": "chunking", "note": "Segmenting first makes transcoding parallel and restartable per segment." },
+        { "id": "cdn", "note": "Transcoding makes the renditions; the CDN is what makes serving them affordable." }
+      ]
+    },
+    {
+      "id": "feature-serving",
+      "category": "media-ml",
+      "title": "Feature Store / Serving",
+      "mechanism": "feature-serving",
+      "what": "Serving the same computed signals to training and to inference, with an offline store for history and an online store for low-latency reads.",
+      "reachFor": [
+        "Models need per-entity features at request time within a few milliseconds",
+        "The same feature definition must be used in training and serving",
+        "Several models or teams share features and are currently recomputing them separately"
+      ],
+      "avoid": [
+        "One model with features computable from the request payload alone",
+        "You have no training/serving skew problem yet and are pre-building for one"
+      ],
+      "costs": [
+        "Two stores to keep consistent — offline history and online serving",
+        "Point-in-time correctness for training data is genuinely hard to get right",
+        "Feature definitions become shared contracts with versioning and deprecation"
+      ],
+      "failureModes": [
+        "Training/serving skew from the same feature computed two different ways",
+        "Label leakage from features that encode information unavailable at prediction time",
+        "Stale online features silently degrading model quality with no error anywhere",
+        "Backfill of a new feature being far more expensive than anyone estimated"
+      ],
+      "alternatives": [
+        { "id": "caching", "note": "A plain cache of precomputed features when there is one consumer and no training-parity requirement." },
+        { "id": "stream-processing", "note": "Where real-time features are computed before they are stored and served." }
+      ]
+    },
+    {
+      "id": "resource-scheduling",
+      "category": "media-ml",
+      "title": "Resource Scheduling",
+      "mechanism": "resource-scheduling",
+      "what": "Allocating scarce, expensive compute — GPUs, batch slots — across competing requests by priority, batching and queueing.",
+      "reachFor": [
+        "The bottleneck resource is expensive enough that utilisation is the design goal",
+        "Requests vary in priority or in cost and cannot be treated identically",
+        "Batching several requests together materially improves throughput"
+      ],
+      "avoid": [
+        "Capacity is cheap and elastic — just autoscale",
+        "Requests are uniform and a plain queue suffices"
+      ],
+      "costs": [
+        "Batching trades per-request latency for throughput, and that curve must be chosen deliberately",
+        "Priority classes need admission control or the top class starves everyone else",
+        "The scheduler becomes a critical, stateful component of its own"
+      ],
+      "failureModes": [
+        "Head-of-line blocking from one very large request occupying the resource",
+        "Batch window tuned for throughput, blowing the latency budget for interactive traffic",
+        "Fragmentation leaving capacity unusable because no waiting request fits it",
+        "Preemption losing partially completed work with no checkpoint"
+      ],
+      "alternatives": [
+        { "id": "work-queue", "note": "When requests are uniform and fair FIFO ordering is acceptable." },
+        { "id": "rate-limiting", "note": "Capping demand per caller is simpler than scheduling it, when fairness is the actual goal." }
+      ]
+    }
+  ]
+}

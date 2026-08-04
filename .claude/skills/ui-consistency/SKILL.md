@@ -19,7 +19,7 @@ Read it before building a new surface. This file is the enforceable short form.
 |---|---|---|
 | Color · type · space · radius · motion · z-layers · breakpoint | `ds/tokens.css` | a hex in a component, a `:root` override per page |
 | Reusable primitives (page frame, button, card, chip, row, sheet, nav, field, MC option, switch, segment, stat, progress, empty, skeleton) | `ds/components.css` | a per-surface copy of the same box |
-| Icons | `ds/icons.js` → `dsIcon(name, px)` | inline one-off `<svg>`, emoji in chrome (D07) — gated by `node tools/check-icons.js` |
+| Icons | `ds/icons.js` → `dsIcon(name, px)` | inline one-off `<svg>`, emoji in chrome, a text glyph (`▸ › ✓`) doing an icon's job (D07) — gated by `node tools/check-icons.js`; rules in `docs/iconography.md`; the whole set is in `ds/gallery.html` |
 | Visual catalog | `ds/gallery.html` | guessing what exists |
 | App-side styling of a ds surface | `css/06-ds-nav.css` … `10-ds-lesson.css` | app selectors inside `ds/` (breaks D04) |
 | localStorage I/O | `js/storage.js` (`window.DrillStorage`) | `localStorage.getItem/setItem` |

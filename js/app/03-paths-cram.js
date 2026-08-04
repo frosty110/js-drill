@@ -7,12 +7,12 @@ async function loadPaths() {
   } catch (e) {
     console.warn('[paths] fetch failed, using minimal Starter-only fallback:', e);
     // Defensive fallback so the app still boots into Starter Plan mode even when
-    // data/paths.json is missing or malformed. lessons:[] disables 🧭 Plan View
+    // data/paths.json is missing or malformed. lessons:[] disables Plan View
     // (would otherwise crash trying to filter on an undefined sequence).
     PATHS = [{
       id: 'starter',
       label: 'Starter Plan',
-      icon: '🧭',
+      icon: 'compass',
       kind: 'lessons',
       blurb: 'Linear recommended order through the full JS Drill curriculum.',
       lessons: []
@@ -26,14 +26,14 @@ function getSubscribedPath() {
 
 // Resolve a path's ordered drill-lesson list from its `lessons` field
 // (populated from data/paths.json by loadPaths). Returns null for paths
-// with no/empty drill-lesson sequence (→ 🧭 Plan View disabled).
+// with no/empty drill-lesson sequence (→ Plan View disabled).
 function getPathLessonOrder(path) {
   if (!path) return null;
   return Array.isArray(path.lessons) && path.lessons.length ? path.lessons : null;
 }
 
 // True when the subscribed path exposes a non-empty drill-lesson sequence the
-// sidebar can filter to. Drives the enabled/disabled state of the 🧭 button.
+// sidebar can filter to. Drives the enabled/disabled state of the button.
 function subscribedPathHasLessons() {
   const order = getPathLessonOrder(getSubscribedPath());
   return Array.isArray(order) && order.length > 0;
@@ -127,7 +127,7 @@ function _cramRenderDayBody(day, dayIdx, opts = {}) {
       <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;">
         <div style="width:80px;height:6px;background:#262930;border-radius:3px;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#f5b62b,#34d399);width:${p.pct}%;"></div></div>
         <span style="font-size:12px;color:#9aa0aa;font-variant-numeric:tabular-nums;">${p.done}/${p.total}</span>
-        ${opts.allowRedrill && !openOnly ? `<button data-cram-redrill-day="${dayIdx}" title="Reset this day's manual ticks (lesson mastery stays)" style="background:#262930;color:#fdba74;border:none;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer;">🎯 Re-drill</button>` : ''}
+        ${opts.allowRedrill && !openOnly ? `<button data-cram-redrill-day="${dayIdx}" title="Reset this day&#39;s manual ticks (lesson mastery stays)" style="background:#262930;color:#fdba74;border:none;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer;">${dsIcon('target', 15)} Re-drill</button>` : ''}
       </div>
     </div>`;
   return `<div data-cram-day-section="${dayIdx}">${header}${blocksHtml}${checkpoints}</div>`;
@@ -199,7 +199,7 @@ function renderCramHome(path) {
   let endedHtml = '';
   if (isPastEnd && (view.mode === 'today' || view.mode === 'day')) {
     endedHtml = `<div style="background:rgba(245,182,43,0.08);border:1px solid rgba(245,182,43,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#c4c9cf;">
-      ✓ Cram cycle complete. Spaced review keeps every lesson you covered alive — check 🕒 Review for what's due today.
+      Cram cycle complete. Spaced review keeps every lesson you covered alive — check Review for what's due today.
     </div>`;
   }
 
@@ -215,7 +215,7 @@ function renderCramHome(path) {
 
   shell.innerHTML = `<div style="max-width:760px;margin:0 auto;padding:0;">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px;">
-      <h1 style="font-size:20px;font-weight:700;color:#ffffff;margin:0;">⏱ ${escapeHtml(path.label)}</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#ffffff;margin:0;">${dsIcon('clock', 15)}${escapeHtml(path.label)}</h1>
       <span style="font-size:12px;color:#9aa0aa;">${isPastEnd ? 'cycle complete' : `Day ${todayIdx + 1} of ${path.days.length}`}</span>
     </div>
     <div style="font-size:13px;color:#9aa0aa;margin-bottom:10px;">${escapeHtml(path.blurb || '')}</div>
@@ -324,13 +324,13 @@ function renderPlanHomeLessons(shell, path) {
   const blurb = (path && path.blurb) || 'Drill across the full curriculum.';
   const qBtn = (id, txt) => `<button data-plan-q="${id}" style="background:#0e0f12;border:1px solid #363a43;border-radius:9px;padding:9px 13px;color:#c4c9cf;cursor:pointer;font:inherit;">${txt}</button>`;
   shell.innerHTML = `<div style="max-width:760px;margin:0 auto;">
-    <h1 style="font-size:22px;font-weight:700;color:#ffffff;margin:0 0 2px;">📋 ${escapeHtml(label)}</h1>
+    <h1 style="font-size:22px;font-weight:700;color:#ffffff;margin:0 0 2px;">${dsIcon('clipboard', 15)}${escapeHtml(label)}</h1>
     <div style="font-size:13px;color:#9aa0aa;margin-bottom:14px;">${escapeHtml(blurb)}</div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:#9aa0aa;margin-bottom:6px;max-width:520px;"><span>${mastered} / ${total} mastered</span><span>${pct}%</span></div>
     <div style="height:8px;background:#262930;border-radius:999px;overflow:hidden;max-width:520px;margin-bottom:18px;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#f5b62b,#34d399);"></div></div>
-    ${nextLesson ? `<button data-plan-continue style="display:inline-flex;align-items:center;gap:8px;background:#059669;color:#ecfdf5;border:0;border-radius:10px;padding:11px 18px;font:inherit;font-weight:700;cursor:pointer;">▶ Continue · ${escapeHtml(nextLesson.title)}</button>` : ''}
+    ${nextLesson ? `<button data-plan-continue style="display:inline-flex;align-items:center;gap:8px;background:#059669;color:#ecfdf5;border:0;border-radius:10px;padding:11px 18px;font:inherit;font-weight:700;cursor:pointer;">${dsIcon('play', 14)} Continue · ${escapeHtml(nextLesson.title)}</button>` : ''}
     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
-      ${qBtn('today-btn', "📅 Today's session")}${qBtn('warmup-btn', '🌅 Warmup')}${qBtn('lucky-btn', '🍀 Lucky')}${qBtn('shuffle-btn', '🎲 Shuffle')}
+      ${qBtn('today-btn', dsIcon('calendar-check', 15) + " Today's session")}${qBtn('warmup-btn', dsIcon('sunrise', 15) + ' Warmup')}${qBtn('lucky-btn', dsIcon('clover', 15) + ' Lucky')}${qBtn('shuffle-btn', dsIcon('dice', 15) + ' Shuffle')}
     </div>
     <div style="font-size:12px;color:#6b7079;margin-top:18px;">Switch plan in the sidebar. Cross-plan stats live in Reflect.</div>
   </div>`;
@@ -416,7 +416,7 @@ async function openCramCheatModal() {
       </div>`;
     }).join('') || `<div style="color:#6b7079;text-align:center;padding:24px;font-size:13px;">No rows match.</div>`;
   _openCramRefModal({
-    title: '⚡ Cheat — which pattern when?',
+    title: dsIcon('zap', 15) + ' Cheat — which pattern when?',
     sub: 'Cue → pattern → tap to drill the canonical lesson.',
     searchPlaceholder: 'Filter cues or patterns…',
     bodyHtml: renderRows(''),
@@ -432,11 +432,11 @@ async function openCramGlossaryModal() {
     const sess = state.glossaryQuiz && state.glossaryQuiz.session;
     if (sess && sess.queue && sess.index < sess.queue.length) {
       return `<div style="position:sticky;top:0;background:#17181c;z-index:1;display:flex;gap:8px;padding-bottom:6px;">
-        <button data-glossquiz-resume style="flex:1;background:#0e7490;color:#ffedc2;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">▶ Resume quiz · ${sess.index + 1}/${sess.queue.length}</button>
+        <button data-glossquiz-resume style="flex:1;background:#0e7490;color:#ffedc2;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">${dsIcon('play', 14)} Resume quiz · ${sess.index + 1}/${sess.queue.length}</button>
         <button data-glossquiz-restart title="Discard the in-progress quiz and start fresh" style="background:#262930;color:#9aa0aa;border:none;border-radius:8px;padding:10px 12px;font-size:13px;cursor:pointer;font-family:inherit;">↻</button>
       </div>`;
     }
-    return `<button data-glossquiz-start style="position:sticky;top:0;z-index:1;width:100%;background:#0e7490;color:#ffedc2;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🎯 Quiz me (${Math.min(GLOSSARY_QUIZ_LEN, total)} questions)</button>`;
+    return `<button data-glossquiz-start style="position:sticky;top:0;z-index:1;width:100%;background:#0e7490;color:#ffedc2;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">${dsIcon('target', 15)} Quiz me (${Math.min(GLOSSARY_QUIZ_LEN, total)} questions)</button>`;
   };
   const renderTerms = (q) => CRAM_REFS.glossary
     .filter(t => _matchesSearch(q, t.term, t.def, t.where))
@@ -533,7 +533,7 @@ function renderGlossaryQuizSession() {
   if (sess.index >= sess.queue.length) {
     const total = sess.queue.length;
     const pct = total ? Math.round(100 * sess.correctCount / total) : 0;
-    titleEl.textContent = '🎯 Glossary Quiz · done';
+    titleEl.innerHTML = dsIcon('target', 15) + ' Glossary Quiz · done';
     subEl.textContent = `${sess.correctCount} / ${total} correct`;
     body.innerHTML = `<div style="text-align:center;padding:30px 12px;">
       <div style="font-size:48px;font-weight:700;color:${pct >= 70 ? '#34d399' : '#f5b62b'};font-variant-numeric:tabular-nums;line-height:1;">${pct}%</div>
@@ -563,7 +563,7 @@ function renderGlossaryQuizSession() {
   const promptText = isTerm2Def ? card.term : card.def;
   const promptSub = isTerm2Def ? 'Pick the definition.' : 'Which term does this define?';
 
-  titleEl.textContent = `🎯 Glossary Quiz · ${sess.index + 1}/${sess.queue.length}`;
+  titleEl.innerHTML = `${dsIcon('target', 15)} Glossary Quiz · ${sess.index + 1}/${sess.queue.length}`;
   subEl.textContent = `Score so far: ${sess.correctCount}/${sess.index}${sess.index ? ` (${Math.round(100*sess.correctCount/sess.index)}%)` : ''}`;
 
   const optionsHtml = card.options.map((opt, i) => {
@@ -581,7 +581,7 @@ function renderGlossaryQuizSession() {
 
   const feedbackHtml = revealed
     ? `<div style="background:#0e0f12;border-left:3px solid ${sess.picked === card.correctIdx ? '#34d399' : '#f87171'};border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:#eef0f2;line-height:1.55;">
-        <div style="font-size:11px;color:${sess.picked === card.correctIdx ? '#34d399' : '#f87171'};text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px;">${sess.picked === card.correctIdx ? '✓ Correct' : '✗ Not quite'}</div>
+        <div style="font-size:11px;color:${sess.picked === card.correctIdx ? '#34d399' : '#f87171'};text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px;">${sess.picked === card.correctIdx ? dsIcon('check', 14) + ' Correct' : dsIcon('alert', 14) + ' Not quite'}</div>
         <div><strong style="color:#ffce5a;">${escapeHtml(card.term)}</strong> — ${escapeHtml(card.def)}</div>
         ${card.where ? `<div style="font-size:12px;color:#9aa0aa;margin-top:8px;padding-top:8px;border-top:1px solid #262930;"><strong style="color:#6b7079;">Where:</strong> ${escapeHtml(card.where)}</div>` : ''}
       </div>`
@@ -637,7 +637,7 @@ function renderGlossaryQuizSession() {
 async function openCramBehaviorModal() {
   await loadCramRefs();
   _openCramRefModal({
-    title: '🎤 Interview Behavior',
+    title: dsIcon('mic', 15) + ' Interview Behavior',
     sub: 'The 8-step say-this-in-the-interview ritual.',
     bodyHtml: CRAM_REFS.behavior.map(c => `<div style="background:#0e0f12;border-left:3px solid #ffce5a;border-radius:8px;padding:12px 14px;">
       <div style="font-size:11px;color:#ffce5a;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px;">${escapeHtml(c.num)}</div>
@@ -685,7 +685,7 @@ function wireCramRefLessonBtns() {
 }
 
 // Phase 4: Daily Review SR over cram reference content.
-const CRAM_SR_INTERVAL_DAYS = [0, 1, 2, 4];           // tier → days until next due
+const CRAM_SR_INTERVAL_DAYS = [0, 1, 2, 4];           // tier  days until next due
 const CRAM_SR_SAMPLE = { glossary: 5, cheat: 4, behavior: 2, code: 3 };
 
 function cramReviewableItems() {
@@ -762,9 +762,9 @@ async function openCramReviewModal() {
     const queue = buildCramReviewQueue();
     if (!queue.length) {
       _openCramRefModal({
-        title: '🔁 Cram Review · all caught up',
+        title: dsIcon('refresh', 15) + ' Cram Review · all caught up',
         sub: 'No items due right now. Items resurface as their interval lapses (0 → 1 → 2 → 4 days).',
-        bodyHtml: `<div style="text-align:center;padding:24px;color:#9aa0aa;font-size:13px;">✓ Nothing due — come back tomorrow.</div>`
+        bodyHtml: `<div style="text-align:center;padding:24px;color:#9aa0aa;font-size:13px;">${dsIcon('check', 14)} Nothing due — come back tomorrow.</div>`
       });
       return;
     }
@@ -788,7 +788,7 @@ function renderCramReviewSession() {
   if (sess.index >= sess.queue.length) {
     const total = sess.gotIt + sess.fuzzy;
     const pct = total ? Math.round(100 * sess.gotIt / total) : 0;
-    titleEl.textContent = '🔁 Cram Review · session done';
+    titleEl.innerHTML = dsIcon('refresh', 15) + ' Cram Review · session done';
     subEl.textContent = 'Fuzzy items resurface tomorrow. Got-it items advance one tier (1 → 2 → 4 days).';
     body.innerHTML = `<div style="text-align:center;padding:30px 12px;">
       <div style="font-size:48px;font-weight:700;color:#34d399;font-variant-numeric:tabular-nums;line-height:1;">${pct}%</div>
@@ -815,7 +815,7 @@ function renderCramReviewSession() {
   const tierLabel = fam === 0 ? 'new' : `tier ${fam}`;
   const typeLabel = ({ glossary: 'Glossary', cheat: 'Pattern trigger', behavior: 'Interview behavior', code: 'Code shape' })[it.type] || it.type;
 
-  titleEl.textContent = `🔁 Cram Review · ${sess.index + 1}/${sess.queue.length}`;
+  titleEl.innerHTML = `${dsIcon('refresh', 15)} Cram Review · ${sess.index + 1}/${sess.queue.length}`;
   subEl.textContent = `${typeLabel} · ${tierLabel}`;
 
   const promptSub = ({
@@ -844,7 +844,7 @@ function renderCramReviewSession() {
     ${answerHtml}
     <div style="margin-top:auto;padding-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
       ${!sess.revealed
-        ? `<button data-cram-review-peek style="flex:1;min-width:140px;padding:12px;border-radius:8px;border:none;background:#262930;color:#eef0f2;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Peek 👀</button>`
+        ? `<button data-cram-review-peek style="flex:1;min-width:140px;padding:12px;border-radius:8px;border:none;background:#262930;color:#eef0f2;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Peek</button>`
         : `<button data-cram-review-fuzzy style="flex:1;min-width:120px;padding:12px;border-radius:8px;border:none;background:#7f1d1d;color:#fecaca;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Fuzzy ✗</button>
            <button data-cram-review-gotit style="flex:1;min-width:120px;padding:12px;border-radius:8px;border:none;background:#34d399;color:#17181c;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Got it ✓</button>`}
     </div>
@@ -903,7 +903,7 @@ const CRAM_ONLY_BUTTON_IDS = new Set([
 //   • .sidebar-curation-hidden (CSS class) — PLAN UX-FOCUS hide. Applied to
 //     buttons NOT in a curated path's `sidebarButtons[]` allowlist. The
 //     button is still ACTIONABLE: it stays available in the topbar Drill /
-//     Train / Reflect menus and the ⌘K palette, because activities are
+// Train / Reflect menus and the ⌘K palette, because activities are
 //     *modality* (how you recall), not *corpus* (which lessons). A plan
 //     should narrow the lesson corpus, not gate the recall directions.
 //
@@ -964,7 +964,7 @@ function updateCramProgressStrip() {
   const dayEl = document.getElementById('topbar-cram-day');
   const barEl = document.getElementById('topbar-cram-bar');
   const countEl = document.getElementById('topbar-cram-count');
-  if (dayEl) dayEl.textContent = `⏱ Day ${dayIdx + 1}/${path.days.length}`;
+  if (dayEl) dayEl.innerHTML = `${dsIcon('clock', 15)} Day ${dayIdx + 1}/${path.days.length}`;
   if (barEl) barEl.style.width = pct + '%';
   if (countEl) countEl.textContent = `${done}/${total}`;
   wrap.hidden = false;
@@ -976,7 +976,7 @@ function openPathModal(opts = {}) {
   if (!modal || !body) return;
   const welcome = !!opts.welcome;
   const heading = modal.querySelector('h2');
-  if (heading) heading.textContent = welcome ? '👋 Welcome to JS Drill' : 'Study plan';
+  if (heading) heading.innerHTML = welcome ? dsIcon('home', 15) + ' Welcome to JS Drill' : 'Study plan';
   const sub = modal.querySelector('[data-path-sub]');
   if (sub) {
     // iter 43 (refine): welcome subhead drops the corpus-stat first
@@ -986,7 +986,7 @@ function openPathModal(opts = {}) {
     // banner + cards + secondary CTAs further below the fold.
     sub.textContent = welcome
       ? `Pick a plan that fits your situation — you can switch any time.`
-      : `Pick the plan that drives your 📅 Today's Plan button. Switching is safe — your lesson progress is shared across every plan.`;
+      : `Pick the plan that drives your Today's Plan button. Switching is safe — your lesson progress is shared across every plan.`;
   }
   const currentId = state.subscribedPathId;
   // On welcome, mark the Starter Plan as the recommended default so a first-
@@ -1005,7 +1005,7 @@ function openPathModal(opts = {}) {
           ? `<span style="color:#6b7079;font-size:13px;">Pick →</span>`
           : `<span style="color:#6b7079;font-size:13px;">Switch →</span>`);
     const recommendedBanner = recommended
-      ? `<span data-recommended style="display:inline-block;align-self:flex-start;color:#34d399;background:rgba(52,211,153,0.14);font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;">⭐ Recommended — most users start here</span>`
+      ? `<span data-recommended style="display:inline-block;align-self:flex-start;color:#34d399;background:rgba(52,211,153,0.14);font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;">${dsIcon('sparkles', 15)} Recommended — most users start here</span>`
       : '';
     // iter 23: promote the blurb's lead sentence to a brighter weight so the
     // ADHD/phone user scans 3 differentiated lines instead of 3 paragraphs.
@@ -1030,7 +1030,7 @@ function openPathModal(opts = {}) {
   }).join('');
   const footerHtml = welcome
     ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #262930;display:flex;flex-direction:column;gap:8px;">
-        <a href="diagnostic.html" style="color:#ffce5a;font-size:12px;text-decoration:none;">🩺 Or start with a 43-question diagnostic →</a>
+        <a href="diagnostic.html" style="color:#ffce5a;font-size:12px;text-decoration:none;">${dsIcon('gauge', 15)} Or start with a 43-question diagnostic →</a>
         <button data-action="browse-on-own" style="background:none;border:none;color:#6b7079;font-size:12px;cursor:pointer;text-align:left;padding:0;">Browse on my own (no path)</button>
       </div>`
     : '';
@@ -1090,7 +1090,7 @@ const REVIEW_INTERVALS = [
 // `lesson.id`) remains canonical. tools/validate-data.js re-extracts those
 // ids and fails if data/paths.json's prep-4day.lessons drifts from prep.html.
 
-// The 🧭 Plan View sidebar filter scopes the sidebar to the *subscribed* path's
+// The Plan View sidebar filter scopes the sidebar to the *subscribed* path's
 // drill-lesson sequence (getPathLessonOrder), then applies the per-track
 // sub-filter (`state.starterPathTrack`) so a user can drill Syntax-only or
 // Patterns-only without track-mixing distraction. Cache is keyed by

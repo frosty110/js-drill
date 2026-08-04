@@ -71,15 +71,15 @@ function loadProgress() {
     // DrillStorage already validated __v ∈ MAIN_APP_ACCEPTED_VERSIONS (2..6).
     // Hydrate state from the parsed shape, then apply app-domain migrations + GC.
     // Every keyed collection is shape-checked on the way in (audit F24).
-    state.progress = _blobMapOf(parsed.progress, _isBlobObj);            // id → { L1?, L2?, L3? }
-    state.bestTimes = _blobMapOf(parsed.bestTimes, Number.isFinite);     // id → ms
-    state.mockHistory = _blobMapOf(parsed.mockHistory, Array.isArray);   // id → [ms, …]
-    state.revealed = _blobMapOf(parsed.revealed, _isBlobObj);            // id → { level: true }
+    state.progress = _blobMapOf(parsed.progress, _isBlobObj);            // id  { L1?, L2?, L3? }
+    state.bestTimes = _blobMapOf(parsed.bestTimes, Number.isFinite);     // id  ms
+    state.mockHistory = _blobMapOf(parsed.mockHistory, Array.isArray);   // id  [ms, …]
+    state.revealed = _blobMapOf(parsed.revealed, _isBlobObj);            // id  { level: true }
     // Timestamp sidecars for the revealed flags (sync merge: newest set/clear
     // event wins). Legacy users (fields absent) get {} — their flags merge as
     // set-at-0, so any recorded clear beats them.
-    state.revealedAt = _blobMapOf(parsed.revealedAt, _isBlobObj);               // id → { level: ts }
-    state.revealedClearedAt = _blobMapOf(parsed.revealedClearedAt, _isBlobObj); // id → { level: ts }
+    state.revealedAt = _blobMapOf(parsed.revealedAt, _isBlobObj);               // id  { level: ts }
+    state.revealedClearedAt = _blobMapOf(parsed.revealedClearedAt, _isBlobObj); // id  { level: ts }
     // L1 partial-pass flags: lessons passed at ≥80%/miss-one but not 100%.
     // Legacy users (field absent) get {} — every prior pass was a clean 100%,
     // so no lesson should be retro-flagged orange.
@@ -122,7 +122,7 @@ function loadProgress() {
           lastRunAt: +parsed.speedrun.lastRunAt || 0
         }
       : { bests: {}, sessions: 0, completions: 0, lastRunAt: 0 };
-    // iter 125: 🥊 Pattern-Family Gauntlet — chained all-L1 untimed session.
+    // iter 125: Pattern-Family Gauntlet — chained all-L1 untimed session.
     state.gauntlet = parsed.gauntlet && typeof parsed.gauntlet === 'object'
       ? {
           sessions: +parsed.gauntlet.sessions || 0,
@@ -140,7 +140,7 @@ function loadProgress() {
           lastRunAt: +parsed.bugHunt.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 77: 🔮 Predict mental-execution lifetime stats. Legacy users get zeros.
+    // iter 77: Predict mental-execution lifetime stats. Legacy users get zeros.
     state.crystal = parsed.crystal && typeof parsed.crystal === 'object'
       ? {
           attempts: +parsed.crystal.attempts || 0,
@@ -158,7 +158,7 @@ function loadProgress() {
           lastRunAt: +parsed.claim.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 83: 🎰 Gotcha Roulette lifetime stats. Legacy users get zeros.
+    // iter 83: Gotcha Roulette lifetime stats. Legacy users get zeros.
     state.gotcha = parsed.gotcha && typeof parsed.gotcha === 'object'
       ? {
           attempts: +parsed.gotcha.attempts || 0,
@@ -167,7 +167,7 @@ function loadProgress() {
           lastRunAt: +parsed.gotcha.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 86: 🔀 Swap-Bench lifetime stats. Legacy users get zeros.
+    // iter 86: Swap-Bench lifetime stats. Legacy users get zeros.
     // iter eval-2026-05-30: per-pair SR. `pairs[pairId] = { dueAt, interval }`
     // tracks per-pair due dates so a bombed pair resurfaces sooner and a
     // mastered pair drops out of next session. Legacy users → empty {}.
@@ -180,7 +180,7 @@ function loadProgress() {
           pairs: parsed.swapBench.pairs && typeof parsed.swapBench.pairs === 'object' ? parsed.swapBench.pairs : {}
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0, pairs: {} };
-    // iter 91: 🎬 Conversation Drill lifetime stats. Legacy users get zeros.
+    // iter 91: Conversation Drill lifetime stats. Legacy users get zeros.
     state.convDrill = parsed.convDrill && typeof parsed.convDrill === 'object'
       ? {
           attempts: +parsed.convDrill.attempts || 0,
@@ -189,7 +189,7 @@ function loadProgress() {
           lastRunAt: +parsed.convDrill.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 93: 🧬 Trace-Hop lifetime stats. Legacy users get zeros.
+    // iter 93: Trace-Hop lifetime stats. Legacy users get zeros.
     state.traceHop = parsed.traceHop && typeof parsed.traceHop === 'object'
       ? {
           attempts: +parsed.traceHop.attempts || 0,
@@ -201,10 +201,10 @@ function loadProgress() {
     // iter eval-2026-05-30: Walkthrough tab per-lesson Quiz/Bug outcome
     // persistence + scrub-to-end flag. Legacy users → empty {}.
     state.walkthrough = parsed.walkthrough && typeof parsed.walkthrough === 'object' ? parsed.walkthrough : {};
-    // iter eval-2026-05-30: 🃏 Flash mode per-token self-rate persistence.
+    // iter eval-2026-05-30: Flash mode per-token self-rate persistence.
     // { [lessonId]: { attempts, blanks, lastRunAt } }. Legacy users → {}.
     state.flash = parsed.flash && typeof parsed.flash === 'object' ? parsed.flash : {};
-    // iter 97: 📝 Notes Cloze Tap-Drill lifetime stats. Legacy users get zeros.
+    // iter 97: Notes Cloze Tap-Drill lifetime stats. Legacy users get zeros.
     state.notesDrill = parsed.notesDrill && typeof parsed.notesDrill === 'object'
       ? {
           attempts: +parsed.notesDrill.attempts || 0,
@@ -213,7 +213,7 @@ function loadProgress() {
           lastRunAt: +parsed.notesDrill.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 98: 🪐 Mechanic Constellation lifetime stats. Legacy users get zeros.
+    // iter 98: Mechanic Constellation lifetime stats. Legacy users get zeros.
     state.mechConstellation = parsed.mechConstellation && typeof parsed.mechConstellation === 'object'
       ? {
           attempts: +parsed.mechConstellation.attempts || 0,
@@ -222,7 +222,7 @@ function loadProgress() {
           lastRunAt: +parsed.mechConstellation.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 99: ⏪ Reverse-Walkthrough lifetime stats. Legacy users get zeros.
+    // iter 99: Reverse-Walkthrough lifetime stats. Legacy users get zeros.
     state.reverseWalk = parsed.reverseWalk && typeof parsed.reverseWalk === 'object'
       ? {
           attempts: +parsed.reverseWalk.attempts || 0,
@@ -231,7 +231,7 @@ function loadProgress() {
           lastRunAt: +parsed.reverseWalk.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 102: 🗂 Notes→Lesson Reverse Lookup lifetime stats. Legacy users get zeros.
+    // iter 102: Notes→Lesson Reverse Lookup lifetime stats. Legacy users get zeros.
     state.notesLocate = parsed.notesLocate && typeof parsed.notesLocate === 'object'
       ? {
           attempts: +parsed.notesLocate.attempts || 0,
@@ -240,7 +240,7 @@ function loadProgress() {
           lastRunAt: +parsed.notesLocate.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 109: 🔖 Match — bidirectional title ↔ description matcher lifetime stats.
+    // iter 109: Match — bidirectional title ↔ description matcher lifetime stats.
     state.match = parsed.match && typeof parsed.match === 'object'
       ? {
           attempts: +parsed.match.attempts || 0,
@@ -249,7 +249,7 @@ function loadProgress() {
           lastRunAt: +parsed.match.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 113: 📦 Offline Drill Pack — last-known cache stats for the
+    // iter 113: Offline Drill Pack — last-known cache stats for the
     // sidebar chip. Polled from the service worker on init/focus; stored
     // so the chip can paint immediately on cold-start without waiting for
     // the SW message round-trip.
@@ -260,11 +260,11 @@ function loadProgress() {
           lastCheckedAt: +parsed.offlinePack.lastCheckedAt || 0
         }
       : { lessonCount: 0, totalCount: 0, lastCheckedAt: 0 };
-    // iter 114: ☁️ Sync Onboarding — one-time flag preventing the
+    // iter 114: ☁Sync Onboarding — one-time flag preventing the
     // post-L3-pass-on-desktop hint banner from re-showing. Set by either
     // Dismiss or Tap-Sync; once true, never re-prompted in this profile.
     state.syncHintShown = !!parsed.syncHintShown;
-    // iter 117: 🎤 Clarify-First Ritual — opt-in toggle (default OFF).
+    // iter 117: Clarify-First Ritual — opt-in toggle (default OFF).
     state.clarifyRitualOn = !!parsed.clarifyRitualOn;
     state.clarify = parsed.clarify && typeof parsed.clarify === 'object'
       ? {
@@ -275,7 +275,7 @@ function loadProgress() {
           lastRunAt: +parsed.clarify.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, completed: 0, sessions: 0, lastRunAt: 0 };
-    // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle (default OFF).
+    // iter 118: Hot-Seat Follow-Up — opt-in toggle (default OFF).
     state.hotseatOn = !!parsed.hotseatOn;
     state.hotseat = parsed.hotseat && typeof parsed.hotseat === 'object'
       ? {
@@ -285,7 +285,7 @@ function loadProgress() {
           lastRunAt: +parsed.hotseat.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 122: 🧪 What-If Output Predictor lifetime stats. Legacy users get zeros.
+    // iter 122: What-If Output Predictor lifetime stats. Legacy users get zeros.
     state.whatif = parsed.whatif && typeof parsed.whatif === 'object'
       ? {
           attempts: +parsed.whatif.attempts || 0,
@@ -294,7 +294,7 @@ function loadProgress() {
           lastRunAt: +parsed.whatif.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 142: 🔀 Mutate-and-Predict lifetime stats. Legacy users get zeros.
+    // iter 142: Mutate-and-Predict lifetime stats. Legacy users get zeros.
     state.mutate = parsed.mutate && typeof parsed.mutate === 'object'
       ? {
           attempts: +parsed.mutate.attempts || 0,
@@ -303,7 +303,7 @@ function loadProgress() {
           lastRunAt: +parsed.mutate.lastRunAt || 0
         }
       : { attempts: 0, correct: 0, sessions: 0, lastRunAt: 0 };
-    // iter 147: 📞 Phone Screen Simulator lifetime stats. Legacy users get zeros.
+    // iter 147: Phone Screen Simulator lifetime stats. Legacy users get zeros.
     state.phoneScreen = parsed.phoneScreen && typeof parsed.phoneScreen === 'object'
       ? {
           sessions: +parsed.phoneScreen.sessions || 0,
@@ -311,7 +311,7 @@ function loadProgress() {
           lastRunAt: +parsed.phoneScreen.lastRunAt || 0
         }
       : { sessions: 0, completions: 0, lastRunAt: 0 };
-    // iter 148: 🚧 Constraint-Shift Drill lifetime stats. Legacy users get zeros.
+    // iter 148: Constraint-Shift Drill lifetime stats. Legacy users get zeros.
     state.constraintShift = parsed.constraintShift && typeof parsed.constraintShift === 'object'
       ? {
           attempts: +parsed.constraintShift.attempts || 0,
@@ -324,11 +324,11 @@ function loadProgress() {
     state.calibrateOn = !!parsed.calibrateOn;
     // iter 140: ⏲ Pace-Bar — opt-in toggle (default OFF).
     state.paceBarOn = !!parsed.paceBarOn;
-    // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF).
+    // iter 141: Haptic Tap-Pulse — opt-in toggle (default OFF).
     state.hapticOn = !!parsed.hapticOn;
-    // 🖍 ADHD Mode — opt-in toggle (default OFF) restyles Conversation prose.
+    // ADHD Mode — opt-in toggle (default OFF) restyles Conversation prose.
     state.adhdMode = !!parsed.adhdMode;
-    // 🔠 App-wide font scale. Legacy users get 'lg' (the new baseline) so the
+    // App-wide font scale. Legacy users get 'lg' (the new baseline) so the
     // bump applies on first reload after this ships; explicit 'md' restores
     // the original size.
     state.fontScale = ['md','lg','xl'].includes(parsed.fontScale) ? parsed.fontScale : 'lg';
@@ -342,17 +342,17 @@ function loadProgress() {
           }
         }
       : { byMechanic: {}, meta: { estimates: 0, skips: 0, passes: 0 } };
-    // iter 104: 🗺 Command Palette use-counter. Legacy users get empty map.
+    // iter 104: Command Palette use-counter. Legacy users get empty map.
     state.commandUsage = parsed.commandUsage && typeof parsed.commandUsage === 'object' && !Array.isArray(parsed.commandUsage)
       ? parsed.commandUsage : {};
     // iter 58: Mistake Tagging Postmortem — schema-additive opt-in tag log.
     // Bounded shape: { lessonId: [{ at, level, tag }] } — no migration; legacy
     // users with no entries get an empty object.
-    state.misses = _blobEventMap(parsed.misses);               // id → [{ at, level, tag }]
+    state.misses = _blobEventMap(parsed.misses);               // id  [{ at, level, tag }]
     // Per-question answer record (share codes). Legacy users get {} — their
     // level-grained progress is untouched, they simply can't share a result
     // set until they drill something again.
-    state.answers = _blobMapOf(parsed.answers, _isBlobObj);    // id → { L1?, L2?, L3? }
+    state.answers = _blobMapOf(parsed.answers, _isBlobObj);    // id  { L1?, L2?, L3? }
     // Subscribed study plan. Legacy users (no field) default to 'starter'.
     // Trust any non-empty stored string — getSubscribedPath() already falls
     // back to PATHS[0] at read time when the id is unknown, and we don't want
@@ -393,12 +393,12 @@ function loadProgress() {
     }
     state.tagFilterOpen = !!parsed.tagFilterOpen;
     state.homeOpen = _blobMap(parsed.homeOpen) ? { ...parsed.homeOpen } : {};
-    state.reviews = _blobMapOf(parsed.reviews, _isBlobObj);   // id → { lastPassedAt, interval, dueAt }
+    state.reviews = _blobMapOf(parsed.reviews, _isBlobObj);   // id  { lastPassedAt, interval, dueAt }
     state.weakness = _blobMap(parsed.weakness) ? { ...parsed.weakness } : {};
     // The one that actually crashed boot (audit F24): _heatstripCells() and
     // _streakMapBuckets() both do `for (const e of history[id])`, so every
     // value has to be iterable — an array, not a number or a string.
-    state.history = _blobEventMap(parsed.history);             // id → [{ at, event }]
+    state.history = _blobEventMap(parsed.history);             // id  [{ at, event }]
     if (parsed.sidebarTrack === 'syntax' || parsed.sidebarTrack === 'patterns' || parsed.sidebarTrack === 'applied') {
       state.sidebarTrack = parsed.sidebarTrack;
     }
@@ -584,7 +584,7 @@ function dueReviewIds() {
     .map(l => l.id);
 }
 // iter 65: Resurrect Queue — lessons that are not just due but *long*-overdue
-// (`now - dueAt > 2 * interval`). Closes iter-64 roadmap #1. The existing 🕒
+// (`now - dueAt > 2 * interval`). Closes iter-64 roadmap #1. The existing
 // Review badge surfaces ALL due lessons without differentiating staleness;
 // this helper isolates the decay-magnitude tail — lessons that have rotted
 // past one full bucket interval and silently regressed. Pure derivation
@@ -602,8 +602,8 @@ function resurrectIds() {
     .sort((a, b) => (now - state.reviews[b.id].dueAt) - (now - state.reviews[a.id].dueAt))
     .map(l => l.id);
 }
-// iter 94: 🧠 Mechanic-Bridge — cross-track transfer routing. Closes iter-90
-// roadmap #3 (last entry from the iter-90 vision queue). The existing 🧩
+// iter 94: Mechanic-Bridge — cross-track transfer routing. Closes iter-90
+// roadmap #3 (last entry from the iter-90 vision queue). The existing
 // Mechanics × Track Matrix (iter 63) *shows* transfer gaps with a ⚠ marker
 // but never *closes* them — the user sees the gap and does nothing. Bridge
 // converts the diagnostic into a 1-tap routing action: for each mechanic
@@ -662,7 +662,7 @@ function _showBridgeToast(candidate) {
   if (existing) existing.remove();
   const toast = document.createElement('div');
   toast.className = 'reveal-cleared-toast bridge-toast';
-  toast.innerHTML = `🧠 You know <strong>${escapeHtml(candidate.mechLabel)}</strong> from <strong>${escapeHtml(candidate.sourceLessonTitle)}</strong> — try it here.`;
+  toast.innerHTML = `${dsIcon('bridge', 15)} You know <strong>${escapeHtml(candidate.mechLabel)}</strong> from <strong>${escapeHtml(candidate.sourceLessonTitle)}</strong> — try it here.`;
   document.body.appendChild(toast);
   requestAnimationFrame(() => toast.classList.add('reveal-cleared-toast-show'));
   setTimeout(() => {
@@ -670,7 +670,7 @@ function _showBridgeToast(candidate) {
     setTimeout(() => toast.remove(), 250);
   }, 2200);
 }
-// iter 108: 🍀 Lucky — arrival toast prefacing the random pick so the user
+// iter 108: Lucky — arrival toast prefacing the random pick so the user
 // understands why they landed on this lesson. 1.8-sec green accent reusing the
 // .reveal-cleared-toast slide-in mechanics.
 function _showLuckyToast(lessonTitle) {
@@ -678,7 +678,7 @@ function _showLuckyToast(lessonTitle) {
   if (existing) existing.remove();
   const toast = document.createElement('div');
   toast.className = 'reveal-cleared-toast lucky-toast';
-  toast.innerHTML = `🍀 Lucky pick: <strong>${escapeHtml(lessonTitle)}</strong>`;
+  toast.innerHTML = `${dsIcon('clover', 15)} Lucky pick: <strong>${escapeHtml(lessonTitle)}</strong>`;
   document.body.appendChild(toast);
   requestAnimationFrame(() => toast.classList.add('reveal-cleared-toast-show'));
   setTimeout(() => {
@@ -702,8 +702,8 @@ function allDueReviewIds() {
     .map(l => l.id);
 }
 // SR-impact text appended after pass/reveal feedback. `kind`:
-//   'pass'   → "Next review in Nd."         (any time a reviews entry exists)
-//   'demote' → "Interval shortened — next review in Nd."  (after a demote)
+// 'pass'   → "Next review in Nd."         (any time a reviews entry exists)
+// 'demote' → "Interval shortened — next review in Nd."  (after a demote)
 // Empty if the lesson has no reviews entry yet (first-mastery L2 surface).
 // The muted gray matches the surrounding small-text styling without
 // stealing emphasis from the "✓ passed" message.
@@ -803,7 +803,7 @@ function _revealedQueue() {
   }
   return queue;
 }
-// iter 60: 📡 Weak-Spot Decay Radar. Returns up to N lesson rows that join
+// iter 60: Weak-Spot Decay Radar. Returns up to N lesson rows that join
 // THREE previously-independent signals: state.weakness (L1-miss count),
 // state.reviews[id].dueAt (SR schedule), state.revealed[id] (mastered-with-
 // reveal integrity flag). Today the user must mentally cross-reference
@@ -871,7 +871,7 @@ function _showRevealClearedToast(lessonId, level) {
   if (existing) existing.remove();
   const toast = document.createElement('div');
   toast.className = 'reveal-cleared-toast';
-  toast.innerHTML = `🃏 ✨ ${escapeHtml(level)} drilled clean — reveal flag cleared on <strong>${escapeHtml(lesson.title)}</strong>`;
+  toast.innerHTML = `${dsIcon('cards', 15)}${escapeHtml(level)} drilled clean — reveal flag cleared on <strong>${escapeHtml(lesson.title)}</strong>`;
   document.body.appendChild(toast);
   // Slide-in via CSS class; remove after 2.2s.
   requestAnimationFrame(() => toast.classList.add('reveal-cleared-toast-show'));
@@ -920,7 +920,7 @@ function recordMiss(lessonId, level, tagId) {
 // of that tag (audits/mistake-tagging.md edits 1+2).
 function _aggregateMissTags(topN = 5) {
   const counts = {};
-  const byTag = {}; // tag → { [lessonId]: { count, lastAt } }
+  const byTag = {}; // tag  { [lessonId]: { count, lastAt } }
   for (const lessonId of Object.keys(state.misses || {})) {
     const log = state.misses[lessonId];
     if (!Array.isArray(log)) continue;

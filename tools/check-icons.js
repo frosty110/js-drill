@@ -2,75 +2,76 @@
 // ============================================================================
 //  tools/check-icons.js — one icon set, and it is the only one
 // ============================================================================
-// Invariant 9 (docs/invariants.md). Three checks, each guarding a failure that
-// leaves the page rendering and green:
+// Invariant 9 (docs/invariants.md); the rules it enforces are written out in
+// docs/iconography.md. Five checks, each guarding a failure that leaves the
+// page rendering and every other signal green:
 //
 //   1. Every icon NAME resolves.        dsIcon('speling') returns '' — an icon
 //                                       that silently isn't there.
-//   2. No inline <svg> outside ds/.     A copied path drifts from the set it
-//                                       was copied from, and both look fine.
-//   3. No emoji in chrome.              Decision D07. Ratcheted, see below.
+//   2. Every MODE has a mark.           A launcher button with no DS_MODE_ICONS
+//                                       entry falls back to a letter tile, so
+//                                       one list shows icons beside initials.
+//   3. No emoji in chrome.              Decision D07.
+//   4. No icon-role text glyph.         '▸' '›' '✓' standing in for an icon —
+//                                       a second icon system at a second weight.
 //
-// Usage:
-//   node tools/check-icons.js            verify (pre-commit / CI)
-//   node tools/check-icons.js --accept   re-baseline the LEGACY emoji budget
+// Usage: node tools/check-icons.js        (pre-commit / CI, no flags)
 //
-// ── On the ratchet ──────────────────────────────────────────────────────────
-// D07 has been the rule since the design system landed, and the pre-design-system
-// surfaces (index.html and js/app/01..15) never complied — a few hundred glyphs
-// across legacy modal headings and mode labels. A gate that fails on all of it
-// on day one gets switched off, and a rule with no gate is what produced the
-// backlog. So the check is a RATCHET:
+// ── On the missing escape hatch ─────────────────────────────────────────────
+// This gate shipped as a RATCHET: design-system paths held zero while 492
+// glyphs across 22 pre-system files carried a budget in
+// data/icon-debt.lock.json that could only fall, re-baselined with --accept.
+// The backlog was cleared in the same series of changes that added the gate, so
+// the budget, the lock and the flag are gone: the rule is now a flat zero
+// everywhere, which is a rule you can check with grep and cannot argue with.
+// If a future backlog ever justifies a ratchet again, the shape is in git.
 //
-//   · STRICT paths must contain ZERO emoji. Everything built on the design
-//     system is here, and a new file lands here by default (see isStrict).
-//   · LEGACY paths carry a recorded budget in data/icon-debt.lock.json. The
-//     count may fall, never rise. Migrate a file to zero and it is removed from
-//     the lock — after which it is strict forever, with no way back.
+// ── What counts ─────────────────────────────────────────────────────────────
+// Emoji is `\p{Emoji_Presentation}` plus U+FE0F — characters that render as a
+// COLOUR glyph. That is the property that makes emoji look out of place beside
+// a stroke icon, and it cleanly spares the typographic marks the app uses on
+// purpose: ⌘ → ← — · ─ ★ are all text-presentation and pass.
 //
-// --accept re-baselines LEGACY entries only. There is deliberately no way to
-// re-baseline a strict path: that is what makes the ratchet one-way.
+// An icon-role text glyph is narrower, because '▸' in prose is fine and '▸' as
+// a disclosure marker is not. Two shapes are flagged, both of which mean "this
+// glyph IS the control": a string literal that is nothing but the glyph, and an
+// element whose entire body is the glyph. A comment that mentions one is not a
+// match, and neither is a bullet inside a sentence.
 //
-// ── What counts as an emoji ────────────────────────────────────────────────
-// `\p{Emoji_Presentation}` plus U+FE0F — characters that render as a COLOUR
-// glyph. That is the property that makes emoji look out of place next to a
-// stroke icon, and it cleanly spares the typographic marks the app legitimately
-// uses: ⌘ → ← ‹ › ─ ★ are all text-presentation and pass.
-//
-// The scan does not exclude comments. "This file contains no emoji" is a rule
-// anyone can check with grep and no parser can get wrong; "no emoji in rendered
-// strings" needs a JS/HTML parser that would itself become a place for a bug to
-// hide.
+// Neither scan excludes comments for emoji: "this file contains no emoji" is a
+// rule anyone can check with grep and no parser can get wrong, where "no emoji
+// in rendered strings" needs a JS/HTML parser that becomes its own hiding place.
 // ============================================================================
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const ACCEPT = process.argv.includes('--accept');
-const LOCK = path.join(ROOT, 'data', 'icon-debt.lock.json');
 
 const EMOJI = /\p{Emoji_Presentation}|️/gu;
+
+// A glyph doing an icon's job. Grouped by what it stands in for so a failure
+// message can say which icon to reach for.
+const STANDIN_ROLES = {
+  '‹': 'chevron-left', '›': 'chevron-right', '▸': 'chevron-right', '▹': 'chevron-right',
+  '▾': 'chevron-down', '▿': 'chevron-down', '▴': 'chevron-up', '▵': 'chevron-up',
+  '▶': 'play', '◀': 'chevron-left', '⏸': 'pause', '⏵': 'play',
+  '✓': 'check', '✔': 'check', '✗': 'alert', '✘': 'alert', '✕': 'x', '×': 'x',
+  '☰': 'menu', '▦': 'grid', '⌫': 'x',
+};
+const STANDIN_CHARS = Object.keys(STANDIN_ROLES).join('');
+// (a) a string literal that is ONLY the glyph   (b) an element whose whole body is the glyph
+const STANDIN = new RegExp(
+  `(?:['"\`]\\s*([${STANDIN_CHARS}])\\s*['"\`]|>\\s*([${STANDIN_CHARS}])\\s*<)`, 'gu');
 
 // Everything the browser loads. tools/ and docs/ are not chrome.
 const SCAN_DIRS = ['js', 'ds', 'css'];
 const SCAN_FILES = ['index.html', 'system-design.html', 'diagnostic.html'];
 
-// The design-system era. A path is STRICT unless it is one of the surfaces that
-// predates the system — so a new file is strict by default rather than by
-// somebody remembering to add it.
-const LEGACY_PREFIXES = [
-  'index.html',
-  'js/app/01-', 'js/app/02-', 'js/app/03-', 'js/app/04-', 'js/app/05-',
-  'js/app/06-', 'js/app/07-', 'js/app/08-', 'js/app/09-', 'js/app/10-',
-  'js/app/11-', 'js/app/12', 'js/app/13-', 'js/app/14-', 'js/app/15-',
-  'js/core/',
-  'css/01-', 'css/02-', 'css/03-', 'css/04-', 'css/05-',
-];
-const isStrict = (rel) => !LEGACY_PREFIXES.some(p => rel.startsWith(p));
-
 // ds/icons.js owns the paths; ds/gallery.html is the catalog that renders them.
 const SVG_ALLOWED = new Set(['ds/icons.js', 'ds/gallery.html']);
+// This file names the glyphs it bans, which is not the same as using them.
+const STANDIN_EXEMPT = new Set(['ds/gallery.html']);
 
 // ── Load the set ────────────────────────────────────────────────────────────
 // Evaluated rather than regex-scraped so the gate reads the same table the
@@ -107,11 +108,13 @@ function sources() {
   return files.map(f => path.relative(ROOT, f).split(path.sep).join('/')).sort();
 }
 
+const lineOf = (src, index) => src.slice(0, index).split('\n').length;
+
 // ── Icon-name references ────────────────────────────────────────────────────
 // Four spellings, one vocabulary:
 //   dsIcon('x')      the design system's own call
 //   icon('x')        a page-local wrapper (system-design.html)
-//   data-icon="x"    static markup filled at boot
+//   data-icon="x"    static markup, filled at boot by mountChromeIcons()
 //   icon: 'x'        a name carried in a registry row (nav items, Home areas,
 //                    Settings rows, data/system-design/topics.json)
 const REF_PATTERNS = [
@@ -126,10 +129,7 @@ function iconRefs(rel, src) {
   for (const re of REF_PATTERNS) {
     re.lastIndex = 0;
     let m;
-    while ((m = re.exec(src))) {
-      const line = src.slice(0, m.index).split('\n').length;
-      found.push({ name: m[1], rel, line });
-    }
+    while ((m = re.exec(src))) found.push({ name: m[1], rel, line: lineOf(src, m.index) });
   }
   return found;
 }
@@ -139,13 +139,12 @@ const { DS_ICONS, DS_MODE_ICONS } = loadIconSet();
 const known = new Set(Object.keys(DS_ICONS));
 const files = sources();
 const failures = [];
-const measured = {};
+
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 // 1 ── every referenced name resolves
 const refs = [];
-for (const rel of files) {
-  refs.push(...iconRefs(rel, fs.readFileSync(path.join(ROOT, rel), 'utf8')));
-}
+for (const rel of files) refs.push(...iconRefs(rel, read(rel)));
 for (const [id, name] of Object.entries(DS_MODE_ICONS || {})) {
   refs.push({ name, rel: 'ds/icons.js', line: 0, note: `DS_MODE_ICONS['${id}']` });
 }
@@ -160,108 +159,101 @@ if (fs.existsSync(TOPICS)) {
 const unknown = refs.filter(r => !known.has(r.name));
 if (unknown.length) {
   failures.push(
-    `${unknown.length} icon reference${unknown.length === 1 ? '' : 's'} name${unknown.length === 1 ? 's' : ''} an icon that isn't in ds/icons.js.\n` +
+    `${unknown.length} icon reference${unknown.length === 1 ? '' : 's'} names an icon that isn't in ds/icons.js.\n` +
     `  dsIcon() returns '' for these — the icon is simply absent and the page still renders.\n` +
     unknown.map(u => `    ${u.rel}${u.line ? ':' + u.line : ''}  →  "${u.name}"${u.note ? ' (' + u.note + ')' : ''}`).join('\n') +
-    `\n  Fix: add the icon to ds/icons.js, or use one of the ${known.size} that exist.`
+    `\n  Fix: add the icon to ds/icons.js, or use one of the ${known.size} that exist (see ds/gallery.html).`
   );
 }
 
-// 2 ── no inline <svg> outside the set
+// 2 ── every launchable mode has a mark
+// The Practice launcher falls back to the label's first LETTER, so a missing
+// entry doesn't break anything — it just puts an initial in a row of icons.
+const launcherIds = [...new Set(
+  [...read('index.html').matchAll(/id="([a-z0-9-]+-btn)"/g)].map(m => m[1]))];
+const unmarked = launcherIds.filter(id => !DS_MODE_ICONS[id]);
+if (unmarked.length) {
+  failures.push(
+    `${unmarked.length} launcher button${unmarked.length === 1 ? '' : 's'} with no DS_MODE_ICONS entry.\n` +
+    `  The Practice launcher falls back to the label's first letter, so these render\n` +
+    `  as initials in a list of icons — nothing errors, the row just looks unfinished.\n` +
+    unmarked.map(id => `    #${id}`).join('\n') +
+    `\n  Fix: add a row to DS_MODE_ICONS in ds/icons.js.`
+  );
+}
+
+// 3 ── no emoji in chrome
+const emojiHits = [];
+for (const rel of files) {
+  const src = read(rel);
+  const n = (src.match(EMOJI) || []).length;
+  if (!n) continue;
+  const where = src.split('\n')
+    .map((l, i) => [i + 1, (l.match(EMOJI) || [])])
+    .filter(([, hits]) => hits.length)
+    .slice(0, 6)
+    .map(([ln, hits]) => `      :${ln}  ${hits.join(' ')}`)
+    .join('\n');
+  emojiHits.push(`    ${rel} — ${n}\n${where}`);
+}
+if (emojiHits.length) {
+  failures.push(
+    `Emoji in ${emojiHits.length} file${emojiHits.length === 1 ? '' : 's'} (D07 — chrome draws from ds/icons.js only).\n` +
+    emojiHits.join('\n') +
+    `\n  Fix: replace with dsIcon('name'). Emoji stays fine in authored lesson\n` +
+    `  content under data/, which this gate does not scan.`
+  );
+}
+
+// 4 ── no text glyph standing in for an icon
+const standinHits = [];
+for (const rel of files) {
+  if (STANDIN_EXEMPT.has(rel)) continue;
+  const src = read(rel);
+  STANDIN.lastIndex = 0;
+  let m;
+  while ((m = STANDIN.exec(src))) {
+    const g = m[1] || m[2];
+    standinHits.push(`    ${rel}:${lineOf(src, m.index)}  ${g}  →  dsIcon('${STANDIN_ROLES[g]}')`);
+  }
+}
+if (standinHits.length) {
+  failures.push(
+    `${standinHits.length} text glyph${standinHits.length === 1 ? '' : 's'} standing in for an icon.\n` +
+    `  A glyph that IS the control is an icon, whatever font it comes from — and a\n` +
+    `  font glyph is a second icon system at a second weight, next to the first.\n` +
+    standinHits.join('\n') +
+    `\n  Fix: use the suggested icon. A glyph inside running text (a bullet, an arrow\n` +
+    `  in a label like "Next →") is typography and is not matched — see docs/iconography.md.`
+  );
+}
+
+// 5 ── no inline <svg> outside the set
 const inlined = [];
 for (const rel of files) {
   if (SVG_ALLOWED.has(rel)) continue;
-  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  const src = read(rel);
   const re = /<svg[\s>]/g;
   let m;
-  while ((m = re.exec(src))) inlined.push(`${rel}:${src.slice(0, m.index).split('\n').length}`);
+  while ((m = re.exec(src))) inlined.push(`    ${rel}:${lineOf(src, m.index)}`);
 }
 if (inlined.length) {
   failures.push(
     `${inlined.length} inline <svg> outside ds/icons.js.\n` +
-    `  A copied path drifts from the set it was copied from and nothing looks broken.\n` +
-    inlined.map(l => `    ${l}`).join('\n') +
+    `  A copied path drifts from the set it was copied from and both still render.\n` +
+    inlined.join('\n') +
     `\n  Fix: add the glyph to ds/icons.js and call dsIcon('name').`
-  );
-}
-
-// 3 ── the emoji ratchet
-const lock = fs.existsSync(LOCK) ? JSON.parse(fs.readFileSync(LOCK, 'utf8')) : { budget: {} };
-const budget = lock.budget || {};
-
-for (const rel of files) {
-  const n = (fs.readFileSync(path.join(ROOT, rel), 'utf8').match(EMOJI) || []).length;
-  if (n) measured[rel] = n;
-}
-
-if (ACCEPT) {
-  const next = {};
-  for (const [rel, n] of Object.entries(measured)) {
-    if (isStrict(rel)) continue;      // strict paths are never re-baselined
-    next[rel] = n;
-  }
-  const before = Object.values(budget).reduce((a, b) => a + b, 0);
-  const after = Object.values(next).reduce((a, b) => a + b, 0);
-  fs.writeFileSync(LOCK, JSON.stringify({
-    _: 'Legacy emoji-in-chrome budget (invariant 9). Counts may fall, never rise. ' +
-       'A file that reaches zero leaves this list and becomes strict. ' +
-       'Re-baseline: node tools/check-icons.js --accept',
-    budget: Object.fromEntries(Object.entries(next).sort()),
-  }, null, 2) + '\n');
-  console.log(`✓ icon-debt lock re-baselined: ${before} → ${after} legacy emoji across ${Object.keys(next).length} files.`);
-  return;
-}
-
-const strictHits = Object.entries(measured).filter(([rel]) => isStrict(rel));
-if (strictHits.length) {
-  failures.push(
-    `Emoji in ${strictHits.length} design-system file${strictHits.length === 1 ? '' : 's'} (D07 — chrome uses ds/icons.js only).\n` +
-    strictHits.map(([rel, n]) => {
-      const src = fs.readFileSync(path.join(ROOT, rel), 'utf8').split('\n');
-      const where = src.map((l, i) => [i + 1, (l.match(EMOJI) || [])])
-        .filter(([, hits]) => hits.length)
-        .slice(0, 6)
-        .map(([ln, hits]) => `      :${ln}  ${hits.join(' ')}`)
-        .join('\n');
-      return `    ${rel} — ${n}\n${where}`;
-    }).join('\n') +
-    `\n  Fix: replace with dsIcon('name'). These paths have no budget and never will.`
-  );
-}
-
-const risen = [];
-const fallen = [];
-for (const [rel, allowed] of Object.entries(budget)) {
-  const now = measured[rel] || 0;
-  if (now > allowed) risen.push(`    ${rel} — was ${allowed}, now ${now}`);
-  else if (now < allowed) fallen.push(`    ${rel} — ${allowed} → ${now}`);
-}
-for (const [rel, n] of Object.entries(measured)) {
-  if (!isStrict(rel) && !(rel in budget)) risen.push(`    ${rel} — was 0 (unlisted), now ${n}`);
-}
-if (risen.length) {
-  failures.push(
-    `The legacy emoji budget went UP — the ratchet only turns one way.\n` +
-    risen.join('\n') +
-    `\n  Fix: use dsIcon('name') instead. If the increase is genuinely intended,\n` +
-    `  re-baseline with: node tools/check-icons.js --accept`
   );
 }
 
 if (failures.length) {
   console.error('✗ icon consistency\n');
   for (const f of failures) console.error(f + '\n');
-  console.error('See docs/invariants.md § 9 and docs/ui-ux-guide.md § Iconography.');
+  console.error('Rules: docs/iconography.md · Invariant: docs/invariants.md § 9');
   process.exit(1);
 }
 
-const legacyTotal = Object.values(budget).reduce((a, b) => a + b, 0);
 console.log(
   `✓ icons: ${refs.length} references resolve against ${known.size} icons; ` +
-  `no inline <svg>; ${Object.keys(budget).length} legacy files hold ${legacyTotal} emoji (ratcheting down).`
+  `all ${launcherIds.length} modes carry a mark; no emoji, no stand-in glyphs, no inline <svg>.`
 );
-if (fallen.length) {
-  console.log(`  ${fallen.length} file(s) below budget — re-baseline to lock the win in:`);
-  console.log(fallen.join('\n'));
-  console.log('  node tools/check-icons.js --accept');
-}

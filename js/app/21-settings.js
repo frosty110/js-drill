@@ -76,7 +76,7 @@ function _settingsActionRow(icon, label, desc, attrs, danger) {
   const badge = `<span class="ds-row__badge${danger ? ' settings-badge--danger' : ''}" aria-hidden="true">${dsIcon(icon, 16)}</span>`;
   const main = `<div class="ds-row__main"><b${danger ? ' style="color: var(--ds-bad);"' : ''}>${escapeHtml(label)}</b>${desc ? `<span>${escapeHtml(desc)}</span>` : ''}</div>`;
   return `<button type="button" class="settings-row settings-row--tap settings-row--action" ${attrs}>
-    ${badge}${main}<span class="ds-row__chev">›</span></button>`;
+    ${badge}${main}<span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span></button>`;
 }
 
 function _settingsRenderBody() {

@@ -14,7 +14,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v41-icon-system-2026-08-04';
+const CACHE_VERSION = 'jsdrill-v42-icon-system-complete-2026-08-04';
 const APP_SHELL = [
   './',
   './index.html',

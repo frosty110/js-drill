@@ -140,7 +140,21 @@ const EMOJI_SCAN = `((root) => (root.innerText.match(/\\p{Emoji_Presentation}|\\
     s.assert(qlink && qlink.w >= 30 && qlink.h >= 30,
       `[${label}] the per-question link stays a real target (${qlink && qlink.w}x${qlink && qlink.h})`);
 
-    // Answer an MC so the verdict renders, then read its glyph.
+    // Answer an MC so the verdict renders. The unit mixes MC and open cards and
+    // the deck order is the reader's, not ours, so walk forward to the first MC
+    // rather than assuming card 1 is one — assuming it made this assertion pass
+    // on mobile and flake on desktop.
+    for (let hop = 0; hop < 8; hop++) {
+      if (await s.eval(`!!document.querySelector('.ds-opt')`)) break;
+      await s.eval(`document.getElementById('reveal-btn')?.click()`);
+      await s.sleep(300);
+      await s.eval(`[...document.querySelectorAll('button')].find(b => /Got it/i.test(b.textContent))?.click()`);
+      await s.sleep(300);
+      await s.eval(`document.getElementById('next-btn')?.click()`);
+      await s.sleep(400);
+    }
+    s.assert(await s.eval(`!!document.querySelector('.ds-opt')`),
+      `[${label}] reached a multiple-choice card to grade`);
     await s.eval(`document.querySelector('.ds-opt')?.click()`);
     await s.sleep(600);
     const verdict = await s.eval(

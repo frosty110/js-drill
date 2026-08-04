@@ -3,10 +3,10 @@
 // overdue lesson. There was no way to ask "what's rotting in Trees?" and no
 // notion of working a review queue to the end. This slice adds both:
 //
-//   startScopedReview('trees')  → queue = that scope's repair list
-//                                 (overdue → due → weak → reveal-flagged,
+// startScopedReview('trees')  → queue = that scope's repair list
+// (overdue → due → weak → reveal-flagged,
 //                                  the same ranking buildRepairIndex() uses)
-//   → drops you into rep 1 at the right level, mounts a HUD strip under the
+// → drops you into rep 1 at the right level, mounts a HUD strip under the
 //     topbar (label · 2/6 · Skip · Exit), and advances automatically when you
 //     PASS the level it sent you to.
 //
@@ -19,13 +19,13 @@
 // Level choice follows THE SIGNAL THAT QUEUED THE LESSON, not just overall
 // mastery — otherwise a rep can "pass" without repairing anything and the
 // lesson stays in the queue the session claims to be draining:
-//   · due / overdue → the long-standing Review-Due rule: L2 on touch (cued
+// · due / overdue → the long-standing Review-Due rule: L2 on touch (cued
 //     recall — typing free-recall code on a phone is the wrong friction,
 //     PROFILE.md's 80% case; L2 on a due lesson holds the SR bucket and
 //     resets dueAt) and L3 on fine pointer (advances the interval).
-//   · weak spot → L1. clearWeakness() is called from ONE place (12a-l1.js, a
+// · weak spot → L1. clearWeakness() is called from ONE place (12a-l1.js, a
 //     clean L1 pass); an L2/L3 rep can never clear it.
-//   · reveal-flagged → the flagged level itself. markLevelPassed only clears
+// · reveal-flagged → the flagged level itself. markLevelPassed only clears
 //     revealed[id][level] for the level actually passed, so an L3-only flag
 //     sent to L2 would survive the "pass". Pointer type only breaks the tie
 //     when both levels are flagged.
@@ -233,7 +233,7 @@ function _reviewToast(msg) {
 // Leaving the queue's lesson by any other route ends the session — the HUD
 // would otherwise claim to be tracking a rep the user has walked away from.
 // Two ways to leave, and BOTH have to be caught:
-//   · another lesson is selected → currentLessonId no longer matches;
+// · another lesson is selected → currentLessonId no longer matches;
 //   · a full-page surface (Home, Today, Browse, Progress) or a full-bleed
 //     drill session takes over #lesson-shell — those renderers leave
 //     currentLessonId untouched, so identity alone would miss it.

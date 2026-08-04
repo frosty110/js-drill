@@ -6,7 +6,7 @@
 // platform and reads as placeholder design); it remains acceptable only in
 // authored lesson content and celebratory toasts.
 //
-// Usage:  dsIcon('target')            → svg string, 20px
+// Usage: dsIcon('target')            → svg string, 20px
 //         dsIcon('flame', 14)         → svg string, custom px
 //         DS_MODE_ICONS['mock-btn']   → icon name for a mode launcher id
 //
@@ -28,6 +28,7 @@ const DS_ICONS = {
   'chevron-left': '<path d="m15 6-6 6 6 6"/>',
   'chevron-right': '<path d="m9 6 6 6-6 6"/>',
   'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+  'chevron-up': '<path d="m18 15-6-6-6 6"/>',
   'external-link': '<path d="M14 4h6v6"/><path d="m20 4-9 9"/><path d="M18 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.1-3 4"/><path d="M12 17.5h.01"/>',
   sliders: '<path d="M21 6h-7"/><path d="M10 6H3"/><circle cx="12" cy="6" r="2"/><path d="M21 12h-3"/><path d="M14 12H3"/><circle cx="16" cy="12" r="2"/><path d="M21 18h-9"/><path d="M8 18H3"/><circle cx="10" cy="18" r="2"/>',
@@ -81,6 +82,30 @@ const DS_ICONS = {
   braces: '<path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/>',
   refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
 
+  // Drill-mode marks. Every launchable mode resolves to one of these through
+  // DS_MODE_ICONS below, so the mode's glyph is declared once and rendered the
+  // same in the Practice launcher, the command palette and the mode's own
+  // session header. They replaced a per-site emoji that only agreed by accident.
+  cards: '<rect x="3" y="7" width="12" height="14" rx="2"/><path d="M7.5 3.6 18.6 6a2 2 0 0 1 1.5 2.4L18 18"/>',
+  radar: '<path d="M19.1 4.9A10 10 0 1 1 4.9 19.1"/><path d="M15.5 8.5a5 5 0 1 0-7 7"/><path d="M12 12 20 4"/><circle cx="12" cy="12" r="1"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 8v4.5l3 1.8"/>',
+  bridge: '<circle cx="5" cy="17" r="2"/><circle cx="19" cy="17" r="2"/><path d="M5 15a7 7 0 0 1 14 0"/><path d="M12 8v3"/>',
+  calendar: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+  clover: '<circle cx="9" cy="8.5" r="3.2"/><circle cx="15" cy="8.5" r="3.2"/><circle cx="9" cy="14.5" r="3.2"/><circle cx="15" cy="14.5" r="3.2"/><path d="M12 17.5V21"/>',
+  scan: '<path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M7 12h10"/>',
+  undo: '<path d="M3 8h11a6 6 0 0 1 0 12h-4"/><path d="m7 4-4 4 4 4"/>',
+  key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/><path d="m14 9 3 3"/>',
+  swap: '<path d="M16 3h5v5"/><path d="M21 3 3 21"/><path d="M8 3H3v5"/><path d="m3 3 7 7"/><path d="m16 16 5 5v-5z"/>',
+  activity: '<path d="M2 12h4l3-8 5 16 3-8h5"/>',
+  network: '<circle cx="12" cy="4" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="m10.5 5.7-4 11.4"/><path d="m13.5 5.7 4 11.4"/><path d="M7 19h10"/>',
+  rewind: '<path d="M11 6 4 12l7 6z"/><path d="M20 6l-7 6 7 6z"/>',
+  flask: '<path d="M10 2v6.6L4.6 18A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-3L14 8.6V2"/><path d="M8.5 2h7"/><path d="M7 15h10"/>',
+  diff: '<path d="M12 3v14"/><path d="M5 10h14"/><path d="M5 21h14"/>',
+  'move-horizontal': '<path d="m18 8 4 4-4 4"/><path d="m6 8-4 4 4 4"/><path d="M2 12h20"/>',
+  bookmark: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  bug: '<path d="M8 4a4 4 0 0 1 8 0"/><rect x="8" y="6" width="8" height="13" rx="4"/><path d="M3 10h5"/><path d="M16 10h5"/><path d="M3 18h5"/><path d="M16 18h5"/><path d="M12 6v13"/>',
+  crosshair: '<circle cx="12" cy="12" r="8"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/>',
+
   // ambient / status
   flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
   alert: '<path d="m10.29 3.86-8.4 14.5A2 2 0 0 0 3.62 21.4h16.76a2 2 0 0 0 1.73-3.03l-8.4-14.5a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
@@ -105,24 +130,86 @@ const DS_ICONS = {
   lightbulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14c.2-1 .7-1.7 1.4-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.8 1.2 1.5 1.4 2.5"/>',
   tag: '<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l6.8-6.8a2 2 0 0 0 0-2.8z"/><path d="M7 7h.01"/>',
   play: '<path d="M6 4v16l14-8z"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  menu: '<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',
   film: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4M3 12h18"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   contrast: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18z"/>',
 };
 
-// Mode-launcher iconography: hidden-button id (or taxonomy `icon` key) → icon.
+// Mode-launcher iconography: launcher-button id → icon name. THE registry —
+// every launchable mode declares its mark here exactly once, and the Practice
+// launcher, the command palette, the legacy topbar menus and the mode's own
+// session header all resolve through it.
+//
+// Before this was complete, each of those surfaces carried its own emoji for the
+// same mode (the launcher fell back to the label's first LETTER when a mode was
+// missing, so one screen showed stroke icons beside letter tiles). Coverage is
+// gated: tools/check-icons.js fails on a launcher button with no entry, so a new
+// mode cannot ship without a mark.
 const DS_MODE_ICONS = {
+  // shell destinations
+  'home-btn': 'home',
+  'today-home-btn': 'home',
+  'browse-btn': 'grid',
+  'practice-launcher-btn': 'zap',
+  'dashboard-btn': 'chart',
+  'system-design-btn': 'sysdesign',
+  'stats-btn': 'chart',
+  'path-btn': 'compass',
   'today-btn': 'calendar-check',
+  'streak-map-btn': 'calendar',
+
+  // repair queues — what to fix, ranked by how it went wrong
+  'review-btn': 'clock',
+  'weak-btn': 'alert',
+  'reveal-replay-btn': 'cards',
+  'at-risk-btn': 'radar',
+  'resurrect-btn': 'history',
+  'bridge-btn': 'bridge',
+  'repair-filter-btn': 'funnel',
+
+  // pick-something-for-me
+  'shuffle-btn': 'dice',
+  'lucky-btn': 'clover',
   'mock-btn': 'target',
   'warmup-btn': 'sunrise',
-  'audio-btn': 'headphones',
-  'conv-drill-btn': 'message',
+
+  // name the pattern
+  'recognize-btn': 'scan',
+  'reverse-btn': 'undo',
+  'constellation-btn': 'network',
+  'match-btn': 'bookmark',
+
+  // run it in your head
+  'crystal-btn': 'eye',
+  'whatif-btn': 'flask',
+  'trace-hop-btn': 'activity',
+  'reverse-walk-btn': 'rewind',
+
+  // judge a code change
+  'bug-hunt-btn': 'bug',
+  'mutate-btn': 'diff',
+  'claim-btn': 'gauge',
+  'constraint-shift-btn': 'move-horizontal',
+  'swap-btn': 'swap',
+
+  // recall the traps
+  'notes-drill-btn': 'file-text',
+  'notes-locate-btn': 'search',
+  'gotcha-btn': 'key',
+
+  // streams + timed formats
   'rapid-fire-btn': 'zap',
   'big-o-btn': 'clock',
   'speedrun-btn': 'flag',
   'gauntlet-btn': 'layers',
   'phone-screen-btn': 'phone',
+  'conv-drill-btn': 'message',
+  'audio-btn': 'headphones',
+
+  // reference + export
   'sections-grid-btn': 'grid',
   'mechanics-btn': 'box',
   'export-btn': 'clipboard',
@@ -132,12 +219,31 @@ const DS_MODE_ICONS = {
   'cram-behavior-btn': 'mic',
   'cram-shapes-btn': 'braces',
   'cram-review-btn': 'refresh',
+
+  // toggles + device
+  'clarify-ritual-btn': 'mic',
+  'hotseat-btn': 'flame',
+  'haptic-btn': 'vibrate',
+  'font-size-btn': 'type',
+  'adhd-mode-btn': 'crosshair',
+  'pace-bar-btn': 'gauge',
+  'hide-mastered-btn': 'eye',
+  'calibrate-btn': 'sliders',
+  'offline-pack-btn': 'download-cloud',
+  'install-btn': 'smartphone',
+
+  // data
+  'backup-btn': 'download',
+  'restore-btn': 'upload',
+  'reset-btn': 'trash',
 };
 
-// Every icon carries `.ds-icon` (ds/components.css): don't shrink inside a flex
-// row, and sit on the text's centre line inline. Those two rules are true of an
-// icon everywhere, so they belong to the set rather than to each call site —
-// which is what stopped surfaces from each inventing their own alignment nudge.
+// A mode's mark, by launcher id. One lookup so no surface reaches into the map
+// (and none of them re-implements the missing-entry fallback three ways).
+function dsModeIcon(id, size = 16) {
+  return dsIcon(DS_MODE_ICONS[id] || '', size);
+}
+
 function dsIcon(name, size = 20) {
   const paths = DS_ICONS[name];
   if (!paths) return '';

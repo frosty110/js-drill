@@ -71,7 +71,7 @@ async function copyTextToClipboard(text) {
   } catch { return false; }
 }
 
-// iter 88: 🤖 AI Coach Export — Markdown blob of weak-spots + revealed +
+// iter 88: AI Coach Export — Markdown blob of weak-spots + revealed +
 // overdue lessons sized for an LLM context window. The drilling user often
 // has Claude/ChatGPT open already on phone; this surface skips the manual
 // "describe my weak spots" reconstruction step by exporting curated context
@@ -178,8 +178,8 @@ async function startAiCoachExport() {
   const toast = document.createElement('div');
   toast.className = 'reveal-cleared-toast ai-coach-toast';
   toast.innerHTML = ok
-    ? `🤖 Copied ${text.length.toLocaleString()} chars — paste into Claude/ChatGPT to be tutored on your weak spots`
-    : `⚠️ Clipboard blocked — open DevTools console and run <code>_aiCoachBuildExport()</code> to print the blob`;
+    ? `${dsIcon('sparkles', 15)} Copied ${text.length.toLocaleString()} chars — paste into Claude/ChatGPT to be tutored on your weak spots`
+    : `${dsIcon('alert', 15)} Clipboard blocked — open DevTools console and run <code>_aiCoachBuildExport()</code> to print the blob`;
   document.body.appendChild(toast);
   requestAnimationFrame(() => toast.classList.add('reveal-cleared-toast-show'));
   setTimeout(() => {
@@ -278,7 +278,7 @@ function renderL1(body, lesson, content) {
     const cCard = document.createElement('div');
     cCard.className = 'mb-6 p-5 rounded-lg bg-slate-900 border border-cyan-700/40';
     cCard.innerHTML = `
-      <div class="text-xs uppercase tracking-wider text-cyan-300/80 mb-1">🔁 Carry-over weak spot · <span class="text-slate-400 normal-case tracking-normal">${escapeHtml(carryover.lessonTitle)}</span></div>
+      <div class="text-xs uppercase tracking-wider text-cyan-300/80 mb-1">${dsIcon('refresh', 15)} Carry-over weak spot · <span class="text-slate-400 normal-case tracking-normal">${escapeHtml(carryover.lessonTitle)}</span></div>
       <div class="text-white font-medium mb-3">${escapeHtml(cQ.q)}</div>
       <div class="space-y-2" data-carryover-opts></div>
       <div class="explain mt-3 text-sm text-slate-400 hidden"></div>
@@ -322,7 +322,7 @@ function renderL1(body, lesson, content) {
         });
         const ex = cCard.querySelector('.explain');
         ex.classList.remove('hidden');
-        ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${cQ.explain ? ' ' + escapeHtml(cQ.explain) : ''}`;
+        ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? dsIcon('check', 14) + ' Correct.' : dsIcon('alert', 14) + ' Not quite.'}</strong>${cQ.explain ? ' ' + escapeHtml(cQ.explain) : ''}`;
       });
       cOptsContainer.appendChild(optEl);
     });
@@ -336,7 +336,7 @@ function renderL1(body, lesson, content) {
       const ex = cCard.querySelector('.explain');
       ex.classList.remove('hidden');
       const wasRight = carryover.selected === cCorrectDisplayIdx;
-      ex.innerHTML = `<strong class="${wasRight ? 'text-emerald-400' : 'text-rose-400'}">${wasRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${cQ.explain ? ' ' + escapeHtml(cQ.explain) : ''}`;
+      ex.innerHTML = `<strong class="${wasRight ? 'text-emerald-400' : 'text-rose-400'}">${wasRight ? dsIcon('check', 14) + ' Correct.' : dsIcon('alert', 14) + ' Not quite.'}</strong>${cQ.explain ? ' ' + escapeHtml(cQ.explain) : ''}`;
     }
     wrap.appendChild(cCard);
   }
@@ -387,7 +387,7 @@ function renderL1(body, lesson, content) {
         const ex = card.querySelector('.explain');
         ex.classList.remove('hidden');
         const isRight = isRightClick;
-        ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${q.explain ? ' ' + escapeHtml(q.explain) : ''}`;
+        ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? dsIcon('check', 14) + ' Correct.' : dsIcon('alert', 14) + ' Not quite.'}</strong>${q.explain ? ' ' + escapeHtml(q.explain) : ''}`;
         // iter 58: Mistake Tagging chip strip — opt-in concept-tagging UI
         // shown only after a miss. Renders below the explain text inside
         // this same question card so the user can tag without losing
@@ -399,7 +399,7 @@ function renderL1(body, lesson, content) {
           strip.innerHTML = `
             <div class="mistake-strip-header">
               <span class="mistake-strip-prompt">🏷 What tripped you?</span>
-              <button class="mistake-strip-dismiss" data-action="dismiss-mistake" aria-label="Dismiss">✕</button>
+              <button class="mistake-strip-dismiss" data-action="dismiss-mistake" aria-label="Dismiss">${dsIcon('x', 13)}</button>
             </div>
             <div class="mistake-strip-chips">
               ${MISTAKE_TAGS.map(t => `<button class="mistake-chip" data-mistake-tag="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`).join('')}
@@ -417,7 +417,7 @@ function renderL1(body, lesson, content) {
               chipBtn.classList.add('mistake-chip-picked');
               // Replace strip with a confirmation line + auto-fade.
               setTimeout(() => {
-                strip.innerHTML = `<div class="mistake-strip-confirm">✓ Tagged as "${escapeHtml(MISTAKE_TAGS.find(t => t.id === tag).label)}"</div>`;
+                strip.innerHTML = `<div class="mistake-strip-confirm">${dsIcon('check', 14)} Tagged as "${escapeHtml(MISTAKE_TAGS.find(t => t.id === tag).label)}"</div>`;
                 setTimeout(() => {
                   strip.classList.add('mistake-strip-fade');
                   setTimeout(() => strip.remove(), 220);
@@ -439,7 +439,7 @@ function renderL1(body, lesson, content) {
   status.innerHTML = `
     <div class="text-sm text-slate-400" id="l1-status">Answer all — miss ≤1 to pass.</div>
     <div class="flex gap-2 flex-wrap">
-      <button class="secondary" data-action="export-l1" title="Copy a prompt with your answers + the right answers to paste into ChatGPT/Claude for tutoring">📋 Ask AI to teach me</button>
+      <button class="secondary" data-action="export-l1" title="Copy a prompt with your answers + the right answers to paste into ChatGPT/Claude for tutoring">${dsIcon('clipboard', 15)} Ask AI to teach me</button>
       <button class="secondary" data-action="retry-l1">Retry</button>
       <button class="primary hidden" data-action="next-l2">L2 Fill-in →</button>
     </div>
@@ -464,7 +464,7 @@ function renderL1(body, lesson, content) {
     const ex = card.querySelector('.explain');
     ex.classList.remove('hidden');
     const isRight = perQ.selected === correctDisplayIdx;
-    ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? '✓ Correct.' : '✗ Not quite.'}</strong>${q.explain ? ' ' + escapeHtml(q.explain) : ''}`;
+    ex.innerHTML = `<strong class="${isRight ? 'text-emerald-400' : 'text-rose-400'}">${isRight ? dsIcon('check', 14) + ' Correct.' : dsIcon('alert', 14) + ' Not quite.'}</strong>${q.explain ? ' ' + escapeHtml(q.explain) : ''}`;
   });
 
   status.querySelector('[data-action="retry-l1"]').addEventListener('click', () => {
@@ -483,7 +483,7 @@ function renderL1(body, lesson, content) {
     const prompt = buildL1AiPrompt(lesson, content, localState);
     const ok = await copyTextToClipboard(prompt);
     const original = exportBtn.innerHTML;
-    exportBtn.innerHTML = ok ? '✓ Copied — paste into AI' : '✗ Copy failed';
+    exportBtn.innerHTML = ok ? dsIcon('check', 14) + ' Copied — paste into AI' : dsIcon('alert', 14) + ' Copy failed';
     exportBtn.disabled = true;
     setTimeout(() => { exportBtn.innerHTML = original; exportBtn.disabled = false; }, 1800);
   });
@@ -506,10 +506,10 @@ function renderL1(body, lesson, content) {
     if (passed) {
       status.querySelector('[data-action="next-l2"]').classList.remove('hidden');
       if (allCorrect) {
-        statusEl.innerHTML = '<span class="text-emerald-400 font-medium">✓ L1 passed.</span> Onward.';
+        statusEl.innerHTML = `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} L1 passed.</span> Onward.`;
       } else {
         const missed = total - correct;
-        statusEl.innerHTML = `<span class="text-amber-400 font-medium">✓ L1 passed (${correct}/${total}).</span> ${missed} flagged to review — Retry for a clean green pass.`;
+        statusEl.innerHTML = `<span class="text-amber-400 font-medium">${dsIcon('check', 14)} L1 passed (${correct}/${total}).</span> ${missed} flagged to review — Retry for a clean green pass.`;
       }
       // Mutate state once. The trailing maybePassL1() on every L1 re-render
       // (tab re-entry) must not re-append history or re-toggle flags — guard on
@@ -520,7 +520,7 @@ function renderL1(body, lesson, content) {
           clearWeakness(lesson.id);     // perfect — gap closed
           clearPartialL1(lesson.id);
         } else {
-          markPartialL1(lesson.id);     // amber ✓; KEEP weakness for re-review
+          markPartialL1(lesson.id);     // amber ; KEEP weakness for re-review
         }
         markPassed(lesson.id, 'L1');
       } else if (allCorrect && isPartialL1(lesson.id)) {

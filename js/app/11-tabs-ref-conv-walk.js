@@ -12,7 +12,7 @@
 //
 // Prose enrichment — `enrichConvText` is applied to all conv body text (say,
 // why, intro). Two layers:
-//   1. Always: convert backtick `code` spans → styled <code class="conv-code">.
+// 1. Always: convert backtick `code` spans → styled <code class="conv-code">.
 //      Authoring convention across all 99+ existing conversations puts code
 //      tokens (`nums`, `target`, `O(1)`) in backticks; this renders them as
 //      inline code instead of leaking literal backticks into the UI.
@@ -89,7 +89,7 @@ function renderConversation(body, content) {
         return `<details class="conv-example">
           <summary class="conv-ex-summary">
             <span class="conv-ex-header">${header}</span>
-            <span class="conv-toggle" aria-hidden="true">▸</span>
+            <span class="conv-toggle" aria-hidden="true">${dsIcon('chevron-right', 14)}</span>
           </summary>
           <div class="conv-ex-body">${noteHtml}${traceHtml}</div>
         </details>`;
@@ -113,7 +113,7 @@ function renderConversation(body, content) {
         <summary class="conv-summary">
           <span class="conv-title">${escapeHtml(s.title)}</span>
           ${promptHtml}
-          <span class="conv-toggle" aria-hidden="true">▸</span>
+          <span class="conv-toggle" aria-hidden="true">${dsIcon('chevron-right', 14)}</span>
         </summary>
         <div class="conv-body">${blocks.join('')}</div>
       </details>`;
@@ -121,7 +121,7 @@ function renderConversation(body, content) {
   section.innerHTML = `
     <div class="mb-2 flex items-center justify-between gap-2">
       <div class="text-xs text-slate-500 uppercase tracking-wider">Interview walk-through</div>
-      <button data-action="conv-listen" style="background:#f5b62b; color:#17181c; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600;">🎧 Listen</button>
+      <button data-action="conv-listen" style="background:#f5b62b; color:#17181c; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600;">${dsIcon('headphones', 15)} Listen</button>
     </div>
     <div class="conv-drill-route mb-3 p-3 rounded-lg" style="background:rgba(245,182,43,0.08); border:1px solid rgba(245,182,43,0.25);">
       <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -129,7 +129,7 @@ function renderConversation(body, content) {
           <span class="font-medium text-cyan-300">Reading is the prep.</span>
           <span class="text-slate-400">Run the cross-lesson Conversation Drill to actually recall which section a snippet belongs to.</span>
         </div>
-        <button class="ds-btn ds-btn--primary" data-action="conv-drill-route" style="min-height:36px; padding:0 12px; font-size:12px; border-radius:6px; white-space:nowrap;">${dsIcon('target', 13)}Drill recall →</button>
+        <button class="ds-btn ds-btn--primary" data-action="conv-drill-route" style="min-height:36px; padding:0 12px; font-size:12px; border-radius:6px; white-space:nowrap;">${dsIcon('target', 13)} Drill recall →</button>
       </div>
     </div>
     ${intro}
@@ -140,14 +140,14 @@ function renderConversation(body, content) {
   `;
   body.appendChild(section);
   section.querySelector('[data-action="conv-to-reference"]').addEventListener('click', () => selectTab('reference'));
-  // 🎧 Listen — start audio playback for this lesson's conversation. The
+  // Listen — start audio playback for this lesson's conversation. The
   // dock-based player handles the rest (queue build, two-voice playback,
   // file-vs-TTS source selection). state.currentLessonId is the source of
   // truth for which lesson we're on.
   section.querySelector('[data-action="conv-listen"]').addEventListener('click', () => {
     if (typeof window.startAudioEpisode === 'function') window.startAudioEpisode(state.currentLessonId);
   });
-  // 🎬 Drill recall — Phase 0 salvage decision (audits/conversation.md).
+  // Drill recall — Phase 0 salvage decision (audits/conversation.md).
   // Conversation tab demoted from pure-read to preview-with-route. The
   // sibling convDrill (`startConvDrillSession`, slice 05) mines the same
   // conversation.sections[] for an active-recall section-classifier quiz
@@ -285,12 +285,12 @@ function renderWalkthrough(body, lesson, content) {
         <select class="walk-example" data-walk-example>${exOptions}</select>
       </label>
       <div class="walk-step-controls">
-        <button class="walk-btn" data-walk-prev aria-label="Previous step">◀ Prev</button>
+        <button class="walk-btn" data-walk-prev aria-label="Previous step">${dsIcon('chevron-left', 14)} Prev</button>
         <span class="walk-step-counter" data-walk-counter>Step 1 of N</span>
         <button class="walk-btn walk-btn-primary" data-walk-next aria-label="Next step">Next ▶</button>
         <button class="walk-btn walk-btn-ghost" data-walk-reset>Reset</button>
-        <button class="walk-btn walk-btn-ghost" data-walk-quiz title="Predict the next step (active-recall mode)">🔮 Quiz</button>
-        <button class="walk-btn walk-btn-ghost" data-walk-bug title="One step's state is wrong — find the bug (debug-direction drill)">🪲 Bug</button>
+        <button class="walk-btn walk-btn-ghost" data-walk-quiz title="Predict the next step (active-recall mode)">${dsIcon('eye', 15)} Quiz</button>
+        <button class="walk-btn walk-btn-ghost" data-walk-bug title="One step&#39;s state is wrong — find the bug (debug-direction drill)">${dsIcon('bug', 15)} Bug</button>
       </div>
     </div>
     <div class="walk-label-bar" data-walk-label>—</div>
@@ -307,14 +307,14 @@ function renderWalkthrough(body, lesson, content) {
       <div class="walk-quiz-q">What's the next step?</div>
       <div class="walk-quiz-opts" data-walk-quiz-opts></div>
       <div class="walk-quiz-actions">
-        <button class="walk-btn walk-btn-ghost" data-walk-quiz-close>✕ Close quiz</button>
+        <button class="walk-btn walk-btn-ghost" data-walk-quiz-close>${dsIcon('x', 13)} Close quiz</button>
       </div>
     </div>
     <div class="walk-bug hidden" data-walk-bug-panel>
       <div class="walk-bug-q">One step's state is corrupted. Tap the buggy step.</div>
       <div class="walk-bug-list" data-walk-bug-list></div>
       <div class="walk-bug-actions">
-        <button class="walk-btn walk-btn-ghost" data-walk-bug-close>✕ Close bug-hunt</button>
+        <button class="walk-btn walk-btn-ghost" data-walk-bug-close>${dsIcon('x', 13)} Close bug-hunt</button>
       </div>
     </div>
   `;
@@ -406,7 +406,7 @@ function renderWalkthrough(body, lesson, content) {
     quizPanel.classList.add('hidden');
     quizOptsEl.innerHTML = '';
     quizBtn.classList.remove('active');
-    quizBtn.textContent = '🔮 Quiz';
+    quizBtn.innerHTML = dsIcon('eye', 15) + ' Quiz';
     render();
   }
 
@@ -423,7 +423,7 @@ function renderWalkthrough(body, lesson, content) {
     render();
     quizPanel.classList.remove('hidden');
     quizBtn.classList.add('active');
-    quizBtn.textContent = '🔮 Quiz on';
+    quizBtn.innerHTML = dsIcon('eye', 15) + ' Quiz on';
     quizOptsEl.innerHTML = '';
     let picked = false;
     quiz.options.forEach(opt => {
@@ -479,7 +479,7 @@ function renderWalkthrough(body, lesson, content) {
       render();
       // Once the user reaches the final step at least once, flag the
       // lesson as "scrubbed" so the next entry to the tab auto-opens
-      // the 🔮 Quiz (per audits/walkthrough.md edit 2 — recall becomes
+      // the Quiz (per audits/walkthrough.md edit 2 — recall becomes
       // default, not opt-in).
       if (uiState.stepIdx === steps.length - 1) {
         const wt = state.walkthrough[lesson.id] || { quizAttempts: 0, quizCorrect: 0, bugAttempts: 0, bugCorrect: 0, lastRunAt: 0 };
@@ -502,7 +502,7 @@ function renderWalkthrough(body, lesson, content) {
   });
   quizCloseBtn.addEventListener('click', exitQuiz);
 
-  // iter 78: 🪲 Bug-Hunt mode — invert the trace from "watch correct" →
+  // iter 78: Bug-Hunt mode — invert the trace from "watch correct" →
   // "find the corrupted step". Picks a random step, mutates one state-field
   // value (numbers ±1, booleans flipped, strings/arrays first-char swapped),
   // renders the full step list as tappable rows. User picks the buggy row.
@@ -559,7 +559,7 @@ function renderWalkthrough(body, lesson, content) {
     bugPanel.classList.add('hidden');
     bugListEl.innerHTML = '';
     bugBtn.classList.remove('active');
-    bugBtn.textContent = '🪲 Bug';
+    bugBtn.innerHTML = dsIcon('bug', 15) + ' Bug';
     render();
   }
   function startBugMode() {
@@ -573,7 +573,7 @@ function renderWalkthrough(body, lesson, content) {
     bugActive = true;
     bugPanel.classList.remove('hidden');
     bugBtn.classList.add('active');
-    bugBtn.textContent = '🪲 Bug on';
+    bugBtn.innerHTML = dsIcon('bug', 15) + ' Bug on';
     render(); // disables controls
     bugListEl.innerHTML = '';
     let picked = false;
@@ -640,7 +640,7 @@ function renderWalkthrough(body, lesson, content) {
   // Initial paint
   render();
 
-  // Default-open 🔮 Quiz when the user has already scrubbed this
+  // Default-open Quiz when the user has already scrubbed this
   // walkthrough to the end at least once (per audits/walkthrough.md
   // edit 2 — recall becomes the default surface, not opt-in). Only
   // triggers when the trace is long enough for a quiz (≥4 steps);
@@ -658,9 +658,9 @@ function renderReference(body, content) {
     <div class="flex items-center justify-between mb-2">
       <div class="text-xs text-slate-500 uppercase tracking-wider">The thing to memorize</div>
       <div class="flex items-center gap-2">
-        <button class="flash-toggle ref-mode-toggle" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">${dsIcon('layers', 13)}Flash</button>
-        <button class="cinema-toggle ref-mode-toggle" data-action="cinema-toggle" title="Read+predict-then-verify — every line starts blurred, tap each to reveal in order">${dsIcon('film', 13)}Cinema</button>
-        <button class="bullets-toggle ref-mode-toggle" data-action="bullets-toggle" title="Hide canonical, type it from the notes below. Desk-tier 'see concept, recall code' recall direction the L1→L2→L3 ladder doesn't drill (L2 = template + blanks given; L3 = problem prompt only; Bullets→Code = notes-as-prompt, full code recall).">${dsIcon('file-text', 13)}Notes→Code</button>
+        <button class="flash-toggle ref-mode-toggle" data-action="flash-toggle" title="Hide random tokens, tap each to reveal">${dsIcon('layers', 13)} Flash</button>
+        <button class="cinema-toggle ref-mode-toggle" data-action="cinema-toggle" title="Read+predict-then-verify — every line starts blurred, tap each to reveal in order">${dsIcon('film', 13)} Cinema</button>
+        <button class="bullets-toggle ref-mode-toggle" data-action="bullets-toggle" title="Hide canonical, type it from the notes below. Desk-tier 'see concept, recall code' recall direction the L1→L2→L3 ladder doesn&#39;t drill (L2 = template + blanks given; L3 = problem prompt only; Bullets→Code = notes-as-prompt, full code recall).">${dsIcon('file-text', 13)} Notes→Code</button>
       </div>
     </div>
     ${ref.approach || ref.complexity ? `
@@ -679,7 +679,7 @@ function renderReference(body, content) {
          this is the second anchor for the same action. -->
     <div class="mt-3 flex items-center justify-end gap-2 text-xs">
       <span class="text-slate-500">Memorized? </span>
-      <button class="secondary px-3 py-1" data-action="start-l1" style="font-size:12px;padding:4px 12px;">${dsIcon('target', 13)}Drill from blank →</button>
+      <button class="secondary px-3 py-1" data-action="start-l1" style="font-size:12px;padding:4px 12px;">${dsIcon('target', 13)} Drill from blank →</button>
     </div>
     <div class="mt-4" data-ref-mechanics></div>
     <div class="mt-6">
@@ -689,7 +689,7 @@ function renderReference(body, content) {
            noise. Appended "· N" announces scope before the user scrolls. -->
       <div data-ref-notes-header class="ref-section-header">Notes · ${ref.notes.length}</div>
       <ul class="space-y-2">
-        ${ref.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600">▸</span><span>${escapeHtml(n)}</span></li>`).join('')}
+        ${ref.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600" aria-hidden="true">&bull;</span><span>${escapeHtml(n)}</span></li>`).join('')}
       </ul>
     </div>
     ${Array.isArray(ref.alternates) && ref.alternates.length ? `
@@ -705,14 +705,14 @@ function renderReference(body, content) {
             <summary class="ref-alt-summary">
               <span class="ref-alt-label">${escapeHtml(alt.label || '')}</span>
               ${alt.complexity ? `<span class="ref-alt-complexity" title="time / space"><span class="ref-complexity-legend">time / space</span>${escapeHtml(alt.complexity)}</span>` : ''}
-              <span class="ref-alt-toggle" aria-hidden="true">▸</span>
+              <span class="ref-alt-toggle" aria-hidden="true">${dsIcon('chevron-right', 14)}</span>
             </summary>
             <div class="ref-alt-body">
               ${alt.when ? `<div class="ref-alt-when">${escapeHtml(alt.when)}</div>` : ''}
               <pre class="code-block cm-s-dracula" data-ref-alt-code="${i}"></pre>
               ${Array.isArray(alt.notes) && alt.notes.length ? `
               <ul class="ref-alt-notes">
-                ${alt.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600">▸</span><span>${escapeHtml(n)}</span></li>`).join('')}
+                ${alt.notes.map(n => `<li class="ref-note flex gap-2"><span class="text-slate-600" aria-hidden="true">&bull;</span><span>${escapeHtml(n)}</span></li>`).join('')}
               </ul>` : ''}
             </div>
           </details>
@@ -753,8 +753,8 @@ function renderReference(body, content) {
     _refToggleLabel(bulletsBtn, 'file-text', 'Notes→Code');
     colorizeInto(codeEl, ref.code);
   }
-  // iter eval-2026-05-30: 🃏 Flash now per-token self-rates. Per audits/
-  // flash.md edits 1+2: mechanics-weighted token selection + 👍/👎 chips
+  // iter eval-2026-05-30: Flash now per-token self-rates. Per audits/
+  // flash.md edits 1+2: mechanics-weighted token selection + /chips
   // on reveal. Session-local blank counter; ≥2 blanks within a single
   // toggle-on flags state.weakness for the lesson. Tap counts persist
   // to state.flash[lessonId] = { attempts, blanks, lastRunAt }.
@@ -794,7 +794,7 @@ function renderReference(body, content) {
       colorizeInto(codeEl, ref.code);
     }
   });
-  // iter 121: 🎬 Reference Cinema — every line starts blurred; tap to reveal.
+  // iter 121: Reference Cinema — every line starts blurred; tap to reveal.
   // Read+predict-then-verify retrieval direction (distinct from Flash's
   // token-cloze). Toggling Cinema off restores syntax-highlighted view;
   // toggling Flash on while Cinema is active resets to canonical first.
@@ -806,7 +806,7 @@ function renderReference(body, content) {
     if (cinemaOn) _renderCinema(codeEl, ref.code);
     else colorizeInto(codeEl, ref.code);
   });
-  // iter 144: 📝 Notes→Code — hide canonical; mount a CodeMirror editor in
+  // iter 144: Notes→Code — hide canonical; mount a CodeMirror editor in
   // its place; user types canonical from the still-visible Notes list below;
   // Run grades against L3.expectedOutput. Fills the documented L2→L3 cell
   // gap ("see concept, recall code" direction). Mutually exclusive with
@@ -827,7 +827,7 @@ function renderReference(body, content) {
     btn.addEventListener('click', () => selectTab('L1'));
   });
 
-  // iter 72: 🧩 Mechanic Drilldown — inline mechanic chips on the Reference
+  // iter 72: Mechanic Drilldown — inline mechanic chips on the Reference
   // tab. Surfaces this lesson's `content.mechanics` ids as tappable pills
   // that open the Mechanics modal directly to the detail view (every other
   // lesson where the idiom appears). Closes iter-64 held candidate B#2
@@ -837,7 +837,7 @@ function renderReference(body, content) {
   _renderReferenceMechanics(section.querySelector('[data-ref-mechanics]'), content.mechanics);
 }
 
-// iter 121: 🎬 Reference Cinema — render reference.code as line-by-line
+// iter 121: Reference Cinema — render reference.code as line-by-line
 // blurred buttons inside the existing <pre data-ref-code> element. Tap a
 // line to reveal it (toggle .cine-revealed class). Bypasses CodeMirror
 // runMode entirely — Cinema mode is about line-grain prediction, not
@@ -864,7 +864,7 @@ function _renderCinema(codeEl, code) {
   }
 }
 
-// iter 144: 📝 Notes→Code — replace the canonical <pre> with a CodeMirror
+// iter 144: Notes→Code — replace the canonical <pre> with a CodeMirror
 // editor + Run button. User types canonical from memory using the still-
 // visible Notes list (below) as the prompt. Run grades via runCode against
 // content.L3.expectedOutput — same runner semantics as the L3 drill itself,
@@ -906,7 +906,7 @@ function _renderBulletsCode(codeEl, content) {
   runBtn.addEventListener('click', async () => {
     const userCode = cm.getValue();
     if (!userCode.trim()) {
-      fb.textContent = '✗ Editor is empty — type something first.';
+      fb.innerHTML = dsIcon('alert', 14) + ' Editor is empty — type something first.';
       fb.className = 'bullets-code-feedback bullets-feedback-warn';
       return;
     }
@@ -914,10 +914,10 @@ function _renderBulletsCode(codeEl, content) {
     fb.className = 'bullets-code-feedback';
     const res = await runCode(userCode);
     if (!res.ok) {
-      fb.textContent = `✗ Error: ${res.output || 'unknown'}`;
+      fb.innerHTML = dsIcon('alert', 14) + ` Error: ${res.output || 'unknown'}`;
       fb.className = 'bullets-code-feedback bullets-feedback-err';
     } else if ((res.output || '') === expected) {
-      fb.textContent = '✓ Output matches the canonical. Notes→Code recall succeeded.';
+      fb.innerHTML = dsIcon('check', 14) + ' Output matches the canonical. Notes→Code recall succeeded.';
       fb.className = 'bullets-code-feedback bullets-feedback-pass';
       // Notes→Code grader is byte-identical to L3's (same runCode +
       // L3.expectedOutput) — a green pass IS an L3 win. Feed the SR
@@ -931,7 +931,7 @@ function _renderBulletsCode(codeEl, content) {
     } else {
       // Show first 80 chars of the wrong output for inline visibility.
       const got = (res.output || '(empty)').slice(0, 80);
-      fb.textContent = `✗ Output: ${got}${(res.output || '').length > 80 ? '…' : ''} (expected: ${expected.slice(0, 80)})`;
+      fb.innerHTML = dsIcon('alert', 14) + ` Output: ${got}${(res.output || '').length > 80 ? '…' : ''} (expected: ${expected.slice(0, 80)})`;
       fb.className = 'bullets-code-feedback bullets-feedback-warn';
     }
   });
@@ -957,7 +957,7 @@ function _renderReferenceMechanics(host, mechanicIds) {
   if (!labels.length) return;
   host.innerHTML = `
     <div class="ref-mechanics-row">
-      <span class="ref-mechanics-prefix">🧩 idioms used:</span>
+      <span class="ref-mechanics-prefix">${dsIcon('box', 15)} idioms used:</span>
       ${labels.map(({ id, m }) => `<button class="ref-mech-chip" data-mech-chip-id="${escapeHtml(id)}" title="${escapeHtml(m.blurb || m.label)} — tap to see every lesson where this idiom appears">${escapeHtml(m.label)}</button>`).join('')}
     </div>
   `;

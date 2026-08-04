@@ -121,7 +121,7 @@ function _settingsRenderBody() {
       <div class="ds-card ds-card--flat settings-card">${ioRows}</div>`;
   }
 
-  // Keyboard shortcuts (folds the topbar ❓ into Settings — nav-audit P2-6).
+  // Keyboard shortcuts (folds the topbar help button into Settings — nav-audit P2-6).
   if (document.getElementById('topbar-help')) {
     html += `<p class="ds-label settings-grouplabel">Help</p>
       <div class="ds-card ds-card--flat settings-card">${_settingsActionRow('keyboard', 'Keyboard shortcuts', 'The full key map', 'data-action-btn="topbar-help"')}</div>`;

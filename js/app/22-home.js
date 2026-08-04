@@ -280,7 +280,7 @@ function _homeDuePill(n) {
 // write-only sink: it was asked, stored and synced, and nothing in js/app/*
 // ever read it — while PROFILE.md § "Study intent — autopilot" makes the last
 // diagnostic's per-section result the thing that steers what gets weighted
-// ("if the last one showed complexity-pricing weak, weight the 🧮 Big-O drill
+// ("if the last one showed complexity-pricing weak, weight the Big-O drill
 // higher"). Home is where that belongs: ONE chip, ONE tap, straight into the
 // drill that attacks the weakest area — not a second decision in the hero,
 // which keeps exactly one primary action (PROFILE: "press one thing → you're

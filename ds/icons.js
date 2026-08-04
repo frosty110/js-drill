@@ -21,11 +21,29 @@ const DS_ICONS = {
   chart: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
   funnel: '<path d="M4 4h16l-6.5 8v6l-3 2v-8z"/>',
+  // Direction. The rule (docs/ui-ux-guide.md § Iconography): a chevron moves you
+  // through a hierarchy — into a card, back to the parent, open a disclosure. A
+  // trailing "→" inside a button label stays typographic, because it advances a
+  // sequence rather than naming an affordance.
+  'chevron-left': '<path d="m15 6-6 6 6 6"/>',
+  'chevron-right': '<path d="m9 6 6 6-6 6"/>',
+  'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+  'external-link': '<path d="M14 4h6v6"/><path d="m20 4-9 9"/><path d="M18 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.1-3 4"/><path d="M12 17.5h.01"/>',
   sliders: '<path d="M21 6h-7"/><path d="M10 6H3"/><circle cx="12" cy="6" r="2"/><path d="M21 12h-3"/><path d="M14 12H3"/><circle cx="16" cy="12" r="2"/><path d="M21 18h-9"/><path d="M8 18H3"/><circle cx="10" cy="18" r="2"/>',
   code: '<path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/>',
   'book-open': '<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>',
   'clipboard-list': '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
+
+  // System Design topic marks. One family, four jobs — a closed book (theory you
+  // read), a navigation compass (the method you run), stacked blocks (parts you
+  // compose), a floor plan (problems you draw). They replaced four unrelated
+  // emoji stickers that shared no line weight, palette or metaphor, so a menu of
+  // four subjects read as four different products. Registered per topic in
+  // data/system-design/topics.json.
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  blocks: '<rect x="14" y="3" width="7" height="7" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1h-6"/>',
+  blueprint: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h6v12"/><path d="M9 9h12"/><path d="M15 9v6h6"/>',
 
   // sessions
   'calendar-check': '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>',
@@ -57,6 +75,9 @@ const DS_ICONS = {
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/>',
   sparkles: '<path d="m12 3 1.9 5.8 5.8 1.9-5.8 1.9L12 18.4l-1.9-5.8-5.8-1.9 5.8-1.9z"/><path d="M19 3v4"/><path d="M17 5h4"/>',
   mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
+  'thumbs-up': '<path d="M7 22H4a1 1 0 0 1-1-1V12a1 1 0 0 1 1-1h3z"/><path d="M7 11l4.2-8.4a2.2 2.2 0 0 1 3.1 2.9L13 9h5.5a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 17.1 20H7z"/>',
+  'thumbs-down': '<path d="M17 2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3z"/><path d="M17 13l-4.2 8.4a2.2 2.2 0 0 1-3.1-2.9L11 15H5.5a2 2 0 0 1-2-2.4l1.4-7A2 2 0 0 1 6.9 4H17z"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
   braces: '<path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/>',
   refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
 
@@ -64,6 +85,8 @@ const DS_ICONS = {
   flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
   alert: '<path d="m10.29 3.86-8.4 14.5A2 2 0 0 0 3.62 21.4h16.76a2 2 0 0 0 1.73-3.03l-8.4-14.5a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   'check-circle': '<circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/>',
+  'x-circle': '<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 
   // settings surface (P6)
@@ -111,8 +134,12 @@ const DS_MODE_ICONS = {
   'cram-review-btn': 'refresh',
 };
 
+// Every icon carries `.ds-icon` (ds/components.css): don't shrink inside a flex
+// row, and sit on the text's centre line inline. Those two rules are true of an
+// icon everywhere, so they belong to the set rather than to each call site —
+// which is what stopped surfaces from each inventing their own alignment nudge.
 function dsIcon(name, size = 20) {
   const paths = DS_ICONS[name];
   if (!paths) return '';
-  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  return `<svg class="ds-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 }

@@ -292,7 +292,20 @@ close button, a status dot, a stat tile. They all exist.
   launcher, a picker) — a bare glyph can't say where it goes.
 - **No emoji in chrome (D07).** Emoji renders per-platform and reads as
   placeholder design. It remains fine in authored lesson content and in
-  celebratory toasts.
+  celebratory toasts. **Gated** by `tools/check-icons.js` (invariants § 9),
+  which also fails an icon name that doesn't resolve and any inline `<svg>`
+  outside `ds/icons.js`. Design-system files hold zero; the pre-system surfaces
+  carry a budget in `data/icon-debt.lock.json` that may only shrink.
+- **Chevron vs. arrow.** A **chevron** (`chevron-left/right/down`) names an
+  affordance that moves you through a hierarchy — into a card, back to the
+  parent, open a disclosure — and is an icon. A trailing `→` inside a button
+  label advances a *sequence* ("Next →", "Continue →") and stays typographic.
+  Both spellings are deliberate; don't convert one into the other.
+- **Alignment belongs to the set.** `dsIcon()` stamps `.ds-icon`
+  (`flex: none; vertical-align: -.16em`) on every glyph, so a call site never
+  carries its own nudge. If an icon needs a container, it gets a **tile** — one
+  size for every peer in the group, which is what makes a row of unrelated
+  subjects read as one menu.
 
 **Hierarchy per surface:** exactly one primary action visible at a time. If two
 things look equally important, the screen has no focus (PRINCIPLES #1).
@@ -553,6 +566,7 @@ Honest inventory so nobody mistakes legacy for precedent:
 | Inline `style="…"` in ds surfaces (`17`, `20`) | ~80 | New markup uses classes. Convert what you touch. |
 | Breakpoint drift (600/700/540/480px) | ~17 media queries | New code uses 768 only. |
 | Toast lives in `css/04-drills.css` with fixed colors | 4 variants | The next agent to add a toast hoists it to `.ds-toast` in `ds/components.css` (tokens, no emoji dependency) and migrates the variants. |
+| Emoji in pre-design-system chrome (`index.html`, `js/app/01..15`, `css/01..05`) | 492 glyphs, 22 files | Ratcheted by `tools/check-icons.js` — the count may only fall. Convert the ones in the block you're already editing to `dsIcon()`, then `--accept` to lock the win in. |
 | First-run welcome + several legacy modals aren't on `ds/` | ~6 surfaces | Migrate opportunistically, one per change, with screenshots. |
 
 **Boy-scout bounds:** clean up the *block you're already in*. Do not open a

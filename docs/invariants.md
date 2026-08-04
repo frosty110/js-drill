@@ -162,7 +162,7 @@ When you add a merge rule, update `js/sync.js`'s header docs and
 | Addressable surfaces / URLs | `js/routes.js` | Hand-concatenate a share path |
 | Design tokens | `ds/tokens.css` | Hard-code hex; re-declare in a page `:root` |
 | UI primitives | `ds/components.css` | Rebuild a button/sheet/card locally |
-| Icons | `ds/icons.js` | Inline a one-off `<svg>` |
+| Icons | `ds/icons.js` | Inline a one-off `<svg>`; reach for an emoji (§ 9 — this row is the one part of rule 5 that IS mechanical) |
 | localStorage I/O | `js/storage.js` | Call `localStorage` directly |
 
 This one is reviewer-enforced, not mechanical — the failure mode is drift, which
@@ -287,6 +287,56 @@ problem's 2–4 *headline* mechanisms, and the catalog is free to be finer.
 requirement, which is the honest way to say "this isn't really used here."
 
 Full contract: [`component-catalog.md`](component-catalog.md).
+
+---
+
+## 9. One icon set, and it is the only one
+
+**Rule — every glyph in chrome comes from `ds/icons.js` via `dsIcon(name)`. No
+emoji, no inline `<svg>`, no second vocabulary.**
+
+This is decision D07 from [`ui-ux-guide.md`](ui-ux-guide.md), finally given a
+gate. It guards three failures that all leave the page rendering:
+
+| Failure | What you see |
+|---|---|
+| `dsIcon('refrsh')` | `''` — the icon is simply absent, layout intact |
+| A path inlined into a surface file | Two copies of one glyph; editing the set updates one |
+| An emoji in chrome | Renders per-platform, at the wrong weight, in a colour no token owns |
+
+The third is the one that produced the backlog. It was a rule in a doc for a
+year: `system-design.html` shipped a file-cabinet wordmark, four unrelated topic
+stickers, and typographic stand-ins (`▦ ▶ ↻ ‹ › ▾ ✓ ✗`) — three icon systems on
+one screen, while the app's nav rail three clicks away drew clean strokes.
+
+**Gate** — `tools/check-icons.js`, in the default `check-all` run.
+
+Emoji is defined as `\p{Emoji_Presentation}` plus U+FE0F — characters that
+render as a **colour** glyph. That spares the typographic marks the app
+legitimately uses (`⌘ → ← ‹ ─ ★`), which are text-presentation. The scan does
+not exclude comments: *"this file contains no emoji"* is checkable by anyone
+with `grep` and impossible for a parser to get wrong, where *"no emoji in
+rendered strings"* needs a JS/HTML parser that becomes its own place to hide a
+bug.
+
+**The ratchet.** A gate that failed on the whole backlog on day one would have
+been switched off, so the check is one-way:
+
+- **Strict paths hold zero.** Everything built on the design system, and every
+  new file by default — the legacy list is enumerated, not the strict one.
+- **Legacy paths carry a budget** in `data/icon-debt.lock.json` (492 glyphs
+  across 22 files at 2026-08-04). The count may fall, never rise. A file that
+  reaches zero leaves the lock and is strict from then on, with no way back.
+
+**Escape hatch** — `node tools/check-icons.js --accept` re-baselines the legacy
+budget. There is deliberately no way to re-baseline a strict path; that is what
+makes the ratchet one-way rather than a suggestion.
+
+**Probe** — `tools/cdp/sd-icons.js` checks the rendered result, including the
+one thing no single-file check can see: the mark System Design wears as its
+wordmark is byte-identical to the one the app's nav rail draws for Design. Two
+files, one glyph. It also asserts the four topic marks share one tile size,
+which is what makes a menu of four subjects read as one menu.
 
 ---
 

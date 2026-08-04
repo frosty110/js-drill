@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Idempotency — Correctness &amp; Coordination — system design</title>
+<meta name="description" content="Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/idempotency/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Idempotency — Correctness &amp; Coordination — system design">
+<meta property="og:description" content="Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/idempotency/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Idempotency</h1>
+    <p class="sharepage__lede">Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>Any retry path exists — and in a distributed system one always does</li><li>The prompt involves payments, orders, or anything a user could double-submit</li><li>Network timeouts leave the caller genuinely unable to tell whether the write happened</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>The operation is naturally idempotent already (a PUT of a full resource); adding keys is ceremony</li><li>There is nowhere durable to record the key at the moment of the effect</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>A key store with a retention window, and that window is a real correctness parameter</li><li>The key must be recorded atomically with the effect, which constrains your storage choices</li><li>Clients must generate and reuse keys correctly — a contract you have to document and police</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Key recorded after the effect, so a crash between them admits a duplicate</li><li>Retention expiring before the last legitimate retry arrives</li><li>Client regenerating a new key per retry, which defeats the entire mechanism</li><li>Same key reused for a genuinely different request, silently returning the wrong prior result</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/exactly-once/">Exactly-Once (Effectively-Once)</a> — The pipeline-level version of the same goal; idempotency is the per-operation building block.</li>
+      <li><a href="../../../../sd/components/c/reservation/">Reservation / Hold</a> — When the operation must hold a scarce resource rather than just be safe to repeat.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 7 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p07/">Design a Notification System</a> — Deduplicates sends, so an at-least-once redelivery does not mean the user&#39;s phone buzzes twice for one event.</li>
+      <li><a href="../../../../sd/design-problems/p15/">Design a Payment System (Wallet / Ledger)</a> — The client-supplied key on every transfer, recorded in the same transaction as the ledger entry — the difference between a retry and a double charge.</li>
+      <li><a href="../../../../sd/design-problems/p16/">Design a Ticket Booking System (Ticketmaster-style)</a> — Booking requests carry a key, so a double-tap or a lost response does not leave one user holding two seats for the same show.</li>
+      <li><a href="../../../../sd/design-problems/p17/">Design a Prescription Drug Marketplace</a> — Orders must survive retry without dispensing twice; the key is recorded with the fulfilment record, not before it.</li>
+      <li><a href="../../../../sd/design-problems/p20/">Design a Distributed Job Scheduler</a> — A job execution is keyed, so at-least-once dispatch does not run the same scheduled task twice on two different workers.</li>
+      <li><a href="../../../../sd/design-problems/p29/">Design a Webhook Delivery System</a> — The delivery id sent with every request, so receivers can recognise a redelivery. Its absence is what makes at-least-once dangerous for them.</li>
+      <li><a href="../../../../sd/design-problems/p32/">Design an Authentication &amp; Session Service</a> — Token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"idempotency","title":"Idempotency","category":"correctness-coordination","mechanism":"idempotency","what":"Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect.","reachFor":["Any retry path exists — and in a distributed system one always does","The prompt involves payments, orders, or anything a user could double-submit","Network timeouts leave the caller genuinely unable to tell whether the write happened"],"avoid":["The operation is naturally idempotent already (a PUT of a full resource); adding keys is ceremony","There is nowhere durable to record the key at the moment of the effect"],"costs":["A key store with a retention window, and that window is a real correctness parameter","The key must be recorded atomically with the effect, which constrains your storage choices","Clients must generate and reuse keys correctly — a contract you have to document and police"],"failureModes":["Key recorded after the effect, so a crash between them admits a duplicate","Retention expiring before the last legitimate retry arrives","Client regenerating a new key per retry, which defeats the entire mechanism","Same key reused for a genuinely different request, silently returning the wrong prior result"],"usedIn":[{"problem":"p07","title":"Design a Notification System","doing":"Deduplicates sends, so an at-least-once redelivery does not mean the user's phone buzzes twice for one event.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p07/"},{"problem":"p15","title":"Design a Payment System (Wallet / Ledger)","doing":"The client-supplied key on every transfer, recorded in the same transaction as the ledger entry — the difference between a retry and a double charge.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p15/"},{"problem":"p16","title":"Design a Ticket Booking System (Ticketmaster-style)","doing":"Booking requests carry a key, so a double-tap or a lost response does not leave one user holding two seats for the same show.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p16/"},{"problem":"p17","title":"Design a Prescription Drug Marketplace","doing":"Orders must survive retry without dispensing twice; the key is recorded with the fulfilment record, not before it.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p17/"},{"problem":"p20","title":"Design a Distributed Job Scheduler","doing":"A job execution is keyed, so at-least-once dispatch does not run the same scheduled task twice on two different workers.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p20/"},{"problem":"p29","title":"Design a Webhook Delivery System","doing":"The delivery id sent with every request, so receivers can recognise a redelivery. Its absence is what makes at-least-once dangerous for them.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p29/"},{"problem":"p32","title":"Design an Authentication & Session Service","doing":"Token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p32/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/idempotency">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

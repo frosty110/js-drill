@@ -100,6 +100,133 @@ function validatePlans(unitIdsByTopic, cruxUnits) {
   }
 }
 
+// --- Component catalog + the component↔problem graph -------------------------
+// docs/component-catalog.md is the contract. Two files, one graph:
+//   components/catalog.json  the component NODES, grouped into categories
+//   mechanism-map.json       the EDGES, each annotated with what the component
+//                            is DOING in that problem
+//
+// The load-bearing gate is coverage (gate 5 in the doc): a component that
+// declares a `mechanism` must annotate every design problem already tagged with
+// it. Without that, tagging a problem and forgetting the annotation degrades the
+// component page into a list of names — the exact link-farm failure the surface
+// exists to avoid, and one that renders perfectly while teaching nothing.
+const CATALOG = readJson(path.join(SD, 'components', 'catalog.json'));
+const EDGE_FILE = readJson(path.join(SD, 'mechanism-map.json'));
+const MAX_EDGE_CHARS = 220;
+const CATALOG_TEXT_FIELDS = ['reachFor', 'avoid', 'costs', 'failureModes'];
+
+function validateCatalog() {
+  if (!CATALOG) { fail('components/catalog.json', 'missing or unreadable'); return; }
+  const cats = Array.isArray(CATALOG.categories) ? CATALOG.categories : [];
+  const comps = Array.isArray(CATALOG.components) ? CATALOG.components : [];
+  if (!cats.length) fail('catalog.json', 'no categories declared');
+  if (!comps.length) fail('catalog.json', 'no components declared');
+  // Which topic owns the catalog is DATA, the way plans.json and tags.json
+  // declare it — the page generator reads this rather than assuming.
+  if (!registry.topics.some(t => t.id === CATALOG.appliesTo)) {
+    fail('catalog.json', `appliesTo "${CATALOG.appliesTo}" is not a registered topic`);
+  }
+
+  const catIds = new Set();
+  for (const c of cats) {
+    if (!c || !c.id || !c.title) { fail('catalog.json', 'every category needs an id and a title'); continue; }
+    if (!/^[a-z0-9-]+$/.test(c.id)) fail('catalog.json', `category id "${c.id}" must be kebab-case`);
+    if (catIds.has(c.id)) fail('catalog.json', `duplicate category id ${c.id}`);
+    catIds.add(c.id);
+    if (!c.blurb) fail('catalog.json', `category ${c.id} missing blurb`);
+  }
+
+  const compIds = new Set();
+  for (const c of comps) {
+    const at = `catalog.json ${c && c.id ? c.id : '?'}`;
+    if (!c || !c.id || !c.title) { fail('catalog.json', 'every component needs an id and a title'); continue; }
+    // The id IS the URL (#/components/c/<id>), so a non-slug id would produce a
+    // route the sanitiser silently rewrites into one that matches nothing.
+    if (!/^[a-z0-9-]+$/.test(c.id)) fail(at, `component id must be kebab-case`);
+    if (compIds.has(c.id)) fail(at, 'duplicate component id');
+    compIds.add(c.id);
+    if (!catIds.has(c.category)) fail(at, `category "${c.category}" is not declared`);
+    if (!c.what || !String(c.what).trim()) fail(at, 'missing "what"');
+    for (const f of CATALOG_TEXT_FIELDS) {
+      const v = c[f];
+      const min = f === 'reachFor' ? 2 : 1;
+      if (!Array.isArray(v) || v.length < min) fail(at, `"${f}" needs >= ${min} entr${min === 1 ? 'y' : 'ies'}`);
+      else if (!v.every(x => typeof x === 'string' && x.trim())) fail(at, `"${f}" has an empty entry`);
+    }
+    // A mechanism ties the component to the faceted tag registry. Unregistered
+    // means the chip deep-links to a facet value matching nothing — an empty
+    // list, no error.
+    if (c.mechanism && !MECHANISMS.has(c.mechanism)) {
+      fail(at, `mechanism "${c.mechanism}" is not registered in tags.json`);
+    }
+  }
+
+  // Alternatives are the "rule out the near neighbour" surface (G2); a dangling
+  // id is a dead link on the one row the user is most likely to follow.
+  const mechOwner = {};
+  for (const c of comps) {
+    for (const a of (c.alternatives || [])) {
+      if (!a || !a.id) { fail(`catalog.json ${c.id}`, 'alternative missing id'); continue; }
+      if (!compIds.has(a.id)) fail(`catalog.json ${c.id}`, `alternative "${a.id}" is not a component`);
+      if (a.id === c.id) fail(`catalog.json ${c.id}`, 'component lists itself as an alternative');
+      if (!a.note || !String(a.note).trim()) fail(`catalog.json ${c.id}`, `alternative "${a.id}" needs a note saying what decides between them`);
+    }
+    if (c.mechanism) {
+      if (mechOwner[c.mechanism]) fail('catalog.json', `mechanism "${c.mechanism}" claimed by both ${mechOwner[c.mechanism]} and ${c.id}`);
+      else mechOwner[c.mechanism] = c.id;
+    }
+    if (c.drill && c.drill.unit && c.drill.topic) {
+      const f = path.join(SD, c.drill.topic, `${c.drill.unit}.json`);
+      if (!fs.existsSync(f)) fail(`catalog.json ${c.id}`, `drill points at missing unit ${c.drill.topic}/${c.drill.unit}`);
+    }
+  }
+
+  // --- Edges ---------------------------------------------------------------
+  const edges = (EDGE_FILE && EDGE_FILE.edges) || null;
+  if (!edges) { fail('mechanism-map.json', 'missing or unreadable — expected an edges{} object'); return; }
+
+  const dpManifest = readJson(path.join(SD, 'design-problems', 'manifest.json'));
+  const dpChapters = (dpManifest && dpManifest.chapters) || [];
+  const problemIds = new Set(dpChapters.map(c => c.id));
+  const taggedWith = {};
+  for (const ch of dpChapters) {
+    for (const m of ((ch.tags || {}).mechanism || [])) (taggedWith[m] || (taggedWith[m] = new Set())).add(ch.id);
+  }
+
+  let edgeCount = 0;
+  for (const [compId, byProblem] of Object.entries(edges)) {
+    if (!compIds.has(compId)) { fail('mechanism-map.json', `edges for unknown component "${compId}"`); continue; }
+    for (const [pid, note] of Object.entries(byProblem)) {
+      edgeCount++;
+      const at = `mechanism-map.json ${compId}→${pid}`;
+      if (!problemIds.has(pid)) fail(at, 'not a design-problem unit id');
+      if (typeof note !== 'string' || !note.trim()) fail(at, 'empty annotation');
+      else if (note.length > MAX_EDGE_CHARS) fail(at, `annotation is ${note.length} chars, max ${MAX_EDGE_CHARS}`);
+      // Renders at BOTH endpoints, so a sentence that names its own problem
+      // reads as nonsense on that problem's own page.
+      else if (/^(this|the) (problem|design|system) (uses|needs)/i.test(note.trim())) {
+        fail(at, 'annotation must be a predicate about the job, not a "this problem uses…" preamble');
+      }
+    }
+  }
+
+  // Gate 5 — coverage.
+  for (const c of comps) {
+    if (!c.mechanism) continue;
+    const need = taggedWith[c.mechanism] || new Set();
+    const have = new Set(Object.keys(edges[c.id] || {}));
+    const missing = [...need].filter(p => !have.has(p));
+    if (missing.length) {
+      fail('mechanism-map.json', `${c.id}: no annotation for ${missing.join(', ')} — tagged "${c.mechanism}" but nothing says what it is doing there`);
+    }
+  }
+
+  if (errors === 0) {
+    console.log(`  Component catalog OK — ${comps.length} components in ${cats.length} categories, ${edgeCount} annotated edges.`);
+  }
+}
+
 function validateTagRegistry() {
   if (!TAGS.facets) { fail('tags.json', 'missing or unreadable — expected a facets[] array'); return; }
   const seen = new Set();
@@ -489,6 +616,7 @@ for (const key of registeredLessons) {
 
 console.log('');
 validatePlans(unitIdsByTopic, cruxUnits);
+validateCatalog();
 
 if (errors === 0) {
   const pending = totalPending ? `, ${totalPending} pending artwork` : '';

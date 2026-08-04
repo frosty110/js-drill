@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leader Election — Correctness &amp; Coordination — system design</title>
+<meta name="description" content="Picking exactly one node to perform a role, with an agreed way to notice failure and pick again.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/leader-election/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Leader Election — Correctness &amp; Coordination — system design">
+<meta property="og:description" content="Picking exactly one node to perform a role, with an agreed way to notice failure and pick again.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/leader-election/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Leader Election</h1>
+    <p class="sharepage__lede">Picking exactly one node to perform a role, with an agreed way to notice failure and pick again.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>Exactly one process must do a job — a scheduler, a compactor, a partition owner</li><li>The prompt needs automatic failover without an operator</li><li>Multiple nodes doing the work concurrently would be incorrect, not just wasteful</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>The work is safely parallel — election adds a coordination dependency for nothing</li><li>You would be implementing consensus yourself; use etcd, ZooKeeper or Raft</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>A consensus system in your dependency graph, with its own availability story</li><li>Failover is not instant; there is a detection window where nobody is leader</li><li>Leases and fencing tokens must be honoured by the work itself, not just the election</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Split brain — a paused leader wakes up still believing it holds the role</li><li>Election storms flapping the role between nodes under load</li><li>Work performed after the lease expired because the worker never checked</li><li>The leader becoming a throughput bottleneck nobody planned for</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/distributed-lock/">Distributed Lock</a> — A lock with a lease is election for one task rather than for a standing role.</li>
+      <li><a href="../../../../sd/components/c/consistent-hashing/">Consistent Hashing</a> — Partition ownership by hash gives every node a role without a single leader.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 2 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p19/">Design a Distributed Message Queue</a> — Each partition has exactly one leader accepting writes, and electing a new one on failure is what lets the broker survive node loss.</li>
+      <li><a href="../../../../sd/design-problems/p20/">Design a Distributed Job Scheduler</a> — Exactly one scheduler instance may decide which jobs are due, or every due job fires once per running instance.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"leader-election","title":"Leader Election","category":"correctness-coordination","mechanism":"leader-election","what":"Picking exactly one node to perform a role, with an agreed way to notice failure and pick again.","reachFor":["Exactly one process must do a job — a scheduler, a compactor, a partition owner","The prompt needs automatic failover without an operator","Multiple nodes doing the work concurrently would be incorrect, not just wasteful"],"avoid":["The work is safely parallel — election adds a coordination dependency for nothing","You would be implementing consensus yourself; use etcd, ZooKeeper or Raft"],"costs":["A consensus system in your dependency graph, with its own availability story","Failover is not instant; there is a detection window where nobody is leader","Leases and fencing tokens must be honoured by the work itself, not just the election"],"failureModes":["Split brain — a paused leader wakes up still believing it holds the role","Election storms flapping the role between nodes under load","Work performed after the lease expired because the worker never checked","The leader becoming a throughput bottleneck nobody planned for"],"usedIn":[{"problem":"p19","title":"Design a Distributed Message Queue","doing":"Each partition has exactly one leader accepting writes, and electing a new one on failure is what lets the broker survive node loss.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p19/"},{"problem":"p20","title":"Design a Distributed Job Scheduler","doing":"Exactly one scheduler instance may decide which jobs are due, or every due job fires once per running instance.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p20/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/leader-election">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

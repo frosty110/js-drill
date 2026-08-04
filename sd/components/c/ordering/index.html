@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Message Ordering — Async &amp; Messaging — system design</title>
+<meta name="description" content="Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/ordering/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Message Ordering — Async &amp; Messaging — system design">
+<meta property="og:description" content="Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/ordering/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Message Ordering</h1>
+    <p class="sharepage__lede">Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>State transitions must apply in sequence — edits, balances, status changes</li><li>The prompt says messages in a conversation or a stream must not appear out of order</li><li>A later event invalidates an earlier one and applying them backwards corrupts state</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>Operations are commutative; ordering costs parallelism you did not need to spend</li><li>Global ordering across all keys is the requirement — that serialises everything</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Per-key ordering means per-key serialisation, capping parallelism at the partition count</li><li>A partition&#39;s throughput becomes the ceiling for its hottest key</li><li>Rebalancing consumers has to preserve the guarantee, which complicates scaling</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Retrying a failed message out of band and applying it after its successor</li><li>Repartitioning silently breaking the key-to-partition binding that provided the order</li><li>Clock-based ordering across producers giving an order that never actually happened</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/conflict-resolution/">Conflict Resolution</a> — If you cannot order, make the operations mergeable instead — CRDTs and version vectors.</li>
+      <li><a href="../../../../sd/components/c/idempotency/">Idempotency</a> — Sequence numbers plus idempotent apply lets a consumer detect and discard out-of-order replays.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 3 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p06/">Design a Chat System</a> — Messages within one conversation must appear in the same order for every participant, which pins a conversation to a single partition.</li>
+      <li><a href="../../../../sd/design-problems/p10/">Design a Collaborative Document Editor</a> — Operations on a document must apply in an agreed sequence — the thing the OT or CRDT machinery exists to establish.</li>
+      <li><a href="../../../../sd/design-problems/p19/">Design a Distributed Message Queue</a> — Per-partition ordering is the guarantee the broker sells; global ordering is deliberately not offered because it would serialise everything.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"ordering","title":"Message Ordering","category":"async-messaging","mechanism":"ordering","what":"Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition.","reachFor":["State transitions must apply in sequence — edits, balances, status changes","The prompt says messages in a conversation or a stream must not appear out of order","A later event invalidates an earlier one and applying them backwards corrupts state"],"avoid":["Operations are commutative; ordering costs parallelism you did not need to spend","Global ordering across all keys is the requirement — that serialises everything"],"costs":["Per-key ordering means per-key serialisation, capping parallelism at the partition count","A partition's throughput becomes the ceiling for its hottest key","Rebalancing consumers has to preserve the guarantee, which complicates scaling"],"failureModes":["Retrying a failed message out of band and applying it after its successor","Repartitioning silently breaking the key-to-partition binding that provided the order","Clock-based ordering across producers giving an order that never actually happened"],"usedIn":[{"problem":"p06","title":"Design a Chat System","doing":"Messages within one conversation must appear in the same order for every participant, which pins a conversation to a single partition.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p06/"},{"problem":"p10","title":"Design a Collaborative Document Editor","doing":"Operations on a document must apply in an agreed sequence — the thing the OT or CRDT machinery exists to establish.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p10/"},{"problem":"p19","title":"Design a Distributed Message Queue","doing":"Per-partition ordering is the guarantee the broker sells; global ordering is deliberately not offered because it would serialise everything.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p19/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/ordering">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

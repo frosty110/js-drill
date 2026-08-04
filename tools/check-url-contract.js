@@ -239,6 +239,8 @@ function checkReconciliation() {
     sdSheet: { topic: 'design-problems', unit: 'p06', sheet: 'overview' },
     sdPlan: { topic: 'design-problems', plan: 'night-before' },
     sdTag: { topic: 'design-problems', facet: 'mechanism', value: 'caching' },
+    sdComponentIndex: { topic: 'components' },
+    sdComponent: { topic: 'components', component: 'caching' },
     sdMixed: { topic: 'ddia' }, sdDue: { topic: 'ddia' },
     appMode: { mode: 'dashboard' }
   };

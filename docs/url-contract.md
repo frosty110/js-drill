@@ -111,6 +111,8 @@ declared fallback, so *"no page for this"* never becomes *"nowhere to go."*
 | **A study sheet, full screen** | `#/design-problems/p06/graphic/presence-and-websockets` | `sd/design-problems/p06/presence-and-websockets/` |
 | **A study plan** | `#/design-problems/plan/night-before` | `sd/design-problems/plan/night-before/` |
 | **A tag list** | `#/design-problems/tag/mechanism/caching` | `sd/design-problems/tag/mechanism/caching/` |
+| **The component catalog** | `#/components/catalog` | `sd/components/catalog/` |
+| **One component** | `#/components/c/caching` | `sd/components/c/caching/` |
 | A due/mixed session | `#/design-problems/mixed` | *(action → the topic page)* |
 | A question in a drill | *(🔗 copies the anchor →)* | `sd/design-problems/p06/#q4` |
 | A diagram on a unit page | — | `sd/design-problems/p06/#diagram-socket-routing` |

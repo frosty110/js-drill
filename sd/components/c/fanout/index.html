@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fan-out — Async &amp; Messaging — system design</title>
+<meta name="description" content="Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull).">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/fanout/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Fan-out — Async &amp; Messaging — system design">
+<meta property="og:description" content="Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull).">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/fanout/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Fan-out</h1>
+    <p class="sharepage__lede">Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull).</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>Reads vastly outnumber writes and the read must be fast</li><li>The prompt describes feeds, timelines or notifications with a follower graph</li><li>The per-recipient view is expensive to assemble at query time</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>One writer has millions of recipients — write amplification explodes</li><li>Recipients rarely read what you precomputed; you did the work for nothing</li><li>The content changes after delivery and every copy would need updating</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Storage for N copies of what was logically one item</li><li>Write amplification proportional to the fan-out degree</li><li>Deletes and edits must chase every copy you created</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Celebrity write becoming a thundering-herd event that stalls the fan-out pipeline</li><li>Partial fan-out on failure leaving some recipients with the item and others without</li><li>Unbounded per-recipient lists growing forever because nothing caps them</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/ranking/">Ranking</a> — Fan-out decides WHAT is in the feed; ranking decides the order. The hybrid answer needs both.</li>
+      <li><a href="../../../../sd/components/c/caching/">Cache</a> — Fan-out-on-read plus an aggressive cache is the pull-side answer, and it is right for low-follower accounts.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 5 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p02/">Design a News Feed</a> — The central tradeoff: push each post into every follower&#39;s timeline on write, or assemble on read — with the hybrid as the production answer.</li>
+      <li><a href="../../../../sd/design-problems/p03/">Design a Photo-Sharing Service</a> — New photos are pushed into follower feeds, carrying the same celebrity write-amplification problem and the same hybrid escape hatch.</li>
+      <li><a href="../../../../sd/design-problems/p06/">Design a Chat System</a> — One message delivered to every member of a group conversation — a fan-out over live connections rather than over stored timelines.</li>
+      <li><a href="../../../../sd/design-problems/p07/">Design a Notification System</a> — One triggering event expanded into per-user, per-channel deliveries, with email, push and SMS each a separate send from a single source event.</li>
+      <li><a href="../../../../sd/design-problems/p27/">Design a Live Streaming Service</a> — One encoded stream distributed to the entire audience at once, where the fan-out degree is the viewer count and the CDN is what makes it affordable.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"fanout","title":"Fan-out","category":"async-messaging","mechanism":"fanout","what":"Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull).","reachFor":["Reads vastly outnumber writes and the read must be fast","The prompt describes feeds, timelines or notifications with a follower graph","The per-recipient view is expensive to assemble at query time"],"avoid":["One writer has millions of recipients — write amplification explodes","Recipients rarely read what you precomputed; you did the work for nothing","The content changes after delivery and every copy would need updating"],"costs":["Storage for N copies of what was logically one item","Write amplification proportional to the fan-out degree","Deletes and edits must chase every copy you created"],"failureModes":["Celebrity write becoming a thundering-herd event that stalls the fan-out pipeline","Partial fan-out on failure leaving some recipients with the item and others without","Unbounded per-recipient lists growing forever because nothing caps them"],"usedIn":[{"problem":"p02","title":"Design a News Feed","doing":"The central tradeoff: push each post into every follower's timeline on write, or assemble on read — with the hybrid as the production answer.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p02/"},{"problem":"p03","title":"Design a Photo-Sharing Service","doing":"New photos are pushed into follower feeds, carrying the same celebrity write-amplification problem and the same hybrid escape hatch.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p03/"},{"problem":"p06","title":"Design a Chat System","doing":"One message delivered to every member of a group conversation — a fan-out over live connections rather than over stored timelines.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p06/"},{"problem":"p07","title":"Design a Notification System","doing":"One triggering event expanded into per-user, per-channel deliveries, with email, push and SMS each a separate send from a single source event.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p07/"},{"problem":"p27","title":"Design a Live Streaming Service","doing":"One encoded stream distributed to the entire audience at once, where the fan-out degree is the viewer count and the CDN is what makes it affordable.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p27/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/fanout">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

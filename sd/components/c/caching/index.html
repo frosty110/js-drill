@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cache — Caching &amp; Delivery — system design</title>
+<meta name="description" content="A fast store holding the answer to work you already did, so the expensive path runs once for many reads.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/caching/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Cache — Caching &amp; Delivery — system design">
+<meta property="og:description" content="A fast store holding the answer to work you already did, so the expensive path runs once for many reads.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/caching/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Cache</h1>
+    <p class="sharepage__lede">A fast store holding the answer to work you already did, so the expensive path runs once for many reads.</p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>The prompt gives a lopsided read:write ratio — 100:1 and up</li><li>The answer is expensive to compute or fetch and changes far more slowly than it is read</li><li>A stated staleness tolerance (&#39;feed can be up to a minute old&#39;) is an explicit invitation</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>Reads must reflect writes immediately — a cache is a correctness hazard you added on purpose</li><li>The working set is uniformly random over a huge keyspace; the hit rate will not pay for the machinery</li><li>Write-heavy workloads where you would spend more invalidating than serving</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Every cache is a second copy of the truth, and now you own the invalidation problem</li><li>Memory is expensive, so capacity forces an eviction policy you must justify</li><li>Debugging gets harder: behaviour now depends on whether something was warm</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Stampede — a hot key expires and every concurrent request hits the origin at once</li><li>Hot key — a single entry exceeds one node&#39;s throughput no matter how many nodes you add</li><li>Cold start after a flush or deploy sends full production load at a database sized for cache-miss traffic</li><li>Silent staleness: an invalidation is missed and wrong data is served indefinitely with no error</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/cdn/">CDN</a> — Same idea moved to the network edge. Pick a CDN when the payload is static and the win is geographic distance.</li>
+      <li><a href="../../../../sd/components/c/search-index/">Inverted Index / Search</a> — If reads are QUERIES rather than key lookups, a precomputed index beats caching every distinct query.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 11 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p01/">Design a URL Shortener</a> — Hot short-code → long-URL lookups. The mapping is immutable once created, so there is no invalidation story to get wrong — only capacity and TTL.</li>
+      <li><a href="../../../../sd/design-problems/p02/">Design a News Feed</a> — The per-user timeline of post IDs in Redis, hydrated to full post bodies on read. The cache IS the precomputed feed, not an optimisation over it.</li>
+      <li><a href="../../../../sd/design-problems/p08/">Design a Distributed Rate Limiter</a> — The counter state itself. Limiter state is small, extremely hot, and worthless once stale — which is exactly the shape an in-memory store is for.</li>
+      <li><a href="../../../../sd/design-problems/p11/">Design a Leaderboard</a> — Top-N slices per leaderboard window, so the overwhelmingly common &#39;show me the top 100&#39; read never touches the underlying ranking structure.</li>
+      <li><a href="../../../../sd/design-problems/p12/">Design a Distributed Cache</a> — The whole problem. Ring placement, replication and eviction all exist to make one cache survive nodes joining and leaving without losing its value.</li>
+      <li><a href="../../../../sd/design-problems/p14/">Design a Typeahead / Autocomplete Service</a> — Precomputed top-K completions per prefix, held in memory because the keystroke budget is tens of milliseconds and a rebuild is a batch job.</li>
+      <li><a href="../../../../sd/design-problems/p16/">Design a Ticket Booking System (Ticketmaster-style)</a> — Event and seat-map reads, which vastly outnumber bookings. Availability counts are cached loosely on purpose; the actual hold stays transactional.</li>
+      <li><a href="../../../../sd/design-problems/p22/">Design an LLM Inference Platform</a> — Prompt-prefix and KV-cache reuse across requests, so a shared system prompt is not recomputed per call — the dominant saving in LLM serving.</li>
+      <li><a href="../../../../sd/design-problems/p24/">Design a Proximity Service</a> — Popular geo cells, whose query volume is wildly skewed toward a few dense urban areas. A short TTL absorbs most reads before the index sees them.</li>
+      <li><a href="../../../../sd/design-problems/p30/">Design a Feature Store</a> — The online store is a cache by another name: precomputed features in a low-latency store, because inference cannot wait for a batch job to finish.</li>
+      <li><a href="../../../../sd/design-problems/p32/">Design an Authentication &amp; Session Service</a> — Session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"caching","title":"Cache","category":"caching-delivery","mechanism":"caching","what":"A fast store holding the answer to work you already did, so the expensive path runs once for many reads.","reachFor":["The prompt gives a lopsided read:write ratio — 100:1 and up","The answer is expensive to compute or fetch and changes far more slowly than it is read","A stated staleness tolerance ('feed can be up to a minute old') is an explicit invitation"],"avoid":["Reads must reflect writes immediately — a cache is a correctness hazard you added on purpose","The working set is uniformly random over a huge keyspace; the hit rate will not pay for the machinery","Write-heavy workloads where you would spend more invalidating than serving"],"costs":["Every cache is a second copy of the truth, and now you own the invalidation problem","Memory is expensive, so capacity forces an eviction policy you must justify","Debugging gets harder: behaviour now depends on whether something was warm"],"failureModes":["Stampede — a hot key expires and every concurrent request hits the origin at once","Hot key — a single entry exceeds one node's throughput no matter how many nodes you add","Cold start after a flush or deploy sends full production load at a database sized for cache-miss traffic","Silent staleness: an invalidation is missed and wrong data is served indefinitely with no error"],"usedIn":[{"problem":"p01","title":"Design a URL Shortener","doing":"Hot short-code → long-URL lookups. The mapping is immutable once created, so there is no invalidation story to get wrong — only capacity and TTL.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p01/"},{"problem":"p02","title":"Design a News Feed","doing":"The per-user timeline of post IDs in Redis, hydrated to full post bodies on read. The cache IS the precomputed feed, not an optimisation over it.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p02/"},{"problem":"p08","title":"Design a Distributed Rate Limiter","doing":"The counter state itself. Limiter state is small, extremely hot, and worthless once stale — which is exactly the shape an in-memory store is for.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p08/"},{"problem":"p11","title":"Design a Leaderboard","doing":"Top-N slices per leaderboard window, so the overwhelmingly common 'show me the top 100' read never touches the underlying ranking structure.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p11/"},{"problem":"p12","title":"Design a Distributed Cache","doing":"The whole problem. Ring placement, replication and eviction all exist to make one cache survive nodes joining and leaving without losing its value.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p12/"},{"problem":"p14","title":"Design a Typeahead / Autocomplete Service","doing":"Precomputed top-K completions per prefix, held in memory because the keystroke budget is tens of milliseconds and a rebuild is a batch job.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p14/"},{"problem":"p16","title":"Design a Ticket Booking System (Ticketmaster-style)","doing":"Event and seat-map reads, which vastly outnumber bookings. Availability counts are cached loosely on purpose; the actual hold stays transactional.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p16/"},{"problem":"p22","title":"Design an LLM Inference Platform","doing":"Prompt-prefix and KV-cache reuse across requests, so a shared system prompt is not recomputed per call — the dominant saving in LLM serving.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p22/"},{"problem":"p24","title":"Design a Proximity Service","doing":"Popular geo cells, whose query volume is wildly skewed toward a few dense urban areas. A short TTL absorbs most reads before the index sees them.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p24/"},{"problem":"p30","title":"Design a Feature Store","doing":"The online store is a cache by another name: precomputed features in a low-latency store, because inference cannot wait for a batch job to finish.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p30/"},{"problem":"p32","title":"Design an Authentication & Session Service","doing":"Session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p32/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/caching">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

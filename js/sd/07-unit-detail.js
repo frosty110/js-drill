@@ -51,7 +51,10 @@ async function renderChapterDetail(t, chId) {
 
   app.innerHTML = `
     <div class="detail">
-      <div class="detail-tag">${esc(label)}</div>
+      <div class="detail-head">
+        <div class="detail-tag">${esc(label)}</div>
+        <button class="ds-btn ds-btn--ghost detail-share" id="share-unit" title="Share a link carrying your results, for an AI to drill you from">${icon('share', 15)} Share</button>
+      </div>
       <h2 class="detail-title">${esc(ch.title)}</h2>
       <p class="detail-summary">${fmt(ch.summary || '')}</p>
       <div class="detail-prog"><span class="bar"><i style="width:${cs.total ? Math.round(cs.mastered / cs.total * 100) : 0}%"></i></span>
@@ -68,7 +71,6 @@ async function renderChapterDetail(t, chId) {
       <div class="cta-row">
         <button class="cta ds-btn ds-btn--primary" id="drill-all">${icon('play')} Drill all <span class="due-pill" style="background:rgba(23,24,28,.25);color:inherit">${items.length}</span></button>
         ${cruxCount ? `<button class="cta ds-btn ds-btn--ghost" id="drill-crux">${icon('zap')} Crux only <span class="due-pill" style="background:var(--ds-accent-soft);color:var(--ds-accent-hi)">${cruxCount}</span></button>` : ''}
-        <button class="cta ds-btn ds-btn--ghost" id="share-unit" title="Share a link carrying your results, for an AI to drill you from">Share</button>
       </div>
     </div>`;
   document.getElementById('drill-all').addEventListener('click', () => startChapter(t, chId));

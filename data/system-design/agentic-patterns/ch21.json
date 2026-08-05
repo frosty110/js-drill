@@ -1,0 +1,128 @@
+{
+  "id": "ch21",
+  "num": 21,
+  "part": "Part III: Scale, Safety & Discovery",
+  "title": "Exploration and Discovery",
+  "summary": "Agents that search a space rather than execute a known task: generating hypotheses, trying approaches, seeking novelty, and reporting what they found. The pattern powers research assistants, test generation, design-space search, and scientific workflows — and its defining risk is that a model can generate plausible novelty indefinitely, so exploration without verification and a budget produces expensive noise.",
+  "keyTakeaways": [
+    "Exploration is a different objective from execution: success is coverage of a space and the discovery of something valuable, not the completion of a specified task.",
+    "The exploration/exploitation tradeoff is explicit here — how much budget goes to trying new directions versus deepening the most promising one — and it should be a parameter, not an accident.",
+    "Generated novelty is cheap and mostly worthless without a verification step; the value of the pattern comes from the filter, not the generator.",
+    "Diversity must be engineered: identical prompts to the same model produce correlated ideas, so varied framings, roles, constraints, or seeds are needed for genuine coverage.",
+    "Exploration needs a scoring function — novelty, feasibility, expected value — or there is no basis for deciding what to pursue and what to discard.",
+    "Budgets and stopping conditions are mandatory, because an exploring agent has no natural end state and will keep producing candidates as long as it is allowed.",
+    "The output should be a ranked, evidence-backed set of findings with what was tried and rejected, since knowing the dead ends is often as valuable as the discoveries."
+  ],
+  "questions": [
+    {
+      "q": "How does an exploration task differ from an execution task?",
+      "options": [
+        "Exploration uses more tools",
+        "Exploration has no defined target output — success is finding something valuable within a space, so the criteria are coverage and quality of discoveries rather than task completion",
+        "Exploration only applies to scientific domains",
+        "Exploration requires multi-agent architectures"
+      ],
+      "answer": 1,
+      "explain": "An execution task has a goal state you can test. Exploration has a space and a value function, which is why it needs different stopping conditions, different metrics, and an explicit budget."
+    },
+    {
+      "q": "What is the exploration/exploitation tradeoff in this setting?",
+      "options": [
+        "Whether to use a large or small model",
+        "Whether to run agents in parallel or sequentially",
+        "How much budget goes to trying genuinely new directions versus deepening the most promising direction found so far",
+        "Whether to cache results between runs"
+      ],
+      "answer": 2,
+      "explain": "Pure exploitation converges early on a locally good idea; pure exploration produces a wide, shallow list of nothing. Making the split an explicit parameter lets the system be tuned for the task instead of drifting toward whichever the prompt implies."
+    },
+    {
+      "q": "Why is the verification step, rather than the generation step, where the value of this pattern lies?",
+      "options": [
+        "Because generation is expensive and verification is cheap",
+        "Because models can generate plausible-sounding novelty endlessly, so what separates a discovery from a fluent guess is whether it survives a check",
+        "Because verification improves the model's future outputs",
+        "Because generation cannot be parallelized"
+      ],
+      "answer": 1,
+      "explain": "Idea generation is nearly free and nearly unlimited. Without an evidence step — running the experiment, executing the test, checking the source, computing the result — the output is a list of confident possibilities with no way to tell which are real."
+    },
+    {
+      "q": "Why must diversity be engineered rather than assumed?",
+      "options": [
+        "Because sampling is disabled by default",
+        "Because diversity requires a larger context window",
+        "Because repeated calls to the same model with the same framing produce correlated ideas clustered around one region of the space",
+        "Because providers deduplicate identical requests"
+      ],
+      "answer": 2,
+      "explain": "Redundant sampling gives you the same neighbourhood repeatedly, which reads as convergence and is actually correlation. Varying the framing, the assumed role, the constraints, or the starting point is what produces coverage."
+    },
+    {
+      "q": "What role does a scoring function play in exploration?",
+      "options": [
+        "It provides the basis for ranking candidates — novelty, feasibility, expected value — so the system can decide what to pursue, what to keep, and what to discard",
+        "It determines the model's temperature",
+        "It is only needed for multi-agent exploration",
+        "It replaces the need for a budget"
+      ],
+      "answer": 0,
+      "explain": "Without a value function, every candidate looks equally worth pursuing and the search cannot direct itself. The scoring function is also what makes results comparable across runs and what turns a pile of ideas into a ranked report."
+    },
+    {
+      "q": "Why are budgets and stopping conditions mandatory for exploring agents specifically?",
+      "options": [
+        "Because providers throttle long-running sessions",
+        "Because an exploring agent has no natural completion state — it can always generate one more candidate — so the loop ends only when something outside it says stop",
+        "Because exploration uses more memory",
+        "Because exploration cannot be parallelized safely"
+      ],
+      "answer": 1,
+      "explain": "Execution ends when the goal is met. Exploration has no such event, so the design supplies one: a budget, a diminishing-returns detector, or a target number of verified findings."
+    },
+    {
+      "q": "What should an exploration run return beyond its discoveries?",
+      "options": [
+        "Only the single best result, to avoid overwhelming the user",
+        "The raw model outputs with no ranking",
+        "A ranked set of findings with supporting evidence, plus what was tried and rejected and why — since dead ends prevent repeated work and reveal coverage",
+        "A confidence score for the model itself"
+      ],
+      "answer": 2,
+      "explain": "The negative results are part of the deliverable: they show how much of the space was covered, stop the next run from repeating the same paths, and let a human judge whether the search was actually thorough."
+    },
+    {
+      "type": "open",
+      "prompt": "Design an exploration agent that proposes and evaluates candidate optimizations for a slow service. How do you keep it from producing a plausible but useless list?",
+      "points": [
+        "Ground the exploration in evidence first: profiles, traces, and metrics, so candidates are generated from observed behaviour rather than from generic best practices.",
+        "Engineer diversity deliberately — different lenses (I/O, algorithmic, caching, concurrency, infrastructure) rather than repeated sampling of one prompt.",
+        "Require each candidate to state a mechanism and a testable prediction, not just a recommendation.",
+        "Verify: measure with a benchmark or experiment where possible, or at minimum check the claim against the profile data.",
+        "Score by expected impact, implementation cost, and risk, and rank accordingly.",
+        "Bound the search: budget in candidates, time, and cost, with early stopping when new candidates stop being novel.",
+        "Deduplicate and cluster candidates so twenty rephrasings of 'add a cache' collapse into one.",
+        "Report negatives: what was considered and ruled out, with the evidence that ruled it out.",
+        "Keep a human in the loop for anything that would be applied to production, since exploration output is hypotheses, not decisions."
+      ],
+      "answer": "The way this fails is that you get a tidy list of generic advice — add caching, use a CDN, optimize your queries — that could have been written without looking at the service at all. So the first design decision is to ground generation in evidence: the agent starts from profiles, traces, slow-query logs, and latency percentiles, and every candidate it proposes must reference a specific observation. That single constraint eliminates most of the plausible-but-useless output. Second, I engineer diversity rather than sampling repeatedly. Instead of asking one prompt five times, I run distinct lenses — I/O and network, algorithmic complexity, caching and reuse, concurrency and contention, infrastructure and configuration — because five samples of one framing produce five versions of the same idea. Third, each candidate must state a mechanism and a testable prediction: not 'add an index' but 'this query does a full scan of 2M rows per request; an index on this column should cut p95 by roughly X'. That makes it falsifiable. Verification is where the value is. Where the agent can run a benchmark or a targeted experiment in a sandbox, it does, and the measured result — including a null result — is attached to the candidate. Where it cannot, it must at least check the prediction against the existing profile data rather than asserting it. Then scoring: expected impact, implementation cost, and risk, producing a ranking rather than a list. Bounds keep it honest: a budget in candidates, wall-clock, and cost, plus early stopping when new candidates stop being meaningfully different from ones already generated — measured by clustering rather than by the agent's own judgment. Deduplication matters here, since twenty rephrasings of one idea look like thorough coverage and are not. Finally, the report includes what was ruled out and why, because that is what tells a reviewer how much of the space was actually searched, and every recommendation stays a hypothesis for a human to approve — exploration output is input to a decision, not the decision.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Explain why exploration agents are prone to producing confident nonsense, and what structural safeguards address it.",
+      "points": [
+        "Generation is unconstrained by truth: models produce fluent plausible content, and in exploration there is no fixed target to check against.",
+        "Novelty and correctness are unrelated — a novel-sounding idea may be novel only because it is wrong or already known to be infeasible.",
+        "There is no natural error signal, unlike execution tasks where a failing step is visible.",
+        "Self-evaluation is unreliable: the same model that generated a candidate is a poor judge of it.",
+        "Correlated sampling makes repeated similar ideas look like convergent evidence.",
+        "Safeguards: require evidence and mechanism per candidate, verify externally (experiment, execution, source check), and separate the generator from the evaluator.",
+        "Check novelty against existing knowledge — a literature or prior-art check — so rediscovery is not reported as discovery.",
+        "Rank with an explicit scoring function and report negatives, so the reader can judge coverage.",
+        "Keep a human decision point, and bound the budget so noise is capped."
+      ],
+      "answer": "Exploration removes the two things that normally keep a model honest. There is no target answer to check against, and there is no failing step to reveal an error — an execution agent that calls a tool wrong gets an exception, while an exploring agent that proposes a bad idea gets nothing but its own fluency. On top of that, novelty and correctness are orthogonal: an idea can sound new precisely because it is wrong, or because the field abandoned it a decade ago for reasons the model did not surface. Two further dynamics amplify the problem. Self-evaluation is weak, because the model judging a candidate shares the assumptions of the model that generated it, so a bad idea passes review by its own author. And correlated sampling creates false confidence: ask five times and get five variations of the same idea, which reads as convergence when it is just one idea sampled five times. The structural safeguards all push in the same direction — make the filter stronger than the generator. Every candidate must carry a mechanism and evidence, not just a recommendation, so it becomes falsifiable. Verification comes from outside the model wherever possible: run the experiment, execute the code, check the source, compute the number. The evaluator is separated from the generator, ideally with different framing or a different model, and given explicit criteria. Novelty is checked against existing knowledge, so rediscovery is labelled as such rather than presented as a finding. Results are ranked by an explicit scoring function and reported alongside what was tried and rejected, which lets a reader assess coverage instead of trusting a curated list. And the budget is bounded with a human decision point at the end, because the honest framing of this pattern's output is a set of hypotheses with evidence attached — never a set of conclusions."
+    }
+  ]
+}

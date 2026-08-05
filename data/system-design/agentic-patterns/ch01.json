@@ -1,0 +1,122 @@
+{
+  "id": "ch01",
+  "num": 1,
+  "part": "Part I: Core Execution Patterns",
+  "title": "Prompt Chaining",
+  "summary": "Decompose a task into a sequence of model calls where each step's output is the next step's input. The pattern trades one opaque, overloaded prompt for several focused ones, buying reliability, debuggability, and the ability to validate — and paying with latency, cost, and the risk that an early error propagates the length of the chain.",
+  "keyTakeaways": [
+    "Prompt chaining is divide-and-conquer for prompts: each call has one job, so each is easier for the model and each is separately testable.",
+    "The handoff between steps should be structured (JSON or another schema) and validated, so a malformed intermediate result fails loudly instead of poisoning the next step.",
+    "The characteristic failure is error propagation — a wrong step-one output becomes step two's ground truth — so validation gates between steps matter more than a better final prompt.",
+    "Chaining lets you route each step to the cheapest model that can do it, which often makes a chain cheaper than the single large call it replaces despite using more calls.",
+    "Costs are additive: latency, token spend, and operational complexity all grow with chain length, so the chain should be as short as the task allows.",
+    "Chaining is for tasks whose steps are known in advance and sequentially dependent; independent steps belong in parallelization, and input-dependent branching belongs in routing."
+  ],
+  "questions": [
+    {
+      "q": "What problem does prompt chaining primarily solve?",
+      "options": [
+        "A single prompt that asks the model to do several things at once degrades on all of them, and its failures are unattributable",
+        "Model providers limit prompt length to a few hundred tokens",
+        "Chained prompts avoid the need for evaluation",
+        "Chaining is the only way to obtain structured output"
+      ],
+      "answer": 0,
+      "explain": "Overloaded prompts ask a model to hold multiple objectives, formats, and constraints in one pass. Splitting gives each call a single objective and makes each step individually observable, testable, and fixable."
+    },
+    {
+      "q": "Why should intermediate outputs in a chain be structured rather than free prose?",
+      "options": [
+        "Structured text uses fewer tokens in all cases",
+        "Providers charge less for JSON",
+        "Because the next step parses them programmatically — a schema lets you validate the handoff and fail fast, instead of passing malformed text forward as if it were correct",
+        "Because models cannot read prose they generated themselves"
+      ],
+      "answer": 2,
+      "explain": "The seam between two steps is where a chain breaks. A schema makes the contract explicit and checkable; free prose makes every downstream step responsible for re-interpreting whatever the previous one happened to produce."
+    },
+    {
+      "q": "What is the characteristic failure mode of a long prompt chain?",
+      "options": [
+        "The model forgets its system prompt after three calls",
+        "Error propagation — an incorrect early output is accepted as fact by every later step, so the final answer is confidently wrong",
+        "The tokenizer changes between steps",
+        "Chains cannot be streamed to the user"
+      ],
+      "answer": 1,
+      "explain": "Each step trusts its input. Without validation gates, a hallucinated entity in step one becomes the premise of steps two through five, and the failure surfaces only at the end, far from its cause."
+    },
+    {
+      "q": "How can chaining reduce total cost even though it makes more model calls?",
+      "options": [
+        "Because chains qualify for bulk pricing",
+        "Because each step is smaller, so intermediate results can be cached forever",
+        "Because chains never need retries",
+        "Because each step can use the cheapest model that handles it — extraction and formatting on a small model, only the hard reasoning step on a large one"
+      ],
+      "answer": 3,
+      "explain": "A monolithic prompt forces the whole task onto whatever model can handle its hardest part. Decomposition lets you right-size per step, which usually more than compensates for the extra calls."
+    },
+    {
+      "q": "When is prompt chaining the wrong pattern?",
+      "options": [
+        "When the task is genuinely single-step, or when the sub-tasks are independent (use parallelization) or the path depends on the input (use routing)",
+        "Whenever more than one model provider is involved",
+        "When the output must be JSON",
+        "When latency is not a concern"
+      ],
+      "answer": 0,
+      "explain": "Chaining assumes a fixed, sequentially dependent pipeline. Independent subtasks waste wall-clock time in a chain, and a chain that needs different steps for different inputs is really a router with branches."
+    },
+    {
+      "q": "What should sit between two steps of a production chain, beyond the prompt itself?",
+      "options": [
+        "A second copy of the system prompt",
+        "Validation of the intermediate output against its schema, plus a defined fallback or retry when it fails",
+        "A user confirmation dialog for every step",
+        "A different tokenizer per step"
+      ],
+      "answer": 1,
+      "explain": "Steps are integration points. Validate the shape and the semantics you depend on, retry with the error fed back when it fails, and define what the chain does when a step cannot produce a usable result — otherwise the chain silently degrades."
+    },
+    {
+      "q": "How does prompt chaining change debugging compared with a single mega-prompt?",
+      "options": [
+        "It removes the need for logs because each step is deterministic",
+        "It makes debugging harder because there are more calls",
+        "It localizes failure: you can inspect and evaluate each step's input and output, and build a test set per step rather than only end to end",
+        "It has no effect on debugging"
+      ],
+      "answer": 2,
+      "explain": "This is often the main reason to chain. Per-step evaluation turns 'the answer was bad' into 'the extraction step dropped the date', which is a fixable statement rather than an observation."
+    },
+    {
+      "type": "open",
+      "prompt": "You are turning a monolithic 'analyse this contract and produce a risk summary' prompt into a chain. Describe the steps you would create and the contracts between them.",
+      "points": [
+        "Identify the natural stages: extract structured clauses and metadata, classify or score each clause for risk, retrieve or apply policy rules, then synthesize the summary.",
+        "Define a schema for each handoff — extracted clauses with identifiers and spans, risk items with severity and rationale — so each step is parseable and testable.",
+        "Validate between steps and define retry/fallback behaviour, feeding validation errors back into the failing step.",
+        "Right-size the model per step: extraction and formatting on a small model, risk judgment on a stronger one.",
+        "Keep provenance through the chain (clause ids, source spans) so the final summary can cite the contract rather than paraphrase it.",
+        "Build a per-step evaluation set as well as an end-to-end one, so failures are attributable.",
+        "Watch the costs: latency accumulates, so parallelize independent per-clause work and keep the chain as short as the task allows."
+      ],
+      "answer": "I would look for the seams where the task changes character. Stage one is extraction: pull the clauses out of the document into a structured list, each with an id, its type, and the character span it came from — that provenance is what lets the final summary cite rather than paraphrase. Stage two is per-clause risk assessment, which is a different job entirely: given one clause and our policy context, classify it and give a severity with a short rationale. Because clauses are independent, this stage fans out in parallel rather than running as a serial chain. Stage three folds in policy: retrieve the relevant internal rules or precedents for the flagged clauses. Stage four synthesizes the summary from the flagged items, with citations back to the clause ids. Each seam gets an explicit schema, validated before the next step runs, with a retry that feeds the validation error back into the failing step and a defined fallback if it still fails — usually flagging for human review rather than continuing on bad data. Model selection differs per stage: extraction and formatting go to a small cheap model, risk judgment to the strongest model I have, since that is where the value is. For evaluation I build a test set per stage — extraction measured against annotated clause lists, risk scoring measured against lawyer-labelled examples — plus an end-to-end set, because a chain that is green at every step can still produce a bad summary. Finally I watch the accumulating latency: everything independent runs concurrently, and I resist adding a step unless it fixes a failure I can point to."
+    },
+    {
+      "type": "open",
+      "prompt": "Compare prompt chaining with a single call to a stronger reasoning model. When does each win?",
+      "points": [
+        "Chaining wins when the steps are known, distinct, and individually verifiable, and when intermediate outputs need to be inspected, stored, or reused.",
+        "Chaining allows per-step model selection, caching of stable steps, deterministic code between steps, and targeted evaluation.",
+        "A single strong call wins when the task is holistic — the sub-decisions interact and splitting them loses context — and when latency budget is tight.",
+        "Reasoning models internalize much of the decomposition, so the marginal value of a hand-built chain has fallen for pure reasoning tasks.",
+        "Chaining still wins where non-model work must interleave: tool calls, database lookups, validation, or human approval between steps.",
+        "Costs differ: chains multiply latency and calls but can use cheap models; a strong single call is one round trip but at a higher per-token price and with hidden reasoning tokens.",
+        "The decision should be made empirically on an evaluation set, not by preference."
+      ],
+      "answer": "The honest answer is that reasoning models have taken over a chunk of what hand-built chains used to do. If the task is a single coherent piece of reasoning — analyse this and conclude — a strong model doing its own internal decomposition often beats a hand-wired chain, and it does so in one round trip rather than five. Splitting a holistic task can actively hurt, because each step loses the context the others hold. Chaining still wins in three situations. First, when the steps are genuinely distinct jobs with verifiable intermediate artifacts: extraction, transformation, classification, synthesis. There I want to inspect and test each stage, and I want the artifacts themselves because downstream systems use them. Second, when non-model work has to interleave — a database query, a tool call, a schema validation, a human approval — because those are seams a single call cannot contain. Third, when economics matter at volume: a chain lets me put four cheap steps and one expensive one where a monolith forces the whole thing onto the expensive model. The costs run the other way: chains add latency per hop, multiply the number of failure points, and propagate early errors unless I validate between steps. My rule is to start with the single strong call, measure it, and introduce a chain only where evaluation shows a specific stage failing or where I need the intermediate artifact for some other reason — then measure again, because the intuition that decomposition always helps is no longer reliable."
+    }
+  ]
+}

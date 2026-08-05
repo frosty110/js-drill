@@ -30,6 +30,15 @@ function setRoute(hash, opts) {
   // The replaceState above doesn't fire hashchange, but the fallback does —
   // release the guard on the next tick either way.
   setTimeout(() => { _routeSuppress = false; }, 0);
+  // …and because neither pushState nor replaceState fires hashchange, nothing
+  // told the header the user had moved. Every screen here navigates by calling
+  // its render function directly — applyRoute only runs for an EXTERNAL hash
+  // change — so the breadcrumb kept painting the trail of the screen you were
+  // on BEFORE the tap. Measured: opening a component from a design problem
+  // left the crumb reading "Home › System Design › Canonical Design Problems",
+  // whose only live link is the topics landing, so the page's one up-affordance
+  // sent you somewhere unrelated to where you actually were.
+  if (window.DrillShell) DrillShell.refresh();
 }
 
 // This page's routes are DECLARED in js/routes.js, not here. parseRoute is the
@@ -250,6 +259,15 @@ if (window.DrillShell) {
   };
   // Grading writes Leitner boxes without navigating; the meter must follow.
   window.addEventListener('drill:storage-written', () => DrillShell.refresh());
+
+  // setRoute() above keeps the header honest at the moment the URL changes,
+  // but a title can land AFTER it: renderChapterDetail routes first and awaits
+  // loadMeta second, so on a cold path the crumb would read "p01" until
+  // something re-rendered it. A screen swap is one childList mutation on #app,
+  // which is the same trick index.html plays on #lesson-shell — one observer
+  // instead of a refresh() sprinkled through fifteen slices.
+  const appEl = document.getElementById('app');
+  if (appEl) new MutationObserver(() => DrillShell.refresh()).observe(appEl, { childList: true });
 }
 
 applyRoute().catch(err => {

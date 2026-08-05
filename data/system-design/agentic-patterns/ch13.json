@@ -1,0 +1,127 @@
+{
+  "id": "ch13",
+  "num": 13,
+  "part": "Part II: State, Knowledge & Interaction",
+  "title": "Human-in-the-Loop",
+  "summary": "Put a person at the points where autonomy is not warranted: approving consequential actions, reviewing and editing output, resolving ambiguity, and handling escalations. The pattern is easy to state and easy to get wrong — a badly designed approval step becomes a rubber stamp, which costs latency and provides no safety at all.",
+  "keyTakeaways": [
+    "Decide where the human sits: in the loop (blocking — nothing proceeds without approval), on the loop (supervising, able to intervene), or out of the loop with after-the-fact review.",
+    "Approval should be triggered by risk and reversibility — irreversible, costly, regulated, or externally visible actions — not applied uniformly to every step.",
+    "Confidence, novelty, and disagreement between components are useful triggers for escalating a normally autonomous path to human review.",
+    "The review UI is the pattern: a person can only approve well if shown exactly what will happen, with the evidence behind it and a real ability to edit or reject.",
+    "Approval fatigue destroys the control — too many requests, or requests without enough information, produce reflexive clicking, which is worse than no gate because it manufactures false assurance.",
+    "Human review is also a data source: edits, rejections, and corrections are the highest-quality signal for evaluation and future adaptation.",
+    "Every human gate is a latency and staffing cost, so the design must consider batching, asynchronous review, and what the system does while it waits."
+  ],
+  "questions": [
+    {
+      "q": "What distinguishes human-in-the-loop from human-on-the-loop?",
+      "options": [
+        "In-the-loop means the human writes the prompts; on-the-loop means the human writes the code",
+        "In-the-loop blocks the action until a human approves; on-the-loop lets the system proceed while a human supervises and can intervene",
+        "In-the-loop applies to text tasks; on-the-loop to actions",
+        "They are synonyms"
+      ],
+      "answer": 1,
+      "explain": "The difference is whether the human is on the critical path. Blocking approval maximizes control and costs latency and staffing; supervision preserves throughput and accepts that some actions complete before anyone looks."
+    },
+    {
+      "q": "What should determine which actions require human approval?",
+      "options": [
+        "The length of the model's response",
+        "The number of tools involved",
+        "Risk and reversibility — irreversible, costly, externally visible, or regulated actions get a gate; cheap reversible ones do not",
+        "Whether the model expressed uncertainty in prose"
+      ],
+      "answer": 2,
+      "explain": "Uniform approval is the design mistake: it makes cheap actions slow and trains reviewers to click through, which then fails on the one action that mattered. Gating by consequence concentrates human attention where it changes outcomes."
+    },
+    {
+      "q": "Which dynamic triggers are useful for escalating an otherwise autonomous path?",
+      "options": [
+        "Low model confidence, an input unlike anything seen before, disagreement between components or verification steps, and repeated failed attempts",
+        "Time of day and server load",
+        "Response length exceeding a threshold",
+        "The user having escalated before"
+      ],
+      "answer": 0,
+      "explain": "These make the gate adaptive rather than static: the routine ninety percent flows through, and the unusual, contested, or failing cases surface to a person — which is where human judgment is actually worth its latency."
+    },
+    {
+      "q": "Why is the design of the approval interface part of the pattern rather than a UI detail?",
+      "options": [
+        "Because interfaces determine token cost",
+        "Because a reviewer can only exercise judgment if shown precisely what will happen, the evidence behind it, and given a genuine option to edit or reject",
+        "Because the model reads the interface",
+        "Because interfaces must be accessible"
+      ],
+      "answer": 1,
+      "explain": "An approval prompt that says 'proceed?' with no diff, no evidence, and no edit path is theatre. Showing the exact payload, the sources, and the reversibility of the action is what converts a click into a decision."
+    },
+    {
+      "q": "Why is approval fatigue worse than having no approval gate at all?",
+      "options": [
+        "Because it doubles the cost of each request",
+        "Because it slows the system down",
+        "Because reflexive approval manufactures a false assurance of oversight — the audit trail says a human reviewed it, and nobody actually did",
+        "Because fatigued reviewers reject too much"
+      ],
+      "answer": 2,
+      "explain": "The gate's value is the judgment, not the click. Once volume or poor presentation turns review into a formality, the organization believes it has a control it does not have — and designs downstream policy around that belief."
+    },
+    {
+      "q": "What secondary value does human review produce beyond safety?",
+      "options": [
+        "It reduces the model's token usage",
+        "It generates high-quality signal — edits, rejections, and corrections are correction pairs for evaluation sets and future adaptation",
+        "It eliminates the need for automated evaluation",
+        "It improves retrieval recall"
+      ],
+      "answer": 1,
+      "explain": "An edit is a labelled example of what the system should have produced, which is far more informative than a thumbs-down. Capturing the diff — not just the fact of an edit — turns the safety mechanism into the data flywheel."
+    },
+    {
+      "q": "What must the system define around a human gate to be operable?",
+      "options": [
+        "What happens while waiting — timeouts, queueing, what the user sees, and the default if no one responds",
+        "The reviewer's job title",
+        "A minimum review duration",
+        "That the model must not be told the outcome"
+      ],
+      "answer": 0,
+      "explain": "A blocking gate introduces an unbounded wait into an automated flow. Timeout behaviour, queue depth, escalation to a second reviewer, and the default on no response are all decisions the design must make explicitly rather than discover in production."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the human-in-the-loop policy for an agent that drafts and sends customer refunds. Cover what is gated, how review is presented, and how you keep it from becoming a rubber stamp.",
+      "points": [
+        "Gate by consequence and amount: small refunds within policy proceed automatically, larger or out-of-policy ones require approval, and anything unusual escalates.",
+        "Add dynamic triggers: low confidence, conflicting evidence, repeat refunds for one customer, or a case type the system has not seen.",
+        "Present the decision, not the conversation: amount, customer, policy rule applied, the evidence, and precisely what will be sent and charged.",
+        "Make edit and reject first-class, with reason capture on rejection so the signal is usable.",
+        "Control volume so reviewers see a manageable number of meaningful decisions; auto-approve the routine tail rather than diluting attention.",
+        "Measure the gate: approval rate, edit rate, time spent per review, and post-hoc error rate on auto-approved cases — a 99.9% approval rate is evidence of rubber stamping.",
+        "Sample-audit auto-approved actions so the autonomous path is also observed.",
+        "Define waiting behaviour: queue, timeout, escalation, and what the customer sees meanwhile.",
+        "Feed edits and rejections back into evaluation sets and policy refinement, and revisit thresholds as measured accuracy changes."
+      ],
+      "answer": "I would gate by consequence rather than uniformly. Refunds below a threshold that clearly satisfy a stated policy rule proceed automatically, because forcing review on those is what destroys reviewer attention. Above the threshold, out of policy, repeat refunds to the same customer, or any case where the evidence is thin or contradictory, the action requires approval. On top of that I would add dynamic triggers — low confidence, a case type the system has not encountered, disagreement between the policy check and the agent's recommendation — so novelty escalates even when the amount is small. Presentation is where the gate lives or dies. The reviewer should not be reading a chat transcript. They should see the decision: customer, amount, the policy rule invoked, the specific evidence (order, delivery status, prior refunds), the exact message that will be sent, and whether the action is reversible. Editing and rejecting must be as easy as approving, and a rejection captures a reason from a short list plus free text, because that is the signal I want. To prevent rubber stamping I control volume deliberately and then measure the gate as a component in its own right: approval rate, edit rate, seconds spent per review, and — the important one — the error rate found by auditing a random sample of auto-approved refunds. If approvals run at 99.9% with three seconds of attention each, the gate is decorative and I would either raise the auto-approval threshold and free the reviewers for the hard cases, or fix the presentation so the decisions are actually decidable. I would also sample-audit the autonomous path, since a gate on the risky tail tells me nothing about the routine middle. Operationally the wait needs a design: a queue with a target response time, a timeout that escalates rather than silently approving, and a clear customer-facing message while it pends. Finally the whole thing feeds back — every edit is a correction pair for the evaluation set, every rejection reason points at a policy or prompt gap, and thresholds move as measured accuracy improves rather than staying where somebody set them at launch.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Where should human oversight sit as an agent's measured accuracy improves? Argue for how the policy should evolve, and what should never be automated.",
+      "points": [
+        "Oversight placement should be a function of measured error rate and error cost, revisited as evidence accumulates — not fixed at launch.",
+        "As accuracy improves on a well-measured slice, blocking approval can move to sampling-based audit for that slice specifically.",
+        "Improvement must be demonstrated per slice, since aggregate accuracy hides the segments where errors concentrate.",
+        "Retain blocking review for irreversible, high-cost, legally or ethically consequential actions regardless of accuracy, because the cost of the rare error dominates.",
+        "Keep humans for genuinely ambiguous judgments, novel situations, and cases where accountability must rest with a person.",
+        "Maintain a continuous audit sample even on automated paths, since drift and distribution shift are silent.",
+        "Preserve the escalation path and the ability to re-tighten quickly when metrics degrade.",
+        "Beware the feedback loss: removing human review also removes the correction data that made improvement possible."
+      ],
+      "answer": "I would treat oversight placement as a measured parameter rather than a fixed policy. At launch, blocking review on almost everything is right, because the error rate is unknown and the reviews generate the data that will tell us. As evidence accumulates, the gate should retreat slice by slice: where a specific case type shows a low, stable error rate across a meaningful sample, that slice moves from blocking approval to sampled audit. The discipline is that the argument must be made per slice, never on the aggregate, because errors concentrate — a system that is 99% accurate overall can be 85% accurate on the segment that carries the most risk. Two things should not follow that trajectory regardless of accuracy. First, actions whose rare failures are catastrophic or irreversible — large financial commitments, legal filings, communications to regulators, anything that cannot be retracted. There the expected-value arithmetic is dominated by the tail, and a 0.1% error rate is not reassurance. Second, decisions where accountability has to rest with a person: judgments involving fairness, individual circumstances, or discretion that we would not accept a machine making, and where an affected person deserves to know a human decided. Alongside the retreat I would keep three things permanently. A continuous audit sample on automated paths, because drift is silent and a gate removed is a monitor removed. A fast path to re-tighten — thresholds as configuration, so degradation restores review the same day rather than the next release. And an honest acknowledgment that removing human review removes the correction data that produced the improvement in the first place, so the audit sample has to be large enough to keep the flywheel turning, not just large enough to satisfy a compliance box."
+    }
+  ]
+}

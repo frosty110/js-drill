@@ -1,0 +1,123 @@
+{
+  "id": "ch03",
+  "num": 3,
+  "part": "Part I: Core Execution Patterns",
+  "title": "Parallelization",
+  "summary": "Run independent work concurrently instead of in sequence — fan out, then fan in. Two shapes dominate: sectioning, where a task is split into genuinely different subtasks that run at the same time, and voting, where the same task runs several times and the results are aggregated. Parallelization buys wall-clock latency and diversity of perspective; it costs tokens, an aggregation step, and a harder failure story.",
+  "keyTakeaways": [
+    "Parallelization applies only to independent work — if step two needs step one's output, the dependency is real and no amount of concurrency removes it.",
+    "Sectioning splits a task into different subtasks run concurrently (summarize each document, check each rule); voting runs the same task multiple times and aggregates (self-consistency, majority vote, multi-perspective review).",
+    "The fan-in step is where the design lives: aggregation must define how conflicts are resolved, what happens when branches disagree, and how partial results are handled.",
+    "Wall-clock latency improves; total token cost usually rises, since you pay for every branch — so parallelization is a latency-for-money trade, not a free win.",
+    "Partial failure is the norm at scale: the pattern needs timeouts, per-branch error handling, and a decision about whether a missing branch degrades the result or fails it.",
+    "Provider rate limits and concurrency caps make unbounded fan-out fragile; bounded concurrency with queuing is the production form of the pattern."
+  ],
+  "questions": [
+    {
+      "q": "What is the prerequisite for applying the parallelization pattern?",
+      "options": [
+        "The subtasks must be independent — none of them needs another's output",
+        "All subtasks must use the same model",
+        "The task must involve at least three model calls",
+        "The system must run on multiple GPUs"
+      ],
+      "answer": 0,
+      "explain": "Independence is the whole basis of the pattern. Where a genuine dependency exists, the work is a chain; trying to parallelize it just means one branch guesses at what the other would have produced."
+    },
+    {
+      "q": "How do sectioning and voting differ as forms of parallelization?",
+      "options": [
+        "Sectioning uses cheap models and voting uses expensive ones",
+        "Sectioning splits one task into different subtasks that run concurrently; voting runs the same task several times and aggregates the results",
+        "Sectioning is synchronous and voting is asynchronous",
+        "Sectioning applies to text and voting to images"
+      ],
+      "answer": 1,
+      "explain": "Sectioning attacks scope — each branch handles a different piece. Voting attacks uncertainty — several attempts at the same piece, combined by majority, by a judge, or by taking the union of findings."
+    },
+    {
+      "q": "Why is the aggregation (fan-in) step the hard part of the pattern?",
+      "options": [
+        "Because it must run on a larger model than the branches",
+        "Because it must re-run every branch to verify it",
+        "Because it must reconcile results that may overlap, conflict, or be missing — the policy for disagreement and partial results is a design decision, not a detail",
+        "Because it cannot be tested"
+      ],
+      "answer": 2,
+      "explain": "Fan-out is mechanical; fan-in encodes the semantics. Merging summaries, resolving contradictory findings, deduplicating overlapping results, and deciding whether three of five branches is enough are all choices that determine the system's behaviour."
+    },
+    {
+      "q": "What is the cost profile of parallelization?",
+      "options": [
+        "It reduces both latency and total token cost",
+        "It reduces wall-clock latency but usually increases total tokens and spend, since every branch is paid for",
+        "It has no effect on cost",
+        "It increases latency and reduces cost"
+      ],
+      "answer": 1,
+      "explain": "You are buying time with money. That is a good trade for user-facing latency and often a bad one for background batch work, where sequential processing at lower concurrency is cheaper and simpler."
+    },
+    {
+      "q": "Which failure consideration is specific to parallel fan-out at production scale?",
+      "options": [
+        "The tokenizer must be shared across branches",
+        "Branches cannot use tools",
+        "Partial failure and rate limiting — some branches time out or get throttled, so the system needs bounded concurrency, per-branch timeouts, and a policy for degraded results",
+        "Parallel branches cannot be logged"
+      ],
+      "answer": 2,
+      "explain": "Unbounded fan-out meets provider concurrency limits immediately, and one slow branch determines the whole response's latency. Bounded concurrency, timeouts, and an explicit rule for whether a missing branch degrades or fails the result are what make it production-safe."
+    },
+    {
+      "q": "How does self-consistency use the voting form of parallelization?",
+      "options": [
+        "It runs the same reasoning task several times with sampling and takes the most common answer, on the theory that correct reasoning paths converge while errors scatter",
+        "It runs the task once and asks the model to confirm its answer",
+        "It compares outputs from two different providers for billing purposes",
+        "It splits the prompt into sentences processed independently"
+      ],
+      "answer": 0,
+      "explain": "Sampling produces varied reasoning paths; wrong paths tend to disagree with each other while correct ones agree. Majority voting exploits that, at a multiple of the cost — which is why it is reserved for high-value or high-uncertainty steps."
+    },
+    {
+      "q": "When is a diverse-perspective fan-out (several branches with different instructions) preferable to running the same prompt several times?",
+      "options": [
+        "When the goal is coverage of different failure modes — a security lens, a performance lens, a correctness lens each find things the others miss",
+        "Never; identical prompts always produce better coverage",
+        "Only when using different providers",
+        "Only for image generation tasks"
+      ],
+      "answer": 0,
+      "explain": "Identical prompts give correlated results, so redundancy mostly buys confidence in what was already found. Deliberately different lenses give uncorrelated coverage, which is what you want when the goal is to find everything rather than to confirm one answer."
+    },
+    {
+      "type": "open",
+      "prompt": "You must review a 200-page document for compliance issues within a tight latency budget. Design a parallelized approach and describe the aggregation.",
+      "points": [
+        "Section the document into chunks that respect structure (sections, clauses) rather than arbitrary token counts, keeping identifiers for provenance.",
+        "Fan out per chunk with bounded concurrency, applying the same compliance checks to each, with per-branch timeouts.",
+        "Consider a second dimension of fan-out: different rule sets or lenses per branch when checks are independent.",
+        "Return structured findings per branch — rule id, severity, evidence span, confidence — so aggregation is mechanical rather than prose merging.",
+        "Aggregate by deduplicating overlapping findings, resolving conflicts by rule or by a judging step, and ranking by severity.",
+        "Handle partial failure explicitly: report which sections could not be processed rather than silently producing a shorter list.",
+        "Add a final synthesis pass over the aggregated findings for the executive summary, which needs global context that per-chunk branches lack.",
+        "Control cost: use a small model for scanning and escalate only flagged chunks to a stronger model for judgment."
+      ],
+      "answer": "This is a sectioning problem with a two-stage cost structure. I split the document along its own structure — sections and clauses, not arbitrary token windows — because a compliance finding cited to 'chunk 47' is useless, and a clause split across a boundary produces both false negatives and false positives. Each chunk keeps its identifier and character span. The fan-out runs with bounded concurrency, sized to the provider's limits rather than the number of chunks, with a per-branch timeout so one slow call cannot own the response's latency. Each branch returns structured findings rather than prose: rule id, severity, the evidence span, and a confidence. That structure is what makes the fan-in mechanical instead of another act of interpretation. Aggregation then deduplicates findings that appear in overlapping chunks, resolves conflicting severities by rule precedence or by a small judging step for the contested ones, and ranks the result by severity and confidence. Partial failure gets reported, not hidden: if six chunks timed out, the output says so, because a compliance report that silently omits sections is worse than one that admits gaps. Cost control comes from a two-tier design — a cheap model scans every chunk and flags candidates, and only flagged chunks go to a stronger model for judgment, which typically cuts spend by an order of magnitude while keeping quality where it matters. Finally, one sequential step at the end: an executive summary written over the aggregated findings, because that requires global context no individual branch had."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the tradeoffs of running the same query five times and voting, versus running it once with a stronger model.",
+      "points": [
+        "Voting exploits the fact that independent errors scatter while correct answers agree, improving accuracy on tasks with a single verifiable answer.",
+        "It works best where answers are comparable — a number, a class, a decision — and poorly for open-ended prose that cannot be tallied.",
+        "Cost multiplies by the number of samples; latency stays close to a single call if the branches truly run in parallel.",
+        "A stronger model may fix the errors that voting only detects, especially where all samples share the same systematic misunderstanding.",
+        "Correlated errors are voting's blind spot: identical prompts to the same model produce correlated mistakes, so the majority can be confidently wrong.",
+        "Aggregation adds design cost: tie-breaking, comparing near-identical answers, and possibly a judge model.",
+        "The empirical answer depends on the task; measure both against an evaluation set including cost and p95 latency."
+      ],
+      "answer": "Voting buys reliability from redundancy. If the task has a comparable answer — a classification, a number, a yes/no decision — sampling several times and taking the majority genuinely raises accuracy, because incorrect reasoning paths tend to diverge from one another while correct ones converge. Latency stays close to a single call if the samples truly run in parallel, which is why it is attractive for user-facing paths. The costs are the obvious one and a subtle one. The obvious one is that you pay five times. The subtle one is correlated error: five samples from the same model with the same prompt are not five independent opinions. When the model misunderstands the question, it misunderstands it consistently, and the majority is then confidently wrong — with the added harm that agreement reads as confidence. Voting also degrades badly on open-ended output, where there is nothing to tally and you need a judge model to aggregate, which reintroduces the single point of failure you were trying to escape. A stronger model attacks a different part of the problem: it can fix errors rather than merely outvote them, and it handles the systematic misunderstanding that voting cannot. It is one call, one bill, usually higher per token, and often higher latency because of internal reasoning. My practical rule: use voting where the answer space is small and verifiable and the stakes justify the multiple, use the stronger model where the task is open-ended or where the failure is comprehension rather than variance, and get diversity into the ensemble — different prompts, different lenses, sometimes different models — if I am going to pay for redundancy at all. Then decide it on an evaluation set that reports quality, cost, and p95 latency together, because the intuition here is unreliable."
+    }
+  ]
+}

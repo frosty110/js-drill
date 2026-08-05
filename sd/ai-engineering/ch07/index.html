@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Finetuning — AI Engineering</title>
+<meta name="description" content="When changing the weights is the right move and when it is a trap: the reasons to finetune (and the stronger reasons not to), how finetuning relates to RAG, the memory math that decides what you can train on what hardware, numerical representations and quantization, and the parameter-efficient techniques — LoRA and friends, soft prompts, partial finetuning — plus model merging and practical finetuning tactics.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Finetuning — AI Engineering">
+<meta property="og:description" content="When changing the weights is the right move and when it is a trap: the reasons to finetune (and the stronger reasons not to), how finetuning relates to RAG, the memory math that decides what you can train on what hardware, numerical representations and quantization, and the parameter-efficient techniques — LoRA and friends, soft prompts, partial finetuning — plus model merging and practical finetuning tactics.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Finetuning","description":"When changing the weights is the right move and when it is a trap: the reasons to finetune (and the stronger reasons not to), how finetuning relates to RAG, the memory math that decides what you can train on what hardware, numerical representations and quantization, and the parameter-efficient techniques — LoRA and friends, soft prompts, partial finetuning — plus model merging and practical finetuning tactics.","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"AI Engineering","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/"},"teaches":["Finetuning changes behavior, format, and style far more reliably than it adds knowledge — if the problem is 'the model does not know our data', retrieval is usually the correct tool, not finetuning.","Try prompting first and exhaust it: finetuning costs data, compute, evaluation, and permanent maintenance, and it locks you to a base model that will be superseded.","Training memory is dominated by more than the weights — gradients, optimizer states, and activations mean full finetuning can need several times the model's inference footprint.","Numerical format is a lever: FP32 to FP16/BF16 halves memory, and quantization to INT8/INT4 shrinks it further; quantization is standard for inference and increasingly viable in training (QLoRA).","LoRA freezes the base weights and trains small low-rank matrices, cutting trainable parameters by orders of magnitude, allowing many swappable adapters over one base model, and merging back at inference for no added latency.","Model merging combines finetuned models without further training and can serve multi-task needs or on-device constraints — an alternative to one model per task."],"hasPart":[{"@type":"Question","position":1,"name":"What is the single most common reason teams finetune when they should not?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q1","acceptedAnswer":{"@type":"Answer","text":"They want the model to know their private data — a knowledge problem that retrieval solves better, more cheaply, and with fresher data"}},{"@type":"Question","position":2,"name":"Which of these is a legitimate reason to finetune?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q2","acceptedAnswer":{"@type":"Answer","text":"A cheaper, smaller model must reliably match a larger model's behavior on one narrow task, or the task needs an output style/format that prompting cannot make consistent"}},{"@type":"Question","position":3,"name":"Why does the book insist finetuning should come after prompting has been exhausted?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q3","acceptedAnswer":{"@type":"Answer","text":"Because prompt iteration takes minutes while finetuning adds data collection, training, evaluation, hosting, and permanent maintenance — and without a prompting baseline you cannot even tell if the finetune helped"}},{"@type":"Question","position":4,"name":"Why does full finetuning require several times more memory than running the same model for inference?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q4","acceptedAnswer":{"@type":"Answer","text":"Because gradients, optimizer states (two per parameter for Adam-style optimizers), and cached activations must be held alongside the weights"}},{"@type":"Question","position":5,"name":"What is the difference between FP16 and BF16, and why does BF16 dominate training?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q5","acceptedAnswer":{"@type":"Answer","text":"BF16 trades mantissa bits for exponent range, matching FP32's dynamic range, which makes training far less prone to overflow/underflow than FP16"}},{"@type":"Question","position":6,"name":"What does quantization do, and where is it most commonly applied?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q6","acceptedAnswer":{"@type":"Answer","text":"It reduces numerical precision (for example FP16 to INT8 or INT4) to cut memory and speed up compute, most commonly applied to inference — though methods like QLoRA bring it into training"}},{"@type":"Question","position":7,"name":"How does LoRA work at a mechanical level?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q7","acceptedAnswer":{"@type":"Answer","text":"It freezes the base weights and learns a low-rank update — two small matrices whose product is added to a weight matrix — so only a tiny fraction of parameters are trained"}},{"@type":"Question","position":8,"name":"What operational advantage does LoRA give beyond cheaper training?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q8","acceptedAnswer":{"@type":"Answer","text":"Adapters are small and swappable, so one base model in memory can serve many task-specific or customer-specific variants"}},{"@type":"Question","position":9,"name":"What is a soft prompt (prefix/prompt tuning), and how does it differ from prompt engineering?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q9","acceptedAnswer":{"@type":"Answer","text":"It is a set of trainable embedding vectors prepended to the input — learned continuous 'tokens' that do not correspond to any words, unlike a human-written text prompt"}},{"@type":"Question","position":10,"name":"What is model merging, and when is it useful?","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q10","acceptedAnswer":{"@type":"Answer","text":"Combining the parameters of multiple finetuned models (by interpolation, task arithmetic, or layer stacking) into one model without further training — useful for multi-task capability or on-device deployment where you can ship only one model"}},{"@type":"Question","position":11,"name":"A team says their support bot 'needs finetuning because it does not know our products'. Explain when they are right and when they are wrong, and what you would do instead or in addition.","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q11","acceptedAnswer":{"@type":"Answer","text":"They are wrong about the mechanism and possibly right about the symptom. 'Does not know our products' is a knowledge gap, and knowledge is the thing finetuning is worst at installing: it takes a lot of data to move facts into weights, the facts go stale the moment a price changes, the model cannot cite them, and you cannot revoke a document's access after it has been trained in. That work belongs in retrieval, where the corpus is updatable, attributable, and permission-checked. So step one is a RAG baseline with a decent prompt, and an evaluation set built from real tickets, so we can say precisely what fails. What that evaluation usually reveals is a second, different problem: the bot's tone is off, it does not follow the escalation policy, it ignores the required format, it misuses domai"}},{"@type":"Question","position":12,"name":"Explain why parameter-efficient finetuning exists by walking through the memory cost of full finetuning, and describe how LoRA changes each term.","url":"https://frosty110.github.io/js-drill/sd/ai-engineering/ch07/#q12","acceptedAnswer":{"@type":"Answer","text":"Full finetuning is expensive because the weights are the smallest part of the bill. You hold the parameters, then a gradient for every one of them, then optimizer state — Adam-style optimizers keep roughly two moments per parameter — and on top of that the activations cached during the forward pass so backpropagation can use them. Add it up and training needs several times the memory that serving the same model needs, which is why a model you can happily run inference on may be untrainable on the same hardware. Precision multiplies through every term, so moving from FP32 to BF16 halves most of it, and that is the first thing anyone does. LoRA attacks the dominant terms directly by freezing the base model: if the base weights are not trained, they need no gradients and no optimizer state at"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/ai-engineering/">AI Engineering</a></p>
+    <h1>Finetuning</h1>
+    <p class="sharepage__lede">When changing the weights is the right move and when it is a trap: the reasons to finetune (and the stronger reasons not to), how finetuning relates to RAG, the memory math that decides what you can train on what hardware, numerical representations and quantization, and the parameter-efficient techniques — LoRA and friends, soft prompts, partial finetuning — plus model merging and practical finetuning tactics.</p>
+    <p class="sharepage__meta"><span class="ds-chip">AI Engineering</span> <span class="ds-chip">12 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Finetuning changes behavior, format, and style far more reliably than it adds knowledge — if the problem is &#39;the model does not know our data&#39;, retrieval is usually the correct tool, not finetuning.</li><li>Try prompting first and exhaust it: finetuning costs data, compute, evaluation, and permanent maintenance, and it locks you to a base model that will be superseded.</li><li>Training memory is dominated by more than the weights — gradients, optimizer states, and activations mean full finetuning can need several times the model&#39;s inference footprint.</li><li>Numerical format is a lever: FP32 to FP16/BF16 halves memory, and quantization to INT8/INT4 shrinks it further; quantization is standard for inference and increasingly viable in training (QLoRA).</li><li>LoRA freezes the base weights and trains small low-rank matrices, cutting trainable parameters by orders of magnitude, allowing many swappable adapters over one base model, and merging back at inference for no added latency.</li><li>Model merging combines finetuned models without further training and can serve multi-task needs or on-device constraints — an alternative to one model per task.</li><li>Finetuning tactics are mostly about discipline: pick the right base model, start with a small high-quality dataset, tune few hyperparameters (learning rate, batch size, epochs), and measure against the prompting baseline you are trying to beat.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">12</span></h2>
+    <p class="sharepage__note">Positions 1–12 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the single most common reason teams finetune when they should not?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> They want to reduce inference latency</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> They want the model to know their private data — a knowledge problem that retrieval solves better, more cheaply, and with fresher data <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> They want structured output</li>
+        <li><span class="sharepage__key">D</span> They want to reduce prompt length</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Finetuning teaches behavior, tone, and format; it is a poor and expensive way to install facts, which then go stale and cannot be cited or updated. Retrieval keeps knowledge outside the weights where it can be edited, attributed, and access-controlled.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which of these is a legitimate reason to finetune?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The documentation changes weekly and answers must stay current</li>
+        <li><span class="sharepage__key">B</span> The team wants to avoid paying per token</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A cheaper, smaller model must reliably match a larger model&#39;s behavior on one narrow task, or the task needs an output style/format that prompting cannot make consistent <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> The prompt is longer than 500 tokens</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Distilling a big model&#39;s behavior into a small one for a narrow, high-volume task is the classic win: quality held, cost and latency cut. So is enforcing a domain-specific style or structure prompting keeps missing. Frequently-changing facts are the counter-case.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does the book insist finetuning should come after prompting has been exhausted?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because finetuning APIs are not generally available</li>
+        <li><span class="sharepage__key">B</span> Because prompting always produces better quality</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because prompt iteration takes minutes while finetuning adds data collection, training, evaluation, hosting, and permanent maintenance — and without a prompting baseline you cannot even tell if the finetune helped <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because finetuning is only legal on open-weight models</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The prompting baseline is both the cheaper option and the yardstick. It also generates the data: a working prompted system&#39;s outputs and corrections become the finetuning set later, if you still need one.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does full finetuning require several times more memory than running the same model for inference?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because training uses a larger context window by default</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because gradients, optimizer states (two per parameter for Adam-style optimizers), and cached activations must be held alongside the weights <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because the tokenizer is duplicated per GPU</li>
+        <li><span class="sharepage__key">D</span> Because training requires FP64 precision</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Inference needs weights plus a KV cache. Training adds a gradient per parameter, optimizer state per parameter, and activations for backpropagation — which is exactly the arithmetic that makes parameter-efficient methods attractive.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the difference between FP16 and BF16, and why does BF16 dominate training?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> BF16 has more mantissa bits, giving higher precision at the same size</li>
+        <li><span class="sharepage__key">B</span> BF16 is an integer format; FP16 is floating point</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> BF16 trades mantissa bits for exponent range, matching FP32&#39;s dynamic range, which makes training far less prone to overflow/underflow than FP16 <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> They are identical; the names are vendor branding</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Both are 16-bit, but the split differs. FP16&#39;s narrow exponent range causes gradient overflow and underflow (hence loss scaling); BF16 keeps FP32&#39;s range with less precision, which training tolerates well.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does quantization do, and where is it most commonly applied?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It reduces numerical precision (for example FP16 to INT8 or INT4) to cut memory and speed up compute, most commonly applied to inference — though methods like QLoRA bring it into training <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It removes redundant layers from the network</li>
+        <li><span class="sharepage__key">C</span> It compresses the training dataset before tokenization</li>
+        <li><span class="sharepage__key">D</span> It converts a dense model into a mixture of experts</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Lower precision means smaller weights and faster memory-bound inference, at some quality cost that depends on the method. Post-training quantization is the default; quantization-aware approaches recover more quality when the drop matters.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does LoRA work at a mechanical level?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It removes attention heads that contribute least to the loss</li>
+        <li><span class="sharepage__key">B</span> It trains a separate small model that post-edits the base model&#39;s output</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It freezes the base weights and learns a low-rank update — two small matrices whose product is added to a weight matrix — so only a tiny fraction of parameters are trained <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It rewrites the prompt automatically using gradient descent</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If a weight update matrix is approximately low rank, you can represent it as A×B with a small rank r. Training only A and B slashes trainable parameters and optimizer memory, and the product can be merged into the base weights at inference so there is no extra latency.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What operational advantage does LoRA give beyond cheaper training?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It guarantees better quality than full finetuning</li>
+        <li><span class="sharepage__key">B</span> It removes the need for evaluation</li>
+        <li><span class="sharepage__key">C</span> It eliminates the need to host the base model</li>
+        <li class="is-correct"><span class="sharepage__key">D</span> Adapters are small and swappable, so one base model in memory can serve many task-specific or customer-specific variants <span class="sharepage__tick">correct</span></li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A full finetune produces another whole model to store and serve. LoRA adapters are megabytes, can be hot-swapped or served in a batched multi-adapter setup, and can be merged when a variant becomes the default — a serving-economics win as much as a training one.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is a soft prompt (prefix/prompt tuning), and how does it differ from prompt engineering?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It is a shorter prompt automatically generated by a helper model</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It is a set of trainable embedding vectors prepended to the input — learned continuous &#39;tokens&#39; that do not correspond to any words, unlike a human-written text prompt <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It is a system prompt stored on the provider&#39;s side</li>
+        <li><span class="sharepage__key">D</span> It is a prompt compressed by removing stop words</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Soft prompts optimize in embedding space rather than word space, so they can encode instructions no phrasing captures — but they are unreadable, tied to the model, and generally less effective than adapter methods like LoRA.</p>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is model merging, and when is it useful?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Running two models in sequence and concatenating their outputs</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Combining the parameters of multiple finetuned models (by interpolation, task arithmetic, or layer stacking) into one model without further training — useful for multi-task capability or on-device deployment where you can ship only one model <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Sharding a model across multiple GPUs</li>
+        <li><span class="sharepage__key">D</span> Ensembling by majority vote at inference time</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Merging operates on weights, not outputs, so unlike ensembling it costs nothing extra at inference. It is a cheap way to combine separately trained capabilities, with the caveat that results are empirical and can degrade any single task.</p>
+    </article>
+    <article class="sharepage__q" id="q11">
+      <h3><a href="#q11" class="sharepage__anchor">Q11</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>A team says their support bot &#39;needs finetuning because it does not know our products&#39;. Explain when they are right and when they are wrong, and what you would do instead or in addition.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Distinguish knowledge from behavior: not knowing facts is a retrieval problem; not behaving correctly (tone, format, refusal policy, domain jargon usage) is a candidate for finetuning.</li><li>Facts that change — prices, inventory, policy — must live outside the weights so they can be updated, cited, and access-controlled.</li><li>Start with retrieval plus prompting, and measure; that also produces the dataset a finetune would need later.</li><li>Legitimate finetuning cases here: consistent house style and format, reliable adherence to the escalation policy, better handling of domain vocabulary, or distilling a large model into a cheap one for high volume.</li><li>Costs to state explicitly: data collection and cleaning, training and evaluation, hosting, re-doing the work when the base model is superseded, and the loss of citation/attribution.</li><li>A hybrid is usually right: retrieval for knowledge, plus a small LoRA for behavior if evaluation shows prompting has plateaued.</li><li>Whatever the choice, the prompting baseline and an evaluation set must exist first, or improvement is unmeasurable.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> They are wrong about the mechanism and possibly right about the symptom. &#39;Does not know our products&#39; is a knowledge gap, and knowledge is the thing finetuning is worst at installing: it takes a lot of data to move facts into weights, the facts go stale the moment a price changes, the model cannot cite them, and you cannot revoke a document&#39;s access after it has been trained in. That work belongs in retrieval, where the corpus is updatable, attributable, and permission-checked. So step one is a RAG baseline with a decent prompt, and an evaluation set built from real tickets, so we can say precisely what fails. What that evaluation usually reveals is a second, different problem: the bot&#39;s tone is off, it does not follow the escalation policy, it ignores the required format, it misuses domain vocabulary. Those are behavior problems, and behavior is exactly what finetuning is good at. A small LoRA on a few thousand curated examples — ideally real conversations that were corrected by human agents — will move those reliably when prompting has plateaued. The other legitimate case is economics: if the prompted system works on a large model and volume is high, distilling that behavior into a small model can hold quality while cutting cost and latency substantially. I would put the costs on the table before anyone starts: dataset curation is the real work, evaluation has to exist either way, you now host and version a model, and when the next base model lands you may repeat all of it. The recommendation that usually survives that conversation is a hybrid — retrieval for what we know, a light finetune for how we behave — and never a finetune as the first move.</div>
+    </article>
+    <article class="sharepage__q" id="q12">
+      <h3><a href="#q12" class="sharepage__anchor">Q12</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Explain why parameter-efficient finetuning exists by walking through the memory cost of full finetuning, and describe how LoRA changes each term.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Full finetuning must hold the weights, a gradient per trainable parameter, optimizer states (typically two per parameter for Adam-style optimizers), and activations for backpropagation.</li><li>In practice this is several times the memory of inference for the same model, which puts large models out of reach of accessible hardware.</li><li>Precision choices scale every term: FP32 to BF16 halves weight/gradient memory; quantizing the frozen base (QLoRA) shrinks the largest term further.</li><li>LoRA freezes base weights, so no gradients or optimizer states are needed for them — the dominant terms collapse to the tiny adapter.</li><li>Only the low-rank matrices are trained, cutting trainable parameters by orders of magnitude; rank r trades capacity for cost.</li><li>Activation memory still scales with batch size and sequence length, so it does not disappear — gradient checkpointing and batch size are the levers there.</li><li>At inference the adapter can be merged into the base weights, so there is no added latency, and unmerged adapters allow many variants over one hosted base.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Full finetuning is expensive because the weights are the smallest part of the bill. You hold the parameters, then a gradient for every one of them, then optimizer state — Adam-style optimizers keep roughly two moments per parameter — and on top of that the activations cached during the forward pass so backpropagation can use them. Add it up and training needs several times the memory that serving the same model needs, which is why a model you can happily run inference on may be untrainable on the same hardware. Precision multiplies through every term, so moving from FP32 to BF16 halves most of it, and that is the first thing anyone does. LoRA attacks the dominant terms directly by freezing the base model: if the base weights are not trained, they need no gradients and no optimizer state at all. What remains trainable is a pair of low-rank matrices per targeted weight matrix, often well under one percent of the parameters, so gradient and optimizer memory become negligible. QLoRA pushes further by keeping the frozen base in 4-bit, shrinking the one large remaining term. What LoRA does not remove is activation memory, which scales with batch size and sequence length — that is handled with gradient checkpointing and smaller batches, and it is the term that bites on long-context training. The payoff at serving time is the part people underrate: because the learned update is a product of two small matrices, you can merge it into the base weights and pay zero extra latency, or keep it separate and swap adapters per customer or per task over a single hosted base model. Rank is the tuning knob — higher rank means more capacity and more cost — and for most behavioral finetunes a small rank is enough.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"ai-engineering","unit":"ch07","title":"Finetuning","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"What is the single most common reason teams finetune when they should not?","options":["They want to reduce inference latency","They want the model to know their private data — a knowledge problem that retrieval solves better, more cheaply, and with fresher data","They want structured output","They want to reduce prompt length"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"Which of these is a legitimate reason to finetune?","options":["The documentation changes weekly and answers must stay current","The team wants to avoid paying per token","A cheaper, smaller model must reliably match a larger model's behavior on one narrow task, or the task needs an output style/format that prompting cannot make consistent","The prompt is longer than 500 tokens"],"answer":2,"answerLetter":"C"},{"n":3,"type":"mc","prompt":"Why does the book insist finetuning should come after prompting has been exhausted?","options":["Because finetuning APIs are not generally available","Because prompting always produces better quality","Because prompt iteration takes minutes while finetuning adds data collection, training, evaluation, hosting, and permanent maintenance — and without a prompting baseline you cannot even tell if the finetune helped","Because finetuning is only legal on open-weight models"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"Why does full finetuning require several times more memory than running the same model for inference?","options":["Because training uses a larger context window by default","Because gradients, optimizer states (two per parameter for Adam-style optimizers), and cached activations must be held alongside the weights","Because the tokenizer is duplicated per GPU","Because training requires FP64 precision"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"What is the difference between FP16 and BF16, and why does BF16 dominate training?","options":["BF16 has more mantissa bits, giving higher precision at the same size","BF16 is an integer format; FP16 is floating point","BF16 trades mantissa bits for exponent range, matching FP32's dynamic range, which makes training far less prone to overflow/underflow than FP16","They are identical; the names are vendor branding"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"What does quantization do, and where is it most commonly applied?","options":["It reduces numerical precision (for example FP16 to INT8 or INT4) to cut memory and speed up compute, most commonly applied to inference — though methods like QLoRA bring it into training","It removes redundant layers from the network","It compresses the training dataset before tokenization","It converts a dense model into a mixture of experts"],"answer":0,"answerLetter":"A"},{"n":7,"type":"mc","prompt":"How does LoRA work at a mechanical level?","options":["It removes attention heads that contribute least to the loss","It trains a separate small model that post-edits the base model's output","It freezes the base weights and learns a low-rank update — two small matrices whose product is added to a weight matrix — so only a tiny fraction of parameters are trained","It rewrites the prompt automatically using gradient descent"],"answer":2,"answerLetter":"C"},{"n":8,"type":"mc","prompt":"What operational advantage does LoRA give beyond cheaper training?","options":["It guarantees better quality than full finetuning","It removes the need for evaluation","It eliminates the need to host the base model","Adapters are small and swappable, so one base model in memory can serve many task-specific or customer-specific variants"],"answer":3,"answerLetter":"D"},{"n":9,"type":"mc","prompt":"What is a soft prompt (prefix/prompt tuning), and how does it differ from prompt engineering?","options":["It is a shorter prompt automatically generated by a helper model","It is a set of trainable embedding vectors prepended to the input — learned continuous 'tokens' that do not correspond to any words, unlike a human-written text prompt","It is a system prompt stored on the provider's side","It is a prompt compressed by removing stop words"],"answer":1,"answerLetter":"B"},{"n":10,"type":"mc","prompt":"What is model merging, and when is it useful?","options":["Running two models in sequence and concatenating their outputs","Combining the parameters of multiple finetuned models (by interpolation, task arithmetic, or layer stacking) into one model without further training — useful for multi-task capability or on-device deployment where you can ship only one model","Sharding a model across multiple GPUs","Ensembling by majority vote at inference time"],"answer":1,"answerLetter":"B"},{"n":11,"type":"open","prompt":"A team says their support bot 'needs finetuning because it does not know our products'. Explain when they are right and when they are wrong, and what you would do instead or in addition.","points":["Distinguish knowledge from behavior: not knowing facts is a retrieval problem; not behaving correctly (tone, format, refusal policy, domain jargon usage) is a candidate for finetuning.","Facts that change — prices, inventory, policy — must live outside the weights so they can be updated, cited, and access-controlled.","Start with retrieval plus prompting, and measure; that also produces the dataset a finetune would need later.","Legitimate finetuning cases here: consistent house style and format, reliable adherence to the escalation policy, better handling of domain vocabulary, or distilling a large model into a cheap one for high volume.","Costs to state explicitly: data collection and cleaning, training and evaluation, hosting, re-doing the work when the base model is superseded, and the loss of citation/attribution.","A hybrid is usually right: retrieval for knowledge, plus a small LoRA for behavior if evaluation shows prompting has plateaued.","Whatever the choice, the prompting baseline and an evaluation set must exist first, or improvement is unmeasurable."]},{"n":12,"type":"open","prompt":"Explain why parameter-efficient finetuning exists by walking through the memory cost of full finetuning, and describe how LoRA changes each term.","points":["Full finetuning must hold the weights, a gradient per trainable parameter, optimizer states (typically two per parameter for Adam-style optimizers), and activations for backpropagation.","In practice this is several times the memory of inference for the same model, which puts large models out of reach of accessible hardware.","Precision choices scale every term: FP32 to BF16 halves weight/gradient memory; quantizing the frozen base (QLoRA) shrinks the largest term further.","LoRA freezes base weights, so no gradients or optimizer states are needed for them — the dominant terms collapse to the tiny adapter.","Only the low-rank matrices are trained, cutting trainable parameters by orders of magnitude; rank r trades capacity for cost.","Activation memory still scales with batch size and sequence length, so it does not disappear — gradient checkpointing and batch size are the levers there.","At inference the adapter can be merged into the base weights, so there is no added latency, and unmerged adapters allow many variants over one hosted base."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/ai-engineering/ch07">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+{
+  "id": "ch18",
+  "num": 18,
+  "part": "Part III: Scale, Safety & Discovery",
+  "title": "Guardrails and Safety Patterns",
+  "summary": "The layered controls that sit around a probabilistic system: input guardrails that inspect what goes in, output guardrails that inspect what comes out, and behavioural limits on what the system is permitted to do. The central discipline is distinguishing controls that reduce the probability of a bad outcome from controls that bound its consequences — only the second kind is a security boundary.",
+  "keyTakeaways": [
+    "Guardrails come in three places: input (injection, sensitive data, out-of-scope requests), output (unsafe content, ungrounded claims, format violations, data leakage), and behaviour (what tools may be called, with what scope, requiring what approval).",
+    "Prompt instructions and content classifiers reduce probability; permission scoping, sandboxing, and human approval bound consequences — a real safety design needs the second kind.",
+    "Every guardrail is a latency and false-positive cost: over-blocking legitimate requests is a product failure, so thresholds and fail-open/fail-closed behaviour must be chosen per risk level.",
+    "Prompt injection cannot be fully solved at the prompt layer, because the model cannot reliably separate instruction from data — so untrusted content is isolated and capability is limited instead.",
+    "Guardrails must be evaluated like any other component, with adversarial test sets, measured false-positive and false-negative rates, and continuous red-teaming rather than a one-time review.",
+    "Defence in depth matters because each layer fails differently: a classifier misses novel attacks, a sandbox contains what the classifier missed, and approval catches what the sandbox permits.",
+    "Monitoring and incident response are part of the pattern: log inputs, decisions, and actions so an attack can be detected, scoped, and reverted after the fact."
+  ],
+  "questions": [
+    {
+      "q": "What are the three layers where guardrails are applied?",
+      "options": [
+        "Training, finetuning, and inference",
+        "Input inspection, output inspection, and behavioural limits on what actions the system may take",
+        "Prompt, model, and tokenizer",
+        "Client, server, and database"
+      ],
+      "answer": 1,
+      "explain": "Inputs are checked for attacks and sensitive data; outputs for unsafe, ungrounded, malformed, or leaking content; and behaviour is bounded by what tools exist, what scope they have, and what requires approval."
+    },
+    {
+      "q": "What is the key distinction between guardrail types?",
+      "options": [
+        "Cheap versus expensive to run",
+        "Model-based versus rule-based",
+        "Controls that reduce the probability of a bad outcome versus controls that bound its consequences — only the latter behaves as a security boundary",
+        "Synchronous versus asynchronous"
+      ],
+      "answer": 2,
+      "explain": "A classifier or a system-prompt rule lowers the odds; least-privilege tools, sandboxes, spend limits, and approval gates cap the damage when the odds run against you. Designs that rely only on the first kind fail on novel attacks."
+    },
+    {
+      "q": "Why can prompt injection not be solved at the prompt layer alone?",
+      "options": [
+        "Because system prompts are limited in length",
+        "Because the model receives instructions and data in the same channel and cannot reliably distinguish them, so any sufficiently persuasive injected text may be followed",
+        "Because injection only affects open-weight models",
+        "Because providers strip injected instructions automatically"
+      ],
+      "answer": 1,
+      "explain": "There is no privileged channel that untrusted content cannot imitate. Mitigations are structural: isolate untrusted content as data, restrict what the agent can do, and require approval for anything consequential."
+    },
+    {
+      "q": "What is the product cost of aggressive guardrails?",
+      "options": [
+        "They increase token cost only",
+        "False positives — legitimate requests blocked and over-refusals — plus added latency on every request, which users experience as a broken or preachy product",
+        "They require a larger model",
+        "They prevent streaming entirely"
+      ],
+      "answer": 1,
+      "explain": "Safety is not free, and an over-blocking system trains users to route around it. Thresholds should be set per risk, with the cheap checks inline and expensive ones reserved for high-risk paths."
+    },
+    {
+      "q": "When should a guardrail fail closed rather than fail open?",
+      "options": [
+        "Always fail closed, regardless of the action",
+        "Always fail open, so users are never blocked",
+        "Fail closed when the action is consequential or irreversible; failing open may be acceptable for low-risk read-only paths where availability matters more",
+        "Fail open for write actions and closed for reads"
+      ],
+      "answer": 2,
+      "explain": "If the safety classifier is unavailable, proceeding with a payment or a public post is a different decision from proceeding with a document lookup. The policy has to be explicit per path rather than an accident of how the code handles exceptions."
+    },
+    {
+      "q": "How should guardrails be evaluated?",
+      "options": [
+        "By a one-time security review before launch",
+        "With adversarial test sets and measured false-positive and false-negative rates, refreshed by continuous red-teaming as attacks evolve",
+        "By counting how many requests they block",
+        "By asking the model whether its output was safe"
+      ],
+      "answer": 1,
+      "explain": "A guardrail is a classifier with an error rate in both directions, and attacks are adversarial and non-stationary. Both rates must be measured, tracked over time, and re-tested against new attack patterns."
+    },
+    {
+      "q": "Why is defence in depth the recommended structure?",
+      "options": [
+        "Because each layer fails differently — a classifier misses novel attacks, isolation contains what it missed, permissions limit what isolation allows, and approval catches the rest",
+        "Because providers require multiple layers",
+        "Because more layers reduce latency",
+        "Because a single strong guardrail is impossible to implement"
+      ],
+      "answer": 0,
+      "explain": "No single control holds against a determined adversary, and layers with different failure modes are what convert a bypass into a contained event rather than an incident."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the guardrail architecture for an agent that reads user-uploaded documents, answers questions about them, and can email summaries to colleagues.",
+      "points": [
+        "Map the risk: untrusted document content plus an outbound communication capability is the classic injection-to-exfiltration path.",
+        "Input side: scan uploads for injection patterns and sensitive data, and place document content in the context clearly delimited as data, never as instructions.",
+        "Behavioural limits: restrict the email tool to colleagues in the organization directory, no arbitrary recipients, no attachments, rate limited.",
+        "Human approval with a preview for anything sent externally, showing exact recipients and content.",
+        "Output side: check for leaked secrets or PII, unexpected URLs or encoded blobs, and groundedness of claims against the document.",
+        "Isolation: process documents without ambient credentials, and separate the role that reads untrusted content from the one that can act.",
+        "Fail-closed on the sending path, fail-open acceptable on lower-risk enrichment checks.",
+        "Monitoring: log documents processed, tool calls with arguments, recipients, and guardrail decisions; alert on anomalies like sudden external recipients.",
+        "Evaluation: adversarial corpus of documents containing injections, measured block and over-block rates, and repeat red-teaming.",
+        "Incident response: ability to revoke, recall where possible, and trace which documents and users were involved."
+      ],
+      "answer": "The risk statement writes itself: this system reads content an attacker can author and holds a capability that can send data out of the organization. That combination is the one that turns a prompt injection into an exfiltration. So I would design around bounding the consequence rather than hoping to detect every attack. On input, uploaded content is scanned for injection patterns and sensitive data, but I treat that as probability reduction, not protection. The structural control is isolation: document text goes into the context clearly delimited as untrusted data, never into the system prompt, and the instructions that govern behaviour live in a channel the attacker cannot write to. On behaviour, the email tool is not 'send an email'. It is a narrow capability restricted to recipients in the organization's directory, no attachments, no arbitrary addresses, rate limited per user and per hour. Anything leaving the organization requires explicit human approval with a preview showing exact recipients and the full body — because that is the one control that reliably stops the attack even when everything upstream has been bypassed. On output, I check for secrets and PII, for unexpected URLs and encoded blobs that could carry data out, and for groundedness of claims against the source document. Execution is isolated with no ambient credentials, and where practical I separate the role that reads untrusted documents from the role permitted to send, so an injected instruction reaching the reader has no send capability to invoke. Fail behaviour is explicit: the sending path fails closed if a guardrail is unavailable, while lower-risk enrichment checks may fail open to preserve availability. Everything is logged — documents processed, every tool call with arguments, every recipient, every guardrail decision — with alerts on anomalies like a first-time external recipient or a burst of sends. And I would treat the guardrails as a measured component: an adversarial corpus of documents with embedded injections, tracked block and over-block rates, and scheduled red-teaming, because the attacks change and a review done at launch expires quietly.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Users complain the assistant refuses reasonable requests. How would you investigate and fix over-refusal without weakening real protections?",
+      "points": [
+        "Quantify first: sample refusals, label them as correct or over-refusal, and get a false-positive rate rather than reasoning from anecdotes.",
+        "Localize the cause: which layer refused — an input classifier, the model's own alignment behaviour, an output filter, or an over-broad system-prompt rule.",
+        "Separate the categories: safety-critical refusals, policy refusals, and refusals caused by vague or over-broad prompt instructions.",
+        "Tune thresholds per category using measured cost of each error type, rather than one global sensitivity.",
+        "Narrow over-broad rules: replace blanket topic bans with specific prohibited actions, since topic-level bans catch legitimate professional use.",
+        "Improve the refusal experience: explain what cannot be done and offer the nearest permissible alternative rather than a flat no.",
+        "Add regression tests both ways — a set of legitimate requests that must be answered, alongside the adversarial set that must be blocked.",
+        "Keep the consequence-bounding controls untouched while relaxing probability-reducing ones, so relaxation does not weaken the security boundary.",
+        "Monitor both rates continuously, since tuning one direction moves the other."
+      ],
+      "answer": "First I would replace the anecdotes with a number. Sample real refusals, label each as a correct refusal or an over-refusal, and produce a false-positive rate broken down by request category. Without that, tuning is guesswork and any change I make will be argued about rather than measured. Next, localize. Refusals come from different places — an input classifier, an output filter, an over-broad rule in the system prompt, or the model's own alignment behaviour — and each has a different fix. In my experience the most common cause is not the classifier at all; it is a blanket instruction someone added to the system prompt, like 'never discuss medical topics', which then blocks a nurse asking a legitimate operational question. The fix for that class is to prohibit specific actions rather than whole topics, because topic-level bans catch exactly the professional users who need the product most. For classifier-driven refusals, I would tune thresholds per category using the measured cost of each error direction rather than one global sensitivity setting: a false negative on self-harm content is not comparable to a false negative on mild profanity, and neither should share a threshold. I would also fix the refusal experience itself, since a flat no reads as broken while an explanation plus the nearest permissible alternative reads as a boundary. The discipline that keeps this from weakening protection is which controls I touch. I relax probability-reducing controls — classifier thresholds, prompt-level rules — and leave the consequence-bounding ones alone: tool scoping, approval gates, sandboxing, and spend limits do not move. Those are the security boundary; the classifiers are a filter. Finally, regression tests in both directions: a permitted-requests suite that must be answered alongside the adversarial suite that must be blocked, both run on every change, with both rates monitored in production — because tuning one direction always moves the other, and only measuring one is how a team ships a helpful assistant that is quietly unsafe, or a safe one nobody can use."
+    }
+  ]
+}

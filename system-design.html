@@ -67,47 +67,24 @@
   .sd-badge{flex:none;display:grid;place-items:center;border-radius:10px;
     background:var(--panel-2);color:var(--accent);transition:background .15s,color .15s}
 
-  /* ── Header ─────────────────────────────────────────────────────────── */
-  /* Scoped to the page header: a bare `header` selector also caught the nested
-     <header> elements that <drill-infographic-set> renders, pinning every study
-     header over the content while scrolling a multi-graphic set. */
-  body > header{position:sticky;top:0;z-index:20;background:var(--bg);
-    padding:12px 16px;border-bottom:1px solid var(--panel-2);
-    display:flex;align-items:center;gap:12px}
-  /* audit F11: js/sync.js mounts a FIXED chip (top:10 right:12, z-index 70)
-     that landed ON TOP of the "JS Drill ↗" link — the only route back to the
-     app from this page. The chip is shared chrome we don't own here, so the
-     header reserves the column it occupies rather than moving it. :has() keeps
-     the inset off when sync isn't configured and no chip is ever mounted. */
-  body:has(#sync-chip) > header{padding-right:92px}
-  header .home-link{display:flex;align-items:center;gap:9px;min-width:0;
-    background:none;border:none;color:var(--text-strong);cursor:pointer;font:inherit;padding:6px 4px}
-  /* The wordmark carries the same `sysdesign` mark the app's nav rail uses for
-     its Design item, so leaving the app and arriving here shows one glyph. */
-  header .badge{display:grid;place-items:center;color:var(--accent);flex:none}
-  header h1{margin:0;font-size:15px;font-weight:600;color:var(--text-strong);
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  header h1 .t-short{display:none}
-  header .spacer{flex:1}
-  header .hbtn{background:var(--panel-2);color:var(--text);border:none;
-    padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none;
-    min-height:var(--touch-target-min);display:inline-flex;align-items:center;gap:6px}
-  header .hbtn:hover{background:var(--panel-3);text-decoration:none}
-  /* audit F11: at 390px the title ellipsed to "System Design…" because the
-     wordmark, the Stats button and the back link all wanted the same row. The
-     phone is the design center (PROFILE.md), so the header sheds width from
-     everything EXCEPT the back link: Stats drops to its glyph (still a 44px
-     target, still labelled for screen readers) and the wordmark uses its short
-     form, so the title reads whole instead of truncating. */
-  @media (max-width:560px){
-    body > header{padding:10px 12px;gap:8px}
-    body:has(#sync-chip) > header{padding-right:88px}
-    header h1{font-size:14px}
-    header h1 .t-full{display:none}
-    header h1 .t-short{display:inline}
-    header #stats-btn{padding:8px 11px;min-width:var(--touch-target-min);justify-content:center}
-    header #stats-btn .lbl{display:none}
-  }
+  /* ── Header ─────────────────────────────────────────────────────────────
+     The bar itself is the shared .topbar component (css/15-ds-shell.css) — the
+     page contributes only its wordmark's mark and its Stats capability. What
+     used to be here was ~35 lines of bespoke header CSS: a .home-link button,
+     a two-spelling wordmark, a .spacer, and .hbtn pills, none of which existed
+     on the other page.
+
+     The `body > header` scoping stays load-bearing on the sticky rule below:
+     a bare `header` selector also catches the nested <header> elements that
+     <drill-infographic-set> renders, pinning every study header over the
+     content while scrolling a multi-graphic set. */
+
+  /* index.html's topbar is a fixed-height flex child of a non-scrolling shell;
+     this page is an ordinary scrolling document, so it pins its own. */
+  body > header#topbar{position:sticky;top:0;z-index:50}
+  /* The Sync chip used to be handled here by reserving a 92px gutter inside
+     the header. css/15-ds-shell.css now moves the chip below the bar on both
+     pages, the way index.html always did — see the note there. */
 
   main{flex:1;width:100%;max-width:820px;margin:0 auto;padding:18px 16px 60px}
   .crumb{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;
@@ -489,17 +466,29 @@
 </head>
 <body>
 
-<header>
-  <button class="home-link" id="home-btn" title="All topics">
-    <span class="badge sd-badge" data-icon="sysdesign" data-icon-size="22" aria-hidden="true"></span>
-    <!-- audit F11: two spellings of one wordmark. Narrow viewports show the
-         short one so the title reads in full instead of ellipsing. -->
-    <h1><span class="t-full">System Design Drill</span><span class="t-short">System Design</span></h1>
-  </button>
-  <div id="ds-shellbar" class="ds-shellbar"></div>
-  <span class="spacer"></span>
-  <button class="hbtn" id="stats-btn" title="Your stats" aria-label="Your stats" hidden><span data-icon="chart" data-icon-size="17" aria-hidden="true"></span><span class="lbl">Stats</span></button>
-  <a class="hbtn" href="index.html" title="Back to JS drill">JS&nbsp;Drill<span data-icon="external-link" data-icon-size="15" aria-hidden="true"></span></a>
+<!-- The SAME top bar index.html renders — same markup, same classes, same
+     rules (css/15-ds-shell.css), filled by the same ds/shell.js. It used to be
+     a bespoke header that merely HOSTED #ds-shellbar in the room left over
+     after a big badge+<h1> button, a labelled Stats button and a "JS Drill ↗"
+     link. At 390px that room measured zero, so the breadcrumb, the scope meter
+     and the due chip all rendered and none of them were visible.
+
+     The "JS Drill ↗" escape hatch is gone with it: it existed because this
+     page had no nav, and a link that opens the other half of the same product
+     with an external-link glyph is precisely the "two apps" tell. Home and
+     Library are rungs of the shared nav now, and the breadcrumb's root is a
+     second route back. -->
+<header id="topbar" class="topbar" role="banner">
+  <div class="topbar-left">
+    <a class="topbar-wordmark" id="home-btn" href="#/" title="All topics">
+      <span class="badge sd-badge" data-icon="sysdesign" data-icon-size="20" aria-hidden="true"></span>
+      <h1>System Design</h1>
+    </a>
+    <div id="ds-shellbar" class="ds-shellbar"></div>
+  </div>
+  <div class="topbar-right">
+    <button class="topbar-icon" id="stats-btn" title="Your stats" aria-label="Your stats" hidden data-icon="chart" data-icon-size="19"></button>
+  </div>
 </header>
 
 <!-- The contents of #app below are the no-JavaScript fallback: the directions an

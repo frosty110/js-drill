@@ -166,12 +166,13 @@ window.addEventListener('hashchange', () => {
 });
 
 mountChromeIcons();
-// The page's own chrome. These three were lost when the D15 shell block was
-// spliced in over the old breadcrumb wiring — an off-by-a-few-lines splice
-// boundary that took the wordmark and Stats listeners with it. Nothing failed
-// loudly: the wordmark simply stopped going anywhere, and only home-nav.js's
-// system-design section (which clicks it) noticed.
-document.getElementById('home-btn').addEventListener('click', renderTopics);
+// The page's own chrome. The wordmark is an <a href="#/"> now, so it needs no
+// click handler: the hash change routes through applyRoute like every other
+// destination, which is the rule the shell states for its nav items and the
+// reason a cmd+click on it opens a new tab at the topic landing. (It was a
+// <button> with a listener, and that listener was once lost to a bad splice
+// boundary — nothing failed loudly; the wordmark simply stopped going
+// anywhere. A route can't be silently unwired that way.)
 document.getElementById('stats-btn').addEventListener('click', openStats);
 document.getElementById('stats-modal').addEventListener('click', e => { if (e.target.id === 'stats-modal') closeStats(); });
 

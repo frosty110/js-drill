@@ -9,32 +9,28 @@
    and the header entirely, because the chrome was written against index.html's
    DOM ids. Load after ds/components.css and css/15-ds-shell.css. */
 
-/* The page header hosts the shell bar: wordmark, then breadcrumb + meter + due.
-   It must be allowed to shrink, or a long unit title pushes the meter off. */
-body > header { gap: 12px; }
-body > header .ds-shellbar { min-width: 0; }
+/* The bar itself is now the SHARED .topbar component (css/15-ds-shell.css),
+   the same one index.html renders — this file no longer restates its gaps, its
+   wordmark rules or its widths. What is left is geometry: how a fixed rail /
+   bottom bar fits around a sticky header and a centred main.
 
-/* The wordmark yields before the breadcrumb does — "System Design Drill" is
-   the least informative thing in a row that also says exactly where you are,
-   and two ellipsed strings side by side ("System Design …" · "H…") is strictly
-   worse than one whole one. The long spelling is dropped the moment a
-   breadcrumb is on screen; the short one and the badge stay, so the page keeps
-   its single <h1> and its click-to-topics anchor. */
-body > header .home-link { flex: 0 0 auto; min-width: 0; }
-body > header .home-link h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-body > header:has(#ds-crumbs:not([hidden])) .home-link .t-full { display: none; }
-body > header:has(#ds-crumbs[hidden]) .home-link .t-short { display: none; }
+   `--sd-header-h` is that geometry's one constant, and it is now DECLARED
+   rather than assumed. It was previously only ever read — `var(--sd-header-h,
+   57px)` with nothing anywhere setting it — so the rail was positioned against
+   a hard-coded guess that had already drifted 8px from the real header. It
+   tracks the shared bar's height (48px, 44px on mobile) plus the safe-area
+   inset the bar pads itself with. */
+:root { --sd-header-h: calc(48px + env(safe-area-inset-top)); }
 
 /* ── ≤767px: the nav is a bottom bar ───────────────────────────────────────
    Clear it, plus the safe-area inset, so the last card and the sticky answer
    bar are never trapped underneath. */
 @media (max-width: 767px) {
+  :root { --sd-header-h: calc(44px + env(safe-area-inset-top)); }
   main { padding-bottom: calc(var(--ds-nav-h, 56px) + env(safe-area-inset-bottom) + 24px); }
   /* The drill's sticky action bar owns the bottom edge during a rep — the same
      immersive-rep rule index.html applies at L3 (css/06-ds-nav.css). */
   body:has(.action-bar) #ds-appnav { display: none; }
-  /* The wordmark's long spelling never fits beside a breadcrumb at 390px. */
-  body > header .home-link .t-full { display: none; }
 }
 
 /* ── ≥768px: the nav is a left rail ────────────────────────────────────────
@@ -42,11 +38,15 @@ body > header:has(#ds-crumbs[hidden]) .home-link .t-short { display: none; }
    sticky header, the centered main, and the infographic workspace that spans
    the viewport. */
 @media (min-width: 768px) {
-  body > header { padding-left: calc(var(--ds-rail-w) + 16px); }
+  /* The header spans the full width and the rail starts BELOW it — the same
+     stacking index.html uses (css/06-ds-nav.css). This file used to indent the
+     header by the rail's width instead, which left a dead black gutter above
+     the rail and put the wordmark 256px from the left edge on one page and
+     12px from it on the other. */
   main { padding-left: calc(var(--ds-rail-w) + 16px); }
   /* main is `margin: 0 auto` with a max-width; the padding above would shift
      its content off-center, so give the box the rail's width back. */
   main { max-width: calc(820px + var(--ds-rail-w) + 16px); }
   /* The rail slots under the sticky header rather than over it. */
-  #ds-appnav { top: var(--sd-header-h, 57px); height: calc(100vh - var(--sd-header-h, 57px)); }
+  #ds-appnav { top: var(--sd-header-h); height: calc(100vh - var(--sd-header-h)); }
 }

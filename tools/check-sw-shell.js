@@ -45,14 +45,33 @@ for (const rel of shell) {
   }
 }
 
-// 2. Every local asset the shell page loads is precached. External CDN URLs are
-//    out of scope — the SW deliberately doesn't own them.
-const html = read('index.html');
-const refs = [...html.matchAll(/(?:src|href)="((?:js|css|ds)\/[^"]+)"/g)].map(m => m[1]);
-for (const rel of new Set(refs)) {
-  if (!shellSet.has(rel)) {
-    console.error(`  ✗ loaded by index.html but NOT precached: ${rel}`);
+// 2. Every local asset EVERY shell page loads is precached. External CDN URLs
+//    are out of scope — the SW deliberately doesn't own them.
+//
+//    This checked index.html alone until 2026-08-05, which is precisely why
+//    system-design.html — a routed destination, the nav's Design rung, reached
+//    from inside the app — sat outside the precache for its whole life. The SW
+//    still runtime-cached it on first visit and (being cache-first then) served
+//    that copy for the life of the CACHE_VERSION string, so returning users got
+//    a System Design page frozen several releases back while index.html looked
+//    current. Nothing failed; the two halves of the product just drifted.
+//
+//    A page belongs in this list when the app can navigate to it. diagnostic.html
+//    is deliberately absent: it is standalone, reached by URL, and shares no
+//    chrome — precaching it would grow the offline pack for nothing.
+const PAGES = ['index.html', 'system-design.html'];
+for (const page of PAGES) {
+  if (!shellSet.has(page)) {
+    console.error(`  ✗ page not precached at all: ${page}`);
     errors++;
+  }
+  const html = read(page);
+  const refs = [...html.matchAll(/(?:src|href)="((?:js|css|ds)\/[^"]+)"/g)].map(m => m[1]);
+  for (const rel of new Set(refs)) {
+    if (!shellSet.has(rel)) {
+      console.error(`  ✗ loaded by ${page} but NOT precached: ${rel}`);
+      errors++;
+    }
   }
 }
 
@@ -60,4 +79,4 @@ if (errors) {
   console.error(`\n✗ app-shell parity: ${errors} problem(s) — update APP_SHELL in service-worker.js (and bump CACHE_VERSION).`);
   process.exit(1);
 }
-console.log(`✓ app-shell parity: ${shell.length} precached assets, all present, all of index.html's local assets covered.`);
+console.log(`✓ app-shell parity: ${shell.length} precached assets, all present, all local assets of ${PAGES.join(' + ')} covered.`);

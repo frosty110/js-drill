@@ -185,6 +185,56 @@ const CRUMBS = `(() => {
   const survived = await s.eval(`!!document.querySelector('#practice-launcher.is-open')`);
   s.assert(!survived, 'navigating dismisses the sheet instead of leaving it over the new surface');
 
+  // ── One chrome, two pages ────────────────────────────────────────────────
+  // The failure this exists to catch renders perfectly and is still invisible.
+  // system-design.html had a bespoke header that merely HOSTED the shell bar
+  // after a big wordmark, a labelled Stats button, a "JS Drill ↗" link and a
+  // 92px gutter reserved for the Sync chip. At 390px the room left over
+  // measured ZERO — so the breadcrumb, the scope meter and the due chip were
+  // all in the DOM, all correct, and none of them on screen. Every assertion
+  // above passed throughout, because each one asks whether a crumb EXISTS.
+  //
+  // So: measure the bar, and measure it against the other page's. Same
+  // component means the same computed height and a shell bar with real width
+  // at the width the user actually holds.
+  for (const mobile of [true, false]) {
+    const label = mobile ? 'mobile' : 'desktop';
+    const bars = {};
+    for (const [page, hash] of [['index.html', '#/m/browse'],
+                                ['system-design.html', '#/design-problems']]) {
+      const p = await connect({ url: `${URL_ARG.replace(/\/$/, '')}/${page}${hash}`,
+        mobile, viewport: mobile ? undefined : { width: 1280, height: 800 }, outDir: OUT });
+      await p.sleep(2600);
+      bars[page] = JSON.parse(await p.eval(`(() => {
+        const box = el => el ? Math.round(el.getBoundingClientRect().width) : -1;
+        const tb = document.getElementById('topbar');
+        const nav = document.getElementById('ds-appnav');
+        return JSON.stringify({
+          topbarH: tb ? Math.round(tb.getBoundingClientRect().height) : -1,
+          shellbarW: box(document.getElementById('ds-shellbar')),
+          crumbW: box(document.getElementById('ds-crumbs')),
+          navW: box(nav),
+          navH: nav ? Math.round(nav.getBoundingClientRect().height) : -1,
+          navItems: nav ? nav.querySelectorAll('.ds-navitem[href]').length : -1,
+          overflow: document.documentElement.scrollWidth - window.innerWidth
+        });
+      })()`));
+      await p.close();
+    }
+    const [a, b] = [bars['index.html'], bars['system-design.html']];
+    s.assert(a.topbarH > 0 && a.topbarH === b.topbarH,
+      `[${label}] both pages render the same top bar (index ${a.topbarH}px, sd ${b.topbarH}px)`);
+    s.assert(b.shellbarW > 120,
+      `[${label}] sd's shell bar has room for the breadcrumb + numbers (got ${b.shellbarW}px)`);
+    s.assert(b.crumbW > 80,
+      `[${label}] sd's breadcrumb is wide enough to read (got ${b.crumbW}px)`);
+    s.assert(b.navItems === 3 && b.navH > 0,
+      `[${label}] sd renders the same 3-destination nav (got ${b.navItems} items, ${b.navH}px tall)`);
+    s.assert(mobile ? b.navW >= 360 : b.navW === a.navW,
+      `[${label}] the nav is a ${mobile ? 'bottom bar' : 'rail'} on sd too (${b.navW}px vs index ${a.navW}px)`);
+    s.assert(b.overflow <= 0, `[${label}] sd gains no horizontal scroll (got ${b.overflow}px)`);
+  }
+
   await s.close();
   const r = s.report();
   process.exit(r.failed || r.errors ? 1 : 0);

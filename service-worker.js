@@ -8,13 +8,42 @@
 //   - install: cache app shell + manifest.json + every full-status lesson JSON
 //     listed in the manifest (chunked addAll to avoid request-storm rate limits).
 //   - activate: delete any stale CACHE_VERSION keys + claim open clients.
-//   - fetch (same-origin GET): cache-first — return cached; on miss, fetch + add
-//     to cache + return. On network failure with no cache, return 503.
+//   - fetch (same-origin GET, CODE — html/js/css): network-first, falling back
+//     to cache. See § Why code is network-first below.
+//   - fetch (same-origin GET, everything else): cache-first — return cached; on
+//     miss, fetch + add to cache + return. On network failure with no cache,
+//     return 503.
 //   - fetch (cross-origin or non-GET): bypass — let the browser handle.
+//
+// ── Why code is network-first (2026-08-05) ─────────────────────────────────
+// It used to be cache-first for EVERYTHING, and the fetch handler adds any
+// successful same-origin GET to the cache. A page not in APP_SHELL therefore
+// froze at whatever bytes it had the first time it was opened, and stayed
+// frozen for the whole life of the CACHE_VERSION string — a string that is
+// bumped by hand, and wasn't, across the entire D15 shell rollout.
+//
+// system-design.html was exactly that page. It is loaded by the app (the nav's
+// Design rung), it changed in nearly every release, and it appeared nowhere in
+// APP_SHELL — so returning users kept the pre-shell copy: no nav rail, no
+// bottom bar, no header, and no way back to Home except the browser's Back
+// button. index.html, which IS in APP_SHELL, was re-fetched at each install
+// and looked current. One page new, one page old, on the same phone, from the
+// same deploy — which reads as "the two halves are different apps."
+//
+// Code is now revalidated on every load when the network answers, and served
+// from cache when it doesn't. Offline still works; a stale shell can no longer
+// outlive a deploy. The drill payload — lesson JSON, images, fonts — stays
+// cache-first, because that is what the Offline Drill Pack is FOR and its
+// content is versioned by URL.
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v42-icon-system-complete-2026-08-04';
+const CACHE_VERSION = 'jsdrill-v43-shared-shell-network-first-code-2026-08-05';
+
+// Code the SW revalidates instead of freezing. Same-origin GETs whose path ends
+// in one of these, plus navigations, take the network-first branch.
+const CODE_EXT = /\.(?:html|js|css)$/i;
+
 const APP_SHELL = [
   './',
   './index.html',
@@ -82,7 +111,31 @@ const APP_SHELL = [
   './js/core/util.js',
   './js/core/runner.js',
   './data/manifest.json',
-  './data/paths.json'
+  './data/paths.json',
+
+  // ── system-design.html and everything only IT loads ──────────────────────
+  // Absent until 2026-08-05, which is how the page came to be served frozen to
+  // returning users (see the note at the top). It is a first-class destination
+  // — the nav's Design rung — so it precaches like index.html does.
+  './system-design.html',
+  './css/16-sd-shell.css',
+  './js/infographic-viewer.js',
+  './js/sd/01-state-data.js',
+  './js/sd/02-diagrams.js',
+  './js/sd/03-tags.js',
+  './js/sd/04-plans.js',
+  './js/sd/05-topic-landing.js',
+  './js/sd/06-topic-home.js',
+  './js/sd/07-unit-detail.js',
+  './js/sd/08-component-catalog.js',
+  './js/sd/09-session.js',
+  './js/sd/10-question-render.js',
+  './js/sd/11-share.js',
+  './js/sd/12-summary.js',
+  './js/sd/13-stats.js',
+  './js/sd/14-keyboard.js',
+  './js/sd/15-routing-shell.js',
+  './data/system-design/topics.json'
 ];
 
 self.addEventListener('install', event => {
@@ -133,18 +186,51 @@ self.addEventListener('fetch', event => {
   const url = new URL(req.url);
   // Cross-origin: bypass — let the browser handle CDN assets via its HTTP cache.
   if (url.origin !== self.location.origin) return;
+  // A navigation asks for a document even when the URL has no .html on it
+  // ('./', a directory index), so ask the request, not only the path.
+  const isCode = req.mode === 'navigate' ||
+    req.destination === 'document' || req.destination === 'script' ||
+    req.destination === 'style' || CODE_EXT.test(url.pathname);
+
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_VERSION);
-    const cached = await cache.match(req);
-    if (cached) return cached;
-    try {
-      const res = await fetch(req);
-      // Only cache successful same-origin GET responses; bypass for redirects,
-      // 4xx/5xx, opaque responses, etc.
+
+    // Only cache successful same-origin GET responses; bypass for redirects,
+    // 4xx/5xx, opaque responses, etc.
+    const store = res => {
       if (res && res.ok && res.type === 'basic') {
         cache.put(req, res.clone()).catch(() => { /* quota / parse errors swallowed */ });
       }
       return res;
+    };
+
+    if (isCode) {
+      // Network-first: the deployed bytes win whenever they're reachable, so a
+      // shipped fix reaches the user on their next load rather than on the next
+      // hand-written CACHE_VERSION bump. Offline falls straight back to cache.
+      try {
+        return store(await fetch(req));
+      } catch (_) {
+        const cached = await cache.match(req);
+        if (cached) return cached;
+        // A navigation offline to a page we never cached: hand back the app
+        // shell rather than a 503, so the router can still render something.
+        if (req.mode === 'navigate') {
+          const shell = await cache.match('./index.html');
+          if (shell) return shell;
+        }
+        return new Response('Offline and not cached', {
+          status: 503, headers: { 'Content-Type': 'text/plain' }
+        });
+      }
+    }
+
+    // Everything else — lesson JSON, infographics, fonts: cache-first. This is
+    // the Offline Drill Pack, and its content is versioned by URL.
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    try {
+      return store(await fetch(req));
     } catch (_) {
       // Network unreachable and not cached — degrade gracefully.
       return new Response('Offline and not cached', {

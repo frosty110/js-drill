@@ -409,6 +409,17 @@
     });
   }
 
+  // The address to put in an href, as seen FROM a given page. Same-page targets
+  // stay bare fragments so following one never reloads the app; cross-page
+  // targets keep their page prefix. Chrome that renders on more than one page
+  // (ds/shell.js, js/breadcrumb.js) must not each re-derive this — getting it
+  // wrong on one page is invisible from the other.
+  function hrefFrom(kind, params, fromPage) {
+    const full = surface(kind).appHash(params || {});
+    const [page, hash] = String(full).split('#');
+    return page === fromPage ? '#' + hash : full;
+  }
+
   // ── Base URL resolution ───────────────────────────────────────────────────
   // Works unchanged from the app root, from a nested static page, and from a
   // local `python3 -m http.server` — all three of which serve the project from
@@ -557,7 +568,7 @@
 
   return {
     SURFACES, APP_PAGES, SD_RESERVED,
-    surface, baseUrl, ancestors, crumbs,
+    surface, baseUrl, ancestors, crumbs, hrefFrom,
     shareUrl, sharePath, appUrl, codeKind,
     parseSharePath, parseAppHash, resolveForFetch, currentCode,
     sitemapXml

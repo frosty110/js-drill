@@ -58,11 +58,14 @@ const CARD = `(() => {
 
   // ── Mobile first: 80% of study happens on a phone (PROFILE.md) ───────────
   const s = await connect({ url: SD('#/design-problems'), mobile: true, outDir: OUT });
-  // A mixed session is ordered new-first over saved Leitner state, so the slice
-  // this probe walks depends on whatever graded it last — including OTHER probes
-  // sharing the browser profile. That made "saw both card types" pass or fail by
-  // suite order rather than by anything real. Reset first, the way
-  // tools/cdp/ds-dragscroll.js does, so every run walks the same pool.
+  // Start from a known store. A mixed session is ordered new-first over saved
+  // Leitner state, so the slice this probe walks depends on whatever graded it
+  // last — including OTHER probes sharing the browser profile. Measured: run
+  // standalone it passed; run straight after sd-tags-nav it saw 12 open cards
+  // and 0 MC, because every MC in the pool had been answered into a later box,
+  // and "saw both card types" is precisely about the pool containing both.
+  //
+  // (Found independently on two branches at once, which is its own evidence.)
   await s.eval(`localStorage.removeItem('jsdrill.systemdesign.v1')`);
   await s.eval(`location.reload()`);
   await s.sleep(1100);

@@ -1,0 +1,383 @@
+{
+  "id": "c09",
+  "num": 9,
+  "part": "Component decks",
+  "title": "APIs & Realtime",
+  "summary": "How callers talk to you, and how you talk back. 7 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "WebSockets / Persistent Connections — A long-lived bidirectional connection, so the server can push without the client asking and latency is one hop rather than one poll interval.",
+    "Server-Sent Events — A one-way stream of events over a normal HTTP response, with browser-native reconnect and event ids for resumption.",
+    "REST — Resource-oriented HTTP with standard verbs, status codes and cacheable GETs — the default public API shape.",
+    "gRPC — Binary RPC over HTTP/2 with an IDL-defined contract, code generation, streaming and multiplexing.",
+    "GraphQL — A single endpoint where the client declares exactly which fields of a graph it wants, in one round trip.",
+    "Webhooks — Pushing events to a URL the customer registered, so their server learns about changes without polling yours.",
+    "Cursor Pagination — Returning a page plus an opaque cursor pointing at the last item, so the next page seeks rather than counting from the start."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The server must initiate — chat messages, live location, presence, collaborative edits; Updates are frequent enough that polling would be wasteful or too slow. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "WebSockets / Persistent Connections — A long-lived bidirectional connection, so the server can push without the client asking and latency is one hop rather than one poll interval.",
+        "The server must initiate — chat messages, live location, presence, collaborative edits",
+        "Updates are frequent enough that polling would be wasteful or too slow",
+        "The prompt says real time and means sub-second"
+      ],
+      "answer": "WebSockets / Persistent Connections. A long-lived bidirectional connection, so the server can push without the client asking and latency is one hop rather than one poll interval. You reach for it when: The server must initiate — chat messages, live location, presence, collaborative edits; Updates are frequent enough that polling would be wasteful or too slow; The prompt says real time and means sub-second."
+    },
+    {
+      "type": "open",
+      "prompt": "You put WebSockets / Persistent Connections in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Updates are one-way server-to-client and infrequent — SSE is simpler and survives proxies better",
+        "Clients are mobile and frequently backgrounded, where connections die constantly",
+        "Update frequency is low enough that polling is honestly fine",
+        "Connection state pins users to servers, which breaks stateless load balancing",
+        "Memory and file descriptors per connection cap how many fit on a box",
+        "You must build reconnect, resume and missed-message backfill yourself"
+      ],
+      "answer": "Don't reach for it when: Updates are one-way server-to-client and infrequent — SSE is simpler and survives proxies better; Clients are mobile and frequently backgrounded, where connections die constantly; Update frequency is low enough that polling is honestly fine. And it is never free: Connection state pins users to servers, which breaks stateless load balancing; Memory and file descriptors per connection cap how many fit on a box; You must build reconnect, resume and missed-message backfill yourself."
+    },
+    {
+      "type": "open",
+      "prompt": "WebSockets / Persistent Connections is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Reconnect storm after a deploy or network blip, all clients at once",
+        "Messages sent while disconnected being lost with no replay path",
+        "Idle proxies and load balancers silently killing connections without a heartbeat",
+        "Uneven connection distribution because balancing happened at connect time and never again"
+      ],
+      "answer": "Reconnect storm after a deploy or network blip, all clients at once Messages sent while disconnected being lost with no replay path Idle proxies and load balancers silently killing connections without a heartbeat Uneven connection distribution because balancing happened at connect time and never again"
+    },
+    {
+      "type": "open",
+      "prompt": "WebSockets / Persistent Connections vs Server-Sent Events vs Webhooks — what decides between them?",
+      "points": [
+        "Server-Sent Events — Server-to-client only, over plain HTTP, with automatic browser reconnect. Usually enough for feeds and notifications.",
+        "Webhooks — When the recipient is a server rather than a browser, push to their endpoint instead of holding a socket.",
+        "WebSockets / Persistent Connections — A long-lived bidirectional connection, so the server can push without the client asking and latency is one hop rather than one poll interval."
+      ],
+      "answer": "Server-Sent Events: Server-to-client only, over plain HTTP, with automatic browser reconnect. Usually enough for feeds and notifications. Webhooks: When the recipient is a server rather than a browser, push to their endpoint instead of holding a socket."
+    },
+    {
+      "type": "open",
+      "prompt": "WebSockets / Persistent Connections appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Chat System — Holds the client connection so inbound messages are pushed instantly, with presence and delivery receipts riding the same channel.",
+        "Design a Ride-Sharing Service — Carries continuous driver location updates and ride-match offers — both server-initiated and both latency-critical.",
+        "Design a Collaborative Document Editor — Streams each operation to every other collaborator, which is the only way the shared-cursor experience can feel live.",
+        "Design a Live Streaming Service — Powers chat and reactions alongside the video, providing the interactive layer a segment-based CDN path structurally cannot."
+      ],
+      "answer": "WebSockets / Persistent Connections carries different work in each: in Design a Chat System, holds the client connection so inbound messages are pushed instantly, with presence and delivery receipts riding the same channel. in Design a Ride-Sharing Service, carries continuous driver location updates and ride-match offers — both server-initiated and both latency-critical. in Design a Collaborative Document Editor, streams each operation to every other collaborator, which is the only way the shared-cursor experience can feel live. in Design a Live Streaming Service, powers chat and reactions alongside the video, providing the interactive layer a segment-based CDN path structurally cannot."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: You want push without owning reconnect logic; Corporate proxies and infrastructure that dislike WebSocket upgrades are in play. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Server-Sent Events — A one-way stream of events over a normal HTTP response, with browser-native reconnect and event ids for resumption.",
+        "Updates flow server-to-client only — notifications, progress, token streaming",
+        "You want push without owning reconnect logic",
+        "Corporate proxies and infrastructure that dislike WebSocket upgrades are in play"
+      ],
+      "answer": "Server-Sent Events. A one-way stream of events over a normal HTTP response, with browser-native reconnect and event ids for resumption. You reach for it when: Updates flow server-to-client only — notifications, progress, token streaming; You want push without owning reconnect logic; Corporate proxies and infrastructure that dislike WebSocket upgrades are in play."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Server-Sent Events in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The client needs to send frequently on the same channel — that is WebSockets",
+        "You need binary frames",
+        "Very high per-client message rates where framing overhead matters",
+        "Still one held connection per client, with the same fan-out and capacity implications",
+        "Text-only, so binary payloads must be encoded",
+        "Older HTTP/1.1 clients hit per-domain connection limits"
+      ],
+      "answer": "Don't reach for it when: The client needs to send frequently on the same channel — that is WebSockets; You need binary frames; Very high per-client message rates where framing overhead matters. And it is never free: Still one held connection per client, with the same fan-out and capacity implications; Text-only, so binary payloads must be encoded; Older HTTP/1.1 clients hit per-domain connection limits."
+    },
+    {
+      "type": "open",
+      "prompt": "Server-Sent Events is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Buffering proxies holding events until the buffer fills, destroying the latency benefit",
+        "Missing Last-Event-ID handling, so a reconnect silently loses everything sent while away",
+        "No heartbeat, so a dead connection looks identical to an idle one"
+      ],
+      "answer": "Buffering proxies holding events until the buffer fills, destroying the latency benefit Missing Last-Event-ID handling, so a reconnect silently loses everything sent while away No heartbeat, so a dead connection looks identical to an idle one"
+    },
+    {
+      "type": "open",
+      "prompt": "Server-Sent Events vs WebSockets / Persistent Connections vs Cursor Pagination — what decides between them?",
+      "points": [
+        "WebSockets / Persistent Connections — When the client must talk back on the same channel at the same cadence.",
+        "Cursor Pagination — For infrequent updates, polling a cursor endpoint is simpler than any push channel.",
+        "Server-Sent Events — A one-way stream of events over a normal HTTP response, with browser-native reconnect and event ids for resumption."
+      ],
+      "answer": "WebSockets / Persistent Connections: When the client must talk back on the same channel at the same cadence. Cursor Pagination: For infrequent updates, polling a cursor endpoint is simpler than any push channel."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: A public API consumed by clients you do not control; You want HTTP caching, proxies and tooling to work without special support. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "REST — Resource-oriented HTTP with standard verbs, status codes and cacheable GETs — the default public API shape.",
+        "A public API consumed by clients you do not control",
+        "You want HTTP caching, proxies and tooling to work without special support",
+        "Broad accessibility matters more than payload efficiency"
+      ],
+      "answer": "REST. Resource-oriented HTTP with standard verbs, status codes and cacheable GETs — the default public API shape. You reach for it when: A public API consumed by clients you do not control; You want HTTP caching, proxies and tooling to work without special support; Broad accessibility matters more than payload efficiency."
+    },
+    {
+      "type": "open",
+      "prompt": "You put REST in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Chatty internal service-to-service calls where serialisation overhead dominates",
+        "Clients need wildly different subsets of the same data and you are drowning in endpoint variants",
+        "Over- and under-fetching, which drives clients to make several round trips",
+        "Versioning is a real design burden once you have external consumers",
+        "No schema enforcement unless you add one"
+      ],
+      "answer": "Don't reach for it when: Chatty internal service-to-service calls where serialisation overhead dominates; Clients need wildly different subsets of the same data and you are drowning in endpoint variants. And it is never free: Over- and under-fetching, which drives clients to make several round trips; Versioning is a real design burden once you have external consumers; No schema enforcement unless you add one."
+    },
+    {
+      "type": "open",
+      "prompt": "REST is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Non-idempotent POST retried after a timeout, creating a duplicate resource",
+        "Offset pagination degrading and skipping rows as the underlying data shifts",
+        "Breaking changes shipped without a version, discovered by customers",
+        "Endpoint proliferation as each client gets its own bespoke variant"
+      ],
+      "answer": "Non-idempotent POST retried after a timeout, creating a duplicate resource Offset pagination degrading and skipping rows as the underlying data shifts Breaking changes shipped without a version, discovered by customers Endpoint proliferation as each client gets its own bespoke variant"
+    },
+    {
+      "type": "open",
+      "prompt": "REST vs gRPC vs GraphQL — what decides between them?",
+      "points": [
+        "gRPC — Internal, high-volume, strongly-typed service calls where efficiency and contracts matter.",
+        "GraphQL — When clients need very different shapes of the same graph and round trips are the pain.",
+        "REST — Resource-oriented HTTP with standard verbs, status codes and cacheable GETs — the default public API shape."
+      ],
+      "answer": "gRPC: Internal, high-volume, strongly-typed service calls where efficiency and contracts matter. GraphQL: When clients need very different shapes of the same graph and round trips are the pain."
+    },
+    {
+      "type": "open",
+      "prompt": "REST appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a URL Shortener — The public creation and redirect surface, where a cacheable GET and a 301 are doing most of the work.",
+        "Design a Ticket Booking System (Ticketmaster-style) — The booking surface, where PUT/POST semantics and idempotency keys decide whether a double-tap books two seats.",
+        "Design a Webhook Delivery System — The contract you require of receivers — a URL, a 2xx and a timeout — which is the entire integration surface they implement."
+      ],
+      "answer": "REST carries different work in each: in Design a URL Shortener, the public creation and redirect surface, where a cacheable GET and a 301 are doing most of the work. in Design a Ticket Booking System (Ticketmaster-style), the booking surface, where PUT/POST semantics and idempotency keys decide whether a double-tap books two seats. in Design a Webhook Delivery System, the contract you require of receivers — a URL, a 2xx and a timeout — which is the entire integration surface they implement."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Internal service-to-service calls at high volume; You want a generated, type-checked contract across several languages. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "gRPC — Binary RPC over HTTP/2 with an IDL-defined contract, code generation, streaming and multiplexing.",
+        "Internal service-to-service calls at high volume",
+        "You want a generated, type-checked contract across several languages",
+        "Bidirectional or server streaming is needed without hand-rolling it"
+      ],
+      "answer": "gRPC. Binary RPC over HTTP/2 with an IDL-defined contract, code generation, streaming and multiplexing. You reach for it when: Internal service-to-service calls at high volume; You want a generated, type-checked contract across several languages; Bidirectional or server streaming is needed without hand-rolling it."
+    },
+    {
+      "type": "open",
+      "prompt": "You put gRPC in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Browsers are first-class clients — it needs a proxy layer to work there",
+        "Third-party developers must integrate quickly with curl and a doc page",
+        "Human-debuggable payloads matter more than efficiency",
+        "Toolchain and codegen in every language you ship",
+        "Binary payloads are hard to inspect on the wire",
+        "Load balancing HTTP/2 needs L7 awareness; naive L4 pins all calls to one connection"
+      ],
+      "answer": "Don't reach for it when: Browsers are first-class clients — it needs a proxy layer to work there; Third-party developers must integrate quickly with curl and a doc page; Human-debuggable payloads matter more than efficiency. And it is never free: Toolchain and codegen in every language you ship; Binary payloads are hard to inspect on the wire; Load balancing HTTP/2 needs L7 awareness; naive L4 pins all calls to one connection."
+    },
+    {
+      "type": "open",
+      "prompt": "gRPC is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Long-lived HTTP/2 connections defeating L4 balancing and hot-spotting one backend",
+        "Proto field reuse or renumbering silently corrupting decoded messages",
+        "Deadline not propagated, so a cancelled call keeps running downstream",
+        "Streaming RPCs leaking when neither side closes"
+      ],
+      "answer": "Long-lived HTTP/2 connections defeating L4 balancing and hot-spotting one backend Proto field reuse or renumbering silently corrupting decoded messages Deadline not propagated, so a cancelled call keeps running downstream Streaming RPCs leaking when neither side closes"
+    },
+    {
+      "type": "open",
+      "prompt": "gRPC vs REST vs Pub/Sub — what decides between them?",
+      "points": [
+        "REST — External consumers, browser clients, or when 'works with curl' is a requirement.",
+        "Pub/Sub — If the caller does not need a response, an event is looser coupling than an RPC.",
+        "gRPC — Binary RPC over HTTP/2 with an IDL-defined contract, code generation, streaming and multiplexing."
+      ],
+      "answer": "REST: External consumers, browser clients, or when 'works with curl' is a requirement. Pub/Sub: If the caller does not need a response, an event is looser coupling than an RPC."
+    },
+    {
+      "type": "open",
+      "prompt": "gRPC appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Ride-Sharing Service — Internal calls between matching, pricing and trip services, where per-call overhead matters at ride-request volume.",
+        "Design an LLM Inference Platform — Carries requests to the model servers, with streaming built in rather than layered on.",
+        "Design a Search Engine — Fans a query out to index shards and gathers results, paying serialisation cost on every shard of every query."
+      ],
+      "answer": "gRPC carries different work in each: in Design a Ride-Sharing Service, internal calls between matching, pricing and trip services, where per-call overhead matters at ride-request volume. in Design an LLM Inference Platform, carries requests to the model servers, with streaming built in rather than layered on. in Design a Search Engine, fans a query out to index shards and gathers results, paying serialisation cost on every shard of every query."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Many client types need very different subsets of the same data; Mobile round trips are the bottleneck and over-fetching is measurable. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "GraphQL — A single endpoint where the client declares exactly which fields of a graph it wants, in one round trip.",
+        "Many client types need very different subsets of the same data",
+        "Mobile round trips are the bottleneck and over-fetching is measurable",
+        "The data is genuinely a graph and clients traverse it differently"
+      ],
+      "answer": "GraphQL. A single endpoint where the client declares exactly which fields of a graph it wants, in one round trip. You reach for it when: Many client types need very different subsets of the same data; Mobile round trips are the bottleneck and over-fetching is measurable; The data is genuinely a graph and clients traverse it differently."
+    },
+    {
+      "type": "open",
+      "prompt": "You put GraphQL in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "One client with stable needs — you have added a query planner for nothing",
+        "HTTP caching is important; a POSTed query defeats it",
+        "You cannot control or budget what clients ask for",
+        "N+1 resolution unless you build dataloader-style batching",
+        "Query cost analysis is required or a single query can take down the backend",
+        "Caching moves from HTTP into your application"
+      ],
+      "answer": "Don't reach for it when: One client with stable needs — you have added a query planner for nothing; HTTP caching is important; a POSTed query defeats it; You cannot control or budget what clients ask for. And it is never free: N+1 resolution unless you build dataloader-style batching; Query cost analysis is required or a single query can take down the backend; Caching moves from HTTP into your application."
+    },
+    {
+      "type": "open",
+      "prompt": "GraphQL is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Deeply nested query exhausting the server, effectively a self-inflicted denial of service",
+        "N+1 database calls hidden behind innocuous-looking field resolvers",
+        "Schema growing into a shared dumping ground nobody can deprecate anything from",
+        "Errors returned with HTTP 200, so infrastructure-level monitoring reports everything as fine"
+      ],
+      "answer": "Deeply nested query exhausting the server, effectively a self-inflicted denial of service N+1 database calls hidden behind innocuous-looking field resolvers Schema growing into a shared dumping ground nobody can deprecate anything from Errors returned with HTTP 200, so infrastructure-level monitoring reports everything as fine"
+    },
+    {
+      "type": "open",
+      "prompt": "GraphQL vs REST vs gRPC — what decides between them?",
+      "points": [
+        "REST — Fewer moving parts, real HTTP caching, and usually enough.",
+        "gRPC — When the callers are services rather than varied UI clients.",
+        "GraphQL — A single endpoint where the client declares exactly which fields of a graph it wants, in one round trip."
+      ],
+      "answer": "REST: Fewer moving parts, real HTTP caching, and usually enough. gRPC: When the callers are services rather than varied UI clients."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: External systems must react to your events promptly; Polling would be wasteful at your customer count. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Webhooks — Pushing events to a URL the customer registered, so their server learns about changes without polling yours.",
+        "External systems must react to your events promptly",
+        "Polling would be wasteful at your customer count",
+        "The prompt describes integrations, payment events or third-party notifications"
+      ],
+      "answer": "Webhooks. Pushing events to a URL the customer registered, so their server learns about changes without polling yours. You reach for it when: External systems must react to your events promptly; Polling would be wasteful at your customer count; The prompt describes integrations, payment events or third-party notifications."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Webhooks in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The receiver cannot host a public endpoint",
+        "Ordering across events is required — delivery order cannot be guaranteed",
+        "Sub-second latency matters; delivery is best-effort with retries",
+        "You now own delivery: retries, backoff, dead-lettering and a replay tool",
+        "Receiver endpoints are unreliable and slow, and that becomes your operational problem",
+        "Signing, secret rotation and replay protection are required, not optional"
+      ],
+      "answer": "Don't reach for it when: The receiver cannot host a public endpoint; Ordering across events is required — delivery order cannot be guaranteed; Sub-second latency matters; delivery is best-effort with retries. And it is never free: You now own delivery: retries, backoff, dead-lettering and a replay tool; Receiver endpoints are unreliable and slow, and that becomes your operational problem; Signing, secret rotation and replay protection are required, not optional."
+    },
+    {
+      "type": "open",
+      "prompt": "Webhooks is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "A dead endpoint accumulating an unbounded retry backlog that starves healthy deliveries",
+        "Retry storms hammering a receiver that is already struggling",
+        "Duplicate delivery corrupting receiver state because no idempotency key was sent",
+        "SSRF via customer-supplied URLs pointed at internal addresses"
+      ],
+      "answer": "A dead endpoint accumulating an unbounded retry backlog that starves healthy deliveries Retry storms hammering a receiver that is already struggling Duplicate delivery corrupting receiver state because no idempotency key was sent SSRF via customer-supplied URLs pointed at internal addresses"
+    },
+    {
+      "type": "open",
+      "prompt": "Webhooks vs Cursor Pagination vs At-Least-Once Delivery — what decides between them?",
+      "points": [
+        "Cursor Pagination — A polled cursor feed is far less machinery when near-real-time is not required.",
+        "At-Least-Once Delivery — The delivery guarantee webhooks provide — receivers must be idempotent.",
+        "Webhooks — Pushing events to a URL the customer registered, so their server learns about changes without polling yours."
+      ],
+      "answer": "Cursor Pagination: A polled cursor feed is far less machinery when near-real-time is not required. At-Least-Once Delivery: The delivery guarantee webhooks provide — receivers must be idempotent."
+    },
+    {
+      "type": "open",
+      "prompt": "Webhooks appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Payment System (Wallet / Ledger) — How the payment processor reports that an asynchronous authorisation settled — the event the ledger is waiting on.",
+        "Design a Prescription Drug Marketplace — Carries fulfilment and authorisation callbacks from pharmacy and payment partners you do not control.",
+        "Design a Webhook Delivery System — The problem itself: everything here is about delivering one to a receiver you neither control nor trust to be up."
+      ],
+      "answer": "Webhooks carries different work in each: in Design a Payment System (Wallet / Ledger), how the payment processor reports that an asynchronous authorisation settled — the event the ledger is waiting on. in Design a Prescription Drug Marketplace, carries fulfilment and authorisation callbacks from pharmacy and payment partners you do not control. in Design a Webhook Delivery System, the problem itself: everything here is about delivering one to a receiver you neither control nor trust to be up."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Result sets are large and clients page through them; New items arrive while a client is paging — a feed, a log, a timeline. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Cursor Pagination — Returning a page plus an opaque cursor pointing at the last item, so the next page seeks rather than counting from the start.",
+        "Result sets are large and clients page through them",
+        "New items arrive while a client is paging — a feed, a log, a timeline",
+        "Deep pages must stay as fast as shallow ones"
+      ],
+      "answer": "Cursor Pagination. Returning a page plus an opaque cursor pointing at the last item, so the next page seeks rather than counting from the start. You reach for it when: Result sets are large and clients page through them; New items arrive while a client is paging — a feed, a log, a timeline; Deep pages must stay as fast as shallow ones."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Cursor Pagination in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Users must jump to an arbitrary page number, which cursors cannot express",
+        "The result set is small and bounded",
+        "There is no stable, unique sort key to build a cursor from",
+        "Requires a stable total ordering, usually a compound key including a tiebreaker",
+        "No total count without a separate query",
+        "Cursor encoding becomes a compatibility surface once clients persist them"
+      ],
+      "answer": "Don't reach for it when: Users must jump to an arbitrary page number, which cursors cannot express; The result set is small and bounded; There is no stable, unique sort key to build a cursor from. And it is never free: Requires a stable total ordering, usually a compound key including a tiebreaker; No total count without a separate query; Cursor encoding becomes a compatibility surface once clients persist them."
+    },
+    {
+      "type": "open",
+      "prompt": "Cursor Pagination is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "OFFSET used instead, so page 500 scans and discards 10,000 rows",
+        "Items skipped or repeated when new rows arrive between requests",
+        "Non-unique sort key causing rows at a boundary to be dropped",
+        "Cursor format changed and previously issued cursors stop decoding"
+      ],
+      "answer": "OFFSET used instead, so page 500 scans and discards 10,000 rows Items skipped or repeated when new rows arrive between requests Non-unique sort key causing rows at a boundary to be dropped Cursor format changed and previously issued cursors stop decoding"
+    },
+    {
+      "type": "open",
+      "prompt": "Cursor Pagination vs Inverted Index / Search vs Server-Sent Events — what decides between them?",
+      "points": [
+        "Inverted Index / Search — For ranked or faceted results, the engine's own paging semantics apply and deep paging is its own problem.",
+        "Server-Sent Events — If the client wants everything new as it happens, push beats repeated paging.",
+        "Cursor Pagination — Returning a page plus an opaque cursor pointing at the last item, so the next page seeks rather than counting from the start."
+      ],
+      "answer": "Inverted Index / Search: For ranked or faceted results, the engine's own paging semantics apply and deep paging is its own problem. Server-Sent Events: If the client wants everything new as it happens, push beats repeated paging."
+    },
+    {
+      "type": "open",
+      "prompt": "Cursor Pagination appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a News Feed — Cursor-based feed paging, so posts arriving mid-scroll do not shift the window and duplicate what the user just read.",
+        "Design a Chat System — Scrollback through message history, keyed on message id so a long thread pages backwards at constant cost.",
+        "Design a Proximity Service — Results page outward by distance band, so 'more places near me' does not rescan the whole radius.",
+        "Design a Search Engine — Result paging, where deep pages are expensive by construction because every shard must produce the full prefix."
+      ],
+      "answer": "Cursor Pagination carries different work in each: in Design a News Feed, cursor-based feed paging, so posts arriving mid-scroll do not shift the window and duplicate what the user just read. in Design a Chat System, scrollback through message history, keyed on message id so a long thread pages backwards at constant cost. in Design a Proximity Service, results page outward by distance band, so 'more places near me' does not rescan the whole radius. in Design a Search Engine, result paging, where deep pages are expensive by construction because every shard must produce the full prefix."
+    }
+  ]
+}

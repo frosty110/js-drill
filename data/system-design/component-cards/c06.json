@@ -1,0 +1,329 @@
+{
+  "id": "c06",
+  "num": 6,
+  "part": "Component decks",
+  "title": "Correctness & Coordination",
+  "summary": "Getting the right answer when parts fail independently. 6 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Idempotency — Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect.",
+    "Saga — A multi-step workflow across services where each step has a compensating action, because no distributed transaction is available.",
+    "Reservation / Hold — Temporarily claiming a scarce resource with an expiry, so a user can complete a multi-step flow without it being sold underneath them.",
+    "Conflict Resolution — Deciding what the truth is when two writers modified the same thing concurrently — last-write-wins, version vectors, OT or CRDTs.",
+    "Leader Election — Picking exactly one node to perform a role, with an agreed way to notice failure and pick again.",
+    "Distributed Lock — A lease held in a shared store that grants one holder the right to act on a resource for a bounded time."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Any retry path exists — and in a distributed system one always does; The prompt involves payments, orders, or anything a user could double-submit. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Idempotency — Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect.",
+        "Any retry path exists — and in a distributed system one always does",
+        "The prompt involves payments, orders, or anything a user could double-submit",
+        "Network timeouts leave the caller genuinely unable to tell whether the write happened"
+      ],
+      "answer": "Idempotency. Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect. You reach for it when: Any retry path exists — and in a distributed system one always does; The prompt involves payments, orders, or anything a user could double-submit; Network timeouts leave the caller genuinely unable to tell whether the write happened."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Idempotency in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The operation is naturally idempotent already (a PUT of a full resource); adding keys is ceremony",
+        "There is nowhere durable to record the key at the moment of the effect",
+        "A key store with a retention window, and that window is a real correctness parameter",
+        "The key must be recorded atomically with the effect, which constrains your storage choices",
+        "Clients must generate and reuse keys correctly — a contract you have to document and police"
+      ],
+      "answer": "Don't reach for it when: The operation is naturally idempotent already (a PUT of a full resource); adding keys is ceremony; There is nowhere durable to record the key at the moment of the effect. And it is never free: A key store with a retention window, and that window is a real correctness parameter; The key must be recorded atomically with the effect, which constrains your storage choices; Clients must generate and reuse keys correctly — a contract you have to document and police."
+    },
+    {
+      "type": "open",
+      "prompt": "Idempotency is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Key recorded after the effect, so a crash between them admits a duplicate",
+        "Retention expiring before the last legitimate retry arrives",
+        "Client regenerating a new key per retry, which defeats the entire mechanism",
+        "Same key reused for a genuinely different request, silently returning the wrong prior result"
+      ],
+      "answer": "Key recorded after the effect, so a crash between them admits a duplicate Retention expiring before the last legitimate retry arrives Client regenerating a new key per retry, which defeats the entire mechanism Same key reused for a genuinely different request, silently returning the wrong prior result"
+    },
+    {
+      "type": "open",
+      "prompt": "Idempotency vs Exactly-Once (Effectively-Once) vs Reservation / Hold — what decides between them?",
+      "points": [
+        "Exactly-Once (Effectively-Once) — The pipeline-level version of the same goal; idempotency is the per-operation building block.",
+        "Reservation / Hold — When the operation must hold a scarce resource rather than just be safe to repeat.",
+        "Idempotency — Making a repeated operation produce the same result as one execution, usually via a client-supplied key recorded with the effect."
+      ],
+      "answer": "Exactly-Once (Effectively-Once): The pipeline-level version of the same goal; idempotency is the per-operation building block. Reservation / Hold: When the operation must hold a scarce resource rather than just be safe to repeat."
+    },
+    {
+      "type": "open",
+      "prompt": "Idempotency appears in 9 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Notification System — Deduplicates sends, so an at-least-once redelivery does not mean the user's phone buzzes twice for one event.",
+        "Design a Payment System (Wallet / Ledger) — The client-supplied key on every transfer, recorded in the same transaction as the ledger entry — the difference between a retry and a double charge.",
+        "Design a Ticket Booking System (Ticketmaster-style) — Booking requests carry a key, so a double-tap or a lost response does not leave one user holding two seats for the same show.",
+        "Design a Prescription Drug Marketplace — Orders must survive retry without dispensing twice; the key is recorded with the fulfilment record, not before it.",
+        "Design a Distributed Job Scheduler — A job execution is keyed, so at-least-once dispatch does not run the same scheduled task twice on two different workers.",
+        "Design a Webhook Delivery System — The delivery id sent with every request, so receivers can recognise a redelivery. Its absence is what makes at-least-once dangerous for them.",
+        "Design an Authentication & Session Service — Token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke.",
+        "Design a Financial Crime Alert Investigation System — A redelivered alert file must not re-investigate what was already decided, so the key is the source alert id and revision rather than anything the pipeline generates.",
+        "Design a Business Verification Pipeline — A vendor timeout is ambiguous about whether the work happened, so the retry has to record one result and incur one charge no matter how many attempts it took."
+      ],
+      "answer": "Idempotency carries different work in each: in Design a Notification System, deduplicates sends, so an at-least-once redelivery does not mean the user's phone buzzes twice for one event. in Design a Payment System (Wallet / Ledger), the client-supplied key on every transfer, recorded in the same transaction as the ledger entry — the difference between a retry and a double charge. in Design a Ticket Booking System (Ticketmaster-style), booking requests carry a key, so a double-tap or a lost response does not leave one user holding two seats for the same show. in Design a Prescription Drug Marketplace, orders must survive retry without dispensing twice; the key is recorded with the fulfilment record, not before it. in Design a Distributed Job Scheduler, a job execution is keyed, so at-least-once dispatch does not run the same scheduled task twice on two different workers. in Design a Webhook Delivery System, the delivery id sent with every request, so receivers can recognise a redelivery. Its absence is what makes at-least-once dangerous for them. in Design an Authentication & Session Service, token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke. in Design a Financial Crime Alert Investigation System, a redelivered alert file must not re-investigate what was already decided, so the key is the source alert id and revision rather than anything the pipeline generates. in Design a Business Verification Pipeline, a vendor timeout is ambiguous about whether the work happened, so the retry has to record one result and incur one charge no matter how many attempts it took."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: A business operation spans several services that each own their own data; The prompt needs all-or-nothing semantics across boundaries where 2PC is not viable. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Saga — A multi-step workflow across services where each step has a compensating action, because no distributed transaction is available.",
+        "A business operation spans several services that each own their own data",
+        "The prompt needs all-or-nothing semantics across boundaries where 2PC is not viable",
+        "Steps involve external parties — payment processors, shipping, third-party APIs"
+      ],
+      "answer": "Saga. A multi-step workflow across services where each step has a compensating action, because no distributed transaction is available. You reach for it when: A business operation spans several services that each own their own data; The prompt needs all-or-nothing semantics across boundaries where 2PC is not viable; Steps involve external parties — payment processors, shipping, third-party APIs."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Saga in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "All the state lives in one database — use a transaction and stop inventing",
+        "Steps genuinely cannot be compensated (an email is sent, a drug is dispensed) and the design pretends they can",
+        "Every forward step needs a compensating step, roughly doubling the logic",
+        "Intermediate states are visible to users, so the product must define what they see",
+        "Orchestration state has to be durable and recoverable, which is another service"
+      ],
+      "answer": "Don't reach for it when: All the state lives in one database — use a transaction and stop inventing; Steps genuinely cannot be compensated (an email is sent, a drug is dispensed) and the design pretends they can. And it is never free: Every forward step needs a compensating step, roughly doubling the logic; Intermediate states are visible to users, so the product must define what they see; Orchestration state has to be durable and recoverable, which is another service."
+    },
+    {
+      "type": "open",
+      "prompt": "Saga is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Compensation itself failing, leaving the workflow stuck in a half-applied state",
+        "Non-compensatable side effect performed before a step that can still fail",
+        "Orchestrator crash mid-saga with no durable record of how far it got",
+        "Concurrent sagas on the same entity interleaving into a state neither expected"
+      ],
+      "answer": "Compensation itself failing, leaving the workflow stuck in a half-applied state Non-compensatable side effect performed before a step that can still fail Orchestrator crash mid-saga with no durable record of how far it got Concurrent sagas on the same entity interleaving into a state neither expected"
+    },
+    {
+      "type": "open",
+      "prompt": "Saga vs Reservation / Hold vs Transactional Outbox / CDC — what decides between them?",
+      "points": [
+        "Reservation / Hold — A two-phase reserve-then-confirm is a lighter pattern when the risk is only about holding scarce stock.",
+        "Transactional Outbox / CDC — The reliable way for each saga step to announce completion without a dual-write.",
+        "Saga — A multi-step workflow across services where each step has a compensating action, because no distributed transaction is available."
+      ],
+      "answer": "Reservation / Hold: A two-phase reserve-then-confirm is a lighter pattern when the risk is only about holding scarce stock. Transactional Outbox / CDC: The reliable way for each saga step to announce completion without a dual-write."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Inventory is finite and the purchase flow takes more than one request — seats, rooms, drivers; Overselling is unacceptable but locking for the whole session is unacceptable too. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Reservation / Hold — Temporarily claiming a scarce resource with an expiry, so a user can complete a multi-step flow without it being sold underneath them.",
+        "Inventory is finite and the purchase flow takes more than one request — seats, rooms, drivers",
+        "Overselling is unacceptable but locking for the whole session is unacceptable too",
+        "The prompt describes a checkout, booking or matching flow"
+      ],
+      "answer": "Reservation / Hold. Temporarily claiming a scarce resource with an expiry, so a user can complete a multi-step flow without it being sold underneath them. You reach for it when: Inventory is finite and the purchase flow takes more than one request — seats, rooms, drivers; Overselling is unacceptable but locking for the whole session is unacceptable too; The prompt describes a checkout, booking or matching flow."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Reservation / Hold in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The resource is effectively unlimited; a hold is pure overhead",
+        "The flow is a single atomic request — just do the transaction",
+        "Expiry handling: something must reliably release abandoned holds",
+        "Held-but-unsold inventory is real lost revenue during high demand",
+        "Users see 'available' counts that include or exclude holds, and you must decide which"
+      ],
+      "answer": "Don't reach for it when: The resource is effectively unlimited; a hold is pure overhead; The flow is a single atomic request — just do the transaction. And it is never free: Expiry handling: something must reliably release abandoned holds; Held-but-unsold inventory is real lost revenue during high demand; Users see 'available' counts that include or exclude holds, and you must decide which."
+    },
+    {
+      "type": "open",
+      "prompt": "Reservation / Hold is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Holds never expiring because the sweeper failed, silently freezing inventory",
+        "Race between expiry and confirmation, releasing something that was just purchased",
+        "Hold count not enforced atomically, so concurrent requests both succeed and oversell"
+      ],
+      "answer": "Holds never expiring because the sweeper failed, silently freezing inventory Race between expiry and confirmation, releasing something that was just purchased Hold count not enforced atomically, so concurrent requests both succeed and oversell"
+    },
+    {
+      "type": "open",
+      "prompt": "Reservation / Hold vs Distributed Lock vs Saga — what decides between them?",
+      "points": [
+        "Distributed Lock — A lock blocks others outright; a reservation is a lock with an owner, an expiry and a business meaning.",
+        "Saga — When the hold spans several services, the reservation becomes one step of a saga.",
+        "Reservation / Hold — Temporarily claiming a scarce resource with an expiry, so a user can complete a multi-step flow without it being sold underneath them."
+      ],
+      "answer": "Distributed Lock: A lock blocks others outright; a reservation is a lock with an owner, an expiry and a business meaning. Saga: When the hold spans several services, the reservation becomes one step of a saga."
+    },
+    {
+      "type": "open",
+      "prompt": "Reservation / Hold appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Ride-Sharing Service — A driver is held for a rider while the offer is outstanding, so two riders cannot be matched to the same car.",
+        "Design a Ticket Booking System (Ticketmaster-style) — Seats are held for the duration of checkout with an expiry — the mechanism that prevents overselling without locking for the whole session.",
+        "Design a Prescription Drug Marketplace — Stock is held while the order and its authorisation clear, since dispensing against inventory that is already gone is not recoverable.",
+        "Design a Human Review Queue — A claimed item is held under an expiring lease, which gives at-most-one-active-reviewer without a lock service and returns the item automatically when someone closes their laptop."
+      ],
+      "answer": "Reservation / Hold carries different work in each: in Design a Ride-Sharing Service, a driver is held for a rider while the offer is outstanding, so two riders cannot be matched to the same car. in Design a Ticket Booking System (Ticketmaster-style), seats are held for the duration of checkout with an expiry — the mechanism that prevents overselling without locking for the whole session. in Design a Prescription Drug Marketplace, stock is held while the order and its authorisation clear, since dispensing against inventory that is already gone is not recoverable. in Design a Human Review Queue, a claimed item is held under an expiring lease, which gives at-most-one-active-reviewer without a lock service and returns the item automatically when someone closes their laptop."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Writes can happen in multiple places at once — offline clients, multi-region, collaborative editing; The prompt says users edit the same document or record simultaneously. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Conflict Resolution — Deciding what the truth is when two writers modified the same thing concurrently — last-write-wins, version vectors, OT or CRDTs.",
+        "Writes can happen in multiple places at once — offline clients, multi-region, collaborative editing",
+        "The prompt says users edit the same document or record simultaneously",
+        "You chose availability over coordination and now must handle the consequence"
+      ],
+      "answer": "Conflict Resolution. Deciding what the truth is when two writers modified the same thing concurrently — last-write-wins, version vectors, OT or CRDTs. You reach for it when: Writes can happen in multiple places at once — offline clients, multi-region, collaborative editing; The prompt says users edit the same document or record simultaneously; You chose availability over coordination and now must handle the consequence."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Conflict Resolution in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "A single leader orders all writes — you do not have conflicts to resolve",
+        "Silent data loss is unacceptable and you are reaching for last-write-wins because it is easy",
+        "Version metadata per item, which can rival the data in size",
+        "CRDTs constrain the operations you may offer; OT requires a central sequencer",
+        "Some conflicts are genuinely a product decision and must be surfaced to a human"
+      ],
+      "answer": "Don't reach for it when: A single leader orders all writes — you do not have conflicts to resolve; Silent data loss is unacceptable and you are reaching for last-write-wins because it is easy. And it is never free: Version metadata per item, which can rival the data in size; CRDTs constrain the operations you may offer; OT requires a central sequencer; Some conflicts are genuinely a product decision and must be surfaced to a human."
+    },
+    {
+      "type": "open",
+      "prompt": "Conflict Resolution is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Last-write-wins discarding a concurrent update with no trace it existed",
+        "Clock skew making 'last' the wrong write entirely",
+        "Tombstone and version metadata growing without bound",
+        "Merge semantics that are technically correct but produce nonsense the user did not intend"
+      ],
+      "answer": "Last-write-wins discarding a concurrent update with no trace it existed Clock skew making 'last' the wrong write entirely Tombstone and version metadata growing without bound Merge semantics that are technically correct but produce nonsense the user did not intend"
+    },
+    {
+      "type": "open",
+      "prompt": "Conflict Resolution vs Message Ordering vs Distributed Lock — what decides between them?",
+      "points": [
+        "Message Ordering — Route all writes for one key through one partition and the conflict never arises.",
+        "Distributed Lock — Prevent concurrent modification instead of reconciling it — at the cost of availability.",
+        "Conflict Resolution — Deciding what the truth is when two writers modified the same thing concurrently — last-write-wins, version vectors, OT or CRDTs."
+      ],
+      "answer": "Message Ordering: Route all writes for one key through one partition and the conflict never arises. Distributed Lock: Prevent concurrent modification instead of reconciling it — at the cost of availability."
+    },
+    {
+      "type": "open",
+      "prompt": "Conflict Resolution appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Collaborative Document Editor — Concurrent edits to the same region are merged rather than rejected — the decision that makes collaborative editing feel live instead of contested.",
+        "Design a File Sync / Object Storage Service — Two devices editing the same file offline produce divergent versions, and the design must choose between merging and conflicted copies.",
+        "Design a Distributed Key-Value Store — Concurrent writes accepted by different replicas are reconciled with version vectors, since a quorum permits them by construction.",
+        "Design a Business Verification Pipeline — The document, the registry and the applicant will state different addresses, so precedence is declared in advance and the winning source is recorded rather than silently overwriting."
+      ],
+      "answer": "Conflict Resolution carries different work in each: in Design a Collaborative Document Editor, concurrent edits to the same region are merged rather than rejected — the decision that makes collaborative editing feel live instead of contested. in Design a File Sync / Object Storage Service, two devices editing the same file offline produce divergent versions, and the design must choose between merging and conflicted copies. in Design a Distributed Key-Value Store, concurrent writes accepted by different replicas are reconciled with version vectors, since a quorum permits them by construction. in Design a Business Verification Pipeline, the document, the registry and the applicant will state different addresses, so precedence is declared in advance and the winning source is recorded rather than silently overwriting."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Exactly one process must do a job — a scheduler, a compactor, a partition owner; The prompt needs automatic failover without an operator. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Leader Election — Picking exactly one node to perform a role, with an agreed way to notice failure and pick again.",
+        "Exactly one process must do a job — a scheduler, a compactor, a partition owner",
+        "The prompt needs automatic failover without an operator",
+        "Multiple nodes doing the work concurrently would be incorrect, not just wasteful"
+      ],
+      "answer": "Leader Election. Picking exactly one node to perform a role, with an agreed way to notice failure and pick again. You reach for it when: Exactly one process must do a job — a scheduler, a compactor, a partition owner; The prompt needs automatic failover without an operator; Multiple nodes doing the work concurrently would be incorrect, not just wasteful."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Leader Election in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The work is safely parallel — election adds a coordination dependency for nothing",
+        "You would be implementing consensus yourself; use etcd, ZooKeeper or Raft",
+        "A consensus system in your dependency graph, with its own availability story",
+        "Failover is not instant; there is a detection window where nobody is leader",
+        "Leases and fencing tokens must be honoured by the work itself, not just the election"
+      ],
+      "answer": "Don't reach for it when: The work is safely parallel — election adds a coordination dependency for nothing; You would be implementing consensus yourself; use etcd, ZooKeeper or Raft. And it is never free: A consensus system in your dependency graph, with its own availability story; Failover is not instant; there is a detection window where nobody is leader; Leases and fencing tokens must be honoured by the work itself, not just the election."
+    },
+    {
+      "type": "open",
+      "prompt": "Leader Election is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Split brain — a paused leader wakes up still believing it holds the role",
+        "Election storms flapping the role between nodes under load",
+        "Work performed after the lease expired because the worker never checked",
+        "The leader becoming a throughput bottleneck nobody planned for"
+      ],
+      "answer": "Split brain — a paused leader wakes up still believing it holds the role Election storms flapping the role between nodes under load Work performed after the lease expired because the worker never checked The leader becoming a throughput bottleneck nobody planned for"
+    },
+    {
+      "type": "open",
+      "prompt": "Leader Election vs Distributed Lock vs Consistent Hashing — what decides between them?",
+      "points": [
+        "Distributed Lock — A lock with a lease is election for one task rather than for a standing role.",
+        "Consistent Hashing — Partition ownership by hash gives every node a role without a single leader.",
+        "Leader Election — Picking exactly one node to perform a role, with an agreed way to notice failure and pick again."
+      ],
+      "answer": "Distributed Lock: A lock with a lease is election for one task rather than for a standing role. Consistent Hashing: Partition ownership by hash gives every node a role without a single leader."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: A critical section spans processes and double execution would corrupt state; A cheap mutual exclusion is needed for a short operation. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Distributed Lock — A lease held in a shared store that grants one holder the right to act on a resource for a bounded time.",
+        "A critical section spans processes and double execution would corrupt state",
+        "A cheap mutual exclusion is needed for a short operation",
+        "You need to serialise access to something that has no transaction of its own"
+      ],
+      "answer": "Distributed Lock. A lease held in a shared store that grants one holder the right to act on a resource for a bounded time. You reach for it when: A critical section spans processes and double execution would corrupt state; A cheap mutual exclusion is needed for a short operation; You need to serialise access to something that has no transaction of its own."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Distributed Lock in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The operation could be made idempotent instead — that is almost always the better answer",
+        "The lock would be held across a long or user-driven operation",
+        "You are using it as a correctness guarantee without fencing tokens",
+        "Every acquisition is a network round trip on the critical path",
+        "TTL choice is a genuine tradeoff: too short breaks long work, too long stalls after a crash",
+        "The lock store becomes a hard dependency and a bottleneck"
+      ],
+      "answer": "Don't reach for it when: The operation could be made idempotent instead — that is almost always the better answer; The lock would be held across a long or user-driven operation; You are using it as a correctness guarantee without fencing tokens. And it is never free: Every acquisition is a network round trip on the critical path; TTL choice is a genuine tradeoff: too short breaks long work, too long stalls after a crash; The lock store becomes a hard dependency and a bottleneck."
+    },
+    {
+      "type": "open",
+      "prompt": "Distributed Lock is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Holder pauses (GC, VM freeze) past its TTL while still believing it holds the lock",
+        "No fencing token, so a stale holder's write is accepted after the lock moved on",
+        "Deadlock or livelock from multiple locks acquired in inconsistent order",
+        "Lock-store failover losing lock state entirely and admitting two holders"
+      ],
+      "answer": "Holder pauses (GC, VM freeze) past its TTL while still believing it holds the lock No fencing token, so a stale holder's write is accepted after the lock moved on Deadlock or livelock from multiple locks acquired in inconsistent order Lock-store failover losing lock state entirely and admitting two holders"
+    },
+    {
+      "type": "open",
+      "prompt": "Distributed Lock vs Idempotency vs Message Ordering — what decides between them?",
+      "points": [
+        "Idempotency — Make the double execution harmless instead of preventing it. Fewer moving parts, no TTL to tune.",
+        "Message Ordering — Serialise by routing to one partition owner rather than by contending on a lock.",
+        "Distributed Lock — A lease held in a shared store that grants one holder the right to act on a resource for a bounded time."
+      ],
+      "answer": "Idempotency: Make the double execution harmless instead of preventing it. Fewer moving parts, no TTL to tune. Message Ordering: Serialise by routing to one partition owner rather than by contending on a lock."
+    },
+    {
+      "type": "open",
+      "prompt": "Distributed Lock appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Ride-Sharing Service — Serialises assignment of one driver, so two concurrent matches cannot both claim the same car.",
+        "Design a Ticket Booking System (Ticketmaster-style) — Guards the seat-hold critical section under flash-sale contention, where optimistic retry alone would thrash.",
+        "Design a Distributed Job Scheduler — Ensures one scheduler tick executes once, with a lease so a crashed holder does not stall the schedule forever."
+      ],
+      "answer": "Distributed Lock carries different work in each: in Design a Ride-Sharing Service, serialises assignment of one driver, so two concurrent matches cannot both claim the same car. in Design a Ticket Booking System (Ticketmaster-style), guards the seat-hold critical section under flash-sale contention, where optimistic retry alone would thrash. in Design a Distributed Job Scheduler, ensures one scheduler tick executes once, with a lease so a crashed holder does not stall the schedule forever."
+    }
+  ]
+}

@@ -1,0 +1,156 @@
+{
+  "id": "c10",
+  "num": 10,
+  "part": "Component decks",
+  "title": "Media & ML Serving",
+  "summary": "Specialised workloads with their own economics. 3 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Transcoding Pipeline — Converting uploaded media into the ladder of formats, resolutions and bitrates that clients actually stream.",
+    "Feature Store / Serving — Serving the same computed signals to training and to inference, with an offline store for history and an online store for low-latency reads.",
+    "Resource Scheduling — Allocating scarce, expensive compute — GPUs, batch slots — across competing requests by priority, batching and queueing."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Users upload video or audio in arbitrary formats; Playback must adapt to device capability and network conditions. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Transcoding Pipeline — Converting uploaded media into the ladder of formats, resolutions and bitrates that clients actually stream.",
+        "Users upload video or audio in arbitrary formats",
+        "Playback must adapt to device capability and network conditions",
+        "The prompt mentions streaming, adaptive bitrate or thumbnails"
+      ],
+      "answer": "Transcoding Pipeline. Converting uploaded media into the ladder of formats, resolutions and bitrates that clients actually stream. You reach for it when: Users upload video or audio in arbitrary formats; Playback must adapt to device capability and network conditions; The prompt mentions streaming, adaptive bitrate or thumbnails."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Transcoding Pipeline in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Media is already in a single known format every client supports",
+        "Volume is low enough that an off-the-shelf managed service is obviously right",
+        "CPU or GPU capacity that dwarfs the rest of the system",
+        "Storage multiplies by the number of renditions you generate",
+        "Latency between upload and availability is now a product decision"
+      ],
+      "answer": "Don't reach for it when: Media is already in a single known format every client supports; Volume is low enough that an off-the-shelf managed service is obviously right. And it is never free: CPU or GPU capacity that dwarfs the rest of the system; Storage multiplies by the number of renditions you generate; Latency between upload and availability is now a product decision."
+    },
+    {
+      "type": "open",
+      "prompt": "Transcoding Pipeline is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Queue backing up during an upload spike, so publish latency grows without bound",
+        "A single enormous file monopolising workers and starving everything behind it",
+        "Partial ladder published, so some clients get a resolution that does not exist",
+        "Retrying a half-finished job and paying full cost again with no checkpointing"
+      ],
+      "answer": "Queue backing up during an upload spike, so publish latency grows without bound A single enormous file monopolising workers and starving everything behind it Partial ladder published, so some clients get a resolution that does not exist Retrying a half-finished job and paying full cost again with no checkpointing"
+    },
+    {
+      "type": "open",
+      "prompt": "Transcoding Pipeline vs Chunking vs CDN — what decides between them?",
+      "points": [
+        "Chunking — Segmenting first makes transcoding parallel and restartable per segment.",
+        "CDN — Transcoding makes the renditions; the CDN is what makes serving them affordable.",
+        "Transcoding Pipeline — Converting uploaded media into the ladder of formats, resolutions and bitrates that clients actually stream."
+      ],
+      "answer": "Chunking: Segmenting first makes transcoding parallel and restartable per segment. CDN: Transcoding makes the renditions; the CDN is what makes serving them affordable."
+    },
+    {
+      "type": "open",
+      "prompt": "Transcoding Pipeline appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Video Streaming Service — Converts each upload into the full bitrate ladder, so players can adapt to changing network conditions mid-playback.",
+        "Design a Live Streaming Service — Must run in near-real-time against live ingest, which is exactly what makes it harder here than in the on-demand case.",
+        "Design a Short-Form Video Feed — Produces the short vertical renditions and thumbnails, at a volume driven by upload rate rather than by watch time."
+      ],
+      "answer": "Transcoding Pipeline carries different work in each: in Design a Video Streaming Service, converts each upload into the full bitrate ladder, so players can adapt to changing network conditions mid-playback. in Design a Live Streaming Service, must run in near-real-time against live ingest, which is exactly what makes it harder here than in the on-demand case. in Design a Short-Form Video Feed, produces the short vertical renditions and thumbnails, at a volume driven by upload rate rather than by watch time."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Models need per-entity features at request time within a few milliseconds; The same feature definition must be used in training and serving. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Feature Store / Serving — Serving the same computed signals to training and to inference, with an offline store for history and an online store for low-latency reads.",
+        "Models need per-entity features at request time within a few milliseconds",
+        "The same feature definition must be used in training and serving",
+        "Several models or teams share features and are currently recomputing them separately"
+      ],
+      "answer": "Feature Store / Serving. Serving the same computed signals to training and to inference, with an offline store for history and an online store for low-latency reads. You reach for it when: Models need per-entity features at request time within a few milliseconds; The same feature definition must be used in training and serving; Several models or teams share features and are currently recomputing them separately."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Feature Store / Serving in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "One model with features computable from the request payload alone",
+        "You have no training/serving skew problem yet and are pre-building for one",
+        "Two stores to keep consistent — offline history and online serving",
+        "Point-in-time correctness for training data is genuinely hard to get right",
+        "Feature definitions become shared contracts with versioning and deprecation"
+      ],
+      "answer": "Don't reach for it when: One model with features computable from the request payload alone; You have no training/serving skew problem yet and are pre-building for one. And it is never free: Two stores to keep consistent — offline history and online serving; Point-in-time correctness for training data is genuinely hard to get right; Feature definitions become shared contracts with versioning and deprecation."
+    },
+    {
+      "type": "open",
+      "prompt": "Feature Store / Serving is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Training/serving skew from the same feature computed two different ways",
+        "Label leakage from features that encode information unavailable at prediction time",
+        "Stale online features silently degrading model quality with no error anywhere",
+        "Backfill of a new feature being far more expensive than anyone estimated"
+      ],
+      "answer": "Training/serving skew from the same feature computed two different ways Label leakage from features that encode information unavailable at prediction time Stale online features silently degrading model quality with no error anywhere Backfill of a new feature being far more expensive than anyone estimated"
+    },
+    {
+      "type": "open",
+      "prompt": "Feature Store / Serving vs Cache vs Stream Processing — what decides between them?",
+      "points": [
+        "Cache — A plain cache of precomputed features when there is one consumer and no training-parity requirement.",
+        "Stream Processing — Where real-time features are computed before they are stored and served.",
+        "Feature Store / Serving — Serving the same computed signals to training and to inference, with an offline store for history and an online store for low-latency reads."
+      ],
+      "answer": "Cache: A plain cache of precomputed features when there is one consumer and no training-parity requirement. Stream Processing: Where real-time features are computed before they are stored and served."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Requests vary in priority or in cost and cannot be treated identically; Batching several requests together materially improves throughput. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Resource Scheduling — Allocating scarce, expensive compute — GPUs, batch slots — across competing requests by priority, batching and queueing.",
+        "The bottleneck resource is expensive enough that utilisation is the design goal",
+        "Requests vary in priority or in cost and cannot be treated identically",
+        "Batching several requests together materially improves throughput"
+      ],
+      "answer": "Resource Scheduling. Allocating scarce, expensive compute — GPUs, batch slots — across competing requests by priority, batching and queueing. You reach for it when: The bottleneck resource is expensive enough that utilisation is the design goal; Requests vary in priority or in cost and cannot be treated identically; Batching several requests together materially improves throughput."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Resource Scheduling in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Capacity is cheap and elastic — just autoscale",
+        "Requests are uniform and a plain queue suffices",
+        "Batching trades per-request latency for throughput, and that curve must be chosen deliberately",
+        "Priority classes need admission control or the top class starves everyone else",
+        "The scheduler becomes a critical, stateful component of its own"
+      ],
+      "answer": "Don't reach for it when: Capacity is cheap and elastic — just autoscale; Requests are uniform and a plain queue suffices. And it is never free: Batching trades per-request latency for throughput, and that curve must be chosen deliberately; Priority classes need admission control or the top class starves everyone else; The scheduler becomes a critical, stateful component of its own."
+    },
+    {
+      "type": "open",
+      "prompt": "Resource Scheduling is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Head-of-line blocking from one very large request occupying the resource",
+        "Batch window tuned for throughput, blowing the latency budget for interactive traffic",
+        "Fragmentation leaving capacity unusable because no waiting request fits it",
+        "Preemption losing partially completed work with no checkpoint"
+      ],
+      "answer": "Head-of-line blocking from one very large request occupying the resource Batch window tuned for throughput, blowing the latency budget for interactive traffic Fragmentation leaving capacity unusable because no waiting request fits it Preemption losing partially completed work with no checkpoint"
+    },
+    {
+      "type": "open",
+      "prompt": "Resource Scheduling vs Work Queue vs Rate Limiting — what decides between them?",
+      "points": [
+        "Work Queue — When requests are uniform and fair FIFO ordering is acceptable.",
+        "Rate Limiting — Capping demand per caller is simpler than scheduling it, when fairness is the actual goal.",
+        "Resource Scheduling — Allocating scarce, expensive compute — GPUs, batch slots — across competing requests by priority, batching and queueing."
+      ],
+      "answer": "Work Queue: When requests are uniform and fair FIFO ordering is acceptable. Rate Limiting: Capping demand per caller is simpler than scheduling it, when fairness is the actual goal."
+    }
+  ]
+}

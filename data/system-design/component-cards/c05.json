@@ -1,0 +1,556 @@
+{
+  "id": "c05",
+  "num": 5,
+  "part": "Component decks",
+  "title": "Async & Messaging",
+  "summary": "Decoupling the producer from the consumer. 10 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Work Queue — A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path.",
+    "Pub/Sub — One published event delivered to every interested subscriber, so producers never learn who consumes them.",
+    "Fan-out — Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull).",
+    "Message Ordering — Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition.",
+    "At-Least-Once Delivery — The default durable-messaging guarantee: a message is redelivered until acknowledged, so it may arrive more than once but never zero times.",
+    "Exactly-Once (Effectively-Once) — Making duplicate delivery invisible in the result, by pairing at-least-once transport with idempotent or transactional application.",
+    "Dead-Letter Queue — A side channel for messages that have failed processing too many times, so one bad item cannot block the pipeline forever."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt has work that must happen but not before the user gets a response; Producer and consumer rates differ, especially in bursts. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Work Queue — A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path.",
+        "The prompt has work that must happen but not before the user gets a response",
+        "Producer and consumer rates differ, especially in bursts",
+        "Retries need to be automatic and durable across a worker crash"
+      ],
+      "answer": "Work Queue. A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path. You reach for it when: The prompt has work that must happen but not before the user gets a response; Producer and consumer rates differ, especially in bursts; Retries need to be automatic and durable across a worker crash."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Work Queue in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The caller needs the result to continue — you have added latency and a callback problem",
+        "Strict end-to-end ordering across all work is required",
+        "The work is trivial; a queue adds an operational component to save nothing",
+        "Eventual consistency becomes visible to users ('it will appear in a moment')",
+        "Another durable system to run, monitor and reason about",
+        "Every consumer must be idempotent, because delivery is at-least-once"
+      ],
+      "answer": "Don't reach for it when: The caller needs the result to continue — you have added latency and a callback problem; Strict end-to-end ordering across all work is required; The work is trivial; a queue adds an operational component to save nothing. And it is never free: Eventual consistency becomes visible to users ('it will appear in a moment'); Another durable system to run, monitor and reason about; Every consumer must be idempotent, because delivery is at-least-once."
+    },
+    {
+      "type": "open",
+      "prompt": "Work Queue is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Unbounded backlog growth when consumers cannot keep up, turning latency into an outage",
+        "Poison message retried forever, blocking the queue behind it",
+        "Duplicate processing from redelivery after a consumer crash mid-work"
+      ],
+      "answer": "Unbounded backlog growth when consumers cannot keep up, turning latency into an outage Poison message retried forever, blocking the queue behind it Duplicate processing from redelivery after a consumer crash mid-work"
+    },
+    {
+      "type": "open",
+      "prompt": "Work Queue vs Pub/Sub vs Backpressure — what decides between them?",
+      "points": [
+        "Pub/Sub — A queue gives each message to ONE consumer; pub/sub gives it to all of them. Different question.",
+        "Backpressure — A queue absorbs bursts; it does not fix a consumer that is permanently too slow.",
+        "Work Queue — A durable buffer of tasks between a producer and a pool of workers, so slow work happens outside the request path."
+      ],
+      "answer": "Pub/Sub: A queue gives each message to ONE consumer; pub/sub gives it to all of them. Different question. Backpressure: A queue absorbs bursts; it does not fix a consumer that is permanently too slow."
+    },
+    {
+      "type": "open",
+      "prompt": "Work Queue appears in 9 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Web Crawler — The URL frontier — the crawler's queue of what to fetch next, with politeness and priority encoded in how items are dequeued.",
+        "Design a Notification System — Decouples the triggering event from delivery, so a slow SMS provider cannot block push notifications or the request that caused them.",
+        "Design a Distributed Job Scheduler — The dispatch path: due jobs are enqueued and worker pools pull from it, which is what separates deciding-what-is-due from running-it.",
+        "Design an LLM Inference Platform — Inference requests wait for scarce GPU capacity rather than being rejected outright, with queue depth feeding the admission decision.",
+        "Design a Content Moderation Pipeline — Content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity.",
+        "Design a Financial Crime Alert Investigation System — Alerts arrive as an overnight batch and each investigation runs for minutes, so the queue is what decouples a 4K-alert dump from a fixed pool of concurrent investigations.",
+        "Design a Sanctions Screening System — Bulk re-screening after a list change is queued rather than run inline, because the two workloads share a matcher but not a latency budget.",
+        "Design a Human Review Queue — The workers are people, so the queue hands out leases rather than assignments and reclaims anything a reviewer abandons without needing the client to cooperate.",
+        "Design a Business Verification Pipeline — Verification hops have wildly different latencies, from a 2-second API call to a manual check taking days, so the work is queued per hop rather than held open per application."
+      ],
+      "answer": "Work Queue carries different work in each: in Design a Web Crawler, the URL frontier — the crawler's queue of what to fetch next, with politeness and priority encoded in how items are dequeued. in Design a Notification System, decouples the triggering event from delivery, so a slow SMS provider cannot block push notifications or the request that caused them. in Design a Distributed Job Scheduler, the dispatch path: due jobs are enqueued and worker pools pull from it, which is what separates deciding-what-is-due from running-it. in Design an LLM Inference Platform, inference requests wait for scarce GPU capacity rather than being rejected outright, with queue depth feeding the admission decision. in Design a Content Moderation Pipeline, content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity. in Design a Financial Crime Alert Investigation System, alerts arrive as an overnight batch and each investigation runs for minutes, so the queue is what decouples a 4K-alert dump from a fixed pool of concurrent investigations. in Design a Sanctions Screening System, bulk re-screening after a list change is queued rather than run inline, because the two workloads share a matcher but not a latency budget. in Design a Human Review Queue, the workers are people, so the queue hands out leases rather than assignments and reclaims anything a reviewer abandons without needing the client to cooperate. in Design a Business Verification Pipeline, verification hops have wildly different latencies, from a 2-second API call to a manual check taking days, so the work is queued per hop rather than held open per application."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Several unrelated systems must react to the same event; You want to add a new consumer later without touching the producer. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Pub/Sub — One published event delivered to every interested subscriber, so producers never learn who consumes them.",
+        "Several unrelated systems must react to the same event",
+        "You want to add a new consumer later without touching the producer",
+        "The prompt describes an event that fans out to notifications, analytics and search indexing at once"
+      ],
+      "answer": "Pub/Sub. One published event delivered to every interested subscriber, so producers never learn who consumes them. You reach for it when: Several unrelated systems must react to the same event; You want to add a new consumer later without touching the producer; The prompt describes an event that fans out to notifications, analytics and search indexing at once."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Pub/Sub in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Exactly one worker should handle each item — that is a work queue",
+        "The producer needs to know the work completed",
+        "No single place shows what happens when an event fires; tracing gets harder",
+        "Every subscriber is a new failure mode for the same event",
+        "Schema evolution must satisfy consumers you may not know about"
+      ],
+      "answer": "Don't reach for it when: Exactly one worker should handle each item — that is a work queue; The producer needs to know the work completed. And it is never free: No single place shows what happens when an event fires; tracing gets harder; Every subscriber is a new failure mode for the same event; Schema evolution must satisfy consumers you may not know about."
+    },
+    {
+      "type": "open",
+      "prompt": "Pub/Sub is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "A slow subscriber applying backpressure to the whole topic, or being silently dropped",
+        "Event-schema change breaking a consumer nobody remembered existed",
+        "Redelivery producing duplicate side effects in every subscriber at once"
+      ],
+      "answer": "A slow subscriber applying backpressure to the whole topic, or being silently dropped Event-schema change breaking a consumer nobody remembered existed Redelivery producing duplicate side effects in every subscriber at once"
+    },
+    {
+      "type": "open",
+      "prompt": "Pub/Sub vs Work Queue vs Transactional Outbox / CDC — what decides between them?",
+      "points": [
+        "Work Queue — When the work must happen once, not N times.",
+        "Transactional Outbox / CDC — If the event must be exactly as durable as the database write that caused it.",
+        "Pub/Sub — One published event delivered to every interested subscriber, so producers never learn who consumes them."
+      ],
+      "answer": "Work Queue: When the work must happen once, not N times. Transactional Outbox / CDC: If the event must be exactly as durable as the database write that caused it."
+    },
+    {
+      "type": "open",
+      "prompt": "Pub/Sub appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Notification System — One triggering event delivered to the email, push and SMS pipelines independently, so adding a channel never touches the producer.",
+        "Design a Collaborative Document Editor — Edit events fan out to every collaborator's session, decoupled from whichever client produced the change.",
+        "Design an Observability Platform — Telemetry is published once and consumed by alerting, storage and dashboards separately, each at its own pace.",
+        "Design a Content Moderation Pipeline — An upload event reaches the scoring models, the audit log and the review queue without the uploader knowing any of them exist."
+      ],
+      "answer": "Pub/Sub carries different work in each: in Design a Notification System, one triggering event delivered to the email, push and SMS pipelines independently, so adding a channel never touches the producer. in Design a Collaborative Document Editor, edit events fan out to every collaborator's session, decoupled from whichever client produced the change. in Design an Observability Platform, telemetry is published once and consumed by alerting, storage and dashboards separately, each at its own pace. in Design a Content Moderation Pipeline, an upload event reaches the scoring models, the audit log and the review queue without the uploader knowing any of them exist."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Reads vastly outnumber writes and the read must be fast; The prompt describes feeds, timelines or notifications with a follower graph. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Fan-out — Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull).",
+        "Reads vastly outnumber writes and the read must be fast",
+        "The prompt describes feeds, timelines or notifications with a follower graph",
+        "The per-recipient view is expensive to assemble at query time"
+      ],
+      "answer": "Fan-out. Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull). You reach for it when: Reads vastly outnumber writes and the read must be fast; The prompt describes feeds, timelines or notifications with a follower graph; The per-recipient view is expensive to assemble at query time."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Fan-out in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "One writer has millions of recipients — write amplification explodes",
+        "Recipients rarely read what you precomputed; you did the work for nothing",
+        "The content changes after delivery and every copy would need updating",
+        "Storage for N copies of what was logically one item",
+        "Write amplification proportional to the fan-out degree",
+        "Deletes and edits must chase every copy you created"
+      ],
+      "answer": "Don't reach for it when: One writer has millions of recipients — write amplification explodes; Recipients rarely read what you precomputed; you did the work for nothing; The content changes after delivery and every copy would need updating. And it is never free: Storage for N copies of what was logically one item; Write amplification proportional to the fan-out degree; Deletes and edits must chase every copy you created."
+    },
+    {
+      "type": "open",
+      "prompt": "Fan-out is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Celebrity write becoming a thundering-herd event that stalls the fan-out pipeline",
+        "Partial fan-out on failure leaving some recipients with the item and others without",
+        "Unbounded per-recipient lists growing forever because nothing caps them"
+      ],
+      "answer": "Celebrity write becoming a thundering-herd event that stalls the fan-out pipeline Partial fan-out on failure leaving some recipients with the item and others without Unbounded per-recipient lists growing forever because nothing caps them"
+    },
+    {
+      "type": "open",
+      "prompt": "Fan-out vs Ranking vs Cache — what decides between them?",
+      "points": [
+        "Ranking — Fan-out decides WHAT is in the feed; ranking decides the order. The hybrid answer needs both.",
+        "Cache — Fan-out-on-read plus an aggressive cache is the pull-side answer, and it is right for low-follower accounts.",
+        "Fan-out — Turning one write into many per-recipient writes — precomputing on write (push) instead of assembling on read (pull)."
+      ],
+      "answer": "Ranking: Fan-out decides WHAT is in the feed; ranking decides the order. The hybrid answer needs both. Cache: Fan-out-on-read plus an aggressive cache is the pull-side answer, and it is right for low-follower accounts."
+    },
+    {
+      "type": "open",
+      "prompt": "Fan-out appears in 5 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a News Feed — The central tradeoff: push each post into every follower's timeline on write, or assemble on read — with the hybrid as the production answer.",
+        "Design a Photo-Sharing Service — New photos are pushed into follower feeds, carrying the same celebrity write-amplification problem and the same hybrid escape hatch.",
+        "Design a Chat System — One message delivered to every member of a group conversation — a fan-out over live connections rather than over stored timelines.",
+        "Design a Notification System — One triggering event expanded into per-user, per-channel deliveries, with email, push and SMS each a separate send from a single source event.",
+        "Design a Live Streaming Service — One encoded stream distributed to the entire audience at once, where the fan-out degree is the viewer count and the CDN is what makes it affordable."
+      ],
+      "answer": "Fan-out carries different work in each: in Design a News Feed, the central tradeoff: push each post into every follower's timeline on write, or assemble on read — with the hybrid as the production answer. in Design a Photo-Sharing Service, new photos are pushed into follower feeds, carrying the same celebrity write-amplification problem and the same hybrid escape hatch. in Design a Chat System, one message delivered to every member of a group conversation — a fan-out over live connections rather than over stored timelines. in Design a Notification System, one triggering event expanded into per-user, per-channel deliveries, with email, push and SMS each a separate send from a single source event. in Design a Live Streaming Service, one encoded stream distributed to the entire audience at once, where the fan-out degree is the viewer count and the CDN is what makes it affordable."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: State transitions must apply in sequence — edits, balances, status changes; A later event invalidates an earlier one and applying them backwards corrupts state. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Message Ordering — Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition.",
+        "State transitions must apply in sequence — edits, balances, status changes",
+        "The prompt says messages in a conversation or a stream must not appear out of order",
+        "A later event invalidates an earlier one and applying them backwards corrupts state"
+      ],
+      "answer": "Message Ordering. Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition. You reach for it when: State transitions must apply in sequence — edits, balances, status changes; The prompt says messages in a conversation or a stream must not appear out of order; A later event invalidates an earlier one and applying them backwards corrupts state."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Message Ordering in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Operations are commutative; ordering costs parallelism you did not need to spend",
+        "Global ordering across all keys is the requirement — that serialises everything",
+        "Per-key ordering means per-key serialisation, capping parallelism at the partition count",
+        "A partition's throughput becomes the ceiling for its hottest key",
+        "Rebalancing consumers has to preserve the guarantee, which complicates scaling"
+      ],
+      "answer": "Don't reach for it when: Operations are commutative; ordering costs parallelism you did not need to spend; Global ordering across all keys is the requirement — that serialises everything. And it is never free: Per-key ordering means per-key serialisation, capping parallelism at the partition count; A partition's throughput becomes the ceiling for its hottest key; Rebalancing consumers has to preserve the guarantee, which complicates scaling."
+    },
+    {
+      "type": "open",
+      "prompt": "Message Ordering is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Retrying a failed message out of band and applying it after its successor",
+        "Repartitioning silently breaking the key-to-partition binding that provided the order",
+        "Clock-based ordering across producers giving an order that never actually happened"
+      ],
+      "answer": "Retrying a failed message out of band and applying it after its successor Repartitioning silently breaking the key-to-partition binding that provided the order Clock-based ordering across producers giving an order that never actually happened"
+    },
+    {
+      "type": "open",
+      "prompt": "Message Ordering vs Conflict Resolution vs Idempotency — what decides between them?",
+      "points": [
+        "Conflict Resolution — If you cannot order, make the operations mergeable instead — CRDTs and version vectors.",
+        "Idempotency — Sequence numbers plus idempotent apply lets a consumer detect and discard out-of-order replays.",
+        "Message Ordering — Guaranteeing that messages sharing a key are processed in the order they were produced — usually by binding a key to one partition."
+      ],
+      "answer": "Conflict Resolution: If you cannot order, make the operations mergeable instead — CRDTs and version vectors. Idempotency: Sequence numbers plus idempotent apply lets a consumer detect and discard out-of-order replays."
+    },
+    {
+      "type": "open",
+      "prompt": "Message Ordering appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Chat System — Messages within one conversation must appear in the same order for every participant, which pins a conversation to a single partition.",
+        "Design a Collaborative Document Editor — Operations on a document must apply in an agreed sequence — the thing the OT or CRDT machinery exists to establish.",
+        "Design a Distributed Message Queue — Per-partition ordering is the guarantee the broker sells; global ordering is deliberately not offered because it would serialise everything.",
+        "Design a Human Review Queue — Arrival order carries no information about importance, so the queue orders by risk and deadline with an aging term that bounds how long the tail can wait."
+      ],
+      "answer": "Message Ordering carries different work in each: in Design a Chat System, messages within one conversation must appear in the same order for every participant, which pins a conversation to a single partition. in Design a Collaborative Document Editor, operations on a document must apply in an agreed sequence — the thing the OT or CRDT machinery exists to establish. in Design a Distributed Message Queue, per-partition ordering is the guarantee the broker sells; global ordering is deliberately not offered because it would serialise everything. in Design a Human Review Queue, arrival order carries no information about importance, so the queue orders by risk and deadline with an aging term that bounds how long the tail can wait."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Losing a message is unacceptable and duplicates are survivable; Consumers can be made idempotent. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "At-Least-Once Delivery — The default durable-messaging guarantee: a message is redelivered until acknowledged, so it may arrive more than once but never zero times.",
+        "Losing a message is unacceptable and duplicates are survivable",
+        "Consumers can be made idempotent",
+        "The prompt involves deliveries, notifications or webhooks that must not be dropped"
+      ],
+      "answer": "At-Least-Once Delivery. The default durable-messaging guarantee: a message is redelivered until acknowledged, so it may arrive more than once but never zero times. You reach for it when: Losing a message is unacceptable and duplicates are survivable; Consumers can be made idempotent; The prompt involves deliveries, notifications or webhooks that must not be dropped."
+    },
+    {
+      "type": "open",
+      "prompt": "You put At-Least-Once Delivery in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Side effects are irreversible and cannot be deduplicated — charging a card twice is not a rounding error",
+        "Duplicate suppression cannot be implemented anywhere in the pipeline",
+        "Every consumer must carry deduplication or idempotency logic",
+        "Retry policy is a real design surface: interval, ceiling, jitter, give-up",
+        "Duplicate rate is invisible unless you measure it"
+      ],
+      "answer": "Don't reach for it when: Side effects are irreversible and cannot be deduplicated — charging a card twice is not a rounding error; Duplicate suppression cannot be implemented anywhere in the pipeline. And it is never free: Every consumer must carry deduplication or idempotency logic; Retry policy is a real design surface: interval, ceiling, jitter, give-up; Duplicate rate is invisible unless you measure it."
+    },
+    {
+      "type": "open",
+      "prompt": "At-Least-Once Delivery is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Consumer acknowledges before the work is durable and the message is lost anyway",
+        "Retry storm after a downstream outage, amplifying load exactly when it is weakest",
+        "Poison message consuming the entire retry budget forever with no dead-letter path"
+      ],
+      "answer": "Consumer acknowledges before the work is durable and the message is lost anyway Retry storm after a downstream outage, amplifying load exactly when it is weakest Poison message consuming the entire retry budget forever with no dead-letter path"
+    },
+    {
+      "type": "open",
+      "prompt": "At-Least-Once Delivery vs Exactly-Once (Effectively-Once) vs Dead-Letter Queue — what decides between them?",
+      "points": [
+        "Exactly-Once (Effectively-Once) — Effectively-once via idempotency keys and transactional sinks — more machinery, stronger promise.",
+        "Dead-Letter Queue — The required companion: somewhere for a message that has failed enough times to go.",
+        "At-Least-Once Delivery — The default durable-messaging guarantee: a message is redelivered until acknowledged, so it may arrive more than once but never zero times."
+      ],
+      "answer": "Exactly-Once (Effectively-Once): Effectively-once via idempotency keys and transactional sinks — more machinery, stronger promise. Dead-Letter Queue: The required companion: somewhere for a message that has failed enough times to go."
+    },
+    {
+      "type": "open",
+      "prompt": "At-Least-Once Delivery appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Notification System — A notification may arrive twice but must never be silently dropped, which is what sets the deduplication requirement downstream.",
+        "Design a Distributed Job Scheduler — A scheduled job may fire twice if a worker dies mid-run, so job bodies have to tolerate re-execution by construction.",
+        "Design a Webhook Delivery System — The contract offered to receivers — retried until acknowledged — which is why every delivery carries an id they can dedupe on.",
+        "Design a Financial Crime Alert Investigation System — Alert delivery is retried by the bank and by the transport, so the pipeline assumes duplicates by default and makes the investigation step safe to repeat rather than trying to deduplicate at the edge."
+      ],
+      "answer": "At-Least-Once Delivery carries different work in each: in Design a Notification System, a notification may arrive twice but must never be silently dropped, which is what sets the deduplication requirement downstream. in Design a Distributed Job Scheduler, a scheduled job may fire twice if a worker dies mid-run, so job bodies have to tolerate re-execution by construction. in Design a Webhook Delivery System, the contract offered to receivers — retried until acknowledged — which is why every delivery carries an id they can dedupe on. in Design a Financial Crime Alert Investigation System, alert delivery is retried by the bank and by the transport, so the pipeline assumes duplicates by default and makes the investigation step safe to repeat rather than trying to deduplicate at the edge."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt counts money, inventory or billable events where a double-apply is a real defect; Aggregates must be exact rather than approximately right. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Exactly-Once (Effectively-Once) — Making duplicate delivery invisible in the result, by pairing at-least-once transport with idempotent or transactional application.",
+        "The prompt counts money, inventory or billable events where a double-apply is a real defect",
+        "Aggregates must be exact rather than approximately right",
+        "You control the sink well enough to commit offset and effect together"
+      ],
+      "answer": "Exactly-Once (Effectively-Once). Making duplicate delivery invisible in the result, by pairing at-least-once transport with idempotent or transactional application. You reach for it when: The prompt counts money, inventory or billable events where a double-apply is a real defect; Aggregates must be exact rather than approximately right; You control the sink well enough to commit offset and effect together."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Exactly-Once (Effectively-Once) in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The sink is a third party you cannot make transactional",
+        "Approximate results are acceptable — you are buying an expensive guarantee for nothing",
+        "Deduplication state per key, which must be kept for at least the retry window",
+        "Transactional writes are slower and constrain which sinks you may use",
+        "It is only exactly-once within the boundary you control; the edges remain at-least-once"
+      ],
+      "answer": "Don't reach for it when: The sink is a third party you cannot make transactional; Approximate results are acceptable — you are buying an expensive guarantee for nothing. And it is never free: Deduplication state per key, which must be kept for at least the retry window; Transactional writes are slower and constrain which sinks you may use; It is only exactly-once within the boundary you control; the edges remain at-least-once."
+    },
+    {
+      "type": "open",
+      "prompt": "Exactly-Once (Effectively-Once) is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Dedup window expiring before a delayed retry arrives, admitting the duplicate you designed against",
+        "Dedup store and sink not committed atomically, so a crash between them re-applies",
+        "Believing the broker's exactly-once flag covers your external side effects — it does not"
+      ],
+      "answer": "Dedup window expiring before a delayed retry arrives, admitting the duplicate you designed against Dedup store and sink not committed atomically, so a crash between them re-applies Believing the broker's exactly-once flag covers your external side effects — it does not"
+    },
+    {
+      "type": "open",
+      "prompt": "Exactly-Once (Effectively-Once) vs Idempotency vs At-Least-Once Delivery — what decides between them?",
+      "points": [
+        "Idempotency — Usually the cheaper route: make the operation safe to repeat and stop trying to prevent repeats.",
+        "At-Least-Once Delivery — If duplicates are harmless, do not pay for this.",
+        "Exactly-Once (Effectively-Once) — Making duplicate delivery invisible in the result, by pairing at-least-once transport with idempotent or transactional application."
+      ],
+      "answer": "Idempotency: Usually the cheaper route: make the operation safe to repeat and stop trying to prevent repeats. At-Least-Once Delivery: If duplicates are harmless, do not pay for this."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Any at-least-once pipeline — this is the companion, not an optional extra; Failures may be permanent (malformed input) as well as transient. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Dead-Letter Queue — A side channel for messages that have failed processing too many times, so one bad item cannot block the pipeline forever.",
+        "Any at-least-once pipeline — this is the companion, not an optional extra",
+        "Failures may be permanent (malformed input) as well as transient",
+        "You need to inspect and replay failures after fixing a bug"
+      ],
+      "answer": "Dead-Letter Queue. A side channel for messages that have failed processing too many times, so one bad item cannot block the pipeline forever. You reach for it when: Any at-least-once pipeline — this is the companion, not an optional extra; Failures may be permanent (malformed input) as well as transient; You need to inspect and replay failures after fixing a bug."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Dead-Letter Queue in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Nothing — but it is misused when it becomes a place messages go to be forgotten",
+        "Another queue to monitor, and an alerting policy for it",
+        "A replay tool, or the DLQ is just a landfill",
+        "Ordering guarantees are broken for anything that detours through it"
+      ],
+      "answer": "Don't reach for it when: Nothing — but it is misused when it becomes a place messages go to be forgotten. And it is never free: Another queue to monitor, and an alerting policy for it; A replay tool, or the DLQ is just a landfill; Ordering guarantees are broken for anything that detours through it."
+    },
+    {
+      "type": "open",
+      "prompt": "Dead-Letter Queue is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Nobody watches it, so silent data loss looks exactly like success",
+        "Replaying without fixing the cause, so items round-trip forever",
+        "Filling up because the retry threshold was tuned for a transient failure mode that turned permanent"
+      ],
+      "answer": "Nobody watches it, so silent data loss looks exactly like success Replaying without fixing the cause, so items round-trip forever Filling up because the retry threshold was tuned for a transient failure mode that turned permanent"
+    },
+    {
+      "type": "open",
+      "prompt": "Dead-Letter Queue vs At-Least-Once Delivery vs Retry with Backoff & Jitter — what decides between them?",
+      "points": [
+        "At-Least-Once Delivery — The delivery guarantee that makes a DLQ necessary in the first place.",
+        "Retry with Backoff & Jitter — Retry policy decides how long something struggles before it is dead-lettered.",
+        "Dead-Letter Queue — A side channel for messages that have failed processing too many times, so one bad item cannot block the pipeline forever."
+      ],
+      "answer": "At-Least-Once Delivery: The delivery guarantee that makes a DLQ necessary in the first place. Retry with Backoff & Jitter: Retry policy decides how long something struggles before it is dead-lettered."
+    },
+    {
+      "type": "open",
+      "prompt": "Dead-Letter Queue appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Notification System — Catches notifications that fail past their retry budget, so one permanently bad recipient cannot block the delivery pipeline.",
+        "Design a Distributed Job Scheduler — Holds jobs that failed every attempt, turning a silent stall into a queue someone can inspect and replay.",
+        "Design a Webhook Delivery System — Where a delivery lands once the retry schedule is exhausted — the difference between a customer being behind and being silently dropped."
+      ],
+      "answer": "Dead-Letter Queue carries different work in each: in Design a Notification System, catches notifications that fail past their retry budget, so one permanently bad recipient cannot block the delivery pipeline. in Design a Distributed Job Scheduler, holds jobs that failed every attempt, turning a silent stall into a queue someone can inspect and replay. in Design a Webhook Delivery System, where a delivery lands once the retry schedule is exhausted — the difference between a customer being behind and being silently dropped."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: A state change must reliably produce an event and you cannot afford to lose either; The prompt has a dual-write problem: database plus queue, with no distributed transaction available. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Transactional Outbox / CDC — Writing the event into the same database transaction as the state change, then shipping it from the table or the write-ahead log — so the event and the data cannot disagree.",
+        "A state change must reliably produce an event and you cannot afford to lose either",
+        "The prompt has a dual-write problem: database plus queue, with no distributed transaction available",
+        "Downstream systems (search index, cache, analytics) must converge on the database's truth"
+      ],
+      "answer": "Transactional Outbox / CDC. Writing the event into the same database transaction as the state change, then shipping it from the table or the write-ahead log — so the event and the data cannot disagree. You reach for it when: A state change must reliably produce an event and you cannot afford to lose either; The prompt has a dual-write problem: database plus queue, with no distributed transaction available; Downstream systems (search index, cache, analytics) must converge on the database's truth."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Transactional Outbox / CDC in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The event does not need to be as durable as the write; a direct publish is far less machinery",
+        "You do not own the database, or cannot run a relay next to it",
+        "An outbox table plus a relay process, or a CDC pipeline to operate",
+        "Additional write volume and a table that needs pruning",
+        "Events carry database shape, so the schema becomes an external contract"
+      ],
+      "answer": "Don't reach for it when: The event does not need to be as durable as the write; a direct publish is far less machinery; You do not own the database, or cannot run a relay next to it. And it is never free: An outbox table plus a relay process, or a CDC pipeline to operate; Additional write volume and a table that needs pruning; Events carry database shape, so the schema becomes an external contract."
+    },
+    {
+      "type": "open",
+      "prompt": "Transactional Outbox / CDC is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Relay lag making 'reliable' events arbitrarily late",
+        "Outbox table growing without bound because pruning was never built",
+        "CDC replaying from an old log position and re-emitting a flood of duplicates"
+      ],
+      "answer": "Relay lag making 'reliable' events arbitrarily late Outbox table growing without bound because pruning was never built CDC replaying from an old log position and re-emitting a flood of duplicates"
+    },
+    {
+      "type": "open",
+      "prompt": "Transactional Outbox / CDC vs Pub/Sub vs Saga — what decides between them?",
+      "points": [
+        "Pub/Sub — Direct publish when losing the occasional event is genuinely acceptable.",
+        "Saga — For multi-service workflows, the outbox is how each step reliably announces it happened.",
+        "Transactional Outbox / CDC — Writing the event into the same database transaction as the state change, then shipping it from the table or the write-ahead log — so the event and the data cannot disagree."
+      ],
+      "answer": "Pub/Sub: Direct publish when losing the occasional event is genuinely acceptable. Saga: For multi-service workflows, the outbox is how each step reliably announces it happened."
+    },
+    {
+      "type": "open",
+      "prompt": "Transactional Outbox / CDC appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Payment System (Wallet / Ledger) — The ledger write and its event commit in one transaction, so a payment can never be recorded without the event telling everyone else.",
+        "Design a Prescription Drug Marketplace — Each workflow step announces completion from the same transaction that performed it, which is what makes the saga recoverable.",
+        "Design a Search Engine — Index updates are driven from the document store's change log, so the index converges on the source of truth without a dual write.",
+        "Design a Feature Store — Feature updates are driven from the source system's change log, so the online store converges on truth without a dual write."
+      ],
+      "answer": "Transactional Outbox / CDC carries different work in each: in Design a Payment System (Wallet / Ledger), the ledger write and its event commit in one transaction, so a payment can never be recorded without the event telling everyone else. in Design a Prescription Drug Marketplace, each workflow step announces completion from the same transaction that performed it, which is what makes the saga recoverable. in Design a Search Engine, index updates are driven from the document store's change log, so the index converges on the source of truth without a dual write. in Design a Feature Store, feature updates are driven from the source system's change log, so the online store converges on truth without a dual write."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt needs near-real-time aggregates over a firehose; Storing every raw event to query later is too expensive or too slow. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Stream Processing — Continuous computation over an unbounded event stream — windowed aggregation, enrichment and joins applied as data arrives.",
+        "The prompt needs near-real-time aggregates over a firehose",
+        "Storing every raw event to query later is too expensive or too slow",
+        "Results must update continuously rather than on a schedule"
+      ],
+      "answer": "Stream Processing. Continuous computation over an unbounded event stream — windowed aggregation, enrichment and joins applied as data arrives. You reach for it when: The prompt needs near-real-time aggregates over a firehose; Storing every raw event to query later is too expensive or too slow; Results must update continuously rather than on a schedule."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Stream Processing in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "A nightly batch would satisfy the requirement — batch is dramatically simpler to operate and reason about",
+        "The computation needs arbitrary access to all historical data at once",
+        "Windowing, watermarks and late-data policy are decisions you cannot avoid making",
+        "Stateful operators need checkpointed state, which is the hard operational part",
+        "Reprocessing history means replaying the stream, and that has to be designed for"
+      ],
+      "answer": "Don't reach for it when: A nightly batch would satisfy the requirement — batch is dramatically simpler to operate and reason about; The computation needs arbitrary access to all historical data at once. And it is never free: Windowing, watermarks and late-data policy are decisions you cannot avoid making; Stateful operators need checkpointed state, which is the hard operational part; Reprocessing history means replaying the stream, and that has to be designed for."
+    },
+    {
+      "type": "open",
+      "prompt": "Stream Processing is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Late events arriving after their window closed and being silently dropped",
+        "Unbounded state growth in a keyed operator with no TTL",
+        "Checkpoint failures forcing a restart that re-emits already-published results"
+      ],
+      "answer": "Late events arriving after their window closed and being silently dropped Unbounded state growth in a keyed operator with no TTL Checkpoint failures forcing a restart that re-emits already-published results"
+    },
+    {
+      "type": "open",
+      "prompt": "Stream Processing vs Pre-Aggregation & Rollups vs Time-Series Store — what decides between them?",
+      "points": [
+        "Pre-Aggregation & Rollups — If you only need counters, a pre-aggregated store may be enough without a stream framework.",
+        "Time-Series Store — Store the points and let the query engine aggregate, when freshness requirements are looser.",
+        "Stream Processing — Continuous computation over an unbounded event stream — windowed aggregation, enrichment and joins applied as data arrives."
+      ],
+      "answer": "Pre-Aggregation & Rollups: If you only need counters, a pre-aggregated store may be enough without a stream framework. Time-Series Store: Store the points and let the query engine aggregate, when freshness requirements are looser."
+    },
+    {
+      "type": "open",
+      "prompt": "Stream Processing appears in 7 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Leaderboard — Score events are folded into the ranking as they arrive, because recomputing from raw events per read would not survive the read volume.",
+        "Design a Typeahead / Autocomplete Service — Query logs are folded into completion counts continuously, so a term trending this hour surfaces before the next full rebuild.",
+        "Design an Ad Click Aggregator — Windowed counting over the click firehose, where watermarks and late-event policy decide what a given 'minute' actually contains.",
+        "Design an Observability Platform — Telemetry is enriched, sampled and aggregated in flight, because storing everything raw and querying later meets neither the cost nor latency bar.",
+        "Design a Feature Store — Real-time features are derived from event streams as they arrive — what makes an online feature fresher than a nightly batch job.",
+        "Design a Content Moderation Pipeline — Uploads flow through a scoring pipeline continuously, so moderation decisions land within seconds of publish rather than on a schedule.",
+        "Design a Sanctions Screening System — List deltas are applied as they publish, so a newly designated party is screened without waiting for a nightly cycle."
+      ],
+      "answer": "Stream Processing carries different work in each: in Design a Leaderboard, score events are folded into the ranking as they arrive, because recomputing from raw events per read would not survive the read volume. in Design a Typeahead / Autocomplete Service, query logs are folded into completion counts continuously, so a term trending this hour surfaces before the next full rebuild. in Design an Ad Click Aggregator, windowed counting over the click firehose, where watermarks and late-event policy decide what a given 'minute' actually contains. in Design an Observability Platform, telemetry is enriched, sampled and aggregated in flight, because storing everything raw and querying later meets neither the cost nor latency bar. in Design a Feature Store, real-time features are derived from event streams as they arrive — what makes an online feature fresher than a nightly batch job. in Design a Content Moderation Pipeline, uploads flow through a scoring pipeline continuously, so moderation decisions land within seconds of publish rather than on a schedule. in Design a Sanctions Screening System, list deltas are applied as they publish, so a newly designated party is screened without waiting for a nightly cycle."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt asks for counts, totals or top-N over volumes too large to scan per request; The same aggregate is read far more often than the underlying events change. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Pre-Aggregation & Rollups — Maintaining counters and summaries as data arrives, so a read is a lookup instead of a scan.",
+        "The prompt asks for counts, totals or top-N over volumes too large to scan per request",
+        "The same aggregate is read far more often than the underlying events change",
+        "Dashboards or leaderboards need sub-second reads"
+      ],
+      "answer": "Pre-Aggregation & Rollups. Maintaining counters and summaries as data arrives, so a read is a lookup instead of a scan. You reach for it when: The prompt asks for counts, totals or top-N over volumes too large to scan per request; The same aggregate is read far more often than the underlying events change; Dashboards or leaderboards need sub-second reads."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Pre-Aggregation & Rollups in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Query dimensions are unknown or ad-hoc; you cannot pre-aggregate every combination",
+        "Exact answers over arbitrary time ranges are required and the rollup granularity would not support them",
+        "Every new dimension multiplies the number of aggregates to maintain",
+        "Backfilling a new aggregate means reprocessing history",
+        "Aggregates can drift from the source and need periodic reconciliation"
+      ],
+      "answer": "Don't reach for it when: Query dimensions are unknown or ad-hoc; you cannot pre-aggregate every combination; Exact answers over arbitrary time ranges are required and the rollup granularity would not support them. And it is never free: Every new dimension multiplies the number of aggregates to maintain; Backfilling a new aggregate means reprocessing history; Aggregates can drift from the source and need periodic reconciliation."
+    },
+    {
+      "type": "open",
+      "prompt": "Pre-Aggregation & Rollups is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Double counting on retry, so the counter is wrong and nothing signals it",
+        "Hot counter — one popular entity's increments exceed a single partition's write throughput",
+        "Rollup granularity chosen too coarse to answer a question the product later asks"
+      ],
+      "answer": "Double counting on retry, so the counter is wrong and nothing signals it Hot counter — one popular entity's increments exceed a single partition's write throughput Rollup granularity chosen too coarse to answer a question the product later asks"
+    },
+    {
+      "type": "open",
+      "prompt": "Pre-Aggregation & Rollups vs Stream Processing vs Hot-Key Mitigation — what decides between them?",
+      "points": [
+        "Stream Processing — When aggregation needs windows, joins or late-data handling, you want a real stream engine.",
+        "Hot-Key Mitigation — Sharded counters are the standard fix once one aggregate becomes a write hotspot.",
+        "Pre-Aggregation & Rollups — Maintaining counters and summaries as data arrives, so a read is a lookup instead of a scan."
+      ],
+      "answer": "Stream Processing: When aggregation needs windows, joins or late-data handling, you want a real stream engine. Hot-Key Mitigation: Sharded counters are the standard fix once one aggregate becomes a write hotspot."
+    },
+    {
+      "type": "open",
+      "prompt": "Pre-Aggregation & Rollups appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Leaderboard — Scores are maintained as running totals rather than recomputed, so a read is a range query on a sorted set instead of a scan.",
+        "Design an Ad Click Aggregator — The output of the system: click counts per ad per window, maintained incrementally because the raw stream is far too large to scan on demand.",
+        "Design an Observability Platform — Metrics are pre-rolled into time buckets at ingest, so a dashboard query reads summaries instead of scanning raw telemetry.",
+        "Design a Feature Store — Windowed feature values — counts and averages over recent activity — computed once and served to every model that needs them."
+      ],
+      "answer": "Pre-Aggregation & Rollups carries different work in each: in Design a Leaderboard, scores are maintained as running totals rather than recomputed, so a read is a range query on a sorted set instead of a scan. in Design an Ad Click Aggregator, the output of the system: click counts per ad per window, maintained incrementally because the raw stream is far too large to scan on demand. in Design an Observability Platform, metrics are pre-rolled into time buckets at ingest, so a dashboard query reads summaries instead of scanning raw telemetry. in Design a Feature Store, windowed feature values — counts and averages over recent activity — computed once and served to every model that needs them."
+    }
+  ]
+}

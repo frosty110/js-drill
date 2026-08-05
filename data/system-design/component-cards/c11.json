@@ -1,0 +1,301 @@
+{
+  "id": "c11",
+  "num": 11,
+  "part": "Component decks",
+  "title": "Governance & Accountability",
+  "summary": "Proving what the system did, for whom, and at what cost. 5 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Audit Log & Provenance — An append-only record of what was decided and what it was shown, pinned to the versions in effect, so the decision can be reconstructed later.",
+    "Agent Decision Record — The row an autonomous decision writes about itself: what it chose, why, how sure it was, and what it was looking at when it chose.",
+    "Cost Metering — Attributing the marginal cost of a request to the tenant and unit of work that caused it, then bounding it before it is spent.",
+    "Progressive Rollout — Earning a change's blast radius in stages, so each widening is justified by evidence the previous stage produced.",
+    "Tenant Isolation — Keeping one customer's data and load away from another's, enforced below application code so a forgotten predicate cannot leak."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The inputs came from somewhere you do not control and will not replay: a third-party API, a vendor feed, a model; Money moved, or access was granted or refused, so 'what did we do and on what basis' is a question that will eventually be asked. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Audit Log & Provenance — An append-only record of what was decided and what it was shown, pinned to the versions in effect, so the decision can be reconstructed later.",
+        "A decision has to be defended to someone external — a regulator, an auditor, a counterparty — months or years after it was made",
+        "The inputs came from somewhere you do not control and will not replay: a third-party API, a vendor feed, a model",
+        "Money moved, or access was granted or refused, so 'what did we do and on what basis' is a question that will eventually be asked"
+      ],
+      "answer": "Audit Log & Provenance. An append-only record of what was decided and what it was shown, pinned to the versions in effect, so the decision can be reconstructed later. You reach for it when: A decision has to be defended to someone external — a regulator, an auditor, a counterparty — months or years after it was made; The inputs came from somewhere you do not control and will not replay: a third-party API, a vendor feed, a model; Money moved, or access was granted or refused, so 'what did we do and on what basis' is a question that will eventually be asked."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Audit Log & Provenance in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The decision is trivially re-derivable from durable inputs you already retain — then the log stores no information you did not have",
+        "You only want debugging visibility, where tracing and structured logs are cheaper and are built for the job",
+        "The record outlives the schema that wrote it, so it must be self-describing and denormalized rather than a web of foreign keys",
+        "Retention is measured in years and is usually a legal floor rather than a tuning knob",
+        "Evidence has to be captured at decision time, which means storing the third-party response rather than the query that produced it",
+        "Write amplification on every step of every decision, which is the price of the record being complete rather than sampled"
+      ],
+      "answer": "Don't reach for it when: The decision is trivially re-derivable from durable inputs you already retain — then the log stores no information you did not have; You only want debugging visibility, where tracing and structured logs are cheaper and are built for the job. And it is never free: The record outlives the schema that wrote it, so it must be self-describing and denormalized rather than a web of foreign keys; Retention is measured in years and is usually a legal floor rather than a tuning knob; Evidence has to be captured at decision time, which means storing the third-party response rather than the query that produced it; Write amplification on every step of every decision, which is the price of the record being complete rather than sampled."
+    },
+    {
+      "type": "open",
+      "prompt": "Audit Log & Provenance is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Recording the conclusion but not what was shown, so the log asserts a decision it cannot evidence",
+        "Pinning the code version but not the policy, prompt or data snapshot — any one of them changing changes the answer",
+        "A log the application can update in place, which records the current story rather than what happened",
+        "Citing a live source instead of a stored snapshot, so the citation resolves to whatever that source says today",
+        "Promising deterministic replay of a non-deterministic process; preserved inputs and a comparison is what you can honestly offer"
+      ],
+      "answer": "Recording the conclusion but not what was shown, so the log asserts a decision it cannot evidence Pinning the code version but not the policy, prompt or data snapshot — any one of them changing changes the answer A log the application can update in place, which records the current story rather than what happened Citing a live source instead of a stored snapshot, so the citation resolves to whatever that source says today Promising deterministic replay of a non-deterministic process; preserved inputs and a comparison is what you can honestly offer"
+    },
+    {
+      "type": "open",
+      "prompt": "Audit Log & Provenance vs Transactional Outbox / CDC vs Stream Processing — what decides between them?",
+      "points": [
+        "Transactional Outbox / CDC — Captures every state change for downstream consumers; an audit log captures the decision and its justification, which a change feed does not carry.",
+        "Stream Processing — When the question is aggregate behaviour over time rather than the defensibility of one specific decision.",
+        "Audit Log & Provenance — An append-only record of what was decided and what it was shown, pinned to the versions in effect, so the decision can be reconstructed later."
+      ],
+      "answer": "Transactional Outbox / CDC: Captures every state change for downstream consumers; an audit log captures the decision and its justification, which a change feed does not carry. Stream Processing: When the question is aggregate behaviour over time rather than the defensibility of one specific decision."
+    },
+    {
+      "type": "open",
+      "prompt": "Audit Log & Provenance appears in 6 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Payment System (Wallet / Ledger) — A double-entry ledger is the audit trail: the balance is derived from immutable entries rather than stored, so any figure can be re-proved from the entries that produced it.",
+        "Design an Ad Click Aggregator — Raw events are kept in object storage and a nightly batch recompute is the authority, so the fast streaming number is always reconcilable against a durable record of what actually arrived.",
+        "Design a Financial Crime Alert Investigation System — An examiner can ask years later why one alert was cleared, so the trace pins prompt, model snapshot, policy version and evidence hashes — everything whose change would change the answer.",
+        "Design a Sanctions Screening System — Every screening decision records the list version it ran against, since 'we did not know' is only defensible with the evidence attached.",
+        "Design a Human Review Queue — A reviewer's decision is written as an immutable event with its reason and the lease that authorised it, and a correction references the original rather than overwriting it.",
+        "Design a Business Verification Pipeline — Sources disagree routinely, so the record keeps what each one said and which precedence rule decided between them, rather than silently keeping the winner."
+      ],
+      "answer": "Audit Log & Provenance carries different work in each: in Design a Payment System (Wallet / Ledger), a double-entry ledger is the audit trail: the balance is derived from immutable entries rather than stored, so any figure can be re-proved from the entries that produced it. in Design an Ad Click Aggregator, raw events are kept in object storage and a nightly batch recompute is the authority, so the fast streaming number is always reconcilable against a durable record of what actually arrived. in Design a Financial Crime Alert Investigation System, an examiner can ask years later why one alert was cleared, so the trace pins prompt, model snapshot, policy version and evidence hashes — everything whose change would change the answer. in Design a Sanctions Screening System, every screening decision records the list version it ran against, since 'we did not know' is only defensible with the evidence attached. in Design a Human Review Queue, a reviewer's decision is written as an immutable event with its reason and the lease that authorised it, and a correction references the original rather than overwriting it. in Design a Business Verification Pipeline, sources disagree routinely, so the record keeps what each one said and which precedence rule decided between them, rather than silently keeping the winner."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: A model or agent disposes of work on its own and somebody will later ask why that specific one went the way it did; You need to move the automated share upward safely, which requires measuring where the agent and a human disagree. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Agent Decision Record — The row an autonomous decision writes about itself: what it chose, why, how sure it was, and what it was looking at when it chose.",
+        "A model or agent disposes of work on its own and somebody will later ask why that specific one went the way it did",
+        "You need to move the automated share upward safely, which requires measuring where the agent and a human disagree",
+        "The decision changes as models, prompts, policy or thresholds change, and you need to attribute a shift to whichever one moved"
+      ],
+      "answer": "Agent Decision Record. The row an autonomous decision writes about itself: what it chose, why, how sure it was, and what it was looking at when it chose. You reach for it when: A model or agent disposes of work on its own and somebody will later ask why that specific one went the way it did; You need to move the automated share upward safely, which requires measuring where the agent and a human disagree; The decision changes as models, prompts, policy or thresholds change, and you need to attribute a shift to whichever one moved."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Agent Decision Record in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The decision is a pure function of stored inputs and a rule you version anyway, where re-running the rule is cheaper and more honest than a narration of it",
+        "Nobody ever asks about an individual outcome, only about the aggregate, where offline evaluation over a labelled set answers it more cheaply",
+        "A reason enum has to be closed and versioned to stay queryable, which means someone owns a vocabulary that will keep changing",
+        "Confidence is worthless until it is calibrated against sampled outcomes per model and prompt version, so the record only pays off alongside a sampling program",
+        "A row per decision on the hot path, carrying a rationale and a trajectory reference, so the write is far from free",
+        "Recording the threshold in force at the time means the row duplicates config on purpose, which reads as denormalization until the day it is the only answer"
+      ],
+      "answer": "Don't reach for it when: The decision is a pure function of stored inputs and a rule you version anyway, where re-running the rule is cheaper and more honest than a narration of it; Nobody ever asks about an individual outcome, only about the aggregate, where offline evaluation over a labelled set answers it more cheaply. And it is never free: A reason enum has to be closed and versioned to stay queryable, which means someone owns a vocabulary that will keep changing; Confidence is worthless until it is calibrated against sampled outcomes per model and prompt version, so the record only pays off alongside a sampling program; A row per decision on the hot path, carrying a rationale and a trajectory reference, so the write is far from free; Recording the threshold in force at the time means the row duplicates config on purpose, which reads as denormalization until the day it is the only answer."
+    },
+    {
+      "type": "open",
+      "prompt": "Agent Decision Record is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Free-form reason strings instead of a closed enum, which yields thousands of near-duplicates and no dimension to group by",
+        "Storing only the applied outcome, so whether a human agreed with the agent cannot be reconstructed and the autonomy metric does not exist",
+        "Treating a self-reported rationale as proof of reasoning rather than evidence of it, when the model narrates after the fact and can narrate wrongly",
+        "Collapsing confidence in the answer and completeness of the evidence into one score, which hides the dangerous quadrant where the agent is sure and underinformed",
+        "Encoding abstention as low confidence plus an escalation, so missing evidence and conflicting sources land in the same bucket and neither gets fixed",
+        "Referencing a threshold that lives only in config, so the row cannot say what bar it actually cleared"
+      ],
+      "answer": "Free-form reason strings instead of a closed enum, which yields thousands of near-duplicates and no dimension to group by Storing only the applied outcome, so whether a human agreed with the agent cannot be reconstructed and the autonomy metric does not exist Treating a self-reported rationale as proof of reasoning rather than evidence of it, when the model narrates after the fact and can narrate wrongly Collapsing confidence in the answer and completeness of the evidence into one score, which hides the dangerous quadrant where the agent is sure and underinformed Encoding abstention as low confidence plus an escalation, so missing evidence and conflicting sources land in the same bucket and neither gets fixed Referencing a threshold that lives only in config, so the row cannot say what bar it actually cleared"
+    },
+    {
+      "type": "open",
+      "prompt": "Agent Decision Record vs Audit Log & Provenance vs Progressive Rollout — what decides between them?",
+      "points": [
+        "Audit Log & Provenance — The general provenance record for any decision; this is the shape it takes when the decider is a model, adding calibrated confidence, an abstention state and the agree/disagree column.",
+        "Progressive Rollout — The mechanism that raises the automated share; this record is the evidence it runs on, because you cannot widen the band without knowing where the agent and the reviewer diverged.",
+        "Agent Decision Record — The row an autonomous decision writes about itself: what it chose, why, how sure it was, and what it was looking at when it chose."
+      ],
+      "answer": "Audit Log & Provenance: The general provenance record for any decision; this is the shape it takes when the decider is a model, adding calibrated confidence, an abstention state and the agree/disagree column. Progressive Rollout: The mechanism that raises the automated share; this record is the evidence it runs on, because you cannot widen the band without knowing where the agent and the reviewer diverged."
+    },
+    {
+      "type": "open",
+      "prompt": "Agent Decision Record appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Financial Crime Alert Investigation System — Every auto-closed alert carries the reason code it closed under, the agent's confidence, the threshold in force that day, and whether a reviewer later disagreed.",
+        "Design a Human Review Queue — The reviewer's verdict is stored beside the agent's recommendation rather than replacing it, so the disagreement rate is a number instead of an impression.",
+        "Design a Business Verification Pipeline — A verification records which source it believed and how sure it was, so an approval on thin evidence is visible rather than indistinguishable from a confident one."
+      ],
+      "answer": "Agent Decision Record carries different work in each: in Design a Financial Crime Alert Investigation System, every auto-closed alert carries the reason code it closed under, the agent's confidence, the threshold in force that day, and whether a reviewer later disagreed. in Design a Human Review Queue, the reviewer's verdict is stored beside the agent's recommendation rather than replacing it, so the disagreement rate is a number instead of an impression. in Design a Business Verification Pipeline, a verification records which source it believed and how sure it was, so an approval on thin evidence is visible rather than indistinguishable from a confident one."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The system decides for itself how much work to do, so it is spending money autonomously and needs a bound rather than a dashboard; You bill by consumption, or you need unit economics per tenant to know whether the product works. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Cost Metering — Attributing the marginal cost of a request to the tenant and unit of work that caused it, then bounding it before it is spent.",
+        "The per-request cost is large enough that it, rather than CPU or storage, is the first ceiling you will hit",
+        "The system decides for itself how much work to do, so it is spending money autonomously and needs a bound rather than a dashboard",
+        "You bill by consumption, or you need unit economics per tenant to know whether the product works"
+      ],
+      "answer": "Cost Metering. Attributing the marginal cost of a request to the tenant and unit of work that caused it, then bounding it before it is spent. You reach for it when: The per-request cost is large enough that it, rather than CPU or storage, is the first ceiling you will hit; The system decides for itself how much work to do, so it is spending money autonomously and needs a bound rather than a dashboard; You bill by consumption, or you need unit economics per tenant to know whether the product works."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Cost Metering in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Marginal cost per request is a rounding error next to fixed infrastructure, where this is accounting overhead on the hot path",
+        "A flat rate already caps exposure, in which case a budget adds a failure mode without removing one",
+        "Attribution has to be threaded through every call path, and one unattributed path is the one that will surprise you",
+        "A budget is a new way to fail: you must decide whether exceeding it degrades, queues, or rejects, and say so",
+        "Vendor prices change underneath you, so the cost model needs its own update path or it silently stops being true"
+      ],
+      "answer": "Don't reach for it when: Marginal cost per request is a rounding error next to fixed infrastructure, where this is accounting overhead on the hot path; A flat rate already caps exposure, in which case a budget adds a failure mode without removing one. And it is never free: Attribution has to be threaded through every call path, and one unattributed path is the one that will surprise you; A budget is a new way to fail: you must decide whether exceeding it degrades, queues, or rejects, and say so; Vendor prices change underneath you, so the cost model needs its own update path or it silently stops being true."
+    },
+    {
+      "type": "open",
+      "prompt": "Cost Metering is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Metering after the fact, which reports the overspend rather than preventing it",
+        "Budgeting per request while the expensive unit is a whole session or a whole case, so the cap never binds",
+        "A shared pool with no per-tenant cap, where one tenant's batch consumes the month",
+        "Counting only the model or vendor bill and missing the retries, which is where a bad day actually gets expensive"
+      ],
+      "answer": "Metering after the fact, which reports the overspend rather than preventing it Budgeting per request while the expensive unit is a whole session or a whole case, so the cap never binds A shared pool with no per-tenant cap, where one tenant's batch consumes the month Counting only the model or vendor bill and missing the retries, which is where a bad day actually gets expensive"
+    },
+    {
+      "type": "open",
+      "prompt": "Cost Metering vs Rate Limiting vs Resource Scheduling vs Load Shedding — what decides between them?",
+      "points": [
+        "Rate Limiting — Bounds request volume; a budget bounds spend, and one expensive request can blow the budget while staying inside the rate limit.",
+        "Resource Scheduling — Allocates scarce compute between competing work; metering decides what that work was allowed to cost in the first place.",
+        "Load Shedding — Drops work to protect latency; a budget stops work to protect the bill, and they can disagree about which request to drop.",
+        "Cost Metering — Attributing the marginal cost of a request to the tenant and unit of work that caused it, then bounding it before it is spent."
+      ],
+      "answer": "Rate Limiting: Bounds request volume; a budget bounds spend, and one expensive request can blow the budget while staying inside the rate limit. Resource Scheduling: Allocates scarce compute between competing work; metering decides what that work was allowed to cost in the first place. Load Shedding: Drops work to protect latency; a budget stops work to protect the bill, and they can disagree about which request to drop."
+    },
+    {
+      "type": "open",
+      "prompt": "Cost Metering appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design an LLM Inference Platform — GPU seconds are the scarce resource and the KV cache sets how many sequences fit, so admission is a spend decision per request rather than a queueing one.",
+        "Design a Financial Crime Alert Investigation System — An agent choosing its own tools is spending money autonomously, so each case carries a hard budget and cost becomes an input to tool selection rather than a report afterwards.",
+        "Design a Business Verification Pipeline — A full ownership walk can fire dozens of paid lookups, so checks are ordered by cost and information gain and results are cached per entity across applications."
+      ],
+      "answer": "Cost Metering carries different work in each: in Design an LLM Inference Platform, gPU seconds are the scarce resource and the KV cache sets how many sequences fit, so admission is a spend decision per request rather than a queueing one. in Design a Financial Crime Alert Investigation System, an agent choosing its own tools is spending money autonomously, so each case carries a hard budget and cost becomes an input to tool selection rather than a report afterwards. in Design a Business Verification Pipeline, a full ownership walk can fire dozens of paid lookups, so checks are ordered by cost and information gain and results are cached per entity across applications."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The change alters a decision rather than an implementation, so correctness cannot be established by a test suite alone; Being wrong is expensive or irreversible, and you would rather find out on 1% than on everyone. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Progressive Rollout — Earning a change's blast radius in stages, so each widening is justified by evidence the previous stage produced.",
+        "The change alters a decision rather than an implementation, so correctness cannot be established by a test suite alone",
+        "Being wrong is expensive or irreversible, and you would rather find out on 1% than on everyone",
+        "You need labelled evidence that the change is good, and the earlier stages generate exactly that data"
+      ],
+      "answer": "Progressive Rollout. Earning a change's blast radius in stages, so each widening is justified by evidence the previous stage produced. You reach for it when: The change alters a decision rather than an implementation, so correctness cannot be established by a test suite alone; Being wrong is expensive or irreversible, and you would rather find out on 1% than on everyone; You need labelled evidence that the change is good, and the earlier stages generate exactly that data."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Progressive Rollout in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The change is trivially reversible and cheap to get wrong, where staging is ceremony that slows the loop",
+        "You cannot measure the outcome at a slice, since a rollout you cannot evaluate is just a slower deploy",
+        "Two code paths live simultaneously, and the shadow path costs real compute while producing nothing a user sees",
+        "Comparison infrastructure is the actual work: without a diff between old and new outcomes, the stages tell you nothing",
+        "Someone has to own the decision to widen, or a rollout parks at 5% indefinitely and becomes permanent complexity"
+      ],
+      "answer": "Don't reach for it when: The change is trivially reversible and cheap to get wrong, where staging is ceremony that slows the loop; You cannot measure the outcome at a slice, since a rollout you cannot evaluate is just a slower deploy. And it is never free: Two code paths live simultaneously, and the shadow path costs real compute while producing nothing a user sees; Comparison infrastructure is the actual work: without a diff between old and new outcomes, the stages tell you nothing; Someone has to own the decision to widen, or a rollout parks at 5% indefinitely and becomes permanent complexity."
+    },
+    {
+      "type": "open",
+      "prompt": "Progressive Rollout is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Advancing on elapsed time rather than on evidence, which is a scheduled deploy wearing a rollout's clothes",
+        "A slice that is not representative — internal users, one region, the cheapest traffic — so the signal never resembles production",
+        "No ratchet back: widening is automated and narrowing is a manual scramble during the incident",
+        "Shadow output that is never compared, which pays the full cost of the mechanism for none of the benefit"
+      ],
+      "answer": "Advancing on elapsed time rather than on evidence, which is a scheduled deploy wearing a rollout's clothes A slice that is not representative — internal users, one region, the cheapest traffic — so the signal never resembles production No ratchet back: widening is automated and narrowing is a manual scramble during the incident Shadow output that is never compared, which pays the full cost of the mechanism for none of the benefit"
+    },
+    {
+      "type": "open",
+      "prompt": "Progressive Rollout vs Circuit Breaker vs Bulkhead Isolation — what decides between them?",
+      "points": [
+        "Circuit Breaker — Reacts to a failure that is already happening; a rollout bounds how much traffic could have been exposed to it.",
+        "Bulkhead Isolation — Contains blast radius by partitioning resources rather than by limiting how much traffic sees the change.",
+        "Progressive Rollout — Earning a change's blast radius in stages, so each widening is justified by evidence the previous stage produced."
+      ],
+      "answer": "Circuit Breaker: Reacts to a failure that is already happening; a rollout bounds how much traffic could have been exposed to it. Bulkhead Isolation: Contains blast radius by partitioning resources rather than by limiting how much traffic sees the change."
+    },
+    {
+      "type": "open",
+      "prompt": "Progressive Rollout appears in 5 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design an LLM Inference Platform — New model versions take a slice of traffic before all of it, because quality regressions are only visible against real prompts.",
+        "Design a Short-Form Video Feed — A new ranker is exposed to a fraction of the feed first, since offline metrics routinely disagree with what people actually watch.",
+        "Design a Feature Store — A changed feature definition rolls out gradually, because training/serving skew surfaces as slow quality drift rather than as an error.",
+        "Design a Content Moderation Pipeline — A new moderation model runs in shadow before it can action anything, since a false positive here removes legitimate content.",
+        "Design a Financial Crime Alert Investigation System — A new agent version is scored against decisions humans already made before it is trusted to dispose of alerts on its own."
+      ],
+      "answer": "Progressive Rollout carries different work in each: in Design an LLM Inference Platform, new model versions take a slice of traffic before all of it, because quality regressions are only visible against real prompts. in Design a Short-Form Video Feed, a new ranker is exposed to a fraction of the feed first, since offline metrics routinely disagree with what people actually watch. in Design a Feature Store, a changed feature definition rolls out gradually, because training/serving skew surfaces as slow quality drift rather than as an error. in Design a Content Moderation Pipeline, a new moderation model runs in shadow before it can action anything, since a false positive here removes legitimate content. in Design a Financial Crime Alert Investigation System, a new agent version is scored against decisions humans already made before it is trusted to dispose of alerts on its own."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: One deployment serves customers who must never see each other's data, and the boundary is a contractual promise rather than a preference; A single tenant can generate enough load to degrade everyone else, so fairness needs enforcing rather than assuming. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Tenant Isolation — Keeping one customer's data and load away from another's, enforced below application code so a forgotten predicate cannot leak.",
+        "One deployment serves customers who must never see each other's data, and the boundary is a contractual promise rather than a preference",
+        "A single tenant can generate enough load to degrade everyone else, so fairness needs enforcing rather than assuming",
+        "An auditor will ask how isolation is guaranteed, and 'every query filters correctly' is not an answer that survives the question"
+      ],
+      "answer": "Tenant Isolation. Keeping one customer's data and load away from another's, enforced below application code so a forgotten predicate cannot leak. You reach for it when: One deployment serves customers who must never see each other's data, and the boundary is a contractual promise rather than a preference; A single tenant can generate enough load to degrade everyone else, so fairness needs enforcing rather than assuming; An auditor will ask how isolation is guaranteed, and 'every query filters correctly' is not an answer that survives the question."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Tenant Isolation in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "A single-tenant deployment per customer, where the isolation is the deployment and adding a second mechanism adds only cost",
+        "Data that is genuinely global — a catalogue, a public price list — where scoping it invents a boundary that does not exist",
+        "Enforcement in the database means every policy predicate needs an index, and a missing one degrades quietly rather than loudly",
+        "Per-tenant queues and quotas multiply the things you operate and the things that can be misconfigured",
+        "The largest customers often demand physical separation anyway, so you end up operating both models"
+      ],
+      "answer": "Don't reach for it when: A single-tenant deployment per customer, where the isolation is the deployment and adding a second mechanism adds only cost; Data that is genuinely global — a catalogue, a public price list — where scoping it invents a boundary that does not exist. And it is never free: Enforcement in the database means every policy predicate needs an index, and a missing one degrades quietly rather than loudly; Per-tenant queues and quotas multiply the things you operate and the things that can be misconfigured; The largest customers often demand physical separation anyway, so you end up operating both models."
+    },
+    {
+      "type": "open",
+      "prompt": "Tenant Isolation is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Isolation enforced only in application code, where one query written without the filter is a breach and nothing catches it",
+        "Background jobs and admin paths running with elevated credentials that bypass the enforcement entirely — the likeliest real leak",
+        "A shared cache keyed without the tenant, so the boundary holds in the database and fails one layer above it",
+        "Fairness measured in requests when the expensive thing is work per request, so a quota that looks fair is not",
+        "No test that actually attempts a cross-tenant read, leaving isolation a claim rather than a verified control"
+      ],
+      "answer": "Isolation enforced only in application code, where one query written without the filter is a breach and nothing catches it Background jobs and admin paths running with elevated credentials that bypass the enforcement entirely — the likeliest real leak A shared cache keyed without the tenant, so the boundary holds in the database and fails one layer above it Fairness measured in requests when the expensive thing is work per request, so a quota that looks fair is not No test that actually attempts a cross-tenant read, leaving isolation a claim rather than a verified control"
+    },
+    {
+      "type": "open",
+      "prompt": "Tenant Isolation vs Bulkhead Isolation vs Rate Limiting vs Sharding — what decides between them?",
+      "points": [
+        "Bulkhead Isolation — Isolates load between workload classes; tenancy adds a data boundary that a bulkhead says nothing about.",
+        "Rate Limiting — Caps a tenant's request rate, which is the load half of isolation and none of the data half.",
+        "Sharding — Splitting by tenant makes isolation physical, at the cost of per-tenant operations and rebalancing.",
+        "Tenant Isolation — Keeping one customer's data and load away from another's, enforced below application code so a forgotten predicate cannot leak."
+      ],
+      "answer": "Bulkhead Isolation: Isolates load between workload classes; tenancy adds a data boundary that a bulkhead says nothing about. Rate Limiting: Caps a tenant's request rate, which is the load half of isolation and none of the data half. Sharding: Splitting by tenant makes isolation physical, at the cost of per-tenant operations and rebalancing."
+    },
+    {
+      "type": "open",
+      "prompt": "Tenant Isolation appears in 5 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design an LLM Inference Platform — Per-tenant GPU pools and quotas, so one customer's batch job cannot consume the capacity another customer's interactive traffic depends on.",
+        "Design an Observability Platform — Per-tenant ingest partitions and query limits, so one customer instrumenting a hot loop cannot degrade everyone else's dashboards.",
+        "Design a Financial Crime Alert Investigation System — Each bank's policy, data and model configuration stay separate, because the same agents run against institutions that must never see each other's alerts.",
+        "Design a Human Review Queue — Reviewer pools and queues are scoped per tenant, since someone cleared to see one institution's data usually is not cleared for another's.",
+        "Design a Business Verification Pipeline — Per-institution verification policy and vendor credentials, so 'sufficient evidence' can mean two different things in the same pipeline."
+      ],
+      "answer": "Tenant Isolation carries different work in each: in Design an LLM Inference Platform, per-tenant GPU pools and quotas, so one customer's batch job cannot consume the capacity another customer's interactive traffic depends on. in Design an Observability Platform, per-tenant ingest partitions and query limits, so one customer instrumenting a hot loop cannot degrade everyone else's dashboards. in Design a Financial Crime Alert Investigation System, each bank's policy, data and model configuration stay separate, because the same agents run against institutions that must never see each other's alerts. in Design a Human Review Queue, reviewer pools and queues are scoped per tenant, since someone cleared to see one institution's data usually is not cleared for another's. in Design a Business Verification Pipeline, per-institution verification policy and vendor credentials, so 'sufficient evidence' can mean two different things in the same pipeline."
+    }
+  ]
+}

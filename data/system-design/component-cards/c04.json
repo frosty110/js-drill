@@ -1,0 +1,279 @@
+{
+  "id": "c04",
+  "num": 4,
+  "part": "Component decks",
+  "title": "Data Distribution",
+  "summary": "Spreading one dataset across many machines. 5 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Sharding — Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally.",
+    "Replication — Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity.",
+    "Consistent Hashing — Placing keys and nodes on a ring so adding or removing a node moves only ~1/N of keys instead of remapping everything.",
+    "Quorum (N/W/R) — Requiring W acknowledgements to write and R responses to read out of N replicas, tuning consistency against availability.",
+    "Distributed ID Generation — Producing unique identifiers across many machines without a central allocator — Snowflake-style, UUID, or ranged counters."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The dataset or its write volume exceeds what one machine can hold or serve; The prompt gives numbers that clearly exceed one primary. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Sharding — Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally.",
+        "The dataset or its write volume exceeds what one machine can hold or serve",
+        "The prompt gives numbers that clearly exceed one primary",
+        "There is a natural partition key with high cardinality and even distribution"
+      ],
+      "answer": "Sharding. Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally. You reach for it when: The dataset or its write volume exceeds what one machine can hold or serve; The prompt gives numbers that clearly exceed one primary; There is a natural partition key with high cardinality and even distribution."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Sharding in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "One machine still fits — sharding is a permanent complexity tax paid in advance",
+        "Queries routinely span all partitions; you have built scatter-gather, not scale",
+        "No good key exists and every candidate is skewed",
+        "Cross-shard queries and transactions become application problems",
+        "Resharding is a migration with a data-movement plan, not a config change",
+        "Every operational task multiplies by the shard count"
+      ],
+      "answer": "Don't reach for it when: One machine still fits — sharding is a permanent complexity tax paid in advance; Queries routinely span all partitions; you have built scatter-gather, not scale; No good key exists and every candidate is skewed. And it is never free: Cross-shard queries and transactions become application problems; Resharding is a migration with a data-movement plan, not a config change; Every operational task multiplies by the shard count."
+    },
+    {
+      "type": "open",
+      "prompt": "Sharding is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Skew: one partition holds the celebrity and saturates while others idle",
+        "Scatter-gather latency governed by the slowest shard, so p99 degrades as shards are added",
+        "A key chosen for even distribution that forces every read to fan out"
+      ],
+      "answer": "Skew: one partition holds the celebrity and saturates while others idle Scatter-gather latency governed by the slowest shard, so p99 degrades as shards are added A key chosen for even distribution that forces every read to fan out"
+    },
+    {
+      "type": "open",
+      "prompt": "Sharding vs Consistent Hashing vs Replication — what decides between them?",
+      "points": [
+        "Consistent Hashing — The placement scheme that makes adding and removing shards cheap; sharding is the what, this is the how.",
+        "Replication — If reads are the bottleneck and the data fits, replicas scale reads without splitting anything.",
+        "Sharding — Splitting one logical dataset across many machines by a partition key, so capacity and throughput scale horizontally."
+      ],
+      "answer": "Consistent Hashing: The placement scheme that makes adding and removing shards cheap; sharding is the what, this is the how. Replication: If reads are the bottleneck and the data fits, replicas scale reads without splitting anything."
+    },
+    {
+      "type": "open",
+      "prompt": "Sharding appears in 7 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a URL Shortener — Splits the mapping table by short-code hash once one primary cannot hold the row count. Access is pure key lookup, which shards about as cleanly as anything does.",
+        "Design a Leaderboard — Partitions scores by leaderboard and time window; one global sorted set would concentrate every write in the system on a single node.",
+        "Design a Typeahead / Autocomplete Service — The trie is partitioned by prefix — the textbook uneven partition, since 'a' and 'th' carry orders of magnitude more traffic than 'zq'.",
+        "Design a Distributed Key-Value Store — The core mechanic. The keyspace is divided across nodes by ring position, and every other feature in the design is built on top of that division.",
+        "Design a Proximity Service — Geo cells are the partition key, so nearby entities land on the same node. Locality is the point; population skew is the price you agree to pay.",
+        "Design a Search Engine — The index is split document-wise so each shard holds a slice of the corpus; a query scatters to every shard and gathers the top-K.",
+        "Design an Observability Platform — Telemetry is partitioned by series or tenant, because ingest volume is the defining constraint and no single node absorbs a firehose."
+      ],
+      "answer": "Sharding carries different work in each: in Design a URL Shortener, splits the mapping table by short-code hash once one primary cannot hold the row count. Access is pure key lookup, which shards about as cleanly as anything does. in Design a Leaderboard, partitions scores by leaderboard and time window; one global sorted set would concentrate every write in the system on a single node. in Design a Typeahead / Autocomplete Service, the trie is partitioned by prefix — the textbook uneven partition, since 'a' and 'th' carry orders of magnitude more traffic than 'zq'. in Design a Distributed Key-Value Store, the core mechanic. The keyspace is divided across nodes by ring position, and every other feature in the design is built on top of that division. in Design a Proximity Service, geo cells are the partition key, so nearby entities land on the same node. Locality is the point; population skew is the price you agree to pay. in Design a Search Engine, the index is split document-wise so each shard holds a slice of the corpus; a query scatters to every shard and gathers the top-K. in Design an Observability Platform, telemetry is partitioned by series or tenant, because ingest volume is the defining constraint and no single node absorbs a firehose."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Durability or availability is a stated requirement — losing one node must not lose data; Read volume dwarfs write volume and the dataset fits on one machine. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Replication — Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity.",
+        "Durability or availability is a stated requirement — losing one node must not lose data",
+        "Read volume dwarfs write volume and the dataset fits on one machine",
+        "Users are geographically spread and reads should be served locally"
+      ],
+      "answer": "Replication. Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity. You reach for it when: Durability or availability is a stated requirement — losing one node must not lose data; Read volume dwarfs write volume and the dataset fits on one machine; Users are geographically spread and reads should be served locally."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Replication in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Writes are the bottleneck — replication multiplies write work rather than reducing it",
+        "The application cannot tolerate reading a value that is momentarily behind",
+        "Replication lag is now a semantic your application must handle explicitly",
+        "Synchronous replication trades latency and availability for consistency; asynchronous trades the reverse",
+        "N× storage and N× write amplification"
+      ],
+      "answer": "Don't reach for it when: Writes are the bottleneck — replication multiplies write work rather than reducing it; The application cannot tolerate reading a value that is momentarily behind. And it is never free: Replication lag is now a semantic your application must handle explicitly; Synchronous replication trades latency and availability for consistency; asynchronous trades the reverse; N× storage and N× write amplification."
+    },
+    {
+      "type": "open",
+      "prompt": "Replication is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Read-your-writes violated because a read landed on a lagging replica",
+        "Split brain during a partition, with two nodes both accepting writes",
+        "Failover promoting a replica that had not caught up, silently losing acknowledged writes"
+      ],
+      "answer": "Read-your-writes violated because a read landed on a lagging replica Split brain during a partition, with two nodes both accepting writes Failover promoting a replica that had not caught up, silently losing acknowledged writes"
+    },
+    {
+      "type": "open",
+      "prompt": "Replication vs Quorum (N/W/R) vs Sharding — what decides between them?",
+      "points": [
+        "Quorum (N/W/R) — Quorum reads/writes let you tune the consistency-availability point instead of accepting the default.",
+        "Sharding — Replication scales reads; sharding scales writes and capacity. Most real systems need both.",
+        "Replication — Keeping copies of the same data on multiple nodes, for read capacity, fault tolerance, or geographic proximity."
+      ],
+      "answer": "Quorum (N/W/R): Quorum reads/writes let you tune the consistency-availability point instead of accepting the default. Sharding: Replication scales reads; sharding scales writes and capacity. Most real systems need both."
+    },
+    {
+      "type": "open",
+      "prompt": "Replication appears in 6 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Distributed Cache — Each entry is held on N successive ring nodes, so losing one node degrades the hit rate instead of losing a whole slice of the keyspace.",
+        "Design a Payment System (Wallet / Ledger) — Synchronous replication of the ledger, because losing an acknowledged financial write is not a degraded mode — it is an unrecoverable defect.",
+        "Design a Distributed Message Queue — Each partition has a leader and followers; the in-sync replica set is what lets an acknowledged publish survive a broker dying.",
+        "Design a Distributed Key-Value Store — N replicas per key range with tunable W and R — where this problem's entire consistency-versus-availability conversation actually lives.",
+        "Design a Search Engine — Index shards are replicated for read throughput and node loss. Query volume, not durability, is what drives the replica count here.",
+        "Design an Authentication & Session Service — Session state is replicated across regions, so a login in one region is honoured in another without a cross-region read on every request."
+      ],
+      "answer": "Replication carries different work in each: in Design a Distributed Cache, each entry is held on N successive ring nodes, so losing one node degrades the hit rate instead of losing a whole slice of the keyspace. in Design a Payment System (Wallet / Ledger), synchronous replication of the ledger, because losing an acknowledged financial write is not a degraded mode — it is an unrecoverable defect. in Design a Distributed Message Queue, each partition has a leader and followers; the in-sync replica set is what lets an acknowledged publish survive a broker dying. in Design a Distributed Key-Value Store, n replicas per key range with tunable W and R — where this problem's entire consistency-versus-availability conversation actually lives. in Design a Search Engine, index shards are replicated for read throughput and node loss. Query volume, not durability, is what drives the replica count here. in Design an Authentication & Session Service, session state is replicated across regions, so a login in one region is honoured in another without a cross-region read on every request."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Membership changes routinely — autoscaling caches, nodes failing and returning; A remap would invalidate a cache wholesale and stampede the origin. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Consistent Hashing — Placing keys and nodes on a ring so adding or removing a node moves only ~1/N of keys instead of remapping everything.",
+        "Membership changes routinely — autoscaling caches, nodes failing and returning",
+        "A remap would invalidate a cache wholesale and stampede the origin",
+        "You need a placement rule every client can compute without asking a coordinator"
+      ],
+      "answer": "Consistent Hashing. Placing keys and nodes on a ring so adding or removing a node moves only ~1/N of keys instead of remapping everything. You reach for it when: Membership changes routinely — autoscaling caches, nodes failing and returning; A remap would invalidate a cache wholesale and stampede the origin; You need a placement rule every client can compute without asking a coordinator."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Consistent Hashing in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The node set is fixed and rare changes can be handled by a planned migration",
+        "Load is skewed by demand rather than by key count — the ring cannot fix a viral key",
+        "Virtual nodes are required for even distribution, which means more ring metadata",
+        "Every client needs the same ring view, so ring membership becomes shared state",
+        "Range queries are impossible; the hash destroys ordering by design"
+      ],
+      "answer": "Don't reach for it when: The node set is fixed and rare changes can be handled by a planned migration; Load is skewed by demand rather than by key count — the ring cannot fix a viral key. And it is never free: Virtual nodes are required for even distribution, which means more ring metadata; Every client needs the same ring view, so ring membership becomes shared state; Range queries are impossible; the hash destroys ordering by design."
+    },
+    {
+      "type": "open",
+      "prompt": "Consistent Hashing is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Too few virtual nodes producing badly uneven load",
+        "Clients disagreeing about ring membership and writing the same key to different nodes",
+        "Cascading failure as a dead node's share lands entirely on its ring successor"
+      ],
+      "answer": "Too few virtual nodes producing badly uneven load Clients disagreeing about ring membership and writing the same key to different nodes Cascading failure as a dead node's share lands entirely on its ring successor"
+    },
+    {
+      "type": "open",
+      "prompt": "Consistent Hashing vs Sharding vs Hot-Key Mitigation — what decides between them?",
+      "points": [
+        "Sharding — Range-based sharding when you need ordered scans and can accept manual rebalancing.",
+        "Hot-Key Mitigation — The ring balances key COUNT, never key DEMAND — pair it with hot-key handling.",
+        "Consistent Hashing — Placing keys and nodes on a ring so adding or removing a node moves only ~1/N of keys instead of remapping everything."
+      ],
+      "answer": "Sharding: Range-based sharding when you need ordered scans and can accept manual rebalancing. Hot-Key Mitigation: The ring balances key COUNT, never key DEMAND — pair it with hot-key handling."
+    },
+    {
+      "type": "open",
+      "prompt": "Consistent Hashing appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Distributed Rate Limiter — Routes each client key to the node holding its counter, so limiter state is not remapped every time a gateway is added or removed.",
+        "Design a Distributed Cache — Places keys on the ring so adding a node moves ~1/N of them, instead of invalidating the whole cache and stampeding the origin.",
+        "Design a Distributed Key-Value Store — Assigns key ranges to nodes and defines the replica set as the next N nodes clockwise from the key's ring position."
+      ],
+      "answer": "Consistent Hashing carries different work in each: in Design a Distributed Rate Limiter, routes each client key to the node holding its counter, so limiter state is not remapped every time a gateway is added or removed. in Design a Distributed Cache, places keys on the ring so adding a node moves ~1/N of them, instead of invalidating the whole cache and stampeding the origin. in Design a Distributed Key-Value Store, assigns key ranges to nodes and defines the replica set as the next N nodes clockwise from the key's ring position."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt asks you to reason explicitly about the consistency-availability tradeoff; You want strong reads sometimes and fast reads other times, from the same store. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Quorum (N/W/R) — Requiring W acknowledgements to write and R responses to read out of N replicas, tuning consistency against availability.",
+        "The prompt asks you to reason explicitly about the consistency-availability tradeoff",
+        "You want strong reads sometimes and fast reads other times, from the same store",
+        "Replicas span regions and you must survive losing one"
+      ],
+      "answer": "Quorum (N/W/R). Requiring W acknowledgements to write and R responses to read out of N replicas, tuning consistency against availability. You reach for it when: The prompt asks you to reason explicitly about the consistency-availability tradeoff; You want strong reads sometimes and fast reads other times, from the same store; Replicas span regions and you must survive losing one."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Quorum (N/W/R) in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "A single-leader store already gives you what you need with less to explain",
+        "The application cannot handle the conflict resolution that concurrent writes require",
+        "Latency is governed by the slowest replica in the quorum",
+        "W+R>N gives overlap, not linearizability — concurrent writes still need conflict resolution",
+        "Operational reasoning gets harder; correctness now depends on numbers in a config"
+      ],
+      "answer": "Don't reach for it when: A single-leader store already gives you what you need with less to explain; The application cannot handle the conflict resolution that concurrent writes require. And it is never free: Latency is governed by the slowest replica in the quorum; W+R>N gives overlap, not linearizability — concurrent writes still need conflict resolution; Operational reasoning gets harder; correctness now depends on numbers in a config."
+    },
+    {
+      "type": "open",
+      "prompt": "Quorum (N/W/R) is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Sloppy quorum accepting writes on nodes outside the intended set, so a later read misses them",
+        "Read repair storms after a partition heals",
+        "Choosing W+R≤N for latency and quietly accepting stale reads nobody documented"
+      ],
+      "answer": "Sloppy quorum accepting writes on nodes outside the intended set, so a later read misses them Read repair storms after a partition heals Choosing W+R≤N for latency and quietly accepting stale reads nobody documented"
+    },
+    {
+      "type": "open",
+      "prompt": "Quorum (N/W/R) vs Replication vs Conflict Resolution — what decides between them?",
+      "points": [
+        "Replication — Plain leader-follower replication when you do not need per-request tuning.",
+        "Conflict Resolution — Quorums make concurrent writes possible; something still has to decide who wins.",
+        "Quorum (N/W/R) — Requiring W acknowledgements to write and R responses to read out of N replicas, tuning consistency against availability."
+      ],
+      "answer": "Replication: Plain leader-follower replication when you do not need per-request tuning. Conflict Resolution: Quorums make concurrent writes possible; something still has to decide who wins."
+    },
+    {
+      "type": "open",
+      "prompt": "Quorum (N/W/R) appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Distributed Cache — Read and write acknowledgement counts decide whether a cached value may be stale — the tunable this design exposes to its callers.",
+        "Design a Payment System (Wallet / Ledger) — W and R are set so an acknowledged ledger write survives losing a replica; latency is spent deliberately to buy that guarantee.",
+        "Design a Distributed Key-Value Store — Tunable N/W/R is the interface through which this design exposes the consistency-availability tradeoff to its callers."
+      ],
+      "answer": "Quorum (N/W/R) carries different work in each: in Design a Distributed Cache, read and write acknowledgement counts decide whether a cached value may be stale — the tunable this design exposes to its callers. in Design a Payment System (Wallet / Ledger), w and R are set so an acknowledged ledger write survives losing a replica; latency is spent deliberately to buy that guarantee. in Design a Distributed Key-Value Store, tunable N/W/R is the interface through which this design exposes the consistency-availability tradeoff to its callers."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Many nodes must mint ids concurrently without coordinating on every one; Ids need to be roughly time-ordered for index locality or pagination. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Distributed ID Generation — Producing unique identifiers across many machines without a central allocator — Snowflake-style, UUID, or ranged counters.",
+        "Many nodes must mint ids concurrently without coordinating on every one",
+        "Ids need to be roughly time-ordered for index locality or pagination",
+        "The prompt needs short, opaque or non-guessable public identifiers"
+      ],
+      "answer": "Distributed ID Generation. Producing unique identifiers across many machines without a central allocator — Snowflake-style, UUID, or ranged counters. You reach for it when: Many nodes must mint ids concurrently without coordinating on every one; Ids need to be roughly time-ordered for index locality or pagination; The prompt needs short, opaque or non-guessable public identifiers."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Distributed ID Generation in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "One database's auto-increment still keeps up — it is simpler and monotonic",
+        "Ids must be strictly gapless or sequential, which distributed generation cannot promise",
+        "Snowflake-style ids need a machine-id assignment scheme and clock discipline",
+        "Random UUIDs destroy index locality and inflate B-tree page splits",
+        "Encoding choices leak information — a sequential id tells competitors your volume"
+      ],
+      "answer": "Don't reach for it when: One database's auto-increment still keeps up — it is simpler and monotonic; Ids must be strictly gapless or sequential, which distributed generation cannot promise. And it is never free: Snowflake-style ids need a machine-id assignment scheme and clock discipline; Random UUIDs destroy index locality and inflate B-tree page splits; Encoding choices leak information — a sequential id tells competitors your volume."
+    },
+    {
+      "type": "open",
+      "prompt": "Distributed ID Generation is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Clock skew or NTP step-back producing duplicate or out-of-order ids",
+        "Machine-id collision after a scaling event reuses an identifier",
+        "Range allocator becoming a single point of failure everyone forgot was in the path"
+      ],
+      "answer": "Clock skew or NTP step-back producing duplicate or out-of-order ids Machine-id collision after a scaling event reuses an identifier Range allocator becoming a single point of failure everyone forgot was in the path"
+    },
+    {
+      "type": "open",
+      "prompt": "Distributed ID Generation vs Relational Database vs Consistent Hashing — what decides between them?",
+      "points": [
+        "Relational Database — A single auto-increment column is correct and boring until you actually outgrow one primary.",
+        "Consistent Hashing — If the id only needs to route, hashing an existing natural key may remove the problem.",
+        "Distributed ID Generation — Producing unique identifiers across many machines without a central allocator — Snowflake-style, UUID, or ranged counters."
+      ],
+      "answer": "Relational Database: A single auto-increment column is correct and boring until you actually outgrow one primary. Consistent Hashing: If the id only needs to route, hashing an existing natural key may remove the problem."
+    }
+  ]
+}

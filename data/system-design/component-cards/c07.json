@@ -1,0 +1,346 @@
+{
+  "id": "c07",
+  "num": 7,
+  "part": "Component decks",
+  "title": "Control & Protection",
+  "summary": "Keeping load inside what the system can survive. 6 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Rate Limiting — Capping how many requests a caller may make in a window, to protect capacity and enforce fairness.",
+    "Backpressure — Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks.",
+    "Circuit Breaker — Tripping a dependency call to fail fast after repeated failures, then probing periodically to see whether it has recovered.",
+    "Retry with Backoff & Jitter — Re-attempting a failed call on an exponentially increasing, randomised delay, so transient failures heal without synchronising the fleet.",
+    "Load Shedding — Deliberately dropping or degrading lower-priority work under overload so the system serves its most important traffic instead of failing at everything.",
+    "Bulkhead Isolation — Partitioning resources — thread pools, connections, even fleets — so one dependency or tenant cannot consume everything."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: A public API where one caller could consume everyone's capacity; The prompt mentions abuse, scraping, brute force or tiered plans. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Rate Limiting — Capping how many requests a caller may make in a window, to protect capacity and enforce fairness.",
+        "A public API where one caller could consume everyone's capacity",
+        "The prompt mentions abuse, scraping, brute force or tiered plans",
+        "You call a third party with its own quota you must not exceed"
+      ],
+      "answer": "Rate Limiting. Capping how many requests a caller may make in a window, to protect capacity and enforce fairness. You reach for it when: A public API where one caller could consume everyone's capacity; The prompt mentions abuse, scraping, brute force or tiered plans; You call a third party with its own quota you must not exceed."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Rate Limiting in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The bottleneck is internal and unbounded work, not caller volume — that is load shedding or backpressure",
+        "Legitimate bursts are normal and a hard cap would break the product",
+        "Distributed counters mean either shared state on the hot path or approximate limits",
+        "Limit values are a product decision that will be wrong at first",
+        "Every rejected request still costs you the work of rejecting it"
+      ],
+      "answer": "Don't reach for it when: The bottleneck is internal and unbounded work, not caller volume — that is load shedding or backpressure; Legitimate bursts are normal and a hard cap would break the product. And it is never free: Distributed counters mean either shared state on the hot path or approximate limits; Limit values are a product decision that will be wrong at first; Every rejected request still costs you the work of rejecting it."
+    },
+    {
+      "type": "open",
+      "prompt": "Rate Limiting is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Fixed-window boundary allowing double the limit across the boundary instant",
+        "Limiter store outage forcing a fail-open (unprotected) or fail-closed (outage) choice you never made explicitly",
+        "Limiting by IP and blocking an entire NAT'd office or mobile carrier",
+        "No Retry-After, so well-behaved clients retry immediately and amplify the overload"
+      ],
+      "answer": "Fixed-window boundary allowing double the limit across the boundary instant Limiter store outage forcing a fail-open (unprotected) or fail-closed (outage) choice you never made explicitly Limiting by IP and blocking an entire NAT'd office or mobile carrier No Retry-After, so well-behaved clients retry immediately and amplify the overload"
+    },
+    {
+      "type": "open",
+      "prompt": "Rate Limiting vs Backpressure vs Load Shedding — what decides between them?",
+      "points": [
+        "Backpressure — Rate limiting protects you from callers; backpressure tells callers to slow down because you are full.",
+        "Load Shedding — When you must drop work by priority under overload rather than by per-caller quota.",
+        "Rate Limiting — Capping how many requests a caller may make in a window, to protect capacity and enforce fairness."
+      ],
+      "answer": "Backpressure: Rate limiting protects you from callers; backpressure tells callers to slow down because you are full. Load Shedding: When you must drop work by priority under overload rather than by per-caller quota."
+    },
+    {
+      "type": "open",
+      "prompt": "Rate Limiting appears in 7 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Web Crawler — Per-domain politeness. The crawler caps its own request rate per host — a limiter pointed at itself rather than at incoming callers.",
+        "Design a Distributed Rate Limiter — The problem itself. Every decision here is about where the counter lives and how exact it needs to be across a fleet of gateways.",
+        "Design a Webhook Delivery System — Delivery attempts per receiver endpoint are capped, so retries toward a struggling customer do not turn into an attack on them.",
+        "Design a Content Moderation Pipeline — Caps per-uploader submission rate — the cheapest defence against bulk spam, applied before any model spends compute on the content.",
+        "Design an Authentication & Session Service — Login attempts per account and per IP, the primary defence against credential stuffing and brute force.",
+        "Design a Sanctions Screening System — Escalations are throttled into the review queue rather than at the matcher, because matching is cheap and the humans are the bottleneck that a list delta would otherwise flood.",
+        "Design a Human Review Queue — Admission into the queue is metered per lane, so a 500K-item batch dump drains gradually instead of displacing the live stream that has deadlines attached."
+      ],
+      "answer": "Rate Limiting carries different work in each: in Design a Web Crawler, per-domain politeness. The crawler caps its own request rate per host — a limiter pointed at itself rather than at incoming callers. in Design a Distributed Rate Limiter, the problem itself. Every decision here is about where the counter lives and how exact it needs to be across a fleet of gateways. in Design a Webhook Delivery System, delivery attempts per receiver endpoint are capped, so retries toward a struggling customer do not turn into an attack on them. in Design a Content Moderation Pipeline, caps per-uploader submission rate — the cheapest defence against bulk spam, applied before any model spends compute on the content. in Design an Authentication & Session Service, login attempts per account and per IP, the primary defence against credential stuffing and brute force. in Design a Sanctions Screening System, escalations are throttled into the review queue rather than at the matcher, because matching is cheap and the humans are the bottleneck that a list delta would otherwise flood. in Design a Human Review Queue, admission into the queue is metered per lane, so a 500K-item batch dump drains gradually instead of displacing the live stream that has deadlines attached."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Producer and consumer rates can diverge for sustained periods; The prompt has a pipeline where an unbounded buffer would just relocate the failure. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Backpressure — Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks.",
+        "Producer and consumer rates can diverge for sustained periods",
+        "The prompt has a pipeline where an unbounded buffer would just relocate the failure",
+        "Memory or queue depth is a real constraint"
+      ],
+      "answer": "Backpressure. Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks. You reach for it when: Producer and consumer rates can diverge for sustained periods; The prompt has a pipeline where an unbounded buffer would just relocate the failure; Memory or queue depth is a real constraint."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Backpressure in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Bursts are short and a buffer genuinely absorbs them",
+        "The producer physically cannot slow down — a firehose of external events — in which case you must shed instead",
+        "Slowness propagates upstream by design, so the effect is visible to callers",
+        "Every stage needs a bounded buffer and a policy for what happens when it is full",
+        "Harder to reason about: a slow leaf can stall the root"
+      ],
+      "answer": "Don't reach for it when: Bursts are short and a buffer genuinely absorbs them; The producer physically cannot slow down — a firehose of external events — in which case you must shed instead. And it is never free: Slowness propagates upstream by design, so the effect is visible to callers; Every stage needs a bounded buffer and a policy for what happens when it is full; Harder to reason about: a slow leaf can stall the root."
+    },
+    {
+      "type": "open",
+      "prompt": "Backpressure is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Unbounded queue chosen 'temporarily', converting a latency problem into an out-of-memory crash",
+        "Backpressure propagating all the way to a user-facing request path and timing everyone out",
+        "Deadlock when two stages apply backpressure to each other in a cycle"
+      ],
+      "answer": "Unbounded queue chosen 'temporarily', converting a latency problem into an out-of-memory crash Backpressure propagating all the way to a user-facing request path and timing everyone out Deadlock when two stages apply backpressure to each other in a cycle"
+    },
+    {
+      "type": "open",
+      "prompt": "Backpressure vs Load Shedding vs Work Queue — what decides between them?",
+      "points": [
+        "Load Shedding — When you cannot slow the producer, drop work deliberately by priority.",
+        "Work Queue — A durable queue absorbs bursts; pair with backpressure so 'burst' cannot silently become 'forever'.",
+        "Backpressure — Letting a saturated consumer slow its producer, so queues stay bounded instead of absorbing an overload until something breaks."
+      ],
+      "answer": "Load Shedding: When you cannot slow the producer, drop work deliberately by priority. Work Queue: A durable queue absorbs bursts; pair with backpressure so 'burst' cannot silently become 'forever'."
+    },
+    {
+      "type": "open",
+      "prompt": "Backpressure appears in 6 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Web Crawler — Politeness limits and frontier depth bound how fast the crawler pulls, so it neither melts a target site nor outruns its own parsers.",
+        "Design a Distributed Message Queue — Producers are slowed when partitions cannot absorb writes, because the alternative is unbounded broker storage followed by a hard failure.",
+        "Design an LLM Inference Platform — Queue depth signals the admission controller to reject or shed, rather than accumulating requests that will time out before a GPU frees up.",
+        "Design an Observability Platform — Ingest pushes back on agents when the pipeline saturates — dropping telemetry is preferable to the observability platform collapsing under it.",
+        "Design a Webhook Delivery System — A slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest.",
+        "Design a Financial Crime Alert Investigation System — Per-tenant concurrency caps keep one bank's overnight backfill from consuming every worker slot, because the shared ceiling is model and vendor spend rather than CPU."
+      ],
+      "answer": "Backpressure carries different work in each: in Design a Web Crawler, politeness limits and frontier depth bound how fast the crawler pulls, so it neither melts a target site nor outruns its own parsers. in Design a Distributed Message Queue, producers are slowed when partitions cannot absorb writes, because the alternative is unbounded broker storage followed by a hard failure. in Design an LLM Inference Platform, queue depth signals the admission controller to reject or shed, rather than accumulating requests that will time out before a GPU frees up. in Design an Observability Platform, ingest pushes back on agents when the pipeline saturates — dropping telemetry is preferable to the observability platform collapsing under it. in Design a Webhook Delivery System, a slow or dead receiver must not consume unbounded delivery capacity; per-endpoint concurrency limits stop one customer starving the rest. in Design a Financial Crime Alert Investigation System, per-tenant concurrency caps keep one bank's overnight backfill from consuming every worker slot, because the shared ceiling is model and vendor spend rather than CPU."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: A downstream dependency can fail or slow down and you must not go down with it; The prompt asks how the system degrades when one service is unavailable. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Circuit Breaker — Tripping a dependency call to fail fast after repeated failures, then probing periodically to see whether it has recovered.",
+        "A downstream dependency can fail or slow down and you must not go down with it",
+        "The prompt asks how the system degrades when one service is unavailable",
+        "Retries against a failing dependency would make its recovery harder"
+      ],
+      "answer": "Circuit Breaker. Tripping a dependency call to fail fast after repeated failures, then probing periodically to see whether it has recovered. You reach for it when: A downstream dependency can fail or slow down and you must not go down with it; The prompt asks how the system degrades when one service is unavailable; Retries against a failing dependency would make its recovery harder."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Circuit Breaker in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The dependency is genuinely required and there is no meaningful fallback — failing fast just fails faster",
+        "Failures are per-request and independent rather than indicative of dependency health",
+        "Thresholds and probe intervals are tuning parameters with no obviously right value",
+        "A fallback path that is rarely exercised is a fallback path that does not work",
+        "State is usually per-process, so behaviour differs across the fleet"
+      ],
+      "answer": "Don't reach for it when: The dependency is genuinely required and there is no meaningful fallback — failing fast just fails faster; Failures are per-request and independent rather than indicative of dependency health. And it is never free: Thresholds and probe intervals are tuning parameters with no obviously right value; A fallback path that is rarely exercised is a fallback path that does not work; State is usually per-process, so behaviour differs across the fleet."
+    },
+    {
+      "type": "open",
+      "prompt": "Circuit Breaker is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Tripping on a transient blip and cutting off a healthy dependency",
+        "Half-open probes stampeding a recovering service and re-tripping it immediately",
+        "Breaker around a non-critical call taking down the critical path because the fallback was never tested"
+      ],
+      "answer": "Tripping on a transient blip and cutting off a healthy dependency Half-open probes stampeding a recovering service and re-tripping it immediately Breaker around a non-critical call taking down the critical path because the fallback was never tested"
+    },
+    {
+      "type": "open",
+      "prompt": "Circuit Breaker vs Retry with Backoff & Jitter vs Bulkhead Isolation — what decides between them?",
+      "points": [
+        "Retry with Backoff & Jitter — Retries handle transient failures; a breaker handles sustained ones. You need both, in that order.",
+        "Bulkhead Isolation — Isolate the resources a bad dependency can consume instead of detecting it after the fact.",
+        "Circuit Breaker — Tripping a dependency call to fail fast after repeated failures, then probing periodically to see whether it has recovered."
+      ],
+      "answer": "Retry with Backoff & Jitter: Retries handle transient failures; a breaker handles sustained ones. You need both, in that order. Bulkhead Isolation: Isolate the resources a bad dependency can consume instead of detecting it after the fact."
+    },
+    {
+      "type": "open",
+      "prompt": "Circuit Breaker appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Notification System — Trips when a downstream provider starts failing, so notifications on other channels are not dragged down with it.",
+        "Design a Prescription Drug Marketplace — Cuts off a failing pharmacy or payment integration rather than letting its latency consume the whole order pipeline.",
+        "Design a Webhook Delivery System — Stops attempts to an endpoint that is consistently failing, which protects both your capacity and the receiver's recovery."
+      ],
+      "answer": "Circuit Breaker carries different work in each: in Design a Notification System, trips when a downstream provider starts failing, so notifications on other channels are not dragged down with it. in Design a Prescription Drug Marketplace, cuts off a failing pharmacy or payment integration rather than letting its latency consume the whole order pipeline. in Design a Webhook Delivery System, stops attempts to an endpoint that is consistently failing, which protects both your capacity and the receiver's recovery."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Failures are transient — a timeout, a brief unavailability, a throttled response; The operation is idempotent or has been made so. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Retry with Backoff & Jitter — Re-attempting a failed call on an exponentially increasing, randomised delay, so transient failures heal without synchronising the fleet.",
+        "Failures are transient — a timeout, a brief unavailability, a throttled response",
+        "The operation is idempotent or has been made so",
+        "The prompt asks how you handle partial failure in a distributed call graph"
+      ],
+      "answer": "Retry with Backoff & Jitter. Re-attempting a failed call on an exponentially increasing, randomised delay, so transient failures heal without synchronising the fleet. You reach for it when: Failures are transient — a timeout, a brief unavailability, a throttled response; The operation is idempotent or has been made so; The prompt asks how you handle partial failure in a distributed call graph."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Retry with Backoff & Jitter in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The failure is deterministic; retrying a malformed request just multiplies it",
+        "The operation is not idempotent and duplicates would be harmful",
+        "You are retrying at several layers at once, multiplying attempts geometrically",
+        "Retries consume capacity at exactly the moment capacity is scarce",
+        "Latency budget must accommodate the retries or the caller times out anyway",
+        "Attempt caps and total deadlines are required, and are extra parameters to get right"
+      ],
+      "answer": "Don't reach for it when: The failure is deterministic; retrying a malformed request just multiplies it; The operation is not idempotent and duplicates would be harmful; You are retrying at several layers at once, multiplying attempts geometrically. And it is never free: Retries consume capacity at exactly the moment capacity is scarce; Latency budget must accommodate the retries or the caller times out anyway; Attempt caps and total deadlines are required, and are extra parameters to get right."
+    },
+    {
+      "type": "open",
+      "prompt": "Retry with Backoff & Jitter is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "No jitter, so every client retries in lockstep and produces a synchronised thundering herd",
+        "Retry amplification across layers turning one user request into dozens of backend calls",
+        "Retrying a request that actually succeeded but whose response was lost, without an idempotency key"
+      ],
+      "answer": "No jitter, so every client retries in lockstep and produces a synchronised thundering herd Retry amplification across layers turning one user request into dozens of backend calls Retrying a request that actually succeeded but whose response was lost, without an idempotency key"
+    },
+    {
+      "type": "open",
+      "prompt": "Retry with Backoff & Jitter vs Circuit Breaker vs Work Queue — what decides between them?",
+      "points": [
+        "Circuit Breaker — Once failures are sustained rather than transient, stop retrying and trip.",
+        "Work Queue — Move the work off the request path and let the queue own durable retry.",
+        "Retry with Backoff & Jitter — Re-attempting a failed call on an exponentially increasing, randomised delay, so transient failures heal without synchronising the fleet."
+      ],
+      "answer": "Circuit Breaker: Once failures are sustained rather than transient, stop retrying and trip. Work Queue: Move the work off the request path and let the queue own durable retry."
+    },
+    {
+      "type": "open",
+      "prompt": "Retry with Backoff & Jitter appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Web Crawler — Re-fetches a page that timed out on a growing, jittered delay, so a struggling host is not hit again immediately.",
+        "Design a Notification System — Governs redelivery after a transient provider error, with jitter so every pending notification does not retry in lockstep.",
+        "Design a Distributed Job Scheduler — Decides how a failed attempt is re-scheduled, and the ceiling at which it stops being retried and is dead-lettered.",
+        "Design a Webhook Delivery System — The delivery schedule itself — exponential, jittered and capped, because a receiver's outage must not become a retry storm."
+      ],
+      "answer": "Retry with Backoff & Jitter carries different work in each: in Design a Web Crawler, re-fetches a page that timed out on a growing, jittered delay, so a struggling host is not hit again immediately. in Design a Notification System, governs redelivery after a transient provider error, with jitter so every pending notification does not retry in lockstep. in Design a Distributed Job Scheduler, decides how a failed attempt is re-scheduled, and the ceiling at which it stops being retried and is dead-lettered. in Design a Webhook Delivery System, the delivery schedule itself — exponential, jittered and capped, because a receiver's outage must not become a retry storm."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Demand can exceed capacity and you cannot slow the source; Some traffic is genuinely more important than the rest — checkout over recommendations. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Load Shedding — Deliberately dropping or degrading lower-priority work under overload so the system serves its most important traffic instead of failing at everything.",
+        "Demand can exceed capacity and you cannot slow the source",
+        "Some traffic is genuinely more important than the rest — checkout over recommendations",
+        "The prompt asks what happens at 10× expected load"
+      ],
+      "answer": "Load Shedding. Deliberately dropping or degrading lower-priority work under overload so the system serves its most important traffic instead of failing at everything. You reach for it when: Demand can exceed capacity and you cannot slow the source; Some traffic is genuinely more important than the rest — checkout over recommendations; The prompt asks what happens at 10× expected load."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Load Shedding in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "All traffic is equally critical, so there is nothing to shed that does not hurt equally",
+        "Capacity is the actual answer and shedding is being used to avoid provisioning",
+        "You need a priority classification for traffic, which is a product decision",
+        "Shed requests are visible failures, so the client experience must be designed",
+        "Detecting overload accurately is harder than it looks — queue depth beats CPU"
+      ],
+      "answer": "Don't reach for it when: All traffic is equally critical, so there is nothing to shed that does not hurt equally; Capacity is the actual answer and shedding is being used to avoid provisioning. And it is never free: You need a priority classification for traffic, which is a product decision; Shed requests are visible failures, so the client experience must be designed; Detecting overload accurately is harder than it looks — queue depth beats CPU."
+    },
+    {
+      "type": "open",
+      "prompt": "Load Shedding is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Shedding triggered too late, once queues are already deep and latency is unrecoverable",
+        "Shedding cheap requests while expensive ones sail through, so it does not reduce load",
+        "Clients retrying shed requests immediately, converting a shed into an amplification"
+      ],
+      "answer": "Shedding triggered too late, once queues are already deep and latency is unrecoverable Shedding cheap requests while expensive ones sail through, so it does not reduce load Clients retrying shed requests immediately, converting a shed into an amplification"
+    },
+    {
+      "type": "open",
+      "prompt": "Load Shedding vs Rate Limiting vs Backpressure — what decides between them?",
+      "points": [
+        "Rate Limiting — Per-caller fairness before overload; shedding is the emergency response after.",
+        "Backpressure — If the producer CAN be slowed, do that instead — no work is lost.",
+        "Load Shedding — Deliberately dropping or degrading lower-priority work under overload so the system serves its most important traffic instead of failing at everything."
+      ],
+      "answer": "Rate Limiting: Per-caller fairness before overload; shedding is the emergency response after. Backpressure: If the producer CAN be slowed, do that instead — no work is lost."
+    },
+    {
+      "type": "open",
+      "prompt": "Load Shedding appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Typeahead / Autocomplete Service — Suggestions are the first thing dropped under load, because a missing dropdown degrades the product far less than a slow search box.",
+        "Design an Ad Click Aggregator — Sampling the click stream under extreme load, accepting an estimate rather than losing the pipeline entirely.",
+        "Design an LLM Inference Platform — Rejects low-priority requests once queue depth implies they would time out anyway, freeing GPUs for work that can still land.",
+        "Design an Observability Platform — Drops or samples telemetry when ingest saturates, on the principle that partial observability beats none."
+      ],
+      "answer": "Load Shedding carries different work in each: in Design a Typeahead / Autocomplete Service, suggestions are the first thing dropped under load, because a missing dropdown degrades the product far less than a slow search box. in Design an Ad Click Aggregator, sampling the click stream under extreme load, accepting an estimate rather than losing the pipeline entirely. in Design an LLM Inference Platform, rejects low-priority requests once queue depth implies they would time out anyway, freeing GPUs for work that can still land. in Design an Observability Platform, drops or samples telemetry when ingest saturates, on the principle that partial observability beats none."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: One slow dependency currently exhausts a shared pool and takes down unrelated paths; The prompt is multi-tenant and one customer must not be able to starve the others. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Bulkhead Isolation — Partitioning resources — thread pools, connections, even fleets — so one dependency or tenant cannot consume everything.",
+        "One slow dependency currently exhausts a shared pool and takes down unrelated paths",
+        "The prompt is multi-tenant and one customer must not be able to starve the others",
+        "Critical and non-critical work share infrastructure today"
+      ],
+      "answer": "Bulkhead Isolation. Partitioning resources — thread pools, connections, even fleets — so one dependency or tenant cannot consume everything. You reach for it when: One slow dependency currently exhausts a shared pool and takes down unrelated paths; The prompt is multi-tenant and one customer must not be able to starve the others; Critical and non-critical work share infrastructure today."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Bulkhead Isolation in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "There is only one dependency and one class of work — partitioning buys nothing",
+        "Utilisation matters more than isolation; reserved partitions sit idle by design",
+        "Lower average utilisation, since capacity is reserved rather than pooled",
+        "More pools to size and monitor, each with its own saturation behaviour",
+        "Cell-based isolation multiplies deployment and operational surface"
+      ],
+      "answer": "Don't reach for it when: There is only one dependency and one class of work — partitioning buys nothing; Utilisation matters more than isolation; reserved partitions sit idle by design. And it is never free: Lower average utilisation, since capacity is reserved rather than pooled; More pools to size and monitor, each with its own saturation behaviour; Cell-based isolation multiplies deployment and operational surface."
+    },
+    {
+      "type": "open",
+      "prompt": "Bulkhead Isolation is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Pools sized by guesswork, so one saturates constantly while another idles",
+        "A shared resource one level down (a connection pool, a database) undoing the isolation above it",
+        "Noisy-neighbour effects surviving because the partition was logical, not physical"
+      ],
+      "answer": "Pools sized by guesswork, so one saturates constantly while another idles A shared resource one level down (a connection pool, a database) undoing the isolation above it Noisy-neighbour effects surviving because the partition was logical, not physical"
+    },
+    {
+      "type": "open",
+      "prompt": "Bulkhead Isolation vs Circuit Breaker vs Rate Limiting — what decides between them?",
+      "points": [
+        "Circuit Breaker — Detect and cut off a bad dependency rather than pre-partitioning for it.",
+        "Rate Limiting — Per-tenant quotas achieve fairness without reserving capacity per tenant.",
+        "Bulkhead Isolation — Partitioning resources — thread pools, connections, even fleets — so one dependency or tenant cannot consume everything."
+      ],
+      "answer": "Circuit Breaker: Detect and cut off a bad dependency rather than pre-partitioning for it. Rate Limiting: Per-tenant quotas achieve fairness without reserving capacity per tenant."
+    },
+    {
+      "type": "open",
+      "prompt": "Bulkhead Isolation appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design an LLM Inference Platform — Separate GPU pools per priority class, so a batch job cannot consume the capacity interactive requests depend on.",
+        "Design an Observability Platform — Per-tenant ingest partitions, so one customer instrumenting a hot loop cannot degrade everyone else's dashboards.",
+        "Design a Webhook Delivery System — Per-endpoint delivery concurrency, so one slow receiver occupies a bounded slice of the worker pool and no more."
+      ],
+      "answer": "Bulkhead Isolation carries different work in each: in Design an LLM Inference Platform, separate GPU pools per priority class, so a batch job cannot consume the capacity interactive requests depend on. in Design an Observability Platform, per-tenant ingest partitions, so one customer instrumenting a hot loop cannot degrade everyone else's dashboards. in Design a Webhook Delivery System, per-endpoint delivery concurrency, so one slow receiver occupies a bounded slice of the worker pool and no more."
+    }
+  ]
+}

@@ -1,0 +1,232 @@
+{
+  "id": "c02",
+  "num": 2,
+  "part": "Component decks",
+  "title": "Caching & Delivery",
+  "summary": "How to stop doing the same expensive work twice. 4 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Cache — A fast store holding the answer to work you already did, so the expensive path runs once for many reads.",
+    "CDN — A globally distributed cache of your static bytes, serving users from a nearby PoP instead of your origin.",
+    "Hot-Key Mitigation — Techniques for the one key whose traffic exceeds what a single shard or cache node can serve — replicate it, split it, or absorb it locally.",
+    "Edge Compute — Running small amounts of your logic in the CDN's PoPs, so personalisation, auth or rewriting happens near the user instead of at origin."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt gives a lopsided read:write ratio — 100:1 and up; The answer is expensive to compute or fetch and changes far more slowly than it is read. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Cache — A fast store holding the answer to work you already did, so the expensive path runs once for many reads.",
+        "The prompt gives a lopsided read:write ratio — 100:1 and up",
+        "The answer is expensive to compute or fetch and changes far more slowly than it is read",
+        "A stated staleness tolerance ('feed can be up to a minute old') is an explicit invitation"
+      ],
+      "answer": "Cache. A fast store holding the answer to work you already did, so the expensive path runs once for many reads. You reach for it when: The prompt gives a lopsided read:write ratio — 100:1 and up; The answer is expensive to compute or fetch and changes far more slowly than it is read; A stated staleness tolerance ('feed can be up to a minute old') is an explicit invitation."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Cache in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Reads must reflect writes immediately — a cache is a correctness hazard you added on purpose",
+        "The working set is uniformly random over a huge keyspace; the hit rate will not pay for the machinery",
+        "Write-heavy workloads where you would spend more invalidating than serving",
+        "Every cache is a second copy of the truth, and now you own the invalidation problem",
+        "Memory is expensive, so capacity forces an eviction policy you must justify",
+        "Debugging gets harder: behaviour now depends on whether something was warm"
+      ],
+      "answer": "Don't reach for it when: Reads must reflect writes immediately — a cache is a correctness hazard you added on purpose; The working set is uniformly random over a huge keyspace; the hit rate will not pay for the machinery; Write-heavy workloads where you would spend more invalidating than serving. And it is never free: Every cache is a second copy of the truth, and now you own the invalidation problem; Memory is expensive, so capacity forces an eviction policy you must justify; Debugging gets harder: behaviour now depends on whether something was warm."
+    },
+    {
+      "type": "open",
+      "prompt": "Cache is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Stampede — a hot key expires and every concurrent request hits the origin at once",
+        "Hot key — a single entry exceeds one node's throughput no matter how many nodes you add",
+        "Cold start after a flush or deploy sends full production load at a database sized for cache-miss traffic",
+        "Silent staleness: an invalidation is missed and wrong data is served indefinitely with no error"
+      ],
+      "answer": "Stampede — a hot key expires and every concurrent request hits the origin at once Hot key — a single entry exceeds one node's throughput no matter how many nodes you add Cold start after a flush or deploy sends full production load at a database sized for cache-miss traffic Silent staleness: an invalidation is missed and wrong data is served indefinitely with no error"
+    },
+    {
+      "type": "open",
+      "prompt": "Cache vs CDN vs Inverted Index / Search — what decides between them?",
+      "points": [
+        "CDN — Same idea moved to the network edge. Pick a CDN when the payload is static and the win is geographic distance.",
+        "Inverted Index / Search — If reads are QUERIES rather than key lookups, a precomputed index beats caching every distinct query.",
+        "Cache — A fast store holding the answer to work you already did, so the expensive path runs once for many reads."
+      ],
+      "answer": "CDN: Same idea moved to the network edge. Pick a CDN when the payload is static and the win is geographic distance. Inverted Index / Search: If reads are QUERIES rather than key lookups, a precomputed index beats caching every distinct query."
+    },
+    {
+      "type": "open",
+      "prompt": "Cache appears in 13 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a URL Shortener — Hot short-code → long-URL lookups. The mapping is immutable once created, so there is no invalidation story to get wrong — only capacity and TTL.",
+        "Design a News Feed — The per-user timeline of post IDs in Redis, hydrated to full post bodies on read. The cache IS the precomputed feed, not an optimisation over it.",
+        "Design a Distributed Rate Limiter — The counter state itself. Limiter state is small, extremely hot, and worthless once stale — which is exactly the shape an in-memory store is for.",
+        "Design a Leaderboard — Top-N slices per leaderboard window, so the overwhelmingly common 'show me the top 100' read never touches the underlying ranking structure.",
+        "Design a Distributed Cache — The whole problem. Ring placement, replication and eviction all exist to make one cache survive nodes joining and leaving without losing its value.",
+        "Design a Typeahead / Autocomplete Service — Precomputed top-K completions per prefix, held in memory because the keystroke budget is tens of milliseconds and a rebuild is a batch job.",
+        "Design a Ticket Booking System (Ticketmaster-style) — Event and seat-map reads, which vastly outnumber bookings. Availability counts are cached loosely on purpose; the actual hold stays transactional.",
+        "Design an LLM Inference Platform — Prompt-prefix and KV-cache reuse across requests, so a shared system prompt is not recomputed per call — the dominant saving in LLM serving.",
+        "Design a RAG / Semantic Search System — Embeddings and retrieval results for repeated queries, since embedding a query costs a model call every single time.",
+        "Design a Proximity Service — Popular geo cells, whose query volume is wildly skewed toward a few dense urban areas. A short TTL absorbs most reads before the index sees them.",
+        "Design a Feature Store — The online store is a cache by another name: precomputed features in a low-latency store, because inference cannot wait for a batch job to finish.",
+        "Design an Authentication & Session Service — Session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard.",
+        "Design a Sanctions Screening System — Adjudications are cached rather than raw matches, so a name a human already cleared against the current list version does not re-enter the review queue on every payment."
+      ],
+      "answer": "Cache carries different work in each: in Design a URL Shortener, hot short-code → long-URL lookups. The mapping is immutable once created, so there is no invalidation story to get wrong — only capacity and TTL. in Design a News Feed, the per-user timeline of post IDs in Redis, hydrated to full post bodies on read. The cache IS the precomputed feed, not an optimisation over it. in Design a Distributed Rate Limiter, the counter state itself. Limiter state is small, extremely hot, and worthless once stale — which is exactly the shape an in-memory store is for. in Design a Leaderboard, top-N slices per leaderboard window, so the overwhelmingly common 'show me the top 100' read never touches the underlying ranking structure. in Design a Distributed Cache, the whole problem. Ring placement, replication and eviction all exist to make one cache survive nodes joining and leaving without losing its value. in Design a Typeahead / Autocomplete Service, precomputed top-K completions per prefix, held in memory because the keystroke budget is tens of milliseconds and a rebuild is a batch job. in Design a Ticket Booking System (Ticketmaster-style), event and seat-map reads, which vastly outnumber bookings. Availability counts are cached loosely on purpose; the actual hold stays transactional. in Design an LLM Inference Platform, prompt-prefix and KV-cache reuse across requests, so a shared system prompt is not recomputed per call — the dominant saving in LLM serving. in Design a RAG / Semantic Search System, embeddings and retrieval results for repeated queries, since embedding a query costs a model call every single time. in Design a Proximity Service, popular geo cells, whose query volume is wildly skewed toward a few dense urban areas. A short TTL absorbs most reads before the index sees them. in Design a Feature Store, the online store is a cache by another name: precomputed features in a low-latency store, because inference cannot wait for a batch job to finish. in Design an Authentication & Session Service, session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard. in Design a Sanctions Screening System, adjudications are cached rather than raw matches, so a name a human already cleared against the current list version does not re-enter the review queue on every payment."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The payload is large, static and read by many people — images, video segments, JS bundles; The prompt names a global user base and latency is a stated requirement. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "CDN — A globally distributed cache of your static bytes, serving users from a nearby PoP instead of your origin.",
+        "The payload is large, static and read by many people — images, video segments, JS bundles",
+        "The prompt names a global user base and latency is a stated requirement",
+        "Origin egress bandwidth is the thing that will not scale"
+      ],
+      "answer": "CDN. A globally distributed cache of your static bytes, serving users from a nearby PoP instead of your origin. You reach for it when: The payload is large, static and read by many people — images, video segments, JS bundles; The prompt names a global user base and latency is a stated requirement; Origin egress bandwidth is the thing that will not scale."
+    },
+    {
+      "type": "open",
+      "prompt": "You put CDN in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Responses are personalised per user — you are caching a thing with an audience of one",
+        "Content must be revoked instantly; purge propagation is not immediate",
+        "The bottleneck is compute, not distance or bandwidth",
+        "You now have cache state in hundreds of places you cannot inspect",
+        "Purge is eventually consistent and often billed per request",
+        "Cache-key design becomes a real engineering problem the moment headers or query strings vary"
+      ],
+      "answer": "Don't reach for it when: Responses are personalised per user — you are caching a thing with an audience of one; Content must be revoked instantly; purge propagation is not immediate; The bottleneck is compute, not distance or bandwidth. And it is never free: You now have cache state in hundreds of places you cannot inspect; Purge is eventually consistent and often billed per request; Cache-key design becomes a real engineering problem the moment headers or query strings vary."
+    },
+    {
+      "type": "open",
+      "prompt": "CDN is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Stale asset served long after deploy because the URL did not change",
+        "Cache fragmentation: a varying header splits one hot object into thousands of cold ones",
+        "Origin shielding absent, so a cold global cache means every PoP independently stampedes the origin"
+      ],
+      "answer": "Stale asset served long after deploy because the URL did not change Cache fragmentation: a varying header splits one hot object into thousands of cold ones Origin shielding absent, so a cold global cache means every PoP independently stampedes the origin"
+    },
+    {
+      "type": "open",
+      "prompt": "CDN vs Cache vs Edge Compute — what decides between them?",
+      "points": [
+        "Cache — An origin-side cache when the win is compute, not distance.",
+        "Edge Compute — When the response must be assembled per request but you still want it done near the user.",
+        "CDN — A globally distributed cache of your static bytes, serving users from a nearby PoP instead of your origin."
+      ],
+      "answer": "Cache: An origin-side cache when the win is compute, not distance. Edge Compute: When the response must be assembled per request but you still want it done near the user."
+    },
+    {
+      "type": "open",
+      "prompt": "CDN appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Photo-Sharing Service — Serves the image bytes themselves, so origin egress does not scale with viewer count and users fetch from a nearby PoP.",
+        "Design a Video Streaming Service — Distributes video segments — the economics of the whole design, since origin bandwidth for video is the cost that dominates everything else.",
+        "Design a Live Streaming Service — Delivers HLS/DASH segments to viewers, which is what makes a million-concurrent-viewer broadcast affordable at all.",
+        "Design a Short-Form Video Feed — Prefetches and serves the next videos in the feed, because perceived instant playback is the product's core interaction."
+      ],
+      "answer": "CDN carries different work in each: in Design a Photo-Sharing Service, serves the image bytes themselves, so origin egress does not scale with viewer count and users fetch from a nearby PoP. in Design a Video Streaming Service, distributes video segments — the economics of the whole design, since origin bandwidth for video is the cost that dominates everything else. in Design a Live Streaming Service, delivers HLS/DASH segments to viewers, which is what makes a million-concurrent-viewer broadcast affordable at all. in Design a Short-Form Video Feed, prefetches and serves the next videos in the feed, because perceived instant playback is the product's core interaction."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt contains a celebrity, a viral item, or a flash sale on one SKU; Load is skewed enough that adding shards does not help because the skew rides along. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Hot-Key Mitigation — Techniques for the one key whose traffic exceeds what a single shard or cache node can serve — replicate it, split it, or absorb it locally.",
+        "The prompt contains a celebrity, a viral item, or a flash sale on one SKU",
+        "Load is skewed enough that adding shards does not help because the skew rides along",
+        "One partition is saturated while the rest of the fleet is idle"
+      ],
+      "answer": "Hot-Key Mitigation. Techniques for the one key whose traffic exceeds what a single shard or cache node can serve — replicate it, split it, or absorb it locally. You reach for it when: The prompt contains a celebrity, a viral item, or a flash sale on one SKU; Load is skewed enough that adding shards does not help because the skew rides along; One partition is saturated while the rest of the fleet is idle."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Hot-Key Mitigation in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Load is genuinely uniform; you are solving a problem the workload does not have",
+        "The hot entity needs strong consistency — replicating it multiplies the write-coordination cost",
+        "Key splitting (key#1..key#N) pushes fan-in complexity to every reader",
+        "Local in-process caches multiply staleness windows by the number of app servers",
+        "Detection needs per-key telemetry you probably are not collecting yet"
+      ],
+      "answer": "Don't reach for it when: Load is genuinely uniform; you are solving a problem the workload does not have; The hot entity needs strong consistency — replicating it multiplies the write-coordination cost. And it is never free: Key splitting (key#1..key#N) pushes fan-in complexity to every reader; Local in-process caches multiply staleness windows by the number of app servers; Detection needs per-key telemetry you probably are not collecting yet."
+    },
+    {
+      "type": "open",
+      "prompt": "Hot-Key Mitigation is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Mitigation applied statically, so yesterday's celebrity is replicated and today's is melting a shard",
+        "Split counters read before all sub-keys are summed, producing numbers that go backwards",
+        "The hot key is a WRITE key, so replication makes contention worse rather than better"
+      ],
+      "answer": "Mitigation applied statically, so yesterday's celebrity is replicated and today's is melting a shard Split counters read before all sub-keys are summed, producing numbers that go backwards The hot key is a WRITE key, so replication makes contention worse rather than better"
+    },
+    {
+      "type": "open",
+      "prompt": "Hot-Key Mitigation vs Consistent Hashing vs Cache — what decides between them?",
+      "points": [
+        "Consistent Hashing — Solves uneven placement, not uneven demand. Virtual nodes will not save you from one viral key.",
+        "Cache — A local cache tier in front absorbs read skew without touching the sharding scheme.",
+        "Hot-Key Mitigation — Techniques for the one key whose traffic exceeds what a single shard or cache node can serve — replicate it, split it, or absorb it locally."
+      ],
+      "answer": "Consistent Hashing: Solves uneven placement, not uneven demand. Virtual nodes will not save you from one viral key. Cache: A local cache tier in front absorbs read skew without touching the sharding scheme."
+    },
+    {
+      "type": "open",
+      "prompt": "Hot-Key Mitigation appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a News Feed — The celebrity account: one write with tens of millions of followers, which is precisely the case that breaks naive fan-out-on-write.",
+        "Design a Leaderboard — One popular leaderboard absorbs most of the reads and writes, so its sorted set has to be split or replicated away from the others.",
+        "Design an Ad Click Aggregator — A viral campaign concentrates click events on a single aggregation key, saturating whichever partition happens to own it.",
+        "Design a Proximity Service — Dense urban cells hold vastly more entities and receive vastly more queries than the rest of the grid, by orders of magnitude."
+      ],
+      "answer": "Hot-Key Mitigation carries different work in each: in Design a News Feed, the celebrity account: one write with tens of millions of followers, which is precisely the case that breaks naive fan-out-on-write. in Design a Leaderboard, one popular leaderboard absorbs most of the reads and writes, so its sorted set has to be split or replicated away from the others. in Design an Ad Click Aggregator, a viral campaign concentrates click events on a single aggregation key, saturating whichever partition happens to own it. in Design a Proximity Service, dense urban cells hold vastly more entities and receive vastly more queries than the rest of the grid, by orders of magnitude."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Responses need small per-user variation but the bulk is cacheable; A redirect, A/B assignment or token check should not cost a round trip to origin. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Edge Compute — Running small amounts of your logic in the CDN's PoPs, so personalisation, auth or rewriting happens near the user instead of at origin.",
+        "Responses need small per-user variation but the bulk is cacheable",
+        "A redirect, A/B assignment or token check should not cost a round trip to origin",
+        "You want to cache aggressively but the cache key depends on a computed value"
+      ],
+      "answer": "Edge Compute. Running small amounts of your logic in the CDN's PoPs, so personalisation, auth or rewriting happens near the user instead of at origin. You reach for it when: Responses need small per-user variation but the bulk is cacheable; A redirect, A/B assignment or token check should not cost a round trip to origin; You want to cache aggressively but the cache key depends on a computed value."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Edge Compute in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The logic needs your primary database — you have moved the compute but not the data",
+        "Anything requiring long execution, large memory, or strong consistency",
+        "A constrained runtime with tight CPU and memory limits and a restricted API surface",
+        "Deploys now target a fleet you do not operate, with its own rollout semantics",
+        "Debugging and observability at the edge is markedly worse than at origin"
+      ],
+      "answer": "Don't reach for it when: The logic needs your primary database — you have moved the compute but not the data; Anything requiring long execution, large memory, or strong consistency. And it is never free: A constrained runtime with tight CPU and memory limits and a restricted API surface; Deploys now target a fleet you do not operate, with its own rollout semantics; Debugging and observability at the edge is markedly worse than at origin."
+    },
+    {
+      "type": "open",
+      "prompt": "Edge Compute is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Edge logic diverges from origin logic and the two disagree about the same request",
+        "A bad edge deploy has global blast radius and no gradual rollout",
+        "Cold starts add latency to exactly the requests you moved to the edge to speed up"
+      ],
+      "answer": "Edge logic diverges from origin logic and the two disagree about the same request A bad edge deploy has global blast radius and no gradual rollout Cold starts add latency to exactly the requests you moved to the edge to speed up"
+    },
+    {
+      "type": "open",
+      "prompt": "Edge Compute vs CDN vs API Gateway — what decides between them?",
+      "points": [
+        "CDN — If the variation can be pushed into the URL, plain CDN caching is simpler and faster.",
+        "API Gateway — Central policy at origin when consistency of the rule matters more than the round trip.",
+        "Edge Compute — Running small amounts of your logic in the CDN's PoPs, so personalisation, auth or rewriting happens near the user instead of at origin."
+      ],
+      "answer": "CDN: If the variation can be pushed into the URL, plain CDN caching is simpler and faster. API Gateway: Central policy at origin when consistency of the rule matters more than the round trip."
+    }
+  ]
+}

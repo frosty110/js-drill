@@ -1,0 +1,264 @@
+{
+  "id": "c01",
+  "num": 1,
+  "part": "Component decks",
+  "title": "Traffic & Routing",
+  "summary": "How a request finds a healthy server. 5 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Load Balancer — A single address in front of many interchangeable servers, spreading requests and routing around dead ones.",
+    "Reverse Proxy — A server-side intermediary that terminates the client connection and speaks to backends on its behalf, so cross-cutting work happens once at the edge.",
+    "API Gateway — The single front door for external callers: authenticates, applies quota, routes to the right service, and normalises the response.",
+    "Service Discovery — A registry that answers 'where is service X right now', so callers reach live instances without hardcoded addresses.",
+    "DNS & Anycast Routing — Steering users to a region or PoP before a connection is ever made, using DNS answers or a single IP announced from many locations."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt says a fleet of stateless app servers behind one endpoint; You need to survive a server dying without the client noticing. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Load Balancer — A single address in front of many interchangeable servers, spreading requests and routing around dead ones.",
+        "The prompt says a fleet of stateless app servers behind one endpoint",
+        "You need to survive a server dying without the client noticing",
+        "Traffic must be added to or removed from a pool during a deploy"
+      ],
+      "answer": "Load Balancer. A single address in front of many interchangeable servers, spreading requests and routing around dead ones. You reach for it when: The prompt says a fleet of stateless app servers behind one endpoint; You need to survive a server dying without the client noticing; Traffic must be added to or removed from a pool during a deploy."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Load Balancer in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The backends are NOT interchangeable — a request must reach one specific shard owner, which is routing, not balancing",
+        "You reach for it to solve a database bottleneck; balancing the tier in front of the bottleneck moves nothing",
+        "One more hop of latency and one more thing that can be misconfigured",
+        "It becomes the failure domain — an LB outage is a total outage, so it needs its own redundancy",
+        "Health-check tuning is a real tradeoff: aggressive checks eject healthy nodes, lax ones send traffic into a black hole"
+      ],
+      "answer": "Don't reach for it when: The backends are NOT interchangeable — a request must reach one specific shard owner, which is routing, not balancing; You reach for it to solve a database bottleneck; balancing the tier in front of the bottleneck moves nothing. And it is never free: One more hop of latency and one more thing that can be misconfigured; It becomes the failure domain — an LB outage is a total outage, so it needs its own redundancy; Health-check tuning is a real tradeoff: aggressive checks eject healthy nodes, lax ones send traffic into a black hole."
+    },
+    {
+      "type": "open",
+      "prompt": "Load Balancer is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Sticky sessions defeat even distribution and turn one hot client into one hot server",
+        "A slow-but-alive backend passes health checks while poisoning latency for everyone routed to it",
+        "Cascading ejection: checks eject nodes under load, concentrating load on the survivors, which then fail checks too"
+      ],
+      "answer": "Sticky sessions defeat even distribution and turn one hot client into one hot server A slow-but-alive backend passes health checks while poisoning latency for everyone routed to it Cascading ejection: checks eject nodes under load, concentrating load on the survivors, which then fail checks too"
+    },
+    {
+      "type": "open",
+      "prompt": "Load Balancer vs DNS & Anycast Routing vs Service Discovery — what decides between them?",
+      "points": [
+        "DNS & Anycast Routing — DNS steers between REGIONS; an LB steers between servers. Different blast radius, different failover speed.",
+        "Service Discovery — Discovery lets the caller pick a backend itself, removing the middle hop — normal for internal service-to-service.",
+        "Load Balancer — A single address in front of many interchangeable servers, spreading requests and routing around dead ones."
+      ],
+      "answer": "DNS & Anycast Routing: DNS steers between REGIONS; an LB steers between servers. Different blast radius, different failover speed. Service Discovery: Discovery lets the caller pick a backend itself, removing the middle hop — normal for internal service-to-service."
+    },
+    {
+      "type": "open",
+      "prompt": "Load Balancer appears in 5 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Chat System — Spreads long-lived socket connections across the chat fleet, where the stateless assumption breaks — a connection pinned for hours is not a request you can rebalance.",
+        "Design a Ride-Sharing Service — Distributes driver and rider connections across the matching fleet, rebalancing only on reconnect since an open socket cannot be moved.",
+        "Design a Collaborative Document Editor — Distributes collaborator sockets across the edit fleet, with everyone on one document needing to reach the same session owner.",
+        "Design a Live Streaming Service — Spreads viewer connections at broadcast start, when a million clients arrive inside the same few seconds rather than arriving smoothly.",
+        "Design an Authentication & Session Service — Fronts a stateless auth tier, which is what lets any node validate any session — and the reason session state lives in a shared store rather than server memory."
+      ],
+      "answer": "Load Balancer carries different work in each: in Design a Chat System, spreads long-lived socket connections across the chat fleet, where the stateless assumption breaks — a connection pinned for hours is not a request you can rebalance. in Design a Ride-Sharing Service, distributes driver and rider connections across the matching fleet, rebalancing only on reconnect since an open socket cannot be moved. in Design a Collaborative Document Editor, distributes collaborator sockets across the edit fleet, with everyone on one document needing to reach the same session owner. in Design a Live Streaming Service, spreads viewer connections at broadcast start, when a million clients arrive inside the same few seconds rather than arriving smoothly. in Design an Authentication & Session Service, fronts a stateless auth tier, which is what lets any node validate any session — and the reason session state lives in a shared store rather than server memory."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: TLS termination, compression, or request buffering should happen in one place, not in every service; Slow clients must not tie up application threads. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Reverse Proxy — A server-side intermediary that terminates the client connection and speaks to backends on its behalf, so cross-cutting work happens once at the edge.",
+        "TLS termination, compression, or request buffering should happen in one place, not in every service",
+        "You want to serve static assets and proxy dynamic paths from the same hostname",
+        "Slow clients must not tie up application threads"
+      ],
+      "answer": "Reverse Proxy. A server-side intermediary that terminates the client connection and speaks to backends on its behalf, so cross-cutting work happens once at the edge. You reach for it when: TLS termination, compression, or request buffering should happen in one place, not in every service; You want to serve static assets and proxy dynamic paths from the same hostname; Slow clients must not tie up application threads."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Reverse Proxy in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "The only need is spreading load — that is a load balancer, and calling it a proxy adds vocabulary without adding a decision",
+        "Per-caller policy, auth and quotas are the real requirement — that is an API gateway",
+        "Another network hop and another config surface",
+        "Buffering large uploads costs memory at the edge",
+        "It sees plaintext after TLS termination, so it becomes a security-relevant component"
+      ],
+      "answer": "Don't reach for it when: The only need is spreading load — that is a load balancer, and calling it a proxy adds vocabulary without adding a decision; Per-caller policy, auth and quotas are the real requirement — that is an API gateway. And it is never free: Another network hop and another config surface; Buffering large uploads costs memory at the edge; It sees plaintext after TLS termination, so it becomes a security-relevant component."
+    },
+    {
+      "type": "open",
+      "prompt": "Reverse Proxy is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Header and body size limits silently truncate or reject at the edge, producing errors the backend never sees",
+        "Connection-pool exhaustion to backends throttles everything behind it",
+        "Timeout mismatches between proxy and backend produce duplicated work: the proxy retries a request still running"
+      ],
+      "answer": "Header and body size limits silently truncate or reject at the edge, producing errors the backend never sees Connection-pool exhaustion to backends throttles everything behind it Timeout mismatches between proxy and backend produce duplicated work: the proxy retries a request still running"
+    },
+    {
+      "type": "open",
+      "prompt": "Reverse Proxy vs API Gateway vs Load Balancer — what decides between them?",
+      "points": [
+        "API Gateway — A gateway is a reverse proxy that also owns auth, rate limits and per-route policy. Pick it when policy is the point.",
+        "Load Balancer — If nothing cross-cutting happens at the hop, you only needed balancing.",
+        "Reverse Proxy — A server-side intermediary that terminates the client connection and speaks to backends on its behalf, so cross-cutting work happens once at the edge."
+      ],
+      "answer": "API Gateway: A gateway is a reverse proxy that also owns auth, rate limits and per-route policy. Pick it when policy is the point. Load Balancer: If nothing cross-cutting happens at the hop, you only needed balancing."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt has many backend services but one public API surface; Auth, rate limiting and request validation must be enforced before traffic reaches any service. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "API Gateway — The single front door for external callers: authenticates, applies quota, routes to the right service, and normalises the response.",
+        "The prompt has many backend services but one public API surface",
+        "Auth, rate limiting and request validation must be enforced before traffic reaches any service",
+        "Clients need one contract while services behind it change shape"
+      ],
+      "answer": "API Gateway. The single front door for external callers: authenticates, applies quota, routes to the right service, and normalises the response. You reach for it when: The prompt has many backend services but one public API surface; Auth, rate limiting and request validation must be enforced before traffic reaches any service; Clients need one contract while services behind it change shape."
+    },
+    {
+      "type": "open",
+      "prompt": "You put API Gateway in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Internal service-to-service calls — a gateway in the middle of a mesh adds a hop and a bottleneck for no policy benefit",
+        "It becomes a place to put business logic; that turns the gateway into an undeployable monolith everyone is afraid of",
+        "A shared choke point: its capacity is the API's capacity, and its deploys are everyone's deploys",
+        "Latency on every single request, including ones that needed nothing from it",
+        "Route config becomes a distributed-ownership problem across teams"
+      ],
+      "answer": "Don't reach for it when: Internal service-to-service calls — a gateway in the middle of a mesh adds a hop and a bottleneck for no policy benefit; It becomes a place to put business logic; that turns the gateway into an undeployable monolith everyone is afraid of. And it is never free: A shared choke point: its capacity is the API's capacity, and its deploys are everyone's deploys; Latency on every single request, including ones that needed nothing from it; Route config becomes a distributed-ownership problem across teams."
+    },
+    {
+      "type": "open",
+      "prompt": "API Gateway is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Auth-service dependency makes the gateway fail closed and take the whole API down with it",
+        "Per-route config drift: a service ships a new endpoint the gateway does not know about",
+        "Fan-out aggregation inside the gateway turns one client timeout into N abandoned backend calls"
+      ],
+      "answer": "Auth-service dependency makes the gateway fail closed and take the whole API down with it Per-route config drift: a service ships a new endpoint the gateway does not know about Fan-out aggregation inside the gateway turns one client timeout into N abandoned backend calls"
+    },
+    {
+      "type": "open",
+      "prompt": "API Gateway vs Reverse Proxy vs Rate Limiting — what decides between them?",
+      "points": [
+        "Reverse Proxy — If you need TLS and routing but no per-caller policy, a plain reverse proxy is less machinery.",
+        "Rate Limiting — The gateway is usually WHERE rate limiting lives; the limiter is the mechanism, the gateway is the venue.",
+        "API Gateway — The single front door for external callers: authenticates, applies quota, routes to the right service, and normalises the response."
+      ],
+      "answer": "Reverse Proxy: If you need TLS and routing but no per-caller policy, a plain reverse proxy is less machinery. Rate Limiting: The gateway is usually WHERE rate limiting lives; the limiter is the mechanism, the gateway is the venue."
+    },
+    {
+      "type": "open",
+      "prompt": "API Gateway appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Distributed Rate Limiter — The venue the limiter actually runs in — the decision belongs at the front door, before a request has cost any backend capacity.",
+        "Design an LLM Inference Platform — Enforces auth, per-tenant quota and admission before a request reaches a GPU, which is the last point where rejecting is still cheap.",
+        "Design an Authentication & Session Service — Validates the session on every request so downstream services never re-implement auth, making it the single enforcement point."
+      ],
+      "answer": "API Gateway carries different work in each: in Design a Distributed Rate Limiter, the venue the limiter actually runs in — the decision belongs at the front door, before a request has cost any backend capacity. in Design an LLM Inference Platform, enforces auth, per-tenant quota and admission before a request reaches a GPU, which is the last point where rejecting is still cheap. in Design an Authentication & Session Service, validates the session on every request so downstream services never re-implement auth, making it the single enforcement point."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Instances come and go constantly — autoscaling, rolling deploys, container schedulers; Internal callers should route directly to backends rather than through a shared LB. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Service Discovery — A registry that answers 'where is service X right now', so callers reach live instances without hardcoded addresses.",
+        "Instances come and go constantly — autoscaling, rolling deploys, container schedulers",
+        "Internal callers should route directly to backends rather than through a shared LB",
+        "The prompt mentions a service mesh or sidecar proxies"
+      ],
+      "answer": "Service Discovery. A registry that answers 'where is service X right now', so callers reach live instances without hardcoded addresses. You reach for it when: Instances come and go constantly — autoscaling, rolling deploys, container schedulers; Internal callers should route directly to backends rather than through a shared LB; The prompt mentions a service mesh or sidecar proxies."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Service Discovery in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "A fixed, small set of long-lived hosts — a config file is honest and has no failure mode",
+        "You need routing decisions based on request CONTENT; discovery answers 'where', not 'which one for this request'",
+        "A strongly-consistent registry is itself a distributed system to run and to keep available",
+        "Client-side libraries must be kept in step across every language you deploy",
+        "Registration lag means the registry is always slightly behind reality"
+      ],
+      "answer": "Don't reach for it when: A fixed, small set of long-lived hosts — a config file is honest and has no failure mode; You need routing decisions based on request CONTENT; discovery answers 'where', not 'which one for this request'. And it is never free: A strongly-consistent registry is itself a distributed system to run and to keep available; Client-side libraries must be kept in step across every language you deploy; Registration lag means the registry is always slightly behind reality."
+    },
+    {
+      "type": "open",
+      "prompt": "Service Discovery is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Stale entries route traffic to instances that are already gone",
+        "Registry outage is a total outage unless callers cache last-known-good and fail static",
+        "Thundering herd of re-registration after a network partition heals"
+      ],
+      "answer": "Stale entries route traffic to instances that are already gone Registry outage is a total outage unless callers cache last-known-good and fail static Thundering herd of re-registration after a network partition heals"
+    },
+    {
+      "type": "open",
+      "prompt": "Service Discovery vs Load Balancer vs DNS & Anycast Routing — what decides between them?",
+      "points": [
+        "Load Balancer — A load balancer centralises the same decision; discovery distributes it to callers. One hop vs. one library everywhere.",
+        "DNS & Anycast Routing — DNS is discovery with weak TTL semantics — fine for coarse-grained, wrong for second-by-second membership.",
+        "Service Discovery — A registry that answers 'where is service X right now', so callers reach live instances without hardcoded addresses."
+      ],
+      "answer": "Load Balancer: A load balancer centralises the same decision; discovery distributes it to callers. One hop vs. one library everywhere. DNS & Anycast Routing: DNS is discovery with weak TTL semantics — fine for coarse-grained, wrong for second-by-second membership."
+    },
+    {
+      "type": "open",
+      "prompt": "Service Discovery appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Distributed Rate Limiter — Gateways have to agree on which node owns a client's counter, so ring membership is shared state rather than a local assumption.",
+        "Design a Distributed Cache — Tells clients which nodes are on the ring right now; a stale membership view means two clients hash the same key to different nodes.",
+        "Design a Distributed Message Queue — Lets producers and consumers find the current leader for a partition, which moves whenever an election happens.",
+        "Design a Distributed Key-Value Store — Propagates ring membership so every node agrees on who owns which key range — usually by gossip rather than a central registry."
+      ],
+      "answer": "Service Discovery carries different work in each: in Design a Distributed Rate Limiter, gateways have to agree on which node owns a client's counter, so ring membership is shared state rather than a local assumption. in Design a Distributed Cache, tells clients which nodes are on the ring right now; a stale membership view means two clients hash the same key to different nodes. in Design a Distributed Message Queue, lets producers and consumers find the current leader for a partition, which moves whenever an election happens. in Design a Distributed Key-Value Store, propagates ring membership so every node agrees on who owns which key range — usually by gossip rather than a central registry."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt is global and the first requirement is 'users hit the nearest region'; You need region-level failover, not server-level. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "DNS & Anycast Routing — Steering users to a region or PoP before a connection is ever made, using DNS answers or a single IP announced from many locations.",
+        "The prompt is global and the first requirement is 'users hit the nearest region'",
+        "You need region-level failover, not server-level",
+        "Traffic must be split by geography, weight or latency at the entry point"
+      ],
+      "answer": "DNS & Anycast Routing. Steering users to a region or PoP before a connection is ever made, using DNS answers or a single IP announced from many locations. You reach for it when: The prompt is global and the first requirement is 'users hit the nearest region'; You need region-level failover, not server-level; Traffic must be split by geography, weight or latency at the entry point."
+    },
+    {
+      "type": "open",
+      "prompt": "You put DNS & Anycast Routing in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Fast failover is required — resolver and client TTL caching means DNS changes take minutes to hours to propagate",
+        "You are steering individual requests; by the time DNS answered, the request already committed to an address",
+        "TTL is a tradeoff you cannot escape: short TTLs cost query volume, long TTLs cost failover time",
+        "Clients and resolvers routinely ignore your TTL anyway",
+        "Anycast requires network-layer control most teams do not have in-house"
+      ],
+      "answer": "Don't reach for it when: Fast failover is required — resolver and client TTL caching means DNS changes take minutes to hours to propagate; You are steering individual requests; by the time DNS answered, the request already committed to an address. And it is never free: TTL is a tradeoff you cannot escape: short TTLs cost query volume, long TTLs cost failover time; Clients and resolvers routinely ignore your TTL anyway; Anycast requires network-layer control most teams do not have in-house."
+    },
+    {
+      "type": "open",
+      "prompt": "DNS & Anycast Routing is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Stale cached answers keep sending users to a region you just drained",
+        "Anycast route flaps mid-connection can break long-lived TCP sessions",
+        "GeoDNS resolves by RESOLVER location, not user location — a centralised corporate resolver mis-steers a whole company"
+      ],
+      "answer": "Stale cached answers keep sending users to a region you just drained Anycast route flaps mid-connection can break long-lived TCP sessions GeoDNS resolves by RESOLVER location, not user location — a centralised corporate resolver mis-steers a whole company"
+    },
+    {
+      "type": "open",
+      "prompt": "DNS & Anycast Routing vs Load Balancer vs CDN — what decides between them?",
+      "points": [
+        "Load Balancer — Use DNS to pick the region, an LB to pick the server. They compose; they do not compete.",
+        "CDN — A CDN already does global steering as part of its product — usually the cheaper answer for static content.",
+        "DNS & Anycast Routing — Steering users to a region or PoP before a connection is ever made, using DNS answers or a single IP announced from many locations."
+      ],
+      "answer": "Load Balancer: Use DNS to pick the region, an LB to pick the server. They compose; they do not compete. CDN: A CDN already does global steering as part of its product — usually the cheaper answer for static content."
+    }
+  ]
+}

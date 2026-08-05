@@ -1,0 +1,425 @@
+{
+  "id": "c03",
+  "num": 3,
+  "part": "Component decks",
+  "title": "Storage & Data Stores",
+  "summary": "Where bytes live, and which store to name. 8 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Relational Database — Row storage with a fixed schema, joins, secondary indexes and multi-row ACID transactions.",
+    "Key-Value Store — A hash table with an operations team: get and put by key, partitioned across nodes, no query language.",
+    "Document Store — Key-value where the value is a structured document the engine can index and query inside.",
+    "Wide-Column Store — Partition-key-first storage (Cassandra, HBase, DynamoDB) built for enormous write volume and range scans within a partition.",
+    "Time-Series Store — A store specialised for append-only timestamped measurements, with automatic downsampling, retention and time-range queries.",
+    "Object / Blob Storage — Cheap, effectively unbounded storage for immutable files addressed by key, with HTTP access and lifecycle tiering.",
+    "Chunking — Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt says money, inventory, bookings, or anything where a partial write is a bug with a lawyer attached; Entities are related and access patterns are not known up front — joins buy you flexibility. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Relational Database — Row storage with a fixed schema, joins, secondary indexes and multi-row ACID transactions.",
+        "The prompt says money, inventory, bookings, or anything where a partial write is a bug with a lawyer attached",
+        "Entities are related and access patterns are not known up front — joins buy you flexibility",
+        "You need read-your-writes and cross-row invariants enforced by the store"
+      ],
+      "answer": "Relational Database. Row storage with a fixed schema, joins, secondary indexes and multi-row ACID transactions. You reach for it when: The prompt says money, inventory, bookings, or anything where a partial write is a bug with a lawyer attached; Entities are related and access patterns are not known up front — joins buy you flexibility; You need read-your-writes and cross-row invariants enforced by the store."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Relational Database in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Write volume that exceeds one primary and the data has no clean partition key",
+        "Schemaless, high-churn documents where every row would be half null",
+        "Append-only telemetry at millions of events per second",
+        "Vertical scaling has a ceiling and horizontal scaling means sharding you implement yourself",
+        "Schema migrations on large tables are an operational event, not a deploy",
+        "Joins that were free at 1M rows are a capacity plan at 1B"
+      ],
+      "answer": "Don't reach for it when: Write volume that exceeds one primary and the data has no clean partition key; Schemaless, high-churn documents where every row would be half null; Append-only telemetry at millions of events per second. And it is never free: Vertical scaling has a ceiling and horizontal scaling means sharding you implement yourself; Schema migrations on large tables are an operational event, not a deploy; Joins that were free at 1M rows are a capacity plan at 1B."
+    },
+    {
+      "type": "open",
+      "prompt": "Relational Database is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Lock contention on a hot row serialises the whole workload",
+        "Connection exhaustion from an app tier that scaled out faster than the pool",
+        "An unindexed query pattern discovered in production as a full table scan"
+      ],
+      "answer": "Lock contention on a hot row serialises the whole workload Connection exhaustion from an app tier that scaled out faster than the pool An unindexed query pattern discovered in production as a full table scan"
+    },
+    {
+      "type": "open",
+      "prompt": "Relational Database vs Key-Value Store vs Wide-Column Store — what decides between them?",
+      "points": [
+        "Key-Value Store — If every access is by primary key and you need no transactions, a KV store scales further for less.",
+        "Wide-Column Store — When write volume and partition-key access dominate and you can give up joins.",
+        "Relational Database — Row storage with a fixed schema, joins, secondary indexes and multi-row ACID transactions."
+      ],
+      "answer": "Key-Value Store: If every access is by primary key and you need no transactions, a KV store scales further for less. Wide-Column Store: When write volume and partition-key access dominate and you can give up joins."
+    },
+    {
+      "type": "open",
+      "prompt": "Relational Database appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Payment System (Wallet / Ledger) — Holds the ledger, where a partial write is not a degraded mode but a lost or duplicated payment — the case ACID exists for.",
+        "Design a Ticket Booking System (Ticketmaster-style) — Enforces seat uniqueness transactionally; overselling is the specific failure this store is chosen to make impossible.",
+        "Design a Prescription Drug Marketplace — Holds orders, authorisations and the dispensing audit trail, where regulatory correctness outranks throughput.",
+        "Design an Authentication & Session Service — The user and credential store — modest volume, strong consistency, and the place a password change must take effect immediately."
+      ],
+      "answer": "Relational Database carries different work in each: in Design a Payment System (Wallet / Ledger), holds the ledger, where a partial write is not a degraded mode but a lost or duplicated payment — the case ACID exists for. in Design a Ticket Booking System (Ticketmaster-style), enforces seat uniqueness transactionally; overselling is the specific failure this store is chosen to make impossible. in Design a Prescription Drug Marketplace, holds orders, authorisations and the dispensing audit trail, where regulatory correctness outranks throughput. in Design an Authentication & Session Service, the user and credential store — modest volume, strong consistency, and the place a password change must take effect immediately."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Every access in the prompt is 'look this up by its id'; You need very high throughput and predictable single-digit-millisecond latency. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Key-Value Store — A hash table with an operations team: get and put by key, partitioned across nodes, no query language.",
+        "Every access in the prompt is 'look this up by its id'",
+        "You need very high throughput and predictable single-digit-millisecond latency",
+        "The value is opaque to the store — a session, a blob of JSON, a serialized object"
+      ],
+      "answer": "Key-Value Store. A hash table with an operations team: get and put by key, partitioned across nodes, no query language. You reach for it when: Every access in the prompt is 'look this up by its id'; You need very high throughput and predictable single-digit-millisecond latency; The value is opaque to the store — a session, a blob of JSON, a serialized object."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Key-Value Store in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "You will need to query by anything other than the key; you would be building indexes by hand",
+        "Cross-key transactions or invariants",
+        "Analytical scans over the whole dataset",
+        "Access patterns are frozen into the key design, and changing them means a migration",
+        "Secondary indexes, if the store has them, are usually eventually consistent",
+        "You own denormalisation and therefore the consistency between copies"
+      ],
+      "answer": "Don't reach for it when: You will need to query by anything other than the key; you would be building indexes by hand; Cross-key transactions or invariants; Analytical scans over the whole dataset. And it is never free: Access patterns are frozen into the key design, and changing them means a migration; Secondary indexes, if the store has them, are usually eventually consistent; You own denormalisation and therefore the consistency between copies."
+    },
+    {
+      "type": "open",
+      "prompt": "Key-Value Store is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Hot partition from a key design that concentrates traffic",
+        "Unbounded value growth turning one key into a multi-megabyte read",
+        "Eventual consistency surfacing as a read that does not contain the write you just made"
+      ],
+      "answer": "Hot partition from a key design that concentrates traffic Unbounded value growth turning one key into a multi-megabyte read Eventual consistency surfacing as a read that does not contain the write you just made"
+    },
+    {
+      "type": "open",
+      "prompt": "Key-Value Store vs Relational Database vs Document Store — what decides between them?",
+      "points": [
+        "Relational Database — The moment two rows must change together, you want transactions more than you want throughput.",
+        "Document Store — Same key-based access but with queryable structure inside the value.",
+        "Key-Value Store — A hash table with an operations team: get and put by key, partitioned across nodes, no query language."
+      ],
+      "answer": "Relational Database: The moment two rows must change together, you want transactions more than you want throughput. Document Store: Same key-based access but with queryable structure inside the value."
+    },
+    {
+      "type": "open",
+      "prompt": "Key-Value Store appears in 7 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a URL Shortener — Holds the short-code → URL mapping. Every access is a lookup by key, which is the shape a KV store scales furthest on.",
+        "Design a Distributed Rate Limiter — Holds per-client counters keyed by client and window, where the entire access pattern is read-modify-write on a single key.",
+        "Design a Leaderboard — Sorted sets are the leaderboard — score updates and top-N range reads are both native operations rather than queries.",
+        "Design a Distributed Job Scheduler — Stores per-job execution state keyed by job id, written and read far more often than it is queried.",
+        "Design a Proximity Service — Holds current entity locations keyed by id, overwritten on every ping rather than appended to.",
+        "Design a Feature Store — The online store itself: features keyed by entity id, read at single-digit-millisecond latency on the inference path.",
+        "Design an Authentication & Session Service — Holds sessions and refresh tokens keyed by id, with TTL doing the expiry work the application would otherwise schedule itself."
+      ],
+      "answer": "Key-Value Store carries different work in each: in Design a URL Shortener, holds the short-code → URL mapping. Every access is a lookup by key, which is the shape a KV store scales furthest on. in Design a Distributed Rate Limiter, holds per-client counters keyed by client and window, where the entire access pattern is read-modify-write on a single key. in Design a Leaderboard, sorted sets are the leaderboard — score updates and top-N range reads are both native operations rather than queries. in Design a Distributed Job Scheduler, stores per-job execution state keyed by job id, written and read far more often than it is queried. in Design a Proximity Service, holds current entity locations keyed by id, overwritten on every ping rather than appended to. in Design a Feature Store, the online store itself: features keyed by entity id, read at single-digit-millisecond latency on the inference path. in Design an Authentication & Session Service, holds sessions and refresh tokens keyed by id, with TTL doing the expiry work the application would otherwise schedule itself."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Entities are self-contained and read as a whole — a product, a profile, an order with its lines; The schema varies per record or evolves quickly. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Document Store — Key-value where the value is a structured document the engine can index and query inside.",
+        "Entities are self-contained and read as a whole — a product, a profile, an order with its lines",
+        "The schema varies per record or evolves quickly",
+        "You want secondary indexes without committing to a rigid schema"
+      ],
+      "answer": "Document Store. Key-value where the value is a structured document the engine can index and query inside. You reach for it when: Entities are self-contained and read as a whole — a product, a profile, an order with its lines; The schema varies per record or evolves quickly; You want secondary indexes without committing to a rigid schema."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Document Store in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Data is highly relational and the same fact would be duplicated across many documents",
+        "You need multi-document transactions as the normal case, not the exception",
+        "Aggregations across the entire collection are the primary workload",
+        "Denormalisation means one fact lives in many documents and updates fan out",
+        "Unbounded arrays inside a document become an anti-pattern that is painful to undo",
+        "Schema flexibility becomes schema drift without discipline in the application layer"
+      ],
+      "answer": "Don't reach for it when: Data is highly relational and the same fact would be duplicated across many documents; You need multi-document transactions as the normal case, not the exception; Aggregations across the entire collection are the primary workload. And it is never free: Denormalisation means one fact lives in many documents and updates fan out; Unbounded arrays inside a document become an anti-pattern that is painful to undo; Schema flexibility becomes schema drift without discipline in the application layer."
+    },
+    {
+      "type": "open",
+      "prompt": "Document Store is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Documents grow past the engine's size limit and writes start failing",
+        "Index bloat from indexing fields inside large nested structures",
+        "Application-level joins doing N+1 fetches that a relational engine would have planned"
+      ],
+      "answer": "Documents grow past the engine's size limit and writes start failing Index bloat from indexing fields inside large nested structures Application-level joins doing N+1 fetches that a relational engine would have planned"
+    },
+    {
+      "type": "open",
+      "prompt": "Document Store vs Relational Database vs Inverted Index / Search — what decides between them?",
+      "points": [
+        "Relational Database — When the same entity is read in many different shapes, normalise and join instead of duplicating.",
+        "Inverted Index / Search — For full-text or faceted query over documents, a search engine is the right tool.",
+        "Document Store — Key-value where the value is a structured document the engine can index and query inside."
+      ],
+      "answer": "Relational Database: When the same entity is read in many different shapes, normalise and join instead of duplicating. Inverted Index / Search: For full-text or faceted query over documents, a search engine is the right tool."
+    },
+    {
+      "type": "open",
+      "prompt": "Document Store appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Photo-Sharing Service — Holds photo metadata — a self-contained record read as a whole, with fields that vary by capture source.",
+        "Design a Collaborative Document Editor — Holds the document snapshot plus its recent operation log, read together whenever a client joins or reconnects.",
+        "Design a File Sync / Object Storage Service — Holds the file manifest: chunk list, versions and sharing state for one file, all read together on every sync."
+      ],
+      "answer": "Document Store carries different work in each: in Design a Photo-Sharing Service, holds photo metadata — a self-contained record read as a whole, with fields that vary by capture source. in Design a Collaborative Document Editor, holds the document snapshot plus its recent operation log, read together whenever a client joins or reconnects. in Design a File Sync / Object Storage Service, holds the file manifest: chunk list, versions and sharing state for one file, all read together on every sync."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Write throughput is the headline requirement and writes are spread across many partition keys; Access is always 'give me a range within one partition' — a user's messages, a device's readings. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Wide-Column Store — Partition-key-first storage (Cassandra, HBase, DynamoDB) built for enormous write volume and range scans within a partition.",
+        "Write throughput is the headline requirement and writes are spread across many partition keys",
+        "Access is always 'give me a range within one partition' — a user's messages, a device's readings",
+        "The prompt needs multi-region writes with tunable consistency"
+      ],
+      "answer": "Wide-Column Store. Partition-key-first storage (Cassandra, HBase, DynamoDB) built for enormous write volume and range scans within a partition. You reach for it when: Write throughput is the headline requirement and writes are spread across many partition keys; Access is always 'give me a range within one partition' — a user's messages, a device's readings; The prompt needs multi-region writes with tunable consistency."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Wide-Column Store in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Query patterns are unknown or will change — the partition key is close to irreversible",
+        "You need joins, or transactions spanning partitions",
+        "The dataset is small enough that one relational primary would do",
+        "You design tables per query, so a new access pattern means a new table and a backfill",
+        "Tombstones and compaction are operational concerns that leak into latency",
+        "Eventual consistency by default; strong reads cost latency and availability"
+      ],
+      "answer": "Don't reach for it when: Query patterns are unknown or will change — the partition key is close to irreversible; You need joins, or transactions spanning partitions; The dataset is small enough that one relational primary would do. And it is never free: You design tables per query, so a new access pattern means a new table and a backfill; Tombstones and compaction are operational concerns that leak into latency; Eventual consistency by default; strong reads cost latency and availability."
+    },
+    {
+      "type": "open",
+      "prompt": "Wide-Column Store is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Unbounded partition growth turning one partition into a hotspot and then a timeout",
+        "Tombstone accumulation making range scans progressively slower until compaction catches up",
+        "Last-write-wins silently discarding a concurrent update"
+      ],
+      "answer": "Unbounded partition growth turning one partition into a hotspot and then a timeout Tombstone accumulation making range scans progressively slower until compaction catches up Last-write-wins silently discarding a concurrent update"
+    },
+    {
+      "type": "open",
+      "prompt": "Wide-Column Store vs Time-Series Store vs Key-Value Store — what decides between them?",
+      "points": [
+        "Time-Series Store — If every row is a timestamped measurement, a purpose-built TSDB gives you retention and rollups for free.",
+        "Key-Value Store — When you never need range scans within a partition, plain KV is simpler.",
+        "Wide-Column Store — Partition-key-first storage (Cassandra, HBase, DynamoDB) built for enormous write volume and range scans within a partition."
+      ],
+      "answer": "Time-Series Store: If every row is a timestamped measurement, a purpose-built TSDB gives you retention and rollups for free. Key-Value Store: When you never need range scans within a partition, plain KV is simpler."
+    },
+    {
+      "type": "open",
+      "prompt": "Wide-Column Store appears in 3 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Chat System — Messages partitioned by conversation and clustered by time, so 'the last 50 in this thread' is one contiguous read.",
+        "Design an Ad Click Aggregator — Absorbs the raw click firehose, where write throughput is the constraint and reads are always a range within one key.",
+        "Design an Observability Platform — Holds telemetry partitioned by series, chosen because ingest volume is the defining constraint and queries never span partitions."
+      ],
+      "answer": "Wide-Column Store carries different work in each: in Design a Chat System, messages partitioned by conversation and clustered by time, so 'the last 50 in this thread' is one contiguous read. in Design an Ad Click Aggregator, absorbs the raw click firehose, where write throughput is the constraint and reads are always a range within one key. in Design an Observability Platform, holds telemetry partitioned by series, chosen because ingest volume is the defining constraint and queries never span partitions."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt is metrics, telemetry, IoT readings, or click events keyed by time; Old data becomes less valuable at a predictable rate and can be rolled up. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Time-Series Store — A store specialised for append-only timestamped measurements, with automatic downsampling, retention and time-range queries.",
+        "The prompt is metrics, telemetry, IoT readings, or click events keyed by time",
+        "Old data becomes less valuable at a predictable rate and can be rolled up",
+        "Queries are almost always 'this series, this window, this aggregate'"
+      ],
+      "answer": "Time-Series Store. A store specialised for append-only timestamped measurements, with automatic downsampling, retention and time-range queries. You reach for it when: The prompt is metrics, telemetry, IoT readings, or click events keyed by time; Old data becomes less valuable at a predictable rate and can be rolled up; Queries are almost always 'this series, this window, this aggregate'."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Time-Series Store in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Records get updated after they are written — TSDBs assume append-only",
+        "High-cardinality dimensions per point; label cardinality is the classic way to melt one",
+        "You need transactional guarantees or joins",
+        "Cardinality is the budget, and it is easy to blow up accidentally",
+        "Retention and rollup policy is a product decision you must make early",
+        "Another store class to operate and to back up"
+      ],
+      "answer": "Don't reach for it when: Records get updated after they are written — TSDBs assume append-only; High-cardinality dimensions per point; label cardinality is the classic way to melt one; You need transactional guarantees or joins. And it is never free: Cardinality is the budget, and it is easy to blow up accidentally; Retention and rollup policy is a product decision you must make early; Another store class to operate and to back up."
+    },
+    {
+      "type": "open",
+      "prompt": "Time-Series Store is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Cardinality explosion from a label like user_id or request_id",
+        "Queries spanning long windows at full resolution overwhelming memory",
+        "Late-arriving points landing after a window was already rolled up"
+      ],
+      "answer": "Cardinality explosion from a label like user_id or request_id Queries spanning long windows at full resolution overwhelming memory Late-arriving points landing after a window was already rolled up"
+    },
+    {
+      "type": "open",
+      "prompt": "Time-Series Store vs Stream Processing vs Wide-Column Store — what decides between them?",
+      "points": [
+        "Stream Processing — If the aggregate matters more than the raw points, compute it in-flight and never store them.",
+        "Wide-Column Store — A generic partition-by-entity, cluster-by-time table when you need control over the layout.",
+        "Time-Series Store — A store specialised for append-only timestamped measurements, with automatic downsampling, retention and time-range queries."
+      ],
+      "answer": "Stream Processing: If the aggregate matters more than the raw points, compute it in-flight and never store them. Wide-Column Store: A generic partition-by-entity, cluster-by-time table when you need control over the layout."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt has large binary payloads — images, video, backups, documents; The bytes are written once and read many times. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Object / Blob Storage — Cheap, effectively unbounded storage for immutable files addressed by key, with HTTP access and lifecycle tiering.",
+        "The prompt has large binary payloads — images, video, backups, documents",
+        "The bytes are written once and read many times",
+        "Storage cost at scale is a stated concern, or the data must outlive any server"
+      ],
+      "answer": "Object / Blob Storage. Cheap, effectively unbounded storage for immutable files addressed by key, with HTTP access and lifecycle tiering. You reach for it when: The prompt has large binary payloads — images, video, backups, documents; The bytes are written once and read many times; Storage cost at scale is a stated concern, or the data must outlive any server."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Object / Blob Storage in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "You need to update a small part of an object; blob stores replace, they do not patch",
+        "Access needs to be transactional with your database",
+        "Latency requirements are single-digit milliseconds",
+        "Eventually-consistent listing and metadata in many implementations",
+        "Egress is the line item that surprises people, which is why a CDN sits in front",
+        "Two systems now hold related state — the object and the row that describes it"
+      ],
+      "answer": "Don't reach for it when: You need to update a small part of an object; blob stores replace, they do not patch; Access needs to be transactional with your database; Latency requirements are single-digit milliseconds. And it is never free: Eventually-consistent listing and metadata in many implementations; Egress is the line item that surprises people, which is why a CDN sits in front; Two systems now hold related state — the object and the row that describes it."
+    },
+    {
+      "type": "open",
+      "prompt": "Object / Blob Storage is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Orphaned objects when the database row is deleted but the object is not, or vice versa",
+        "Uploads going through the app tier and saturating it, instead of client-direct with presigned URLs",
+        "Hot prefixes throttling throughput in stores that partition by key prefix"
+      ],
+      "answer": "Orphaned objects when the database row is deleted but the object is not, or vice versa Uploads going through the app tier and saturating it, instead of client-direct with presigned URLs Hot prefixes throttling throughput in stores that partition by key prefix"
+    },
+    {
+      "type": "open",
+      "prompt": "Object / Blob Storage vs Chunking vs CDN — what decides between them?",
+      "points": [
+        "Chunking — For very large or resumable payloads, chunk before you store — it changes the failure story entirely.",
+        "CDN — Blob storage holds the bytes; a CDN is how users actually get them without paying origin egress.",
+        "Object / Blob Storage — Cheap, effectively unbounded storage for immutable files addressed by key, with HTTP access and lifecycle tiering."
+      ],
+      "answer": "Chunking: For very large or resumable payloads, chunk before you store — it changes the failure story entirely. CDN: Blob storage holds the bytes; a CDN is how users actually get them without paying origin egress."
+    },
+    {
+      "type": "open",
+      "prompt": "Object / Blob Storage appears in 5 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Photo-Sharing Service — Holds the original photos and their derived sizes; the database stores only metadata and the object key that points at them.",
+        "Design a Video Streaming Service — Stores raw uploads and every transcoded rendition, which is why storage cost multiplies by the size of the bitrate ladder.",
+        "Design a File Sync / Object Storage Service — The backing store for content-addressed chunks, with the file manifest in a database pointing at each one.",
+        "Design a RAG / Semantic Search System — Holds the source documents the citations point back at, because a retrieved passage without its original is not verifiable.",
+        "Design a Business Verification Pipeline — The uploaded document is evidence with the same retention obligation as the decision, so the original is content-addressed and never replaced by anything derived from it."
+      ],
+      "answer": "Object / Blob Storage carries different work in each: in Design a Photo-Sharing Service, holds the original photos and their derived sizes; the database stores only metadata and the object key that points at them. in Design a Video Streaming Service, stores raw uploads and every transcoded rendition, which is why storage cost multiplies by the size of the bitrate ladder. in Design a File Sync / Object Storage Service, the backing store for content-addressed chunks, with the file manifest in a database pointing at each one. in Design a RAG / Semantic Search System, holds the source documents the citations point back at, because a retrieved passage without its original is not verifiable. in Design a Business Verification Pipeline, the uploaded document is evidence with the same retention obligation as the decision, so the original is content-addressed and never replaced by anything derived from it."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Files are large enough that a failed transfer must not restart from zero; Only part of a file typically changes between versions. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Chunking — Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece.",
+        "Files are large enough that a failed transfer must not restart from zero",
+        "Only part of a file typically changes between versions",
+        "You want parallel upload or download, or per-piece deduplication"
+      ],
+      "answer": "Chunking. Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece. You reach for it when: Files are large enough that a failed transfer must not restart from zero; Only part of a file typically changes between versions; You want parallel upload or download, or per-piece deduplication."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Chunking in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Payloads are small; per-chunk metadata will exceed the data",
+        "The consumer needs the whole object anyway and cannot start early",
+        "A manifest per object, and now the manifest is a consistency problem of its own",
+        "Chunk-size choice is a real tradeoff: small chunks dedup better, large chunks cost less metadata",
+        "Reassembly and ordering logic on the read path"
+      ],
+      "answer": "Don't reach for it when: Payloads are small; per-chunk metadata will exceed the data; The consumer needs the whole object anyway and cannot start early. And it is never free: A manifest per object, and now the manifest is a consistency problem of its own; Chunk-size choice is a real tradeoff: small chunks dedup better, large chunks cost less metadata; Reassembly and ordering logic on the read path."
+    },
+    {
+      "type": "open",
+      "prompt": "Chunking is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Partial uploads leaving orphan chunks nobody garbage collects",
+        "Manifest written before all chunks are durable, producing an object that reads as corrupt",
+        "Fixed-size chunking defeating dedup because one inserted byte shifts every boundary"
+      ],
+      "answer": "Partial uploads leaving orphan chunks nobody garbage collects Manifest written before all chunks are durable, producing an object that reads as corrupt Fixed-size chunking defeating dedup because one inserted byte shifts every boundary"
+    },
+    {
+      "type": "open",
+      "prompt": "Chunking vs Object / Blob Storage vs Deduplication — what decides between them?",
+      "points": [
+        "Object / Blob Storage — Multipart upload gives you most of the retry benefit without you owning a manifest.",
+        "Deduplication — Chunking is usually the enabler for dedup rather than an end in itself.",
+        "Chunking — Splitting a large payload into independently addressable pieces, so transfer, retry, dedup and parallelism operate per piece."
+      ],
+      "answer": "Object / Blob Storage: Multipart upload gives you most of the retry benefit without you owning a manifest. Deduplication: Chunking is usually the enabler for dedup rather than an end in itself."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt implies heavy duplication — shared files, re-uploads, mirrored pages; Storage or bandwidth cost is an explicit constraint. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Deduplication — Storing identical content once by addressing it with a hash of its bytes, so repeats cost a reference instead of a copy.",
+        "The prompt implies heavy duplication — shared files, re-uploads, mirrored pages",
+        "Storage or bandwidth cost is an explicit constraint",
+        "You need to detect 'have I already processed this?' cheaply"
+      ],
+      "answer": "Deduplication. Storing identical content once by addressing it with a hash of its bytes, so repeats cost a reference instead of a copy. You reach for it when: The prompt implies heavy duplication — shared files, re-uploads, mirrored pages; Storage or bandwidth cost is an explicit constraint; You need to detect 'have I already processed this?' cheaply."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Deduplication in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Content is unique by nature; you pay hashing cost for nothing",
+        "Per-copy metadata or permissions must differ, and a shared object cannot carry them",
+        "Hashing on the write path, and a content-address index that must itself scale",
+        "Reference counting, which means deletion is now a distributed garbage-collection problem",
+        "Cross-tenant dedup raises real security and isolation questions"
+      ],
+      "answer": "Don't reach for it when: Content is unique by nature; you pay hashing cost for nothing; Per-copy metadata or permissions must differ, and a shared object cannot carry them. And it is never free: Hashing on the write path, and a content-address index that must itself scale; Reference counting, which means deletion is now a distributed garbage-collection problem; Cross-tenant dedup raises real security and isolation questions."
+    },
+    {
+      "type": "open",
+      "prompt": "Deduplication is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Reference count leaks so nothing is ever reclaimed",
+        "Deleting an object still referenced by another user",
+        "Hash collision handling ignored entirely because it 'cannot happen'"
+      ],
+      "answer": "Reference count leaks so nothing is ever reclaimed Deleting an object still referenced by another user Hash collision handling ignored entirely because it 'cannot happen'"
+    },
+    {
+      "type": "open",
+      "prompt": "Deduplication vs Bloom Filter vs Chunking — what decides between them?",
+      "points": [
+        "Bloom Filter — If you only need 'have I seen this before' and can tolerate false positives, a bloom filter is far cheaper.",
+        "Chunking — Chunk-level dedup catches partial overlap that whole-file dedup misses.",
+        "Deduplication — Storing identical content once by addressing it with a hash of its bytes, so repeats cost a reference instead of a copy."
+      ],
+      "answer": "Bloom Filter: If you only need 'have I seen this before' and can tolerate false positives, a bloom filter is far cheaper. Chunking: Chunk-level dedup catches partial overlap that whole-file dedup misses."
+    }
+  ]
+}

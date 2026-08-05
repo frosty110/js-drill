@@ -1,0 +1,322 @@
+{
+  "id": "c08",
+  "num": 8,
+  "part": "Component decks",
+  "title": "Indexes & Search",
+  "summary": "Finding the needle without scanning the haystack. 6 building blocks drilled by recall: the signal that says reach for one, what it costs, how it breaks, which sibling rules it out, and what it is doing across the canonical problems.",
+  "keyTakeaways": [
+    "Inverted Index / Search — A term-to-document mapping built ahead of time, so full-text and faceted queries are lookups rather than scans.",
+    "Vector Search — Approximate nearest-neighbour lookup over embeddings, retrieving by semantic similarity instead of by keyword.",
+    "Ranking — Ordering a candidate set by a score — recency, affinity, engagement, relevance — usually as a cheap retrieval stage followed by an expensive scoring stage.",
+    "Geospatial Index — Mapping 2-D coordinates onto a 1-D key that preserves locality — geohash, quadtree or S2 — so 'what is near me' becomes a range scan.",
+    "Bloom Filter — A compact probabilistic set that answers 'definitely not present' or 'probably present', trading exactness for tiny memory.",
+    "Trie / Autocomplete — A prefix tree with top-K completions precomputed at each node, so a keystroke returns suggestions in a single traversal."
+  ],
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "A design prompt says: Users query by content rather than by key — free text, filters, facets; The prompt needs relevance ordering, not just matching. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Inverted Index / Search — A term-to-document mapping built ahead of time, so full-text and faceted queries are lookups rather than scans.",
+        "Users query by content rather than by key — free text, filters, facets",
+        "The prompt needs relevance ordering, not just matching",
+        "A LIKE '%…%' over the primary store would be a full scan"
+      ],
+      "answer": "Inverted Index / Search. A term-to-document mapping built ahead of time, so full-text and faceted queries are lookups rather than scans. You reach for it when: Users query by content rather than by key — free text, filters, facets; The prompt needs relevance ordering, not just matching; A LIKE '%…%' over the primary store would be a full scan."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Inverted Index / Search in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Lookups are always by primary key",
+        "The index would need to be transactionally consistent with the database",
+        "The corpus is small enough to filter in memory",
+        "A second copy of the data with its own ingestion pipeline and lag",
+        "Analysis choices — tokenising, stemming, language — are baked in at index time",
+        "Reindexing after a mapping change is a full rebuild, not a migration"
+      ],
+      "answer": "Don't reach for it when: Lookups are always by primary key; The index would need to be transactionally consistent with the database; The corpus is small enough to filter in memory. And it is never free: A second copy of the data with its own ingestion pipeline and lag; Analysis choices — tokenising, stemming, language — are baked in at index time; Reindexing after a mapping change is a full rebuild, not a migration."
+    },
+    {
+      "type": "open",
+      "prompt": "Inverted Index / Search is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Index drifting from the source of truth with no reconciliation job to catch it",
+        "Deep pagination degrading badly because every shard must return the full prefix",
+        "Hot shard from an uneven document distribution",
+        "Ingestion lag making just-written content unfindable exactly when users look for it"
+      ],
+      "answer": "Index drifting from the source of truth with no reconciliation job to catch it Deep pagination degrading badly because every shard must return the full prefix Hot shard from an uneven document distribution Ingestion lag making just-written content unfindable exactly when users look for it"
+    },
+    {
+      "type": "open",
+      "prompt": "Inverted Index / Search vs Trie / Autocomplete vs Vector Search — what decides between them?",
+      "points": [
+        "Trie / Autocomplete — For prefix matching specifically, a trie is far cheaper than a general search engine.",
+        "Vector Search — When the match should be semantic rather than lexical.",
+        "Inverted Index / Search — A term-to-document mapping built ahead of time, so full-text and faceted queries are lookups rather than scans."
+      ],
+      "answer": "Trie / Autocomplete: For prefix matching specifically, a trie is far cheaper than a general search engine. Vector Search: When the match should be semantic rather than lexical."
+    },
+    {
+      "type": "open",
+      "prompt": "Inverted Index / Search appears in 4 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a Typeahead / Autocomplete Service — The prefix-to-completions structure that turns each keystroke into a lookup rather than a scan over the query log.",
+        "Design a RAG / Semantic Search System — Keyword retrieval running alongside vector search, because hybrid retrieval consistently beats either one alone on real queries.",
+        "Design a Search Engine — The inverted index is the system: term → posting list is what makes query time independent of corpus size.",
+        "Design a Sanctions Screening System — Alias, transliteration and spelling expansion turn 40K sanctioned entities into millions of searchable strings, so candidate generation runs over an n-gram index rather than the entity list."
+      ],
+      "answer": "Inverted Index / Search carries different work in each: in Design a Typeahead / Autocomplete Service, the prefix-to-completions structure that turns each keystroke into a lookup rather than a scan over the query log. in Design a RAG / Semantic Search System, keyword retrieval running alongside vector search, because hybrid retrieval consistently beats either one alone on real queries. in Design a Search Engine, the inverted index is the system: term → posting list is what makes query time independent of corpus size. in Design a Sanctions Screening System, alias, transliteration and spelling expansion turn 40K sanctioned entities into millions of searchable strings, so candidate generation runs over an n-gram index rather than the entity list."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt needs 'find things like this' where the match is meaning, not spelling; Retrieval feeds an LLM (RAG) or a recommender. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Vector Search — Approximate nearest-neighbour lookup over embeddings, retrieving by semantic similarity instead of by keyword.",
+        "The prompt needs 'find things like this' where the match is meaning, not spelling",
+        "Retrieval feeds an LLM (RAG) or a recommender",
+        "Users phrase queries differently from the source documents"
+      ],
+      "answer": "Vector Search. Approximate nearest-neighbour lookup over embeddings, retrieving by semantic similarity instead of by keyword. You reach for it when: The prompt needs 'find things like this' where the match is meaning, not spelling; Retrieval feeds an LLM (RAG) or a recommender; Users phrase queries differently from the source documents."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Vector Search in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Exact matching and filtering are what users need — keyword search is cheaper and explainable",
+        "The corpus changes constantly and index rebuilds cannot keep up",
+        "You cannot explain why a result was returned and the product requires that",
+        "Embeddings must be generated and regenerated whenever the model changes",
+        "ANN indexes are memory-hungry and trade recall for latency by construction",
+        "Hybrid ranking with keyword search is usually necessary, so you run both"
+      ],
+      "answer": "Don't reach for it when: Exact matching and filtering are what users need — keyword search is cheaper and explainable; The corpus changes constantly and index rebuilds cannot keep up; You cannot explain why a result was returned and the product requires that. And it is never free: Embeddings must be generated and regenerated whenever the model changes; ANN indexes are memory-hungry and trade recall for latency by construction; Hybrid ranking with keyword search is usually necessary, so you run both."
+    },
+    {
+      "type": "open",
+      "prompt": "Vector Search is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Model version drift making old and new embeddings incomparable in the same index",
+        "Recall silently degrading as index parameters are tuned for latency",
+        "Chunking strategy destroying the context that made a passage meaningful",
+        "No metadata filtering, so results are semantically close but structurally invalid"
+      ],
+      "answer": "Model version drift making old and new embeddings incomparable in the same index Recall silently degrading as index parameters are tuned for latency Chunking strategy destroying the context that made a passage meaningful No metadata filtering, so results are semantically close but structurally invalid"
+    },
+    {
+      "type": "open",
+      "prompt": "Vector Search vs Inverted Index / Search vs Ranking — what decides between them?",
+      "points": [
+        "Inverted Index / Search — Lexical search when exactness, filters and explainability matter more than semantics.",
+        "Ranking — Retrieval gets candidates; ranking decides the order. Vector search is the first stage, not the whole answer.",
+        "Vector Search — Approximate nearest-neighbour lookup over embeddings, retrieving by semantic similarity instead of by keyword."
+      ],
+      "answer": "Inverted Index / Search: Lexical search when exactness, filters and explainability matter more than semantics. Ranking: Retrieval gets candidates; ranking decides the order. Vector search is the first stage, not the whole answer."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: There are far more matching items than can be shown, and order is the product; The prompt mentions feeds, recommendations, search results or 'what the user sees first'. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Ranking — Ordering a candidate set by a score — recency, affinity, engagement, relevance — usually as a cheap retrieval stage followed by an expensive scoring stage.",
+        "There are far more matching items than can be shown, and order is the product",
+        "The prompt mentions feeds, recommendations, search results or 'what the user sees first'",
+        "Simple chronological ordering demonstrably under-serves users"
+      ],
+      "answer": "Ranking. Ordering a candidate set by a score — recency, affinity, engagement, relevance — usually as a cheap retrieval stage followed by an expensive scoring stage. You reach for it when: There are far more matching items than can be shown, and order is the product; The prompt mentions feeds, recommendations, search results or 'what the user sees first'; Simple chronological ordering demonstrably under-serves users."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Ranking in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Chronological is the expected contract and reordering would violate user trust",
+        "The candidate set is small enough that order barely matters",
+        "You cannot measure whether the ranking is working",
+        "A feature pipeline, and features are the expensive, high-maintenance part",
+        "Scoring latency forces a multi-stage architecture: cheap retrieval, expensive rank on the top-K",
+        "Training and serving must agree, or you get skew that is very hard to debug"
+      ],
+      "answer": "Don't reach for it when: Chronological is the expected contract and reordering would violate user trust; The candidate set is small enough that order barely matters; You cannot measure whether the ranking is working. And it is never free: A feature pipeline, and features are the expensive, high-maintenance part; Scoring latency forces a multi-stage architecture: cheap retrieval, expensive rank on the top-K; Training and serving must agree, or you get skew that is very hard to debug."
+    },
+    {
+      "type": "open",
+      "prompt": "Ranking is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Training/serving skew from features computed differently in the two paths",
+        "Feedback loops where the ranker promotes what it already promoted",
+        "Cold start for new users and new items with no signal to rank on",
+        "Score computed over a stale candidate set, ranking items that no longer exist"
+      ],
+      "answer": "Training/serving skew from features computed differently in the two paths Feedback loops where the ranker promotes what it already promoted Cold start for new users and new items with no signal to rank on Score computed over a stale candidate set, ranking items that no longer exist"
+    },
+    {
+      "type": "open",
+      "prompt": "Ranking vs Feature Store / Serving vs Pre-Aggregation & Rollups — what decides between them?",
+      "points": [
+        "Feature Store / Serving — The infrastructure ranking depends on — where the signals come from at request time.",
+        "Pre-Aggregation & Rollups — Precomputed counters make a serviceable ranking signal without a model.",
+        "Ranking — Ordering a candidate set by a score — recency, affinity, engagement, relevance — usually as a cheap retrieval stage followed by an expensive scoring stage."
+      ],
+      "answer": "Feature Store / Serving: The infrastructure ranking depends on — where the signals come from at request time. Pre-Aggregation & Rollups: Precomputed counters make a serviceable ranking signal without a model."
+    },
+    {
+      "type": "open",
+      "prompt": "Ranking appears in 6 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a News Feed — Orders the assembled timeline by recency, affinity and engagement rather than pure chronology — the second half of the feed problem after fan-out.",
+        "Design a RAG / Semantic Search System — Reranks vector-retrieved candidates before they reach the model, because approximate-nearest-neighbour recall is not the same thing as relevance.",
+        "Design a Search Engine — Scores matching documents so the top-K is worth reading. Retrieval finds candidates; ranking is what makes the result page useful.",
+        "Design a Short-Form Video Feed — Drives the entire product. The feed is not a follow graph but a ranked stream, so the ranker IS the short-form video experience.",
+        "Design a Content Moderation Pipeline — Prioritises the review queue so the most likely violations and the highest-reach content reach a human moderator first.",
+        "Design a Sanctions Screening System — Scoring the surviving candidates is where date of birth, nationality and identifiers separate a genuine hit from a common surname, and it produces three bands rather than a boolean."
+      ],
+      "answer": "Ranking carries different work in each: in Design a News Feed, orders the assembled timeline by recency, affinity and engagement rather than pure chronology — the second half of the feed problem after fan-out. in Design a RAG / Semantic Search System, reranks vector-retrieved candidates before they reach the model, because approximate-nearest-neighbour recall is not the same thing as relevance. in Design a Search Engine, scores matching documents so the top-K is worth reading. Retrieval finds candidates; ranking is what makes the result page useful. in Design a Short-Form Video Feed, drives the entire product. The feed is not a follow graph but a ranked stream, so the ranker IS the short-form video experience. in Design a Content Moderation Pipeline, prioritises the review queue so the most likely violations and the highest-reach content reach a human moderator first. in Design a Sanctions Screening System, scoring the surviving candidates is where date of birth, nationality and identifiers separate a genuine hit from a common surname, and it produces three bands rather than a boolean."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt asks for nearby drivers, restaurants, stores or users; Location updates are frequent and proximity queries must be fast. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Geospatial Index — Mapping 2-D coordinates onto a 1-D key that preserves locality — geohash, quadtree or S2 — so 'what is near me' becomes a range scan.",
+        "The prompt asks for nearby drivers, restaurants, stores or users",
+        "Location updates are frequent and proximity queries must be fast",
+        "A naive distance calculation over every row would be a full scan"
+      ],
+      "answer": "Geospatial Index. Mapping 2-D coordinates onto a 1-D key that preserves locality — geohash, quadtree or S2 — so 'what is near me' becomes a range scan. You reach for it when: The prompt asks for nearby drivers, restaurants, stores or users; Location updates are frequent and proximity queries must be fast; A naive distance calculation over every row would be a full scan."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Geospatial Index in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Locations are static and few",
+        "Queries are by region name or administrative boundary rather than by radius",
+        "Exact distance ordering matters more than fast candidate retrieval",
+        "Precision level is a tradeoff between cell size and the number of cells to scan",
+        "Boundary handling requires querying neighbouring cells, not just the containing one",
+        "High-frequency location updates are a write-heavy workload of their own"
+      ],
+      "answer": "Don't reach for it when: Locations are static and few; Queries are by region name or administrative boundary rather than by radius; Exact distance ordering matters more than fast candidate retrieval. And it is never free: Precision level is a tradeoff between cell size and the number of cells to scan; Boundary handling requires querying neighbouring cells, not just the containing one; High-frequency location updates are a write-heavy workload of their own."
+    },
+    {
+      "type": "open",
+      "prompt": "Geospatial Index is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Edge cases at cell boundaries missing a genuinely nearby result",
+        "Dense urban cells holding orders of magnitude more entities than rural ones",
+        "Fixed precision performing badly in both dense and sparse regions simultaneously",
+        "Write amplification from updating the index on every location ping"
+      ],
+      "answer": "Edge cases at cell boundaries missing a genuinely nearby result Dense urban cells holding orders of magnitude more entities than rural ones Fixed precision performing badly in both dense and sparse regions simultaneously Write amplification from updating the index on every location ping"
+    },
+    {
+      "type": "open",
+      "prompt": "Geospatial Index vs Sharding vs Cache — what decides between them?",
+      "points": [
+        "Sharding — Geo cells make a natural partition key, but they inherit population skew — plan for it.",
+        "Cache — Popular areas are queried repeatedly; a short-TTL cache absorbs most of the read load.",
+        "Geospatial Index — Mapping 2-D coordinates onto a 1-D key that preserves locality — geohash, quadtree or S2 — so 'what is near me' becomes a range scan."
+      ],
+      "answer": "Sharding: Geo cells make a natural partition key, but they inherit population skew — plan for it. Cache: Popular areas are queried repeatedly; a short-TTL cache absorbs most of the read load."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: You need to avoid an expensive lookup for keys that are usually absent; Memory is the constraint and false positives are cheap to recover from. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Bloom Filter — A compact probabilistic set that answers 'definitely not present' or 'probably present', trading exactness for tiny memory.",
+        "You need to avoid an expensive lookup for keys that are usually absent",
+        "Memory is the constraint and false positives are cheap to recover from",
+        "The prompt has dedup or membership checks over a huge keyspace"
+      ],
+      "answer": "Bloom Filter. A compact probabilistic set that answers 'definitely not present' or 'probably present', trading exactness for tiny memory. You reach for it when: You need to avoid an expensive lookup for keys that are usually absent; Memory is the constraint and false positives are cheap to recover from; The prompt has dedup or membership checks over a huge keyspace."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Bloom Filter in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "A false positive would be a correctness bug rather than a wasted lookup",
+        "You need deletion — standard bloom filters cannot remove elements",
+        "The set is small enough for an exact structure",
+        "Sizing must be decided up front from expected cardinality and target error rate",
+        "It degrades as it fills, and the only fix is to rebuild",
+        "Another structure to keep in sync with the real data"
+      ],
+      "answer": "Don't reach for it when: A false positive would be a correctness bug rather than a wasted lookup; You need deletion — standard bloom filters cannot remove elements; The set is small enough for an exact structure. And it is never free: Sizing must be decided up front from expected cardinality and target error rate; It degrades as it fills, and the only fix is to rebuild; Another structure to keep in sync with the real data."
+    },
+    {
+      "type": "open",
+      "prompt": "Bloom Filter is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Filter saturating past its design cardinality so the false-positive rate silently climbs",
+        "Treating 'probably present' as 'present' and skipping the confirming lookup",
+        "Attempting deletion by clearing bits and corrupting other members"
+      ],
+      "answer": "Filter saturating past its design cardinality so the false-positive rate silently climbs Treating 'probably present' as 'present' and skipping the confirming lookup Attempting deletion by clearing bits and corrupting other members"
+    },
+    {
+      "type": "open",
+      "prompt": "Bloom Filter vs Deduplication vs Cache — what decides between them?",
+      "points": [
+        "Deduplication — When you need certainty, an exact content-address index is the honest answer.",
+        "Cache — A negative cache stores known-absent keys exactly, at higher memory cost.",
+        "Bloom Filter — A compact probabilistic set that answers 'definitely not present' or 'probably present', trading exactness for tiny memory."
+      ],
+      "answer": "Deduplication: When you need certainty, an exact content-address index is the honest answer. Cache: A negative cache stores known-absent keys exactly, at higher memory cost."
+    },
+    {
+      "type": "open",
+      "prompt": "Bloom Filter appears in 5 of the canonical design problems. Name as many as you can, and say what it is doing in each.",
+      "points": [
+        "Design a URL Shortener — Answers 'has this short code been issued' without a lookup, turning most collision checks into a memory read.",
+        "Design a Web Crawler — The seen-URL check — the canonical use, asked billions of times, where a false positive only costs a skipped page.",
+        "Design a Distributed Cache — Avoids a network hop for keys a node certainly does not hold, which matters when the miss costs a round trip to the origin.",
+        "Design a File Sync / Object Storage Service — Tests whether a chunk already exists before uploading it, so the dedup path avoids a round trip for genuinely new content.",
+        "Design a Distributed Key-Value Store — Sits in front of each SSTable so a read skips files that certainly do not hold the key."
+      ],
+      "answer": "Bloom Filter carries different work in each: in Design a URL Shortener, answers 'has this short code been issued' without a lookup, turning most collision checks into a memory read. in Design a Web Crawler, the seen-URL check — the canonical use, asked billions of times, where a false positive only costs a skipped page. in Design a Distributed Cache, avoids a network hop for keys a node certainly does not hold, which matters when the miss costs a round trip to the origin. in Design a File Sync / Object Storage Service, tests whether a chunk already exists before uploading it, so the dedup path avoids a round trip for genuinely new content. in Design a Distributed Key-Value Store, sits in front of each SSTable so a read skips files that certainly do not hold the key."
+    },
+    {
+      "type": "open",
+      "prompt": "A design prompt says: The prompt is typeahead, search suggestions or command completion; Latency budget is tens of milliseconds because it fires on every keystroke. Which building block answers that, and why is it the right reach?",
+      "points": [
+        "Trie / Autocomplete — A prefix tree with top-K completions precomputed at each node, so a keystroke returns suggestions in a single traversal.",
+        "The prompt is typeahead, search suggestions or command completion",
+        "Latency budget is tens of milliseconds because it fires on every keystroke",
+        "The suggestion set changes far more slowly than it is queried"
+      ],
+      "answer": "Trie / Autocomplete. A prefix tree with top-K completions precomputed at each node, so a keystroke returns suggestions in a single traversal. You reach for it when: The prompt is typeahead, search suggestions or command completion; Latency budget is tens of milliseconds because it fires on every keystroke; The suggestion set changes far more slowly than it is queried."
+    },
+    {
+      "type": "open",
+      "prompt": "You put Trie / Autocomplete in a design. Name the signals that should have stopped you — and what it costs even when it is the right call.",
+      "points": [
+        "Matching should be fuzzy or semantic rather than prefix-based",
+        "The suggestion set is tiny — a filter over an array is simpler",
+        "Suggestions must be personalised per user at full precision",
+        "Memory grows with the vocabulary, and storing top-K at every node multiplies it",
+        "Rebuilds are batch jobs, so new terms appear on a delay",
+        "Sharding a trie by prefix creates uneven partitions by construction"
+      ],
+      "answer": "Don't reach for it when: Matching should be fuzzy or semantic rather than prefix-based; The suggestion set is tiny — a filter over an array is simpler; Suggestions must be personalised per user at full precision. And it is never free: Memory grows with the vocabulary, and storing top-K at every node multiplies it; Rebuilds are batch jobs, so new terms appear on a delay; Sharding a trie by prefix creates uneven partitions by construction."
+    },
+    {
+      "type": "open",
+      "prompt": "Trie / Autocomplete is in your design and load goes up ten times. How does it break?",
+      "points": [
+        "Popular prefixes ('a', 'th') becoming hot shards that serve most of the traffic",
+        "Stale top-K after a spike in popularity for a term the last rebuild missed",
+        "Memory blowup from storing full strings at every node instead of references",
+        "No typo tolerance, so a single mistyped character returns nothing"
+      ],
+      "answer": "Popular prefixes ('a', 'th') becoming hot shards that serve most of the traffic Stale top-K after a spike in popularity for a term the last rebuild missed Memory blowup from storing full strings at every node instead of references No typo tolerance, so a single mistyped character returns nothing"
+    },
+    {
+      "type": "open",
+      "prompt": "Trie / Autocomplete vs Inverted Index / Search vs Cache — what decides between them?",
+      "points": [
+        "Inverted Index / Search — A general search engine with an edge-ngram analyser, when you want fuzziness and are willing to pay for it.",
+        "Cache — Popular prefixes dominate the distribution; caching their results absorbs most requests before the trie.",
+        "Trie / Autocomplete — A prefix tree with top-K completions precomputed at each node, so a keystroke returns suggestions in a single traversal."
+      ],
+      "answer": "Inverted Index / Search: A general search engine with an edge-ngram analyser, when you want fuzziness and are willing to pay for it. Cache: Popular prefixes dominate the distribution; caching their results absorbs most requests before the trie."
+    }
+  ]
+}

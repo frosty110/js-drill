@@ -1,0 +1,160 @@
+{
+  "id": "ch09",
+  "chapter": 9,
+  "part": "Part V: Production",
+  "title": "Inference Optimization",
+  "summary": "What actually determines the cost and latency of serving a model: the two phases of inference (compute-bound prefill and memory-bandwidth-bound decode), the metrics that describe it (time to first token, time per output token, throughput, goodput), how accelerators behave, and the two families of optimization — model-level (quantization, distillation, pruning, attention and KV-cache techniques, speculative decoding) and service-level (batching, caching, parallelism, routing).",
+  "keyTakeaways": [
+    "Inference has two phases with opposite bottlenecks: prefill processes the whole prompt in parallel and is compute-bound, while decode emits one token at a time and is bound by memory bandwidth — so they optimize differently.",
+    "Latency is not one number: time to first token (dominated by prefill) and time per output token (dominated by decode) are separate user experiences, and total latency depends on output length.",
+    "Throughput and latency trade off directly — larger batches raise tokens per second per dollar while making any individual request slower — which is why goodput (requests meeting their latency target) is the honest serving metric.",
+    "The KV cache is what makes decoding fast and what consumes the memory: its size grows with batch size and sequence length, so techniques like multi-query/grouped-query attention and paged attention exist to control it.",
+    "Model-level optimizations change the model — quantization, distillation, pruning — and buy large savings at some quality cost that must be measured, not assumed.",
+    "Service-level optimizations leave the model alone: continuous (in-flight) batching, prefix/prompt caching, semantic caching, replication, and routing simple requests to cheaper models.",
+    "Speculative decoding uses a small draft model to propose tokens that the big model verifies in parallel, cutting latency without changing the output distribution."
+  ],
+  "questions": [
+    {
+      "q": "Why are prefill and decode described as having opposite bottlenecks?",
+      "options": [
+        "Prefill runs on CPU while decode runs on GPU",
+        "Prefill processes all prompt tokens in parallel and saturates compute, while decode generates one token at a time and is limited by how fast weights and KV cache can be read from memory",
+        "Prefill is deterministic and decode is stochastic",
+        "Prefill uses the KV cache while decode does not"
+      ],
+      "answer": 1,
+      "explain": "During prefill there is a large matrix of tokens to crunch, so the accelerator's FLOPs are the limit. During decode each step touches the entire model's weights to produce a single token, so memory bandwidth dominates and the compute units idle — which is why batching helps decode so much."
+    },
+    {
+      "q": "What does time to first token (TTFT) mostly reflect, and what does time per output token (TPOT) reflect?",
+      "options": [
+        "TTFT reflects prefill (prompt length, queueing); TPOT reflects decode speed per generated token",
+        "TTFT reflects network latency only; TPOT reflects tokenizer speed",
+        "TTFT reflects model size; TPOT reflects context window size",
+        "They are the same measurement expressed in different units"
+      ],
+      "answer": 0,
+      "explain": "A long prompt or a busy queue delays the first token; after that, the stream's smoothness is TPOT. Splitting them matters because they have different fixes — shortening or caching the prompt helps TTFT, while batching strategy and decode optimizations help TPOT."
+    },
+    {
+      "q": "Why is `goodput` a more honest serving metric than raw throughput?",
+      "options": [
+        "Goodput counts only requests that produced valid JSON",
+        "Goodput measures GPU utilization rather than requests",
+        "Goodput counts only the requests that met their latency requirement, so it exposes the throughput gains that were bought by making individual users wait too long",
+        "Goodput is throughput measured over a longer window"
+      ],
+      "answer": 2,
+      "explain": "You can always raise tokens per second by batching more aggressively — while blowing the latency SLO for everyone in the batch. Goodput prices that: only useful, in-SLO work counts."
+    },
+    {
+      "q": "What is the KV cache and why does it dominate memory during serving?",
+      "options": [
+        "A cache of prompt/response pairs used to skip repeated requests entirely",
+        "A cache of tokenizer outputs shared across requests",
+        "The stored key and value tensors for all previous tokens, reused each decode step to avoid recomputation — its size grows with batch size, sequence length, layers, and heads",
+        "A cache of model weights kept in CPU RAM"
+      ],
+      "answer": 2,
+      "explain": "Without it, every new token would recompute attention over the whole sequence. With it, memory grows linearly in tokens times batch size, which is why long contexts and high concurrency run out of memory before they run out of compute."
+    },
+    {
+      "q": "What problem do multi-query and grouped-query attention solve?",
+      "options": [
+        "They allow multiple users to share one prompt",
+        "They shrink the KV cache by sharing key/value projections across attention heads, trading a little quality for much lower memory and bandwidth during decode",
+        "They increase the context window without retraining",
+        "They parallelize prefill across GPUs"
+      ],
+      "answer": 1,
+      "explain": "Full multi-head attention stores keys and values per head. Sharing them across heads (fully in MQA, in groups in GQA) cuts the cache substantially, which directly increases how many concurrent sequences fit and how fast decode runs."
+    },
+    {
+      "q": "What is paged attention (as popularized by vLLM) addressing?",
+      "options": [
+        "Swapping model weights between GPU and disk",
+        "Compressing the model's weights into pages for faster loading",
+        "Fragmentation and waste in KV cache allocation — it manages the cache in fixed-size blocks like virtual memory pages, so sequences of unpredictable length pack efficiently and can share prefixes",
+        "Paginating long responses for the client"
+      ],
+      "answer": 2,
+      "explain": "Naive allocation reserves worst-case contiguous memory per sequence and wastes most of it. Block-based allocation raises effective batch size dramatically and enables copy-on-write sharing of common prefixes between requests."
+    },
+    {
+      "q": "How does continuous (in-flight) batching differ from static batching?",
+      "options": [
+        "It batches only requests with identical prompts",
+        "It runs the batch on multiple GPUs instead of one",
+        "It processes each request twice for reliability",
+        "It admits new requests into the running batch as others finish, instead of waiting for the whole batch to complete — so short requests are not held hostage by long ones"
+      ],
+      "answer": 3,
+      "explain": "Generation lengths vary wildly, so a static batch idles while its longest member finishes. Continuous batching keeps the accelerator full and drastically improves both throughput and tail latency in real workloads."
+    },
+    {
+      "q": "How does speculative decoding reduce latency without changing output quality?",
+      "options": [
+        "It truncates the response when confidence is high",
+        "A small draft model proposes several tokens that the large model verifies in one parallel pass, accepting the prefix that matches what it would have produced anyway",
+        "It caches the most common responses and returns them directly",
+        "It reduces precision only for the least important tokens"
+      ],
+      "answer": 1,
+      "explain": "Verification is a parallel (compute-bound) operation, while sequential decoding is bandwidth-bound — so checking several proposed tokens at once is nearly as cheap as producing one. The acceptance rule preserves the target model's distribution, so quality is unchanged."
+    },
+    {
+      "q": "What is prompt (prefix) caching and when does it pay off most?",
+      "options": [
+        "Caching entire responses keyed by exact prompt hash; it pays off for repeated identical requests",
+        "Caching the KV state of a shared prompt prefix — a long system prompt, few-shot block, or document — so repeated requests skip recomputing prefill for it",
+        "Caching embeddings of user queries for retrieval reuse",
+        "Caching tokenizer vocabularies across models"
+      ],
+      "answer": 1,
+      "explain": "It attacks prefill cost specifically. Applications with a large fixed preamble — long system prompts, few-shot examples, a document being asked about repeatedly — see big TTFT and cost reductions, which is why providers expose it explicitly."
+    },
+    {
+      "q": "Which combination best describes model-level versus service-level optimization?",
+      "options": [
+        "Model-level: quantization, distillation, pruning. Service-level: batching, caching, replication, routing",
+        "Model-level: batching, caching. Service-level: quantization, pruning",
+        "Model-level: choosing a cloud region. Service-level: choosing a tokenizer",
+        "Model-level: prompt engineering. Service-level: finetuning"
+      ],
+      "answer": 0,
+      "explain": "Model-level changes the artifact and therefore may change output quality, so it demands re-evaluation. Service-level leaves the model's outputs alone and changes how requests are scheduled and reused — generally the safer place to start."
+    },
+    {
+      "type": "open",
+      "prompt": "Your chat feature has an acceptable average latency but users complain it feels slow, and inference cost is over budget. Diagnose and plan the optimization work.",
+      "points": [
+        "Decompose latency into TTFT and TPOT and look at percentiles rather than the mean — 'feels slow' is usually TTFT or p95, not the average.",
+        "Instrument by phase: queueing time, prefill time, decode time, plus retrieval and tool calls if present.",
+        "Fix perceived latency first: stream tokens, show progress, and shorten the prompt — long system prompts and stuffed context inflate both TTFT and cost.",
+        "Apply prefix/prompt caching for the fixed preamble, and semantic or exact response caching for repeated questions.",
+        "Right-size the model: route simple requests to a smaller/cheaper model and reserve the large model for hard ones; measure quality per route.",
+        "Serving-side: continuous batching, paged attention, and enough replicas to keep queueing time low; tune batch size against a latency SLO using goodput.",
+        "Model-level: quantization, or distillation of the common path into a small model — each requires re-running evaluation, since quality can move.",
+        "Consider speculative decoding for decode-bound latency, and shorter outputs (a real cost lever, since cost and time scale with generated tokens).",
+        "Track cost per request and latency percentiles as ongoing SLOs, not a one-off tuning exercise."
+      ],
+      "answer": "First I would refuse the average. 'Feels slow' in a chat product is almost always time to first token or the p95 tail, and both are invisible in a mean. So I instrument the request into phases — queueing, retrieval, prefill, decode — and look at p50/p95/p99 for TTFT and for time per output token separately. That decomposition usually points straight at the fix. If TTFT is the problem, the prompt is the first suspect: long system prompts, stuffed few-shot blocks, and over-retrieved context all inflate prefill, which costs both time and money. Trimming context and enabling prefix caching for the fixed preamble is the highest-ratio change available, and streaming the response makes the remaining wait feel far shorter. If the pain is in decode, the levers are serving-side: continuous batching and paged attention to keep the accelerator busy without holding short requests behind long ones, enough replicas that queueing is not masquerading as inference time, and possibly speculative decoding, which cuts decode latency without changing the output distribution. On cost, I look at three things in order. Output length, because tokens generated is the term that scales cost and latency together and is often trivially reducible by instruction. Model right-sizing, because most traffic in a chat product is easy — routing simple requests to a small model and escalating hard ones typically captures most of the savings, provided I measure quality per route rather than in aggregate. And then model-level compression: quantization first, distillation of the common path if volume justifies it, both re-validated against the evaluation set, since these are the changes that can silently move quality. Finally I would set explicit SLOs — a p95 TTFT target and a cost-per-request ceiling — and tune batch size against goodput rather than raw throughput, so we stop buying throughput with everyone's latency.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the KV cache: what it is, why it exists, and how it shapes the capacity and cost of a serving system.",
+      "points": [
+        "Attention needs the keys and values of all previous tokens; recomputing them each step would make generation quadratic in sequence length.",
+        "The KV cache stores those tensors so each decode step only computes the new token's contribution — trading memory for compute.",
+        "Cache size scales with batch size, sequence length, number of layers, number of heads, and precision, so it grows fast with concurrency and long contexts.",
+        "It typically becomes the binding constraint on how many concurrent sequences a GPU can serve — memory, not FLOPs, caps throughput.",
+        "Grouped-query/multi-query attention shrink it by sharing key/value projections across heads.",
+        "Paged attention manages it in blocks to eliminate fragmentation and enable prefix sharing across requests.",
+        "Prefix caching reuses the cached state of a shared prompt across requests, cutting prefill cost.",
+        "Implication for application design: long contexts are expensive in a way that is invisible in the price-per-token intuition, so context discipline is a serving optimization."
+      ],
+      "answer": "Attention at step t needs the keys and values for every token before t. If you recomputed them at each step, generating an n-token response would cost quadratic work, so instead the server keeps them: the KV cache is the stored key and value tensors for the sequence so far, and each decode step only computes the new token and reads the rest. It is a straight memory-for-compute trade, and it is what makes autoregressive serving practical. The consequence is that memory, not compute, is usually what limits a serving deployment. Cache size scales with batch size times sequence length times layers times heads times precision, so doubling concurrency or doubling context doubles it, and a GPU that has plenty of FLOPs left will refuse more concurrent sequences because there is nowhere to put their cache. Every well-known serving optimization is aimed at that fact. Grouped-query and multi-query attention shrink the cache by sharing key and value projections across heads, accepting a small quality cost for a large memory win. Paged attention allocates the cache in fixed-size blocks like virtual memory, eliminating the fragmentation of reserving worst-case contiguous space per request and allowing two requests with the same prefix to share blocks copy-on-write. Prefix caching takes the same idea across time: a long shared system prompt or document can have its cached state reused so prefill is not repeated per request. For application design the lesson is that context length is not merely a per-token line item — it consumes the scarce resource that determines how many users you can serve concurrently. Trimming context, caching shared prefixes, and retrieving less but better are serving optimizations as much as quality ones."
+    }
+  ]
+}

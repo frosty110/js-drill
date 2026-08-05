@@ -1,0 +1,156 @@
+{
+  "id": "ch04",
+  "chapter": 4,
+  "part": "Part II: Evaluation",
+  "title": "Evaluate AI Systems",
+  "summary": "Turning evaluation methods into an evaluation system: choosing criteria that reflect your application (domain capability, generation quality, instruction following, cost and latency), running a model-selection workflow that separates hard from soft requirements and build from buy, reading public benchmarks without being fooled by them, and designing a pipeline that evaluates every component and every turn against a written guideline.",
+  "keyTakeaways": [
+    "Evaluation criteria must be derived from the application, not borrowed from a leaderboard: domain-specific capability, generation capability (factual consistency, safety, coherence), instruction-following, and cost/latency are the four families.",
+    "Factual consistency splits into two very different problems — consistency with a provided context (checkable) and consistency with open world facts (much harder) — and most production systems should be scoped to the first.",
+    "Model selection is a repeating funnel: filter by hard constraints (privacy, licensing, latency, cost ceilings), then evaluate candidates on your own data; it is not a one-time decision because the model landscape moves.",
+    "Build versus buy is a spectrum from commercial API to self-hosted open-weight model, traded off across data privacy, control and transparency, performance ceiling, cost structure, and the engineering burden of serving.",
+    "Public benchmarks are contaminated, saturated, and aggregated with arbitrary weights — use them to shortlist, never to decide, and check whether a benchmark correlates with your task at all.",
+    "An evaluation pipeline evaluates every component and the end-to-end system, is anchored by a written guideline with concrete scoring examples, mixes methods and data slices, and is itself evaluated for reliability and cost."
+  ],
+  "questions": [
+    {
+      "q": "Why does the book insist you derive evaluation criteria from your application rather than adopting standard benchmark metrics?",
+      "options": [
+        "Standard metrics are proprietary and cannot be reused",
+        "Benchmarks measure what their authors cared about; your application fails in its own specific ways, so a model can top a leaderboard and still be wrong for you",
+        "Benchmarks only work for classification tasks",
+        "Application-derived criteria are always cheaper to compute"
+      ],
+      "answer": 1,
+      "explain": "A leaderboard score is an average over someone else's prompt distribution. Your users have a distribution, a tolerance for failure modes, and a cost budget of their own — criteria have to come from that, or you optimize a number nobody experiences."
+    },
+    {
+      "q": "Huyen distinguishes two kinds of factual consistency. What are they, and which is more tractable to evaluate?",
+      "options": [
+        "Consistency with the provided context versus consistency with open-world facts — the former is tractable because you can check the claim against the given source",
+        "Consistency across languages versus across modalities — the former is tractable because translation is well studied",
+        "Consistency within a single response versus across a session — the former is tractable because responses are short",
+        "Consistency with the system prompt versus with the user prompt — the former is tractable because system prompts are fixed"
+      ],
+      "answer": 0,
+      "explain": "If the answer must be supported by retrieved documents, verification is entailment against a known text — automatable and reliable. Verifying against the whole world requires a source of truth you do not have. Scoping a product to context-grounded answers is what makes its factuality checkable."
+    },
+    {
+      "q": "What is the point of testing `instruction-following capability` separately from general answer quality?",
+      "options": [
+        "It measures how fast the model responds to instructions",
+        "It only matters for models without a system prompt",
+        "A model can produce a good answer that ignores your constraints — wrong format, wrong length, wrong role, ignoring the schema — which breaks the surrounding software even when the prose is fine",
+        "It is a legal requirement in most jurisdictions"
+      ],
+      "answer": 2,
+      "explain": "Applications embed model output in software, so obedience to format and constraints is a functional requirement independent of eloquence. Roleplay adherence, JSON conformance, length limits, and refusal behavior all belong to this family."
+    },
+    {
+      "q": "Why must cost and latency be first-class evaluation criteria rather than post-launch concerns?",
+      "options": [
+        "They are the only criteria a leaderboard reports",
+        "Providers charge extra for evaluated requests",
+        "They can be optimized only during pretraining",
+        "They constrain which models are even eligible — a model that clears the quality bar but blows the per-request cost budget or the p95 latency target is not a candidate"
+      ],
+      "answer": 3,
+      "explain": "Quality, cost, and latency form the actual decision surface, and they trade off directly (bigger model, more reasoning tokens, more retrieval passes). Evaluating quality alone produces a shortlist you cannot ship."
+    },
+    {
+      "q": "In the model-selection workflow, what is the role of `hard attributes` versus `soft attributes`?",
+      "options": [
+        "Hard attributes are quantitative and soft attributes are qualitative",
+        "Hard attributes are constraints you cannot negotiate (data privacy, licensing, on-prem, latency ceiling) and filter the candidate set; soft attributes (quality on your tasks) are improvable and rank what survives",
+        "Hard attributes apply to open models and soft attributes to commercial APIs",
+        "Hard attributes are set by the vendor and soft attributes by the user"
+      ],
+      "answer": 1,
+      "explain": "Filtering before evaluating saves work: if data cannot leave your network, no amount of quality makes a hosted API eligible. What remains is then ranked on evaluated quality, cost, and latency — and revisited as the landscape changes."
+    },
+    {
+      "q": "Which tradeoff best characterizes commercial API versus self-hosted open-weight models?",
+      "options": [
+        "APIs are always cheaper at every scale; open models are always higher quality",
+        "APIs give you convenience, scale, and often the strongest models, but less control, transparency, and data locality; self-hosting gives control, privacy, and cost predictability at the price of significant serving engineering",
+        "Open models cannot be finetuned; API models can",
+        "APIs guarantee reproducibility; open models do not"
+      ],
+      "answer": 1,
+      "explain": "The decision is about control and responsibility, not just price. Self-hosting means you own inference optimization, capacity, and uptime; an API means you accept a dependency that can change, deprecate, or see your data — with the frontier usually arriving there first."
+    },
+    {
+      "q": "What is benchmark `contamination` and how does it distort model selection?",
+      "options": [
+        "Benchmarks containing unsafe content that models refuse to answer",
+        "Benchmark data leaking into training corpora, so a model scores well by having memorized the test — inflating scores relative to genuinely unseen tasks",
+        "Multiple benchmarks measuring the same skill",
+        "Benchmarks being written by the model vendors themselves"
+      ],
+      "answer": 1,
+      "explain": "Public benchmarks live on the internet, and the internet is the training corpus. Contaminated scores overstate generalization, which is precisely why a private evaluation set built from your own traffic is the trustworthy comparison."
+    },
+    {
+      "q": "What is the main caution about aggregate leaderboards that combine many benchmarks into one number?",
+      "options": [
+        "They cannot include open models",
+        "They are updated too frequently to be stable",
+        "The aggregation weights are a judgment call — the composite reflects the aggregator's priorities, which may have nothing to do with your workload",
+        "They only average benchmarks with the same number of questions"
+      ],
+      "answer": 2,
+      "explain": "Picking which benchmarks to include, and how to weight them, encodes an opinion about what matters. A single ranked list conceals that opinion. Reading the component benchmarks that resemble your task is more informative than the composite."
+    },
+    {
+      "q": "The book's evaluation-pipeline design starts with 'evaluate all components in a system'. Why is per-component evaluation necessary in addition to end-to-end?",
+      "options": [
+        "Because end-to-end evaluation is not possible for multi-turn systems",
+        "Because each component must use a different model",
+        "Because component metrics are cheaper to compute than end-to-end metrics",
+        "Because an end-to-end failure does not tell you which stage caused it — a bad answer may be a retrieval miss, a bad prompt, or a model limitation, and each has a different fix"
+      ],
+      "answer": 3,
+      "explain": "Systems compose retrieval, routing, generation, and post-processing. Only per-component measurement (retrieval recall, tool-call accuracy, generation quality given perfect context) localizes the fault; end-to-end tells you whether the user is served."
+    },
+    {
+      "q": "Why does the book emphasize writing an explicit evaluation guideline before scoring anything?",
+      "options": [
+        "Because it is required for regulatory compliance in most industries",
+        "Because without a written definition of what a good response is — with concrete scored examples — human and AI graders drift, disagree, and produce scores that cannot be compared over time",
+        "Because guidelines let you skip human annotation entirely",
+        "Because model providers require a guideline for their judge APIs"
+      ],
+      "answer": 1,
+      "explain": "The guideline is the metric's specification. It should tie criteria to business outcomes, define the scoring scale with examples at each level, and make it possible for two graders — human or model — to reach the same conclusion. Without it, 'quality went up' is unfalsifiable."
+    },
+    {
+      "type": "open",
+      "prompt": "Design an evaluation pipeline for a RAG-based internal documentation assistant. Describe the components you evaluate, the methods you use for each, and how you decide it is ready to ship.",
+      "points": [
+        "Break the system into components — query understanding/rewriting, retrieval, generation, and any post-processing or guardrails — and evaluate each separately as well as end to end.",
+        "Retrieval: measure recall/precision at k against a labeled set of query→relevant-document pairs; a generation failure caused by retrieval must be attributable.",
+        "Generation given context: evaluate factual consistency (is every claim supported by the retrieved passages), answer relevance, and refusal behavior when context is insufficient.",
+        "Instruction/format compliance: citations present and valid, length limits, safe handling of out-of-scope questions.",
+        "Build an evaluation set from real queries, sliced by topic, query type, and difficulty, plus adversarial cases (no answer exists, conflicting docs, stale docs).",
+        "Combine methods: exact checks for citations and format, an AI judge with a versioned rubric for groundedness and helpfulness, and a human-labeled calibration sample.",
+        "Define ship criteria in advance as thresholds per slice plus cost and latency budgets, not a single average; track them over time and re-run when the model, prompt, or corpus changes."
+      ],
+      "answer": "I would treat it as a system of components, because 'the answer was wrong' is not actionable. Query rewriting, retrieval, generation, and the guardrail/citation layer each get their own measurement, plus an end-to-end score that represents what the user experiences. For retrieval, I build a labeled set of query-to-document pairs from real questions and measure recall and precision at the k I actually pass to the model — most bad answers in RAG are retrieval failures wearing a generation costume. For generation, I evaluate given a fixed context, so I am measuring the model rather than the retriever: is every claim supported by the passages, is the answer relevant to the question, and does it correctly refuse or say 'not documented' when the context does not contain the answer. Citations and formatting are exact checks — the cited document must exist and must actually contain the claim's support. The evaluation set is built from production queries and deliberately sliced: by topic area, by query type, and by difficulty, with adversarial slices for questions the docs cannot answer, conflicting versions of a document, and stale content. Method-wise I mix: exact checks where possible, an AI judge with a pinned model and versioned rubric for groundedness and helpfulness, and a few hundred human-labeled examples to calibrate how much I trust that judge. Ship criteria are written before the run: a groundedness threshold on every slice rather than on the average, a hard ceiling on ungrounded claims, a p95 latency budget, and a cost per query. Then I keep it running — the corpus changes weekly and the model changes underneath me, so this pipeline is not a launch gate, it is a permanent instrument.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Your team wants to switch from a commercial API to a self-hosted open-weight model to cut costs. How do you evaluate that decision?",
+      "points": [
+        "Start from hard constraints: data privacy/residency, licensing terms of the open weights, compliance, and any latency or availability commitments — these can decide the question before quality is measured.",
+        "Measure quality on your own evaluation set, not on public benchmarks, per slice, and including instruction-following and format compliance which often degrade more than prose quality.",
+        "Model total cost honestly: GPU capacity for peak load (not average), engineering time for serving and inference optimization, on-call burden, and the cost of idle capacity versus per-token pricing.",
+        "Compare latency under realistic concurrency, including time-to-first-token, not single-request benchmarks.",
+        "Consider control benefits: no silent model updates, reproducibility, freedom to finetune, no rate limits — versus losing access to frontier capability and provider-side safety tooling.",
+        "Consider a hybrid or router: self-host the high-volume simple traffic, route hard or rare requests to the API, which often captures most of the savings at much less risk.",
+        "Plan the migration as an experiment with a rollback path: shadow traffic, compare on live data, and keep the evaluation pipeline as the arbiter."
+      ],
+      "answer": "First I check the constraints that can end the discussion regardless of quality: whether the open weights' license permits our commercial use, whether data residency or privacy actually requires self-hosting (which would flip the decision the other way), and what uptime we are contractually on the hook for. Then I measure quality on our own evaluation set, sliced, because an average is exactly where a regression hides. In my experience the prose quality gap is smaller than the instruction-following gap — format compliance, tool-call correctness, and refusal behavior are where a smaller open model tends to slip, and those break the software around it. Cost is where the proposal usually gets tested. Per-token pricing is a variable cost; GPUs are a fixed one, provisioned for peak, and idle at 3 a.m. I would model total cost at realistic peak concurrency, add the engineering time to build and maintain serving with batching and caching, and add the on-call load — then compare against the API bill honestly rather than against a token-price ratio. Latency must be measured under concurrency, with time-to-first-token separated from total time, since batching improves throughput while hurting individual latency. On the other side of the ledger, self-hosting buys real things: no silent model updates, reproducibility, the freedom to finetune, and no rate limits. My usual recommendation is not binary — route the high-volume, simple, well-understood traffic to the self-hosted model and keep the API for the hard tail. That captures most of the savings with a fraction of the risk. Whatever we choose, it ships as a shadow-traffic experiment with the evaluation pipeline as the arbiter and a one-switch rollback."
+    }
+  ]
+}

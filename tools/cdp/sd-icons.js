@@ -4,8 +4,8 @@
 // ============================================================================
 // tools/check-icons.js proves the SOURCE only names icons that exist. This
 // proves the rendered page: that every glyph on System Design came out of
-// ds/icons.js, that the four topic marks are one family in identical tiles
-// rather than four stickers at four sizes, and that the mark this page wears is
+// ds/icons.js, that every topic mark is one family in identical tiles
+// rather than a sticker per topic at its own size, and that the mark this page wears is
 // the same one the app's nav rail draws for Design — a cross-page invariant no
 // single-file check can see.
 //
@@ -18,6 +18,10 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
 
 const BASE = process.argv[2] || 'http://localhost:8765/';
 const SD = new URL('system-design.html', BASE).href;
+// Derived, never hardcoded: this probe went red the day a fifth topic was added,
+// which is the failure mode docs/invariants.md calls out — a probe that breaks on
+// a content ADDITION teaches people to ignore it.
+const N_TOPICS = require('../../data/system-design/topics.json').topics.length;
 const OUT = '/tmp/sd-icons-shots';
 
 // Rendered-text emoji. Same definition as tools/check-icons.js: colour-glyph
@@ -56,9 +60,9 @@ const EMOJI_SCAN = `((root) => (root.innerText.match(/\\p{Emoji_Presentation}|\\
     await s.eval(`location.hash = '#/'`);
     await s.sleep(900);
 
-    // ── Topic landing: four marks, one family ──────────────────────────────
+    // ── Topic landing: every mark, one family ──────────────────────────────
     const cards = await s.eval(`document.querySelectorAll('.topic-card').length`);
-    s.assert(cards === 4, `[${label}] 4 topic cards, got ${cards}`);
+    s.assert(cards === N_TOPICS, `[${label}] ${N_TOPICS} topic cards, got ${cards}`);
 
     const marks = JSON.parse(await s.eval(`JSON.stringify(
       [...document.querySelectorAll('.topic-icon')].map(el => {
@@ -68,13 +72,13 @@ const EMOJI_SCAN = `((root) => (root.innerText.match(/\\p{Emoji_Presentation}|\\
                  w: Math.round(r.width), h: Math.round(r.height),
                  tile: getComputedStyle(el).borderRadius };
       }))`));
-    s.assert(marks.length === 4 && marks.every(m => m.svg),
-      `[${label}] every topic mark is an svg, got ${marks.filter(m => m.svg).length}/4`);
+    s.assert(marks.length === N_TOPICS && marks.every(m => m.svg),
+      `[${label}] every topic mark is an svg, got ${marks.filter(m => m.svg).length}/${N_TOPICS}`);
     s.assert(marks.every(m => m.ds),
       `[${label}] every topic mark came from dsIcon (.ds-icon)`);
     const sizes = new Set(marks.map(m => `${m.w}x${m.h}`));
     s.assert(sizes.size === 1,
-      `[${label}] all four marks share one tile size, got ${[...sizes].join(', ')}`);
+      `[${label}] all ${N_TOPICS} marks share one tile size, got ${[...sizes].join(', ')}`);
     s.assert(marks.every(m => parseFloat(m.tile) > 0),
       `[${label}] the marks sit in rounded tiles, not free-floating`);
     await s.snap(`${label}-01-topics`);

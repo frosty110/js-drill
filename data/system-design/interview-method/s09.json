@@ -1,0 +1,190 @@
+{
+  "id": "s09",
+  "chapter": 9,
+  "part": "Designing with Agents",
+  "title": "Agentic Decision Patterns",
+  "summary": "The named patterns an LLM system can be built from, arranged as a ladder from one call to a fleet of agents — and the rule for choosing a rung. `s08` asks what an agent costs you to operate; this asks which shape you should have reached for in the first place, which is the question an interviewer is actually testing when they say 'how would you architect this'.",
+  "keyTakeaways": [
+    "The patterns form an escalation ladder: single call with tools → prompt chaining → routing → parallelization → reflection → planning/ReAct → multi-agent. Each rung costs more tokens, latency and failure surface than the one below it.",
+    "The rule is to take the LOWEST rung that solves the problem. Naming a pattern is not the skill; declining to climb is.",
+    "Workflow versus agent is one question: can you predict the steps? If the path is knowable in advance, encode it. An agent earns its overhead only when the number of steps cannot be known until the work is underway.",
+    "Parallelization splits two ways for two different reasons — sectioning for independent subtasks (speed), voting for the same task run N times (confidence).",
+    "Reflection only pays when the criteria are EXTERNALLY verifiable. Self-critique against a subjective goal burns a second model call and returns the model's own taste.",
+    "Multi-agent has two distinct shapes: a manager that delegates and synthesizes, or decentralized handoff where agents transfer control peer-to-peer. They fail differently — the manager is a bottleneck, handoff loses the thread.",
+    "Delegation is a specification. A subagent needs an objective, an output format, guidance on which tools and sources to use, and explicit task boundaries, or subagents duplicate each other's work.",
+    "Multi-agent is a budget decision before it is an architecture decision: agents run roughly 4× the tokens of a chat turn, and multi-agent systems roughly 15×.",
+    "Decouple plan generation from plan execution. Generate the plan, validate it by heuristic or judge, and only then execute — so a bad plan is caught before anything with a side effect runs."
+  ],
+  "questions": [
+    {
+      "q": "You have seven named agentic patterns available and a task in front of you. What is the selection rule?",
+      "options": [
+        "Pick the most capable pattern the task could plausibly need, since headroom costs nothing if unused",
+        "Take the lowest rung on the ladder that actually solves the problem, and climb only when it demonstrably fails",
+        "Match the pattern to the one your framework has the best abstraction for",
+        "Start multi-agent and collapse it down once you learn which agents were unnecessary"
+      ],
+      "answer": 1,
+      "explain": "Each rung adds tokens, latency and failure surface, so unused headroom is not free — it is paid for on every request. Starting high and collapsing down (the tempting distractor) sounds empirical but you pay full cost the whole time you are learning, and a working multi-agent system is rarely torn back down.",
+      "crux": true
+    },
+    {
+      "q": "In DDIA-style terms, what is the single question that separates a `workflow` from an `agent`?",
+      "options": [
+        "Whether the system calls external tools or only generates text",
+        "Whether a human reviews the output before it takes effect",
+        "Whether you can predict the required number of steps in advance",
+        "Whether the model is allowed to write to a database rather than only read"
+      ],
+      "answer": 2,
+      "explain": "A workflow is a path you encoded because you knew it; an agent decides its own path because you could not. Tool use (the tempting distractor) does not settle it — a fixed chain can call tools, and that is still a workflow.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "An interviewer describes a support system that must classify a ticket, look up the customer, and draft a reply. Walk the ladder out loud and land on a rung. What would have to change for you to climb higher?",
+      "points": [
+        "Name the steps and observe they are knowable in advance — classify, look up, draft — which makes this a workflow, not an agent.",
+        "Prompt chaining is the natural fit: three steps, each consuming the previous output, with a deterministic order.",
+        "Add routing if ticket categories need genuinely different downstream handling (a refund path versus a bug report path) — that is classification into specialized handlers, still not an agent.",
+        "Reject the agent rung explicitly: nothing here has an unknown step count, so the loop buys nothing and costs tokens, latency, and a harder debugging story.",
+        "The trigger to climb would be a step count that cannot be known until the work starts — e.g. 'investigate until you can explain the charge', which may need one lookup or nine.",
+        "Note the cheap escape hatch: if the drafted reply must meet a checkable standard (policy compliance, required disclosures), add an evaluator-optimizer loop rather than promoting the whole thing to an agent."
+      ],
+      "answer": "The steps are knowable, so this is a workflow — I'd start with prompt chaining: classify, look up, draft, each feeding the next. If different ticket categories need genuinely different handling I'd add routing in front, which is still a workflow. I would not reach for an agent here, because nothing in the task has an unpredictable step count, and the loop would buy me nothing while costing tokens and traceability. What would change my mind is a requirement like 'investigate until the charge is explained' — that has no knowable step count, and that is exactly where an agent earns its overhead."
+    },
+    {
+      "q": "Parallelization splits into two variants. What distinguishes `sectioning` from `voting`?",
+      "options": [
+        "Sectioning runs independent subtasks concurrently; voting runs the same task several times and aggregates for confidence",
+        "Sectioning splits the prompt by token count; voting splits it by topic",
+        "Sectioning is for read-only tasks; voting is for tasks with side effects",
+        "Sectioning uses one model; voting requires models from different providers"
+      ],
+      "answer": 0,
+      "explain": "They parallelize for different goods — sectioning buys wall-clock time on decomposable work, voting buys confidence on a single judgement by sampling it repeatedly. Requiring different providers (the plausible-sounding distractor) is an occasional implementation choice, not what defines voting.",
+      "crux": true
+    },
+    {
+      "q": "Your team wants to add a reflection loop so a second model call critiques the first. When does this pattern actually pay for itself?",
+      "options": [
+        "Whenever output quality matters, since a second opinion is always better than one",
+        "When the criteria are externally verifiable — the critic can check against something outside its own judgement",
+        "When the first model is smaller than the critic model",
+        "When latency budget allows it, since the only real cost is the extra round-trip"
+      ],
+      "answer": 1,
+      "explain": "Reflection works when there is ground truth to check against — tests that run, a schema that validates, a policy that can be cited. Against a subjective goal the critic returns the model's own taste at double the cost, which is why 'quality matters' is the trap: it is true of every task and therefore selects nothing."
+    },
+    {
+      "type": "open",
+      "prompt": "You are asked to justify a multi-agent design to a skeptical staff engineer who thinks one agent with more tools would do. Make the case honestly, including what it costs.",
+      "points": [
+        "State the cost first to establish credibility: agents run roughly 4× the tokens of a chat turn, and multi-agent systems roughly 15×.",
+        "Name the two things the split actually buys — genuine parallelism on independent subtasks, and context isolation so each subagent works in a clean window.",
+        "Give the qualifying condition: the roles must be genuinely separable and the work must exceed what one context window can hold. If both aren't true, the single agent wins.",
+        "Concede the losses explicitly — information is dropped at every handoff, and no single trace explains the outcome, which makes debugging materially harder.",
+        "Point out that token spend correlates strongly with task success, so the 15× is buying something real, not pure waste — but only on tasks whose value justifies it.",
+        "Land on the decision framing: this is a budget decision before it is an architecture decision, so it should be defended with the task's value, not with elegance."
+      ],
+      "answer": "I'd lead with the cost, because it's large: agents run about 4× the tokens of a chat turn and multi-agent systems about 15×. What that buys is real parallelism on independent subtasks and context isolation, so each subagent reasons in a clean window instead of one agent drowning in accumulated tool output. The qualifying test is whether the roles are genuinely separable and the work exceeds a single context — if either fails, his single agent is the better design and I'd say so. The honest cost beyond tokens is that we lose information at every handoff and no single trace explains the outcome. So I'd defend this on the value of the task, not on elegance."
+    },
+    {
+      "q": "A lead agent spawns subagents that keep duplicating each other's work and returning overlapping findings. What is the most likely defect?",
+      "options": [
+        "The subagents share a context window and are reading each other's intermediate output",
+        "Too few subagents were spawned, so each is over-scoped",
+        "The delegation is underspecified — subagents lack objectives, output formats, tool guidance and explicit task boundaries",
+        "The lead agent's model is too small to synthesize the results"
+      ],
+      "answer": 2,
+      "explain": "Delegation is a specification, and a vague one produces subagents that each interpret the task the same broad way. Shared context (the tempting distractor) would cause the opposite symptom — coordination, not duplication — and is not how subagent isolation works.",
+      "crux": true
+    },
+    {
+      "q": "Multi-agent systems come in two coordination shapes. Which pair is correct, and how do they fail differently?",
+      "options": [
+        "Manager (central orchestrator delegates and synthesizes) versus decentralized handoff (agents transfer control peer-to-peer); the manager becomes a bottleneck, handoff loses the thread",
+        "Synchronous versus asynchronous; the first blocks, the second drops messages",
+        "Stateless versus stateful; the first forgets, the second leaks memory across tasks",
+        "Supervised versus unsupervised; the first needs a human, the second does not"
+      ],
+      "answer": 0,
+      "explain": "Manager centralizes the goal and the synthesis, so it is the throughput ceiling and the single point of misunderstanding; handoff distributes control, so no agent holds the whole objective and intent degrades across transfers. The other pairs are real distinctions in distributed systems but they are not the multi-agent coordination axis."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the step that sits between an agent producing a plan and the agent acting on it. Why is that seam worth building?",
+      "points": [
+        "Decouple generation from execution: the agent proposes a plan as a first-class artifact rather than immediately acting.",
+        "Validate the proposed plan before execution — by heuristic (do the named tools exist, are required parameters present, are constraints satisfied) or by an AI judge.",
+        "Only execute plans that pass validation; reject or regenerate the rest.",
+        "The seam is worth building because it catches planning failures — invalid tools, wrong parameters, unmet constraints — BEFORE anything with a side effect runs.",
+        "It is far cheaper to discard a bad plan than to compensate a bad action, and some actions (payments, emails, deletes) have no compensating transaction at all.",
+        "It also creates the natural human-in-the-loop insertion point: a human approves the plan, not each individual tool call, which is a far lower review burden.",
+        "Note the failure taxonomy it addresses — planning failures are distinct from tool failures and from efficiency failures, and only this seam catches the first class."
+      ],
+      "answer": "I'd make the plan an artifact rather than a side effect: the agent proposes, a validator checks it, and only an approved plan executes. Validation can be cheap heuristics — do these tools exist, are the parameters well-formed, are the constraints satisfied — or a judge model for the harder cases. The reason the seam is worth building is that planning failures are a distinct class from tool failures, and this is the only place you catch them before something irreversible happens. Discarding a bad plan is cheap; compensating a bad action may be impossible if it was a payment or an email. It also gives you the right human-in-the-loop granularity — a human approves one plan instead of reviewing twenty tool calls."
+    },
+    {
+      "q": "You are building a ReAct-style planning loop. Which safeguard is non-optional?",
+      "options": [
+        "A second model reviewing every observation before the next action",
+        "An explicit iteration cap on the reason-act-observe cycle",
+        "Forcing the model to emit its full remaining plan on every turn",
+        "Running each action twice and comparing the observations"
+      ],
+      "answer": 1,
+      "explain": "An unbounded loop is the characteristic failure of the pattern — the agent recovers from an error by trying again, forever, burning budget with no termination condition. Re-running every action (the last distractor) doubles cost and is actively unsafe for anything with a side effect."
+    },
+    {
+      "type": "open",
+      "prompt": "An agent runs for fifty turns and its context window is filling with raw tool output. Name the techniques you'd apply and what each one trades away.",
+      "points": [
+        "Frame context as a finite attention budget, not storage: recall degrades as the window fills, so everything in it competes.",
+        "Compaction — summarize the history when it approaches the limit and continue from the summary; trades fidelity for room, and the hard part is choosing what to keep (decisions, constraints, open bugs) versus discard (redundant tool output).",
+        "Structured note-taking — persist state to an external file the agent re-reads; trades an extra tool round-trip for memory that survives outside the window.",
+        "Sub-agent isolation — delegate detailed exploration to a subagent with a clean window that returns only a condensed summary; trades information at the handoff for a coordinator that stays legible.",
+        "Just-in-time retrieval — hold lightweight identifiers and load full content only when needed; trades latency at point of use for a window that isn't pre-loaded with things never read.",
+        "Tool design as a context lever — tools that return token-efficient results and don't overlap prevent waste at the source, which is cheaper than any cleanup technique."
+      ],
+      "answer": "I'd treat the window as an attention budget rather than storage, because recall degrades as it fills. Four techniques, each with a real trade: compaction summarizes history to buy room but loses fidelity, and the skill is keeping decisions and constraints while dropping redundant tool output. Structured note-taking pushes state into an external file the agent re-reads, costing a round-trip. Sub-agent isolation sends detailed exploration to a clean window and returns a summary, which costs information at the handoff. Just-in-time retrieval holds identifiers and loads content only when needed. The cheapest fix is upstream though — tools that return token-efficient results stop the problem at the source."
+    },
+    {
+      "q": "Which task is the clearest fit for the `routing` pattern specifically, rather than a chain or an agent?",
+      "options": [
+        "Summarizing a long document by splitting it into sections and merging the summaries",
+        "Investigating an incident until the root cause is identified",
+        "Translating a document, then proofreading the translation, then formatting it",
+        "Directing a customer query to refunds, technical support, or account management, each with different tools and prompts"
+      ],
+      "answer": 3,
+      "explain": "Routing classifies an input and dispatches it to one of N specialized handlers, which is exactly the triage shape. The first option is sectioning, the third is prompt chaining, and the second has no knowable step count so it is the agent case.",
+      "crux": true
+    },
+    {
+      "q": "A team reports their multi-agent system performs no better than a single agent, despite 15× the token spend. Which explanation best fits the known evidence?",
+      "options": [
+        "The task was not decomposable into genuinely independent subtasks, so parallelism bought nothing while handoffs lost information",
+        "The subagents used the same model as the single-agent baseline, so no additional capability was introduced",
+        "Multi-agent systems require more turns to converge and needed longer to run",
+        "The lead agent's synthesis step discarded most of the subagent output by design"
+      ],
+      "answer": 0,
+      "explain": "The split pays only when the work genuinely separates; forced onto a sequential task it adds handoff loss and coordination overhead with no parallelism to show for it. Same-model subagents (the tempting distractor) is not the defect — context isolation is the point, not a smarter model."
+    },
+    {
+      "type": "open",
+      "prompt": "Give the shortest honest answer you can to 'when should we NOT use any of these patterns?' — and defend it against the objection that you're being unambitious.",
+      "points": [
+        "The test: if you can enumerate the steps, write the code. Determinism is a feature, not a limitation.",
+        "A documented, finite, rarely-changing rule set is already a correct program — replacing it with a model trades an auditable artifact for a probabilistic one and gets nothing back.",
+        "Name what you lose: reproducibility, a readable trace, cheap testing, and a cost that doesn't scale with token prices.",
+        "Answer the ambition objection directly — the ambitious move is matching the tool to the problem, and shipping a rules engine that is right every time beats an agent that is right most of the time.",
+        "Give the condition that would flip the call: inputs that are open-ended or unstructured enough that enumeration genuinely fails, or a rule set changing fast enough that maintenance dominates.",
+        "Note the hybrid that usually wins: deterministic code for the enumerable path, a model only at the specific step that needs judgement."
+      ],
+      "answer": "The test is simple: if you can enumerate the steps, write the code. A documented, finite, rarely-changing rule set is already a correct program, and replacing it with a model trades an auditable artifact for a probabilistic one while losing reproducibility, a readable trace, and cheap testing. On the ambition objection — I'd argue matching the tool to the problem is the ambitious move, and a rules engine that's right every time beats an agent that's right most of the time on a path we already understand. What would flip my call is inputs open-ended enough that enumeration genuinely fails, or a rule set churning fast enough that maintenance dominates. Usually the right answer is the hybrid: deterministic code for the enumerable path, a model only at the step that actually needs judgement."
+    }
+  ]
+}

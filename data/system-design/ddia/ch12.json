@@ -194,6 +194,76 @@
         "Last-write-wins is wrong: it silently picks one and discards the other rather than rejecting the conflict, so a user thinks they registered a name they don't own."
       ],
       "answer": "I'd partition a totally-ordered log by the username itself, so every competing claim for a given name is routed into the same partition where it has a definite order. A deterministic consumer then reads claims in that order, grants the first one for each name, and rejects the rest — that's effectively a linearizable compare-and-set on the username, which is exactly the primitive a uniqueness constraint requires. Eventual consistency would let two concurrent claims on different replicas both succeed and only 'converge' afterward, breaking uniqueness in the window between. Last-write-wins is just as wrong: it silently keeps one write and discards the other instead of rejecting the conflict, so a user believes they registered a name they actually don't own."
+    },
+    {
+      "q": "An immutable, append-only event log is in direct tension with which data-protection requirement?",
+      "options": [
+        "Purpose limitation — data collected for one purpose should not be reused for another",
+        "The right to erasure — a user can demand their personal data be deleted, but an append-only log is designed never to lose a committed fact",
+        "Data portability — a user can demand an export of their data",
+        "Breach notification — a controller must disclose a breach within a fixed window"
+      ],
+      "answer": 1,
+      "explain": "The architecture's core virtue — nothing committed is ever lost — is exactly what erasure forbids, which is why systems resort to crypto-shredding or storing personal data outside the log behind a reference. Portability and breach notification are satisfiable by an immutable log without any structural conflict."
+    },
+    {
+      "q": "Which technique lets a system keep an append-only log while still honoring a deletion request?",
+      "options": [
+        "Rewriting the log to remove the affected events and recomputing all downstream derived state",
+        "Marking the events as deleted with a tombstone so consumers skip them",
+        "Keeping personal data outside the log and storing only a reference, or encrypting per-user and discarding the key so the ciphertext becomes unreadable",
+        "Reducing the log's retention period so the events expire naturally"
+      ],
+      "answer": 2,
+      "explain": "Both approaches make the data unrecoverable without violating the log's append-only guarantee — indirection removes it from the log entirely, crypto-shredding leaves bytes that decode to nothing. A tombstone (the tempting distractor) hides data from well-behaved consumers but does not delete it, which does not satisfy erasure."
+    },
+    {
+      "q": "A model denies loan applications at a higher rate for one neighborhood, though the applicant's neighborhood was never an input. What is the mechanism?",
+      "options": [
+        "A proxy variable — an included feature correlates with the excluded attribute, so removing the attribute does not remove its influence",
+        "Overfitting to the training set, which will resolve with more data",
+        "Label leakage from the target variable into the features",
+        "Concept drift, since the relationship between features and outcome changed after training"
+      ],
+      "answer": 0,
+      "explain": "Correlated features carry the excluded attribute back in, which is why blindness-by-omission fails as a fairness strategy and outcomes must be measured directly across groups. Overfitting and drift are real problems but neither explains a systematic disparity along an attribute that was deliberately withheld."
+    },
+    {
+      "q": "In DDIA's framing, what makes `accountability` for an algorithmic decision difficult in practice?",
+      "options": [
+        "Models are proprietary, so their internals cannot be disclosed",
+        "The decision emerges from data, code, and thresholds owned by different people, so no one party can explain or is answerable for a specific outcome",
+        "Regulations do not yet require any explanation of automated decisions",
+        "Predictions are probabilistic, so no individual decision can be called wrong"
+      ],
+      "answer": 1,
+      "explain": "Responsibility diffuses across the pipeline — whoever collected the data, trained the model, and set the threshold each own a piece and none owns the outcome. Proprietary internals are an obstacle but a contingent one, and the probabilistic-therefore-unfalsifiable claim is the argument accountability frameworks exist to reject."
+    },
+    {
+      "q": "What does a durable execution engine (workflow engine) add over retrying a multi-step process from the beginning?",
+      "options": [
+        "It guarantees each step is idempotent, so retries are always safe",
+        "It runs the steps in parallel, reducing total latency",
+        "It rolls back completed steps automatically when a later step fails",
+        "It persists progress after each step, so a failure resumes from the last completed step rather than replaying side effects already performed"
+      ],
+      "answer": 3,
+      "explain": "Checkpointing each step is the whole point: a process that already charged a card resumes after that step rather than charging again. It does not make your steps idempotent for you (you still must), and automatic rollback is the saga pattern, which compensates rather than undoes."
+    },
+    {
+      "type": "open",
+      "prompt": "You've built an event-sourced system, and legal informs you that users can now request full deletion of their personal data. Walk through your options and make a recommendation.",
+      "points": [
+        "State the conflict precisely: the log's guarantee is that no committed fact is ever lost, and erasure requires exactly that loss — this is structural, not a bug.",
+        "Reject log rewriting as the default: it invalidates every offset and hash downstream, forces a rebuild of all derived state, and destroys the auditability the log existed to provide.",
+        "Reject tombstones as insufficient — they hide data from cooperative consumers but the data is still there, so the obligation is not met.",
+        "Option one — indirection: keep personal data in a mutable store and put only a stable reference in the log. Deletion becomes a normal delete; the log keeps its shape and its history.",
+        "Option two — crypto-shredding: encrypt personal data per user, store the ciphertext in the log, and discard the key on request so the remaining bytes decode to nothing.",
+        "Recommend indirection as the default for new design because it is simpler to reason about and to prove, and crypto-shredding where the data must remain inline for replay to work.",
+        "Note the downstream obligation either way: derived views, caches, search indexes and backups also hold the data, so deletion is a pipeline-wide operation and needs to be designed as one.",
+        "Close on the design lesson — retention and deletion are architectural requirements to be settled before the log shape is chosen, not policies bolted on afterwards."
+      ],
+      "answer": "The conflict is structural, not accidental: the log's guarantee is that nothing committed is lost, and erasure demands exactly that. I'd rule out rewriting the log — it invalidates every downstream offset and forces a full rebuild, and it destroys the auditability we built the log for. Tombstones don't satisfy the obligation either, since the data is still there. That leaves two real options: keep personal data in a mutable store and put only a reference in the log, so deletion is an ordinary delete; or encrypt per user and discard the key so the ciphertext decodes to nothing. I'd default to indirection because it's easier to prove to an auditor, and use crypto-shredding where the data has to stay inline for replay to work. Either way deletion is a pipeline-wide operation — derived views, search indexes and backups hold it too. The real lesson is that retention is an architectural requirement, and it should be settled before you choose the log's shape."
     }
   ]
 }

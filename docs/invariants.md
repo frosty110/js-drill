@@ -359,6 +359,56 @@ and the flag are gone. Emoji remains fine in authored lesson content under
 
 ---
 
+## 10. The design system is used, not just present
+
+**Rule — a surface composes `ds/components.css`. A page stylesheet may say where
+a component sits; it may not say what it looks like.**
+
+Invariant 9 made the icon vocabulary singular by making its gate a flat zero.
+This is the same idea for the component vocabulary, and it exists because the
+measurement was stark: at the 2026-08-05 audit `system-design.html` referenced
+`ds-btn` 24 times and every other primitive **zero** times, while carrying its
+own card (×4), chip (×8), progress bar (×4), stat tile, session HUD and **three**
+separate empty states — every one of which `ds/components.css` already had and
+`index.html` was already using.
+
+Nothing was broken, which is the point. Each page looked deliberate on its own;
+they only disagreed when you put them side by side, and then they disagreed
+about everything — what a hovered card does, what "warn" is, whether a chip has
+a border. The user's report was not a bug list, it was *"it looks like a
+separate application."*
+
+The tell that a primitive is MISSING rather than ignored: both pages built it.
+The session HUD is the specimen — `js/sd/09-session.js` carried the comment
+*"same shape as the main app's scoped-review HUD so the family reads as one
+product"* directly above a from-scratch reimplementation with different class
+names, no icon and no meter. The intent to match was documented and the
+mechanism to match did not exist. When you find that, promote the component into
+`ds/components.css` rather than converting one copy into the other.
+
+| Failure | What you see |
+|---|---|
+| A page re-declares a card | two hover behaviours for one gesture, and only a side-by-side shows it |
+| A page re-declares a chip | "warn" is two ambers; a token change fixes one of them |
+| A hard-coded hex in a component rule | the token system is intact and this rule silently opted out |
+| A missing primitive built twice | the drift is now structural — a fix has to be applied in two files, forever |
+
+**Gate** — `tools/check-ds-adoption.js`, in the default `check-all` run. It is a
+**ratchet, not an absolute**: `data/ds-adoption.lock.json` records the per-file
+count of re-declared primitives and raw hex, and those numbers may fall but
+never rise. The legacy `css/01`–`05` predate the design system by years and are
+not worth a rewrite; what matters is that they cannot grow and that new work
+starts composed. It counts DECLARATIONS, not selector names — a `.thing-card`
+that only sets `display:flex` is composing correctly, and a rule that paints its
+own surface, border and radius is re-declaring one whatever it is called.
+
+`--accept` re-baselines, and is the right move only when the number went down.
+If a number must go **up**, that is the conversation this gate exists to force:
+the answer is almost always a new primitive in `ds/components.css` (where
+`ds/gallery.html` documents it), not a new one in a page file.
+
+---
+
 ## Adding an invariant
 
 If you find yourself writing "remember to…" in a doc, that is a rule without a

@@ -21,6 +21,14 @@ function facetLabel(fid, vid) {
   return v ? v.label : vid;
 }
 const LENGTH_OF = (q) => (q <= 8 ? 'short' : q <= 10 ? 'medium' : 'long');
+
+// Difficulty renders in the design system's semantic chip variants rather than
+// in three bespoke ones. easy/medium/hard were `.sd-chip--easy/--medium/--hard`,
+// declaring their own greens and ambers next to `.ds-chip--good/--accent/--warn`
+// declaring the same thing from tokens — so the two pages drifted apart on what
+// "warn" looks like. The MAPPING is the only page-specific part, because only
+// this page knows that "hard" is the cautionary one.
+const SD_DIFF_VARIANT = { easy: 'good', medium: 'accent', hard: 'warn' };
 // A family is DERIVED from the part a problem sits in, but its value has to be a
 // stable id rather than the display name: "AI & ML Infrastructure" cannot be a
 // URL segment, and the route sanitiser would strip it to something that matches

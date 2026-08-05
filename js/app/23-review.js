@@ -182,7 +182,7 @@ function _reviewMountHud() {
   if (!hud) {
     hud = document.createElement('div');
     hud.id = 'review-hud';
-    hud.className = 'review-hud';
+    hud.className = 'ds-hud review-hud';
     hud.setAttribute('role', 'status');
     const topbar = document.getElementById('topbar');
     if (topbar && topbar.parentNode) topbar.parentNode.insertBefore(hud, topbar.nextSibling);
@@ -202,12 +202,12 @@ function _reviewRenderHud() {
   if (!hud || !s) return;
   const pct = Math.round(100 * s.pos / s.ids.length);
   hud.innerHTML = `
-    <span class="review-hud__icon" aria-hidden="true">${dsIcon('refresh', 14)}</span>
-    <span class="review-hud__label">${escapeHtml(s.label)}</span>
-    <span class="review-hud__count ds-num">${s.pos + 1}/${s.ids.length}</span>
-    <span class="ds-progress review-hud__meter"><i style="width:${pct}%"></i></span>
-    <button class="ds-btn ds-btn--ghost ds-btn--pill review-hud__btn" data-review-skip>Skip</button>
-    <button class="ds-iconbtn review-hud__btn" data-review-exit aria-label="Exit review">${dsIcon('x', 15)}</button>`;
+    <span class="ds-hud__icon" aria-hidden="true">${dsIcon('refresh', 14)}</span>
+    <span class="ds-hud__label">${escapeHtml(s.label)}</span>
+    <span class="ds-hud__count">${s.pos + 1}/${s.ids.length}</span>
+    <span class="ds-progress ds-hud__meter"><i style="width:${pct}%"></i></span>
+    <button class="ds-btn ds-btn--ghost ds-btn--pill ds-hud__btn" data-review-skip>Skip</button>
+    <button class="ds-iconbtn ds-hud__btn" data-review-exit aria-label="Exit review">${dsIcon('x', 15)}</button>`;
 }
 
 function _reviewUnmountHud() {

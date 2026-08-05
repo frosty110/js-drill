@@ -85,10 +85,10 @@ const N_FAMILIES = MANIFEST.parts.length;
   await s.sleep(900);
 
   // ── Tag chips on cards ───────────────────────────────────────────────────
-  const chipCount = await s.eval(`document.querySelectorAll('.ch-card .ch-tags .sd-chip').length`);
+  const chipCount = await s.eval(`document.querySelectorAll('.ch-card .ch-tags .ds-chip').length`);
   s.assert(chipCount >= N_PROBLEMS, `every card carries chips, got ${chipCount}`);
   const firstChips = await s.eval(`
-    Array.from(document.querySelectorAll('.ch-card')[0].querySelectorAll('.sd-chip')).map(e => e.textContent.trim()).join('|')`);
+    Array.from(document.querySelectorAll('.ch-card')[0].querySelectorAll('.ds-chip')).map(e => e.textContent.trim()).join('|')`);
   s.assert(/Easy/.test(firstChips), `p01 shows its difficulty chip, got ${firstChips}`);
 
   // ── Filter panel ─────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ const N_FAMILIES = MANIFEST.parts.length;
   await s.eval(`document.querySelector('.sd-chip--btn[data-facet="difficulty"][data-val="easy"]').click()`);
   await s.sleep(400);
   await s.snap('04-empty-state');
-  s.assert(await s.eval(`!!document.querySelector('.sd-empty')`), 'impossible combination shows empty state');
+  s.assert(await s.eval(`!!document.querySelector('.ds-empty')`), 'impossible combination shows empty state');
   await s.eval(`document.getElementById('filter-clear').click()`);
   await s.sleep(300);
 
@@ -146,7 +146,7 @@ const N_FAMILIES = MANIFEST.parts.length;
   await s.sleep(800);
   await s.snap('05-detail-chips');
   const detailChips = await s.eval(`
-    Array.from(document.querySelectorAll('.detail-tags .sd-chip')).map(e => e.textContent.trim()).join('|')`);
+    Array.from(document.querySelectorAll('.detail-tags .ds-chip')).map(e => e.textContent.trim()).join('|')`);
   s.assert(/Medium/.test(detailChips), `p12 shows difficulty + company chips, got ${detailChips}`);
   // The mechanism half of this row was PROMOTED, not removed: bare chips linking
   // sideways to a filtered list became the "Components in play" block, where each

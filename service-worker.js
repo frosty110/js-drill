@@ -119,6 +119,7 @@ const APP_SHELL = [
   // — the nav's Design rung — so it precaches like index.html does.
   './system-design.html',
   './css/16-sd-shell.css',
+  './css/17-sd-page.css',
   './js/infographic-viewer.js',
   './js/sd/01-state-data.js',
   './js/sd/02-diagrams.js',

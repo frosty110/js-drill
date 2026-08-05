@@ -241,7 +241,7 @@ const clearSD = `localStorage.removeItem('jsdrill.systemdesign.v1')`;
     await s.sleep(1000);
     s.assert(await s.eval(`!!document.querySelector('.plan-hud')`),
       `two-segment company plan link works (#/${TOPIC}/plan/company/${topCompany})`);
-    const chud = await s.eval(`document.querySelector('.plan-hud__label').textContent.trim()`);
+    const chud = await s.eval(`document.querySelector('.ds-hud__label').textContent.trim()`);
     s.assert(/loop$/.test(chud), `company HUD names the loop, got "${chud}"`);
     await s.eval(`document.getElementById('plan-exit').click()`);
     await s.sleep(700);
@@ -269,7 +269,7 @@ const clearSD = `localStorage.removeItem('jsdrill.systemdesign.v1')`;
   await s.eval(`document.querySelector('[data-plan="${first.id}"]').click()`);
   await s.sleep(900);
   const taps = await s.eval(`
-    Array.from(document.querySelectorAll('.plan-hud__btn')).map(e => Math.round(e.getBoundingClientRect().height))`);
+    Array.from(document.querySelectorAll('.ds-hud__btn')).map(e => Math.round(e.getBoundingClientRect().height))`);
   s.assert(taps.length === 2 && taps.every(h => h >= 44), `HUD buttons >= 44px, got ${taps.join(',')}`);
   const hudScroll = await s.eval(`document.documentElement.scrollWidth - document.documentElement.clientWidth`);
   s.assert(hudScroll <= 1, `no horizontal scroll with the HUD on mobile, overflow=${hudScroll}px`);

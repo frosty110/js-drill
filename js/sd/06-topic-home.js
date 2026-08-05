@@ -33,7 +33,7 @@ async function renderTopicHome(t) {
       : `All caught up — no ${nounPl} due for review`;
 
   let html = `
-    <section class="hero">
+    <section class="ds-card hero">
       <p class="book-title">${esc(m.title)}</p>
       <p class="book-sub">${esc(m.subtitle || meta.kind || '')}</p>
       ${m.author ? `<p class="book-author">${esc(m.author)}</p>` : ''}
@@ -45,7 +45,7 @@ async function renderTopicHome(t) {
           ${workLine}</div>
       </div>
       <div class="cta-row">
-        <button class="cta ds-btn ds-btn--primary" id="mixed-btn" ${s.total ? '' : 'disabled'}>${s.seen ? icon('zap') + ' Mixed review' : icon('play') + ' Start learning'}${s.due ? ` <span class="due-pill">${s.due}</span>` : ''}</button>
+        <button class="cta ds-btn ds-btn--primary" id="mixed-btn" ${s.total ? '' : 'disabled'}>${s.seen ? icon('zap') + ' Mixed review' : icon('play') + ' Start learning'}${s.due ? ` <span class="ds-chip ds-chip--warn due-pill">${s.due}</span>` : ''}</button>
         ${resume ? `<button class="cta ds-btn ds-btn--ghost" id="resume-btn">${icon('refresh')} Resume ${unitAbbrev(t)} ${chNum(byId[resume], t)}</button>` : ''}
       </div>
     </section>`;
@@ -59,7 +59,7 @@ async function renderTopicHome(t) {
     const n = (CATALOG.components || []).length;
     const links = (CATALOG.components || []).reduce((a, c) => a + componentEdges(c.id).length, 0);
     html += `
-      <a class="cmp-entry" href="#/${t}/catalog" id="catalog-entry">
+      <a class="ds-card ds-card--flat ds-card--tap cmp-entry" href="#/${t}/catalog" id="catalog-entry">
         <span class="cmp-entry__icon sd-badge" aria-hidden="true">${icon('grid', 19)}</span>
         <span class="cmp-entry__main">
           <span class="cmp-entry__title">Component catalog</span>
@@ -78,7 +78,7 @@ async function renderTopicHome(t) {
       const pr = planProgress(t, active);
       html += `
         <section class="plan-strip plan-strip--active">
-          <div class="plan-active">
+          <div class="ds-card ds-card--flat plan-active">
             <div class="plan-active__main">
               <b>${esc(active.title)}</b>
               <span class="plan-active__meta">${ap.index + 1} of ${pr.total} · ${pr.done} mastered</span>
@@ -94,10 +94,10 @@ async function renderTopicHome(t) {
       const planCard = (p) => {
         const pr = planProgress(t, p);
         const pct = pr.total ? Math.round(pr.done / pr.total * 100) : 0;
-        return `<button class="plan-card" data-plan="${esc(p.id)}">
+        return `<button class="ds-card ds-card--flat ds-card--tap plan-card" data-plan="${esc(p.id)}">
           <span class="plan-card__title">${esc(p.title)}</span>
           <span class="plan-card__budget">${esc(p.budget)}${p.mode === 'crux' ? ' · crux' : ''}</span>
-          <span class="plan-card__bar"><i style="width:${pct}%"></i></span>
+          <span class="ds-progress ds-progress--good plan-card__bar"><i style="width:${pct}%"></i></span>
           <span class="plan-card__frac">${pr.done}/${pr.total}</span>
         </button>`;
       };
@@ -130,17 +130,17 @@ async function renderTopicHome(t) {
       const mech = tags.mechanism.slice(0, 2);
       const extra = tags.mechanism.length - mech.length;
       chips = `<div class="ch-tags">
-        ${diff ? `<span class="sd-chip sd-chip--${diff}">${esc(facetLabel('difficulty', diff))}</span>` : ''}
-        ${mech.map(v => `<span class="sd-chip">${esc(facetLabel('mechanism', v))}</span>`).join('')}
-        ${extra > 0 ? `<span class="sd-chip sd-chip--more">+${extra}</span>` : ''}
+        ${diff ? `<span class="ds-chip ds-chip--${SD_DIFF_VARIANT[diff]}">${esc(facetLabel('difficulty', diff))}</span>` : ''}
+        ${mech.map(v => `<span class="ds-chip">${esc(facetLabel('mechanism', v))}</span>`).join('')}
+        ${extra > 0 ? `<span class="ds-chip sd-chip--more">+${extra}</span>` : ''}
       </div>`;
     }
     return `
-      <button class="ch-card" data-ch="${ch.id}">
+      <button class="ds-card ds-card--flat ds-card--tap ch-card" data-ch="${ch.id}">
         <div class="ch-num ${done ? 'done' : ''}">${done ? icon('check', 19) : chNum(ch, t)}</div>
         <div class="ch-main">
           <div class="ch-title">${esc(ch.title)}</div>
-          <div class="ch-meta"><span class="bar"><i style="width:${p}%"></i></span>
+          <div class="ch-meta"><span class="ds-progress ds-progress--good"><i style="width:${p}%"></i></span>
             <span class="ch-frac">${cs.mastered}/${cs.total}</span>
             ${workLabel(cs)}</div>
           ${chips}
@@ -158,7 +158,7 @@ async function renderTopicHome(t) {
       <section class="sd-filter ${open ? 'is-open' : ''}">
         <button class="sd-filter-head" id="filter-toggle" aria-expanded="${open}">
           <span class="sd-filter-title">Filter</span>
-          ${active ? `<span class="sd-filter-count">${active} active</span>` : ''}
+          ${active ? `<span class="ds-chip ds-chip--accent sd-filter-count">${active} active</span>` : ''}
           <span class="sd-filter-caret" aria-hidden="true">${icon(open ? 'chevron-down' : 'chevron-right', 15)}</span>
         </button>
         ${open ? `<div class="sd-filter-body">
@@ -171,11 +171,11 @@ async function renderTopicHome(t) {
             return `<div class="sd-facet">
               <div class="sd-facet-label">${esc(f.label)}</div>
               <div class="sd-facet-vals">
-                ${list.map(v => `<button class="sd-chip sd-chip--btn ${tagFilterHas(f.id, v.id) ? 'is-on' : ''}"
+                ${list.map(v => `<button class="ds-chip sd-chip--btn ${tagFilterHas(f.id, v.id) ? 'is-on' : ''}"
                    data-facet="${esc(f.id)}" data-val="${esc(v.id)}">${esc(v.label)}</button>`).join('')}
               </div></div>`;
           }).join('')}
-          ${active ? `<button class="sd-filter-clear" id="filter-clear">Clear all filters</button>` : ''}
+          ${active ? `<button class="ds-btn ds-btn--ghost sd-filter-clear" id="filter-clear">Clear all filters</button>` : ''}
         </div>` : ''}
       </section>`;
 
@@ -187,8 +187,10 @@ async function renderTopicHome(t) {
       html += `<div class="part-head">${hits.length} problem${hits.length === 1 ? '' : 's'} match</div>`;
       html += hits.length
         ? hits.map(e => card(e.id)).join('')
-        : `<div class="sd-empty">No problems match all four filters.<br>
-             <small>Try clearing the narrowest one.</small></div>`;
+        : `<div class="ds-empty">
+             <div class="ds-empty__title">No problems match all four filters</div>
+             <p class="ds-empty__body">Try clearing the narrowest one.</p>
+           </div>`;
     }
   }
 

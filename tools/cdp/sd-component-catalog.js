@@ -156,7 +156,7 @@ const TOTAL_EDGES = COMPONENTS.reduce((n, c) => n + usesOf(c.id), 0);
   // The detail page states its tagging as chips rather than burying the
   // mechanism in a CTA button at the bottom of the page.
   const chips = await s.eval(`
-    Array.from(document.querySelectorAll('.detail-tags .sd-chip')).map(e => e.textContent.trim())`);
+    Array.from(document.querySelectorAll('.detail-tags .ds-chip')).map(e => e.textContent.trim())`);
   s.assert(chips.some(x => /signature/i.test(x)), `a mechanism-backed component says so, got ${chips.join('|')}`);
   s.assert(chips.some(x => x === `${usesOf('caching')} problems`),
     `the chip row states the usage count, got ${chips.join('|')}`);

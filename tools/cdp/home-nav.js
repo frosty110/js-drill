@@ -209,7 +209,7 @@ const SEED = {
     await s.eval(`location.hash = '#/m/review/coding'`);
     await s.waitFor(`!!document.getElementById('review-hud')`, { timeoutMs: 6000 });
     s.assert(
-      await s.eval(`(document.querySelector('.review-hud__label')?.textContent || '').includes('Coding')`),
+      await s.eval(`(document.querySelector('.ds-hud__label')?.textContent || '').includes('Coding')`),
       '#/m/review/<slug> deep-links into a scoped review'
     );
     await s.click('[data-review-exit]');

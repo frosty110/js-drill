@@ -39,6 +39,7 @@ const GATES = [
   { name: 'offline app shell',   cmd: ['tools/check-sw-shell.js'] },
   { name: 'sync key coverage',   cmd: ['tools/check-sync-coverage.js'] },
   { name: 'icon consistency',    cmd: ['tools/check-icons.js'] },
+  { name: 'ds adoption',         cmd: ['tools/check-ds-adoption.js'], fix: ['tools/check-ds-adoption.js', '--accept'] },
   { name: 'content order lock',  cmd: ['tools/check-content-order.js', '--check'], fix: ['tools/check-content-order.js'] },
   { name: 'lesson exercises',    cmd: ['tools/validate-data.js'] },
   { name: 'system design',       cmd: ['tools/validate-system-design.js'] },

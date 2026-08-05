@@ -20,7 +20,7 @@ async function openStats() {
       const s = chapterStats(t, ch); pm += s.mastered; pt += s.total;
       const p = s.total ? Math.round(s.mastered / s.total * 100) : 0;
       return `<div class="row"><span class="nm">${unitAbbrev(t)} ${chNum(ch, t)}. ${esc(ch.title)}</span>
-        <span class="bar" style="max-width:90px"><i style="width:${p}%"></i></span>
+        <span class="ds-progress ds-progress--good" style="max-width:90px"><i style="width:${p}%"></i></span>
         <span class="ch-frac">${s.mastered}/${s.total}</span></div>`;
     }).join('');
     parts += `<div class="part-stat"><div class="ph">${esc(part.name)} — ${pm}/${pt}</div>${rows}</div>`;
@@ -30,10 +30,10 @@ async function openStats() {
     <button class="close" id="stats-close" aria-label="Close">${icon('x', 18)}</button>
     <h2>Your progress</h2>
     <p style="color:var(--muted);font-size:13px;margin:2px 0 0">${esc(m.title)}</p>
-    <div class="stat-grid">
-      <div class="stat-tile"><div class="n">${totalM}</div><div class="l">Mastered</div></div>
-      <div class="stat-tile"><div class="n">${seenQ}</div><div class="l">Seen</div></div>
-      <div class="stat-tile"><div class="n">${totalDue}</div><div class="l">Due</div></div>
+    <div class="sd-stat-grid">
+      <div class="ds-stat"><b>${totalM}</b><span>Mastered</span></div>
+      <div class="ds-stat"><b>${seenQ}</b><span>Seen</span></div>
+      <div class="ds-stat"><b>${totalDue}</b><span>Due</span></div>
     </div>
     ${parts}
     <button class="danger-link" id="reset-btn">Reset all system-design progress</button>`;

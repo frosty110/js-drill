@@ -8,7 +8,7 @@ function renderSummary() {
   const t = session.topic;
   app.innerHTML = `
     ${planHud()}
-    <div class="summary">
+    <div class="ds-card summary">
       <h2>${session.plan ? esc(session.title) : 'Session complete'}</h2>
       <div class="score">${session.right}/${total}</div>
       <p class="sub">${pct}% on this ${session.mixed ? 'mixed review' : 'set'}.</p>

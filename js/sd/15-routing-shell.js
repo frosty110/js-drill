@@ -272,7 +272,11 @@ if (window.DrillShell) {
 
 applyRoute().catch(err => {
   document.getElementById('app').innerHTML =
-    `<div class="empty">Couldn't load content.<br><small>${esc(err.message)}</small><br><br>
-     Serve this over http (e.g. <code>python3 -m http.server</code>) — <code>file://</code> can't fetch the JSON.</div>`;
+    `<div class="ds-empty">
+       <div class="ds-empty__title">Couldn't load content</div>
+       <p class="ds-empty__body">${esc(err.message)}</p>
+       <p class="ds-empty__body">Serve this over http (e.g. <code>python3 -m http.server</code>) —
+          <code>file://</code> can't fetch the JSON.</p>
+     </div>`;
   console.error(err);
 });

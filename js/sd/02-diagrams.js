@@ -58,7 +58,7 @@ function renderDiagramDeck(el, diagrams, label = 'Visual models') {
   el.innerHTML = `
     <div class="diagram-deck__head">
       <div><span class="diagram-deck__eyebrow"></span><strong class="diagram-deck__title"></strong></div>
-      <span class="diagram-deck__count" aria-live="polite"></span>
+      <span class="ds-chip diagram-deck__count" aria-live="polite"></span>
     </div>
     <div class="diagram-slot"></div>
     <p class="diagram-deck__takeaway"></p>

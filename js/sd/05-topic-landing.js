@@ -33,13 +33,13 @@ async function renderTopics() {
     for (const t of inShelf) {
       const s = topicStats(t.id);
       html += `
-        <button class="topic-card" data-topic="${t.id}">
+        <button class="ds-card ds-card--tap topic-card" data-topic="${t.id}">
           <span class="topic-icon sd-badge" aria-hidden="true">${icon(t.icon || 'book', 24)}</span>
           <span class="topic-body">
             <span class="topic-title">${esc(t.title)}</span>
             <div class="topic-kind">${esc(t.kind || '')}</div>
             <div class="topic-blurb">${esc(t.blurb || '')}</div>
-            <div class="topic-prog"><span class="bar"><i style="width:${s.pct}%"></i></span>
+            <div class="topic-prog"><span class="ds-progress ds-progress--good"><i style="width:${s.pct}%"></i></span>
               <span class="ch-frac">${s.mastered}/${s.total}</span>
               ${workLabel(s)}</div>
           </span>

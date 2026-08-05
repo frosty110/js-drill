@@ -68,7 +68,7 @@ function renderPlanDone(t, plan) {
   const app = document.getElementById('app');
   const pr = planProgress(t, plan);
   app.innerHTML = `
-    <div class="detail">
+    <div class="ds-card detail">
       <div class="detail-tag">Plan complete</div>
       <h2 class="detail-title">${esc(plan.title)}</h2>
       <p class="detail-summary">You worked all ${pr.total} ${esc(unitNoun(t, pr.total))} in this plan.
@@ -83,16 +83,23 @@ function renderPlanDone(t, plan) {
   window.scrollTo(0, 0);
 }
 
-// The HUD strip — same shape as the main app's scoped-review HUD so the family
-// reads as one product: label · n/N · Skip · Exit.
+// The HUD strip. This used to say "same shape as the main app's scoped-review
+// HUD so the family reads as one product" and then build its own — different
+// classes, no icon, no meter, bare <button>s. It is now literally the same
+// component (.ds-hud in ds/components.css, promoted there for exactly this
+// reason), so the two can no longer drift: a change to the strip changes both.
+// `.plan-hud` survives only as this page's placement.
 function planHud() {
   if (!session || !session.plan) return '';
   const p = session.plan;
-  return `<div class="plan-hud">
-    <span class="plan-hud__label">${esc(p.label)}</span>
-    <span class="plan-hud__count">${p.index + 1}/${p.total}</span>
-    <button class="plan-hud__btn" id="plan-skip">Skip</button>
-    <button class="plan-hud__btn" id="plan-exit">Exit</button>
+  const pct = p.total ? Math.round(100 * p.index / p.total) : 0;
+  return `<div class="ds-hud plan-hud">
+    <span class="ds-hud__icon" aria-hidden="true">${icon('refresh', 14)}</span>
+    <span class="ds-hud__label">${esc(p.label)}</span>
+    <span class="ds-hud__count">${p.index + 1}/${p.total}</span>
+    <span class="ds-progress ds-hud__meter"><i style="width:${pct}%"></i></span>
+    <button class="ds-btn ds-btn--ghost ds-btn--pill ds-hud__btn" id="plan-skip">Skip</button>
+    <button class="ds-iconbtn ds-hud__btn" id="plan-exit" aria-label="Exit plan">${icon('x', 15)}</button>
   </div>`;
 }
 function wirePlanHud() {

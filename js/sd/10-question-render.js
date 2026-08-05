@@ -66,7 +66,7 @@ function renderQuestion() {
       <p class="q-stem">${fmt(q.prompt)}</p>
       ${briefHtml(it, ch)}
       <p class="open-hint">${icon('mic', 15)}<b>Say your answer out loud</b> as if in the interview — then reveal the model answer and grade yourself honestly.</p>
-      <textarea class="open-scratch" placeholder="(optional) jot key points…"></textarea>
+      <textarea class="ds-field open-scratch" placeholder="(optional) jot key points…"></textarea>
       <div id="explain-slot"></div>
       <div class="action-bar" id="action-bar"><button class="cta ds-btn ds-btn--primary" id="reveal-btn">Reveal model answer</button></div>`;
     hint = 'Press <code>Enter</code> or <code>Space</code> to reveal · then <code>1</code> Missed · <code>2</code> Partial · <code>3</code> Got it';
@@ -160,7 +160,7 @@ function revealOpen() {
   // committed to an answer, so it grades you rather than feeding you.
   const gated = ch && ch.brief && Array.isArray(ch.brief.gate) && ch.brief.gate.includes(it.qIndex);
   document.getElementById('explain-slot').innerHTML = `
-    <div class="model">
+    <div class="ds-card ds-card--flat model">
       <h4>Key points to hit</h4>
       <ul>${(q.points || []).map(p => `<li>${fmt(p)}</li>`).join('')}</ul>
       <div class="ans">${fmt(q.answer || '')}</div>

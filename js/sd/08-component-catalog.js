@@ -34,18 +34,18 @@ async function renderComponentCatalog(t) {
   const card = (c) => {
     const n = componentEdges(c.id).length;
     const sig = !!c.mechanism;
-    return `<a class="cmp-card" href="#/${t}/c/${encodeURIComponent(c.id)}" data-cmp="${esc(c.id)}" data-sig="${sig ? '1' : '0'}">
+    return `<a class="ds-card ds-card--flat ds-card--tap cmp-card" href="#/${t}/c/${encodeURIComponent(c.id)}" data-cmp="${esc(c.id)}" data-sig="${sig ? '1' : '0'}">
       <span class="cmp-card__main">
-        <span class="cmp-card__title">${esc(c.title)}${sig ? ` <span class="cmp-sig" title="A registered mechanism — a headline component problems are tagged with">signature</span>` : ''}</span>
+        <span class="cmp-card__title">${esc(c.title)}${sig ? ` <span class="ds-chip ds-chip--accent cmp-sig" title="A registered mechanism — a headline component problems are tagged with">signature</span>` : ''}</span>
         <span class="cmp-card__what">${fmt(c.what)}</span>
       </span>
-      ${n ? `<span class="cmp-card__uses" title="Appears in ${n} canonical design problem${n === 1 ? '' : 's'}">${n}</span>`
-          : `<span class="cmp-card__uses cmp-card__uses--none" title="Not yet mapped to a design problem">–</span>`}
+      ${n ? `<span class="ds-chip ds-chip--accent cmp-card__uses" title="Appears in ${n} canonical design problem${n === 1 ? '' : 's'}">${n}</span>`
+          : `<span class="ds-chip cmp-card__uses cmp-card__uses--none" title="Not yet mapped to a design problem">–</span>`}
     </a>`;
   };
 
   let html = `
-    <section class="hero">
+    <section class="ds-card hero">
       <p class="book-title">${esc(CATALOG.title || 'Component Catalog')}</p>
       <p class="book-sub">${esc(CATALOG.subtitle || '')}</p>
       <p class="book-desc">${esc(CATALOG.description || '')}</p>
@@ -70,7 +70,7 @@ async function renderComponentCatalog(t) {
   html += `
     <div class="cmp-roles" role="group" aria-label="Filter components">
       ${[['all', 'All'], ['signature', 'Signature'], ['supporting', 'Supporting']].map(([id, label]) =>
-        `<button class="sd-chip sd-chip--btn ${role === id ? 'is-on' : ''}" data-role="${id}"
+        `<button class="ds-chip sd-chip--btn ${role === id ? 'is-on' : ''}" data-role="${id}"
            aria-pressed="${role === id}">${label} <b>${roleCounts[id]}</b></button>`).join('')}
     </div>`;
 
@@ -150,7 +150,7 @@ async function renderComponentDetail(t, id, from) {
   }
 
   const bullets = (label, items, mod) => (items && items.length) ? `
-    <section class="cmp-block cmp-block--${mod}">
+    <section class="ds-card ds-card--flat cmp-block cmp-block--${mod}">
       <h3>${esc(label)}</h3>
       <ul>${items.map(x => `<li>${fmt(x)}</li>`).join('')}</ul>
     </section>` : '';
@@ -163,7 +163,7 @@ async function renderComponentDetail(t, id, from) {
     </a>`).join('');
 
   app.innerHTML = `
-    <div class="detail">
+    <div class="ds-card detail">
       ${backRow}
       <div class="detail-tag">${esc(cat ? cat.title : 'Component')}</div>
       <h2 class="detail-title">${esc(c.title)}</h2>
@@ -171,11 +171,11 @@ async function renderComponentDetail(t, id, from) {
 
       <div class="detail-tags">
         ${c.mechanism
-          ? `<a class="sd-chip sd-chip--link" href="#/design-problems/tag/mechanism/${encodeURIComponent(c.mechanism)}"
+          ? `<a class="ds-chip sd-chip--link" href="#/design-problems/tag/mechanism/${encodeURIComponent(c.mechanism)}"
                title="Every problem tagged with this mechanism">${esc(facetLabel('mechanism', c.mechanism))}</a>
-             <span class="sd-chip cmp-sig">signature</span>`
-          : `<span class="sd-chip sd-chip--more" title="Not a registered mechanism — a supporting block problems are not tagged with">supporting</span>`}
-        <span class="sd-chip">${edges.length} problem${edges.length === 1 ? '' : 's'}</span>
+             <span class="ds-chip ds-chip--accent cmp-sig">signature</span>`
+          : `<span class="ds-chip sd-chip--more" title="Not a registered mechanism — a supporting block problems are not tagged with">supporting</span>`}
+        <span class="ds-chip">${edges.length} problem${edges.length === 1 ? '' : 's'}</span>
       </div>
 
       ${bullets('Reach for it when', c.reachFor, 'yes')}
@@ -184,7 +184,7 @@ async function renderComponentDetail(t, id, from) {
       ${bullets('How it breaks', c.failureModes, 'fail')}
 
       ${alts.length ? `
-        <section class="cmp-block cmp-block--alt">
+        <section class="ds-card ds-card--flat cmp-block cmp-block--alt">
           <h3>Instead, consider</h3>
           <ul class="cmp-alts">${alts.map(a => {
             const o = componentById(a.id);
@@ -193,7 +193,7 @@ async function renderComponentDetail(t, id, from) {
           }).join('')}</ul>
         </section>` : ''}
 
-      <section class="cmp-block cmp-block--uses">
+      <section class="ds-card ds-card--flat cmp-block cmp-block--uses">
         <h3>Used in ${edges.length} design problem${edges.length === 1 ? '' : 's'}${c.mechanism ? '' : ''}</h3>
         ${edges.length
           ? `<div class="cmp-uses">${usedIn}</div>`

@@ -7,8 +7,18 @@
 // skill being drilled is picking the right block under a prompt you haven't
 // seen. Prose is the answer key, not the page (PROFILE.md bans gating practice
 // behind reading), so the reference body sits below the decision surface.
+// The unit a component was opened FROM, for as long as that is still true.
+// See renderComponentDetail's `from` — this is the same fact, remembered across
+// the back/forward steps of one reading session so pressing Back inside the
+// catalog doesn't quietly strand the reader.
+let cmpOrigin = null;
+
 async function renderComponentCatalog(t) {
   session = null; curTopic = t;
+  // Reaching the catalog means you are browsing components now, not reading a
+  // problem. Anything opened from here belongs to no problem, and saying
+  // otherwise would send the reader somewhere they never were.
+  cmpOrigin = null;
   setRoute(`#/${t}/catalog`);
   document.getElementById('stats-btn').hidden = false;
   const app = document.getElementById('app');
@@ -96,8 +106,22 @@ async function renderComponentCatalog(t) {
   window.scrollTo(0, 0);
 }
 
-async function renderComponentDetail(t, id) {
+// `from` — {topic, unit} — is the unit you were reading when you tapped this
+// component. It is the ONE fact the breadcrumb cannot carry: the trail is
+// containment (System Design › Building Blocks › Catalog › Cache) and the
+// problem you came from is nowhere on it. Without it the only route back to
+// that problem was to find it again in the "Used in" list, below five decision
+// blocks, on a phone.
+//
+// Omitting it FALLS BACK to the session's remembered origin rather than
+// dropping the row, because applyRoute — which is what browser Back and
+// Forward go through — has no argument to pass. Losing the way out on Back is
+// the exact complaint this whole change answers, so it must not reappear one
+// component deeper. Memory only: a reload or a pasted link starts with none,
+// and correctly shows no row instead of inventing a journey.
+async function renderComponentDetail(t, id, from) {
   session = null; curTopic = t;
+  if (from) cmpOrigin = from; else from = cmpOrigin;
   await loadCatalog();
   const c = componentById(id);
   if (!c) return renderComponentCatalog(t);
@@ -111,6 +135,19 @@ async function renderComponentDetail(t, id) {
   const dpMeta = await loadMeta('design-problems').catch(() => null);
   const dpTitle = {};
   if (dpMeta) for (const ch of dpMeta.chapters) dpTitle[ch.id] = ch.title;
+
+  // Resolved from the manifest the same way the "Used in" titles are, so a
+  // renamed unit can't leave a stale label here, and a `from` naming a unit
+  // this build no longer has simply renders nothing.
+  let backRow = '';
+  if (from && from.topic && from.unit) {
+    const fMeta = from.topic === 'design-problems' ? dpMeta : await loadMeta(from.topic).catch(() => null);
+    const fCh = fMeta && (fMeta.chapters || []).find(x => x.id === from.unit);
+    if (fCh) backRow = `
+      <a class="cmp-back" href="#/${from.topic}/${encodeURIComponent(from.unit)}"
+         data-back-topic="${esc(from.topic)}" data-back-unit="${esc(from.unit)}"
+         >${icon('chevron-left', 15)}<span>${esc(fCh.title)}</span></a>`;
+  }
 
   const bullets = (label, items, mod) => (items && items.length) ? `
     <section class="cmp-block cmp-block--${mod}">
@@ -127,6 +164,7 @@ async function renderComponentDetail(t, id) {
 
   app.innerHTML = `
     <div class="detail">
+      ${backRow}
       <div class="detail-tag">${esc(cat ? cat.title : 'Component')}</div>
       <h2 class="detail-title">${esc(c.title)}</h2>
       <p class="detail-summary">${fmt(c.what)}</p>
@@ -168,14 +206,21 @@ async function renderComponentDetail(t, id) {
         ${c.mechanism ? `<a class="cta ds-btn ds-btn--ghost" href="#/design-problems/tag/mechanism/${encodeURIComponent(c.mechanism)}" id="cmp-filter">Filter problems by this</a>` : ''}
       </div>
     </div>`;
+  // Following "Instead, consider" keeps the origin: you are still reading the
+  // same problem, just weighing a sibling block against it.
   app.querySelectorAll('[data-cmp]').forEach(el => el.addEventListener('click', e => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-    e.preventDefault(); renderComponentDetail(t, el.dataset.cmp);
+    e.preventDefault(); renderComponentDetail(t, el.dataset.cmp, from);
   }));
   app.querySelectorAll('[data-prob]').forEach(el => el.addEventListener('click', e => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault(); renderChapterDetail('design-problems', el.dataset.prob);
   }));
+  const back = app.querySelector('[data-back-unit]');
+  if (back) back.addEventListener('click', e => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault(); renderChapterDetail(back.dataset.backTopic, back.dataset.backUnit);
+  });
   const d = document.getElementById('cmp-drill');
   if (d) d.addEventListener('click', () => startChapter(c.drill.topic || t, c.drill.unit));
   window.scrollTo(0, 0);

@@ -37,6 +37,62 @@ body > header:has(#ds-crumbs[hidden]) .home-link .t-short { display: none; }
   body > header .home-link .t-full { display: none; }
 }
 
+/* ── ≤767px: the breadcrumb has to actually get width ──────────────────────
+   The rule above dropped the wordmark's LONG spelling and stopped there, but
+   the short one still costs ~100px in a row that, after the inset reserved for
+   the sync chip, is only ~290px wide. Everything else in it is `flex: 0 0
+   auto`, so the breadcrumb — the one flexible item — absorbed the entire
+   deficit: measured at 390px it was 0px wide, with each crumb link squeezed to
+   8px and "System Design" to 0×0. Invisible and untappable, which is the whole
+   of the page's up-navigation gone on the viewport PROFILE.md calls the design
+   center. It read as "there is no way back" because there was none.
+
+   So when a crumb is on screen the wordmark yields the rest of the way, to its
+   mark alone. The <h1> text is hidden the accessible way, not `display: none`:
+   the heading must keep its name, and the button stays a real click-to-topics
+   target either way. */
+@media (max-width: 767px) {
+  body > header:has(#ds-crumbs:not([hidden])) .home-link h1 {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden; white-space: nowrap;
+    clip-path: inset(50%);
+  }
+  /* `header .spacer` is `flex: 1`, so it competed with the shell bar for what
+     the wordmark gave up. It exists to push the header buttons right, and the
+     shell bar (also `flex: 1 1 auto`) already does that whenever a crumb is
+     rendered — so drop it exactly then, and leave it alone at the topics
+     landing where the crumb is hidden and it is still the only thing holding
+     the row apart. */
+  body > header:has(#ds-crumbs:not([hidden])) .spacer { display: none; }
+  /* The bottom nav's Home rung is this same destination, so on a phone the
+     link drops to its glyph — same trade the Stats button already makes one
+     breakpoint down, and it keeps its 44px target and its aria-label. */
+  body > header:has(#ds-crumbs:not([hidden])) #jsdrill-btn {
+    min-width: var(--touch-target-min);
+    justify-content: center;
+    padding: 8px;
+  }
+  body > header:has(#ds-crumbs:not([hidden])) #jsdrill-btn .lbl { display: none; }
+
+  /* Parent and leaf, and nothing else. css/14-breadcrumb.css keeps the root
+     plus the last two, which is right for index.html; here the same trail has
+     to fit a row that also gives 88px back to the sync chip, so five crumbs
+     came out as "H › B. › C › Cache" — 60 of the 142 available pixels spent on
+     chevrons and every ancestor ellipsed to one letter. A crumb you cannot
+     read is not navigation. The root is the one safe thing to drop: on this
+     breakpoint the nav is a bottom bar and its Home rung is on screen the
+     whole time, so "get me out" never depended on the trail here.
+
+     `a.ds-crumb:last-of-type` IS the parent — every ancestor is a link and the
+     leaf is the one crumb rendered as a <span> (you are already there). */
+  #ds-crumbs > a.ds-crumb:not(:last-of-type),
+  #ds-crumbs > a.ds-crumb:not(:last-of-type) + .ds-crumb__sep { display: none; }
+  /* With the ancestors gone the parent can afford its whole name. */
+  #ds-crumbs > a.ds-crumb:last-of-type { max-width: 14em; }
+}
+
 /* ── ≥768px: the nav is a left rail ────────────────────────────────────────
    It is fixed, so every full-width surface on the page has to clear it: the
    sticky header, the centered main, and the infographic workspace that spans

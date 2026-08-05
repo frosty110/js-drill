@@ -116,6 +116,26 @@ the latter is nonsense when rendered on the News Feed page.
   why the TTL can be minutes"` beats `"…caches user data"`.
 - No "This problem uses…" preambles. Start with the noun.
 
+### Getting back out
+
+An edge is only half a traversal if you cannot return along it. The breadcrumb
+structurally cannot do this: it paints **containment** (System Design ›
+Building Blocks › Catalog › Cache), and the problem that sent you to a
+component is nowhere on that trail. So a component opened from a unit renders a
+**return row** above its title naming that unit, and following an *Instead,
+consider* alternative carries the origin with it — you are still weighing
+blocks against the same problem.
+
+The origin is held **in memory**, not in the URL. It is a fact about this
+visit, so a reload or a pasted link correctly shows no row rather than
+inventing a journey the reader never took; reaching the catalog clears it,
+because browsing components is not reading a problem. It does survive
+back/forward within a session — `applyRoute` has no argument to pass, and
+losing the way out on Back is the failure the row exists to fix.
+
+Probed by `tools/cdp/sd-component-return.js`, which navigates by **clicking**
+rather than by setting `location.hash` — see the note in that file.
+
 ---
 
 ## Schemas

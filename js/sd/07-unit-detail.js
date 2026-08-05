@@ -77,7 +77,10 @@ async function renderChapterDetail(t, chId) {
   document.getElementById('share-unit').addEventListener('click', () => openShareSheet(t, ch));
   app.querySelectorAll('[data-cmp-link]').forEach(el => el.addEventListener('click', e => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-    e.preventDefault(); renderComponentDetail('components', el.dataset.cmpLink);
+    // Hand the component page the problem you left, so it can offer a way
+    // back. The breadcrumb structurally cannot: a component is CONTAINED by
+    // the catalog, not by the problem that sent you to it.
+    e.preventDefault(); renderComponentDetail('components', el.dataset.cmpLink, { topic: t, unit: chId });
   }));
   const cx = document.getElementById('drill-crux'); if (cx) cx.addEventListener('click', () => startCrux(t, chId));
   if (INFOGRAPHIC_TOPICS.has(t)) renderLessonInfographics(document.getElementById('unit-infographic'), t, ch, infographicSet);

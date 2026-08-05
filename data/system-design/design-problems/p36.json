@@ -69,6 +69,52 @@
     },
     {
       "type": "open",
+      "prompt": "Sketch the API. How does an applicant submit, and how does a caller observe a case that takes days?",
+      "points": [
+        "`POST /v1/applications {legalName, jurisdiction, registrationNumber, declaredOwners[]}` returns `{applicationId, state}`. Nothing is verified yet — the response is a state, not a decision.",
+        "Documents upload out of band: `POST /v1/applications/{id}/documents:presign {contentType, bytes}` returns `{documentId, uploadUrl}`, the client PUTs a 20MB scan straight to object storage, then calls `:commit {sha256}`.",
+        "Routing scans through the API tier buys nothing and costs a timeout, so the API only ever handles the metadata.",
+        "The commit is keyed on `sha256`, so the same articles of incorporation uploaded twice is one artifact, one extraction, and one round of paid verification.",
+        "`GET /v1/applications/{id}` returns `{state, checks[{type, source, state, outcome, completedAt}], blockingOn[], decision?}`, and `blockingOn` is the field that makes a multi-day wait explainable to the applicant.",
+        "Partial completion has to be expressible in that response, because it is the normal case: most applications clear most checks, and per-check state is what lets the product offer conditional approval at all.",
+        "`GET /v1/applications/{id}/ownership` returns `{nodes[], edges[{from,to,pct,source}], beneficialOwners[{personId, effectivePct, path[]}], opaque[{entityId, jurisdiction}]}` — `path[]` is what makes a 30% effective stake auditable rather than asserted.",
+        "Webhooks `application.state_changed`, `application.awaiting_applicant` and `application.decided`. The middle one is a product event, because that state is the biggest single driver of abandonment.",
+        "There is no synchronous verify call anywhere in this API. A p99 measured in days means every endpoint returns a state and every transition arrives as an event."
+      ],
+      "answer": "`POST /v1/applications` takes the declared details and returns an application id and a state — nothing is verified at that point, and the response says so. Documents go up out of band: presign, PUT the scan straight to object storage, then commit with its `sha256`, so a twenty-megabyte file never traverses the API tier and the same certificate uploaded twice costs one extraction and one round of paid verification rather than two. Reading back, `GET /v1/applications/{id}` returns per-check state plus a `blockingOn` list, because partial completion is the normal case here and a single pending flag would collapse awaiting-the-applicant and awaiting-a-registry into one useless state. The ownership endpoint returns the resolved graph with each beneficial owner's effective percentage and the path that produced it, which is what makes a thirty percent stake auditable rather than asserted. Transitions arrive as webhooks, including an explicit awaiting-applicant event, since that stall is the biggest driver of abandonment. And there is no synchronous verify call anywhere — with a p99 measured in days, everything returns a state.",
+      "crux": true,
+      "diagram": {
+        "kind": "mermaid",
+        "caption": "Presign, commit, then observe a case measured in days",
+        "code": "sequenceDiagram\n  participant A as Applicant\n  participant API as Verification API\n  participant OBJ as Object storage\n  participant WF as Case workflow\n  participant V as Registry vendor\n  A->>API: POST /v1/applications\n  API-->>A: applicationId + state\n  A->>API: POST documents:presign\n  API-->>A: documentId + uploadUrl\n  A->>OBJ: PUT the 20MB scan\n  A->>API: POST documents:commit sha256\n  Note over API,OBJ: the API never carries the file\n  API->>WF: start or resume the case\n  WF->>V: verification activity\n  V-->>WF: answers in seconds or days\n  API-->>A: webhook application.awaiting_applicant\n  A->>API: GET /v1/applications/{id}\n  API-->>A: checks[] + blockingOn[]"
+      }
+    },
+    {
+      "type": "open",
+      "prompt": "Describe the high-level architecture and the data model. What does per-field confidence look like as a schema?",
+      "points": [
+        "`applications(id, tenant_id, legal_name, jurisdiction, registration_number, state, risk_tier, opened_at, decided_at, decision)` — `state` is the explicit machine, not a `pending` flag that hides which stall you can act on.",
+        "`documents(id, application_id, sha256, doc_type, type_confidence, uri, bytes, uploaded_at, expires_on, validity_status)` with `UNIQUE(application_id, sha256)` — content addressing is the dedup key and the evidence pointer at once, and `validity_status` is separate from anything extracted because an expired document can be read perfectly.",
+        "`extractions(document_id, extractor_version, field, value, confidence, bbox jsonb)` — one row per FIELD. That is what per-field confidence means as a schema, and a single document-level score column is the shape that throws it away.",
+        "`extractor_version` on the row is what lets a better extractor be replayed against the stored original instead of asking the applicant to upload again.",
+        "`verifications(id, application_id, subject_ref, check_type, source, idempotency_key, state, outcome, source_value, raw_response_uri, cost_cents, started_at, completed_at)` with `UNIQUE(idempotency_key)` — the timeout-retry answer is a database constraint rather than a code convention.",
+        "`cost_cents` is a column because vendor spend is the operating constraint; without it, cost per application is a quarterly finance question instead of a per-case one.",
+        "`field_resolutions(application_id, field, claimed_value, source_values jsonb, winning_source, precedence_rule, resolved_at)` — the Oak Street versus Elm Street case becomes a row, so which source won and why is queryable rather than buried in a log.",
+        "`entities(id, jurisdiction, registration_number, name, last_resolved_at)` and `ownership_edges(parent_entity_id, child_entity_id, pct, source, as_of)` — the graph is keyed by ENTITY, not by application, and that keying is the entire cost story.",
+        "Because edges are per-entity, the tenth business under the same parent reuses a resolved subgraph instead of paying for the walk again.",
+        "`persons(id, name, dob, nationality)` and `beneficial_owners(application_id, person_id, effective_pct, path jsonb)`, where `path` records the chain of stakes that produced the percentage.",
+        "Documents and raw vendor responses live in object storage under their hash and Postgres holds state, edges and outcomes — which is also what makes the retention conflict solvable: purge the passport image, keep `documents.sha256` and the decision row."
+      ],
+      "answer": "Applications carry an explicit `state` rather than a pending flag, because awaiting-applicant and awaiting-third-party are operationally different and collapsing them hides which stall you can act on. Documents are keyed by `sha256` with a unique constraint per application, so content addressing does dedup and evidence-pointing at the same time, and `validity_status` sits apart from anything extracted since an expired document reads perfectly. The table I would spend the most time on is `extractions`, which is one row per field with its own confidence and extractor version — that is what per-field confidence actually looks like in a schema, and a document-level score column is the shape that throws the distinction away. `verifications` carries a unique `idempotency_key`, so the timeout-retry answer is a constraint rather than a convention, plus `cost_cents`, because vendor spend is the operating constraint and it needs to be a per-case number. `field_resolutions` turns the Oak Street versus Elm Street conflict into a queryable row recording which source won and under which precedence rule. The graph lives in `entities` and `ownership_edges` keyed by entity rather than by application, which is the whole cost story — the tenth business under the same parent reuses a resolved subgraph — with `beneficial_owners` recording each person's effective percentage and the path that produced it.",
+      "crux": true,
+      "diagram": {
+        "kind": "mermaid",
+        "caption": "One row per field, one constraint per vendor call, one graph per entity",
+        "code": "flowchart TD\n  APP[\"applications<br/>state = explicit machine,<br/>not a pending flag\"] --> DOC[\"documents<br/>sha256, doc_type, validity_status<br/>UNIQUE(application_id, sha256)\"]\n  DOC --> DEDUP([\"dedup key AND evidence pointer\"])\n  DOC --> EXT[\"extractions<br/>ONE ROW PER FIELD<br/>field, value, confidence,<br/>extractor_version\"]\n  EXT --> PERF([\"a document-level score column<br/>is what throws this away\"])\n  APP --> VER[\"verifications<br/>UNIQUE(idempotency_key)<br/>outcome, source_value, cost_cents\"]\n  VER --> IDEM([\"the retry answer is a constraint,<br/>not a convention\"])\n  VER --> FR[\"field_resolutions<br/>claimed_value, source_values,<br/>winning_source, precedence_rule\"]\n  FR --> AUDIT([\"which source won and why,<br/>queryable not logged\"])\n  ENT[\"entities<br/>keyed by jurisdiction + reg number\"] --> EDGE[\"ownership_edges<br/>parent, child, pct, as_of\"]\n  EDGE --> REUSE([\"keyed by ENTITY not application:<br/>the tenth business under the same<br/>parent reuses the subgraph\"])\n  EDGE --> BO[\"beneficial_owners<br/>effective_pct, path\"]\n  BO --> PER[\"persons\"]\n  OBJ[(\"object storage: originals<br/>+ raw vendor responses, by hash\")] --> DOC\n  OBJ --> PURGE([\"purge the image, keep the hash<br/>and the decision row\"])"
+      }
+    },
+    {
+      "type": "open",
       "prompt": "Deep dive: walk through what happens to a single uploaded document.",
       "points": [
         "Accept the upload, scan it for malware, and store the original immediately, content-addressed by hash, before anything parses it.",
@@ -187,7 +233,7 @@
       "kind": "mermaid",
       "role": "overview",
       "takeaway": "Extraction and verification are separate stages against separate sources, because what a document says and whether it is true are different questions.",
-      "afterQuestion": 2,
+      "afterQuestion": 3,
       "code": "flowchart LR\n  UP([\"applicant uploads\"]) --> SCAN[\"malware scan\"]\n  SCAN --> OBJ[(\"original, content-addressed<br/>never mutated\")]\n  OBJ --> CLS[\"classify document type\"]\n  CLS --> EXT[\"extract: typed schema<br/>+ per-field confidence\"]\n  EXT -->|\"low confidence field\"| HUM([\"human review\"])\n  EXT --> VER[\"verify against sources\"]\n  VER --> REG[(\"registries, ID vendors\")]\n  VER --> OWN[\"ownership walk\"]\n  OWN --> PEOPLE([\"natural persons\"])\n  PEOPLE --> SCR([\"screening system\"])\n  VER --> DEC[(\"decision + which source won\")]\n  HUM --> DEC"
     },
     {
@@ -196,7 +242,7 @@
       "kind": "mermaid",
       "role": "comparison",
       "takeaway": "A perfectly extracted field from a forged or expired document is worth nothing, so OCR confidence is never evidence of truth.",
-      "afterQuestion": 2,
+      "afterQuestion": 4,
       "code": "flowchart TD\n  DOC([\"uploaded document\"]) --> Q1[\"what does it SAY?\"]\n  DOC --> Q2[\"is it TRUE?\"]\n  Q1 --> E[\"extraction\"]\n  E --> E1([\"OCR / vision model\"])\n  E --> E2([\"per-field confidence\"])\n  E --> E3([\"fails: misread, misclassified\"])\n  Q2 --> V[\"verification\"]\n  V --> V1([\"authoritative source lookup\"])\n  V --> V2([\"validity: expiry, issuer, tamper\"])\n  V --> V3([\"fails: forged, stale, not found\"])\n  TRAP[\"treating 0.99 OCR confidence<br/>as evidence the claim is true\"] --> BOTH([\"the classic conflation\"])"
     },
     {
@@ -205,7 +251,7 @@
       "kind": "mermaid",
       "role": "mechanism",
       "takeaway": "Stakes multiply down the chain, so an effective holding can cross the threshold that no single hop crosses.",
-      "afterQuestion": 4,
+      "afterQuestion": 6,
       "code": "flowchart TD\n  APP([\"applicant company\"]) --> O1[\"owner A: 60% (a company)\"]\n  APP --> O2[\"owner B: 40% (a person)\"]\n  O1 --> P1[\"holds 50% of A<br/>= 30% effective: CROSSES 25%\"]\n  O1 --> P2[\"holds 10% of A<br/>= 6% effective: below\"]\n  P1 --> PERSON([\"natural person: verify + screen\"])\n  O2 --> PERSON2([\"natural person: verify + screen\"])\n  O1 --> OPAQUE{\"parent in a jurisdiction<br/>with no public registry\"}\n  OPAQUE --> FIND([\"a finding, not an error:<br/>opacity is a risk signal\"])\n  GUARD[\"hard depth limit<br/>+ cycle detection\"] --> APP"
     },
     {
@@ -214,7 +260,7 @@
       "kind": "mermaid",
       "role": "failure",
       "takeaway": "A registry returning empty instead of erroring makes everything auto-clear, so the pipeline looks healthier than it has ever been.",
-      "afterQuestion": 7,
+      "afterQuestion": 9,
       "code": "flowchart TD\n  CHK[\"verification call\"] --> RESP{\"registry responds\"}\n  RESP -->|\"error\"| RETRY([\"retry, then escalate: loud\"])\n  RESP -->|\"empty result, HTTP 200\"| NOMATCH[\"read as 'no adverse finding'\"]\n  NOMATCH --> PASS([\"auto-clear\"])\n  PASS --> METRIC([\"pass rate RISES<br/>time-to-decision IMPROVES\"])\n  METRIC --> LOOK([\"looks like a win\"])\n  CANARY[\"canary lookups on known entities\"] --> DETECT([\"the only thing that catches it\"])\n  ALERT[\"alert on pass-rate shift<br/>with no deploy\"] --> DETECT"
     }
   ]

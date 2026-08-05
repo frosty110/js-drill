@@ -69,6 +69,51 @@
     },
     {
       "type": "open",
+      "prompt": "Sketch the API for both paths. What does the signup form call, and what does a list publish trigger?",
+      "points": [
+        "`POST /v1/screen` on the blocking path: `{name, entityType, dob?, nationality?, identifiers[], context:{flow, subjectId}}` returning `{screeningId, decision, band, listVersion, matches[{entityId, matchedVariant, score, signals}]}` at a p99 under 200ms.",
+        "`listVersion` is in every response and is not optional. A result that cannot name the snapshot it screened against is undefendable later, so it belongs in the contract rather than in a log line.",
+        "Batch is a different verb rather than the same endpoint with more items: `POST /v1/rescreens {listVersionFrom, listVersionTo, scope}` returning `{jobId}`, then `GET /v1/rescreens/{jobId}` for progress and coverage.",
+        "That split is deliberate — one call blocks a signup form and the other is 20M units of work, and giving them one endpoint is how a rescreen ends up sharing a connection pool with onboarding.",
+        "`POST /v1/matches/{matchId}/adjudication` with `{outcome, reasonCode, reviewerId}` writes adjudication memory, which is what stops a cleared name re-alerting on every rescreen forever.",
+        "`GET /v1/lists/current` returns `{version, publishedAt, ingestedAt, entities, variants}` — the freshness SLO made callable, and the endpoint the stale-list alert actually polls.",
+        "Unavailability has to be explicit: return `503` with a `deferredScreeningId` so the caller records an obligation, rather than an empty `matches[]` that reads exactly like a clean result.",
+        "That is the most important decision in this API — a screener that fails open returns the same shape as a screener that found nothing, and only an explicit deferral distinguishes them.",
+        "Idempotency on `POST /v1/screen` keyed by `(subjectId, listVersion, normalizedName)`, so a retried signup does not create a second review-queue item for the same match."
+      ],
+      "answer": "The blocking path is `POST /v1/screen` taking the name plus whatever corroborating fields exist — date of birth, nationality, identifiers — and returning a decision, a band, the matches with their scores and signals, and the list version, at a p99 under two hundred milliseconds. I would put `listVersion` in the response contract rather than a log line, because the whole January-versus-September defence rests on being able to name the snapshot. Batch gets its own verb, `POST /v1/rescreens` returning a job id you poll for progress and coverage, precisely so nobody serves twenty million units of work through the endpoint a signup form calls. Adjudication is `POST /v1/matches/{id}/adjudication` with a structured outcome and reason, which is what feeds the memory that stops cleared names re-alerting. And the decision I would argue hardest for is that unavailability returns a `503` with a deferred-screening id rather than an empty match list — a screener that fails open and a screener that found nothing return the same shape, and only an explicit deferral tells them apart.",
+      "crux": true,
+      "diagram": {
+        "kind": "mermaid",
+        "caption": "Two paths, and the failure that must not look like a pass",
+        "code": "sequenceDiagram\n  participant F as Signup form\n  participant S as POST /v1/screen\n  participant IX as In-memory index\n  participant G as Government list\n  participant R as POST /v1/rescreens\n  F->>S: name + dob + identifiers\n  S->>IX: candidates then score\n  IX-->>S: matches + band\n  S-->>F: decision + listVersion\n  Note over S,F: listVersion is in the contract\n  S-->>F: 503 + deferredScreeningId when down\n  Note over S,F: never an empty matches[]\n  G->>R: list delta published\n  R-->>G: jobId\n  R->>IX: rescreen on isolated capacity"
+      }
+    },
+    {
+      "type": "open",
+      "prompt": "Describe the high-level architecture and the data model. What is stored per list version, and what does a decision point at?",
+      "points": [
+        "Real-time screeners are stateless and hold the index in memory; the batch rescreen fleet is a separate deployment reading the same immutable snapshot. Shared matching core, separate pools, separate blast radius.",
+        "`list_versions(id, source, published_at, ingested_at, entity_count, variant_count, index_uri, status)` — the row every decision points at, and `ingested_at` is the column the freshness SLO reads.",
+        "`sanctioned_entities(id, list_version_id, external_id, entity_type, primary_name, dob, nationality, identifiers jsonb, programs[])` — roughly 40K rows per version, and the source of the corroborating fields that separate the bands.",
+        "`name_variants(id, entity_id, list_version_id, variant, script, normalized, phonetic_key, kind)` — 2 to 5M rows per version, and the table whose size people underestimate by two orders of magnitude when they size by entity count.",
+        "Two tables rather than one because the two stages have different access patterns: candidate generation indexes `normalized` and `phonetic_key`, scoring reads the entity row.",
+        "`screenings(id, tenant_id, subject_id, submitted_name, normalized, list_version_id, flow, decision, band, created_at)` — pinning `list_version_id` on the screening is the entire defence when a customer cleared in January turns out to have been listed in March.",
+        "`screening_matches(screening_id, entity_id, variant_id, score, signals jsonb, band)` — one row per surviving candidate, which is what the reviewer reads and what the audit reconstructs.",
+        "`adjudications(subject_id, entity_id, list_version_id, outcome, reason_code, reviewer_id, created_at)` — keyed on the list version, so a cleared name stays quiet until the entry it was cleared against actually changes.",
+        "`subjects(id, tenant_id, kind, last_screened_at, last_list_version_id)` — this turns \"who has not been screened against the current version\" into one indexed query, which is how rescreen coverage gets proved rather than asserted.",
+        "Versions are immutable and additive: a new list version writes new entity and variant rows rather than updating old ones, which is what makes the atomic index swap possible and old decisions still readable."
+      ],
+      "answer": "Two deployments over one matching core: stateless real-time screeners holding the index in memory, and a batch rescreen fleet reading the same immutable snapshot on isolated capacity. The model starts with `list_versions`, carrying `published_at` and `ingested_at` — that second column is the freshness SLO. Under it, `sanctioned_entities` at roughly forty thousand rows per version and `name_variants` at two to five million, split into two tables because candidate generation indexes the normalized and phonetic forms while scoring reads the entity's date of birth and identifiers. On the decision side, `screenings` pins `list_version_id`, which is the whole defence when someone cleared in January turns out to have been listed in March, with `screening_matches` holding one row per surviving candidate and its signals. `adjudications` is keyed on `(subject, entity, list_version)` so a cleared name stays quiet until the entry it was cleared against actually changes, and `subjects` carries `last_list_version_id` so \"who has not been screened against the current version\" is one indexed query rather than a claim. Versions are immutable and additive throughout, which is what makes the atomic index swap possible and keeps old decisions readable.",
+      "crux": true,
+      "diagram": {
+        "kind": "mermaid",
+        "caption": "The version is the join key everything hangs off",
+        "code": "flowchart LR\n  LV[\"list_versions<br/>published_at, ingested_at<br/>entity_count, variant_count\"] --> SE[\"sanctioned_entities<br/>~40K rows per version<br/>dob, nationality, identifiers\"]\n  LV --> NV[\"name_variants<br/>2-5M rows per version<br/>normalized, phonetic_key\"]\n  SE --> NV\n  NV --> GEN([\"stage 1 indexes these\"])\n  SE --> SCORE([\"stage 2 reads these\"])\n  SC[\"screenings<br/>pins list_version_id\"] --> LV\n  SC --> SM[\"screening_matches<br/>score, signals, band\"]\n  SM --> SE\n  ADJ[\"adjudications<br/>key: subject + entity + list_version\"] --> SC\n  ADJ --> QUIET([\"cleared name stays quiet until<br/>the entry it cleared against changes\"])\n  SUBJ[\"subjects<br/>last_screened_at,<br/>last_list_version_id\"] --> COV([\"coverage is one indexed query,<br/>not an assertion\"])"
+      }
+    },
+    {
+      "type": "open",
       "prompt": "Deep dive: how does the matching actually work? Walk through a single screening.",
       "points": [
         "Normalize aggressively first: Unicode folding, transliteration to a common script, case, punctuation, honorifics (Mr, Dr, Sheikh), and legal-entity suffixes (Ltd, GmbH, LLC).",
@@ -182,7 +227,7 @@
       "kind": "mermaid",
       "role": "overview",
       "takeaway": "The real-time and batch paths share the matcher and nothing else, because a rescreen must never be able to take down onboarding.",
-      "afterQuestion": 1,
+      "afterQuestion": 3,
       "code": "flowchart LR\n  SIGNUP([\"onboarding / payment\"]) -->|\"p99 < 200ms\"| RT[\"Real-time screener<br/>index in memory\"]\n  GOV([\"government list publish\"]) --> ING[\"List ingest<br/>immutable versions\"]\n  ING --> IDX[(\"Name-variant index<br/>2-5M strings\")]\n  IDX --> RT\n  IDX --> BATCH[\"Batch rescreen<br/>isolated capacity\"]\n  RT --> BANDS{\"three bands\"}\n  BATCH --> BANDS\n  BANDS -->|\"clear\"| OK([\"pass\"])\n  BANDS -->|\"probable\"| REV([\"review queue\"])\n  BANDS -->|\"definite\"| BLOCK([\"block\"])\n  REV --> ADJ[(\"Adjudication memory\")]\n  ADJ --> RT"
     },
     {
@@ -191,7 +236,7 @@
       "kind": "mermaid",
       "role": "mechanism",
       "takeaway": "The expensive comparison only ever sees a handful of survivors, which is the only reason this is affordable at all.",
-      "afterQuestion": 2,
+      "afterQuestion": 4,
       "code": "flowchart TD\n  IN([\"raw name\"]) --> NORM[\"normalize: fold, transliterate,<br/>strip honorifics + suffixes\"]\n  NORM --> TOK[\"unordered token set<br/>(name order varies by culture)\"]\n  TOK --> GEN[\"stage 1: candidate generation<br/>n-gram index / phonetic / ANN\"]\n  GEN -->|\"millions to tens\"| CAND[\"~30 candidates\"]\n  CAND --> SCORE[\"stage 2: scoring<br/>edit distance + token overlap\"]\n  SCORE --> SIG[\"+ DOB, nationality,<br/>passport, registration no.\"]\n  SIG --> BAND{\"three bands\"}\n  BAND --> CLEAR([\"clear\"])\n  BAND --> PROB([\"probable: human or LLM adjudicates\"])\n  BAND --> HIT([\"definite: block\"])"
     },
     {
@@ -200,7 +245,7 @@
       "kind": "mermaid",
       "role": "lifecycle",
       "takeaway": "An addition only needs new-entries-against-all-customers; only a matching-logic change forces the full cross-product.",
-      "afterQuestion": 4,
+      "afterQuestion": 6,
       "code": "flowchart TD\n  PUB([\"list publishes\"]) --> VER[\"ingest as new immutable version\"]\n  VER --> DIFF[\"diff vs previous\"]\n  DIFF --> BUILD[\"build new index alongside old\"]\n  BUILD --> SWAP[\"atomic swap\"]\n  SWAP --> SCOPE{\"what changed?\"}\n  SCOPE -->|\"entries added\"| NEW[\"screen all customers<br/>against NEW entries only\"]\n  SCOPE -->|\"matching logic changed\"| FULL[\"full rescreen:<br/>every prior result invalid\"]\n  NEW --> QUEUE([\"escalations, rate-limited into review\"])\n  FULL --> QUEUE\n  HALF[\"half-updated index =<br/>some screened old, some new,<br/>no way to tell which\"] --> SWAP"
     },
     {
@@ -209,7 +254,7 @@
       "kind": "mermaid",
       "role": "failure",
       "takeaway": "A failed list update produces no errors and no alerts, because screening against stale data succeeds perfectly.",
-      "afterQuestion": 8,
+      "afterQuestion": 10,
       "code": "flowchart TD\n  FEED([\"list feed\"]) --> FETCH{\"update succeeds?\"}\n  FETCH -->|\"yes\"| FRESH[(\"current index\")]\n  FETCH -->|\"no, silently\"| STALE[(\"stale index\")]\n  STALE --> SCREEN[\"screening continues<br/>and returns clean results\"]\n  SCREEN --> GREEN([\"every dashboard green:<br/>latency fine, errors zero\"])\n  GREEN --> MISS([\"newly sanctioned parties<br/>pass for weeks\"])\n  FRESH --> SLO[\"SLO: hours since last<br/>successful list update\"]\n  STALE --> SLO\n  SLO --> PAGE([\"this is the alert that matters\"])"
     }
   ]

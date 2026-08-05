@@ -69,19 +69,50 @@
     },
     {
       "type": "open",
-      "prompt": "Sketch the high-level architecture and the core data model.",
+      "prompt": "Sketch the API. What does the bank call, and what does an examiner's tooling read?",
+      "points": [
+        "`POST /v1/alerts` with an `Idempotency-Key` header and body `{sourceSystem, sourceAlertId, revision, subject, triggeredRules[], raw}` returning `202 {caseId, state}`. Ingest acknowledges; it does not decide.",
+        "The same payload arrives three ways — webhook push, a pull cursor `GET /v1/alerts?since=<cursor>`, and an SFTP batch drop — and all three land on that one idempotent write.",
+        "Returning a disposition synchronously is the design error to avoid: an investigation is 30 seconds to 3 minutes of vendor calls, so the contract is submit-then-subscribe.",
+        "`GET /v1/cases/{caseId}` returns `{state, disposition, riskBand, policyVersion, dueAt, evidence[], narrative}`, and a `case.decided` webhook pushes the same thing.",
+        "`GET /v1/cases/{caseId}/events` returns the append-only trace and `GET /v1/evidence/{sha256}` returns the stored artifact. Those two endpoints are the audit product — without them the trail is a claim rather than a record.",
+        "`POST /v1/cases/{caseId}/override` with `{disposition, reasonCode, analystId}`: the analyst's decision is its own call with a required structured reason, not a `PATCH` of the case row.",
+        "Evidence is addressed by hash, never by the vendor's URL, because a URL is not stable across a five-year retention window and the hash is the thing the narrative cites.",
+        "Tenant comes from the credential and never from a path or body parameter. A `tenantId` the caller can set is a cross-bank data leak waiting for its first bug.",
+        "Everything is versioned from day one (`/v1`), because the consumers are bank integrations you cannot redeploy and regulators who will read the responses years later."
+      ],
+      "answer": "Ingest is `POST /v1/alerts` with an idempotency key, and it returns `202` with a case id rather than a disposition — an investigation takes minutes of vendor calls, so the contract has to be submit-then-subscribe. The same idempotent write sits behind all three delivery shapes banks actually use: webhook, a pull cursor, and an SFTP batch drop. Reading back, `GET /v1/cases/{id}` gives state, disposition, policy version and the narrative, with a `case.decided` webhook for push. The two endpoints that matter most for the regulated half are `GET /v1/cases/{id}/events` for the append-only trace and `GET /v1/evidence/{sha256}` for the artifact itself, because a narrative nobody can resolve to stored evidence is an assertion. The analyst override is its own `POST` carrying a structured reason code rather than a patch of the case row, and tenant always comes from the credential — a tenant id the caller can set is a cross-bank leak waiting for its first bug.",
+      "crux": true,
+      "diagram": {
+        "kind": "mermaid",
+        "caption": "Submit-then-subscribe, and what the examiner reads",
+        "code": "sequenceDiagram\n  participant B as Bank monitoring\n  participant I as POST /v1/alerts\n  participant W as Case workflow\n  participant E as Evidence service\n  participant X as Examiner tooling\n  B->>I: alert + Idempotency-Key\n  I-->>B: 202 caseId\n  I->>W: enqueue case\n  W->>E: fetch evidence\n  E-->>W: raw response + sha256\n  W-->>B: webhook case.decided\n  X->>W: GET /v1/cases/{id}/events\n  W-->>X: append-only trace\n  X->>E: GET /v1/evidence/{sha256}\n  E-->>X: exactly what the agent saw"
+      }
+    },
+    {
+      "type": "open",
+      "prompt": "Sketch the high-level architecture and the core data model. Name the tables, and say which columns carry the audit weight.",
       "points": [
         "Ingest tier accepting three shapes, because all three exist in real banks: webhook push, API pull, and an SFTP batch file drop.",
         "Land the raw payload immutably before interpreting it, so a parsing change never destroys what was actually received.",
-        "Idempotency key of (tenant, source_system, alert_id, revision) so a redelivered file cannot double-investigate.",
         "A durable workflow engine drives each case: plan, gather, evaluate, decide, narrate. Steps are retryable activities; the workflow survives restarts and can pause for days.",
         "An evidence service fronting every external vendor, so adapters own auth, retries, rate limits, and normalization into one envelope.",
         "Object storage for raw evidence, content-addressed by hash. Postgres for case state, decisions, and the append-only event log.",
-        "Core tables: alerts (raw + parsed), cases, evidence_artifacts (hash, source, fetched_at, tenant), decisions (disposition, thresholds, versions), events (append-only trace), policies (versioned per tenant).",
+        "`alerts(id, tenant_id, source_system, source_alert_id, revision, raw_uri, received_at)` with `UNIQUE(tenant_id, source_system, source_alert_id, revision)` — the idempotency rule is a constraint, not a code path that can be forgotten.",
+        "`cases(id, tenant_id, alert_id, state, risk_band, policy_version, prompt_version, model_snapshot, opened_at, due_at, disposition)` — the version columns live on the case because a case in flight stays pinned to what it started under.",
+        "`case_events(case_id, seq, type, payload jsonb, prev_hash, hash, created_at)` with `UNIQUE(case_id, seq)` — append-only and hash-chained, so a silent edit breaks the chain rather than passing unnoticed.",
+        "`evidence_artifacts(sha256 PK, tenant_id, source, fetched_at, uri, bytes, retain_until)` plus `case_evidence(case_id, sha256, requirement, status)`, where `requirement` is `required` or `best_effort` — that column is what the escalate-on-missing rule actually reads.",
+        "`decisions(id, case_id, disposition, decided_by, actor_id, reason_code, evidence_shas[], tool_versions jsonb, code_release, created_at)` — the agent's disposition and the human's override are the same shape, so an override is a row rather than a special case.",
+        "`policies(tenant_id, version, body jsonb, effective_from)` — policy is versioned tenant data, so changing it is an insert rather than a deploy.",
         "Case state is a projection of the event log rather than the other way round, so the trace is authoritative and the read model is rebuildable."
       ],
-      "answer": "Ingest accepts webhook, API pull and SFTP batch, because banks genuinely still use the third, and it lands the raw payload immutably before anything parses it. From there a durable workflow engine owns each case as a long-running orchestration: plan, gather evidence, evaluate against policy, decide, narrate. Every external call goes through an evidence service so per-vendor auth, retries and rate limits live in one place and results come back in a common envelope. For storage I would put raw evidence in object storage, content-addressed by hash, and keep case state, decisions and an append-only event log in Postgres. The important modeling choice is that the event log is the source of truth and the case row is a projection of it, so the trace is authoritative and the read model can be rebuilt.",
-      "crux": true
+      "answer": "Ingest accepts webhook, API pull and SFTP batch, because banks genuinely still use the third, and it lands the raw payload immutably before anything parses it. From there a durable workflow engine owns each case as a long-running orchestration, and every external call goes through an evidence service so per-vendor auth, retries and rate limits live in one place. Raw evidence goes to object storage content-addressed by hash; Postgres holds the rest. The tables are `alerts` carrying a unique constraint on `(tenant_id, source_system, source_alert_id, revision)` so a redelivered file cannot double-investigate, `cases` carrying the pinned `policy_version`, `prompt_version` and `model_snapshot` so a case in flight is not moved underneath itself, `case_events` as an append-only hash-chained log with a unique `(case_id, seq)`, `evidence_artifacts` keyed by `sha256` with `case_evidence` marking each source `required` or `best_effort`, `decisions` where the agent's disposition and the analyst's override are the same row shape, and `policies` as versioned tenant data. The one modeling choice I would defend hardest is that the event log is the source of truth and the case row is a projection of it, so the audit trail cannot drift from the decision.",
+      "crux": true,
+      "diagram": {
+        "kind": "mermaid",
+        "caption": "Core tables and what each one is for",
+        "code": "flowchart LR\n  A[\"alerts<br/>UNIQUE(tenant, source, alert_id, revision)<br/>raw_uri\"] --> C[\"cases<br/>state, risk_band<br/>policy_version, prompt_version,<br/>model_snapshot pinned\"]\n  C --> EV[\"case_events<br/>seq, prev_hash, hash<br/>append-only, chained\"]\n  EV --> PROJ([\"case row is a PROJECTION<br/>of this log\"])\n  C --> CE[\"case_evidence<br/>requirement: required | best_effort\"]\n  CE --> ART[\"evidence_artifacts<br/>sha256 PK, retain_until\"]\n  ART --> OBJ[(\"object storage<br/>object-lock 5y\")]\n  C --> D[\"decisions<br/>disposition, decided_by,<br/>reason_code, evidence_shas[]\"]\n  D --> SAME([\"agent + human override<br/>share one row shape\"])\n  POL[\"policies<br/>tenant_id, version, body\"] --> C\n  CE --> GATE([\"the column the escalate-on-missing<br/>rule reads\"])"
+      }
     },
     {
       "type": "mc",
@@ -181,7 +212,7 @@
       "kind": "mermaid",
       "role": "overview",
       "takeaway": "The event log is the source of truth and the case row is a projection of it, so the audit trail cannot drift from the decision.",
-      "afterQuestion": 2,
+      "afterQuestion": 3,
       "code": "flowchart LR\n  BANK([\"Bank monitoring system\"]) -->|\"webhook / pull / SFTP batch\"| ING[\"Ingest: land raw, then parse\"]\n  ING --> Q[\"Priority queue<br/>risk + statutory clock\"]\n  Q --> WF[\"Durable workflow per case\"]\n  WF --> EV[\"Evidence service\"]\n  EV --> VEND[(\"Vendors + internal systems\")]\n  EV --> OBJ[(\"Evidence store<br/>content-addressed, object-lock\")]\n  WF --> POL[(\"Policy, versioned per tenant\")]\n  WF --> LOG[(\"Append-only event log\")]\n  LOG --> CASE[(\"Case state = projection\")]\n  WF --> HUMAN([\"Review queue\"])"
     },
     {
@@ -190,7 +221,7 @@
       "kind": "mermaid",
       "role": "mechanism",
       "takeaway": "A citation to a vendor is worthless because their index moved; a citation to a stored hash is proof.",
-      "afterQuestion": 4,
+      "afterQuestion": 5,
       "code": "flowchart TD\n  ASK[\"agent queries vendor in March\"] --> RESP[\"raw response\"]\n  RESP --> HASH[\"store content-addressed<br/>+ object-lock 5y\"]\n  HASH --> CITE[\"narrative cites artifact + offset\"]\n  RESP --> DEC[\"disposition\"]\n  LATER([\"September: examiner asks why\"]) --> TWO{\"what do you show?\"}\n  TWO -->|\"re-run the query\"| BAD([\"different index, different answer<br/>may contradict the decision\"])\n  TWO -->|\"the stored artifact\"| GOOD([\"exactly what the agent saw\"])\n  CITE --> GOOD"
     },
     {
@@ -199,7 +230,7 @@
       "kind": "mermaid",
       "role": "lifecycle",
       "takeaway": "Each rung generates the evaluation labels that justify the next, so the rollout and the eval set are the same activity.",
-      "afterQuestion": 8,
+      "afterQuestion": 9,
       "code": "flowchart LR\n  S[\"shadow<br/>runs, decides nothing\"] --> SUG[\"suggest<br/>human accepts or rejects\"]\n  SUG --> AUTO[\"auto-close<br/>narrowest risk band\"]\n  AUTO --> WIDE[\"widen the band\"]\n  SUG -->|\"overrides become labels\"| EVAL[(\"regression set\")]\n  AUTO -->|\"sampled QA\"| EVAL\n  EVAL -->|\"evidence to widen\"| WIDE\n  WIDE -->|\"quality decays\"| NARROW([\"ratchet back\"])"
     },
     {
@@ -208,7 +239,7 @@
       "kind": "mermaid",
       "role": "failure",
       "takeaway": "A required source that did not answer means the policy was never actually evaluated, so the only defensible outcome is a human.",
-      "afterQuestion": 5,
+      "afterQuestion": 6,
       "code": "flowchart TD\n  GATHER[\"gather evidence\"] --> MISS{\"a source failed\"}\n  MISS -->|\"best-effort source\"| NOTE[\"note the gap, continue\"]\n  MISS -->|\"required source\"| ESC([\"escalate to a human\"])\n  NOTE --> DEC[\"disposition\"]\n  TEMPT[\"tempting: decide anyway<br/>and note the gap\"] --> ART([\"a documented decision made on<br/>evidence known to be incomplete\"])\n  ART --> FIND([\"the artefact an examiner finds\"])\n  TEMPT2[\"tempting: nothing suspicious found<br/>so auto-close\"] --> INV([\"inverts the asymmetry:<br/>absence of evidence is not evidence of absence\"])"
     }
   ]

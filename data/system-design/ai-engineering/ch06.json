@@ -1,0 +1,159 @@
+{
+  "id": "ch06",
+  "chapter": 6,
+  "part": "Part III: Prompting, RAG & Agents",
+  "title": "RAG and Agents",
+  "summary": "The two dominant context-construction patterns. RAG retrieves relevant information and inserts it into the context: retriever plus generator, term-based versus embedding-based retrieval, hybrid search and reranking, chunking, and the optimizations that move the needle. Agents go further — a model that uses tools and plans in an environment — with tool taxonomy, planning and execution, the specific failure modes of multi-step autonomy, and memory as the mechanism that carries information across steps and sessions.",
+  "keyTakeaways": [
+    "RAG and agents are both answers to the same question — how do you construct the context the model needs — with RAG pulling in information and agents acting in an environment to obtain or change it.",
+    "Retrieval splits into term-based (BM25/TF-IDF, sparse, exact-keyword strong, cheap) and embedding-based (dense vectors plus approximate nearest neighbor search, semantic, robust to paraphrase); hybrid search plus a reranker usually beats either alone.",
+    "Chunking, metadata filtering, query rewriting, and reranking are the levers that actually improve RAG quality — and retrieval quality should be measured separately (context precision and recall) from answer quality.",
+    "An agent is a model plus tools plus a planning loop in an environment; tools fall into knowledge augmentation (read), capability extension (compute, code, other models), and write actions that change the world.",
+    "Multi-step autonomy compounds error: per-step accuracy raised to the power of the number of steps collapses quickly, which is why planning validation, tool-call verification, retries, and step limits matter more than a clever prompt.",
+    "Write-capable tools change the risk profile entirely — an agent that can act needs least-privilege scoping, approval for consequential actions, and defenses against prompt injection arriving through tool outputs.",
+    "Memory spans the model's internal knowledge, short-term memory in the context window, and long-term memory in an external store; managing it means deciding what to keep, summarize, retrieve, or forget."
+  ],
+  "questions": [
+    {
+      "q": "In Huyen's framing, what do RAG and agents have in common?",
+      "options": [
+        "Both require finetuning the base model",
+        "Both are techniques for constructing the context the model needs — RAG by retrieving information, agents by acting in an environment to gather or change it",
+        "Both eliminate the need for evaluation",
+        "Both are only available on open-weight models"
+      ],
+      "answer": 1,
+      "explain": "Framing them as context construction unifies them: the model's capability is fixed, so the leverage is what you put in front of it. RAG fetches; an agent decides what to fetch or do, possibly over many steps."
+    },
+    {
+      "q": "How do term-based and embedding-based retrieval differ in their failure modes?",
+      "options": [
+        "Term-based matches exact keywords and misses paraphrases; embedding-based matches meaning but can retrieve semantically near yet factually irrelevant passages and struggles with rare exact identifiers",
+        "Term-based only works on English; embedding-based works on all languages equally",
+        "Term-based requires a GPU; embedding-based runs on CPU",
+        "Term-based is probabilistic; embedding-based is deterministic"
+      ],
+      "answer": 0,
+      "explain": "They are complementary. BM25 nails an error code or a product SKU that a dense model blurs; embeddings handle 'how do I cancel' matching 'subscription termination'. Hybrid retrieval plus reranking exists because each covers the other's blind spot."
+    },
+    {
+      "q": "Why is a reranker commonly added after the initial retrieval step?",
+      "options": [
+        "To translate documents into the user's language",
+        "To compress documents so more fit in the context",
+        "To deduplicate the vector index",
+        "Because cheap retrieval optimizes for recall over many documents, and a more expensive cross-encoder can then reorder the top candidates by true relevance before the few best go into the context"
+      ],
+      "answer": 3,
+      "explain": "It is a two-stage funnel: retrieve broadly and cheaply, then rank precisely and expensively over a small candidate set. Since only a handful of chunks fit usefully in the context, ordering quality matters more than raw retrieval depth."
+    },
+    {
+      "q": "What is the core tradeoff in choosing a chunk size for RAG?",
+      "options": [
+        "Small chunks cost more to embed but retrieve faster",
+        "Small chunks are precise but may lose the context needed to be understood; large chunks preserve context but dilute relevance and waste context-window budget",
+        "Large chunks cannot be embedded by most models",
+        "Chunk size only affects storage, not quality"
+      ],
+      "answer": 1,
+      "explain": "A chunk must be self-contained enough to answer with, and focused enough to match a query. Overlap, document-structure-aware splitting, and attaching surrounding context to each chunk are the usual mitigations."
+    },
+    {
+      "q": "Why should retrieval quality be evaluated separately from answer quality?",
+      "options": [
+        "Because retrieval metrics are required by vector database vendors",
+        "Because answer quality cannot be measured at all",
+        "Because a bad answer may be a retrieval miss or a generation failure, and only separate measurement (context precision/recall) tells you which to fix",
+        "Because retrieval runs on different hardware"
+      ],
+      "answer": 2,
+      "explain": "If the right passage was never retrieved, no prompt fix helps. Measuring recall at k over a labeled query-to-document set localizes the fault; measuring generation with a fixed, known-good context isolates the model's contribution."
+    },
+    {
+      "q": "In the tool taxonomy, what distinguishes capability extension from knowledge augmentation, and why does the distinction matter for reliability?",
+      "options": [
+        "Capability extension tools are always slower",
+        "Knowledge augmentation reads information into the context (search, retrieval, APIs), while capability extension gives the model abilities it lacks (calculator, code execution, other models) — offloading work that generation is bad at",
+        "Knowledge augmentation is free; capability extension is billed per call",
+        "Capability extension only applies to open-weight models"
+      ],
+      "answer": 1,
+      "explain": "Arithmetic, precise data transformations, and deterministic logic are exactly where token-by-token generation is weakest, so handing them to a calculator or code interpreter converts a probabilistic step into a deterministic one — a reliability upgrade, not just a convenience."
+    },
+    {
+      "q": "Why does the book treat write actions as a different class of tool entirely?",
+      "options": [
+        "Write actions require a separate API key",
+        "Write actions cannot be evaluated",
+        "Write actions consume more tokens than read actions",
+        "Because they change the world — a wrong read wastes a call, a wrong write sends an email, moves money, or deletes data, so they need scoping, approval, and reversibility"
+      ],
+      "answer": 3,
+      "explain": "Read failures are recoverable; write failures are incidents. That is why write tools deserve least-privilege scoping, confirmation for consequential actions, idempotency, and audit logs — and why prompt injection matters most in systems that can act."
+    },
+    {
+      "q": "Why does per-step accuracy matter so much more in agents than in single-call applications?",
+      "options": [
+        "Because errors compound multiplicatively across steps — 95% accuracy over ten dependent steps leaves roughly 60% end-to-end success",
+        "Because agents run on slower hardware",
+        "Because agents cannot use few-shot examples",
+        "Because each step resets the context window"
+      ],
+      "answer": 0,
+      "explain": "A long autonomous chain multiplies its per-step reliability. That arithmetic is the argument for shorter plans, verification between steps, deterministic tools where possible, retries with feedback, and bounded step counts rather than open-ended looping."
+    },
+    {
+      "q": "Which of these is a characteristic agent failure mode the book calls out?",
+      "options": [
+        "The model cannot produce JSON at all",
+        "Tokenizer mismatch between planner and executor",
+        "Invalid tool selection, malformed tool parameters, failure to achieve the goal despite valid calls, and loops that repeat the same action without progress",
+        "Vector index corruption during retrieval"
+      ],
+      "answer": 2,
+      "explain": "Agent evaluation needs its own instrumentation: was the chosen tool valid, were the parameters well formed, did the trajectory make progress, was the goal achieved, and at what cost in steps, tokens, and time. Loop detection and step budgets are standard safeguards."
+    },
+    {
+      "q": "How does the book frame memory in an agentic system?",
+      "options": [
+        "As the GPU memory required to serve the model",
+        "As three layers — internal knowledge baked into the weights, short-term memory in the context window, and long-term memory in an external store — with management deciding what to keep, summarize, retrieve, or drop",
+        "As a synonym for the vector database",
+        "As a feature only available in finetuned models"
+      ],
+      "answer": 1,
+      "explain": "The context window is a scarce, per-request working memory; anything that must survive it goes to external storage and gets retrieved. Practical management uses recency windows, summarization of older turns, and retrieval of relevant memories rather than replaying everything."
+    },
+    {
+      "type": "open",
+      "prompt": "Your RAG assistant answers well on common questions but fabricates details on specific ones. Diagnose the likely causes in order and describe the fixes.",
+      "points": [
+        "First isolate retrieval versus generation: check whether the supporting passage was in the retrieved context at all, using a labeled set and recall@k.",
+        "If retrieval missed: examine chunking (is the fact split across chunks), the embedding model's fit to the domain, and whether exact identifiers need term-based/hybrid search.",
+        "Add query rewriting or expansion for underspecified questions, and metadata filtering to restrict the search space.",
+        "Add a reranker so the best passages, not merely similar ones, occupy the limited context.",
+        "If retrieval succeeded but the answer was wrong: strengthen grounding instructions, place context effectively, and require citations tied to the passages.",
+        "Give the model an explicit escape hatch — answer 'not found in the documentation' — since a model with no supported answer will otherwise invent one.",
+        "Verify after generation: check that each claim is supported by the retrieved text, and evaluate factual consistency continuously rather than once.",
+        "Consider corpus problems: stale, contradictory, or missing documents cannot be fixed by any retrieval tuning."
+      ],
+      "answer": "I would split the problem before touching anything, because 'it hallucinated' has two very different causes. For a set of failing questions I check whether the supporting passage was in the retrieved context. If it was not, this is a retrieval bug and no prompt change will fix it. There I look at chunking first — specific facts often live in a table or a sentence that got split across chunk boundaries, so structure-aware chunking with overlap and a parent-document or context-attached strategy usually helps. Then I check the query type: exact identifiers, error codes, and product names are where dense embeddings blur and BM25 shines, so hybrid retrieval plus a cross-encoder reranker is the standard remedy. Query rewriting helps for underspecified questions, and metadata filters cut the search space when the user's scope is known. If the passage was retrieved and the answer is still wrong, it is a generation problem. I make the grounding instruction explicit, place the context where the model attends, and require citations that point at specific passages — citations make ungrounded claims visible instead of invisible. Crucially I give the model a legitimate way out: it must be allowed, and instructed, to say the documentation does not cover this. A model with no supported answer and no permission to decline will always invent one. After generation I verify: an automated check that each claim is entailed by the retrieved text, with the same criterion used in continuous evaluation. And I keep one eye on the corpus itself — stale versions, contradictory documents, and simply missing content produce failures that look like model failures and are not.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "When would you build an agent rather than a fixed RAG pipeline, and what engineering do you have to add to make the agent trustworthy?",
+      "points": [
+        "Prefer the fixed pipeline when the steps are known in advance — it is cheaper, faster, more predictable, and far easier to evaluate.",
+        "Choose an agent when the required steps depend on intermediate results, the task needs multiple tools or many hops, or the input space is too varied to enumerate.",
+        "Accept the costs: multiplied latency and token spend, compounding errors, nondeterministic trajectories, and much harder debugging.",
+        "Add planning discipline: constrain the tool set, validate plans before execution, and bound the number of steps.",
+        "Verify per step — check tool call validity and arguments, feed errors back for a retry, and detect loops and lack of progress.",
+        "Use deterministic tools for anything computable rather than asking the model to compute it.",
+        "Scope write actions with least privilege and require human approval for consequential or irreversible actions.",
+        "Instrument everything: full trace of steps, tools, arguments, and cost; evaluate trajectories, not just final answers."
+      ],
+      "answer": "My default is the fixed pipeline. If I can enumerate the steps in advance — retrieve, then answer — I should, because a static pipeline is cheaper, faster, more predictable, and much easier to evaluate. I reach for an agent when the sequence genuinely depends on what it finds along the way: the query might need one search or five, might need a database lookup and then a calculation, might need to open a link discovered in a previous result. That branching is the thing agents buy you, and it is the only thing worth paying for them. The costs are real: latency and tokens multiply by the number of steps, errors compound so a 95%-per-step agent is unreliable over ten steps, trajectories vary between runs, and debugging becomes archaeology. So the engineering is mostly about constraining and verifying. I keep the tool set small and well described, since tool choice degrades as the menu grows. I validate the plan before executing it when the actions are expensive, and I bound step count and wall-clock so a confused agent stops instead of burning budget. Every tool call is checked — is the tool valid, do the arguments type-check — and errors are fed back as observations so the agent can correct rather than fail silently. Anything deterministic goes to code: arithmetic, date math, data transforms, because that converts a probabilistic step into a reliable one. Write actions get least-privilege scoping and human approval when they are consequential, and I treat every tool output as untrusted input that might carry an injection. Finally, observability: I log the full trajectory with arguments, tokens, and time, and I evaluate trajectories rather than only final answers, because two runs that both reached the right answer can differ enormously in cost and risk."
+    }
+  ]
+}

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exploration and Discovery — Agentic Design Patterns</title>
+<meta name="description" content="Agents that search a space rather than execute a known task: generating hypotheses, trying approaches, seeking novelty, and reporting what they found. The pattern powers research assistants, test generation, design-space search, and scientific workflows — and its defining risk is that a model can generate plausible novelty indefinitely, so exploration without verification and a budget produces expensive noise.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Exploration and Discovery — Agentic Design Patterns">
+<meta property="og:description" content="Agents that search a space rather than execute a known task: generating hypotheses, trying approaches, seeking novelty, and reporting what they found. The pattern powers research assistants, test generation, design-space search, and scientific workflows — and its defining risk is that a model can generate plausible novelty indefinitely, so exploration without verification and a budget produces expensive noise.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Exploration and Discovery","description":"Agents that search a space rather than execute a known task: generating hypotheses, trying approaches, seeking novelty, and reporting what they found. The pattern powers research assistants, test generation, design-space search, and scientific workflows — and its defining risk is that a model can generate plausible novelty indefinitely, so exploration without verification and a budget produces expensive noise.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Agentic Design Patterns","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/"},"teaches":["Exploration is a different objective from execution: success is coverage of a space and the discovery of something valuable, not the completion of a specified task.","The exploration/exploitation tradeoff is explicit here — how much budget goes to trying new directions versus deepening the most promising one — and it should be a parameter, not an accident.","Generated novelty is cheap and mostly worthless without a verification step; the value of the pattern comes from the filter, not the generator.","Diversity must be engineered: identical prompts to the same model produce correlated ideas, so varied framings, roles, constraints, or seeds are needed for genuine coverage.","Exploration needs a scoring function — novelty, feasibility, expected value — or there is no basis for deciding what to pursue and what to discard.","Budgets and stopping conditions are mandatory, because an exploring agent has no natural end state and will keep producing candidates as long as it is allowed."],"hasPart":[{"@type":"Question","position":1,"name":"How does an exploration task differ from an execution task?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q1","acceptedAnswer":{"@type":"Answer","text":"Exploration has no defined target output — success is finding something valuable within a space, so the criteria are coverage and quality of discoveries rather than task completion"}},{"@type":"Question","position":2,"name":"What is the exploration/exploitation tradeoff in this setting?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q2","acceptedAnswer":{"@type":"Answer","text":"How much budget goes to trying genuinely new directions versus deepening the most promising direction found so far"}},{"@type":"Question","position":3,"name":"Why is the verification step, rather than the generation step, where the value of this pattern lies?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q3","acceptedAnswer":{"@type":"Answer","text":"Because models can generate plausible-sounding novelty endlessly, so what separates a discovery from a fluent guess is whether it survives a check"}},{"@type":"Question","position":4,"name":"Why must diversity be engineered rather than assumed?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q4","acceptedAnswer":{"@type":"Answer","text":"Because repeated calls to the same model with the same framing produce correlated ideas clustered around one region of the space"}},{"@type":"Question","position":5,"name":"What role does a scoring function play in exploration?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q5","acceptedAnswer":{"@type":"Answer","text":"It provides the basis for ranking candidates — novelty, feasibility, expected value — so the system can decide what to pursue, what to keep, and what to discard"}},{"@type":"Question","position":6,"name":"Why are budgets and stopping conditions mandatory for exploring agents specifically?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q6","acceptedAnswer":{"@type":"Answer","text":"Because an exploring agent has no natural completion state — it can always generate one more candidate — so the loop ends only when something outside it says stop"}},{"@type":"Question","position":7,"name":"What should an exploration run return beyond its discoveries?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q7","acceptedAnswer":{"@type":"Answer","text":"A ranked set of findings with supporting evidence, plus what was tried and rejected and why — since dead ends prevent repeated work and reveal coverage"}},{"@type":"Question","position":8,"name":"Design an exploration agent that proposes and evaluates candidate optimizations for a slow service. How do you keep it from producing a plausible but useless list?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q8","acceptedAnswer":{"@type":"Answer","text":"The way this fails is that you get a tidy list of generic advice — add caching, use a CDN, optimize your queries — that could have been written without looking at the service at all. So the first design decision is to ground generation in evidence: the agent starts from profiles, traces, slow-query logs, and latency percentiles, and every candidate it proposes must reference a specific observation. That single constraint eliminates most of the plausible-but-useless output. Second, I engineer diversity rather than sampling repeatedly. Instead of asking one prompt five times, I run distinct lenses — I/O and network, algorithmic complexity, caching and reuse, concurrency and contention, infrastructure and configuration — because five samples of one framing produce five versions of the same id"}},{"@type":"Question","position":9,"name":"Explain why exploration agents are prone to producing confident nonsense, and what structural safeguards address it.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch21/#q9","acceptedAnswer":{"@type":"Answer","text":"Exploration removes the two things that normally keep a model honest. There is no target answer to check against, and there is no failing step to reveal an error — an execution agent that calls a tool wrong gets an exception, while an exploring agent that proposes a bad idea gets nothing but its own fluency. On top of that, novelty and correctness are orthogonal: an idea can sound new precisely because it is wrong, or because the field abandoned it a decade ago for reasons the model did not surface. Two further dynamics amplify the problem. Self-evaluation is weak, because the model judging a candidate shares the assumptions of the model that generated it, so a bad idea passes review by its own author. And correlated sampling creates false confidence: ask five times and get five variations"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/agentic-patterns/">Agentic Design Patterns</a></p>
+    <h1>Exploration and Discovery</h1>
+    <p class="sharepage__lede">Agents that search a space rather than execute a known task: generating hypotheses, trying approaches, seeking novelty, and reporting what they found. The pattern powers research assistants, test generation, design-space search, and scientific workflows — and its defining risk is that a model can generate plausible novelty indefinitely, so exploration without verification and a budget produces expensive noise.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Agentic Design Patterns</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Exploration is a different objective from execution: success is coverage of a space and the discovery of something valuable, not the completion of a specified task.</li><li>The exploration/exploitation tradeoff is explicit here — how much budget goes to trying new directions versus deepening the most promising one — and it should be a parameter, not an accident.</li><li>Generated novelty is cheap and mostly worthless without a verification step; the value of the pattern comes from the filter, not the generator.</li><li>Diversity must be engineered: identical prompts to the same model produce correlated ideas, so varied framings, roles, constraints, or seeds are needed for genuine coverage.</li><li>Exploration needs a scoring function — novelty, feasibility, expected value — or there is no basis for deciding what to pursue and what to discard.</li><li>Budgets and stopping conditions are mandatory, because an exploring agent has no natural end state and will keep producing candidates as long as it is allowed.</li><li>The output should be a ranked, evidence-backed set of findings with what was tried and rejected, since knowing the dead ends is often as valuable as the discoveries.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does an exploration task differ from an execution task?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Exploration uses more tools</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Exploration has no defined target output — success is finding something valuable within a space, so the criteria are coverage and quality of discoveries rather than task completion <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Exploration only applies to scientific domains</li>
+        <li><span class="sharepage__key">D</span> Exploration requires multi-agent architectures</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> An execution task has a goal state you can test. Exploration has a space and a value function, which is why it needs different stopping conditions, different metrics, and an explicit budget.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the exploration/exploitation tradeoff in this setting?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Whether to use a large or small model</li>
+        <li><span class="sharepage__key">B</span> Whether to run agents in parallel or sequentially</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> How much budget goes to trying genuinely new directions versus deepening the most promising direction found so far <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Whether to cache results between runs</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Pure exploitation converges early on a locally good idea; pure exploration produces a wide, shallow list of nothing. Making the split an explicit parameter lets the system be tuned for the task instead of drifting toward whichever the prompt implies.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why is the verification step, rather than the generation step, where the value of this pattern lies?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because generation is expensive and verification is cheap</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because models can generate plausible-sounding novelty endlessly, so what separates a discovery from a fluent guess is whether it survives a check <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because verification improves the model&#39;s future outputs</li>
+        <li><span class="sharepage__key">D</span> Because generation cannot be parallelized</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Idea generation is nearly free and nearly unlimited. Without an evidence step — running the experiment, executing the test, checking the source, computing the result — the output is a list of confident possibilities with no way to tell which are real.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why must diversity be engineered rather than assumed?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because sampling is disabled by default</li>
+        <li><span class="sharepage__key">B</span> Because diversity requires a larger context window</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because repeated calls to the same model with the same framing produce correlated ideas clustered around one region of the space <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because providers deduplicate identical requests</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Redundant sampling gives you the same neighbourhood repeatedly, which reads as convergence and is actually correlation. Varying the framing, the assumed role, the constraints, or the starting point is what produces coverage.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What role does a scoring function play in exploration?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It provides the basis for ranking candidates — novelty, feasibility, expected value — so the system can decide what to pursue, what to keep, and what to discard <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It determines the model&#39;s temperature</li>
+        <li><span class="sharepage__key">C</span> It is only needed for multi-agent exploration</li>
+        <li><span class="sharepage__key">D</span> It replaces the need for a budget</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Without a value function, every candidate looks equally worth pursuing and the search cannot direct itself. The scoring function is also what makes results comparable across runs and what turns a pile of ideas into a ranked report.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why are budgets and stopping conditions mandatory for exploring agents specifically?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because providers throttle long-running sessions</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because an exploring agent has no natural completion state — it can always generate one more candidate — so the loop ends only when something outside it says stop <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because exploration uses more memory</li>
+        <li><span class="sharepage__key">D</span> Because exploration cannot be parallelized safely</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Execution ends when the goal is met. Exploration has no such event, so the design supplies one: a budget, a diminishing-returns detector, or a target number of verified findings.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What should an exploration run return beyond its discoveries?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Only the single best result, to avoid overwhelming the user</li>
+        <li><span class="sharepage__key">B</span> The raw model outputs with no ranking</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A ranked set of findings with supporting evidence, plus what was tried and rejected and why — since dead ends prevent repeated work and reveal coverage <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> A confidence score for the model itself</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The negative results are part of the deliverable: they show how much of the space was covered, stop the next run from repeating the same paths, and let a human judge whether the search was actually thorough.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>Design an exploration agent that proposes and evaluates candidate optimizations for a slow service. How do you keep it from producing a plausible but useless list?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Ground the exploration in evidence first: profiles, traces, and metrics, so candidates are generated from observed behaviour rather than from generic best practices.</li><li>Engineer diversity deliberately — different lenses (I/O, algorithmic, caching, concurrency, infrastructure) rather than repeated sampling of one prompt.</li><li>Require each candidate to state a mechanism and a testable prediction, not just a recommendation.</li><li>Verify: measure with a benchmark or experiment where possible, or at minimum check the claim against the profile data.</li><li>Score by expected impact, implementation cost, and risk, and rank accordingly.</li><li>Bound the search: budget in candidates, time, and cost, with early stopping when new candidates stop being novel.</li><li>Deduplicate and cluster candidates so twenty rephrasings of &#39;add a cache&#39; collapse into one.</li><li>Report negatives: what was considered and ruled out, with the evidence that ruled it out.</li><li>Keep a human in the loop for anything that would be applied to production, since exploration output is hypotheses, not decisions.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The way this fails is that you get a tidy list of generic advice — add caching, use a CDN, optimize your queries — that could have been written without looking at the service at all. So the first design decision is to ground generation in evidence: the agent starts from profiles, traces, slow-query logs, and latency percentiles, and every candidate it proposes must reference a specific observation. That single constraint eliminates most of the plausible-but-useless output. Second, I engineer diversity rather than sampling repeatedly. Instead of asking one prompt five times, I run distinct lenses — I/O and network, algorithmic complexity, caching and reuse, concurrency and contention, infrastructure and configuration — because five samples of one framing produce five versions of the same idea. Third, each candidate must state a mechanism and a testable prediction: not &#39;add an index&#39; but &#39;this query does a full scan of 2M rows per request; an index on this column should cut p95 by roughly X&#39;. That makes it falsifiable. Verification is where the value is. Where the agent can run a benchmark or a targeted experiment in a sandbox, it does, and the measured result — including a null result — is attached to the candidate. Where it cannot, it must at least check the prediction against the existing profile data rather than asserting it. Then scoring: expected impact, implementation cost, and risk, producing a ranking rather than a list. Bounds keep it honest: a budget in candidates, wall-clock, and cost, plus early stopping when new candidates stop being meaningfully different from ones already generated — measured by clustering rather than by the agent&#39;s own judgment. Deduplication matters here, since twenty rephrasings of one idea look like thorough coverage and are not. Finally, the report includes what was ruled out and why, because that is what tells a reviewer how much of the space was actually searched, and every recommendation stays a hypothesis for a human to approve — exploration output is input to a decision, not the decision.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Explain why exploration agents are prone to producing confident nonsense, and what structural safeguards address it.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Generation is unconstrained by truth: models produce fluent plausible content, and in exploration there is no fixed target to check against.</li><li>Novelty and correctness are unrelated — a novel-sounding idea may be novel only because it is wrong or already known to be infeasible.</li><li>There is no natural error signal, unlike execution tasks where a failing step is visible.</li><li>Self-evaluation is unreliable: the same model that generated a candidate is a poor judge of it.</li><li>Correlated sampling makes repeated similar ideas look like convergent evidence.</li><li>Safeguards: require evidence and mechanism per candidate, verify externally (experiment, execution, source check), and separate the generator from the evaluator.</li><li>Check novelty against existing knowledge — a literature or prior-art check — so rediscovery is not reported as discovery.</li><li>Rank with an explicit scoring function and report negatives, so the reader can judge coverage.</li><li>Keep a human decision point, and bound the budget so noise is capped.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Exploration removes the two things that normally keep a model honest. There is no target answer to check against, and there is no failing step to reveal an error — an execution agent that calls a tool wrong gets an exception, while an exploring agent that proposes a bad idea gets nothing but its own fluency. On top of that, novelty and correctness are orthogonal: an idea can sound new precisely because it is wrong, or because the field abandoned it a decade ago for reasons the model did not surface. Two further dynamics amplify the problem. Self-evaluation is weak, because the model judging a candidate shares the assumptions of the model that generated it, so a bad idea passes review by its own author. And correlated sampling creates false confidence: ask five times and get five variations of the same idea, which reads as convergence when it is just one idea sampled five times. The structural safeguards all push in the same direction — make the filter stronger than the generator. Every candidate must carry a mechanism and evidence, not just a recommendation, so it becomes falsifiable. Verification comes from outside the model wherever possible: run the experiment, execute the code, check the source, compute the number. The evaluator is separated from the generator, ideally with different framing or a different model, and given explicit criteria. Novelty is checked against existing knowledge, so rediscovery is labelled as such rather than presented as a finding. Results are ranked by an explicit scoring function and reported alongside what was tried and rejected, which lets a reader assess coverage instead of trusting a curated list. And the budget is bounded with a human decision point at the end, because the honest framing of this pattern&#39;s output is a set of hypotheses with evidence attached — never a set of conclusions.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"agentic-patterns","unit":"ch21","title":"Exploration and Discovery","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"How does an exploration task differ from an execution task?","options":["Exploration uses more tools","Exploration has no defined target output — success is finding something valuable within a space, so the criteria are coverage and quality of discoveries rather than task completion","Exploration only applies to scientific domains","Exploration requires multi-agent architectures"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"What is the exploration/exploitation tradeoff in this setting?","options":["Whether to use a large or small model","Whether to run agents in parallel or sequentially","How much budget goes to trying genuinely new directions versus deepening the most promising direction found so far","Whether to cache results between runs"],"answer":2,"answerLetter":"C"},{"n":3,"type":"mc","prompt":"Why is the verification step, rather than the generation step, where the value of this pattern lies?","options":["Because generation is expensive and verification is cheap","Because models can generate plausible-sounding novelty endlessly, so what separates a discovery from a fluent guess is whether it survives a check","Because verification improves the model's future outputs","Because generation cannot be parallelized"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"Why must diversity be engineered rather than assumed?","options":["Because sampling is disabled by default","Because diversity requires a larger context window","Because repeated calls to the same model with the same framing produce correlated ideas clustered around one region of the space","Because providers deduplicate identical requests"],"answer":2,"answerLetter":"C"},{"n":5,"type":"mc","prompt":"What role does a scoring function play in exploration?","options":["It provides the basis for ranking candidates — novelty, feasibility, expected value — so the system can decide what to pursue, what to keep, and what to discard","It determines the model's temperature","It is only needed for multi-agent exploration","It replaces the need for a budget"],"answer":0,"answerLetter":"A"},{"n":6,"type":"mc","prompt":"Why are budgets and stopping conditions mandatory for exploring agents specifically?","options":["Because providers throttle long-running sessions","Because an exploring agent has no natural completion state — it can always generate one more candidate — so the loop ends only when something outside it says stop","Because exploration uses more memory","Because exploration cannot be parallelized safely"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"What should an exploration run return beyond its discoveries?","options":["Only the single best result, to avoid overwhelming the user","The raw model outputs with no ranking","A ranked set of findings with supporting evidence, plus what was tried and rejected and why — since dead ends prevent repeated work and reveal coverage","A confidence score for the model itself"],"answer":2,"answerLetter":"C"},{"n":8,"type":"open","prompt":"Design an exploration agent that proposes and evaluates candidate optimizations for a slow service. How do you keep it from producing a plausible but useless list?","points":["Ground the exploration in evidence first: profiles, traces, and metrics, so candidates are generated from observed behaviour rather than from generic best practices.","Engineer diversity deliberately — different lenses (I/O, algorithmic, caching, concurrency, infrastructure) rather than repeated sampling of one prompt.","Require each candidate to state a mechanism and a testable prediction, not just a recommendation.","Verify: measure with a benchmark or experiment where possible, or at minimum check the claim against the profile data.","Score by expected impact, implementation cost, and risk, and rank accordingly.","Bound the search: budget in candidates, time, and cost, with early stopping when new candidates stop being novel.","Deduplicate and cluster candidates so twenty rephrasings of 'add a cache' collapse into one.","Report negatives: what was considered and ruled out, with the evidence that ruled it out.","Keep a human in the loop for anything that would be applied to production, since exploration output is hypotheses, not decisions."]},{"n":9,"type":"open","prompt":"Explain why exploration agents are prone to producing confident nonsense, and what structural safeguards address it.","points":["Generation is unconstrained by truth: models produce fluent plausible content, and in exploration there is no fixed target to check against.","Novelty and correctness are unrelated — a novel-sounding idea may be novel only because it is wrong or already known to be infeasible.","There is no natural error signal, unlike execution tasks where a failing step is visible.","Self-evaluation is unreliable: the same model that generated a candidate is a poor judge of it.","Correlated sampling makes repeated similar ideas look like convergent evidence.","Safeguards: require evidence and mechanism per candidate, verify externally (experiment, execution, source check), and separate the generator from the evaluator.","Check novelty against existing knowledge — a literature or prior-art check — so rediscovery is not reported as discovery.","Rank with an explicit scoring function and report negatives, so the reader can judge coverage.","Keep a human decision point, and bound the budget so noise is capped."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/agentic-patterns/ch21">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

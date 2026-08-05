@@ -1,0 +1,160 @@
+{
+  "id": "ch08",
+  "chapter": 8,
+  "part": "Part IV: Adapting Models",
+  "title": "Dataset Engineering",
+  "summary": "The data half of adaptation: curating for quality, coverage, and quantity; acquiring and annotating; augmenting and synthesizing data with AI, including distillation and its risks; and processing — inspecting, deduplicating, cleaning, filtering, and formatting. The premise is that in AI engineering the dataset, not the training loop, is where quality is won or lost.",
+  "keyTakeaways": [
+    "Quality beats quantity for finetuning: a few thousand carefully curated, correct, consistently formatted examples routinely beat a hundred thousand noisy ones.",
+    "Coverage is the second axis — the data must span the real input distribution, including the edge cases, formats, and user styles the model will actually meet.",
+    "Data synthesis is used for quantity, coverage of rare cases, privacy, and distillation, but synthetic data must be verified: unverified generated data quietly encodes the generator's errors and biases.",
+    "Distillation trains a smaller model on a larger model's outputs; it is powerful and cheap, and it is constrained by the teacher's terms of service as much as by the technique.",
+    "Over-reliance on synthetic data risks degradation — the model learns the generator's distribution, diversity collapses, and provenance becomes untraceable, including into your evaluation sets.",
+    "Deduplication matters more than it looks: duplicates skew the training distribution, waste compute, and leak between training and evaluation splits, producing scores that do not hold up.",
+    "Always inspect your data by hand — reading samples finds the formatting bug, the truncated field, and the systematically wrong label that no aggregate statistic surfaces."
+  ],
+  "questions": [
+    {
+      "q": "Why does the book argue quality beats quantity for finetuning data?",
+      "options": [
+        "Because training frameworks cap dataset size",
+        "Because a model finetuned on noisy examples learns the noise — inconsistent formats, wrong answers, and contradictory styles teach exactly that, while a small consistent set teaches the target behavior cleanly",
+        "Because large datasets always cause overfitting",
+        "Because quality data is cheaper to collect than quantity"
+      ],
+      "answer": 1,
+      "explain": "Finetuning is behavior shaping on top of an already capable model, not knowledge acquisition from scratch. Contradictions in the data become inconsistency in the model, so curation — not collection volume — is the lever."
+    },
+    {
+      "q": "What does data 'coverage' mean in this context, and what is the classic symptom of poor coverage?",
+      "options": [
+        "How many tokens the dataset contains; the symptom is slow training",
+        "How much disk space the dataset uses; the symptom is high storage cost",
+        "How well the data spans the real input distribution — languages, formats, difficulty, edge cases; the symptom is a model that performs well on typical inputs and falls apart on the tail",
+        "How many annotators reviewed each example; the symptom is annotator disagreement"
+      ],
+      "answer": 2,
+      "explain": "A dataset can be large, clean, and still narrow. If every example is a short, well-formed English question, the finetuned model will be brittle on long, messy, multilingual, or adversarial inputs — which is most of production."
+    },
+    {
+      "q": "What is the difference between data augmentation and data synthesis as the book uses the terms?",
+      "options": [
+        "Augmentation derives new examples from existing real data (perturbation, paraphrase, transformation); synthesis generates new data, typically with a model or a simulator, rather than deriving it from a specific real example",
+        "Augmentation is manual; synthesis is automated",
+        "Augmentation applies to images; synthesis applies to text",
+        "Augmentation happens before training; synthesis happens after"
+      ],
+      "answer": 0,
+      "explain": "Augmentation stays anchored to real examples and preserves their label; synthesis creates data outright. Synthesis unlocks scale and rare-case coverage but is only as trustworthy as its generator and its verification step."
+    },
+    {
+      "q": "Which of these is NOT one of the book's motivations for synthesizing data?",
+      "options": [
+        "Increasing quantity when real data is scarce",
+        "Covering rare or dangerous cases that occur too infrequently in real traffic",
+        "Guaranteeing that the resulting model will be factually correct",
+        "Avoiding privacy problems by generating data instead of using real user records"
+      ],
+      "answer": 2,
+      "explain": "Synthesis addresses quantity, coverage, privacy, and cost (including distillation). It provides no correctness guarantee — the generator's errors are inherited, which is exactly why verification of synthetic data is mandatory rather than optional."
+    },
+    {
+      "q": "What is model distillation in the dataset-engineering sense?",
+      "options": [
+        "Compressing a model's weights via quantization",
+        "Training a smaller student model on outputs generated by a larger teacher model, transferring behavior at a fraction of the serving cost",
+        "Removing duplicate documents from a corpus",
+        "Merging several finetuned models into one"
+      ],
+      "answer": 1,
+      "explain": "The teacher generates the training signal — responses, labels, or reasoning traces — and the student learns to reproduce it. This is the standard path from an expensive prototype to an affordable production model, subject to the teacher's licensing terms."
+    },
+    {
+      "q": "What legal or contractual constraint does the book flag around distillation?",
+      "options": [
+        "Distillation requires the teacher model's weights to be public",
+        "Distilled models cannot be quantized",
+        "Distillation requires attribution in the UI",
+        "Many commercial providers' terms of service forbid using their outputs to train competing models, so the technique's legality depends on the teacher's terms, not just on the code"
+      ],
+      "answer": 3,
+      "explain": "The engineering is straightforward; the permission is not. Teams should check the teacher's terms before building a pipeline whose entire value is derived from its outputs."
+    },
+    {
+      "q": "What is the risk of training predominantly on AI-generated data?",
+      "options": [
+        "It always increases inference latency",
+        "It requires more GPUs than training on human data",
+        "Diversity collapses toward the generator's distribution, its errors and biases are amplified, and provenance is lost — including the risk that generated data derived from a benchmark contaminates evaluation",
+        "It makes quantization impossible"
+      ],
+      "answer": 2,
+      "explain": "Each generation of synthetic data narrows the distribution and bakes in the previous model's mistakes. Untracked provenance also lets benchmark-derived text leak into training or evaluation sets, so measured quality no longer reflects real capability."
+    },
+    {
+      "q": "Why is deduplication treated as a first-class processing step rather than a nicety?",
+      "options": [
+        "Because duplicate records break JSON parsers",
+        "Because duplicates skew the training distribution toward repeated content, waste compute, and — when the same item lands in both training and evaluation — inflate scores by testing on training data",
+        "Because deduplication is required to compute perplexity",
+        "Because vector databases reject duplicate embeddings"
+      ],
+      "answer": 1,
+      "explain": "The train/eval leak is the dangerous one: it produces a number that looks like generalization and is memorization. Dedup should cover exact, near-duplicate (fuzzy), and semantic duplicates, and be applied across splits as well as within them."
+    },
+    {
+      "q": "Why does the book repeatedly insist on manually inspecting data samples?",
+      "options": [
+        "Because regulations require human review of all training data",
+        "Because manual inspection is faster than automated analysis",
+        "Because aggregate statistics hide the failures that matter — truncated fields, HTML artifacts, systematically mislabeled examples, and wrong chat formatting are visible in five minutes of reading and invisible in a summary table",
+        "Because models cannot process data that has not been read by a human"
+      ],
+      "answer": 2,
+      "explain": "Nearly every experienced practitioner's dataset horror story is something that reading fifty examples would have caught. Inspection is the cheapest debugging step in the pipeline and the one most often skipped."
+    },
+    {
+      "q": "Why does the exact formatting of finetuning data matter so much?",
+      "options": [
+        "Because JSON is required by all training APIs",
+        "Because instruction-tuned models expect a specific chat template with role markers and special tokens — mismatched formatting between training and inference teaches and then triggers the wrong behavior",
+        "Because formatting affects the tokenizer's vocabulary size",
+        "Because unformatted data cannot be deduplicated"
+      ],
+      "answer": 1,
+      "explain": "The template is part of what the model learned during post-training. Training on one format and serving with another produces subtly degraded behavior that looks like a data-quality problem and is actually a plumbing problem."
+    },
+    {
+      "type": "open",
+      "prompt": "You need a finetuning dataset for a classification-and-summarization assistant, and you have limited real examples. Describe how you would build it.",
+      "points": [
+        "Start from real data wherever it exists — production logs, human-corrected outputs, support tickets — since real inputs carry the true distribution of messiness.",
+        "Define the target behavior precisely first (an annotation guideline with examples), because inconsistent labels are the main source of a bad finetune.",
+        "Assess coverage explicitly across dimensions that matter — topic, length, language, format, difficulty, and adversarial or out-of-scope inputs — and identify the gaps.",
+        "Fill gaps with augmentation of real examples (paraphrase, perturbation, format variation) before resorting to full synthesis.",
+        "Use AI synthesis for rare or sensitive cases, with a verification step: automated checks, a stronger model as verifier, and human review of a sample.",
+        "Track provenance per example (real, augmented, synthetic, which generator) so you can measure how each slice affects results and avoid evaluation contamination.",
+        "Hold out an evaluation set built only from real data, deduplicated against training, before any training happens.",
+        "Process the data: dedup exact/fuzzy/semantic, clean PII and artifacts, enforce the model's chat template, and read a sample by hand.",
+        "Iterate small: train on a few thousand high-quality examples, measure against the prompting baseline, and grow the dataset where evaluation shows weakness."
+      ],
+      "answer": "I would treat the dataset as the deliverable and the training run as an afterthought. First, define the target behavior in writing — a short annotation guideline with worked examples for each label and a model summary — because if two annotators or two prompts disagree, the finetuned model will learn the disagreement. Second, mine real data: production logs, tickets, and especially outputs that humans corrected, since a correction pair is the highest-signal example there is. Third, audit coverage against the axes that actually vary in production — topic, length, language, formatting, difficulty, and the adversarial or out-of-scope inputs users send — and write down where I am thin. Only then do I manufacture. Augmentation of real examples comes first because it preserves the true input distribution: paraphrases, formatting variants, injected noise and typos. Synthesis comes second, for rare, dangerous, or privacy-sensitive cases that real data cannot supply, and it never goes in unverified — automated checks for structure, a stronger model as a verifier, and a human read of a random sample. I record provenance on every row (real, augmented, synthetic, generator and prompt version) so I can slice results by source later and so synthetic text derived from a benchmark cannot silently contaminate my evaluation. The evaluation set is carved out of real data before training, and deduplicated against training with exact, fuzzy, and semantic matching — that leak is the one that produces a great number and a bad model. Processing then does the unglamorous work: strip PII, remove HTML and artifacts, enforce the exact chat template the model expects, and read fifty examples by hand, which reliably finds the truncation bug no statistic shows. Finally I start small — a few thousand strong examples — and compare against the prompting baseline. If it does not beat prompting, more data is not obviously the answer; the guideline probably is.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the case for and against using a frontier model to generate training data for a smaller in-house model.",
+      "points": [
+        "For: it is dramatically cheaper and faster than human annotation, and can produce coverage of rare cases on demand.",
+        "For: distillation can transfer most of the behavior of an expensive model into a small one, cutting serving cost and latency at high volume.",
+        "For: synthetic data avoids exposing real user records, easing privacy and compliance constraints.",
+        "Against: the student inherits the teacher's errors, biases, and stylistic tics, and cannot exceed it on the distilled behavior.",
+        "Against: diversity collapse — generated data clusters around the teacher's distribution, leaving the tail uncovered exactly where you needed help.",
+        "Against: provenance and evaluation contamination risks, since generated text may encode benchmark content.",
+        "Against: terms of service on commercial models frequently prohibit training competing models on their outputs.",
+        "Mitigations: verify synthetic examples, mix with real data, track provenance, keep a real held-out evaluation set, and diversify generators/prompts."
+      ],
+      "answer": "The case for is mostly economics and speed. Human annotation is slow and expensive; a frontier model can produce tens of thousands of labeled examples overnight, including deliberate coverage of rare cases you would wait months to observe naturally. If the goal is distillation — getting a small model to reproduce an expensive model's behavior on a narrow, high-volume task — this is the standard and very effective path, and it can cut serving cost and latency by an order of magnitude while holding quality on that task. It also helps with privacy: generated records let you train without moving real user data around. The case against starts with the ceiling. The student learns the teacher's distribution, which means it inherits the teacher's mistakes, biases, and mannerisms, and it will not outperform the teacher on the behavior being distilled. Diversity collapse is the subtler harm: generated data clusters tightly, so the long tail — the exact region where you wanted extra coverage — stays thin while the dataset looks large. Provenance is the third problem, because generated text can carry benchmark content into your training or evaluation set, and once mixed it is hard to trace, so your metrics stop meaning what you think. And before any of that, there is a contractual question: many commercial providers explicitly forbid using their outputs to train competing models, so the pipeline's legality depends on the teacher's terms. My working compromise is to use synthesis as an amplifier rather than a substitute: seed from real examples, verify every generated item automatically and a sample of them by hand, mix synthetic with real rather than going pure, vary generators and prompts to avoid a single distribution, tag provenance on every row, and keep an evaluation set built exclusively from real, deduplicated data so the scoreboard stays honest."
+    }
+  ]
+}

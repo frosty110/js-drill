@@ -1,0 +1,127 @@
+{
+  "id": "ch11",
+  "num": 11,
+  "part": "Part II: State, Knowledge & Interaction",
+  "title": "Goal Setting and Monitoring",
+  "summary": "Give the agent an explicit goal with checkable success criteria, and then watch progress against it while it runs. Without this, an autonomous loop has no way to distinguish finishing from stopping, progress from motion, or the original objective from whatever it drifted into three steps ago.",
+  "keyTakeaways": [
+    "A task instruction is not a goal: the goal is a checkable statement of the desired end state, which is what lets the system decide it is done.",
+    "Success criteria should be verifiable by something other than the agent's own opinion — a test passing, a record existing, a value matching, a human confirming.",
+    "Monitoring during execution catches the failure that end-of-run checks miss: stagnation (repeating without progress), divergence (drifting from the goal), and budget burn.",
+    "Decomposing a goal into sub-goals gives intermediate checkpoints, so failure is detected near its cause rather than at the end of a long run.",
+    "Every autonomous loop needs termination conditions on all three axes: goal achieved, budget exhausted (steps, time, cost), or unrecoverable failure — with escalation rather than silent stopping.",
+    "Progress should be observable to the user for long-running tasks; an opaque agent that works for four minutes is indistinguishable from one that is stuck.",
+    "Goal drift is a real failure: as context accumulates, agents optimize for the latest sub-problem rather than the original objective, so the goal must be re-anchored in context."
+  ],
+  "questions": [
+    {
+      "q": "What distinguishes a goal from a task instruction in this pattern?",
+      "options": [
+        "A goal is longer and more detailed",
+        "A goal names a checkable end state — what must be true when the work is done — while an instruction only says what to do",
+        "A goal must be written by a human, an instruction by the model",
+        "A goal applies to multi-agent systems only"
+      ],
+      "answer": 1,
+      "explain": "'Investigate the outage' is an instruction; 'a ticket exists whose stated cause is supported by log evidence' is a goal. Only the second can be evaluated, which is what makes autonomous termination possible."
+    },
+    {
+      "q": "Why should success criteria be verifiable by something other than the agent itself?",
+      "options": [
+        "Because agents cannot read their own output",
+        "Because self-assessment inherits the same blind spots that produced the work — an agent that misunderstood the task will also judge itself as having completed it",
+        "Because external checks are always cheaper",
+        "Because providers require external validation"
+      ],
+      "answer": 1,
+      "explain": "Asking the model whether it succeeded gives you its confidence, not its correctness. A test suite, a database query, a schema check, or a human confirmation is evidence; self-report is a claim."
+    },
+    {
+      "q": "What does in-flight monitoring catch that a final check does not?",
+      "options": [
+        "Formatting errors in the final answer",
+        "Stagnation — repeating the same actions without progress — and divergence from the goal, both detectable long before the run ends",
+        "Token pricing changes",
+        "Retrieval index corruption"
+      ],
+      "answer": 1,
+      "explain": "By the time a final check fails, the budget is already spent. Watching progress per step lets the system intervene — replan, escalate, or stop — while the loop still has resources to do something useful."
+    },
+    {
+      "q": "Why does decomposing a goal into sub-goals improve reliability?",
+      "options": [
+        "It reduces the number of tokens per call",
+        "It removes the need for tools",
+        "It creates intermediate checkpoints, so a failure is detected near its cause instead of surfacing as an unexplained bad result at the end",
+        "It guarantees the sub-goals can run in parallel"
+      ],
+      "answer": 2,
+      "explain": "Checkpoints localize failure and make partial progress meaningful — the run can resume from the last verified sub-goal rather than restarting, and the trace shows where things went wrong."
+    },
+    {
+      "q": "Which set of termination conditions should an autonomous loop define?",
+      "options": [
+        "Goal achieved; budget exhausted in steps, time, or cost; and unrecoverable failure — each with a defined follow-up rather than silent stopping",
+        "Only 'goal achieved', since anything else is a bug",
+        "Only a maximum number of steps",
+        "Termination should be left to the model's judgment"
+      ],
+      "answer": 0,
+      "explain": "All three happen in production. What matters as much as the bound is what happens at it: escalate with the trace, report partial results, or hand back to a human — never stop quietly and leave the caller to infer success."
+    },
+    {
+      "q": "What is goal drift?",
+      "options": [
+        "The goal changing because the user edited it",
+        "The agent gradually optimizing for the most recent sub-problem in its context rather than the original objective, which recedes as the transcript grows",
+        "The success criteria becoming unverifiable over time",
+        "Latency increasing as context grows"
+      ],
+      "answer": 1,
+      "explain": "Long runs accumulate context, and the most recent material dominates attention. Re-anchoring — keeping the goal pinned in context and re-checking each step against it — is the standard mitigation."
+    },
+    {
+      "q": "Why does the pattern call for surfacing progress on long-running tasks?",
+      "options": [
+        "To satisfy audit requirements",
+        "Because streaming reduces token cost",
+        "Because an opaque agent working for minutes is indistinguishable from a stuck one — visible progress lets a user intervene, and gives the system a place to report partial results",
+        "Because users prefer longer responses"
+      ],
+      "answer": 2,
+      "explain": "Progress reporting is both a UX requirement and an operational one: it converts a black box into something a human can supervise, and it makes the intervention point explicit when the agent goes off track."
+    },
+    {
+      "type": "open",
+      "prompt": "An agent is asked to 'clean up our stale documentation'. Turn this into a goal with monitoring, and describe what you would put in place before letting it run.",
+      "points": [
+        "Refuse the vague objective: define what stale means operationally (not updated in N months, referencing removed APIs, failing link checks) and what cleanup means (flagged, edited, or archived).",
+        "Express the goal as a checkable end state with scope limits — which repositories, which document types, how many documents per run.",
+        "Decompose into sub-goals with checkpoints: identify candidates, verify staleness against evidence, propose changes, apply approved changes.",
+        "Define verification that is not the agent's own opinion: link checks, references to symbols that no longer exist, git history, test or build results.",
+        "Separate read from write: identification and proposal run autonomously; any edit or deletion requires review or is delivered as a pull request rather than a direct change.",
+        "Set budgets: documents per run, wall-clock, cost, and a cap on the number of changes proposed at once so review remains feasible.",
+        "Monitor for stagnation and drift — repeated candidates, edits outside scope, scope creep into rewriting rather than updating.",
+        "Report progress and partial results, and escalate ambiguity (is this document obsolete or just rarely changed?) instead of guessing.",
+        "Make everything reversible: version control, no destructive deletes, an audit trail of what changed and why."
+      ],
+      "answer": "The first thing I would do is refuse the objective as stated, because 'stale' and 'clean up' are not checkable. Operationally, stale becomes a disjunction of evidence-backed conditions: the document references a symbol or endpoint that no longer exists, its links fail, its code samples do not run, or it has not been touched in a defined period while the code it documents has changed. Cleanup becomes one of three explicit outcomes — flag for a human, propose an edit, or archive — with archiving reserved for documents meeting the strictest criteria. The goal then reads as an end state: every document in the named scope has been assessed, each stale one has a proposed action with cited evidence, and no non-stale document has been modified. Scope limits are part of the goal — which repositories, which document types, and a cap on documents per run. I would decompose it into checkpointed sub-goals: identify candidates, verify staleness against evidence, propose changes, and only then apply. Verification is deliberately external to the agent: link checkers, symbol lookups against the current codebase, git history, and build or test results. If the agent's only evidence is its impression that a document feels old, that is not evidence. The write boundary is where I would be strictest: identification and proposal run autonomously, but nothing is edited or deleted directly. Changes arrive as a pull request with the evidence in the description, which turns an irreversible action into a reviewable one and also caps the blast radius of a misjudgment. Budgets cover documents per run, wall-clock, cost, and — importantly — the number of proposed changes, because a hundred-file pull request will not be reviewed and therefore has no safety value. During execution I monitor for stagnation, for repeated candidates, and for scope drift, since the characteristic failure here is an agent that starts updating documentation and ends up rewriting it. Progress is reported as it goes, ambiguous cases are escalated rather than guessed, and everything is under version control so the whole run can be reverted.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "How would you detect that a running agent is making no real progress, and what should the system do about it?",
+      "points": [
+        "Define progress against the goal's sub-goals or state changes, not against step count or token spend.",
+        "Detect repetition: identical or near-identical tool calls and arguments, repeated retrieval of the same content, cycling between two actions.",
+        "Detect absence of state change: no new information gained, no verified sub-goal completed within a window of steps.",
+        "Track budget consumption relative to progress — a rate-of-progress signal rather than an absolute step count.",
+        "Watch for divergence: actions no longer related to the goal, or scope expanding beyond the original objective.",
+        "Responses in order of escalation: replan with the failure explained, change approach or tool, reduce scope, then escalate to a human with the trace and partial results.",
+        "Always terminate with a report rather than silence, distinguishing 'failed' from 'partially completed' and returning what was accomplished.",
+        "Log the pattern so recurring stagnation causes become evaluation cases and fixes rather than repeated incidents."
+      ],
+      "answer": "I would define progress in terms of the goal rather than activity, because an agent burning tokens looks busy either way. Concretely, progress means a sub-goal was verified complete, or new information entered the state that was not there before. Against that definition, the detectors are simple. Repetition: the same tool with near-identical arguments called more than once, or a cycle between two actions — that is the classic loop, and it is cheap to catch by hashing calls. Absence of state change: a window of N steps in which no sub-goal was verified and nothing new was learned. Rate of progress: budget consumed relative to sub-goals completed, which catches the slow-motion version where the agent does make progress but will clearly exhaust its budget before finishing. And divergence: steps whose targets no longer relate to the goal, or scope quietly widening beyond what was asked. The response should escalate rather than jump straight to failure. First, replan with the impasse stated explicitly — telling the agent 'this approach has failed twice, the tool returns empty' is far more effective than letting it try a third time. Second, change approach: a different tool, a different query formulation, a smaller sub-goal. Third, reduce scope and deliver what is achievable. Fourth, escalate to a human with the full trace, the partial results, and a specific question rather than a generic failure. The rule I would hold to is that the run never ends silently: it terminates with a report that distinguishes completed, partially completed, and failed, and hands back whatever was accomplished so the work is not thrown away. Finally, every stagnation event gets logged with its signature, because the same impasse recurring across runs is a design bug — a missing tool, a bad description, an impossible sub-goal — and it belongs in the evaluation set, not in the incident channel."
+    }
+  ]
+}

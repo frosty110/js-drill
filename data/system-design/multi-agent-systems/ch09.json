@@ -1,0 +1,139 @@
+{
+  "id": "ch09",
+  "chapter": 9,
+  "part": "Part II: Building Multi-Agent Systems from Scratch",
+  "title": "Multi-Agent Frameworks",
+  "summary": "How to evaluate the frameworks rather than collect them. Each encodes a control-flow model — a graph, a conversation, a crew of roles, a handoff mesh — and that model, not the API surface, is what you are adopting. The criteria that matter are control-flow fit, state and streaming support, observability, escape hatches, and how much of the prompt the framework writes on your behalf.",
+  "keyTakeaways": [
+    "A framework's control-flow model is the real commitment: graph-based, conversation-based, role/crew-based, and handoff-based designs make different things easy and different things awkward.",
+    "The most important evaluation question is what the framework actually sends to the model — hidden preambles and reformatted messages mean you are evaluating its prompt, not yours.",
+    "State handling and resumability separate demo frameworks from production ones: durable state, checkpointing, and replay matter more than the number of built-in agents.",
+    "Streaming, tracing, and human-in-the-loop support should be first-class, since retrofitting them onto a framework that returns final values is painful.",
+    "Escape hatches matter more than features: you will eventually need to do something the abstraction did not anticipate, and the question is whether that costs an afternoon or a rewrite.",
+    "Build the raw loop once before adopting anything, so framework behaviour is legible and its failure modes are debuggable.",
+    "Lock-in is proportional to how much of your logic lives in framework-specific constructs; keeping prompts, tools, and evaluation outside the framework preserves optionality.",
+    "The ecosystem moves fast, so favour frameworks whose abstractions you could reimplement over ones whose magic you depend on."
+  ],
+  "questions": [
+    {
+      "q": "What are you primarily adopting when you choose an agent framework?",
+      "options": [
+        "Its list of integrations",
+        "Its control-flow model — graph, conversation, roles, or handoffs — which determines what is natural to express and what fights the abstraction",
+        "Its choice of default model",
+        "Its logging format"
+      ],
+      "answer": 1,
+      "explain": "Integrations can be written; the control-flow model shapes everything you build. A graph framework makes deterministic workflows natural and free-form collaboration awkward, and a conversation framework does the reverse."
+    },
+    {
+      "q": "Why is 'what does it actually send to the model' a critical evaluation question?",
+      "options": [
+        "Because prompt length determines cost only",
+        "Because frameworks inject preambles, reformat messages, and add their own instructions — so your prompt engineering may be evaluating the framework's text rather than yours",
+        "Because providers reject framework-generated prompts",
+        "Because models behave differently per framework by design"
+      ],
+      "answer": 1,
+      "explain": "If you cannot see and control the final payload, you cannot debug quality, migrate models predictably, or attribute a regression. The ability to log and override the exact request is a hard requirement."
+    },
+    {
+      "q": "Which capability most distinguishes a production-ready framework from a demo-oriented one?",
+      "options": [
+        "The number of prebuilt agent personas",
+        "Support for the newest models",
+        "Durable state with checkpointing, resumption, and replay — so long runs survive failures and can be inspected",
+        "A visual builder"
+      ],
+      "answer": 2,
+      "explain": "Demos run to completion in one process. Production runs get interrupted by deploys, timeouts, and rate limits, and their side effects must not be repeated on retry — which requires state the framework persists rather than holds in memory."
+    },
+    {
+      "q": "Why should streaming, tracing, and human-in-the-loop be first-class rather than added later?",
+      "options": [
+        "Because they are required by model providers",
+        "Because each requires the execution model to expose intermediate events and to pause and resume — properties that cannot be bolted onto an abstraction that only returns final results",
+        "Because they reduce token cost",
+        "Because frameworks charge extra for them"
+      ],
+      "answer": 1,
+      "explain": "Progress events, pause/resume for approval, and per-step traces all depend on the framework's internal execution model. If it was not designed for them, the workaround is usually to stop using the framework for that part."
+    },
+    {
+      "q": "Why are escape hatches a more important criterion than feature count?",
+      "options": [
+        "Because features are always poorly implemented",
+        "Because you will eventually need behaviour the abstraction did not anticipate, and the cost of that moment depends on whether you can drop to a lower level or must work around the framework",
+        "Because escape hatches improve performance",
+        "Because features change between versions"
+      ],
+      "answer": 1,
+      "explain": "Every abstraction eventually mismatches a requirement — a custom retry policy, an unusual message shape, a provider quirk. A framework that lets you take over one step is survivable; one that makes that impossible forces a rewrite."
+    },
+    {
+      "q": "What is the argument for building the raw loop before adopting a framework?",
+      "options": [
+        "Custom loops always perform better",
+        "Frameworks cannot call tools",
+        "Having built the loop, you can tell what a framework is doing, debug it, and judge whether its abstraction fits — otherwise its behaviour is opaque",
+        "It is required to obtain API access"
+      ],
+      "answer": 2,
+      "explain": "The loop is small. Writing it once turns framework internals from magic into a known structure with a wrapper around it, which is what makes framework problems diagnosable rather than mysterious."
+    },
+    {
+      "q": "How is lock-in best minimized?",
+      "options": [
+        "By using only open-source frameworks",
+        "By keeping prompts, tool implementations, evaluation, and business logic outside framework-specific constructs, so the framework orchestrates rather than owns them",
+        "By avoiding frameworks entirely",
+        "By pinning to a specific framework version forever"
+      ],
+      "answer": 1,
+      "explain": "The transferable assets are your prompts, tools, evaluation sets, and domain logic. When those live in plain code and the framework only wires them together, switching is a rewiring job rather than a rewrite."
+    },
+    {
+      "q": "What posture does the fast-moving framework ecosystem suggest?",
+      "options": [
+        "Wait until the ecosystem stabilizes before building anything",
+        "Adopt whichever framework has the most stars",
+        "Prefer abstractions you could reimplement yourself, and treat the framework as replaceable infrastructure rather than the foundation of the product",
+        "Use several frameworks simultaneously to hedge"
+      ],
+      "answer": 2,
+      "explain": "Frameworks in this space change APIs frequently and some do not survive. Depending on ones whose behaviour you understand and could rebuild keeps a deprecation from becoming an existential event."
+    },
+    {
+      "type": "open",
+      "prompt": "Your team must choose a framework for a production multi-agent system. Define the evaluation you would run.",
+      "points": [
+        "Start from requirements: control-flow shape needed (deterministic workflow, handoffs, group discussion), latency and cost budgets, human-in-the-loop needs, and deployment constraints.",
+        "Build the raw loop first so the team can judge what any framework adds.",
+        "Prototype the same representative task in two or three candidates rather than reading documentation.",
+        "Check payload transparency: can you log and override the exact request sent to the model.",
+        "Check state: durability, checkpointing, resumption, and whether a run can be replayed for debugging.",
+        "Check streaming and event granularity, and whether pause/resume for human input is supported.",
+        "Check observability: tracing integration, per-step cost and token accounting.",
+        "Check escape hatches: can you implement one step by hand inside the framework's flow.",
+        "Assess maintenance risk: release cadence, breaking-change history, governance, and community size.",
+        "Keep prompts, tools, and evaluation outside the framework so the decision stays reversible; decide on the prototype evidence, including cost and latency."
+      ],
+      "answer": "I would start from our requirements rather than from the framework landscape, because the deciding factor is control-flow fit. Do we need a deterministic workflow with branching and checkpoints, a conversational group, or a handoff mesh? What are our latency and cost budgets, do we need mid-run human approval, and where must this deploy? Those answers eliminate most candidates before any code is written. Then I would have the team build the raw loop — messages, tools, termination, streaming — because without that baseline nobody can say what a framework is adding. With the requirements and the baseline in hand, I would prototype the same representative task in two or three candidates rather than reading their documentation, since documentation shows the happy path and the prototype shows the abstraction fighting you. In each prototype I check a specific list. Payload transparency: can I log the exact request sent to the model and override it. State: is it durable, can a run checkpoint, resume after a process restart, and be replayed for debugging. Streaming: are events emitted at a useful granularity and can the run pause for human input and resume with state intact. Observability: does it integrate with tracing, and does it account tokens and cost per step. Escape hatches: can I take over one step and implement it by hand without leaving the framework. That last test is the one that predicts how the next twelve months go. Alongside the technical evaluation I look at maintenance risk — release cadence, history of breaking changes, who governs it, how large the community is — because this ecosystem moves fast and some of these projects will not exist in two years. Whatever we choose, I would insist that prompts, tool implementations, evaluation sets, and domain logic live in our own code with the framework merely orchestrating them, so that the decision stays reversible. And the choice gets made on prototype evidence including measured cost and latency, not on feature matrices."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the tradeoff between using a framework and building your own orchestration, and how you would decide.",
+      "points": [
+        "Frameworks provide the boring parts quickly: tool-call parsing, retries, streaming plumbing, provider abstraction, and common topologies.",
+        "They also impose an execution model, hidden prompts, and an upgrade treadmill, and they can obscure what is sent to the model.",
+        "Custom orchestration gives full control, transparency, and exact fit, at the cost of building and maintaining plumbing that is not your product.",
+        "The agent loop itself is small; the expensive parts are durable state, streaming, tracing, retries, and human-in-the-loop.",
+        "Team capacity and timeline matter: a small team shipping fast benefits more from a framework than a platform team with long-lived requirements.",
+        "Hybrid is common and often correct: own the loop and state, use libraries for narrow pieces such as provider clients and tracing.",
+        "Whichever path, keep prompts, tools, and evaluation portable so the decision can be revisited.",
+        "Decide on measured prototypes rather than principle."
+      ],
+      "answer": "Frameworks are worth most for the parts that are tedious and identical everywhere: parsing tool calls across providers, retry and backoff, streaming plumbing, provider abstraction, and ready-made topologies you would otherwise write. For a small team trying to ship, that is real acceleration. What you accept in exchange is an execution model you did not design, prompts you did not write being sent on your behalf, and an upgrade treadmill in an ecosystem with a history of breaking changes. The failure I would watch for is the one where quality problems become unattributable because you cannot see the final payload. Building your own gives exact fit and total transparency, and the core loop genuinely is small — a message list, a model call, tool dispatch, termination. What is not small is everything around it: durable state and resumption, a streaming event protocol, tracing with per-step cost accounting, retry classification, cancellation, and pause/resume for human approval. That is where the months go, and it is plumbing rather than product. So my decision rule is about where the leverage is. If our differentiation is in the domain — the tools, the prompts, the evaluation, the data — I want to spend engineering there and let something else handle plumbing, provided it passes the transparency and escape-hatch tests. If our requirements are unusual enough that we would be fighting the abstraction constantly, or if the system is long-lived infrastructure that many teams will build on, owning the orchestration is the better investment. In practice I lean hybrid: own the loop and the state, because those are where debugging and correctness live, and use libraries for the narrow, well-scoped pieces — provider clients, tracing, schema validation. Whichever way it goes, prompts, tools, and evaluation stay in portable code so the decision can be revisited in a year, and I would settle it on measured prototypes rather than on principle."
+    }
+  ]
+}

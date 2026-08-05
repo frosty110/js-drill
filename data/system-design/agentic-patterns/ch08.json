@@ -1,0 +1,127 @@
+{
+  "id": "ch08",
+  "num": 8,
+  "part": "Part II: State, Knowledge & Interaction",
+  "title": "Memory Management",
+  "summary": "Give the agent state that survives the context window. Short-term memory is the conversation in the window and the scratchpad within a task; long-term memory is an external store the agent writes to and retrieves from across sessions. The design questions are what to write, when to retrieve, how to keep it fresh, and when to forget — none of which the model decides for you.",
+  "keyTakeaways": [
+    "Short-term memory is the context window: cheap to use, bounded, and lost at the end of the session. Long-term memory is external storage that must be explicitly written and explicitly retrieved.",
+    "Context management techniques — sliding windows, summarization/compaction of older turns, and retrieval of only relevant history — trade fidelity for room, and each loses something specific.",
+    "A memory system needs a write policy (what is worth remembering, and in what form) as much as a read policy; indiscriminate writing produces a store full of noise that pollutes every retrieval.",
+    "Structured memory (user profile, preferences, facts as fields) is more reliable than dumping raw transcripts, because it can be updated, conflict-checked, and shown to the user.",
+    "Stale and contradictory memories are the dominant failure: without expiry, supersession, or conflict resolution, the agent confidently acts on facts that were true last month.",
+    "Memory is user data: it needs access control, retention limits, correction, and deletion — an agent that silently remembers everything is a privacy problem before it is a feature.",
+    "Retrieval quality governs whether memory helps: pulling irrelevant memories into the context wastes budget and actively misleads the model."
+  ],
+  "questions": [
+    {
+      "q": "What distinguishes short-term from long-term memory in an agentic system?",
+      "options": [
+        "Short-term memory is stored on the client; long-term memory on the server",
+        "Short-term memory is what fits in the current context window and disappears with the session; long-term memory is external storage that must be explicitly written and retrieved",
+        "Short-term memory is text; long-term memory is embeddings",
+        "Short-term memory is free; long-term memory is billed per token"
+      ],
+      "answer": 1,
+      "explain": "The context window is working memory: immediate, complete, and transient. Anything that must survive it is a storage and retrieval problem you own, not something the model does automatically."
+    },
+    {
+      "q": "What does each common context-management technique lose?",
+      "options": [
+        "A sliding window drops old turns entirely; summarization keeps the gist but loses specifics; retrieval keeps specifics but may omit context the model needed",
+        "They all lose exactly the same information",
+        "None of them lose anything if the window is large enough",
+        "Summarization loses recent turns while sliding windows lose recent detail"
+      ],
+      "answer": 0,
+      "explain": "Naming the loss is the point: a window forgets that the user stated a constraint fifty turns ago, a summary remembers 'discussed pricing' but not the number, and retrieval brings back the number without the caveat attached to it. Production systems usually combine them."
+    },
+    {
+      "q": "Why is a write policy as important as a read policy?",
+      "options": [
+        "Because writes are more expensive than reads",
+        "Because storing everything fills the store with noise — trivia, one-off details, and superseded statements — which then degrades every future retrieval",
+        "Because providers limit the number of writes",
+        "Because writes must be encrypted"
+      ],
+      "answer": 1,
+      "explain": "Memory quality is a curation problem. Deciding what is durable (a stated preference, a decision, a stable fact) versus ephemeral (a passing question) is what keeps retrieval precise instead of returning five irrelevant fragments."
+    },
+    {
+      "q": "Why is structured memory usually preferable to storing raw conversation transcripts?",
+      "options": [
+        "Transcripts cannot be embedded",
+        "Structured records can be updated in place, checked for conflicts, scoped by field, shown to the user, and deleted selectively — while transcripts can only be appended and searched fuzzily",
+        "Structured memory uses fewer tokens to write",
+        "Transcripts are not permitted under most privacy regimes"
+      ],
+      "answer": 1,
+      "explain": "A profile field like preferred_language can be corrected; a sentence buried in turn 43 of a transcript cannot. Structure also makes memory reviewable by the user, which matters both for trust and for correcting a wrong fact the agent keeps repeating."
+    },
+    {
+      "q": "What is the dominant failure mode of long-term memory?",
+      "options": [
+        "The store running out of disk space",
+        "Embeddings becoming corrupted over time",
+        "Stale or contradictory memories — the agent retrieves and acts on a fact that has since changed, with no supersession or expiry to catch it",
+        "Retrieval latency exceeding the model's timeout"
+      ],
+      "answer": 2,
+      "explain": "Facts have lifetimes. Without recording when something was learned, marking updates as superseding earlier records, and resolving conflicts at retrieval time, the agent will confidently tell a user about a job they left or a preference they changed."
+    },
+    {
+      "q": "Why does poor retrieval make memory actively harmful rather than merely useless?",
+      "options": [
+        "Because irrelevant memories consume context budget and, worse, are treated by the model as relevant facts — steering the answer wrong",
+        "Because retrieval failures crash the agent",
+        "Because unused memories are billed twice",
+        "Because retrieval invalidates the system prompt"
+      ],
+      "answer": 0,
+      "explain": "Anything placed in the context is treated as pertinent. Retrieving a superficially similar but unrelated memory does not just waste tokens; it plants a false premise the model will reason from."
+    },
+    {
+      "q": "Which memory concern is a product and legal requirement rather than an engineering nicety?",
+      "options": [
+        "Choosing between cosine and dot-product similarity",
+        "Access control, retention limits, user visibility, correction, and deletion of stored memories",
+        "Compressing embeddings to reduce storage cost",
+        "Using the same embedding model for writes and reads"
+      ],
+      "answer": 1,
+      "explain": "Memory is personal data by default. Users need to see what is stored, fix what is wrong, and delete what they want gone — and the store needs scoping so one user's memories can never surface in another's session."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the memory system for a long-running personal assistant. Cover what is stored, how it is retrieved, and how it stays correct.",
+      "points": [
+        "Distinguish memory types: durable profile facts and preferences, episodic records of past interactions and decisions, and task scratchpad state that is discarded on completion.",
+        "Write policy: extract candidate memories explicitly (a dedicated step or tool), store structured records with timestamps, source turn, and confidence, rather than dumping transcripts.",
+        "Deduplicate and supersede on write: a new value for an existing field updates it and marks the old one superseded rather than appending a contradiction.",
+        "Read policy: retrieve by relevance to the current task, bounded in number, mixing recency and importance, and always include the small always-on profile.",
+        "Expiry and freshness: attach validity expectations, decay or re-confirm time-sensitive facts, and surface uncertainty rather than asserting stale data.",
+        "Conflict resolution at read time: prefer the most recent, and where conflicts are material, ask the user rather than silently choosing.",
+        "Privacy and control: user-visible memory list, edit and delete, per-user scoping, retention limits, and exclusion of sensitive categories.",
+        "Evaluate memory: measure retrieval precision, the rate of stale-fact usage, and whether memory actually improves task outcomes.",
+        "Budget: cap how much context memory may consume so it cannot crowd out the task."
+      ],
+      "answer": "I would split memory by lifetime and shape rather than treating it as one store. Durable facts and preferences live in a structured profile — name, timezone, dietary constraints, preferred tone, recurring people and projects — as fields that can be updated in place. Episodic memory holds records of past interactions and decisions with timestamps and links to the conversation they came from. Scratchpad state belongs to the current task and is discarded when it finishes; keeping it is how stores fill with noise. Writing is an explicit step, not a side effect: after a session, an extraction pass proposes candidate memories with a type, a value, a source turn, and a confidence, and only durable-looking items are stored. On write I deduplicate and supersede — if the user now works somewhere else, the old employer is marked superseded with a date rather than left to contradict the new one. Reading is bounded and deliberate: the small always-on profile is included every time, plus a capped number of episodic memories retrieved by relevance to the current task, ranked with both similarity and recency, with a hard ceiling on how much of the context memory may occupy so it cannot crowd out the actual work. Freshness is handled by attaching an expectation of validity to each fact: some things are stable, others should be re-confirmed after a while, and a stale time-sensitive memory is surfaced as 'last I knew, X — is that still right?' rather than asserted. Where retrieved memories conflict and the difference matters, the assistant asks rather than silently picking. On the product side, memory is visible: the user can see the list, correct an entry, and delete anything, storage is strictly scoped per user, sensitive categories are excluded from extraction entirely, and retention has a limit. Finally I would evaluate it like any other component — retrieval precision, how often a stale fact was used, and whether task outcomes actually improve with memory enabled — because an unmeasured memory system tends to accumulate confident wrongness.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Your agent's conversations regularly exceed the context window. Compare the strategies for handling that and explain what you would combine.",
+      "points": [
+        "Sliding window: keep the most recent N turns — simple and cheap, but silently drops constraints stated early in the conversation.",
+        "Summarization/compaction: periodically replace older turns with a summary — preserves the thread, loses specifics like numbers, names, and exact wording.",
+        "Retrieval over history: embed turns and pull back only relevant ones — preserves specifics, but can retrieve fragments without their surrounding context.",
+        "Structured extraction: pull durable facts and decisions into a compact state object that always rides along, independent of raw history.",
+        "Pinning: keep certain content permanently in context — the task goal, hard constraints, the system prompt.",
+        "Combination in practice: pinned goal and constraints, a compact structured state, a recent window verbatim, plus retrieval into the remainder.",
+        "Watch for compounding summarization loss (summaries of summaries) and for prompt-cache invalidation when the prefix changes.",
+        "Measure the outcome: task success after compaction, and whether earlier constraints are still honoured."
+      ],
+      "answer": "Each strategy loses something different, so the answer is a combination rather than a choice. A sliding window is the cheapest and the most dangerous on its own: it keeps the conversation flowing but silently drops the constraint the user stated in turn three, and the agent then violates it with no sign anything was lost. Summarization keeps the narrative and the fact that a topic was discussed, but it reliably loses precision — the number, the exact name, the specific caveat — and repeated summarization compounds that loss until the summary is a vague impression. Retrieval over history is the opposite: it can bring back the exact turn where a number was given, but a retrieved fragment arrives without the qualification that followed it, and relevance ranking over conversational turns is noisy. Structured extraction is the one I would build first, because it addresses the real need: the durable state of the conversation — the goal, the constraints, the decisions made, the entities involved — as a compact object that is always in context and is updated as things change. That is small, cheap, and precise, and it makes the rest of the history optional rather than load-bearing. So in practice: pin the system prompt, the task goal, and hard constraints; always include the structured state; keep the last several turns verbatim so the immediate conversational texture is intact; and retrieve from the compacted remainder when the current turn references something older. I would also watch two operational details: summaries of summaries degrade, so I compact from the original where possible rather than recursively, and rewriting the front of the context invalidates prompt caches, so I keep the stable prefix stable and let the volatile part sit later. Then I would measure it — task success rate after a compaction event, and specifically whether constraints stated before the compaction are still honoured, since that is the failure users notice and metrics usually miss."
+    }
+  ]
+}

@@ -10,6 +10,7 @@ const INTERVAL_DAYS = [0, 1, 3, 7, 16, 45];  // days until due after reaching bo
 const MAX_BOX = 5, MASTER_BOX = 4, DAY = 86400000;
 
 let TOPICS = [];              // topics.json registry
+let SHELVES = [];             // topics.json shelves[] — landing-page grouping
 let META = {};               // topicId -> manifest
 let INFOGRAPHIC_SETS = null;  // authored multi-image study sets
 let CH = {};                 // topicId -> { chId -> chapter json }
@@ -56,7 +57,17 @@ function grade(key, outcome, pick) {   // 'good' | 'partial' | 'again'
 }
 
 // ── Data loading ─────────────────────────────────────────────────────────
-async function loadTopics() { if (!TOPICS.length) TOPICS = (await fetch(`${BASE}/topics.json`).then(r => r.json())).topics; return TOPICS; }
+async function loadTopics() {
+  if (!TOPICS.length) {
+    const reg = await fetch(`${BASE}/topics.json`).then(r => r.json());
+    TOPICS = reg.topics;
+    // Shelves group topics on the landing page by subject (System Design vs the
+    // AI books). Optional and additive: an older registry with no shelves[]
+    // renders exactly as before, ungrouped.
+    SHELVES = Array.isArray(reg.shelves) ? reg.shelves : [];
+  }
+  return TOPICS;
+}
 async function loadMeta(t) {
   if (!META[t]) {
     const m = await fetch(`${BASE}/${t}/manifest.json`).then(r => r.json());

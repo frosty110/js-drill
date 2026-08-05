@@ -1,0 +1,140 @@
+{
+  "id": "ch07",
+  "chapter": 7,
+  "part": "Part II: Building Multi-Agent Systems from Scratch",
+  "title": "Autonomous Multi-Agent Orchestration",
+  "summary": "Coordination where a model, not code, decides what happens next: group chat with a speaker-selection policy, LLM-driven handoffs where control transfers to whichever agent should own the task, and plan-based coordination where a planner assigns work that agents execute. All three need the same scaffolding — context policy, termination conditions, and a way to stop redundant or looping behaviour.",
+  "keyTakeaways": [
+    "Autonomous orchestration replaces coded control flow with a selection decision: who speaks or acts next, decided by a manager model, by rules, or by the agents themselves.",
+    "Speaker selection strategies range from round-robin (predictable, wasteful) through rule-based to model-selected (adaptive, unpredictable) — the choice is a control/adaptivity tradeoff.",
+    "Context policy is a first-class decision: whether agents share the full transcript, a filtered view, or only their own history determines both cost and quality.",
+    "Termination must come from outside the conversation — max turns, an explicit completion signal, a budget, or an external judge — because agents rarely conclude on their own.",
+    "Plan-based coordination gives an inspectable artifact before execution, which is the autonomous topology with the best safety story.",
+    "The recurring failure modes are non-termination, redundant work across agents, context bloat as the transcript grows, and premature consensus on a wrong answer.",
+    "State must be externalized and serializable so an autonomous run can be paused, resumed, inspected, and replayed — the trajectory is not reproducible otherwise.",
+    "Autonomy should be bounded by capability, not by instruction: which agent may call which tools, and which actions require approval, remain code-enforced."
+  ],
+  "questions": [
+    {
+      "q": "What defines autonomous orchestration as opposed to a workflow?",
+      "options": [
+        "It uses more agents",
+        "A model decides which agent acts next, so the sequence emerges at runtime instead of being fixed in code",
+        "It cannot use tools",
+        "It requires a group chat topology"
+      ],
+      "answer": 1,
+      "explain": "The selection decision is the difference. Once a model chooses the next actor, the trajectory varies per run, which buys adaptability and costs predictability, testability, and easy cost estimation."
+    },
+    {
+      "q": "How do speaker-selection strategies differ?",
+      "options": [
+        "Round-robin is adaptive; model-selected is fixed",
+        "Round-robin is predictable but wastes turns on agents with nothing to contribute; rule-based is deterministic and needs maintained conditions; model-selected adapts but is unpredictable and can loop",
+        "They differ only in implementation language",
+        "Rule-based selection requires a separate model"
+      ],
+      "answer": 1,
+      "explain": "Each buys something different. Round-robin is trivially debuggable and burns tokens on irrelevant turns; a manager model picks well when the situation is clear and can oscillate between two agents when it is not."
+    },
+    {
+      "q": "Why is context policy a first-class design decision in group-style orchestration?",
+      "options": [
+        "Because providers charge differently for shared context",
+        "Because it determines whether agents can be run in parallel",
+        "Because sharing the full transcript with everyone drives cost and context bloat, while over-filtering starves agents of information they needed — both degrade the system",
+        "Because context policy determines the model used"
+      ],
+      "answer": 2,
+      "explain": "Everyone reading everything is the naive default and scales badly: cost grows with the square of participation and quality falls as context fills with irrelevant chatter. Filtered views are cheaper and often better, provided the filter does not drop what a role needs."
+    },
+    {
+      "q": "Why must termination be imposed from outside the conversation?",
+      "options": [
+        "Because models cannot generate stop tokens",
+        "Because agents asked to collaborate will keep finding things to say — completion has to be defined by a turn cap, an explicit signal, a budget, or an external check",
+        "Because frameworks do not support internal termination",
+        "Because termination requires human approval"
+      ],
+      "answer": 1,
+      "explain": "Politeness and helpfulness are trained behaviours: agents elaborate, thank each other, and propose refinements indefinitely. Without an external stop rule the run ends only when a budget or timeout kills it."
+    },
+    {
+      "q": "What makes plan-based coordination the safest of the autonomous topologies?",
+      "options": [
+        "It uses fewer tokens",
+        "It produces an inspectable plan before execution, which can be validated against real tools, reviewed by a human, and used to bound what will happen",
+        "It cannot fail",
+        "It requires no termination condition"
+      ],
+      "answer": 1,
+      "explain": "The artifact is the safety property. You can check that every step references a real tool the actor is permitted to use, spot the destructive steps, and approve or reject the whole approach before anything executes."
+    },
+    {
+      "q": "Which failure mode is most characteristic of autonomous multi-agent runs?",
+      "options": [
+        "Tokenizer mismatch between agents",
+        "Non-termination and redundant work — agents repeating each other's research, re-deriving the same facts, and continuing past the point of usefulness",
+        "Inability to call tools",
+        "Context windows resetting between turns"
+      ],
+      "answer": 1,
+      "explain": "Without explicit ownership and a stop rule, agents duplicate effort and keep talking. Both are cheap to detect — repeated tool calls, no new information across turns — and both need to be designed against rather than discovered in the bill."
+    },
+    {
+      "q": "Why must state be externalized in an autonomous system?",
+      "options": [
+        "To reduce model latency",
+        "Because the trajectory is not reproducible from the inputs alone, so pausing, resuming, inspecting, and replaying all require the run's state to be persisted and serializable",
+        "Because frameworks require a database",
+        "Because agents cannot share memory otherwise"
+      ],
+      "answer": 1,
+      "explain": "A workflow can be re-derived from its code and inputs; an autonomous run cannot, because the path emerged at runtime. Persisted state plus a full trace is the only way to analyse what happened or continue after an interruption."
+    },
+    {
+      "q": "How should the risk of an autonomous topology be bounded?",
+      "options": [
+        "By instructing agents in their system prompts to be careful",
+        "By using a stronger model for the manager",
+        "By code-enforced capability limits — which agent holds which tools, scoped credentials, and approval gates on consequential actions",
+        "By limiting the conversation to three agents"
+      ],
+      "answer": 2,
+      "explain": "Instructions reduce probability; capability limits bound consequence. In an emergent system where you cannot predict the trajectory, what the agents are permitted to do is the only reliable constraint."
+    },
+    {
+      "type": "open",
+      "prompt": "You are implementing a group-chat orchestration for a research task with four specialist agents. Describe the mechanics you would implement to keep it useful.",
+      "points": [
+        "Define roles with distinct responsibilities and tools so participation is meaningful rather than ceremonial.",
+        "Choose a speaker-selection policy deliberately — a manager model with a rule-based fallback, or rules where the sequence is predictable.",
+        "Set a context policy: filtered views per agent, structured summaries rather than full transcript replay, and pinned task goal and constraints.",
+        "Impose termination externally: maximum turns, an explicit completion signal from a designated owner, and a hard budget in tokens and time.",
+        "Assign ownership of the final artifact to one agent so completion does not require consensus.",
+        "Prevent redundancy: a shared record of what has been researched and claimed, so agents do not repeat work.",
+        "Detect stagnation — turns that add no new information or repeat tool calls — and intervene by replanning or terminating.",
+        "Externalize state and emit events per turn for streaming, tracing, and resumption.",
+        "Enforce capability boundaries per agent, especially separating the agent that reads untrusted sources from any that can act.",
+        "Evaluate the run: quality, cost, turn count, and how often the extra agents changed the outcome versus a single-agent baseline."
+      ],
+      "answer": "The mechanics that matter are selection, context, and termination — the rest is prompt work. For selection I would start with a manager model choosing the next speaker from the current state, with a rule-based fallback for the predictable phases and an override that prevents the same agent speaking three times consecutively, since oscillation and monologue are the two common failure shapes. For context, I would not give everyone the full transcript; each agent gets the pinned task goal and constraints, a structured summary of established findings, and its own history, with the raw material relevant to its role. Full-transcript sharing is the default in most implementations and it is where cost quietly explodes while quality falls, because the context fills with other agents' deliberation. Termination is imposed from outside: a maximum turn count, a hard token and wall-clock budget, and an explicit completion signal that only the designated owner of the final artifact can emit. Naming that owner is important — if completion requires consensus, the run continues until the budget stops it. To prevent redundancy I maintain a shared record of what has been searched, what has been claimed, and with what evidence, so a second researcher does not repeat the first one's queries. Alongside it, a stagnation detector: if a turn produces no new claim, no new evidence, and no state change, or if tool calls repeat with the same arguments, the orchestrator intervenes — re-plan with the impasse stated, or terminate and report. State is externalized per turn so the run can be paused, resumed, and replayed, and every turn emits an event so the interface can stream progress with attribution. Capabilities are code-enforced per agent, and I would specifically keep the agent that ingests external sources away from any write tools, since untrusted content plus capability is where injection becomes an incident. Finally I would measure whether this earns its keep: quality, total cost, turn count, and how often the group's answer differed from a single-agent baseline — because if the four agents mostly agree with what one would have said, the topology is expensive theatre.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Compare LLM-driven handoff with a manager-delegates topology for a customer-facing assistant. What would you choose and why?",
+      "points": [
+        "Handoff transfers ownership of the conversation to a specialist, which keeps context focused and matches how human support escalation works.",
+        "Manager-delegates keeps one coordinator that assigns subtasks and integrates results, giving a single voice to the user and one place to enforce policy.",
+        "For a conversational product, handoff usually reads more naturally and avoids the manager becoming a lossy relay.",
+        "Handoff risks: ping-ponging, context loss at transfer, and unclear ownership if the specialist cannot resolve the issue.",
+        "Manager risks: bottleneck latency, information loss when relaying, and a single point of misjudgment.",
+        "Mitigations for handoff: explicit criteria, a structured transfer payload, a transfer counter that escalates to a human, and one owner at a time.",
+        "Policy and safety enforcement should be centralized regardless of topology, in code rather than in whichever agent is speaking.",
+        "Decide by conversational continuity needs, latency budget, and how well-separated the specialisms are."
+      ],
+      "answer": "For a customer-facing assistant I would choose handoff, with policy enforcement kept outside the agents. The reason is conversational: a manager that delegates and then relays produces a lossy middleman — the specialist's answer gets summarized by an agent that does not fully understand it, and the user ends up in a conversation with a translator. Handoff avoids that by transferring ownership to the specialist, who then talks to the user directly with the context it needs and nothing it does not. It also mirrors how human support works, which means the mental model is familiar to users and the escalation semantics are already understood by the business. The costs of handoff are specific and manageable. Ping-ponging, where two agents each conclude the issue belongs to the other, is handled with a transfer counter that escalates to a human after a small number of hops. Context loss at the transfer is handled with a structured payload rather than a prose summary — what the customer wants, what has been established, what has been tried, what is still unknown — so the receiving agent does not re-ask questions the customer already answered, which is the failure users hate most. And ownership is made explicit: exactly one agent owns the conversation at a time, and there is a defined fallback owner so a task cannot be dropped between them. Manager-delegates would win in a different setting — a non-conversational task where results must be integrated from several workers, where one coherent artifact is the deliverable, and where the manager's integration step adds real value rather than acting as a relay. Whichever topology I pick, safety and policy do not live in the agents: refusal categories, authentication requirements, refund limits, and approval gates are enforced in code on the path to the tools, so they hold regardless of which agent happens to be holding the conversation."
+    }
+  ]
+}

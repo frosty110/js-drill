@@ -1,0 +1,124 @@
+{
+  "id": "ch06",
+  "num": 6,
+  "part": "Part I: Core Execution Patterns",
+  "title": "Planning",
+  "summary": "Turn a goal into a sequence of steps before or while acting. Planning ranges from an explicit plan artifact produced up front and then executed, to interleaved plan-act-observe loops that decide the next step from what the last one returned. The explicit plan buys inspectability, validation, parallelization, and human review; the interleaved loop buys adaptability. Both need replanning, step budgets, and a definition of done.",
+  "keyTakeaways": [
+    "Planning separates deciding what to do from doing it, which is what makes an agent's behaviour reviewable before anything irreversible happens.",
+    "Plan-then-execute produces an artifact you can validate, show to a human, parallelize, cache, and resume; interleaved planning (act, observe, decide) adapts to what it finds but is harder to inspect ahead of time.",
+    "A plan is a hypothesis, not a contract: the world changes and steps fail, so replanning on failure or on new information is part of the pattern rather than an error path.",
+    "Plans should reference only tools and resources that exist — validating a plan against the real tool catalog before execution catches hallucinated steps cheaply.",
+    "Every plan needs a success criterion per step and for the goal overall, or the agent cannot tell progress from motion.",
+    "Planning is overhead: for simple, single-step requests it adds latency and cost for nothing, so it should be applied when the task genuinely has multiple interdependent steps.",
+    "Hierarchical planning — a high-level plan whose steps expand into sub-plans — keeps long tasks tractable without one enormous flat step list."
+  ],
+  "questions": [
+    {
+      "q": "What is the main advantage of producing an explicit plan artifact before execution?",
+      "options": [
+        "It reduces the number of model calls to one",
+        "It makes the intended actions inspectable and validatable before anything is executed — enabling human review, tool validation, parallelization, and resumption",
+        "It guarantees the plan will succeed",
+        "It removes the need for error handling"
+      ],
+      "answer": 1,
+      "explain": "The artifact is the point. You can check that every step references a real tool, spot destructive actions before they happen, run independent steps concurrently, show it to a user for approval, and resume from step four after a crash."
+    },
+    {
+      "q": "How does interleaved planning (plan, act, observe, replan) differ in its tradeoffs?",
+      "options": [
+        "It is always cheaper than plan-then-execute",
+        "It cannot use tools",
+        "It adapts to what each step reveals, which suits uncertain environments, but the trajectory is not knowable in advance so it is harder to review, bound, and predict",
+        "It only works with a single tool"
+      ],
+      "answer": 2,
+      "explain": "When you cannot know the next step until you see the last result — searching, debugging, browsing — interleaving is the right shape. The cost is that you cannot approve the whole plan up front, so bounds and per-step permission checks carry the safety load."
+    },
+    {
+      "q": "Why is replanning a first-class part of the pattern rather than an exception?",
+      "options": [
+        "Because models cannot produce correct plans",
+        "Because steps fail and the world changes — a plan built on assumptions that turn out false must be revised, not blindly retried",
+        "Because providers require it",
+        "Because plans expire after a fixed time"
+      ],
+      "answer": 1,
+      "explain": "A plan is a hypothesis about how to reach the goal. When a step returns something unexpected — the record does not exist, the API changed, the file is empty — the correct response is to revise the plan with that new information, which is why plans should be revisable state rather than a fixed script."
+    },
+    {
+      "q": "What cheap validation should run on a generated plan before execution begins?",
+      "options": [
+        "A grammar check on the plan text",
+        "Re-generating the plan five times and comparing",
+        "Checking that every referenced tool, resource, and parameter actually exists and is permitted, and flagging destructive or costly steps",
+        "Translating the plan into another language and back"
+      ],
+      "answer": 2,
+      "explain": "Planners hallucinate tools and resources that would be convenient. A schema-level check against the real catalog catches that before the first call, and surfacing the destructive steps lets policy decide whether a human should approve them."
+    },
+    {
+      "q": "Why does each step need a success criterion?",
+      "options": [
+        "To satisfy logging requirements",
+        "Because without one the agent cannot distinguish progress from motion — it may loop, repeat a step, or declare success on partial results",
+        "Because criteria reduce token usage",
+        "Because criteria are needed to parallelize"
+      ],
+      "answer": 1,
+      "explain": "'Did this step accomplish what it was for?' is the signal that drives advancing, retrying, or replanning. Without it, the loop is running on vibes and the classic failure — repeating the same action and calling it progress — becomes invisible."
+    },
+    {
+      "q": "When is planning the wrong pattern?",
+      "options": [
+        "When the request is simple and single-step — the planning overhead adds latency and cost while producing a one-item plan",
+        "When the task requires more than one tool",
+        "When a human must approve the outcome",
+        "When the environment is uncertain"
+      ],
+      "answer": 0,
+      "explain": "Planning earns its keep on multi-step, interdependent tasks. Applying it to every request means paying an extra call and a second of latency to be told that the answer is one search away — which is why many systems route simple requests around the planner entirely."
+    },
+    {
+      "q": "What does hierarchical planning add for long tasks?",
+      "options": [
+        "It removes the need for tools at the leaf level",
+        "It guarantees parallel execution",
+        "It keeps the top-level plan short and comprehensible while letting each step expand into its own sub-plan when executed — avoiding one enormous flat list that drifts",
+        "It caches the plan across users"
+      ],
+      "answer": 2,
+      "explain": "Long flat plans degrade: later steps are guesses made without the information earlier steps produce. Expanding a step into a sub-plan at execution time means the detail is decided when the relevant context exists."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the planning layer for an agent that handles multi-step operational tasks (for example: 'investigate why the nightly job failed and open a ticket with the cause'). Cover plan generation, validation, execution, and failure.",
+      "points": [
+        "Generate a structured plan — ordered steps with the tool, arguments, expected outcome, and dependencies — rather than prose.",
+        "Validate the plan before executing: tools exist, permissions allow them, arguments type-check, and destructive steps are flagged.",
+        "Classify steps by risk: read-only investigation runs automatically, write actions (ticket creation, restarts) need approval or stricter checks.",
+        "Execute with per-step success criteria, running independent steps in parallel where dependencies allow.",
+        "Feed observations back and replan when a step fails or reveals something the plan did not anticipate, rather than continuing on stale assumptions.",
+        "Bound everything: step count, wall-clock, and cost, with a clear escalation to a human when a bound is hit.",
+        "Keep the plan and its revisions as inspectable state, with a full trace of steps, arguments, and outcomes.",
+        "Define done: the goal's success criterion is the ticket existing with a cause supported by evidence, not merely the steps having run."
+      ],
+      "answer": "I would have the planner emit a structured artifact rather than prose: an ordered list of steps, each naming the tool, its arguments, the expected outcome, and which earlier steps it depends on. That structure is what everything else keys off. Before anything runs, the plan is validated mechanically — every tool exists, the current principal is allowed to call it, arguments type-check, and any step that writes or restarts something is flagged. That single pass catches the hallucinated tool and the accidentally destructive step at zero risk. Then I classify by risk: read-only investigation — fetching logs, checking job history, querying metrics — runs automatically, while write actions like opening the ticket or restarting a service require either approval or, for low-stakes writes, an idempotency guarantee and a preview. Execution walks the dependency graph, running independent steps concurrently, with a success criterion per step so the loop can tell whether to advance, retry, or stop. Observations feed back into the plan, and when a step fails or turns up something unexpected — the job did not fail, it never started — the agent replans rather than pushing on through a plan whose premise is now false. I bound the whole thing three ways: maximum steps, wall-clock, and cost, with any breach escalating to a human with the trace attached rather than silently continuing. The plan and all its revisions stay as inspectable state, alongside a full trace of calls and outcomes, because for operational work the reasoning is as valuable as the result. And I define done at the goal level: the task is complete when a ticket exists whose stated cause is supported by evidence the trace contains — not when the last step returned without error."
+    },
+    {
+      "type": "open",
+      "prompt": "Compare plan-then-execute with a ReAct-style interleaved loop. When would you choose each, and can they be combined?",
+      "points": [
+        "Plan-then-execute suits tasks whose steps can be known up front: predictable workflows, batch processing, anything needing pre-approval.",
+        "It enables review, validation, parallel execution of independent steps, caching, and resumption from a known point.",
+        "Interleaved loops suit exploration and uncertainty — searching, debugging, browsing — where each observation determines the next action.",
+        "Interleaving is harder to bound and audit ahead of time, so safety shifts to per-step permission checks, step budgets, and loop detection.",
+        "Cost/latency differ: an up-front plan is one extra call but enables parallelism; interleaving is sequential by nature and multiplies round trips.",
+        "Hybrid: plan at a high level, execute steps that themselves run interleaved sub-loops, replanning when a step's outcome invalidates the plan.",
+        "The choice should follow the environment's predictability and the risk of the actions, not stylistic preference."
+      ],
+      "answer": "The deciding question is whether the next step is knowable before the previous one runs. If it is — a defined workflow, a batch of documents, an onboarding sequence — plan-then-execute is clearly better. You get an artifact you can validate against the tool catalog, show to a human for approval, execute with independent steps in parallel, cache, and resume from step four after a crash. All of that is impossible when the trajectory only exists in hindsight. If the next step genuinely depends on what the last one returned — investigating a failure, searching until you find the answer, debugging — then an interleaved loop is the honest model, and forcing a plan up front just produces a fiction that is wrong by step two. The price is that you cannot approve the trajectory in advance, so the safety burden moves to per-step permission checks, tight step and cost budgets, and loop detection so the agent does not repeat the same query forever. It is also inherently sequential: every step is a round trip, so latency grows linearly. In practice I combine them, and I think the hybrid is the default in serious systems. Plan at a coarse level — investigate, then diagnose, then act — validate that plan and get approval for the acting phase, then let each step run its own bounded interleaved sub-loop that adapts to what it finds. When a step's outcome invalidates the premise of the plan, replan at the coarse level rather than thrashing inside a step. That gives you the reviewability of an explicit plan where the risk is, and the adaptability of ReAct where the uncertainty is."
+    }
+  ]
+}

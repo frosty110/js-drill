@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Planning — Agentic Design Patterns</title>
+<meta name="description" content="Turn a goal into a sequence of steps before or while acting. Planning ranges from an explicit plan artifact produced up front and then executed, to interleaved plan-act-observe loops that decide the next step from what the last one returned. The explicit plan buys inspectability, validation, parallelization, and human review; the interleaved loop buys adaptability. Both need replanning, step budgets, and a definition of done.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Planning — Agentic Design Patterns">
+<meta property="og:description" content="Turn a goal into a sequence of steps before or while acting. Planning ranges from an explicit plan artifact produced up front and then executed, to interleaved plan-act-observe loops that decide the next step from what the last one returned. The explicit plan buys inspectability, validation, parallelization, and human review; the interleaved loop buys adaptability. Both need replanning, step budgets, and a definition of done.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Planning","description":"Turn a goal into a sequence of steps before or while acting. Planning ranges from an explicit plan artifact produced up front and then executed, to interleaved plan-act-observe loops that decide the next step from what the last one returned. The explicit plan buys inspectability, validation, parallelization, and human review; the interleaved loop buys adaptability. Both need replanning, step budgets, and a definition of done.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Agentic Design Patterns","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/"},"teaches":["Planning separates deciding what to do from doing it, which is what makes an agent's behaviour reviewable before anything irreversible happens.","Plan-then-execute produces an artifact you can validate, show to a human, parallelize, cache, and resume; interleaved planning (act, observe, decide) adapts to what it finds but is harder to inspect ahead of time.","A plan is a hypothesis, not a contract: the world changes and steps fail, so replanning on failure or on new information is part of the pattern rather than an error path.","Plans should reference only tools and resources that exist — validating a plan against the real tool catalog before execution catches hallucinated steps cheaply.","Every plan needs a success criterion per step and for the goal overall, or the agent cannot tell progress from motion.","Planning is overhead: for simple, single-step requests it adds latency and cost for nothing, so it should be applied when the task genuinely has multiple interdependent steps."],"hasPart":[{"@type":"Question","position":1,"name":"What is the main advantage of producing an explicit plan artifact before execution?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q1","acceptedAnswer":{"@type":"Answer","text":"It makes the intended actions inspectable and validatable before anything is executed — enabling human review, tool validation, parallelization, and resumption"}},{"@type":"Question","position":2,"name":"How does interleaved planning (plan, act, observe, replan) differ in its tradeoffs?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q2","acceptedAnswer":{"@type":"Answer","text":"It adapts to what each step reveals, which suits uncertain environments, but the trajectory is not knowable in advance so it is harder to review, bound, and predict"}},{"@type":"Question","position":3,"name":"Why is replanning a first-class part of the pattern rather than an exception?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q3","acceptedAnswer":{"@type":"Answer","text":"Because steps fail and the world changes — a plan built on assumptions that turn out false must be revised, not blindly retried"}},{"@type":"Question","position":4,"name":"What cheap validation should run on a generated plan before execution begins?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q4","acceptedAnswer":{"@type":"Answer","text":"Checking that every referenced tool, resource, and parameter actually exists and is permitted, and flagging destructive or costly steps"}},{"@type":"Question","position":5,"name":"Why does each step need a success criterion?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q5","acceptedAnswer":{"@type":"Answer","text":"Because without one the agent cannot distinguish progress from motion — it may loop, repeat a step, or declare success on partial results"}},{"@type":"Question","position":6,"name":"When is planning the wrong pattern?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q6","acceptedAnswer":{"@type":"Answer","text":"When the request is simple and single-step — the planning overhead adds latency and cost while producing a one-item plan"}},{"@type":"Question","position":7,"name":"What does hierarchical planning add for long tasks?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q7","acceptedAnswer":{"@type":"Answer","text":"It keeps the top-level plan short and comprehensible while letting each step expand into its own sub-plan when executed — avoiding one enormous flat list that drifts"}},{"@type":"Question","position":8,"name":"Design the planning layer for an agent that handles multi-step operational tasks (for example: 'investigate why the nightly job failed and open a ticket with the cause'). Cover plan generation, validation, execution, and failure.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q8","acceptedAnswer":{"@type":"Answer","text":"I would have the planner emit a structured artifact rather than prose: an ordered list of steps, each naming the tool, its arguments, the expected outcome, and which earlier steps it depends on. That structure is what everything else keys off. Before anything runs, the plan is validated mechanically — every tool exists, the current principal is allowed to call it, arguments type-check, and any step that writes or restarts something is flagged. That single pass catches the hallucinated tool and the accidentally destructive step at zero risk. Then I classify by risk: read-only investigation — fetching logs, checking job history, querying metrics — runs automatically, while write actions like opening the ticket or restarting a service require either approval or, for low-stakes writes, an idem"}},{"@type":"Question","position":9,"name":"Compare plan-then-execute with a ReAct-style interleaved loop. When would you choose each, and can they be combined?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch06/#q9","acceptedAnswer":{"@type":"Answer","text":"The deciding question is whether the next step is knowable before the previous one runs. If it is — a defined workflow, a batch of documents, an onboarding sequence — plan-then-execute is clearly better. You get an artifact you can validate against the tool catalog, show to a human for approval, execute with independent steps in parallel, cache, and resume from step four after a crash. All of that is impossible when the trajectory only exists in hindsight. If the next step genuinely depends on what the last one returned — investigating a failure, searching until you find the answer, debugging — then an interleaved loop is the honest model, and forcing a plan up front just produces a fiction that is wrong by step two. The price is that you cannot approve the trajectory in advance, so the sa"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/agentic-patterns/">Agentic Design Patterns</a></p>
+    <h1>Planning</h1>
+    <p class="sharepage__lede">Turn a goal into a sequence of steps before or while acting. Planning ranges from an explicit plan artifact produced up front and then executed, to interleaved plan-act-observe loops that decide the next step from what the last one returned. The explicit plan buys inspectability, validation, parallelization, and human review; the interleaved loop buys adaptability. Both need replanning, step budgets, and a definition of done.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Agentic Design Patterns</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Planning separates deciding what to do from doing it, which is what makes an agent&#39;s behaviour reviewable before anything irreversible happens.</li><li>Plan-then-execute produces an artifact you can validate, show to a human, parallelize, cache, and resume; interleaved planning (act, observe, decide) adapts to what it finds but is harder to inspect ahead of time.</li><li>A plan is a hypothesis, not a contract: the world changes and steps fail, so replanning on failure or on new information is part of the pattern rather than an error path.</li><li>Plans should reference only tools and resources that exist — validating a plan against the real tool catalog before execution catches hallucinated steps cheaply.</li><li>Every plan needs a success criterion per step and for the goal overall, or the agent cannot tell progress from motion.</li><li>Planning is overhead: for simple, single-step requests it adds latency and cost for nothing, so it should be applied when the task genuinely has multiple interdependent steps.</li><li>Hierarchical planning — a high-level plan whose steps expand into sub-plans — keeps long tasks tractable without one enormous flat step list.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the main advantage of producing an explicit plan artifact before execution?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It reduces the number of model calls to one</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It makes the intended actions inspectable and validatable before anything is executed — enabling human review, tool validation, parallelization, and resumption <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It guarantees the plan will succeed</li>
+        <li><span class="sharepage__key">D</span> It removes the need for error handling</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The artifact is the point. You can check that every step references a real tool, spot destructive actions before they happen, run independent steps concurrently, show it to a user for approval, and resume from step four after a crash.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does interleaved planning (plan, act, observe, replan) differ in its tradeoffs?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It is always cheaper than plan-then-execute</li>
+        <li><span class="sharepage__key">B</span> It cannot use tools</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It adapts to what each step reveals, which suits uncertain environments, but the trajectory is not knowable in advance so it is harder to review, bound, and predict <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It only works with a single tool</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> When you cannot know the next step until you see the last result — searching, debugging, browsing — interleaving is the right shape. The cost is that you cannot approve the whole plan up front, so bounds and per-step permission checks carry the safety load.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why is replanning a first-class part of the pattern rather than an exception?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because models cannot produce correct plans</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because steps fail and the world changes — a plan built on assumptions that turn out false must be revised, not blindly retried <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because providers require it</li>
+        <li><span class="sharepage__key">D</span> Because plans expire after a fixed time</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A plan is a hypothesis about how to reach the goal. When a step returns something unexpected — the record does not exist, the API changed, the file is empty — the correct response is to revise the plan with that new information, which is why plans should be revisable state rather than a fixed script.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What cheap validation should run on a generated plan before execution begins?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A grammar check on the plan text</li>
+        <li><span class="sharepage__key">B</span> Re-generating the plan five times and comparing</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Checking that every referenced tool, resource, and parameter actually exists and is permitted, and flagging destructive or costly steps <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Translating the plan into another language and back</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Planners hallucinate tools and resources that would be convenient. A schema-level check against the real catalog catches that before the first call, and surfacing the destructive steps lets policy decide whether a human should approve them.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does each step need a success criterion?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To satisfy logging requirements</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because without one the agent cannot distinguish progress from motion — it may loop, repeat a step, or declare success on partial results <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because criteria reduce token usage</li>
+        <li><span class="sharepage__key">D</span> Because criteria are needed to parallelize</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> &#39;Did this step accomplish what it was for?&#39; is the signal that drives advancing, retrying, or replanning. Without it, the loop is running on vibes and the classic failure — repeating the same action and calling it progress — becomes invisible.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>When is planning the wrong pattern?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> When the request is simple and single-step — the planning overhead adds latency and cost while producing a one-item plan <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> When the task requires more than one tool</li>
+        <li><span class="sharepage__key">C</span> When a human must approve the outcome</li>
+        <li><span class="sharepage__key">D</span> When the environment is uncertain</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Planning earns its keep on multi-step, interdependent tasks. Applying it to every request means paying an extra call and a second of latency to be told that the answer is one search away — which is why many systems route simple requests around the planner entirely.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does hierarchical planning add for long tasks?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It removes the need for tools at the leaf level</li>
+        <li><span class="sharepage__key">B</span> It guarantees parallel execution</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It keeps the top-level plan short and comprehensible while letting each step expand into its own sub-plan when executed — avoiding one enormous flat list that drifts <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It caches the plan across users</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Long flat plans degrade: later steps are guesses made without the information earlier steps produce. Expanding a step into a sub-plan at execution time means the detail is decided when the relevant context exists.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Design the planning layer for an agent that handles multi-step operational tasks (for example: &#39;investigate why the nightly job failed and open a ticket with the cause&#39;). Cover plan generation, validation, execution, and failure.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Generate a structured plan — ordered steps with the tool, arguments, expected outcome, and dependencies — rather than prose.</li><li>Validate the plan before executing: tools exist, permissions allow them, arguments type-check, and destructive steps are flagged.</li><li>Classify steps by risk: read-only investigation runs automatically, write actions (ticket creation, restarts) need approval or stricter checks.</li><li>Execute with per-step success criteria, running independent steps in parallel where dependencies allow.</li><li>Feed observations back and replan when a step fails or reveals something the plan did not anticipate, rather than continuing on stale assumptions.</li><li>Bound everything: step count, wall-clock, and cost, with a clear escalation to a human when a bound is hit.</li><li>Keep the plan and its revisions as inspectable state, with a full trace of steps, arguments, and outcomes.</li><li>Define done: the goal&#39;s success criterion is the ticket existing with a cause supported by evidence, not merely the steps having run.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I would have the planner emit a structured artifact rather than prose: an ordered list of steps, each naming the tool, its arguments, the expected outcome, and which earlier steps it depends on. That structure is what everything else keys off. Before anything runs, the plan is validated mechanically — every tool exists, the current principal is allowed to call it, arguments type-check, and any step that writes or restarts something is flagged. That single pass catches the hallucinated tool and the accidentally destructive step at zero risk. Then I classify by risk: read-only investigation — fetching logs, checking job history, querying metrics — runs automatically, while write actions like opening the ticket or restarting a service require either approval or, for low-stakes writes, an idempotency guarantee and a preview. Execution walks the dependency graph, running independent steps concurrently, with a success criterion per step so the loop can tell whether to advance, retry, or stop. Observations feed back into the plan, and when a step fails or turns up something unexpected — the job did not fail, it never started — the agent replans rather than pushing on through a plan whose premise is now false. I bound the whole thing three ways: maximum steps, wall-clock, and cost, with any breach escalating to a human with the trace attached rather than silently continuing. The plan and all its revisions stay as inspectable state, alongside a full trace of calls and outcomes, because for operational work the reasoning is as valuable as the result. And I define done at the goal level: the task is complete when a ticket exists whose stated cause is supported by evidence the trace contains — not when the last step returned without error.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Compare plan-then-execute with a ReAct-style interleaved loop. When would you choose each, and can they be combined?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Plan-then-execute suits tasks whose steps can be known up front: predictable workflows, batch processing, anything needing pre-approval.</li><li>It enables review, validation, parallel execution of independent steps, caching, and resumption from a known point.</li><li>Interleaved loops suit exploration and uncertainty — searching, debugging, browsing — where each observation determines the next action.</li><li>Interleaving is harder to bound and audit ahead of time, so safety shifts to per-step permission checks, step budgets, and loop detection.</li><li>Cost/latency differ: an up-front plan is one extra call but enables parallelism; interleaving is sequential by nature and multiplies round trips.</li><li>Hybrid: plan at a high level, execute steps that themselves run interleaved sub-loops, replanning when a step&#39;s outcome invalidates the plan.</li><li>The choice should follow the environment&#39;s predictability and the risk of the actions, not stylistic preference.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The deciding question is whether the next step is knowable before the previous one runs. If it is — a defined workflow, a batch of documents, an onboarding sequence — plan-then-execute is clearly better. You get an artifact you can validate against the tool catalog, show to a human for approval, execute with independent steps in parallel, cache, and resume from step four after a crash. All of that is impossible when the trajectory only exists in hindsight. If the next step genuinely depends on what the last one returned — investigating a failure, searching until you find the answer, debugging — then an interleaved loop is the honest model, and forcing a plan up front just produces a fiction that is wrong by step two. The price is that you cannot approve the trajectory in advance, so the safety burden moves to per-step permission checks, tight step and cost budgets, and loop detection so the agent does not repeat the same query forever. It is also inherently sequential: every step is a round trip, so latency grows linearly. In practice I combine them, and I think the hybrid is the default in serious systems. Plan at a coarse level — investigate, then diagnose, then act — validate that plan and get approval for the acting phase, then let each step run its own bounded interleaved sub-loop that adapts to what it finds. When a step&#39;s outcome invalidates the premise of the plan, replan at the coarse level rather than thrashing inside a step. That gives you the reviewability of an explicit plan where the risk is, and the adaptability of ReAct where the uncertainty is.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"agentic-patterns","unit":"ch06","title":"Planning","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"What is the main advantage of producing an explicit plan artifact before execution?","options":["It reduces the number of model calls to one","It makes the intended actions inspectable and validatable before anything is executed — enabling human review, tool validation, parallelization, and resumption","It guarantees the plan will succeed","It removes the need for error handling"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"How does interleaved planning (plan, act, observe, replan) differ in its tradeoffs?","options":["It is always cheaper than plan-then-execute","It cannot use tools","It adapts to what each step reveals, which suits uncertain environments, but the trajectory is not knowable in advance so it is harder to review, bound, and predict","It only works with a single tool"],"answer":2,"answerLetter":"C"},{"n":3,"type":"mc","prompt":"Why is replanning a first-class part of the pattern rather than an exception?","options":["Because models cannot produce correct plans","Because steps fail and the world changes — a plan built on assumptions that turn out false must be revised, not blindly retried","Because providers require it","Because plans expire after a fixed time"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"What cheap validation should run on a generated plan before execution begins?","options":["A grammar check on the plan text","Re-generating the plan five times and comparing","Checking that every referenced tool, resource, and parameter actually exists and is permitted, and flagging destructive or costly steps","Translating the plan into another language and back"],"answer":2,"answerLetter":"C"},{"n":5,"type":"mc","prompt":"Why does each step need a success criterion?","options":["To satisfy logging requirements","Because without one the agent cannot distinguish progress from motion — it may loop, repeat a step, or declare success on partial results","Because criteria reduce token usage","Because criteria are needed to parallelize"],"answer":1,"answerLetter":"B"},{"n":6,"type":"mc","prompt":"When is planning the wrong pattern?","options":["When the request is simple and single-step — the planning overhead adds latency and cost while producing a one-item plan","When the task requires more than one tool","When a human must approve the outcome","When the environment is uncertain"],"answer":0,"answerLetter":"A"},{"n":7,"type":"mc","prompt":"What does hierarchical planning add for long tasks?","options":["It removes the need for tools at the leaf level","It guarantees parallel execution","It keeps the top-level plan short and comprehensible while letting each step expand into its own sub-plan when executed — avoiding one enormous flat list that drifts","It caches the plan across users"],"answer":2,"answerLetter":"C"},{"n":8,"type":"open","prompt":"Design the planning layer for an agent that handles multi-step operational tasks (for example: 'investigate why the nightly job failed and open a ticket with the cause'). Cover plan generation, validation, execution, and failure.","points":["Generate a structured plan — ordered steps with the tool, arguments, expected outcome, and dependencies — rather than prose.","Validate the plan before executing: tools exist, permissions allow them, arguments type-check, and destructive steps are flagged.","Classify steps by risk: read-only investigation runs automatically, write actions (ticket creation, restarts) need approval or stricter checks.","Execute with per-step success criteria, running independent steps in parallel where dependencies allow.","Feed observations back and replan when a step fails or reveals something the plan did not anticipate, rather than continuing on stale assumptions.","Bound everything: step count, wall-clock, and cost, with a clear escalation to a human when a bound is hit.","Keep the plan and its revisions as inspectable state, with a full trace of steps, arguments, and outcomes.","Define done: the goal's success criterion is the ticket existing with a cause supported by evidence, not merely the steps having run."]},{"n":9,"type":"open","prompt":"Compare plan-then-execute with a ReAct-style interleaved loop. When would you choose each, and can they be combined?","points":["Plan-then-execute suits tasks whose steps can be known up front: predictable workflows, batch processing, anything needing pre-approval.","It enables review, validation, parallel execution of independent steps, caching, and resumption from a known point.","Interleaved loops suit exploration and uncertainty — searching, debugging, browsing — where each observation determines the next action.","Interleaving is harder to bound and audit ahead of time, so safety shifts to per-step permission checks, step budgets, and loop detection.","Cost/latency differ: an up-front plan is one extra call but enables parallelism; interleaving is sequential by nature and multiplies round trips.","Hybrid: plan at a high level, execute steps that themselves run interleaved sub-loops, replanning when a step's outcome invalidates the plan.","The choice should follow the environment's predictability and the risk of the actions, not stylistic preference."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/agentic-patterns/ch06">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>
